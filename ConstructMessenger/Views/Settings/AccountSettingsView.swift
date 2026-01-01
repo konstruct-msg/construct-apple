@@ -15,9 +15,6 @@ struct AccountSettingsView: View {
     // Profile Picture
     @State private var showingImagePicker = false
 
-    // Contact Sharing
-    @State private var showingQRCode = false
-
     // Change Password
     @State private var showingChangePassword = false
     @State private var currentPassword = ""
@@ -70,41 +67,6 @@ struct AccountSettingsView: View {
 
             } header: {
                 Text("Account Information")
-            }
-
-            // MARK: - Share Contact Section
-            Section {
-                Button {
-                    showingQRCode = true
-                } label: {
-                    HStack {
-                        Image(systemName: "qrcode")
-                            .foregroundColor(.blue)
-                        Text("Show My QR Code")
-                            .foregroundColor(.primary)
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                }
-
-                Button {
-                    copyContactLink()
-                } label: {
-                    HStack {
-                        Image(systemName: "link")
-                            .foregroundColor(.blue)
-                        Text("Copy Contact Link")
-                            .foregroundColor(.primary)
-                        Spacer()
-                    }
-                }
-            } header: {
-                Text("Share Contact")
-            } footer: {
-                Text("Share your QR code or link to let others add you as a verified contact")
-                    .font(.caption)
             }
 
             // MARK: - Password Section
@@ -164,22 +126,6 @@ struct AccountSettingsView: View {
                 viewModel.saveAvatar(image)
             })
         }
-        .sheet(isPresented: $showingQRCode) {
-            ContactQRCodeView(
-                userId: viewModel.userId,
-                username: viewModel.username
-            )
-        }
-    }
-
-    // MARK: - Contact Link
-    private var contactLink: String {
-        // Format: construct://add-contact?id=USER_ID&username=USERNAME
-        guard let userId = authViewModel.currentUserId,
-              let username = authViewModel.currentUsername else {
-            return ""
-        }
-        return "construct://add-contact?id=\(userId)&username=\(username)"
     }
 
     // MARK: - Validation
@@ -191,12 +137,6 @@ struct AccountSettingsView: View {
     }
 
     // MARK: - Actions
-    private func copyContactLink() {
-        UIPasteboard.general.string = contactLink
-        // Could show a toast/banner here
-        print("Contact link copied: \(contactLink)")
-    }
-
     private func changePassword() {
         guard isPasswordValid else {
             passwordError = "Please check all fields"

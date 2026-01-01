@@ -11,10 +11,45 @@ struct SettingsView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
     @StateObject private var viewModel = SettingsViewModel()
     @State private var showingLogoutConfirmation = false
+    @State private var showingQRCode = false
+    @State private var linkCopied = false
 
     var body: some View {
         NavigationStack {
             List {
+                // MARK: - Share Contact Section
+                Section {
+                    Button {
+                        showingQRCode = true
+                    } label: {
+                        Label {
+                            Text("Show My QR Code")
+                                .foregroundColor(.primary)
+                        } icon: {
+                            Image(systemName: "qrcode")
+                                .foregroundColor(.blue)
+                        }
+                    }
+
+                    Button {
+                        copyContactLink()
+                    } label: {
+                        Label {
+                            Text(linkCopied ? "Link Copied!" : "Copy Contact Link")
+                                .foregroundColor(.primary)
+                        } icon: {
+                            Image(systemName: linkCopied ? "checkmark.circle.fill" : "link")
+                                .foregroundColor(linkCopied ? .green : .green)
+                        }
+                    }
+                    .disabled(linkCopied)
+                } header: {
+                    Text("Share Contact")
+                } footer: {
+                    Text("Share your QR code or link to let others add you as a contact")
+                        .font(.caption)
+                }
+
                 // MARK: - Account Section
                 Section {
                     NavigationLink(destination: AccountSettingsView().environmentObject(authViewModel)) {
@@ -119,6 +154,38 @@ struct SettingsView: View {
                 }
             } message: {
                 Text("Are you sure you want to logout?")
+            }
+            .sheet(isPresented: $showingQRCode) {
+                ContactQRCodeView(
+                    userId: viewModel.userId,
+                    username: viewModel.username
+                )
+            }
+        }
+    }
+
+    // MARK: - Contact Link
+    private var contactLink: String {
+        guard let userId = authViewModel.currentUserId,
+              let username = authViewModel.currentUsername else {
+            return ""
+        }
+        return "construct://add-contact?id=\(userId)&username=\(username)"
+    }
+
+    private func copyContactLink() {
+        UIPasteboard.general.string = contactLink
+        print("Contact link copied: \(contactLink)")
+
+        // Show visual feedback
+        withAnimation {
+            linkCopied = true
+        }
+
+        // Reset after 2 seconds
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            withAnimation {
+                linkCopied = false
             }
         }
     }

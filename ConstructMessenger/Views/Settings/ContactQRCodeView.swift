@@ -57,28 +57,20 @@ struct ContactQRCodeView: View {
                         Text("Show this code to someone nearby")
                             .font(.caption)
                             .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal)
                     }
                 }
 
                 Spacer()
 
-                // Share button
-                Button {
-                    shareQRCode()
-                } label: {
-                    HStack {
-                        Image(systemName: "square.and.arrow.up")
-                        Text("Share QR Code")
-                            .fontWeight(.semibold)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color.blue)
-                    .foregroundColor(.white)
-                    .cornerRadius(12)
-                }
-                .padding(.horizontal, 32)
-                .padding(.bottom, 32)
+                // Hint text
+                Text("They can scan this with their camera or take a screenshot")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 32)
+                    .padding(.bottom, 32)
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -110,21 +102,6 @@ struct ContactQRCodeView: View {
         }
 
         return nil
-    }
-
-    // MARK: - Share
-    private func shareQRCode() {
-        guard let qrImage = generateQRCode(from: contactLink) else { return }
-
-        let activityVC = UIActivityViewController(
-            activityItems: [qrImage, contactLink],
-            applicationActivities: nil
-        )
-
-        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-           let rootVC = windowScene.windows.first?.rootViewController {
-            rootVC.present(activityVC, animated: true)
-        }
     }
 }
 

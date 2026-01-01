@@ -133,14 +133,29 @@ class ChatViewModel: ObservableObject {
 
     // MARK: - Send Message
     func sendMessage(text: String, replyTo: Message? = nil) {
-        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        guard let recipientId = chat.otherUser?.id else { return }
-        guard let currentUserId = SessionManager.shared.currentUserId else { return }
+        Log.info("📤 sendMessage called", category: "ChatViewModel")
+
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            Log.debug("❌ Empty message, ignoring", category: "ChatViewModel")
+            return
+        }
+
+        guard let recipientId = chat.otherUser?.id else {
+            Log.error("❌ No recipient ID", category: "ChatViewModel")
+            return
+        }
+
+        guard let currentUserId = SessionManager.shared.currentUserId else {
+            Log.error("❌ No current user ID", category: "ChatViewModel")
+            return
+        }
+
+        Log.info("📤 Sending to: \(recipientId), from: \(currentUserId)", category: "ChatViewModel")
 
         // 🚫 BLOCK: Cannot send encrypted messages to yourself
         if recipientId == currentUserId {
             errorMessage = "Cannot send encrypted messages to yourself. Use notes app instead."
-            Log.debug("Blocked attempt to send message to self", category: "ChatViewModel")
+            Log.debug("❌ Blocked attempt to send message to self", category: "ChatViewModel")
             return
         }
 
@@ -149,9 +164,11 @@ class ChatViewModel: ObservableObject {
             // Queue the message to be sent after session initialization
             pendingMessages.append((text: text, timestamp: Date()))
             errorMessage = "Initializing secure connection..."
-            Log.info("Message queued - waiting for session initialization", category: "ChatViewModel")
+            Log.info("⏳ Message queued - waiting for session initialization (session ready: \(isSessionReady))", category: "ChatViewModel")
             return
         }
+
+        Log.info("✅ Session is ready, checking WebSocket connection...", category: "ChatViewModel")
 
         isSending = true
         errorMessage = nil
@@ -173,9 +190,14 @@ class ChatViewModel: ObservableObject {
             )
 
             Log.debug("📤 Sending message with ID: \(messageId)", category: "ChatViewModel")
+            Log.debug("   Message number: \(components.messageNumber)", category: "ChatViewModel")
+            Log.debug("   Content length: \(message.content.count) bytes", category: "ChatViewModel")
 
             // ✅ FIX: Check WebSocket connection BEFORE saving as "sending"
-            if !wsManager.isConnected {
+            let wsConnected = wsManager.isConnected
+            Log.info("🔌 WebSocket connected: \(wsConnected)", category: "ChatViewModel")
+
+            if !wsConnected {
                 Log.error("❌ WebSocket not connected - message will be queued", category: "ChatViewModel")
                 saveMessage(
                     message,
@@ -189,6 +211,8 @@ class ChatViewModel: ObservableObject {
                 return
             }
 
+            Log.info("✅ WebSocket connected, saving message with .sending status", category: "ChatViewModel")
+
             // Save with .sending status
             saveMessage(
                 message,
@@ -199,8 +223,9 @@ class ChatViewModel: ObservableObject {
             )
 
             // Send through WebSocket
+            Log.info("📮 Calling wsManager.send() for message: \(messageId)", category: "ChatViewModel")
             wsManager.send(.sendMessage(message))
-            Log.debug("📮 Message sent to WebSocket: \(messageId)", category: "ChatViewModel")
+            Log.info("✅ wsManager.send() completed", category: "ChatViewModel")
 
         } catch {
             errorMessage = "Failed to encrypt message: \(error.localizedDescription)"
@@ -308,38 +333,32 @@ class ChatViewModel: ObservableObject {
                 self.recipientBundle = (data.identityPublic, data.signedPrekeyPublic, data.signature, data.verifyingKey)
                 guard let currentUserId = SessionManager.shared.currentUserId else { return }
 
-                // 🔑 Determine who is the initiator (lexicographically smaller UUID)
-                let isInitiator = currentUserId < data.userId
+                // ✅ FIX: If we requested the keys, WE are the initiator
+                // The fact that we're in ChatViewModel and requested getPublicKey
+                // means the user wants to start a conversation → we're the initiator
+                Log.info("🔑 Received public key bundle - we requested it, so we are INITIATOR", category: "ChatViewModel")
 
-                if isInitiator {
-                    // ✅ ALICE (initiator): Initialize session immediately
-                    do {
-                        let bundleWithSuite = (
-                            identityPublic: self.recipientBundle!.identityPublic,
-                            signedPrekeyPublic: self.recipientBundle!.signedPrekeyPublic,
-                            signature: self.recipientBundle!.signature,
-                            verifyingKey: self.recipientBundle!.verifyingKey,
-                            suiteId: "1"
-                        )
-                        try CryptoManager.shared.initializeSession(for: data.userId, recipientBundle: bundleWithSuite)
+                do {
+                    let bundleWithSuite = (
+                        identityPublic: data.identityPublic,
+                        signedPrekeyPublic: data.signedPrekeyPublic,
+                        signature: data.signature,
+                        verifyingKey: data.verifyingKey,
+                        suiteId: "1"
+                    )
+                    try CryptoManager.shared.initializeSession(for: data.userId, recipientBundle: bundleWithSuite)
 
-                        isSessionReady = true
-                        errorMessage = nil
-                        Log.info("✅ Session initialized as INITIATOR for \(data.userId)", category: "ChatViewModel")
+                    isSessionReady = true
+                    errorMessage = nil
+                    Log.info("✅ Session initialized as INITIATOR for \(data.userId)", category: "ChatViewModel")
 
-                        processPendingMessages()
+                    // Process any pending messages
+                    processPendingMessages()
 
-                    } catch {
-                        errorMessage = "Failed to initialize secure session: \(error.localizedDescription)"
-                        Log.error("❌ Failed to initialize session as initiator: \(error.localizedDescription)", category: "ChatViewModel")
-                        isSessionReady = false
-                    }
-                } else {
-                    // ✅ BOB (responder): Do NOT initialize session here!
-                    // Session will be initialized in ChatsViewModel when first message arrives
-                    Log.info("📦 Received public key bundle as RESPONDER - waiting for first message to initialize session", category: "ChatViewModel")
-                    // Don't set isSessionReady = true yet
-                    // ChatsViewModel will handle init_receiving_session when first message arrives
+                } catch {
+                    errorMessage = "Failed to initialize secure session: \(error.localizedDescription)"
+                    Log.error("❌ Failed to initialize session: \(error.localizedDescription)", category: "ChatViewModel")
+                    isSessionReady = false
                 }
             }
         // ✅ REMOVED: .message handling - ChatsViewModel handles ALL incoming messages

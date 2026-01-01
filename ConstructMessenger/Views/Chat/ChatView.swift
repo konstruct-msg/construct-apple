@@ -21,6 +21,7 @@ struct ChatView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // ✅ Status banner with debug info
             if viewModel.isSending {
                 HStack(spacing: 8) {
                     ProgressView()
@@ -32,6 +33,28 @@ struct ChatView: View {
                 .padding(.vertical, 6)
                 .frame(maxWidth: .infinity)
                 .background(Color.secondary.opacity(0.1))
+            } else if !viewModel.isSessionReady {
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .scaleEffect(0.7)
+                    Text("Initializing secure connection...")
+                        .font(.caption)
+                        .foregroundColor(.orange)
+                }
+                .padding(.vertical, 6)
+                .frame(maxWidth: .infinity)
+                .background(Color.orange.opacity(0.1))
+            } else if !WebSocketManager.shared.isConnected {
+                HStack(spacing: 8) {
+                    Image(systemName: "wifi.slash")
+                        .font(.caption)
+                    Text("Not connected to server")
+                        .font(.caption)
+                        .foregroundColor(.red)
+                }
+                .padding(.vertical, 6)
+                .frame(maxWidth: .infinity)
+                .background(Color.red.opacity(0.1))
             }
 
             ScrollViewReader { proxy in

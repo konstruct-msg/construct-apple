@@ -52,9 +52,19 @@ class AuthViewModel: ObservableObject {
 
     // MARK: - Session Management
     func restoreSession() {
-        guard let token = SessionManager.shared.sessionToken, SessionManager.shared.currentUserId != nil else {
+        print("🔄 restoreSession() called")
+
+        guard let token = SessionManager.shared.sessionToken else {
+            print("❌ No session token found - user needs to login")
             return
         }
+
+        guard let userId = SessionManager.shared.currentUserId else {
+            print("❌ No current user ID found")
+            return
+        }
+
+        print("✅ Found session token for user: \(userId)")
 
         // ✅ FIXED: Check if token is still valid
         guard SessionManager.shared.isSessionValid else {
@@ -63,12 +73,18 @@ class AuthViewModel: ObservableObject {
             return
         }
 
-
+        print("✅ Session token is valid, attempting restore...")
 
         isLoading = true
+
+        print("🔌 Connecting to WebSocket...")
         wsManager.connect()
+
+        print("📤 Sending Connect message with token: \(token.prefix(20))...")
         wsManager.send(.connect(ConnectData(sessionToken: token)))
+
         startSessionRestoreTimeout()
+        print("✅ Session restore initiated, waiting for ConnectSuccess")
     }
 
     // ✅ FIXED: Monitor token expiration
@@ -248,10 +264,16 @@ class AuthViewModel: ObservableObject {
     }
 
     private func handleConnectSuccess(userId: String, username: String) {
+        print("✅ ConnectSuccess received!")
+        print("   User ID: \(userId)")
+        print("   Username: \(username)")
+
         currentUserId = userId
         currentUsername = username
         currentDisplayName = nil // Set to nil explicitly if not received from server
         isAuthenticated = true
+
+        print("✅ User authenticated successfully")
     }
     
     private func handleSessionExpired() {
