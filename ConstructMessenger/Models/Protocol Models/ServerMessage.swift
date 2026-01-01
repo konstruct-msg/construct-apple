@@ -13,7 +13,6 @@ enum ServerMessage: Codable {
     case loginSuccess(LoginSuccessData)
     case connectSuccess(ConnectSuccessData)
     case sessionExpired
-    case searchResults(SearchResultsData)
     case publicKeyBundle(PublicKeyBundleData)
     case message(ChatMessage)
     case ack(AckData)
@@ -29,7 +28,7 @@ enum ServerMessage: Codable {
     }
     
     private enum MessageType: String, Codable {
-        case registerSuccess, loginSuccess, connectSuccess, sessionExpired, searchResults, publicKeyBundle, message, ack, keyRotationSuccess, error, logoutSuccess
+        case registerSuccess, loginSuccess, connectSuccess, sessionExpired, publicKeyBundle, message, ack, keyRotationSuccess, error, logoutSuccess
     }
 
     init(from decoder: Decoder) throws {
@@ -48,9 +47,6 @@ enum ServerMessage: Codable {
             self = .connectSuccess(payload)
         case .sessionExpired:
             self = .sessionExpired
-        case .searchResults:
-            let payload = try container.decode(SearchResultsData.self, forKey: .payload)
-            self = .searchResults(payload)
         case .publicKeyBundle:
             let payload = try container.decode(PublicKeyBundleData.self, forKey: .payload)
             self = .publicKeyBundle(payload)
@@ -84,9 +80,6 @@ enum ServerMessage: Codable {
             try container.encode(data, forKey: .payload)
         case .sessionExpired:
             try container.encode(MessageType.sessionExpired, forKey: .type)
-        case .searchResults(let data):
-            try container.encode(MessageType.searchResults, forKey: .type)
-            try container.encode(data, forKey: .payload)
         case .publicKeyBundle(let data):
             try container.encode(MessageType.publicKeyBundle, forKey: .type)
             try container.encode(data, forKey: .payload)
@@ -125,10 +118,6 @@ struct LoginSuccessData: Codable {
 struct ConnectSuccessData: Codable {
     let userId: String
     let username: String
-}
-
-struct SearchResultsData: Codable {
-    let users: [PublicUserInfo]
 }
 
 struct PublicKeyBundleData: Codable {

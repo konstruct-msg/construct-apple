@@ -25,6 +25,9 @@ struct LoginView: View {
                     .textFieldStyle(.roundedBorder)
                     .autocapitalization(.none)
                     .autocorrectionDisabled()
+                    .onChange(of: username) { newValue in
+                        username = newValue.lowercased()
+                    }
             }
 
             VStack(alignment: .leading, spacing: 4) {

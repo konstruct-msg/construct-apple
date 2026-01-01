@@ -1,6 +1,6 @@
 # 🔐 Construct Messenger
 
-**Secure end-to-end encrypted messenger с крипто-гибкостью и готовностью к постквантовой эре**
+**Secure end-to-end encrypted messenger with crypto-agility and post-quantum readiness**
 
 [![Rust](https://img.shields.io/badge/Rust-1.75+-orange.svg)](https://www.rust-lang.org/)
 [![Swift](https://img.shields.io/badge/Swift-5.9+-red.svg)](https://swift.org/)
@@ -9,28 +9,28 @@
 
 ---
 
-## 🎯 О проекте
+## 🎯 About the Project
 
-Construct Messenger - это современный мессенджер с **end-to-end шифрованием**, построенный на:
+Construct Messenger is a modern **end-to-end encrypted** messenger built on:
 
-- **Double Ratchet Protocol** (Signal Protocol) для forward secrecy
-- **X3DH** для асинхронного key agreement
-- **Rust Core** для 90% криптографической логики
-- **Crypto-Agility** для поддержки различных криптографических алгоритмов
-- **Post-Quantum Ready** архитектура для гибридных схем (Kyber + Dilithium)
+- **Double Ratchet Protocol** (Signal Protocol) for forward secrecy
+- **X3DH** for asynchronous key agreement
+- **Rust Core** for 90% of the cryptographic logic
+- **Crypto-Agility** to support various cryptographic algorithms
+- **Post-Quantum Ready** architecture for hybrid schemes (Kyber + Dilithium)
 
-### Ключевые особенности
+### Key Features
 
-- ✅ **100% E2EE** - Сервер никогда не видит plaintext
-- ✅ **Forward Secrecy** - Компрометация ключей не раскрывает историю
-- ✅ **Crypto-Agility** - Поддержка множественных криптографических наборов
-- ✅ **Zero unsafe** - Весь Rust код безопасен (0 `unsafe` блоков)
-- ✅ **Multi-Platform** - Единое Rust ядро для iOS, Android, Web
-- 🚧 **Post-Quantum** - Гибридные схемы (в разработке)
+- ✅ **100% E2EE** - The server never sees plaintext
+- ✅ **Forward Secrecy** - Compromised keys do not reveal history
+- ✅ **Crypto-Agility** - Support for multiple cryptographic suites
+- ✅ **Zero unsafe** - All Rust code is safe (0 `unsafe` blocks)
+- ✅ **Multi-Platform** - Single Rust core for iOS, Android, Web
+- 🚧 **Post-Quantum** - Hybrid schemes (in development)
 
 ---
 
-## 🏗️ Архитектура
+## 🏗️ Architecture
 
 ```
 ┌─────────────────────────────────────────────────────┐
@@ -63,98 +63,97 @@ Construct Messenger - это современный мессенджер с **en
 
 ## 🚀 Quick Start
 
-### Требования
+### Requirements
 
 - **Rust** 1.75+ ([rustup](https://rustup.rs/))
-- **Xcode** 15+ (для iOS)
+- **Xcode** 15+ (for iOS)
 - **UniFFI** 0.28
-- **PostgreSQL** 14+ (для сервера)
 
-### Сборка iOS приложения
+### Building the iOS App
 
 ```bash
-# 1. Соберите Rust библиотеку
+# 1. Build the Rust library
 cd packages/core
 cargo build --release --target aarch64-apple-ios
 
-# 2. Сгенерируйте Swift bindings
+# 2. Generate Swift bindings
 uniffi-bindgen generate \
   --library ../../target/aarch64-apple-ios/release/libconstruct_core.a \
   --language swift \
   --out-dir bindings/swift
 
-# 3. Скопируйте в Xcode проект
+# 3. Copy to the Xcode project
 cp ../../target/aarch64-apple-ios/release/libconstruct_core.a ../../
 cp bindings/swift/construct_core.swift ../../ConstructMessenger/
 cp bindings/swift/construct_coreFFI.h ../../ConstructMessenger/
 
-# 4. Откройте Xcode и запустите
+# 4. Open Xcode and run
 open ../../ConstructMessenger.xcodeproj
 ```
 
-### Запуск сервера
+### Running the Server
 
 ```bash
-# 1. Настройте PostgreSQL
+# 1. Set up PostgreSQL
 createdb construct_messenger
 
-# 2. Запустите миграции
+# 2. Run migrations
 cd packages/server
 sqlx migrate run
 
-# 3. Запустите сервер
+# 3. Start the server
 cargo run --release
 ```
 
 ---
 
-## 📚 Документация
+## 📚 Documentation
 
-### Начало работы
-- [**ARCHITECTURE_RESPONSIBILITY.md**](docs/ARCHITECTURE_RESPONSIBILITY.md) - 🎯 **Ключевой принцип:** Swift = тонкий клиент, Rust = вся логика
-- [**RUST_SWIFT_INTEGRATION.md**](docs/RUST_SWIFT_INTEGRATION.md) - Полное руководство по интеграции Rust + Swift
-- [**XCODE_INTEGRATION.md**](XCODE_INTEGRATION.md) - Настройка Xcode проекта
-- [**ROADMAP.md**](docs/ROADMAP.md) - План развития и постквантовая криптография
-- [**TESTING.md**](TESTING.md) - Руководство по тестированию
+### Getting Started
+- [**ARCHITECTURE_RESPONSIBILITY.md**](docs/ARCHITECTURE_RESPONSIBILITY.md) - 🎯 **Key Principle:** Swift = thin client, Rust = all logic
+- [**RUST_SWIFT_INTEGRATION.md**](docs/RUST_SWIFT_INTEGRATION.md) - Complete guide to Rust + Swift integration
+- [**XCODE_INTEGRATION.md**](XCODE_INTEGRATION.md) - Setting up the Xcode project
+- [**ROADMAP.md**](docs/ROADMAP.md) - Development plan and post-quantum cryptography
+- [**TESTING.md**](TESTING.md) - Testing guide
 
 ### API
-- [**API_V3_SPEC.md**](docs/API_V3_SPEC.md) - Спецификация API с crypto-agility
+- [**API_V3_SPEC.md**](docs/API_V3_SPEC.md) - API specification with crypto-agility
 
 ---
 
-## 🔐 Криптография
+## 🔐 Cryptography
 
 ### Classic Suite (v1) - Production
 
-| Компонент | Алгоритм | Назначение |
-|-----------|----------|------------|
-| Key Agreement | **X25519** (ECDH) | Ephemeral DH для ratcheting |
-| Signatures | **Ed25519** | Подписи prekeys |
-| AEAD | **ChaCha20-Poly1305** | Шифрование сообщений |
-| KDF | **HKDF-SHA256** | Деривация ключей |
+| Component     | Algorithm             | Purpose                         |
+|---------------|-----------------------|---------------------------------|
+| Key Agreement | **X25519** (ECDH)     | Ephemeral DH for ratcheting     |
+| Signatures    | **Ed25519**           | Prekey signatures               |
+| AEAD          | **ChaCha20-Poly1305** | Message encryption              |
+| KDF           | **HKDF-SHA256**       | Key derivation                  |
 
-### Post-Quantum Hybrid Suite (v2) - В разработке
+### Post-Quantum Hybrid Suite (v2) - In Development
 
-| Компонент | Алгоритм | Назначение |
-|-----------|----------|------------|
-| Key Agreement | **X25519 ⊕ Kyber768** | Гибридный KEM |
-| Signatures | **Ed25519 + Dilithium3** | Гибридные подписи |
-| AEAD | **ChaCha20-Poly1305** | Шифрование (без изменений) |
+| Component     | Algorithm                | Purpose                         |
+|---------------|--------------------------|---------------------------------|
+| Key Agreement | **X25519 ⊕ Kyber768**      | Hybrid KEM                      |
+| Signatures    | **Ed25519 + Dilithium3**   | Hybrid signatures               |
+| AEAD          | **ChaCha20-Poly1305**    | Encryption (unchanged)          |
 
-**Философия:** Hybrid = защита от квантовых компьютеров + защита от уязвимостей в новых алгоритмах
+**Philosophy:** Hybrid = protection against quantum computers + protection against vulnerabilities in new algorithms
 
 ---
 
-## 🛠️ Структура проекта
+## 🛠️ Project Structure
 
 ```
 construct-messenger/
-├── docs/                    # 📚 Документация
+├── docs/                    # 📚 Documentation
 │
 ├── packages/
-│   ├── core/               # 🦀 Rust криптографическое ядро
+│   ├── core/               # 🦀 Rust cryptographic core
 │   │   ├── src/
-│   │   │   ├── crypto/    # Криптографические модули
+│   │   │   ├── crypto/    # Cryptographic modules
 │   │   │   │   ├── classic_suite.rs
 │   │   │   │   ├── crypto_provider.rs
 │   │   │   │   ├── double_ratchet.rs
@@ -164,14 +163,14 @@ construct-messenger/
 │   │   ├── Cargo.toml
 │   │   └── build.rs
 │   │
-│   └── server/             # 🦀 Rust WebSocket сервер
+│   └── server/             # 🦀 Rust WebSocket server
 │       ├── src/
 │       │   ├── handlers/  # Message handlers
 │       │   ├── db.rs      # PostgreSQL
 │       │   └── message.rs # Protocol types
 │       └── Cargo.toml
 │
-├── ConstructMessenger/     # 📱 iOS Swift приложение
+├── ConstructMessenger/     # 📱 iOS Swift application
 │   ├── ViewModels/        # MVVM view models
 │   ├── Views/             # SwiftUI views
 │   ├── Security/
@@ -180,13 +179,13 @@ construct-messenger/
 │   │   └── WebSocketManager.swift
 │   └── Models/            # Core Data models
 │
-├── libconstruct_core.a    # Скомпилированная Rust библиотека
-└── README.md              # 📖 Этот файл
+├── libconstruct_core.a    # Compiled Rust library
+└── README.md              # 📖 This file
 ```
 
 ---
 
-## 🧪 Тестирование
+## 🧪 Testing
 
 ### Rust Core
 
@@ -198,10 +197,10 @@ cargo test --all-features
 ### iOS App
 
 ```bash
-# В Xcode: ⌘U (Run Tests)
+# In Xcode: ⌘U (Run Tests)
 ```
 
-### Сервер
+### Server
 
 ```bash
 cd packages/server
@@ -210,69 +209,59 @@ cargo test
 
 ---
 
-## 🤝 Участие в разработке
+## 🤝 Contributing
 
-Мы приветствуем contributions! Пожалуйста, ознакомьтесь с:
+We welcome contributions! Please familiarize yourself with:
 
-1. [ROADMAP.md](docs/ROADMAP.md) - План развития
-2. [RUST_SWIFT_INTEGRATION.md](docs/RUST_SWIFT_INTEGRATION.md) - Технические детали
-3. Создайте Issue для обсуждения новых функций
-4. Отправьте Pull Request
+1. [ROADMAP.md](docs/ROADMAP.md) - Development plan
+2. [RUST_SWIFT_INTEGRATION.md](docs/RUST_SWIFT_INTEGRATION.md) - Technical details
+3. Create an Issue to discuss new features
+4. Submit a Pull Request
 
-### Приоритетные области
+### Priority Areas
 
-- 🔴 **Критично:** Исправление расшифровки сообщений
-- 🟠 **Важно:** Unit/integration тесты
-- 🟡 **Полезно:** UI/UX улучшения
-- 🟢 **Будущее:** Post-quantum crypto implementation
+- 🔴 **Critical:** Fix message decryption
+- 🟠 **Important:** Unit/integration tests
+- 🟡 **Useful:** UI/UX improvements
+- 🟢 **Future:** Post-quantum crypto implementation
 
 ---
 
-## 📊 Текущий статус
+## 📊 Current Status
 
-**Версия:** v0.1.0 (Early Alpha)
-**Дата:** 26 декабря 2025
+**Version:** v0.2.8 (Early Alpha)
+**Date:** December 26, 2025
 
-### ✅ Готово
-- [x] Rust криптографическое ядро (Double Ratchet + X3DH)
-- [x] UniFFI интеграция с iOS
-- [x] WebSocket сервер с PostgreSQL
-- [x] Базовый UI (SwiftUI)
+### ✅ Done
+- [x] Rust cryptographic core (Double Ratchet + X3DH)
+- [x] UniFFI integration with iOS
+- [x] WebSocket server with PostgreSQL
+- [x] Basic UI (SwiftUI)
 - [x] Core Data persistence
 
-### 🚧 В работе
-- [ ] Расшифровка сообщений (debugging)
-- [ ] Unit тесты
-- [ ] Push notifications
-- [ ] File attachments
 
-### 📅 Планируется
+### 📅 Planned
 **Q2 2026:**
 - [ ] Post-quantum hybrid cryptography (Kyber768 + Dilithium3)
-- [ ] Android приложение
 - [ ] Web PWA
-
-**2027:**
 - [ ] Group messaging (Sender Keys)
 - [ ] Voice/Video calls (WebRTC)
-
-**2028+:**
-- [ ] **Федерация серверов** (Email 2.0 с E2E шифрованием)
-- [ ] Децентрализованная архитектура (alice@server1.com ↔ bob@server2.com)
+- [ ] **Server Federation** (Email 2.0 with E2E encryption)
+- [ ] Decentralized architecture (alice@server1.com ↔ bob@server2.com)
 - [ ] DNS-based server discovery
-- [ ] Sealed sender для metadata privacy
+- [ ] Sealed sender for metadata privacy
 
 ---
 
-## 📄 Лицензия
+## 📄 License
 
-MIT License - смотрите [LICENSE](LICENSE) для деталей
+MIT License - see [LICENSE](LICENSE) for details
 
 ---
 
-## 🙏 Благодарности
+## 🙏 Acknowledgments
 
-- **Signal Foundation** за Double Ratchet Protocol
-- **Mozilla** за UniFFI
-- **Rust Community** за отличные crypto библиотеки
-- **NIST** за стандартизацию постквантовой криптографии
+- **Signal Foundation** for the Double Ratchet Protocol
+- **Mozilla** for UniFFI
+- **Rust Community** for excellent crypto libraries
+- **NIST** for standardizing post-quantum cryptography

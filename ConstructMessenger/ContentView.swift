@@ -12,6 +12,7 @@ struct ContentView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
     @Environment(\.managedObjectContext) private var viewContext
     @Environment(\.scenePhase) private var scenePhase
+    @AppStorage("appTheme") private var appTheme: AppTheme = .automatic
 
     var body: some View {
         Group {
@@ -21,6 +22,7 @@ struct ContentView: View {
                 AuthView()
             }
         }
+        .preferredColorScheme(appTheme.colorScheme)
         .onAppear {
             // This will run once when ContentView first appears
             authViewModel.restoreSession()

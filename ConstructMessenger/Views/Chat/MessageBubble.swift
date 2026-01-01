@@ -9,11 +9,25 @@ import SwiftUI
 
 struct MessageBubble: View {
     let message: Message
+    let isLastInGroup: Bool
     let onRetry: ((Message) -> Void)?
+    let onReply: ((Message) -> Void)?
+    let onDelete: ((Message) -> Void)?
 
-    init(message: Message, onRetry: ((Message) -> Void)? = nil) {
+    @State private var showMessageInfo = false
+
+    init(
+        message: Message,
+        isLastInGroup: Bool = true,
+        onRetry: ((Message) -> Void)? = nil,
+        onReply: ((Message) -> Void)? = nil,
+        onDelete: ((Message) -> Void)? = nil
+    ) {
         self.message = message
+        self.isLastInGroup = isLastInGroup
         self.onRetry = onRetry
+        self.onReply = onReply
+        self.onDelete = onDelete
     }
 
     var body: some View {
@@ -23,29 +37,101 @@ struct MessageBubble: View {
             }
 
             VStack(alignment: message.isSentByMe ? .trailing : .leading, spacing: 4) {
-                Text(message.decryptedContent ?? "Encrypted")
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(message.isSentByMe ? Color.blue : Color.gray.opacity(0.2))
-                    .foregroundColor(message.isSentByMe ? .white : .primary)
-                    .cornerRadius(16)
+                VStack(alignment: .leading, spacing: 0) {
+                    // Reply/Quote preview
+                    if let replyContent = message.replyToContent {
+                        HStack(spacing: 4) {
+                            Rectangle()
+                                .fill(message.isSentByMe ? Color.white.opacity(0.5) : Color.blue.opacity(0.5))
+                                .frame(width: 3)
 
-                HStack(spacing: 4) {
-                    if message.isSentByMe {
-                        deliveryStatusView
+                            Text(replyContent)
+                                .font(.caption)
+                                .foregroundColor(message.isSentByMe ? .white.opacity(0.8) : .secondary)
+                                .lineLimit(2)
+                                .padding(.vertical, 4)
+                                .padding(.trailing, 8)
+                        }
+                        .padding(.leading, 8)
+                        .padding(.top, 8)
                     }
 
-                    Text(message.timestamp ?? Date(), style: .time)
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
+                    // Main message content
+                    Text(message.decryptedContent ?? "Encrypted")
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, message.replyToContent != nil ? 4 : 8)
+                        .padding(.bottom, message.replyToContent != nil ? 8 : 0)
                 }
-                .padding(.horizontal, 4)
+                .background(message.isSentByMe ? Color.blue : Color.gray.opacity(0.2))
+                .foregroundColor(message.isSentByMe ? .white : .primary)
+                .cornerRadius(16)
+
+                if isLastInGroup {
+                    HStack(spacing: 4) {
+                        if message.isSentByMe {
+                            deliveryStatusView
+                        }
+
+                        Text(message.timestamp, style: .time)
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.horizontal, 4)
+                }
             }
             .frame(maxWidth: UIScreen.main.bounds.width * 0.7, alignment: message.isSentByMe ? .trailing : .leading)
 
             if !message.isSentByMe {
                 Spacer(minLength: 60)
             }
+        }
+        .contextMenu {
+            // Reply - только для чужих сообщений или если есть callback
+            if let onReply = onReply {
+                Button {
+                    onReply(message)
+                } label: {
+                    Label("Reply", systemImage: "arrowshape.turn.up.left")
+                }
+            }
+
+            // Copy text
+            Button {
+                UIPasteboard.general.string = message.decryptedContent
+            } label: {
+                Label("Copy", systemImage: "doc.on.doc")
+            }
+
+            // Message info
+            Button {
+                showMessageInfo = true
+            } label: {
+                Label("Info", systemImage: "info.circle")
+            }
+
+            Divider()
+
+            // Delete - только для своих сообщений
+            if message.isSentByMe, let onDelete = onDelete {
+                Button(role: .destructive) {
+                    onDelete(message)
+                } label: {
+                    Label("Delete", systemImage: "trash")
+                }
+            }
+
+            // Retry - только для failed/queued сообщений
+            if (message.deliveryStatus == .failed || message.deliveryStatus == .queued),
+               let onRetry = onRetry {
+                Button {
+                    onRetry(message)
+                } label: {
+                    Label("Retry", systemImage: "arrow.clockwise")
+                }
+            }
+        }
+        .sheet(isPresented: $showMessageInfo) {
+            MessageInfoSheet(message: message)
         }
     }
 
@@ -70,9 +156,20 @@ struct MessageBubble: View {
                 .foregroundColor(.green)
 
         case .queued:
-            Image(systemName: "tray")
-                .font(.system(size: 10))
-                .foregroundColor(.orange)
+            Button {
+                if let onRetry = onRetry {
+                    onRetry(message)
+                }
+            } label: {
+                HStack(spacing: 2) {
+                    Image(systemName: "tray")
+                        .font(.system(size: 10))
+                        .foregroundColor(.orange)
+                    Text("Retry")
+                        .font(.caption2)
+                        .foregroundColor(.orange)
+                }
+            }
 
         case .failed:
             Button {

@@ -51,6 +51,8 @@ extension Message {
     @NSManaged public var isSentByMe: Bool
     @NSManaged public var deliveryStatusRaw: Int16
     @NSManaged public var retryCount: Int16
+    @NSManaged public var replyToMessageId: String?
+    @NSManaged public var replyToContent: String?
     @NSManaged public var chat: Chat?
 
     // Computed property для удобства

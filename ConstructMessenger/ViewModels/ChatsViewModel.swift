@@ -11,10 +11,6 @@ import CoreData
 
 @MainActor
 class ChatsViewModel: ObservableObject {
-    @Published var searchResults: [PublicUserInfo] = []
-    @Published var isSearching = false
-    @Published var searchError: String?
-
     private let wsManager = WebSocketManager.shared
     private var cancellables = Set<AnyCancellable>()
     private var viewContext: NSManagedObjectContext?
@@ -37,18 +33,6 @@ class ChatsViewModel: ObservableObject {
                 self?.handleServerMessage(message)
             }
             .store(in: &cancellables)
-    }
-
-    // MARK: - Search Users
-    func searchUsers(query: String) {
-        guard !query.isEmpty else {
-            searchResults = []
-            return
-        }
-
-        isSearching = true
-        searchError = nil
-        wsManager.send(.searchUsers(SearchUsersData(query: query)))
     }
 
     // MARK: - Start Chat
@@ -92,19 +76,11 @@ class ChatsViewModel: ObservableObject {
     // MARK: - Handle Server Messages
     private func handleServerMessage(_ message: ServerMessage) {
         switch message {
-        case .searchResults(let data):
-            searchResults = data.users
-            isSearching = false
-
         case .publicKeyBundle(let data):
             handlePublicKeyBundle(data)
 
         case .message(let msg):
             handleIncomingMessage(msg)
-
-        case .error(let data):
-            searchError = data.message
-            isSearching = false
 
         default:
             break

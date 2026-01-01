@@ -72,6 +72,17 @@ class ChatViewModel: ObservableObject {
                 self?.handleServerMessage(message)
             }
             .store(in: &cancellables)
+
+        // ✅ FIX: Listen for connection status changes
+        wsManager.$isConnected
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] isConnected in
+                if isConnected {
+                    Log.info("✅ WebSocket reconnected - processing queued messages", category: "ChatViewModel")
+                    self?.sendQueuedMessages()
+                }
+            }
+            .store(in: &cancellables)
     }
 
     // ✅ FIXED: Check if we already have a session for this user
@@ -121,7 +132,7 @@ class ChatViewModel: ObservableObject {
     }
 
     // MARK: - Send Message
-    func sendMessage(text: String) {
+    func sendMessage(text: String, replyTo: Message? = nil) {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         guard let recipientId = chat.otherUser?.id else { return }
         guard let currentUserId = SessionManager.shared.currentUserId else { return }
@@ -162,7 +173,32 @@ class ChatViewModel: ObservableObject {
             )
 
             Log.debug("📤 Sending message with ID: \(messageId)", category: "ChatViewModel")
-            saveMessage(message, decryptedContent: text, isSentByMe: true, status: .sending)
+
+            // ✅ FIX: Check WebSocket connection BEFORE saving as "sending"
+            if !wsManager.isConnected {
+                Log.error("❌ WebSocket not connected - message will be queued", category: "ChatViewModel")
+                saveMessage(
+                    message,
+                    decryptedContent: text,
+                    isSentByMe: true,
+                    status: .queued,  // Save as QUEUED, not SENDING
+                    replyTo: replyTo
+                )
+                errorMessage = "Not connected. Message saved and will be sent when connection is restored."
+                isSending = false
+                return
+            }
+
+            // Save with .sending status
+            saveMessage(
+                message,
+                decryptedContent: text,
+                isSentByMe: true,
+                status: .sending,
+                replyTo: replyTo
+            )
+
+            // Send through WebSocket
             wsManager.send(.sendMessage(message))
             Log.debug("📮 Message sent to WebSocket: \(messageId)", category: "ChatViewModel")
 
@@ -186,11 +222,74 @@ class ChatViewModel: ObservableObject {
         }
     }
 
+    // ✅ FIX: Send all queued messages when connection is restored
+    private func sendQueuedMessages() {
+        let fetchRequest: NSFetchRequest<Message> = Message.fetchRequest()
+        fetchRequest.predicate = NSPredicate(format: "chat == %@ AND deliveryStatusRaw == %d", chat, DeliveryStatus.queued.rawValue)
+        fetchRequest.sortDescriptors = [NSSortDescriptor(key: "timestamp", ascending: true)]
+
+        guard let queuedMessages = try? viewContext.fetch(fetchRequest) else {
+            return
+        }
+
+        Log.info("📤 Sending \(queuedMessages.count) queued messages", category: "ChatViewModel")
+
+        for message in queuedMessages {
+            // Re-encrypt and send
+            guard let decryptedText = message.decryptedContent,
+                  let recipientId = chat.otherUser?.id,
+                  let currentUserId = SessionManager.shared.currentUserId else {
+                continue
+            }
+
+            do {
+                let components = try CryptoManager.shared.encryptMessage(decryptedText, for: recipientId)
+
+                let chatMessage = ChatMessage(
+                    id: message.id,
+                    from: currentUserId,
+                    to: recipientId,
+                    ephemeralPublicKey: components.ephemeralPublicKey,
+                    messageNumber: components.messageNumber,
+                    content: components.content,
+                    timestamp: UInt64(message.timestamp.timeIntervalSince1970)
+                )
+
+                message.deliveryStatus = .sending
+                try? viewContext.save()
+
+                wsManager.send(.sendMessage(chatMessage))
+                Log.debug("📮 Re-sent queued message: \(message.id)", category: "ChatViewModel")
+
+            } catch {
+                Log.error("Failed to re-encrypt queued message: \(error)", category: "ChatViewModel")
+                message.deliveryStatus = .failed
+                try? viewContext.save()
+            }
+        }
+
+        loadMessages()
+    }
+
     func retryMessage(_ message: Message) {
-        // This needs to be re-thought. Retrying a message in a ratchet is complex.
-        // For now, we just re-send the original encrypted content, which will fail to decrypt on the other side.
-        // A proper implementation would require re-encrypting the decrypted content.
-        Log.info("Message retry is not fully implemented for ratchet protocol.", category: "ChatViewModel")
+        // Retry for failed or queued messages
+        guard message.canRetry || message.deliveryStatus == .queued else {
+            Log.info("Message cannot be retried", category: "ChatViewModel")
+            return
+        }
+
+        guard let decryptedText = message.decryptedContent else {
+            Log.error("Cannot retry - no decrypted content", category: "ChatViewModel")
+            return
+        }
+
+        // Increment retry count
+        message.retryCount += 1
+        try? viewContext.save()
+
+        // Re-send the message
+        sendMessage(text: decryptedText)
+        Log.info("Retrying message (attempt \(message.retryCount))", category: "ChatViewModel")
     }
 
     // MARK: - Handle Server Messages
@@ -293,7 +392,7 @@ class ChatViewModel: ObservableObject {
     // ChatViewModel only displays messages already saved to Core Data
 
     // MARK: - Core Data Operations
-    private func saveMessage(_ message: ChatMessage, decryptedContent: String, isSentByMe: Bool, status: DeliveryStatus) {
+    private func saveMessage(_ message: ChatMessage, decryptedContent: String, isSentByMe: Bool, status: DeliveryStatus, replyTo: Message? = nil) {
         Log.debug("💾 Saving message \(message.id), isSentByMe: \(isSentByMe), status: \(status)", category: "ChatViewModel")
 
         let fetchRequest: NSFetchRequest<Message> = Message.fetchRequest()
@@ -314,6 +413,12 @@ class ChatViewModel: ObservableObject {
             newMessage.isSentByMe = isSentByMe
             newMessage.deliveryStatus = status
             newMessage.chat = chat
+
+            // Set reply information
+            if let replyMessage = replyTo {
+                newMessage.replyToMessageId = replyMessage.id
+                newMessage.replyToContent = replyMessage.decryptedContent
+            }
         }
 
         do {

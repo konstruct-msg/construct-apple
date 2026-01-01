@@ -12,7 +12,6 @@ enum ClientMessage: Codable {
     case register(RegisterData)
     case login(LoginData)
     case connect(ConnectData)
-    case searchUsers(SearchUsersData)
     case getPublicKey(GetPublicKeyData)
     case sendMessage(ChatMessage)
     case rotatePrekey(RotatePrekeyData)
@@ -26,7 +25,7 @@ enum ClientMessage: Codable {
     }
 
     private enum MessageType: String, Codable {
-        case register, login, connect, searchUsers, getPublicKey, sendMessage, rotatePrekey, logout
+        case register, login, connect, getPublicKey, sendMessage, rotatePrekey, logout
     }
 
     init(from decoder: Decoder) throws {
@@ -42,9 +41,6 @@ enum ClientMessage: Codable {
         case .connect:
             let payload = try container.decode(ConnectData.self, forKey: .payload)
             self = .connect(payload)
-        case .searchUsers:
-            let payload = try container.decode(SearchUsersData.self, forKey: .payload)
-            self = .searchUsers(payload)
         case .getPublicKey:
             let payload = try container.decode(GetPublicKeyData.self, forKey: .payload)
             self = .getPublicKey(payload)
@@ -71,9 +67,6 @@ enum ClientMessage: Codable {
             try container.encode(data, forKey: .payload)
         case .connect(let data):
             try container.encode(MessageType.connect, forKey: .type)
-            try container.encode(data, forKey: .payload)
-        case .searchUsers(let data):
-            try container.encode(MessageType.searchUsers, forKey: .type)
             try container.encode(data, forKey: .payload)
         case .getPublicKey(let data):
             try container.encode(MessageType.getPublicKey, forKey: .type)
@@ -128,10 +121,6 @@ struct LoginData: Codable {
 
 struct ConnectData: Codable {
     let sessionToken: String
-}
-
-struct SearchUsersData: Codable {
-    let query: String
 }
 
 struct GetPublicKeyData: Codable {

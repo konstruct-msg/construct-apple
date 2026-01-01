@@ -12,132 +12,97 @@ struct SettingsView: View {
     @StateObject private var viewModel = SettingsViewModel()
     @State private var showingLogoutConfirmation = false
 
-    // 🎯 AppStorage автоматически синхронизируется с UserDefaults!
-    @AppStorage(APIConstants.customServerURLKey) private var storedServerURL: String?
-    @State private var editingServerURL: String = ""
-    @State private var isEditingServer = false
-
     var body: some View {
         NavigationStack {
             List {
+                // MARK: - Account Section
                 Section {
-                    HStack {
-                        Text("Display Name")
-                            .foregroundColor(.secondary)
-                        Spacer()
-                        Text(viewModel.displayName)
-                            .fontWeight(.medium)
-                    }
-
-                    HStack {
-                        Text("Username")
-                            .foregroundColor(.secondary)
-                        Spacer()
-                        Text("@\(viewModel.username)")
-                            .fontWeight(.medium)
-                            .foregroundColor(.blue)
-                    }
-
-                    HStack {
-                        Text("User ID")
-                            .foregroundColor(.secondary)
-                        Spacer()
-                        Text(viewModel.userId)
-                            .font(.system(size: 12, design: .monospaced))
-                            .foregroundColor(.gray)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                    }
-                } header: {
-                    Text("Account Information")
-                }
-
-                Section {
-                    HStack {
-                        Text("Connection")
-                            .foregroundColor(.secondary)
-                        Spacer()
-                        HStack(spacing: 4) {
-                            Circle()
-                                .fill(WebSocketManager.shared.isConnected ? Color.green : Color.red)
-                                .frame(width: 8, height: 8)
-                            Text(WebSocketManager.shared.isConnected ? "Connected" : "Disconnected")
-                                .fontWeight(.medium)
+                    NavigationLink(destination: AccountSettingsView().environmentObject(authViewModel)) {
+                        Label {
+                            Text("Account")
+                        } icon: {
+                            Image(systemName: "person.circle")
+                                .foregroundColor(.blue)
                         }
                     }
-
+                } header: {
+                    Text("User")
+                } footer: {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Server URL")
+                        Text("@\(viewModel.username)")
+                            .font(.caption)
                             .foregroundColor(.secondary)
-                        Text(APIConstants.activeServerURL)
-                            .font(.system(size: 12, design: .monospaced))
-                            .foregroundColor(.blue)
+                    }
+                }
+
+                // MARK: - Network Section
+                Section {
+                    NavigationLink(destination: NetworkSettingsView()) {
+                        Label {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Network")
+                                HStack(spacing: 4) {
+                                    Circle()
+                                        .fill(WebSocketManager.shared.isConnected ? Color.green : Color.red)
+                                        .frame(width: 6, height: 6)
+                                    Text(WebSocketManager.shared.isConnected ? "Connected" : "Disconnected")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        } icon: {
+                            Image(systemName: "network")
+                                .foregroundColor(.green)
+                        }
                     }
                 } header: {
                     Text("Connection")
                 }
 
+                // MARK: - Appearance Section
                 Section {
-                    if isEditingServer {
-                        TextField("wss://your-server.com", text: $editingServerURL)
-                            .autocapitalization(.none)
-                            .keyboardType(.URL)
-                            .textContentType(.URL)
-
-                        HStack {
-                            Button("Cancel") {
-                                isEditingServer = false
-                                editingServerURL = ""
-                            }
-
-                            Spacer()
-
-                            Button("Apply") {
-                                saveCustomServer()
-                            }
-                            .disabled(editingServerURL.isEmpty)
-                        }
-                    } else {
-                        Button {
-                            isEditingServer = true
-                            editingServerURL = storedServerURL ?? ""
-                        } label: {
-                            Text("Change Server")
-                        }
-
-                        if storedServerURL != nil {
-                            Button(role: .destructive) {
-                                resetToDefaultServer()
-                            } label: {
-                                Text("Reset to Default")
-                            }
+                    NavigationLink(destination: AppearanceSettingsView()) {
+                        Label {
+                            Text("Appearance")
+                        } icon: {
+                            Image(systemName: "paintbrush.fill")
+                                .foregroundColor(.purple)
                         }
                     }
                 } header: {
-                    Text("Server Configuration")
-                } footer: {
-                    Text("Default: \(ServerEnvironment.current.serverURL)")
-                        .font(.caption)
+                    Text("Preferences")
                 }
 
+                // MARK: - About Section
                 Section {
-                    Text("App Version")
-                        .foregroundColor(.secondary)
-                    Text("\(AppConstants.appVersion) (\(AppConstants.buildNumber))")
-                        .font(.caption)
-                        .foregroundColor(.gray)
+                    HStack {
+                        Label {
+                            Text("Version")
+                        } icon: {
+                            Image(systemName: "info.circle")
+                                .foregroundColor(.orange)
+                        }
+                        Spacer()
+                        Text("\(AppConstants.appVersion) (\(AppConstants.buildNumber))")
+                            .foregroundColor(.secondary)
+                    }
                 } header: {
                     Text("About")
                 }
 
+                // MARK: - Logout Section
                 Section {
                     Button(role: .destructive) {
                         showingLogoutConfirmation = true
                     } label: {
                         HStack {
                             Spacer()
-                            Text("Logout")
-                                .fontWeight(.semibold)
+                            Label {
+                                Text("Logout")
+                                    .fontWeight(.semibold)
+                            } icon: {
+                                Image(systemName: "rectangle.portrait.and.arrow.right")
+                            }
                             Spacer()
                         }
                     }
@@ -155,45 +120,6 @@ struct SettingsView: View {
             } message: {
                 Text("Are you sure you want to logout?")
             }
-        }
-    }
-
-    // MARK: - Server Configuration Methods
-
-    private func saveCustomServer() {
-        var url = editingServerURL.trimmingCharacters(in: .whitespaces)
-
-        // Ensure URL has wss:// or ws:// prefix
-        if !url.hasPrefix("wss://") && !url.hasPrefix("ws://") {
-            url = "wss://" + url
-        }
-
-        // 🎯 @AppStorage автоматически сохранит в UserDefaults!
-        storedServerURL = url
-        isEditingServer = false
-
-        // Notify and reconnect
-        NotificationCenter.default.post(name: .serverURLChanged, object: nil)
-        reconnectToServer()
-
-        print("⚠️ Using custom server: \(url)")
-    }
-
-    private func resetToDefaultServer() {
-        // 🎯 @AppStorage автоматически удалит из UserDefaults!
-        storedServerURL = nil
-
-        // Notify and reconnect
-        NotificationCenter.default.post(name: .serverURLChanged, object: nil)
-        reconnectToServer()
-
-        print("✅ Reset to default server: \(ServerEnvironment.current.serverURL)")
-    }
-
-    private func reconnectToServer() {
-        WebSocketManager.shared.disconnect()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            WebSocketManager.shared.connect()
         }
     }
 }
