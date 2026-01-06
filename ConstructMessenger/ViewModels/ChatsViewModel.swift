@@ -46,16 +46,40 @@ class ChatsViewModel: ObservableObject {
             return existingChat
         }
 
-        let dbUser = User(context: context)
-        dbUser.id = user.id
-        dbUser.username = user.username
-        dbUser.displayName = user.username // ✅ FIX: Set required displayName
+        // ✅ FIX: Check if User already exists before creating a new one
+        let userFetchRequest: NSFetchRequest<User> = User.fetchRequest()
+        userFetchRequest.predicate = NSPredicate(format: "id == %@", user.id)
+
+        let dbUser: User
+        if let existingUser = try? context.fetch(userFetchRequest).first {
+            // Use existing user - update username and displayName if they changed
+            existingUser.username = user.username
+            existingUser.displayName = user.username
+            dbUser = existingUser
+            Log.debug("Using existing user: id=\(user.id), username=\(user.username), displayName=\(existingUser.displayName)", category: "ChatsViewModel")
+        } else {
+            // Create new user
+            dbUser = User(context: context)
+            dbUser.id = user.id
+            dbUser.username = user.username
+            dbUser.displayName = user.username
+            Log.debug("Created new user: id=\(user.id), username=\(user.username), displayName=\(user.username)", category: "ChatsViewModel")
+        }
 
         let chat = Chat(context: context)
         chat.id = UUID().uuidString
         chat.otherUser = dbUser
 
-        try? context.save()
+        do {
+            try context.save()
+            Log.debug("✅ Chat saved successfully", category: "ChatsViewModel")
+            Log.debug("   chat.id = \(chat.id ?? "nil")", category: "ChatsViewModel")
+            Log.debug("   chat.otherUser?.id = \(chat.otherUser?.id ?? "nil")", category: "ChatsViewModel")
+            Log.debug("   chat.otherUser?.username = \(chat.otherUser?.username ?? "nil")", category: "ChatsViewModel")
+            Log.debug("   chat.otherUser?.displayName = \(chat.otherUser?.displayName ?? "nil")", category: "ChatsViewModel")
+        } catch {
+            Log.error("❌ Failed to save chat: \(error)", category: "ChatsViewModel")
+        }
         return chat
     }
 
@@ -89,10 +113,12 @@ class ChatsViewModel: ObservableObject {
 
     // MARK: - Handle Public Key Bundle (for receiving session initialization)
     private func handlePublicKeyBundle(_ data: PublicKeyBundleData) {
+        Log.debug("📦 ChatsViewModel: Received publicKeyBundle for userId: \(data.userId), hasPendingMessage: \(pendingFirstMessages[data.userId] != nil)", category: "ChatsViewModel")
+
         // Check if we have a pending first message from this user
         guard let firstMessage = pendingFirstMessages[data.userId] else {
             // No pending message - this bundle was requested for outgoing session (handled in ChatViewModel)
-            Log.debug("Received public key bundle for \(data.userId), but no pending first message", category: "ChatsViewModel")
+            Log.debug("ChatsViewModel: No pending first message for \(data.userId) - assuming this is for ChatViewModel to handle", category: "ChatsViewModel")
 
             // Update username for existing user if found
             guard let context = viewContext else { return }
@@ -142,7 +168,8 @@ class ChatsViewModel: ObservableObject {
                 if let user = existingChat.otherUser {
                     user.username = data.username
                     user.displayName = data.username
-                    Log.info("✅ Updated username to: \(data.username)", category: "ChatsViewModel")
+                    try? context.save()  // ✅ FIX: Save updated username
+                    Log.info("✅ Updated username to: \(data.username), displayName: \(user.displayName)", category: "ChatsViewModel")
                 }
                 chat = existingChat
             } else {

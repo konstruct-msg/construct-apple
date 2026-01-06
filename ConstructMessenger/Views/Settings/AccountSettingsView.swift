@@ -21,6 +21,12 @@ struct AccountSettingsView: View {
     @State private var newPassword = ""
     @State private var confirmPassword = ""
     @State private var passwordError: String?
+    
+    @State private var showingLogoutConfirmation = false
+
+    private var passwordFooterText: Text {
+        Text(String(format: NSLocalizedString("password_min_length_message", comment: ""), ValidationRules.minPasswordLength))
+    }
 
     var body: some View {
         List {
@@ -60,25 +66,25 @@ struct AccountSettingsView: View {
 
             // MARK: - Account Information Section
             Section {
-                TextField("Display Name", text: $viewModel.displayName)
+                TextField("display_name", text: $viewModel.displayName)
                     .onChange(of: viewModel.displayName) { newValue in
-                        viewModel.saveDisplayName(newValue)
+                        viewModel.saveDisplayName(newValue, authViewModel: authViewModel)
                     }
 
             } header: {
-                Text("Account Information")
+                Text("account_information")
             }
 
             // MARK: - Password Section
             Section {
                 if showingChangePassword {
-                    SecureField("Current Password", text: $currentPassword)
+                    SecureField("current_password", text: $currentPassword)
                         .textContentType(.password)
 
-                    SecureField("New Password", text: $newPassword)
+                    SecureField("new_password", text: $newPassword)
                         .textContentType(.newPassword)
 
-                    SecureField("Confirm New Password", text: $confirmPassword)
+                    SecureField("confirm_new_password", text: $confirmPassword)
                         .textContentType(.newPassword)
 
                     if let error = passwordError {
@@ -88,13 +94,13 @@ struct AccountSettingsView: View {
                     }
 
                     HStack {
-                        Button("Cancel") {
+                        Button("cancel") {
                             cancelPasswordChange()
                         }
 
                         Spacer()
 
-                        Button("Change Password") {
+                        Button("change_password") {
                             changePassword()
                         }
                         .disabled(!isPasswordValid)
@@ -103,27 +109,53 @@ struct AccountSettingsView: View {
                     Button {
                         showingChangePassword = true
                     } label: {
-                        Text("Change Password")
+                        Text("change_password")
                     }
                 }
             } header: {
-                Text("Security")
+                Text("security")
             } footer: {
                 if showingChangePassword {
-                    Text("Password must be at least \(ValidationRules.minPasswordLength) characters")
+                    passwordFooterText
                         .font(.caption)
                 }
             }
+            
+            // MARK: - Logout Section
+            Section {
+                Button(role: .destructive) {
+                    showingLogoutConfirmation = true
+                } label: {
+                    HStack {
+                        Spacer()
+                        Label {
+                            Text("logout")
+                                .fontWeight(.semibold)
+                        } icon: {
+                            Image(systemName: "rectangle.portrait.and.arrow.right")
+                        }
+                        Spacer()
+                    }
+                }
+            }
         }
-        .navigationTitle("Account")
+        .navigationTitle("account")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             viewModel.setContext(viewContext)
             viewModel.loadUserInfo(from: authViewModel)
         }
+        .alert("logout", isPresented: $showingLogoutConfirmation) {
+            Button("cancel", role: .cancel) { }
+            Button("logout", role: .destructive) {
+                authViewModel.logout()
+            }
+        } message: {
+            Text("logout_confirmation")
+        }
         .sheet(isPresented: $showingImagePicker) {
             ImagePicker(onImagePicked: { image in
-                viewModel.saveAvatar(image)
+                viewModel.saveAvatar(image, authViewModel: authViewModel)
             })
         }
     }
@@ -139,7 +171,7 @@ struct AccountSettingsView: View {
     // MARK: - Actions
     private func changePassword() {
         guard isPasswordValid else {
-            passwordError = "Please check all fields"
+            passwordError = NSLocalizedString("please_check_all_fields", comment: "")
             return
         }
 
@@ -211,7 +243,7 @@ struct ImagePicker: UIViewControllerRepresentable {
 
     try? context.save()
 
-    let authViewModel = AuthViewModel()
+    let authViewModel = AuthViewModel(context: context)
     authViewModel.isAuthenticated = true
     authViewModel.currentUserId = "user123"
     authViewModel.currentUsername = "john_doe"

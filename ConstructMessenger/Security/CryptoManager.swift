@@ -164,11 +164,18 @@ class CryptoManager {
 
     /// Delete a session for a user (called when deleting a chat)
     func deleteSession(for userId: String) {
-        if let sessionId = userSessions[userId] {
-            userSessions.removeValue(forKey: userId)
-            Log.info("✅ Session deleted for user: \(userId)", category: "CryptoManager")
-        } else {
-            Log.debug("No session found to delete for user: \(userId)", category: "CryptoManager")
+        // Remove from the Swift session mapping
+        if userSessions.removeValue(forKey: userId) != nil {
+            Log.info("✅ Removed session from Swift mapping for user: \(userId)", category: "CryptoManager")
+        }
+
+        // Also remove from the Rust core
+        if let core = core {
+            if core.removeSession(contactId: userId) {
+                Log.info("✅ Successfully removed session from Rust core for user: \(userId)", category: "CryptoManager")
+            } else {
+                Log.debug("No session found in Rust core for user \(userId), which is normal if one was never established.", category: "CryptoManager")
+            }
         }
     }
 

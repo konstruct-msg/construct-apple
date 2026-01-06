@@ -18,32 +18,32 @@ struct NetworkSettingsView: View {
             // MARK: - Connection Status Section
             Section {
                 HStack {
-                    Text("Status")
+                    Text("status")
                         .foregroundColor(.secondary)
                     Spacer()
                     HStack(spacing: 4) {
                         Circle()
                             .fill(WebSocketManager.shared.isConnected ? Color.green : Color.red)
                             .frame(width: 8, height: 8)
-                        Text(WebSocketManager.shared.isConnected ? "Connected" : "Disconnected")
+                        Text(WebSocketManager.shared.isConnected ? "connected" : "disconnected")
                             .fontWeight(.medium)
                     }
                 }
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Active Server")
+                    Text("active_server")
                         .foregroundColor(.secondary)
                     Text(APIConstants.activeServerURL)
                         .font(.system(size: 12, design: .monospaced))
                         .foregroundColor(.blue)
                 }
             } header: {
-                Text("Connection")
+                Text("connection")
             }
 
             // MARK: - Server Configuration Section
             Section {
-                Toggle("Use Custom Server", isOn: $useCustomServer)
+                Toggle("use_custom_server", isOn: $useCustomServer)
                     .onChange(of: useCustomServer) { newValue in
                         if !newValue {
                             // Switching back to default
@@ -56,7 +56,7 @@ struct NetworkSettingsView: View {
 
                 if useCustomServer {
                     VStack(alignment: .leading, spacing: 8) {
-                        TextField("wss://your-server.com", text: $customServerURL)
+                        TextField("custom_server_placeholder", text: $customServerURL)
                             .autocapitalization(.none)
                             .keyboardType(.URL)
                             .textContentType(.URL)
@@ -67,7 +67,7 @@ struct NetworkSettingsView: View {
                         } label: {
                             HStack {
                                 Spacer()
-                                Text("Apply Changes")
+                                Text("apply_changes")
                                     .fontWeight(.semibold)
                                 Spacer()
                             }
@@ -77,12 +77,12 @@ struct NetworkSettingsView: View {
                     }
                 }
             } header: {
-                Text("Server Configuration")
+                Text("server_configuration")
             } footer: {
                 VStack(alignment: .leading, spacing: 8) {
 
                     if useCustomServer {
-                        Text("Custom server address must start with wss:// or ws://")
+                        Text("custom_server_prefix_warning")
                             .font(.caption)
                             .foregroundColor(.orange)
                     }
@@ -92,38 +92,38 @@ struct NetworkSettingsView: View {
             // MARK: - Server Info Section
             Section {
                 HStack {
-                    Text("Environment")
+                    Text("environment")
                         .foregroundColor(.secondary)
                     Spacer()
-                    Text(ServerEnvironment.current.displayName)
-                        .fontWeight(.medium)
+//                    Text(ServerEnvironment.current.displayName)
+//                        .fontWeight(.medium)
                 }
 
                 HStack {
-                    Text("Build Configuration")
+                    Text("build_configuration")
                         .foregroundColor(.secondary)
                     Spacer()
-                    Text(BuildConfiguration.current == .debug ? "Debug" : "Release")
+                    Text(BuildConfiguration.current == .debug ? "debug" : "release")
                         .fontWeight(.medium)
                 }
             } header: {
-                Text("Server Information")
+                Text("server_information")
             } footer: {
-                Text("These settings are automatically configured based on your build configuration.")
+                Text("server_settings_footer")
                     .font(.caption)
             }
         }
-        .navigationTitle("Network")
+        .navigationTitle("network")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             // Initialize state based on stored value
             useCustomServer = storedServerURL != nil
             customServerURL = storedServerURL ?? ""
         }
-        .alert("Reconnect Required", isPresented: $showingReconnectAlert) {
-            Button("OK") { }
+        .alert("reconnect_required", isPresented: $showingReconnectAlert) {
+            Button("ok") { }
         } message: {
-            Text("The app will reconnect to the new server.")
+            Text("reconnect_alert_message")
         }
     }
 
@@ -141,7 +141,7 @@ struct NetworkSettingsView: View {
             print("⚠️ Using custom server: \(url)")
         } else {
             storedServerURL = nil
-            print("✅ Reset to default server: \(ServerEnvironment.current.serverURL)")
+//            print("✅ Reset to default server: \(ServerEnvironment.current.serverURL)")
         }
 
         // Notify and reconnect

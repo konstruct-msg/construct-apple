@@ -449,6 +449,39 @@ impl IndexedDbStorage {
     pub async fn load_metadata(&self, _user_id: &str) -> Result<Option<StoredAppMetadata>> {
         Ok(None)
     }
+
+    // === Утилиты ===
+
+    #[cfg(target_arch = "wasm32")]
+    pub async fn clear_all(&self) -> Result<()> {
+        let db = self.get_db()?;
+        let store_names = &["private_keys", "sessions", "contacts", "messages", "metadata"];
+
+        for store_name in store_names {
+            let transaction = db
+                .transaction_with_str_and_mode(store_name, IdbTransactionMode::Readwrite)
+                .map_err(|e| ConstructError::StorageError(format!("Failed to create transaction for clear: {:?}", e)))?;
+
+            let store = transaction
+                .object_store(store_name)
+                .map_err(|e| ConstructError::StorageError(format!("Failed to get store for clear: {:?}", e)))?;
+
+            let request = store
+                .clear()
+                .map_err(|e| ConstructError::StorageError(format!("Failed to clear {}: {:?}", store_name, e)))?;
+
+            let promise = idb_request_to_promise(&request);
+            JsFuture::from(promise).await
+                .map_err(|e| ConstructError::StorageError(format!("Clear operation failed for {}: {:?}", store_name, e)))?;
+        }
+
+        Ok(())
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub async fn clear_all(&self) -> Result<()> {
+        Ok(())
+    }
 }
 
 impl Default for IndexedDbStorage {

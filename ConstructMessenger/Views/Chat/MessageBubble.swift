@@ -57,7 +57,7 @@ struct MessageBubble: View {
                     }
 
                     // Main message content
-                    Text(message.decryptedContent ?? "Encrypted")
+                    Text(message.decryptedContent ?? NSLocalizedString("encrypted", comment: "Fallback for encrypted content"))
                         .padding(.horizontal, 12)
                         .padding(.vertical, message.replyToContent != nil ? 4 : 8)
                         .padding(.bottom, message.replyToContent != nil ? 8 : 0)
@@ -91,7 +91,7 @@ struct MessageBubble: View {
                 Button {
                     onReply(message)
                 } label: {
-                    Label("Reply", systemImage: "arrowshape.turn.up.left")
+                    Label("reply", systemImage: "arrowshape.turn.up.left")
                 }
             }
 
@@ -99,14 +99,14 @@ struct MessageBubble: View {
             Button {
                 UIPasteboard.general.string = message.decryptedContent
             } label: {
-                Label("Copy", systemImage: "doc.on.doc")
+                Label("copy", systemImage: "doc.on.doc")
             }
 
             // Message info
             Button {
                 showMessageInfo = true
             } label: {
-                Label("Info", systemImage: "info.circle")
+                Label("info", systemImage: "info.circle")
             }
 
             Divider()
@@ -116,7 +116,7 @@ struct MessageBubble: View {
                 Button(role: .destructive) {
                     onDelete(message)
                 } label: {
-                    Label("Delete", systemImage: "trash")
+                    Label("delete", systemImage: "trash")
                 }
             }
 
@@ -126,7 +126,7 @@ struct MessageBubble: View {
                 Button {
                     onRetry(message)
                 } label: {
-                    Label("Retry", systemImage: "arrow.clockwise")
+                    Label("retry", systemImage: "arrow.clockwise")
                 }
             }
         }
@@ -165,7 +165,7 @@ struct MessageBubble: View {
                     Image(systemName: "tray")
                         .font(.system(size: 10))
                         .foregroundColor(.orange)
-                    Text("Retry")
+                    Text("retry")
                         .font(.caption2)
                         .foregroundColor(.orange)
                 }
@@ -181,7 +181,7 @@ struct MessageBubble: View {
                     Image(systemName: "exclamationmark.circle.fill")
                         .font(.system(size: 10))
                         .foregroundColor(.red)
-                    Text("Retry")
+                    Text("retry")
                         .font(.caption2)
                         .foregroundColor(.red)
                 }

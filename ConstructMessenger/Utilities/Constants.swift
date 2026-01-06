@@ -21,50 +21,31 @@ enum BuildConfiguration {
     }
 }
 
-// MARK: - Server Environment
-enum ServerEnvironment {
-    case development
-    case production
-
-    // Можно переключать вручную для тестирования
-    static var current: ServerEnvironment {
-        switch BuildConfiguration.current {
-        case .debug:
-            return .development
-        case .release:
-            return .production
+// MARK: - Server Configuration
+struct ServerConfig {
+    static var defaultWebsocketURL: String {
+        do {
+            var value: String = try ConfigurationManager.value(for: "APIBaseURL")
+            // убрать кавычки и пробелы
+            value = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            value = value.trimmingCharacters(in: CharacterSet(charactersIn: "\""))
+            print("🔍 normalized APIBaseURL =", value)
+            guard !value.isEmpty else { throw ConfigurationManager.Error.invalidValue }
+            return value
+        } catch {
+            print("⚠️ Using fallback WebSocket URL due to config error:", error)
+            return "wss://api.konstruct.cc"
         }
-    }
-
-    var serverURL: String {
-        switch self {
-        case .development:
-            // Для локального тестирования можно использовать:
-            // return "ws://localhost:8080"
-            // Пока используем production для разработки тоже
-            return "wss://construct-server.fly.dev"
-        case .production:
-            return "wss://construct-server.fly.dev"
-        }
-    }
-
-    var displayName: String {
-        switch self {
-        case .development: return "Development"
-        case .production: return "Production"
-        }
-    }
-
-    var isProduction: Bool {
-        return self == .production
     }
 }
 
+
+
 // MARK: - API Constants
 struct APIConstants {
-    // WebSocket Server URL (зависит от окружения)
+    // WebSocket Server URL (managed by .xcconfig)
     static var websocketURL: String {
-        ServerEnvironment.current.serverURL
+        ServerConfig.defaultWebsocketURL
     }
 
     // Default server URL key for AppStorage
@@ -91,9 +72,9 @@ struct APIConstants {
 
     // Server Info (для отображения в UI)
     static var serverInfo: String {
-        let env = ServerEnvironment.current.displayName
+        let config = BuildConfiguration.current == .debug ? "Debug" : "Release"
         let url = activeServerURL
-        return "\(env): \(url)"
+        return "(\(config)) \(url)"
     }
 }
 
@@ -109,7 +90,7 @@ struct ValidationRules {
 
 // MARK: - App Constants
 struct AppConstants {
-    static let appName = "Construct Messenger"
+    static let appName = "Konstruct"
     static let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
     static let buildNumber = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
 

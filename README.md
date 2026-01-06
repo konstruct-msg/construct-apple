@@ -123,25 +123,6 @@ cargo run --release
 
 ---
 
-## 📚 Documentation
-
-### Getting Started
-- [**ARCHITECTURE_RESPONSIBILITY.md**](docs/ARCHITECTURE_RESPONSIBILITY.md) - 🎯 **Key Principle:** Swift = thin client, Rust = all logic
-- [**RUST_SWIFT_INTEGRATION.md**](docs/RUST_SWIFT_INTEGRATION.md) - Complete guide to Rust + Swift integration
-- [**XCODE_INTEGRATION.md**](XCODE_INTEGRATION.md) - Setting up the Xcode project
-- [**ROADMAP.md**](docs/ROADMAP.md) - Development plan and post-quantum cryptography
-- [**TESTING.md**](TESTING.md) - Testing guide
-
-### Feature Documentation
-- [**CAMERA_TESTING_GUIDE.md**](docs/CAMERA_TESTING_GUIDE.md) - Camera QR scanner debugging and testing
-- [**CONTACT_LINK_FORMAT.md**](docs/CONTACT_LINK_FORMAT.md) - Contact link format and QR code specification
-- [**PROFILE_SHARING_IMPLEMENTATION.md**](docs/PROFILE_SHARING_IMPLEMENTATION.md) - Privacy-first profile sharing design
-
-### API
-- [**API_V3_SPEC.md**](docs/API_V3_SPEC.md) - API specification with crypto-agility
-
----
-
 ## 🔐 Cryptography
 
 ### Classic Suite (v1) - Production
@@ -169,12 +150,6 @@ cargo run --release
 
 ```
 construct-messenger/
-├── docs/                    # 📚 Documentation
-│   ├── ARCHITECTURE_RESPONSIBILITY.md
-│   ├── API_V3_SPEC.md
-│   ├── CAMERA_TESTING_GUIDE.md         # 🆕 Camera debugging
-│   ├── CONTACT_LINK_FORMAT.md          # 🆕 QR code format
-│   └── PROFILE_SHARING_IMPLEMENTATION.md  # 🆕 P2P profile sharing
 │
 ├── packages/
 │   ├── core/               # 🦀 Rust cryptographic core
@@ -250,10 +225,8 @@ cargo test
 
 We welcome contributions! Please familiarize yourself with:
 
-1. [ROADMAP.md](docs/ROADMAP.md) - Development plan
-2. [RUST_SWIFT_INTEGRATION.md](docs/RUST_SWIFT_INTEGRATION.md) - Technical details
-3. Create an Issue to discuss new features
-4. Submit a Pull Request
+1. Create an Issue to discuss new features
+2. Submit a Pull Request
 
 ### Priority Areas
 

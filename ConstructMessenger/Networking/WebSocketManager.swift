@@ -11,7 +11,12 @@ class WebSocketManager: NSObject, ObservableObject {
 
     private var webSocketTask: URLSessionWebSocketTask?
     private var url: URL {
-        URL(string: APIConstants.activeServerURL)!
+        let raw = APIConstants.activeServerURL
+            guard let url = URL(string: raw) else {
+                Log.error("❌ Invalid WebSocket URL: \(raw)", category: "WebSocket")
+                fatalError("Invalid WebSocket URL: \(raw)")
+            }
+            return url
     }
     private var session: URLSession!
 
@@ -36,7 +41,7 @@ class WebSocketManager: NSObject, ObservableObject {
             switch self {
             case .connected: return "Connected"
             case .disconnected: return "Disconnected"
-            case .reconnecting(let attempt): return "Reconnecting... )"
+            case .reconnecting: return "Reconnecting..."
             }
         }
     }
@@ -207,6 +212,18 @@ class WebSocketManager: NSObject, ObservableObject {
         }
     }
 
+    // MARK: - Authentication
+    private func authenticateSession() {
+        guard let sessionToken = SessionManager.shared.sessionToken else {
+            Log.error("❌ No session token available for authentication", category: "WebSocket")
+            return
+        }
+
+        Log.info("🔐 Authenticating WebSocket with session token", category: "WebSocket")
+        let connectMessage = ClientMessage.connect(ConnectData(sessionToken: sessionToken))
+        send(connectMessage)
+    }
+
     // MARK: - Disconnect
     func disconnect() {
         stopPingTimer()
@@ -226,9 +243,13 @@ class WebSocketManager: NSObject, ObservableObject {
 extension WebSocketManager: URLSessionWebSocketDelegate {
     nonisolated func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask, didOpenWithProtocol protocol: String?) {
         DispatchQueue.main.async {
-            Log.info("WebSocket connected successfully", category: "WebSocket")
+            Log.info("✅ WebSocket connected successfully", category: "WebSocket")
             self.isConnected = true
             self.connectionStatus = .connected
+
+            // ✅ FIX: Authenticate immediately after connection
+            self.authenticateSession()
+
             if self.isReconnecting {
                 self.onReconnectSuccess()
             }

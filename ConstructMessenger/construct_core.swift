@@ -408,6 +408,27 @@ fileprivate struct FfiConverterUInt32: FfiConverterPrimitive {
     }
 }
 
+fileprivate struct FfiConverterBool : FfiConverter {
+    typealias FfiType = Int8
+    typealias SwiftType = Bool
+
+    public static func lift(_ value: Int8) throws -> Bool {
+        return value != 0
+    }
+
+    public static func lower(_ value: Bool) -> Int8 {
+        return value ? 1 : 0
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Bool {
+        return try lift(readInt(&buf))
+    }
+
+    public static func write(_ value: Bool, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
 fileprivate struct FfiConverterString: FfiConverter {
     typealias SwiftType = String
     typealias FfiType = RustBuffer
@@ -462,6 +483,8 @@ public protocol ClassicCryptoCoreProtocol : AnyObject {
     func initReceivingSession(contactId: String, recipientBundle: [UInt8], firstMessage: [UInt8]) throws  -> SessionInitResult
     
     func initSession(contactId: String, recipientBundle: [UInt8]) throws  -> String
+    
+    func removeSession(contactId: String)  -> Bool
     
 }
 
@@ -555,6 +578,14 @@ open func initSession(contactId: String, recipientBundle: [UInt8])throws  -> Str
     uniffi_construct_core_fn_method_classiccryptocore_init_session(self.uniffiClonePointer(),
         FfiConverterString.lower(contactId),
         FfiConverterSequenceUInt8.lower(recipientBundle),$0
+    )
+})
+}
+    
+open func removeSession(contactId: String) -> Bool {
+    return try!  FfiConverterBool.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_classiccryptocore_remove_session(self.uniffiClonePointer(),
+        FfiConverterString.lower(contactId),$0
     )
 })
 }
@@ -1076,6 +1107,9 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_classiccryptocore_init_session() != 28133) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_classiccryptocore_remove_session() != 58665) {
         return InitializationResult.apiChecksumMismatch
     }
 

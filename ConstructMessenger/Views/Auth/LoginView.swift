@@ -17,11 +17,11 @@ struct LoginView: View {
         VStack(spacing: 16) {
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
-                    Text("Username")
+                    Text("username")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
-                TextField("Enter username", text: $username)
+                TextField("enter_username", text: $username)
                     .textFieldStyle(.roundedBorder)
                     .autocapitalization(.none)
                     .autocorrectionDisabled()
@@ -32,12 +32,12 @@ struct LoginView: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
-                    Text("Password")
+                    Text("password")
                         .font(.caption)
                         .foregroundColor(.secondary)
                     
                 }
-                SecureField("Enter password", text: $password)
+                SecureField("enter_password", text: $password)
                     .textFieldStyle(.roundedBorder)
             }
             
@@ -46,7 +46,7 @@ struct LoginView: View {
             Button {
                 viewModel.login(username: username, password: password)
             } label: {
-                Text("Login")
+                Text("login")
                     .frame(maxWidth: .infinity)
                     .padding()
                     .background(isValid ? Color.blue : Color.gray)
@@ -65,7 +65,8 @@ struct LoginView: View {
 }
 
 #Preview {
-    LoginView(viewModel: AuthViewModel())
+    let container = PreviewHelpers.createPreviewContainer()
+    return LoginView(viewModel: AuthViewModel(context: container.viewContext))
         .padding()
 }
 

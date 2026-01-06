@@ -7,6 +7,7 @@
 
 import Foundation
 import Combine
+import CoreData
 
 @MainActor
 class AuthViewModel: ObservableObject {
@@ -21,11 +22,13 @@ class AuthViewModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private var sessionRestoreTimer: Timer?
     private var authOperationTimer: Timer?
+    private let viewContext: NSManagedObjectContext
 
     // Timer for monitoring token expiration
     nonisolated(unsafe) private var tokenRefreshTimer: Timer?
 
-    init() {
+    init(context: NSManagedObjectContext) {
+        self.viewContext = context
         setupSubscribers()
         startTokenRefreshMonitoring()  // ✅ FIXED: Monitor token expiration
     }
@@ -63,6 +66,9 @@ class AuthViewModel: ObservableObject {
             print("❌ No current user ID found")
             return
         }
+        
+        // ✅ FIX: Immediately load local data on restore attempt
+        loadUserFromCoreData(userId: userId)
 
         print("✅ Found session token for user: \(userId)")
 
@@ -181,7 +187,7 @@ class AuthViewModel: ObservableObject {
         isAuthenticated = false
         currentUserId = nil
         currentUsername = nil
-        // Removed currentDisplayName = nil
+        currentDisplayName = nil
         
         wsManager.disconnect()
     }
@@ -259,8 +265,10 @@ class AuthViewModel: ObservableObject {
         SessionManager.shared.saveSession(userId: userId, token: token, expires: expires)
         currentUserId = userId
         currentUsername = username
-        currentDisplayName = nil // Set to nil explicitly if not received from server
         isAuthenticated = true
+        
+        // ✅ FIX: Load local user data (like display name) after successful auth
+        loadUserFromCoreData(userId: userId)
     }
 
     private func handleConnectSuccess(userId: String, username: String) {
@@ -270,9 +278,10 @@ class AuthViewModel: ObservableObject {
 
         currentUserId = userId
         currentUsername = username
-        currentDisplayName = nil // Set to nil explicitly if not received from server
         isAuthenticated = true
 
+        // ✅ FIX: Load local user data (like display name) after successful auth
+        loadUserFromCoreData(userId: userId)
         print("✅ User authenticated successfully")
     }
     
@@ -280,5 +289,35 @@ class AuthViewModel: ObservableObject {
         SessionManager.shared.clearSession()
         isAuthenticated = false
         errorMessage = "Session expired. Please login again."
+    }
+    
+    // MARK: - Core Data Integration
+    
+    /// Finds or creates the User entity and loads local data into the AuthViewModel
+    private func loadUserFromCoreData(userId: String) {
+        let fetchRequest: NSFetchRequest<User> = User.fetchRequest()
+        fetchRequest.predicate = NSPredicate(format: "id == %@", userId)
+        
+        do {
+            let user: User
+            if let existingUser = try viewContext.fetch(fetchRequest).first {
+                user = existingUser
+                print("👤 Found existing user in Core Data: \(user.displayName ?? user.username ?? "Unknown")")
+            } else {
+                // First login on this device, create a new User entity
+                user = User(context: viewContext)
+                user.id = userId
+                user.username = self.currentUsername ?? ""
+                user.displayName = self.currentUsername ?? "" // Default display name to username
+                try viewContext.save()
+                print("✨ Created new user in Core Data for ID: \(userId)")
+            }
+            
+            // Update the published properties
+            self.currentDisplayName = user.displayName
+            
+        } catch {
+            print("❌ Failed to fetch or create user from Core Data: \(error)")
+        }
     }
 }

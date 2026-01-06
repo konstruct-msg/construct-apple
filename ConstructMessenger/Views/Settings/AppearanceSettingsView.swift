@@ -34,13 +34,13 @@ struct AppearanceSettingsView: View {
                     }
                 }
             } header: {
-                Text("Theme")
+                Text("theme")
             } footer: {
-                Text("Choose how Construct Messenger looks. Automatic adjusts based on your system settings.")
+                Text("theme_footer")
                     .font(.caption)
             }
         }
-        .navigationTitle("Appearance")
+        .navigationTitle("appearance")
         .navigationBarTitleDisplayMode(.inline)
     }
 }
@@ -51,11 +51,11 @@ enum AppTheme: String, CaseIterable {
     case light = "light"
     case dark = "dark"
 
-    var displayName: String {
+    var displayName: LocalizedStringKey {
         switch self {
-        case .automatic: return "Automatic"
-        case .light: return "Light"
-        case .dark: return "Dark"
+        case .automatic: return "automatic"
+        case .light: return "light"
+        case .dark: return "dark"
         }
     }
 

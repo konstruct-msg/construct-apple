@@ -44,7 +44,7 @@ struct ContentView: View {
 
 #Preview("Not Authenticated") {
     let container = PreviewHelpers.createPreviewContainer()
-    let authViewModel = AuthViewModel()
+    let authViewModel = AuthViewModel(context: container.viewContext)
     authViewModel.isAuthenticated = false
 
     return ContentView()
@@ -55,7 +55,7 @@ struct ContentView: View {
 #Preview("Authenticated") {
     let container = PreviewHelpers.createPreviewContainer()
     let context = container.viewContext
-    let authViewModel = AuthViewModel()
+    let authViewModel = AuthViewModel(context: context)
     authViewModel.isAuthenticated = true
     authViewModel.currentUserId = "me"
     authViewModel.currentUsername = "john_doe"

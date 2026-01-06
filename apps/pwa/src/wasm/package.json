@@ -1,0 +1,20 @@
+{
+  "name": "construct-core",
+  "type": "module",
+  "collaborators": [
+    "Construct Team"
+  ],
+  "description": "Core Rust engine for Construct Messenger with E2EE",
+  "version": "0.1.0",
+  "license": "MIT",
+  "files": [
+    "construct_core_bg.wasm",
+    "construct_core.js",
+    "construct_core.d.ts"
+  ],
+  "main": "construct_core.js",
+  "types": "construct_core.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}

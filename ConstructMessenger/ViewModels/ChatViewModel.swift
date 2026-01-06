@@ -28,6 +28,8 @@ class ChatViewModel: ObservableObject {
     init(chat: Chat, context: NSManagedObjectContext) {
         self.chat = chat
         self.viewContext = context
+        Log.debug("🔧 ChatViewModel init: chat.id=\(chat.id ?? "nil"), chat.otherUser?.id=\(chat.otherUser?.id ?? "nil"), chat.otherUser?.username=\(chat.otherUser?.username ?? "nil")", category: "ChatViewModel")
+
         setupFetchedResultsController()  // ✅ Setup FRC first
         setupSubscribers()
         checkExistingSession()  // ✅ FIXED: Check if session already exists
@@ -95,8 +97,15 @@ class ChatViewModel: ObservableObject {
     }
 
     private func fetchRecipientPublicKey() {
-        guard let userId = chat.otherUser?.id else { return }
-        guard let currentUserId = SessionManager.shared.currentUserId else { return }
+        guard let userId = chat.otherUser?.id else {
+            Log.error("❌ Cannot fetch recipient public key: chat.otherUser?.id is nil", category: "ChatViewModel")
+            return
+        }
+        guard let currentUserId = SessionManager.shared.currentUserId else {
+            Log.error("❌ Cannot fetch recipient public key: currentUserId is nil", category: "ChatViewModel")
+            return
+        }
+        Log.debug("🔑 Fetching public key for userId: \(userId), currentUserId: \(currentUserId)", category: "ChatViewModel")
 
         // 🚫 BLOCK: Cannot send encrypted messages to yourself
         if userId == currentUserId {
@@ -321,6 +330,7 @@ class ChatViewModel: ObservableObject {
     private func handleServerMessage(_ message: ServerMessage) {
         switch message {
         case .publicKeyBundle(let data):
+            Log.debug("📦 Received publicKeyBundle for userId: \(data.userId), chat.otherUser?.id: \(chat.otherUser?.id ?? "nil"), match: \(data.userId == chat.otherUser?.id)", category: "ChatViewModel")
             if data.userId == chat.otherUser?.id {
                 // ✅ Update username if we have the user in Core Data
                 if let user = chat.otherUser {
@@ -332,6 +342,12 @@ class ChatViewModel: ObservableObject {
 
                 self.recipientBundle = (data.identityPublic, data.signedPrekeyPublic, data.signature, data.verifyingKey)
                 guard let currentUserId = SessionManager.shared.currentUserId else { return }
+                
+                // ✅ FIX: Proactively delete any stale session before starting a new one.
+                // This handles cases where a session exists in the Rust core but not in the Swift
+                // session mapping, or any other conflict, preventing initialization failures.
+                CryptoManager.shared.deleteSession(for: data.userId)
+                Log.info("🗑️ Proactively deleted any existing session for \(data.userId) before initialization.", category: "ChatViewModel")
 
                 // ✅ FIX: If we requested the keys, WE are the initiator
                 // The fact that we're in ChatViewModel and requested getPublicKey
@@ -431,6 +447,7 @@ class ChatViewModel: ObservableObject {
             newMessage.timestamp = Date(timeIntervalSince1970: TimeInterval(message.timestamp))
             newMessage.isSentByMe = isSentByMe
             newMessage.deliveryStatus = status
+            newMessage.retryCount = 0  // ✅ FIX: Initialize required field
             newMessage.chat = chat
 
             // Set reply information

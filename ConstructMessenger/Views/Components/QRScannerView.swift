@@ -45,11 +45,11 @@ struct QRScannerView: View {
                     Spacer()
 
                     VStack(spacing: 16) {
-                        Text("Scan QR Code")
+                        Text("scan_qr_code")
                             .font(.headline)
                             .foregroundColor(.white)
 
-                        Text("Position the QR code within the frame")
+                        Text("position_qr_code_within_frame")
                             .font(.subheadline)
                             .foregroundColor(.white.opacity(0.8))
 
@@ -75,7 +75,7 @@ struct QRScannerView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
+                    Button("cancel") {
                         dismiss()
                     }
                     .foregroundColor(.white)
@@ -96,25 +96,25 @@ struct QRScannerView: View {
             .onDisappear {
                 scanner.stopScanning()
             }
-            .alert("Camera Access Required", isPresented: $showingPermissionAlert) {
-                Button("Open Settings") {
+            .alert("camera_access_required", isPresented: $showingPermissionAlert) {
+                Button("open_settings") {
                     if let settingsURL = URL(string: UIApplication.openSettingsURLString) {
                         UIApplication.shared.open(settingsURL)
                     }
                 }
-                Button("Cancel", role: .cancel) {
+                Button("cancel", role: .cancel) {
                     dismiss()
                 }
             } message: {
-                Text("Please allow camera access in Settings to scan QR codes")
+                Text("allow_camera_access_for_qr")
             }
             .onChange(of: scanner.scannedCode) { newValue in
                 if let code = newValue {
                     handleScannedCode(code)
                 }
             }
-            .alert("Error", isPresented: $showingError) {
-                Button("OK") {
+            .alert("error", isPresented: $showingError) {
+                Button("ok") {
                     dismiss()
                 }
             } message: {
@@ -227,7 +227,10 @@ struct QRScannerView: View {
         let testUsername = "test_user_\(Int.random(in: 100...999))"
         let testCode = "construct://add-contact?id=\(testUserId)&username=\(testUsername)"
 
-        print("🧪 Simulating QR scan: \(testCode)")
+        print("🧪 QRScannerView: Simulating QR scan")
+        print("   Generated URL: \(testCode)")
+        print("   UserId: \(testUserId)")
+        print("   Username: \(testUsername)")
         handleScannedCode(testCode)
     }
 
@@ -268,7 +271,7 @@ struct QRScannerView: View {
         if code.hasPrefix("construct://add-contact") {
             onCodeScanned(code)
         } else {
-            errorMessage = "Invalid QR code. Please scan a Construct Messenger contact code."
+            errorMessage = NSLocalizedString("invalid_qr_code_construct", comment: "Error message for invalid QR code")
             showingError = true
         }
     }

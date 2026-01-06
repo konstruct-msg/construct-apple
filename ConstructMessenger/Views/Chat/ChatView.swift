@@ -26,7 +26,7 @@ struct ChatView: View {
                 HStack(spacing: 8) {
                     ProgressView()
                         .scaleEffect(0.7)
-                    Text("Sending...")
+                    Text("sending")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -37,7 +37,7 @@ struct ChatView: View {
                 HStack(spacing: 8) {
                     ProgressView()
                         .scaleEffect(0.7)
-                    Text("Initializing secure connection...")
+                    Text("initializing_secure_connection")
                         .font(.caption)
                         .foregroundColor(.orange)
                 }
@@ -46,9 +46,7 @@ struct ChatView: View {
                 .background(Color.orange.opacity(0.1))
             } else if !WebSocketManager.shared.isConnected {
                 HStack(spacing: 8) {
-                    Image(systemName: "wifi.slash")
-                        .font(.caption)
-                    Text("Not connected to server")
+                    Text("not_connected_to_server")
                         .font(.caption)
                         .foregroundColor(.red)
                 }
@@ -118,7 +116,7 @@ struct ChatView: View {
                 }
             )
         }
-        .navigationTitle(viewModel.chat.otherUser?.displayName ?? "Chat")
+        .navigationTitle(viewModel.chat.otherUser?.displayName ?? NSLocalizedString("chat", comment: "Default chat title"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {

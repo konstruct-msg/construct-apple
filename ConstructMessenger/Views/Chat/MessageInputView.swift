@@ -24,11 +24,11 @@ struct MessageInputView: View {
                         .frame(width: 3)
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Reply to:")
+                        Text("reply_to_colon")
                             .font(.caption)
                             .foregroundColor(.secondary)
 
-                        Text(replyMessage.decryptedContent ?? "Message")
+                        Text(replyMessage.decryptedContent ?? NSLocalizedString("message", comment: "Fallback for reply preview"))
                             .font(.subheadline)
                             .lineLimit(1)
                             .foregroundColor(.primary)
@@ -53,7 +53,7 @@ struct MessageInputView: View {
             // Input field
             HStack(spacing: 16) {
                 HStack {
-                    TextField("Message...", text: $text, axis: .vertical)
+                    TextField("message_placeholder", text: $text, axis: .vertical)
                         .lineLimit(1...5)
                         .padding(.leading, 12)
                         .padding(.trailing, canSend ? 0 : 12)

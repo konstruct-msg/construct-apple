@@ -160,9 +160,14 @@ pub struct AppState<P: CryptoProvider> {
     conversations_manager: ConversationsManager,
 
     // === Хранилище ===
+    #[cfg(target_arch = "wasm32")]
+    storage: IndexedDbStorage,
+    #[cfg(not(target_arch = "wasm32"))]
     storage: MemoryStorage,
 
     // === Состояние соединения ===
+    #[cfg(target_arch = "wasm32")]
+    transport: Option<WebSocketTransport>,
     connection_state: ConnectionState,
     server_url: Option<String>,
     reconnect_state: ReconnectState,
@@ -445,26 +450,24 @@ impl<P: CryptoProvider> AppState<P> {
     /// Эта версия используется внутри AppState, где мы не имеем доступа к Arc
     #[cfg(target_arch = "wasm32")]
     fn setup_transport_callbacks(&self, transport: &mut WebSocketTransport) -> Result<()> {
-        use crate::wasm::console;
-
         // Callback для успешного подключения
         transport.set_on_open(|| {
-            console::log("✅ WebSocket connected successfully");
+            web_sys::console::log_1(&"✅ WebSocket connected successfully".into());
         })?;
 
         // Базовый callback для входящих сообщений
         transport.set_on_message(|msg| {
-            console::log(&format!("📩 Received message: {:?}", msg));
+            web_sys::console::log_1(&format!("📩 Received message: {:?}", msg).into());
         })?;
 
         // Callback для ошибок
         transport.set_on_error(|err| {
-            console::log(&format!("❌ WebSocket error: {}", err));
+            web_sys::console::log_1(&format!("❌ WebSocket error: {}", err).into());
         })?;
 
         // Callback для закрытия соединения
         transport.set_on_close(|code, reason| {
-            console::log(&format!("🔌 WebSocket closed: {} - {}", code, reason));
+            web_sys::console::log_1(&format!("🔌 WebSocket closed: {} - {}", code, reason).into());
         })?;
 
         Ok(())
@@ -603,13 +606,16 @@ impl<P: CryptoProvider> AppState<P> {
     // === Очистка ===
 
     /// Очистить все данные
-    pub fn clear_all_data(&mut self) -> Result<()> {
+    pub async fn clear_all_data(&mut self) -> Result<()> {
         // Очистить кеши
         self.message_cache.clear();
         self.conversations_manager.clear_all();
         self.contact_manager.clear_all();
 
         // Очистить хранилище
+        #[cfg(target_arch = "wasm32")]
+        self.storage.clear_all().await?;
+        #[cfg(not(target_arch = "wasm32"))]
         self.storage.clear_all()?;
 
         // Сбросить состояние
@@ -653,7 +659,6 @@ impl<P: CryptoProvider> AppState<P> {
         // 5. Создать RegisterData
         let register_data = RegisterData {
             username: username.clone(),
-            display_name: username.clone(), // Используем username как display_name
             password,
             public_key,
         };

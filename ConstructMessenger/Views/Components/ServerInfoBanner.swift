@@ -25,9 +25,9 @@ struct ServerInfoBanner: View {
 
                     Spacer()
 
-                    Text(ServerEnvironment.current.displayName)
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
+//                    Text(ServerEnvironment.current.displayName)
+//                        .font(.caption2)
+//                        .foregroundColor(.secondary)
                 }
 
                 Text(APIConstants.activeServerURL)

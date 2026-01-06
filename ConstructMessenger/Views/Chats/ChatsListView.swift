@@ -15,7 +15,7 @@ struct ChatsListView: View {
     private var chats: FetchedResults<Chat>
 
     @StateObject private var chatsViewModel = ChatsViewModel()
-    @State private var showingNewChat = false
+    @State private var showingQRScanner = false
 
     init() {
         let fetchRequest: NSFetchRequest<Chat> = Chat.fetchRequest()
@@ -43,14 +43,16 @@ struct ChatsListView: View {
 
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
-                        showingNewChat = true
+                        showingQRScanner = true
                     } label: {
                         Image(systemName: "qrcode.viewfinder")
                     }
                 }
             }
-            .sheet(isPresented: $showingNewChat) {
-                NewChatView(chatsViewModel: chatsViewModel)
+            .sheet(isPresented: $showingQRScanner) {
+                QRScannerView { contactURL in
+                    handleScannedContact(contactURL)
+                }
             }
             .onAppear {
                 chatsViewModel.setContext(viewContext)
@@ -61,6 +63,77 @@ struct ChatsListView: View {
     private func deleteItems(offsets: IndexSet) {
         withAnimation {
             offsets.map { chats[$0] }.forEach(chatsViewModel.deleteChat)
+        }
+    }
+
+    // MARK: - QR Code Handling
+    private func handleScannedContact(_ url: String) {
+        print("🔍 ChatsListView: Handling scanned URL: \(url)")
+
+        // Parse URL: construct://add-contact?id=USER_ID&username=USERNAME
+        guard url.hasPrefix("construct://add-contact") else {
+            print("❌ Invalid URL prefix: \(url)")
+            return
+        }
+
+        guard let components = URLComponents(string: url) else {
+            print("❌ Failed to parse URL components from: \(url)")
+            return
+        }
+
+        guard let queryItems = components.queryItems else {
+            print("❌ No query items in URL: \(url)")
+            return
+        }
+
+        print("📋 Query items: \(queryItems)")
+
+        // Extract parameters
+        var userId: String?
+        var username: String?
+
+        for item in queryItems {
+            print("  - \(item.name) = \(item.value ?? "nil")")
+            if item.name == "id" {
+                userId = item.value
+            } else if item.name == "username" {
+                username = item.value
+            }
+        }
+
+        guard let userId = userId, !userId.isEmpty,
+              let username = username, !username.isEmpty else {
+            print("❌ Missing or empty required parameters - userId: \(userId ?? "nil"), username: \(username ?? "nil")")
+            return
+        }
+
+        print("✅ Parsed contact: userId=\(userId), username=\(username)")
+
+        // Add contact and create chat
+        addContact(userId: userId, username: username)
+
+        // Close scanner
+        showingQRScanner = false
+    }
+
+    private func addContact(userId: String, username: String) {
+        print("📱 ChatsListView: Adding contact userId=\(userId), username=\(username)")
+
+        // Start chat with user - ChatsViewModel handles User creation
+        let publicUserInfo = PublicUserInfo(
+            id: userId,
+            username: username,
+            avatarUrl: nil,
+            bio: nil
+        )
+        if let chat = chatsViewModel.startChat(with: publicUserInfo) {
+            print("✅ ChatsListView: Chat created with @\(username)")
+            print("   chat.id = \(chat.id ?? "nil")")
+            print("   chat.otherUser?.id = \(chat.otherUser?.id ?? "nil")")
+            print("   chat.otherUser?.username = \(chat.otherUser?.username ?? "nil")")
+            print("   chat.otherUser?.displayName = \(chat.otherUser?.displayName ?? "nil")")
+        } else {
+            print("❌ ChatsListView: Failed to create chat with @\(username)")
         }
     }
 }

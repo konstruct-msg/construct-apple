@@ -13,6 +13,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 # Feature flags для разных платформ
 [features]
 default = []
+wasm = []
 desktop = [
     "tokio/rt",
 ]
@@ -34,6 +35,40 @@ tracing = { workspace = true }
 uuid = { workspace = true }
 uniffi = { version = "0.28", features = ["build"] }
 chrono = "0.4"
+
+# WASM-специфичные зависимости
+wasm-bindgen = { version = "0.2", features = ["serde-serialize"] }
+web-sys = { version = "0.3", features = [
+    "Window",
+    "WebSocket",
+    "Crypto",
+    "SubtleCrypto",
+    "Storage",
+    "CloseEvent",
+    "ErrorEvent",
+    "MessageEvent",
+    "IdbDatabase",
+    "IdbRequest",
+    "IdbTransaction",
+    "IdbTransactionMode",
+    "IdbObjectStore",
+    "IdbObjectStoreParameters",
+    "IdbVersionChangeEvent",
+    "IdbOpenDbRequest",
+    "IdbFactory",
+    "Event",
+    "EventTarget",
+    "BinaryType",
+    "console",
+    "IdbIndex",
+    "DomException",
+] }
+js-sys = "0.3"
+getrandom = { version = "0.2", features = ["js"] }
+console_error_panic_hook = "0.1.7"
+wasm-bindgen-futures = "0.4"
+serde-wasm-bindgen = "0.6.5"
+
 
 # Криптография
 x25519-dalek = { workspace = true }
@@ -59,6 +94,7 @@ hex = "0.4"
 
 # Desktop dependencies
 tokio = { version = "1.0", features = ["rt-multi-thread", "macros"], optional = true }
+once_cell = "1.21.3"
 
 [dev-dependencies]
 hex = "0.4"

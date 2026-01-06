@@ -430,6 +430,12 @@ impl ClassicCryptoCore {
         String::from_utf8(plaintext_bytes)
             .map_err(|_| CryptoError::DecryptionFailed)
     }
+
+    /// Deletes a session for a contact, allowing a new one to be created.
+    pub fn remove_session(&self, contact_id: String) -> bool {
+        let mut client = self.inner.lock().unwrap();
+        client.remove_session(&contact_id)
+    }
 }
 
 /// Create a new CryptoCore instance (exported via UDL)

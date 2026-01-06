@@ -15,18 +15,22 @@ struct RegisterView: View {
     @State private var password = ""
     @State private var confirmPassword = ""
 
+    private var passwordPlaceholder: String {
+        String(format: NSLocalizedString("min_password_placeholder", comment: "Placeholder for password field with minimum length"), ValidationRules.minPasswordLength)
+    }
+
     var body: some View {
         VStack(spacing: 16) {
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
-                    Text("Username")
+                    Text("username")
                         .font(.caption)
                         .foregroundColor(.secondary)
                     Text("*")
                         .font(.caption)
                         .foregroundColor(.red)
                 }
-                TextField("Enter username", text: $username)
+                TextField("enter_username", text: $username)
                     .textFieldStyle(.roundedBorder)
                     .autocapitalization(.none)
                     .autocorrectionDisabled()
@@ -37,27 +41,27 @@ struct RegisterView: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
-                    Text("Password")
+                    Text("password")
                         .font(.caption)
                         .foregroundColor(.secondary)
                     Text("*")
                         .font(.caption)
                         .foregroundColor(.red)
                 }
-                SecureField("Min \(ValidationRules.minPasswordLength) characters", text: $password)
+                SecureField(passwordPlaceholder, text: $password)
                     .textFieldStyle(.roundedBorder)
             }
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
-                    Text("Confirm Password")
+                    Text("confirm_password")
                         .font(.caption)
                         .foregroundColor(.secondary)
                     Text("*")
                         .font(.caption)
                         .foregroundColor(.red)
                 }
-                SecureField("Re-enter password", text: $confirmPassword)
+                SecureField("reenter_password", text: $confirmPassword)
                     .textFieldStyle(.roundedBorder)
             }
             
@@ -70,7 +74,7 @@ struct RegisterView: View {
                     password: password
                 )
             } label: {
-                Text("Register")
+                Text("register")
                     .frame(maxWidth: .infinity)
                     .padding()
                     .background(isValid ? Color.blue : Color.gray)
@@ -91,7 +95,8 @@ struct RegisterView: View {
 }
 
 #Preview {
-    RegisterView(viewModel: AuthViewModel())
+    let container = PreviewHelpers.createPreviewContainer()
+    return RegisterView(viewModel: AuthViewModel(context: container.viewContext))
         .padding()
 }
 

@@ -8,22 +8,48 @@
 import SwiftUI
 
 struct SettingsView: View {
+    @Environment(\.managedObjectContext) private var viewContext
     @EnvironmentObject var authViewModel: AuthViewModel
     @StateObject private var viewModel = SettingsViewModel()
-    @State private var showingLogoutConfirmation = false
     @State private var showingQRCode = false
     @State private var linkCopied = false
 
     var body: some View {
         NavigationStack {
             List {
+                // MARK: - Account Section
+                Section {
+                    NavigationLink(destination: AccountSettingsView().environmentObject(authViewModel)) {
+                        Label {
+                            Text("account")
+                        } icon: {
+                            Image(systemName: "person.circle")
+                                .foregroundColor(.blue)
+                        }
+                    }
+                } header: {
+                    Text("user")
+                } footer: {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("@\(viewModel.username)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                // TODO: Add Security Section here
+                // - PIN code protection (6-10 digits)
+                // - Biometric authentication (Face ID / Touch ID)
+                // - Auto-lock timeout settings
+                // See: TODO.md for detailed requirements
+
                 // MARK: - Share Contact Section
                 Section {
                     Button {
                         showingQRCode = true
                     } label: {
                         Label {
-                            Text("Show My QR Code")
+                            Text("show_my_qr_code")
                                 .foregroundColor(.primary)
                         } icon: {
                             Image(systemName: "qrcode")
@@ -35,7 +61,7 @@ struct SettingsView: View {
                         copyContactLink()
                     } label: {
                         Label {
-                            Text(linkCopied ? "Link Copied!" : "Copy Contact Link")
+                            Text(linkCopied ? "link_copied" : "copy_contact_link")
                                 .foregroundColor(.primary)
                         } icon: {
                             Image(systemName: linkCopied ? "checkmark.circle.fill" : "link")
@@ -44,43 +70,20 @@ struct SettingsView: View {
                     }
                     .disabled(linkCopied)
                 } header: {
-                    Text("Share Contact")
-                } footer: {
-                    Text("Share your QR code or link to let others add you as a contact")
-                        .font(.caption)
+                    Text("share_contact")
                 }
 
-                // MARK: - Account Section
-                Section {
-                    NavigationLink(destination: AccountSettingsView().environmentObject(authViewModel)) {
-                        Label {
-                            Text("Account")
-                        } icon: {
-                            Image(systemName: "person.circle")
-                                .foregroundColor(.blue)
-                        }
-                    }
-                } header: {
-                    Text("User")
-                } footer: {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("@\(viewModel.username)")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                }
-
-                // MARK: - Network Section
+                // MARK: - Preferences Section
                 Section {
                     NavigationLink(destination: NetworkSettingsView()) {
                         Label {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("Network")
+                                Text("network")
                                 HStack(spacing: 4) {
                                     Circle()
                                         .fill(WebSocketManager.shared.isConnected ? Color.green : Color.red)
                                         .frame(width: 6, height: 6)
-                                    Text(WebSocketManager.shared.isConnected ? "Connected" : "Disconnected")
+                                    Text(WebSocketManager.shared.isConnected ? "connected" : "disconnected")
                                         .font(.caption)
                                         .foregroundColor(.secondary)
                                 }
@@ -90,70 +93,47 @@ struct SettingsView: View {
                                 .foregroundColor(.green)
                         }
                     }
-                } header: {
-                    Text("Connection")
-                }
-
-                // MARK: - Appearance Section
-                Section {
                     NavigationLink(destination: AppearanceSettingsView()) {
                         Label {
-                            Text("Appearance")
+                            Text("appearance")
                         } icon: {
                             Image(systemName: "paintbrush.fill")
                                 .foregroundColor(.purple)
                         }
                     }
+                    NavigationLink(destination: NotificationsSettingsView()) {
+                        Label {
+                            Text("notifications")
+                        } icon: {
+                            Image(systemName: "bell")
+                                .foregroundColor(.blue)
+                        }
+                    }
                 } header: {
-                    Text("Preferences")
+                    Text("preferences")
                 }
 
                 // MARK: - About Section
                 Section {
                     HStack {
                         Label {
-                            Text("Version")
+                            Text("version")
                         } icon: {
                             Image(systemName: "info.circle")
                                 .foregroundColor(.orange)
                         }
                         Spacer()
-                        Text("\(AppConstants.appVersion) (\(AppConstants.buildNumber))")
+                        Text("Construct v\(AppConstants.appVersion)")
                             .foregroundColor(.secondary)
                     }
                 } header: {
-                    Text("About")
-                }
-
-                // MARK: - Logout Section
-                Section {
-                    Button(role: .destructive) {
-                        showingLogoutConfirmation = true
-                    } label: {
-                        HStack {
-                            Spacer()
-                            Label {
-                                Text("Logout")
-                                    .fontWeight(.semibold)
-                            } icon: {
-                                Image(systemName: "rectangle.portrait.and.arrow.right")
-                            }
-                            Spacer()
-                        }
-                    }
+                    Text("about")
                 }
             }
-            .navigationTitle("Settings")
+            .navigationTitle("settings")
             .onAppear {
+                viewModel.setContext(viewContext)
                 viewModel.loadUserInfo(from: authViewModel)
-            }
-            .alert("Logout", isPresented: $showingLogoutConfirmation) {
-                Button("Cancel", role: .cancel) { }
-                Button("Logout", role: .destructive) {
-                    authViewModel.logout()
-                }
-            } message: {
-                Text("Are you sure you want to logout?")
             }
             .sheet(isPresented: $showingQRCode) {
                 ContactQRCodeView(
@@ -192,7 +172,8 @@ struct SettingsView: View {
 }
 
 #Preview {
-    let authViewModel = AuthViewModel()
+    let container = PreviewHelpers.createPreviewContainer()
+    let authViewModel = AuthViewModel(context: container.viewContext)
     authViewModel.isAuthenticated = true
     authViewModel.currentUserId = "user123"
     authViewModel.currentUsername = "john_doe"

@@ -22,34 +22,34 @@ struct MessageInfoSheet: View {
                             .textSelection(.enabled)
                     }
                 } header: {
-                    Text("Message")
+                    Text("message")
                 }
 
                 // Delivery Information
                 Section {
                     InfoRow(
-                        label: "Status",
+                        label: "status",
                         value: message.deliveryStatus.displayName,
                         icon: message.deliveryStatus.icon,
                         iconColor: statusColor
                     )
 
                     InfoRow(
-                        label: "Sent",
+                        label: "sent",
                         value: formatDate(message.timestamp)
                     )
 
                     if message.isSentByMe {
                         InfoRow(
-                            label: "Direction",
-                            value: "Outgoing",
+                            label: "direction",
+                            value: NSLocalizedString("outgoing", comment: ""),
                             icon: "arrow.up.circle.fill",
                             iconColor: .blue
                         )
                     } else {
                         InfoRow(
-                            label: "Direction",
-                            value: "Incoming",
+                            label: "direction",
+                            value: NSLocalizedString("incoming", comment: ""),
                             icon: "arrow.down.circle.fill",
                             iconColor: .green
                         )
@@ -57,66 +57,66 @@ struct MessageInfoSheet: View {
 
                     if message.retryCount > 0 {
                         InfoRow(
-                            label: "Retry Count",
+                            label: "retry_count",
                             value: "\(message.retryCount)",
                             icon: "arrow.clockwise",
                             iconColor: .orange
                         )
                     }
                 } header: {
-                    Text("Delivery Information")
+                    Text("delivery_information")
                 }
 
                 // Technical Details
                 Section {
                     InfoRow(
-                        label: "Message ID",
-                        value: message.id ?? "Unknown"
+                        label: "message_id",
+                        value: message.id ?? NSLocalizedString("unknown", comment: "Unknown value")
                     )
 
                     InfoRow(
-                        label: "From",
+                        label: "from",
                         value: message.fromUserId
                     )
 
                     InfoRow(
-                        label: "To",
+                        label: "to",
                         value: message.toUserId
                     )
 
                     if let replyToId = message.replyToMessageId {
                         InfoRow(
-                            label: "Reply To",
+                            label: "reply_to",
                             value: replyToId,
                             icon: "arrowshape.turn.up.left"
                         )
                     }
                 } header: {
-                    Text("Technical Details")
+                    Text("technical_details")
                 }
 
                 // Encryption
                 Section {
                     InfoRow(
-                        label: "Encryption",
-                        value: "End-to-End",
+                        label: "encryption",
+                        value: NSLocalizedString("end_to_end", comment: ""),
                         icon: "lock.fill",
                         iconColor: .green
                     )
 
                     InfoRow(
-                        label: "Protocol",
-                        value: "Double Ratchet"
+                        label: "protocol",
+                        value: NSLocalizedString("double_ratchet", comment: "")
                     )
                 } header: {
-                    Text("Security")
+                    Text("security")
                 }
             }
-            .navigationTitle("Message Info")
+            .navigationTitle("message_info")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") {
+                    Button("done") {
                         dismiss()
                     }
                 }
@@ -148,7 +148,7 @@ struct MessageInfoSheet: View {
 }
 
 struct InfoRow: View {
-    let label: String
+    let label: LocalizedStringKey
     let value: String
     var icon: String? = nil
     var iconColor: Color = .secondary

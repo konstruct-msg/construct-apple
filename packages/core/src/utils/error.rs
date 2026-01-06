@@ -25,9 +25,23 @@ pub enum ConstructError {
     #[error("Not found: {0}")]
     NotFound(String),
 
+    #[error("Invalid input: {0}")]
+    InvalidInput(String),
+
     #[error("Internal error: {0}")]
     InternalError(String),
+
+    #[error("WASM serialization error: {0}")]
+    SerdeWasmError(String),
 }
+
+#[cfg(target_arch = "wasm32")]
+impl From<serde_wasm_bindgen::Error> for ConstructError {
+    fn from(error: serde_wasm_bindgen::Error) -> Self {
+        ConstructError::SerdeWasmError(error.to_string())
+    }
+}
+
 
 pub type Result<T> = std::result::Result<T, ConstructError>;
 

@@ -24,11 +24,19 @@ class SettingsViewModel: ObservableObject {
     }
 
     func loadUserInfo(from authViewModel: AuthViewModel) {
-        guard let context = viewContext else { return }
+        guard let _ = viewContext else {
+            print("⚠️ SettingsViewModel: viewContext is nil")
+            return
+        }
 
         userId = authViewModel.currentUserId ?? SessionManager.shared.currentUserId ?? ""
         username = authViewModel.currentUsername ?? ""
         displayName = authViewModel.currentDisplayName ?? ""
+
+        print("📋 SettingsViewModel: Loaded user info")
+        print("   userId: \(userId)")
+        print("   username: \(username)")
+        print("   displayName: \(displayName)")
 
         // Load avatar from Core Data
         loadAvatarFromCoreData()
@@ -49,7 +57,7 @@ class SettingsViewModel: ObservableObject {
     }
 
     /// Saves avatar to Core Data using ImageHelper for processing
-    func saveAvatar(_ image: UIImage) {
+    func saveAvatar(_ image: UIImage, authViewModel: AuthViewModel) {
         guard let context = viewContext, !userId.isEmpty else {
             print("⚠️ Cannot save avatar: context or userId missing")
             return
@@ -74,6 +82,8 @@ class SettingsViewModel: ObservableObject {
                 // Update UI
                 profileImage = ImageHelper.imageFromData(processedData)
                 print("✅ Avatar saved successfully")
+                
+                // ✅ FIX: No direct property for avatar on AuthViewModel, but good practice to notify if there were.
             } else {
                 print("⚠️ User not found in Core Data")
             }
@@ -83,7 +93,7 @@ class SettingsViewModel: ObservableObject {
     }
 
     /// Saves display name to Core Data
-    func saveDisplayName(_ name: String) {
+    func saveDisplayName(_ name: String, authViewModel: AuthViewModel) {
         guard let context = viewContext, !userId.isEmpty else { return }
 
         let trimmed = name.trimmingCharacters(in: .whitespaces)
@@ -96,7 +106,11 @@ class SettingsViewModel: ObservableObject {
             if let user = try context.fetch(fetchRequest).first {
                 user.displayName = trimmed
                 try context.save()
+                
+                // Update local and global state
                 displayName = trimmed
+                authViewModel.currentDisplayName = trimmed
+                
                 print("✅ Display name saved: \(trimmed)")
             }
         } catch {

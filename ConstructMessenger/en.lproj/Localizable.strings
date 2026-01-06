@@ -1,0 +1,209 @@
+/*
+  Localizable.strings
+  ConstructMessenger
+
+  Created by Gemini on 2026-01-02.
+  
+*/
+
+// MARK: - General
+"error" = "Error";
+"ok" = "OK";
+"cancel" = "Cancel";
+"done" = "Done";
+"unknown" = "Unknown";
+
+// MARK: - Main Tabs
+"chats" = "Chats";
+"settings" = "Settings";
+
+// MARK: - Auth
+"construct_messenger" = "Konstruct";
+"back_to_login" = "Back to Login";
+"register" = "Register";
+"username" = "Username";
+"enter_username" = "Enter username";
+"password" = "Password";
+"enter_password" = "Enter password";
+"login" = "Login";
+"min_password_placeholder" = "Min %d characters";
+"confirm_password" = "Confirm Password";
+"reenter_password" = "Re-enter password";
+"please_check_all_fields" = "Please check all fields";
+"logout" = "Logout";
+"logout_confirmation" = "Are you sure you want to logout?";
+
+// MARK: - Chats List
+"add_contact" = "Add Contact";
+"scan_qr_code_or_share_link" = "Scan a QR code or share your contact link to add verified contacts";
+"scan_qr_code" = "Scan QR Code";
+"your_contact_link_is_in_account_settings" = "Your contact link is in Account Settings";
+"new_contact" = "New Contact";
+
+// MARK: - Chat
+"sending" = "Sending...";
+"initializing_secure_connection" = "Initializing secure connection...";
+"not_connected_to_server" = "Not connected to server";
+"chat" = "Chat";
+"encrypted" = "Encrypted";
+"reply" = "Reply";
+"copy" = "Copy";
+"info" = "Info";
+"delete" = "Delete";
+"retry" = "Retry";
+"message" = "Message";
+"reply_to_colon" = "Reply to:";
+"message_placeholder" = "Message...";
+
+// MARK: - Message Info
+"status" = "Status";
+"sent" = "Sent";
+"direction" = "Direction";
+"outgoing" = "Outgoing";
+"incoming" = "Incoming";
+"retry_count" = "Retry Count";
+"delivery_information" = "Delivery Information";
+"message_id" = "Message ID";
+"from" = "From";
+"to" = "To";
+"reply_to" = "Reply To";
+"technical_details" = "Technical Details";
+"encryption" = "Encryption";
+"end_to_end" = "End-to-End";
+"protocol" = "Protocol";
+"double_ratchet" = "Double Ratchet";
+"security" = "Security";
+"message_info" = "Message Info";
+
+// MARK: - QR Code Scanner
+"position_qr_code_within_frame" = "Position the QR code within the frame";
+"camera_access_required" = "Camera Access Required";
+"open_settings" = "Open Settings";
+"allow_camera_access_for_qr" = "Please allow camera access in Settings to scan QR codes";
+"invalid_qr_code_construct" = "Invalid QR code. Please scan a Construct Messenger contact code.";
+
+// MARK: - Settings Main
+"user" = "User";
+"preferences" = "Preferences";
+"version" = "Version";
+"about" = "About";
+"account" = "Account";
+"appearance" = "Appearance";
+"network" = "Network";
+"notifications" = "Notifications";
+
+// MARK: - Settings -> Account
+"display_name" = "Display Name";
+"account_information" = "Account Information";
+"current_password" = "Current Password";
+"new_password" = "New Password";
+"confirm_new_password" = "Confirm New Password";
+"change_password" = "Change Password";
+"password_min_length_message" = "Password must be at least %d characters";
+"show_my_qr_code" = "Show My QR Code";
+"link_copied" = "Link Copied!";
+"copy_contact_link" = "Copy Contact Link";
+"share_contact" = "Share Contact";
+"share_contact_footer" = "Share your QR code or link to let others add you as a contact";
+
+// TODO: Add Security section strings
+// "security" = "Security";
+// "pin_code" = "PIN Code";
+// "enable_pin_code" = "Enable PIN Code";
+// "change_pin_code" = "Change PIN Code";
+// "enter_pin_code" = "Enter PIN Code";
+// "create_pin_code" = "Create PIN Code";
+// "confirm_pin_code" = "Confirm PIN Code";
+// "pin_code_length" = "PIN must be 6-10 digits";
+// "pin_codes_dont_match" = "PIN codes don't match";
+// "wrong_pin_code" = "Wrong PIN Code";
+// "attempts_remaining" = "%d attempts remaining";
+// "pin_locked" = "Too many failed attempts. Try again later";
+// "face_id" = "Face ID";
+// "touch_id" = "Touch ID";
+// "use_biometric" = "Use %@ to unlock";
+// "auto_lock" = "Auto-Lock";
+// "auto_lock_immediate" = "Immediate";
+// "auto_lock_1min" = "After 1 minute";
+// "auto_lock_5min" = "After 5 minutes";
+// "auto_lock_never" = "Never";
+// See: TODO.md for complete requirements
+
+// MARK: - Settings -> My QR Code
+"my_qr_code" = "My QR Code";
+"failed_to_generate_qr_code" = "Failed to generate QR code";
+"show_this_code_to_someone_nearby" = "Show this code to someone nearby";
+"scan_with_camera_or_screenshot" = "They can scan this with their camera or take a screenshot";
+
+// MARK: - Settings -> Appearance
+"theme" = "Theme";
+"theme_footer" = "Choose how Construct Messenger looks. Automatic adjusts based on your system settings.";
+"automatic" = "Automatic";
+"light" = "Light";
+"dark" = "Dark";
+
+// MARK: - Settings -> Network
+"connected" = "Connected";
+"disconnected" = "Disconnected";
+"active_server" = "Active Server";
+"connection" = "Connection";
+"use_custom_server" = "Use Custom Server";
+"custom_server_placeholder" = "wss://your-server.com";
+"apply_changes" = "Apply Changes";
+"server_configuration" = "Server Configuration";
+"custom_server_prefix_warning" = "Custom server address must start with wss:// or ws://";
+"environment" = "Environment";
+"build_configuration" = "Build Configuration";
+"debug" = "Debug";
+"release" = "Release";
+"server_information" = "Server Information";
+"server_settings_footer" = "These settings are automatically configured based on your build configuration.";
+"reconnect_required" = "Reconnect Required";
+"reconnect_alert_message" = "The app will reconnect to the new server.";
+
+// MARK: - Notifications Settings
+"notifications_settings" = "Notification Settings";
+"enable_notifications" = "Enable Notifications";
+"notifications_footer" = "Control how and when you receive notifications";
+"message_notifications" = "Message Notifications";
+"show_message_notifications" = "Show Message Notifications";
+"message_notifications_footer" = "Get notified when you receive new messages";
+"notification_preview" = "Notification Preview";
+"preview_name_and_message" = "Name and Message";
+"preview_name_only" = "Name Only";
+"preview_none" = "No Preview";
+"notification_preview_footer" = "Choose what information appears in notifications";
+"sound_and_haptics" = "Sound & Haptics";
+"notification_sound" = "Notification Sound";
+"vibration" = "Vibration";
+"sound_haptics_footer" = "Customize notification sound and vibration";
+"push_notifications" = "Push Notifications";
+"enable_push_notifications" = "Enable Push Notifications";
+"push_notifications_footer" = "Receive notifications when the app is in the background. Your messages remain end-to-end encrypted.";
+"push_privacy_notice" = "Privacy Notice";
+"push_privacy_notice_text" = "Push notifications are delivered using encrypted, anonymous tokens. The server cannot read your messages or identify who you're talking to.";
+"system_notification_settings" = "System Notification Settings";
+"open_system_settings" = "Open System Settings";
+"system_settings_footer" = "Manage notification permissions in iOS Settings";
+"notification_permissions_required" = "Notification permissions are required to receive alerts";
+"grant_permission" = "Grant Permission";
+"not_determined" = "Not Set";
+"authorized" = "Authorized";
+"denied" = "Denied";
+
+// MARK: - Background Fetch & Local Notifications
+"construct_new_message" = "New Message";
+"construct_new_messages" = "New Messages";
+"construct_new_message_from" = "New message from %@";
+"construct_new_messages_count" = "You have %d new messages";
+"construct_new_messages_from_contacts" = "You have %d new messages from %d contacts";
+"construct_sync_completed" = "Messages Synced";
+"construct_sync_completed_count" = "Synced %d new messages";
+"background_fetch" = "Background Refresh";
+"background_fetch_footer" = "Check for new messages in the background. Uses minimal battery.";
+"enable_background_fetch" = "Enable Background Refresh";
+"background_fetch_status" = "Background Refresh Status";
+"background_fetch_disabled" = "Disabled";
+"background_fetch_enabled" = "Enabled";
+"background_fetch_last_check" = "Last check: %@";
+"background_fetch_waiting" = "Enabled, waiting for first check";

@@ -14,8 +14,8 @@
             filePath = "ConstructMessenger/Views/Settings/AccountSettingsView.swift"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "24"
-            endingLineNumber = "24"
+            startingLineNumber = "26"
+            endingLineNumber = "26"
             landmarkName = "AccountSettingsView"
             landmarkType = "14">
          </BreakpointContent>
@@ -30,10 +30,10 @@
             filePath = "ConstructMessenger/Views/Settings/AccountSettingsView.swift"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "25"
-            endingLineNumber = "25"
-            landmarkName = "AccountSettingsView"
-            landmarkType = "14">
+            startingLineNumber = "27"
+            endingLineNumber = "27"
+            landmarkName = "passwordFooterText"
+            landmarkType = "24">
          </BreakpointContent>
       </BreakpointProxy>
    </Breakpoints>

@@ -29,3 +29,7 @@ pub mod error;
 // Re-exports для удобства
 pub use api::MessengerAPI;
 
+// WASM-specific bindings
+#[cfg(target_arch = "wasm32")]
+pub mod wasm;
+
