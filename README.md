@@ -26,6 +26,9 @@ Construct Messenger is a modern **end-to-end encrypted** messenger built on:
 - ✅ **Crypto-Agility** - Support for multiple cryptographic suites
 - ✅ **Zero unsafe** - All Rust code is safe (0 `unsafe` blocks)
 - ✅ **Multi-Platform** - Single Rust core for iOS, Android, Web
+- ✅ **QR Code Sharing** - Add contacts by scanning QR codes
+- ✅ **Offline Message Queue** - Messages saved when offline, sent when reconnected
+- ✅ **Privacy-First Profile Sharing** - Display names and avatars shared P2P, not stored on server
 - 🚧 **Post-Quantum** - Hybrid schemes (in development)
 
 ---
@@ -105,6 +108,19 @@ sqlx migrate run
 cargo run --release
 ```
 
+### Using the App
+
+1. **Register** a new account (username + password)
+2. **Share your contact:**
+   - Go to Settings
+   - Tap "Show My QR Code" or "Copy Contact Link"
+3. **Add contacts:**
+   - From Chats screen, tap "+" → "Scan QR Code"
+   - Or paste contact link when adding manually
+4. **Start messaging** - all messages are end-to-end encrypted automatically!
+
+**Tip:** Use the camera debug panel (ℹ️ icon in QR scanner) to troubleshoot camera issues.
+
 ---
 
 ## 🔐 Cryptography
@@ -157,11 +173,22 @@ construct-messenger/
 │
 ├── ConstructMessenger/     # 📱 iOS Swift application
 │   ├── ViewModels/        # MVVM view models
+│   │   ├── ChatViewModel.swift        # 🆕 Queued messages
+│   │   └── AuthViewModel.swift
 │   ├── Views/             # SwiftUI views
+│   │   ├── Chat/
+│   │   │   ├── ChatView.swift
+│   │   │   ├── MessageBubble.swift    # 🆕 Context menu
+│   │   │   └── MessageInfoSheet.swift # 🆕 Message details
+│   │   ├── Components/
+│   │   │   └── QRScannerView.swift    # 🆕 Camera QR scanner
+│   │   └── Settings/
+│   │       ├── SettingsView.swift     # 🆕 Quick share
+│   │       └── ContactQRCodeView.swift
 │   ├── Security/
 │   │   └── CryptoManager.swift  # Thin wrapper
 │   ├── Networking/
-│   │   └── WebSocketManager.swift
+│   │   └── WebSocketManager.swift  # 🆕 Connection checks
 │   └── Models/            # Core Data models
 │
 ├── libconstruct_core.a    # Compiled Rust library
@@ -203,25 +230,53 @@ We welcome contributions! Please familiarize yourself with:
 
 ### Priority Areas
 
-- 🔴 **Critical:** Fix message decryption
-- 🟠 **Important:** Unit/integration tests
-- 🟡 **Useful:** UI/UX improvements
-- 🟢 **Future:** Post-quantum crypto implementation
+- 🔴 **Critical:** Complete profile sharing implementation
+- 🟠 **Important:** Enhanced message delivery status (seen/read receipts)
+- 🟡 **Useful:** UI/UX polish (toast notifications, loading states)
+- 🟢 **Future:** Post-quantum crypto implementation, group messaging
 
 ---
 
 ## 📊 Current Status
 
-**Version:** v0.2.8 (Early Alpha)
-**Date:** December 26, 2025
+**Version:** v0.2.8 (Alpha)
+**Date:** January 1, 2026
+
+### 🆕 Recent Updates (v0.3.0)
+
+**Messaging Improvements:**
+- Fixed session initialization for new contacts - no more "Initializing secure connection..." hang
+- Added offline message queue - messages saved when disconnected, auto-sent when reconnected
+- Message context menu with copy, reply, delete, and detailed info
+- Visual status indicators: Sending → Sent → Delivered
+
+**Contact Management:**
+- QR code scanner with camera permission handling
+- Debug panel for troubleshooting camera issues (tap ℹ️ icon)
+- Test mode for simulator (auto-generates mock QR scans)
+- Simplified contact sharing - moved to main Settings screen
+
+**Developer Experience:**
+- Comprehensive debug logging for session initialization
+- Camera testing guide with troubleshooting steps
+- Profile sharing design documentation
 
 ### ✅ Done
 - [x] Rust cryptographic core (Double Ratchet + X3DH)
 - [x] UniFFI integration with iOS
 - [x] WebSocket server with PostgreSQL
-- [x] Basic UI (SwiftUI)
-- [x] Core Data persistence
+- [x] SwiftUI interface with Core Data
+- [x] QR code scanning for contact addition
+- [x] Camera permission handling and debugging tools
+- [x] Offline message queue with auto-retry
+- [x] Message context menu (copy, reply, delete, info)
+- [x] Improved session initialization and error handling
+- [x] Settings redesign with quick contact sharing
 
+### 🔨 In Progress
+- [ ] Profile sharing implementation (display names & avatars)
+- [ ] Message delivery status indicators
+- [ ] Enhanced error feedback and toast notifications
 
 ### 📅 Planned
 **Q2 2026:**
