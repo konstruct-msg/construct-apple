@@ -31,12 +31,16 @@ struct ContactInfo: Equatable {
 }
 
 struct LinkParser {
-    static let contactLinkPrefix = "https://konstruct.cc/c/"
+    static let contactLinkPrefixes = [
+        "https://konstruct.cc/c/",
+        "https://web.konstruct.cc/c/"
+    ]
 
     static func parseContactLink(_ url: URL) throws -> ContactInfo {
         let urlString = url.absoluteString
 
-        guard urlString.hasPrefix(contactLinkPrefix) else {
+        // Check if URL matches any of the supported prefixes
+        guard contactLinkPrefixes.contains(where: { urlString.hasPrefix($0) }) else {
             throw ContactLinkError.invalidPrefix
         }
 

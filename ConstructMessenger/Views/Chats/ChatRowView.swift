@@ -49,7 +49,7 @@ struct ChatRowView: View {
     }
 
     private var initials: String {
-        guard let displayName = chat.otherUser?.displayName else { return "?" }
+        guard let displayName = chat.otherUser?.username else { return "?" }
         let components = displayName.split(separator: " ")
         if components.count >= 2 {
             return String(components[0].prefix(1) + components[1].prefix(1)).uppercased()
