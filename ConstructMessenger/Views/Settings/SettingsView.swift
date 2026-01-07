@@ -150,7 +150,18 @@ struct SettingsView: View {
               let username = authViewModel.currentUsername else {
             return ""
         }
-        return "construct://add-contact?id=\(userId)&username=\(username)"
+        
+        let encodedUsername = username.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? username
+        
+        var components = URLComponents()
+        components.scheme = "https"
+        components.host = "konstruct.cc"
+        components.path = "/c/\(userId)"
+        components.queryItems = [
+            URLQueryItem(name: "username", value: encodedUsername)
+        ]
+
+        return components.string ?? "https://konstruct.cc/c/\(userId)?username=\(encodedUsername)"
     }
 
     private func copyContactLink() {

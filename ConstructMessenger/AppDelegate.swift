@@ -10,6 +10,9 @@ import BackgroundTasks
 
 class AppDelegate: NSObject, UIApplicationDelegate {
 
+    // Inject DeepLinkHandler for processing Universal Links
+    let deepLinkHandler = DeepLinkHandler()
+
     func application(
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil
@@ -38,6 +41,21 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         _ = LocalNotificationManager.shared
 
         return true
+    }
+
+    // MARK: - Universal Links
+    func application(
+        _ application: UIApplication,
+        continue userActivity: NSUserActivity,
+        restorationHandler: @escaping ([UIUserActivityRestoring]?) -> Void
+    ) -> Bool {
+        guard userActivity.activityType == NSUserActivityTypeBrowsingWeb,
+              let url = userActivity.webpageURL else {
+            return false
+        }
+        
+        Log.info("AppDelegate: Received Universal Link: \(url.absoluteString)")
+        return deepLinkHandler.handleURL(url)
     }
 
     // MARK: - Scene Lifecycle (iOS 13+)

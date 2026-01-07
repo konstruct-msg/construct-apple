@@ -23,3 +23,16 @@ extension String {
         return NSPredicate(format: "SELF MATCHES %@", regex).evaluate(with: self)
     }
 }
+
+extension Array {
+    /// Safely retrieves an element at the specified index.
+    ///
+    /// - Parameter index: The index of the element to retrieve.
+    /// - Returns: The element at the specified index, or `nil` if the index is out of bounds.
+    func get(at index: Int) -> Element? {
+        guard index >= 0, index < count else {
+            return nil
+        }
+        return self[index]
+    }
+}

@@ -10,14 +10,27 @@ import CoreData
 
 struct ContentView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
+    @EnvironmentObject var deepLinkHandler: DeepLinkHandler // Inject DeepLinkHandler
     @Environment(\.managedObjectContext) private var viewContext
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("appTheme") private var appTheme: AppTheme = .automatic
+
+    @State private var showingNewChatSheet = false
+    @State private var contactInfoFromDeepLink: ContactInfo?
 
     var body: some View {
         Group {
             if authViewModel.isAuthenticated {
                 MainTabView()
+                    .sheet(isPresented: $showingNewChatSheet, onDismiss: {
+                        // Clear the deep link after the sheet is dismissed
+                        deepLinkHandler.deepLink = nil
+                    }) {
+                        if let contactInfo = contactInfoFromDeepLink {
+                            // Ensure chatsViewModel is passed correctly
+                            NewChatView(chatsViewModel: ChatsViewModel(), initialContactInfo: contactInfo)
+                        }
+                    }
             } else {
                 AuthView()
             }
@@ -37,6 +50,12 @@ struct ContentView: View {
                 // Disconnect when going to background to save resources
                 // The connection will be restored when app becomes active again
                 WebSocketManager.shared.disconnect()
+            }
+        }
+        .onChange(of: deepLinkHandler.deepLink) { newDeepLink in
+            if case .contact(let contactInfo) = newDeepLink {
+                contactInfoFromDeepLink = contactInfo
+                showingNewChatSheet = true
             }
         }
     }

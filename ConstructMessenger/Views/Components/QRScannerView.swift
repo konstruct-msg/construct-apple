@@ -225,7 +225,7 @@ struct QRScannerView: View {
         // Генерируем тестовый QR код
         let testUserId = UUID().uuidString
         let testUsername = "test_user_\(Int.random(in: 100...999))"
-        let testCode = "construct://add-contact?id=\(testUserId)&username=\(testUsername)"
+        let testCode = "https://konstruct.cc/c/\(testUserId)?username=\(testUsername)"
 
         print("🧪 QRScannerView: Simulating QR scan")
         print("   Generated URL: \(testCode)")
@@ -267,8 +267,7 @@ struct QRScannerView: View {
     private func handleScannedCode(_ code: String) {
         scanner.stopScanning()
 
-        // Validate it's a construct:// URL
-        if code.hasPrefix("construct://add-contact") {
+        if code.hasPrefix("https://konstruct.cc/c/") {
             onCodeScanned(code)
         } else {
             errorMessage = NSLocalizedString("invalid_qr_code_construct", comment: "Error message for invalid QR code")
@@ -329,7 +328,7 @@ class QRCodeScanner: NSObject, ObservableObject, AVCaptureMetadataOutputObjectsD
         }
 
         // ✅ Only startRunning() is async - setup is sync
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+        DispatchQueue.global(qos: .userInitiated).async {
             session.startRunning()
             print("✅ Camera session started")
         }

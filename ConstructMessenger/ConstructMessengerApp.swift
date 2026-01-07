@@ -43,6 +43,7 @@ struct Construct_MessengerApp: App {
             ContentView()
                 .environment(\.managedObjectContext, Construct_MessengerApp.persistentContainer.viewContext)
                 .environmentObject(authViewModel)
+                .environmentObject(appDelegate.deepLinkHandler)
                 // TODO: Add environment object for security
                 // .environmentObject(securityViewModel)
         }

@@ -108,10 +108,16 @@ struct ContactQRCodeView: View {
     
     private func generateContactLink(userId: String, username: String) -> String {
         let encodedUsername = username.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? username
+        
+        var components = URLComponents()
+        components.scheme = "https"
+        components.host = "konstruct.cc"
+        components.path = "/c/\(userId)"
+        components.queryItems = [
+            URLQueryItem(name: "username", value: encodedUsername)
+        ]
 
-        let httpsLink = "https://konstruct.cc/add?id=\(userId)&username=\(encodedUsername)"
-
-        return httpsLink
+        return components.string ?? "https://konstruct.cc/c/\(userId)?username=\(encodedUsername)"
     }
 }
 

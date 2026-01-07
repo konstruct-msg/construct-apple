@@ -34,7 +34,7 @@ struct ChatRowView: View {
             }
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(chat.otherUser?.displayName ?? NSLocalizedString("unknown", comment: "Unknown user"))
+                Text(chat.otherUser?.username ?? NSLocalizedString("unknown", comment: "Unknown user"))
                     .fontWeight(.semibold)
 
                 if let lastMessage = chat.lastMessageText {

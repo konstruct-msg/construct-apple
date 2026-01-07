@@ -67,50 +67,24 @@ struct ChatsListView: View {
     }
 
     // MARK: - QR Code Handling
-    private func handleScannedContact(_ url: String) {
-        print("🔍 ChatsListView: Handling scanned URL: \(url)")
+    private func handleScannedContact(_ urlString: String) {
+        print("🔍 ChatsListView: Handling scanned URL: \(urlString)")
 
-        // Parse URL: construct://add-contact?id=USER_ID&username=USERNAME
-        guard url.hasPrefix("construct://add-contact") else {
-            print("❌ Invalid URL prefix: \(url)")
+        guard let url = URL(string: urlString) else {
+            print("❌ Invalid URL string: \(urlString)")
+            // TODO: Show alert to user
             return
         }
 
-        guard let components = URLComponents(string: url) else {
-            print("❌ Failed to parse URL components from: \(url)")
-            return
+        do {
+            let contactInfo = try LinkParser.parseContactLink(url)
+            print("✅ Parsed contact: userId=\(contactInfo.userId), username=\(contactInfo.username)")
+            
+            addContact(userId: contactInfo.userId, username: contactInfo.username)
+        } catch {
+            print("❌ Failed to parse contact link: \(error.localizedDescription)")
+            // TODO: Show alert to user with specific error message
         }
-
-        guard let queryItems = components.queryItems else {
-            print("❌ No query items in URL: \(url)")
-            return
-        }
-
-        print("📋 Query items: \(queryItems)")
-
-        // Extract parameters
-        var userId: String?
-        var username: String?
-
-        for item in queryItems {
-            print("  - \(item.name) = \(item.value ?? "nil")")
-            if item.name == "id" {
-                userId = item.value
-            } else if item.name == "username" {
-                username = item.value
-            }
-        }
-
-        guard let userId = userId, !userId.isEmpty,
-              let username = username, !username.isEmpty else {
-            print("❌ Missing or empty required parameters - userId: \(userId ?? "nil"), username: \(username ?? "nil")")
-            return
-        }
-
-        print("✅ Parsed contact: userId=\(userId), username=\(username)")
-
-        // Add contact and create chat
-        addContact(userId: userId, username: username)
 
         // Close scanner
         showingQRScanner = false
