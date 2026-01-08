@@ -14,6 +14,8 @@ struct RegisterView: View {
     @State private var displayName = ""
     @State private var password = ""
     @State private var confirmPassword = ""
+    @State private var showPasswordGenerator = false
+    @State private var passwordStrength: PasswordStrength = .veryWeak
 
     private var passwordPlaceholder: String {
         String(format: NSLocalizedString("min_password_placeholder", comment: "Placeholder for password field with minimum length"), ValidationRules.minPasswordLength)
@@ -34,6 +36,7 @@ struct RegisterView: View {
                     .textFieldStyle(.roundedBorder)
                     .autocapitalization(.none)
                     .autocorrectionDisabled()
+                    .textContentType(.username)
                     .onChange(of: username) { newValue in
                         username = newValue.lowercased()
                     }
@@ -47,9 +50,31 @@ struct RegisterView: View {
                     Text("*")
                         .font(.caption)
                         .foregroundColor(.red)
+                    Spacer()
+                    Button {
+                        generatePassword()
+                    } label: {
+                        Image(systemName: "key.fill")
+                            .font(.caption)
+                            .foregroundColor(.blue)
+                    }
                 }
                 SecureField(passwordPlaceholder, text: $password)
                     .textFieldStyle(.roundedBorder)
+                    .textContentType(.newPassword)
+                    .onChange(of: password) { newValue in
+                        passwordStrength = PasswordGenerator.shared.strength(of: newValue)
+                    }
+                
+                if !password.isEmpty {
+                    HStack {
+                        Text(passwordStrength.description)
+                            .font(.caption)
+                            .foregroundColor(passwordStrength == .veryWeak || passwordStrength == .weak ? .red : 
+                                            passwordStrength == .medium ? .orange : .green)
+                        Spacer()
+                    }
+                }
             }
 
             VStack(alignment: .leading, spacing: 4) {
@@ -63,6 +88,7 @@ struct RegisterView: View {
                 }
                 SecureField("reenter_password", text: $confirmPassword)
                     .textFieldStyle(.roundedBorder)
+                    .textContentType(.newPassword)
             }
             
             Spacer()
@@ -91,6 +117,14 @@ struct RegisterView: View {
         !password.isEmpty &&
         password == confirmPassword &&
         password.count >= ValidationRules.minPasswordLength
+    }
+    
+    private func generatePassword() {
+        if let generatedPassword = PasswordGenerator.shared.generate(length: 16, includeSymbols: true) {
+            password = generatedPassword
+            confirmPassword = generatedPassword
+            passwordStrength = PasswordGenerator.shared.strength(of: generatedPassword)
+        }
     }
 }
 

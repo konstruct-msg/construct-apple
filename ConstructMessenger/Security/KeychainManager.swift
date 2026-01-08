@@ -92,6 +92,22 @@ class KeychainManager {
         return String(data: data, encoding: .utf8)
     }
     
+    // MARK: - Username (for autofill convenience)
+    // Note: We don't save passwords in Keychain - iOS Password AutoFill handles that securely
+    func saveLastUsername(_ username: String) {
+        guard let data = username.data(using: .utf8) else { return }
+        save(data, forKey: APIConstants.lastUsernameKey, accessible: kSecAttrAccessibleAfterFirstUnlock)
+    }
+    
+    func loadLastUsername() -> String? {
+        guard let data = load(forKey: APIConstants.lastUsernameKey) else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+    
+    func deleteLastUsername() {
+        delete(forKey: APIConstants.lastUsernameKey)
+    }
+    
     func deleteAllKeys() {
         delete(forKey: "identity_key")
         delete(forKey: "signed_prekey")

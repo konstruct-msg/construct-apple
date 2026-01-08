@@ -164,16 +164,21 @@ class ChatsViewModel: ObservableObject {
 
             let chat: Chat
             if let existingChat = try? context.fetch(fetchRequest).first {
-                // Update username for existing user
+                // Update username for existing user (it was set to GUID in handleIncomingMessage)
                 if let user = existingChat.otherUser {
+                    let oldUsername = user.username
                     user.username = data.username
                     user.displayName = data.username
+                    Log.info("🔄 Updating username from '\(oldUsername)' to '\(data.username)' for user \(data.userId)", category: "ChatsViewModel")
                     try? context.save()  // ✅ FIX: Save updated username
                     Log.info("✅ Updated username to: \(data.username), displayName: \(user.displayName)", category: "ChatsViewModel")
+                } else {
+                    Log.error("❌ Chat found but otherUser is nil for userId: \(data.userId)", category: "ChatsViewModel")
                 }
                 chat = existingChat
             } else {
                 // This shouldn't happen since handleIncomingMessage creates the chat
+                // But if it does, create it with correct username from the start
                 let newUser = User(context: context)
                 newUser.id = data.userId
                 newUser.username = data.username
@@ -183,7 +188,7 @@ class ChatsViewModel: ObservableObject {
                 newChat.id = UUID().uuidString
                 newChat.otherUser = newUser
                 chat = newChat
-                Log.debug("⚠️ Chat didn't exist, created new one (this shouldn't happen)", category: "ChatsViewModel")
+                Log.debug("⚠️ Chat didn't exist, created new one with username: \(data.username) (this shouldn't happen)", category: "ChatsViewModel")
             }
 
             // Save the message
@@ -215,13 +220,16 @@ class ChatsViewModel: ObservableObject {
         fetchRequest.predicate = NSPredicate(format: "otherUser.id == %@", otherUserId)
 
         let chat: Chat
+        let isNewChat: Bool
         if let existingChat = try? context.fetch(fetchRequest).first {
             chat = existingChat
+            isNewChat = false
         } else {
             // Create a new user with only the ID (no server-stored metadata)
+            // Username will be updated when we receive publicKeyBundle
             let newUser = User(context: context)
             newUser.id = otherUserId
-            newUser.username = otherUserId
+            newUser.username = otherUserId  // Temporary: will be updated from publicKeyBundle
             newUser.displayName = otherUserId // ✅ FIX: Set required displayName
             // User display info is stored locally only, not fetched from server
 
@@ -229,6 +237,7 @@ class ChatsViewModel: ObservableObject {
             newChat.id = UUID().uuidString
             newChat.otherUser = newUser
             chat = newChat
+            isNewChat = true
 
             // NOTE: If we received a message, session already exists.
             // Don't request public key here - it's for session initialization only!
@@ -244,6 +253,17 @@ class ChatsViewModel: ObservableObject {
 
             // Store the first message temporarily
             pendingFirstMessages[otherUserId] = message
+
+            // If we created a new chat, save it now so it appears in UI
+            // Username will be updated when publicKeyBundle arrives
+            if isNewChat {
+                do {
+                    try context.save()
+                    Log.debug("✅ Saved new chat for \(otherUserId) (username will be updated when publicKeyBundle arrives)", category: "ChatsViewModel")
+                } catch {
+                    Log.error("❌ Failed to save new chat: \(error)", category: "ChatsViewModel")
+                }
+            }
 
             // Request sender's public key bundle from server
             wsManager.send(.getPublicKey(GetPublicKeyData(userId: otherUserId)))

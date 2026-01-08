@@ -184,6 +184,10 @@ class AuthViewModel: ObservableObject {
         cancelTimeouts()
         SessionManager.shared.clearSession()
         
+        // Note: We keep the username in Keychain for convenience on next login
+        // If you want to clear it, uncomment the line below:
+        // KeychainManager.shared.deleteLastUsername()
+        
         isAuthenticated = false
         currentUserId = nil
         currentUsername = nil
@@ -263,6 +267,10 @@ class AuthViewModel: ObservableObject {
     private func handleAuthSuccess(userId: String, username: String, token: String, expires: Int64) {
         // ✅ FIXED: Pass expires timestamp to SessionManager
         SessionManager.shared.saveSession(userId: userId, token: token, expires: expires)
+        
+        // ✅ Save username to Keychain for autofill convenience
+        KeychainManager.shared.saveLastUsername(username)
+        
         currentUserId = userId
         currentUsername = username
         isAuthenticated = true
@@ -275,6 +283,9 @@ class AuthViewModel: ObservableObject {
         print("✅ ConnectSuccess received!")
         print("   User ID: \(userId)")
         print("   Username: \(username)")
+
+        // ✅ Save username to Keychain for autofill convenience
+        KeychainManager.shared.saveLastUsername(username)
 
         currentUserId = userId
         currentUsername = username

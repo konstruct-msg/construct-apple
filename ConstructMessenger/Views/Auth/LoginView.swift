@@ -12,6 +12,14 @@ struct LoginView: View {
 
     @State private var username = ""
     @State private var password = ""
+    
+    init(viewModel: AuthViewModel) {
+        self.viewModel = viewModel
+        // Загружаем последний использованный username при инициализации
+        if let lastUsername = KeychainManager.shared.loadLastUsername() {
+            _username = State(initialValue: lastUsername)
+        }
+    }
 
     var body: some View {
         VStack(spacing: 16) {
@@ -25,6 +33,7 @@ struct LoginView: View {
                     .textFieldStyle(.roundedBorder)
                     .autocapitalization(.none)
                     .autocorrectionDisabled()
+                    .textContentType(.username)
                     .onChange(of: username) { newValue in
                         username = newValue.lowercased()
                     }
@@ -39,6 +48,7 @@ struct LoginView: View {
                 }
                 SecureField("enter_password", text: $password)
                     .textFieldStyle(.roundedBorder)
+                    .textContentType(.password)
             }
             
             Spacer()

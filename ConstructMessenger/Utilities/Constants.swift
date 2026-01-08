@@ -64,6 +64,7 @@ struct APIConstants {
     static let sessionTokenKey = "session_token"
     static let privateKeyKey = "private_key"
     static let userIdKey = "user_id"
+    static let lastUsernameKey = "last_username"
 
     // API Timeouts
     static let connectionTimeout: TimeInterval = 10.0

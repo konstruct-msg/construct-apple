@@ -6,6 +6,8 @@
 	<array>
 		<string>applinks:konstruct.cc</string>
 		<string>applinks:web.konstruct.cc</string>
+		<!-- Uncomment for full Password AutoFill support (requires server configuration) -->
+		<!-- <string>webcredentials:konstruct.cc</string> -->
 	</array>
 </dict>
 </plist>

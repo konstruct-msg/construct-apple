@@ -32,6 +32,11 @@
 "please_check_all_fields" = "Please check all fields";
 "logout" = "Logout";
 "logout_confirmation" = "Are you sure you want to logout?";
+"password_strength_very_weak" = "Very Weak";
+"password_strength_weak" = "Weak";
+"password_strength_medium" = "Medium";
+"password_strength_strong" = "Strong";
+"password_strength_very_strong" = "Very Strong";
 
 // MARK: - Chats List
 "add_contact" = "Add Contact";
