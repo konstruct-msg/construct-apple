@@ -65,10 +65,12 @@ struct ContentView: View {
     let container = PreviewHelpers.createPreviewContainer()
     let authViewModel = AuthViewModel(context: container.viewContext)
     authViewModel.isAuthenticated = false
+    let deepLinkHandler = DeepLinkHandler()
 
     return ContentView()
         .environment(\.managedObjectContext, container.viewContext)
         .environmentObject(authViewModel)
+        .environmentObject(deepLinkHandler)
 }
 
 #Preview("Authenticated") {
@@ -79,6 +81,7 @@ struct ContentView: View {
     authViewModel.currentUserId = "me"
     authViewModel.currentUsername = "john_doe"
     authViewModel.currentDisplayName = "John Doe"
+    let deepLinkHandler = DeepLinkHandler()
 
     // Create sample chats
     let user1 = PreviewHelpers.createSampleUser(context: context, id: "user1", username: "alice", displayName: "Alice")
@@ -90,4 +93,5 @@ struct ContentView: View {
     return ContentView()
         .environment(\.managedObjectContext, context)
         .environmentObject(authViewModel)
+        .environmentObject(deepLinkHandler)
 }

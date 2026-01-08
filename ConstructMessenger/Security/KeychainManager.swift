@@ -114,6 +114,44 @@ class KeychainManager {
         delete(forKey: "signing_key")
     }
 
+    // MARK: - Session Persistence
+
+    /// Save a session JSON string for a specific contact
+    /// - Parameters:
+    ///   - sessionJson: JSON string of the serialized session
+    ///   - contactId: The contact/user ID this session belongs to
+    /// - Returns: true if saved successfully
+    func saveSessionJson(_ sessionJson: String, for contactId: String) -> Bool {
+        guard let data = sessionJson.data(using: .utf8) else { return false }
+        let key = "session_\(contactId)"
+        return save(data, forKey: key, accessible: kSecAttrAccessibleWhenUnlockedThisDeviceOnly)
+    }
+
+    /// Load a session JSON string for a specific contact
+    /// - Parameter contactId: The contact/user ID
+    /// - Returns: JSON string of the serialized session, or nil if not found
+    func loadSessionJson(for contactId: String) -> String? {
+        let key = "session_\(contactId)"
+        guard let data = load(forKey: key) else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    /// Delete a session for a specific contact
+    /// - Parameter contactId: The contact/user ID
+    func deleteSession(for contactId: String) {
+        let key = "session_\(contactId)"
+        delete(forKey: key)
+    }
+
+    /// Load all saved session IDs
+    /// - Returns: Array of contact IDs that have saved sessions
+    func loadAllSessionIds() -> [String] {
+        // Note: Keychain doesn't have a direct way to list all keys
+        // We'll need to track session IDs separately or use a different approach
+        // For now, return empty array - we'll track sessions in Core Data
+        return []
+    }
+
     // MARK: - Generic Helpers
     private func save(_ data: Data, forKey key: String, accessible: CFString) -> Bool {
         let query: [String: Any] = [

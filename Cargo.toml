@@ -46,10 +46,10 @@ uuid = { version = "1.0", features = ["v4", "serde", "js"] }
 tracing = "0.1"
 
 [workspace.package]
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Construct Team"]
-edition = "2021"
-rust-version = "1.70"
+edition = "2024"
+rust-version = "1.85"
 license = "MIT"
 repository = "https://github.com/maximeliseyev/construct-messenger"
 
