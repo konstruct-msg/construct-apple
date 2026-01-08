@@ -109,6 +109,24 @@ struct SettingsView: View {
                                 .foregroundColor(.blue)
                         }
                     }
+                    NavigationLink(destination: BackgroundFetchSettingsView()) {
+                        Label {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("background_fetch")
+                                HStack(spacing: 4) {
+                                    Circle()
+                                        .fill(BackgroundFetchConfig.shouldBeEnabled ? Color.green : Color.gray)
+                                        .frame(width: 6, height: 6)
+                                    Text(BackgroundFetchConfig.shouldBeEnabled ? "background_fetch_enabled" : "background_fetch_disabled")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        } icon: {
+                            Image(systemName: "arrow.clockwise.circle")
+                                .foregroundColor(.orange)
+                        }
+                    }
                 } header: {
                     Text("preferences")
                 }

@@ -212,3 +212,15 @@
 "background_fetch_enabled" = "Enabled";
 "background_fetch_last_check" = "Last check: %@";
 "background_fetch_waiting" = "Enabled, waiting for first check";
+"background_fetch_interval" = "Check Interval";
+"background_fetch_interval_settings" = "Check Interval";
+"background_fetch_interval_footer" = "How often to check for new messages. iOS may adjust this based on your usage patterns.";
+"background_fetch_interval_minutes" = "%d min";
+"background_fetch_interval_hours" = "%d hour";
+"background_fetch_low_power_mode_warning" = "Disabled in Low Power Mode";
+"background_fetch_low_power_mode_title" = "Low Power Mode Active";
+"background_fetch_low_power_mode_description" = "Background refresh is automatically disabled when Low Power Mode is enabled to save battery.";
+"background_fetch_low_power_mode_alert_title" = "Low Power Mode Detected";
+"background_fetch_low_power_mode_alert_message" = "Background refresh has been disabled because Low Power Mode is enabled. It will be re-enabled automatically when Low Power Mode is turned off.";
+"background_fetch_disabled_low_power" = "Disabled (Low Power Mode)";
+"background_fetch_energy_saving" = "Energy Saving";

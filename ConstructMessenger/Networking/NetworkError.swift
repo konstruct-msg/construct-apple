@@ -14,6 +14,7 @@ enum NetworkError: Error, LocalizedError {
     case invalidMessage
     case encodingFailed
     case decodingFailed
+    case serverError(String)  // Server returned an error message
 
     var errorDescription: String? {
         switch self {
@@ -23,6 +24,7 @@ enum NetworkError: Error, LocalizedError {
         case .invalidMessage: return "Invalid message format"
         case .encodingFailed: return "Failed to encode message"
         case .decodingFailed: return "Failed to decode message"
+        case .serverError(let message): return "Server error: \(message)"
         }
     }
 }

@@ -10,10 +10,11 @@ import BackgroundTasks
 import Combine
 import UIKit
 import os.log
+import CoreData
 
 /// Manages background task scheduling and execution for message fetching
 /// Uses BGTaskScheduler for intelligent, energy-efficient background operations
-class BackgroundFetchManager: NSObject {
+class BackgroundFetchManager: NSObject, ObservableObject {
 
     // MARK: - Task Identifiers
 
@@ -49,7 +50,28 @@ class BackgroundFetchManager: NSObject {
 
     private override init() {
         super.init()
-        Log.info("BackgroundFetchManager initialized")
+        BackgroundFetchConfig.initializeDefaults()
+        
+        // Initialize enabled state from config
+        isBackgroundFetchEnabled = BackgroundFetchConfig.shouldBeEnabled
+        
+        // Monitor Low Power Mode changes
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(lowPowerModeChanged),
+            name: .NSProcessInfoPowerStateDidChange,
+            object: nil
+        )
+        
+        Log.info("BackgroundFetchManager initialized", category: "BackgroundFetch")
+    }
+    
+    @objc private func lowPowerModeChanged() {
+        checkLowPowerMode()
+    }
+    
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
 
     // MARK: - Registration
@@ -82,21 +104,24 @@ class BackgroundFetchManager: NSObject {
     /// Schedule next background fetch task
     /// iOS will intelligently decide when to run based on usage patterns
     func scheduleBackgroundFetch() {
+        // Check if background fetch should be enabled (respects Low Power Mode)
+        guard BackgroundFetchConfig.shouldBeEnabled else {
+            Log.info("Background fetch disabled (user setting or Low Power Mode)", category: "BackgroundFetch")
+            cancelAllBackgroundTasks()
+            return
+        }
+        
         let request = BGAppRefreshTaskRequest(identifier: Self.messageRefreshTaskID)
 
-        // Request execution no earlier than 15 minutes from now
-        // iOS may schedule it later based on:
-        // - Battery level
-        // - Network availability
-        // - User's usage patterns
-        // - Low Power Mode state
-        request.earliestBeginDate = Date(timeIntervalSinceNow: 15 * 60)
+        // Use configured interval
+        let interval = BackgroundFetchConfig.interval
+        request.earliestBeginDate = Date(timeIntervalSinceNow: interval)
 
         do {
             try BGTaskScheduler.shared.submit(request)
-            Log.info("Background fetch scheduled successfully")
+            Log.info("Background fetch scheduled successfully (interval: \(Int(interval / 60)) minutes)", category: "BackgroundFetch")
         } catch {
-            Log.error("Failed to schedule background fetch: \(error)")
+            Log.error("Failed to schedule background fetch: \(error)", category: "BackgroundFetch")
         }
     }
 
@@ -192,43 +217,253 @@ class BackgroundFetchManager: NSObject {
     /// Perform quick message fetch with connect-fetch-disconnect pattern
     /// Target execution time: 2-5 seconds
     private func performQuickMessageFetch(completion: @escaping (Result<Int, Error>) -> Void) {
-        // Create a timeout timer
-        var didComplete = false
-        let timeoutSeconds: TimeInterval = 20
-
-        DispatchQueue.global().asyncAfter(deadline: .now() + timeoutSeconds) {
-            if !didComplete {
-                didComplete = true
-                self.cleanupFetch()
-                completion(.failure(BackgroundFetchError.timeout))
+        Log.info("🚀 Starting quick message fetch", category: "BackgroundFetch")
+        
+        // Check authentication
+        guard SessionManager.shared.sessionToken != nil else {
+            Log.error("❌ No session token available", category: "BackgroundFetch")
+            completion(.failure(BackgroundFetchError.notAuthenticated))
+            return
+        }
+        
+        // Get Core Data context
+        let context = PersistenceController.shared.container.viewContext
+        let backgroundContext = NSManagedObjectContext(concurrencyType: .privateQueueConcurrencyType)
+        backgroundContext.parent = context
+        
+        // Fetch offline messages via WebSocket
+        WebSocketManager.shared.fetchOfflineMessages { [weak self] result in
+            switch result {
+            case .success(let messages):
+                Log.info("📬 Received \(messages.count) offline messages", category: "BackgroundFetch")
+                
+                guard !messages.isEmpty else {
+                    completion(.success(0))
+                    return
+                }
+                
+                // Process messages in background context
+                backgroundContext.perform {
+                    var newMessagesCount = 0
+                    var messagesByChat: [String: [ChatMessage]] = [:]
+                    var chatUserIds: [String: String] = [:] // chatId -> userId
+                    
+                    guard let currentUserId = SessionManager.shared.currentUserId else {
+                        DispatchQueue.main.async {
+                            completion(.failure(BackgroundFetchError.notAuthenticated))
+                        }
+                        return
+                    }
+                    
+                    // Group messages by chat
+                    for message in messages {
+                        let otherUserId = message.from == currentUserId ? message.to : message.from
+                        
+                        // Find or create chat
+                        let chatId = self?.findOrCreateChat(
+                            for: otherUserId,
+                            in: backgroundContext,
+                            currentUserId: currentUserId
+                        )
+                        
+                        if let chatId = chatId {
+                            if messagesByChat[chatId] == nil {
+                                messagesByChat[chatId] = []
+                            }
+                            messagesByChat[chatId]?.append(message)
+                            chatUserIds[chatId] = otherUserId
+                        }
+                    }
+                    
+                    // Process each chat's messages
+                    for (chatId, chatMessages) in messagesByChat {
+                        guard let otherUserId = chatUserIds[chatId] else { continue }
+                        
+                        // Find chat
+                        let chatFetch: NSFetchRequest<Chat> = Chat.fetchRequest()
+                        chatFetch.predicate = NSPredicate(format: "id == %@", chatId)
+                        guard let chat = try? backgroundContext.fetch(chatFetch).first else {
+                            Log.error("❌ Chat not found: \(chatId)", category: "BackgroundFetch")
+                            continue
+                        }
+                        
+                        // Process messages
+                        for messageData in chatMessages {
+                            // Check if message already exists
+                            let messageFetch: NSFetchRequest<Message> = Message.fetchRequest()
+                            messageFetch.predicate = NSPredicate(format: "id == %@", messageData.id)
+                            
+                            if (try? backgroundContext.fetch(messageFetch).first) != nil {
+                                continue // Already exists
+                            }
+                            
+                            // Try to decrypt message
+                            var decryptedContent: String?
+                            
+                            if CryptoManager.shared.hasSession(for: otherUserId) {
+                                do {
+                                    decryptedContent = try CryptoManager.shared.decryptMessage(messageData)
+                                    Log.debug("✅ Decrypted message \(messageData.id)", category: "BackgroundFetch")
+                                } catch {
+                                    Log.error("❌ Failed to decrypt message \(messageData.id): \(error)", category: "BackgroundFetch")
+                                    // Continue without decryption - will be decrypted when user opens chat
+                                }
+                            } else {
+                                Log.info("⚠️ No session for user \(otherUserId), message will be decrypted later", category: "BackgroundFetch")
+                                // Message will be decrypted when user opens chat and session is initialized
+                            }
+                            
+                            // Save message
+                            let message = Message(context: backgroundContext)
+                            message.id = messageData.id
+                            message.fromUserId = messageData.from
+                            message.toUserId = messageData.to
+                            message.encryptedContent = messageData.content
+                            message.decryptedContent = decryptedContent
+                            message.timestamp = Date(timeIntervalSince1970: TimeInterval(messageData.timestamp))
+                            message.isSentByMe = false
+                            message.deliveryStatus = .delivered
+                            message.retryCount = 0
+                            message.chat = chat
+                            
+                            newMessagesCount += 1
+                            
+                            // Update chat's last message
+                            if let lastMessage = chatMessages.last {
+                                chat.lastMessageText = decryptedContent ?? "[Encrypted]"
+                                chat.lastMessageTime = Date(timeIntervalSince1970: TimeInterval(lastMessage.timestamp))
+                            }
+                        }
+                    }
+                    
+                    // Save context
+                    do {
+                        try backgroundContext.save()
+                        context.performAndWait {
+                            try? context.save()
+                        }
+                        
+                        Log.info("✅ Saved \(newMessagesCount) new messages to Core Data", category: "BackgroundFetch")
+                        
+                        // Show notifications on main thread
+                        DispatchQueue.main.async {
+                            if newMessagesCount > 0 {
+                                self?.showNotificationsForMessages(
+                                    messagesByChat: messagesByChat,
+                                    chatUserIds: chatUserIds,
+                                    totalCount: newMessagesCount
+                                )
+                            }
+                            
+                            completion(.success(newMessagesCount))
+                        }
+                    } catch {
+                        Log.error("❌ Failed to save messages: \(error)", category: "BackgroundFetch")
+                        DispatchQueue.main.async {
+                            completion(.failure(error))
+                        }
+                    }
+                }
+                
+            case .failure(let error):
+                Log.error("❌ Background fetch failed: \(error)", category: "BackgroundFetch")
+                completion(.failure(error))
             }
         }
-
-        // TODO: Implement actual WebSocket connection and message fetching
-        // For now, simulate fetch
-        DispatchQueue.global().asyncAfter(deadline: .now() + 2) {
-            if !didComplete {
-                didComplete = true
-
-                // Simulate successful fetch with 0 new messages
-                // In real implementation:
-                // 1. Quick WebSocket connect
-                // 2. Send GetOfflineMessages request
-                // 3. Receive messages
-                // 4. Immediately disconnect
-                // 5. Save to Core Data
-                // 6. Show local notifications if needed
-
-                completion(.success(0))
-            }
+    }
+    
+    /// Find or create chat for a user
+    private func findOrCreateChat(
+        for userId: String,
+        in context: NSManagedObjectContext,
+        currentUserId: String
+    ) -> String? {
+        let chatFetch: NSFetchRequest<Chat> = Chat.fetchRequest()
+        chatFetch.predicate = NSPredicate(format: "otherUser.id == %@", userId)
+        
+        if let existingChat = try? context.fetch(chatFetch).first {
+            return existingChat.id
         }
+        
+        // Create new chat
+        let userFetch: NSFetchRequest<User> = User.fetchRequest()
+        userFetch.predicate = NSPredicate(format: "id == %@", userId)
+        
+        let dbUser: User
+        if let existingUser = try? context.fetch(userFetch).first {
+            dbUser = existingUser
+        } else {
+            let newUser = User(context: context)
+            newUser.id = userId
+            newUser.username = userId // Temporary, will be updated when public key bundle is received
+            newUser.displayName = userId
+            dbUser = newUser
+        }
+        
+        let newChat = Chat(context: context)
+        newChat.id = UUID().uuidString
+        newChat.otherUser = dbUser
+        
+        return newChat.id
+    }
+    
+    /// Show notifications for new messages
+    private func showNotificationsForMessages(
+        messagesByChat: [String: [ChatMessage]],
+        chatUserIds: [String: String],
+        totalCount: Int
+    ) {
+        let notificationManager = LocalNotificationManager.shared
+        
+        if messagesByChat.count == 1, let (chatId, messages) = messagesByChat.first {
+            // Single chat - show individual notification
+            let userId = chatUserIds[chatId] ?? "Unknown"
+            
+            // Get user display name from Core Data
+            let context = PersistenceController.shared.container.viewContext
+            let userFetch: NSFetchRequest<User> = User.fetchRequest()
+            userFetch.predicate = NSPredicate(format: "id == %@", userId)
+            
+            let senderName: String
+            if let user = try? context.fetch(userFetch).first {
+                senderName = user.displayName
+            } else {
+                senderName = userId
+            }
+            
+            let preview = messages.first.flatMap { msg -> String? in
+                // Try to get decrypted content if available
+                let messageFetch: NSFetchRequest<Message> = Message.fetchRequest()
+                messageFetch.predicate = NSPredicate(format: "id == %@", msg.id)
+                if let savedMessage = try? context.fetch(messageFetch).first,
+                   let decrypted = savedMessage.decryptedContent {
+                    return decrypted
+                }
+                return nil
+            }
+            
+            notificationManager.showNewMessageNotification(
+                senderName: senderName,
+                messagePreview: preview,
+                chatID: chatId
+            )
+        } else {
+            // Multiple chats - show batch notification
+            notificationManager.showMultipleMessagesNotification(
+                messageCount: totalCount,
+                fromContacts: messagesByChat.count
+            )
+        }
+        
+        // Update badge
+        notificationManager.updateBadge(totalCount)
     }
 
     /// Cleanup fetch resources
     private func cleanupFetch() {
-        // Disconnect WebSocket if connected
-        // Cancel any pending operations
-        Log.error("Cleaning up fetch resources")
+        // WebSocket cleanup is handled by fetchOfflineMessages
+        // which creates its own temporary connection
+        Log.info("Cleaning up fetch resources", category: "BackgroundFetch")
     }
 
     /// Perform maintenance operations (cache cleanup, etc.)
@@ -248,17 +483,46 @@ class BackgroundFetchManager: NSObject {
     /// Enable background fetch
     /// Call this when user enables background refresh in settings
     func enableBackgroundFetch() {
+        // Check Low Power Mode
+        guard !ProcessInfo.processInfo.isLowPowerModeEnabled else {
+            Log.info("Cannot enable background fetch: Low Power Mode is enabled", category: "BackgroundFetch")
+            BackgroundFetchConfig.isEnabled = false
+            isBackgroundFetchEnabled = false
+            return
+        }
+        
+        BackgroundFetchConfig.isEnabled = true
         isBackgroundFetchEnabled = true
         scheduleBackgroundFetch()
-        Log.info("Background fetch enabled by user")
+        Log.info("Background fetch enabled by user", category: "BackgroundFetch")
     }
 
     /// Disable background fetch
     /// Call this when user disables background refresh in settings
     func disableBackgroundFetch() {
+        BackgroundFetchConfig.isEnabled = false
         isBackgroundFetchEnabled = false
         cancelAllBackgroundTasks()
-        Log.info("Background fetch disabled by user")
+        Log.info("Background fetch disabled by user", category: "BackgroundFetch")
+    }
+    
+    /// Update fetch interval
+    func updateFetchInterval(_ minutes: Int) {
+        BackgroundFetchConfig.intervalMinutes = minutes
+        // Reschedule with new interval if enabled
+        if isBackgroundFetchEnabled {
+            cancelAllBackgroundTasks()
+            scheduleBackgroundFetch()
+        }
+        Log.info("Background fetch interval updated to \(minutes) minutes", category: "BackgroundFetch")
+    }
+    
+    /// Check if Low Power Mode is enabled and disable background fetch if needed
+    func checkLowPowerMode() {
+        if ProcessInfo.processInfo.isLowPowerModeEnabled && isBackgroundFetchEnabled {
+            Log.info("Low Power Mode detected - disabling background fetch", category: "BackgroundFetch")
+            disableBackgroundFetch()
+        }
     }
 
     /// Get readable status string for UI

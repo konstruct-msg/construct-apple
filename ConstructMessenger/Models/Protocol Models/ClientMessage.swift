@@ -16,6 +16,7 @@ enum ClientMessage: Codable {
     case sendMessage(ChatMessage)
     case rotatePrekey(RotatePrekeyData)
     case logout(LogoutData)
+    case getOfflineMessages
 
     // MARK: - Codable Implementation
     
@@ -25,7 +26,7 @@ enum ClientMessage: Codable {
     }
 
     private enum MessageType: String, Codable {
-        case register, login, connect, getPublicKey, sendMessage, rotatePrekey, logout
+        case register, login, connect, getPublicKey, sendMessage, rotatePrekey, logout, getOfflineMessages
     }
 
     init(from decoder: Decoder) throws {
@@ -53,6 +54,8 @@ enum ClientMessage: Codable {
         case .logout:
             let payload = try container.decode(LogoutData.self, forKey: .payload)
             self = .logout(payload)
+        case .getOfflineMessages:
+            self = .getOfflineMessages
         }
     }
 
@@ -80,6 +83,8 @@ enum ClientMessage: Codable {
         case .logout(let data):
             try container.encode(MessageType.logout, forKey: .type)
             try container.encode(data, forKey: .payload)
+        case .getOfflineMessages:
+            try container.encode(MessageType.getOfflineMessages, forKey: .type)
         }
     }
 }

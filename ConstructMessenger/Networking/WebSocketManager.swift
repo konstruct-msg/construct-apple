@@ -257,6 +257,196 @@ class WebSocketManager: NSObject, ObservableObject {
         isConnected = false
         connectionStatus = .disconnected
     }
+    
+    // MARK: - Background Fetch
+    
+    /// Fetch offline messages in background
+    /// Creates a temporary connection, requests messages, and disconnects
+    /// - Parameter completion: Called with result containing array of messages or error
+    func fetchOfflineMessages(completion: @escaping (Result<[ChatMessage], Error>) -> Void) {
+        Log.info("📥 Starting background fetch for offline messages", category: "WebSocket")
+        
+        // Create a temporary WebSocket connection for background fetch
+        // Use a simple configuration without delegate for background fetch
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 15.0
+        config.timeoutIntervalForResource = 20.0
+        let tempSession = URLSession(configuration: config)
+        let request = URLRequest(url: url)
+        let tempTask = tempSession.webSocketTask(with: request)
+        
+        var messages: [ChatMessage] = []
+        var didComplete = false
+        let timeout: TimeInterval = 15.0
+        
+        // Set timeout
+        DispatchQueue.global().asyncAfter(deadline: .now() + timeout) {
+            if !didComplete {
+                didComplete = true
+                tempTask.cancel(with: .goingAway, reason: nil)
+                completion(.failure(BackgroundFetchError.timeout))
+            }
+        }
+        
+        // Track connection state
+        var isAuthenticated = false
+        var hasRequestedMessages = false
+        
+        // Start receiving messages
+        func receiveMessages() {
+            tempTask.receive { result in
+                guard !didComplete else { return }
+                
+                switch result {
+                case .success(let message):
+                    switch message {
+                    case .data(let data):
+                        do {
+                            let serverMessage: ServerMessage = try MessagePackHelper.decode(from: data)
+                            
+                            switch serverMessage {
+                            case .connectSuccess:
+                                Log.info("✅ Background fetch: Connected and authenticated", category: "WebSocket")
+                                isAuthenticated = true
+                                
+                                // Request offline messages
+                                if !hasRequestedMessages {
+                                    hasRequestedMessages = true
+                                    do {
+                                        let requestMessage = ClientMessage.getOfflineMessages
+                                        let msgpackData = try MessagePackHelper.encode(requestMessage)
+                                        let wsMessage = URLSessionWebSocketTask.Message.data(msgpackData)
+                                        tempTask.send(wsMessage) { error in
+                                            if let error = error {
+                                                Log.error("Failed to send GetOfflineMessages: \(error)", category: "WebSocket")
+                                                if !didComplete {
+                                                    didComplete = true
+                                                    completion(.failure(error))
+                                                }
+                                            } else {
+                                                Log.info("📤 GetOfflineMessages request sent", category: "WebSocket")
+                                            }
+                                        }
+                                    } catch {
+                                        Log.error("Failed to encode GetOfflineMessages: \(error)", category: "WebSocket")
+                                        if !didComplete {
+                                            didComplete = true
+                                            completion(.failure(error))
+                                        }
+                                    }
+                                }
+                                
+                            case .offlineMessages(let data):
+                                Log.info("📬 Received \(data.messages.count) offline messages", category: "WebSocket")
+                                messages = data.messages
+                                
+                                // Disconnect after receiving messages
+                                if !didComplete {
+                                    didComplete = true
+                                    tempTask.cancel(with: .goingAway, reason: nil)
+                                    completion(.success(messages))
+                                }
+                                
+                            case .message(let msg):
+                                // Handle individual message (fallback if server sends messages one by one)
+                                Log.debug("📨 Received individual message in background fetch", category: "WebSocket")
+                                messages.append(msg)
+                                
+                            case .error(let errorData):
+                                Log.error("❌ Server error: \(errorData.message)", category: "WebSocket")
+                                if !didComplete {
+                                    didComplete = true
+                                    tempTask.cancel(with: .goingAway, reason: nil)
+                                    completion(.failure(NetworkError.serverError(errorData.message)))
+                                }
+                                
+                            case .sessionExpired:
+                                Log.error("❌ Session expired during background fetch", category: "WebSocket")
+                                if !didComplete {
+                                    didComplete = true
+                                    tempTask.cancel(with: .goingAway, reason: nil)
+                                    completion(.failure(BackgroundFetchError.notAuthenticated))
+                                }
+                                
+                            default:
+                                // Ignore other message types
+                                break
+                            }
+                            
+                            // Continue receiving if not done
+                            if !didComplete {
+                                receiveMessages()
+                            }
+                        } catch {
+                            Log.error("Failed to decode server message: \(error)", category: "WebSocket")
+                            if !didComplete {
+                                didComplete = true
+                                tempTask.cancel(with: .goingAway, reason: nil)
+                                completion(.failure(NetworkError.decodingFailed))
+                            }
+                        }
+                        
+                    case .string(let text):
+                        Log.info("Received unexpected string message: \(text)", category: "WebSocket")
+                        receiveMessages()
+                        
+                    @unknown default:
+                        receiveMessages()
+                    }
+                    
+                case .failure(let error):
+                    Log.error("WebSocket receive error: \(error.localizedDescription)", category: "WebSocket")
+                    if !didComplete {
+                        didComplete = true
+                        completion(.failure(error))
+                    }
+                }
+            }
+        }
+        
+        // Start connection
+        tempTask.resume()
+        
+        // Authenticate after a short delay to allow connection to establish
+        DispatchQueue.global().asyncAfter(deadline: .now() + 0.5) {
+            guard !didComplete else { return }
+            guard let sessionToken = SessionManager.shared.sessionToken else {
+                if !didComplete {
+                    didComplete = true
+                    tempTask.cancel(with: .goingAway, reason: nil)
+                    completion(.failure(BackgroundFetchError.notAuthenticated))
+                }
+                return
+            }
+            
+            do {
+                let connectMessage = ClientMessage.connect(ConnectData(sessionToken: sessionToken))
+                let msgpackData = try MessagePackHelper.encode(connectMessage)
+                let wsMessage = URLSessionWebSocketTask.Message.data(msgpackData)
+                tempTask.send(wsMessage) { error in
+                    if let error = error {
+                        Log.error("Failed to authenticate background fetch: \(error)", category: "WebSocket")
+                        if !didComplete {
+                            didComplete = true
+                            tempTask.cancel(with: .goingAway, reason: nil)
+                            completion(.failure(error))
+                        }
+                    } else {
+                        Log.info("🔐 Background fetch authentication sent", category: "WebSocket")
+                        // Start receiving messages
+                        receiveMessages()
+                    }
+                }
+            } catch {
+                Log.error("Failed to encode connect message: \(error)", category: "WebSocket")
+                if !didComplete {
+                    didComplete = true
+                    tempTask.cancel(with: .goingAway, reason: nil)
+                    completion(.failure(error))
+                }
+            }
+        }
+    }
 }
 
 // MARK: - URLSessionWebSocketDelegate

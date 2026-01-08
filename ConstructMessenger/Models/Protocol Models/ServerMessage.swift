@@ -19,6 +19,7 @@ enum ServerMessage: Codable {
     case keyRotationSuccess
     case error(ErrorData)
     case logoutSuccess
+    case offlineMessages(OfflineMessagesData)
 
     // MARK: - Codable Implementation
     
@@ -28,7 +29,7 @@ enum ServerMessage: Codable {
     }
     
     private enum MessageType: String, Codable {
-        case registerSuccess, loginSuccess, connectSuccess, sessionExpired, publicKeyBundle, message, ack, keyRotationSuccess, error, logoutSuccess
+        case registerSuccess, loginSuccess, connectSuccess, sessionExpired, publicKeyBundle, message, ack, keyRotationSuccess, error, logoutSuccess, offlineMessages
     }
 
     init(from decoder: Decoder) throws {
@@ -63,6 +64,9 @@ enum ServerMessage: Codable {
             self = .error(payload)
         case .logoutSuccess:
             self = .logoutSuccess
+        case .offlineMessages:
+            let payload = try container.decode(OfflineMessagesData.self, forKey: .payload)
+            self = .offlineMessages(payload)
         }
     }
 
@@ -96,6 +100,9 @@ enum ServerMessage: Codable {
             try container.encode(data, forKey: .payload)
         case .logoutSuccess:
             try container.encode(MessageType.logoutSuccess, forKey: .type)
+        case .offlineMessages(let data):
+            try container.encode(MessageType.offlineMessages, forKey: .type)
+            try container.encode(data, forKey: .payload)
         }
     }
 }
@@ -137,4 +144,8 @@ struct AckData: Codable {
 struct ErrorData: Codable {
     let code: String
     let message: String
+}
+
+struct OfflineMessagesData: Codable {
+    let messages: [ChatMessage]
 }

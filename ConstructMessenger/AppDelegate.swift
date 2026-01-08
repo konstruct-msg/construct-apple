@@ -26,14 +26,11 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 
         // Check if user has enabled background fetch in settings
         // If enabled, schedule the first background fetch task
-        let userDefaults = UserDefaults.standard
-        let isBackgroundFetchEnabled = userDefaults.bool(forKey: "backgroundFetchEnabled")
-
-        if isBackgroundFetchEnabled {
+        if BackgroundFetchConfig.shouldBeEnabled {
             BackgroundFetchManager.shared.scheduleBackgroundFetch()
             Log.info("Background fetch is enabled, scheduled first task")
         } else {
-            Log.info("Background fetch is disabled by user")
+            Log.info("Background fetch is disabled by user or Low Power Mode")
         }
 
         // Initialize local notification manager
@@ -102,11 +99,10 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         Log.debug("Application did enter background")
 
         // Ensure background fetch is scheduled if enabled
-        let userDefaults = UserDefaults.standard
-        let isBackgroundFetchEnabled = userDefaults.bool(forKey: "backgroundFetchEnabled")
-
-        if isBackgroundFetchEnabled {
+        if BackgroundFetchConfig.shouldBeEnabled {
             BackgroundFetchManager.shared.scheduleBackgroundFetch()
+        } else {
+            BackgroundFetchManager.shared.cancelAllBackgroundTasks()
         }
     }
 }
