@@ -86,7 +86,7 @@ class CryptoManager {
 
     /// Restore sessions for recent chats (pagination - first 10)
     func restoreRecentSessions(limit: Int = 10) {
-        guard let core = core else {
+        guard core != nil else {
             Log.error("Cannot restore sessions - core not initialized", category: "CryptoManager")
             return
         }

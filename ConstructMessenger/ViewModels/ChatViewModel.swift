@@ -28,7 +28,7 @@ class ChatViewModel: ObservableObject {
     init(chat: Chat, context: NSManagedObjectContext) {
         self.chat = chat
         self.viewContext = context
-        Log.debug("🔧 ChatViewModel init: chat.id=\(chat.id ?? "nil"), chat.otherUser?.id=\(chat.otherUser?.id ?? "nil"), chat.otherUser?.username=\(chat.otherUser?.username ?? "nil")", category: "ChatViewModel")
+        Log.debug("🔧 ChatViewModel init: chat.id=\(chat.id), chat.otherUser?.id=\(chat.otherUser?.id ?? "nil"), chat.otherUser?.username=\(chat.otherUser?.username ?? "nil")", category: "ChatViewModel")
 
         setupFetchedResultsController()  // ✅ Setup FRC first
         setupSubscribers()
@@ -123,7 +123,7 @@ class ChatViewModel: ObservableObject {
     }
 
     private func loadMessages() {
-        Log.debug("📥 Loading messages for chat \(chat.id ?? "unknown")", category: "ChatViewModel")
+        Log.debug("📥 Loading messages for chat \(chat.id)", category: "ChatViewModel")
 
         let fetchRequest: NSFetchRequest<Message> = Message.fetchRequest()
         fetchRequest.predicate = NSPredicate(format: "chat == %@", chat)
@@ -133,7 +133,7 @@ class ChatViewModel: ObservableObject {
             messages = fetchedMessages
             Log.debug("📬 Loaded \(fetchedMessages.count) messages", category: "ChatViewModel")
             for (index, msg) in fetchedMessages.enumerated() {
-                Log.debug("  Message \(index): id=\(msg.id ?? "nil"), isSentByMe=\(msg.isSentByMe), text=\(msg.decryptedContent?.prefix(20) ?? "nil")", category: "ChatViewModel")
+                Log.debug("  Message \(index): id=\(msg.id), isSentByMe=\(msg.isSentByMe), text=\(msg.decryptedContent?.prefix(20) ?? "nil")", category: "ChatViewModel")
             }
         } else {
             Log.error("❌ Failed to fetch messages", category: "ChatViewModel")
@@ -362,7 +362,7 @@ class ChatViewModel: ObservableObject {
                 }
 
                 self.recipientBundle = (data.identityPublic, data.signedPrekeyPublic, data.signature, data.verifyingKey)
-                guard let currentUserId = SessionManager.shared.currentUserId else { return }
+                guard SessionManager.shared.currentUserId != nil else { return }
                 
                 // ✅ FIX: Proactively delete any stale session before starting a new one.
                 // This handles cases where a session exists in the Rust core but not in the Swift
@@ -416,7 +416,7 @@ class ChatViewModel: ObservableObject {
         let fetchRequest: NSFetchRequest<Message> = Message.fetchRequest()
         fetchRequest.predicate = NSPredicate(format: "id == %@", messageId)
 
-        if let message = try? viewContext.fetch(fetchRequest).first {
+        if (try? viewContext.fetch(fetchRequest).first) != nil {
             Log.debug("✅ Found message by ID: \(messageId)", category: "ChatViewModel")
             updateMessageStatus(messageId: messageId, status: status == "delivered" ? .delivered : .sent)
         } else {
@@ -430,12 +430,12 @@ class ChatViewModel: ObservableObject {
             if let allMessages = try? viewContext.fetch(allMessagesRequest) {
                 Log.debug("📋 All sent messages in this chat:", category: "ChatViewModel")
                 for msg in allMessages.prefix(5) {
-                    Log.debug("  - ID: \(msg.id ?? "nil"), status: \(msg.deliveryStatus), timestamp: \(msg.timestamp)", category: "ChatViewModel")
+                    Log.debug("  - ID: \(msg.id), status: \(msg.deliveryStatus), timestamp: \(msg.timestamp)", category: "ChatViewModel")
                 }
 
                 // Try to match by most recent sending message
                 if let mostRecentSending = allMessages.first(where: { $0.deliveryStatus == .sending }) {
-                    Log.debug("🔄 Assuming ACK is for most recent sending message: \(mostRecentSending.id ?? "nil")", category: "ChatViewModel")
+                    Log.debug("🔄 Assuming ACK is for most recent sending message: \(mostRecentSending.id)", category: "ChatViewModel")
                     mostRecentSending.deliveryStatus = status == "delivered" ? .delivered : .sent
                     try? viewContext.save()
                     loadMessages()

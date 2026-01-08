@@ -71,7 +71,7 @@ struct MessageInfoSheet: View {
                 Section {
                     InfoRow(
                         label: "message_id",
-                        value: message.id ?? NSLocalizedString("unknown", comment: "Unknown value")
+                        value: message.id
                     )
 
                     InfoRow(

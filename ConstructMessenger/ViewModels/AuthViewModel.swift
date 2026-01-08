@@ -57,7 +57,7 @@ class AuthViewModel: ObservableObject {
     func restoreSession() {
         print("🔄 restoreSession() called")
 
-        guard let token = SessionManager.shared.sessionToken else {
+        guard SessionManager.shared.sessionToken != nil else {
             print("❌ No session token found - user needs to login")
             return
         }
@@ -318,7 +318,7 @@ class AuthViewModel: ObservableObject {
             let user: User
             if let existingUser = try viewContext.fetch(fetchRequest).first {
                 user = existingUser
-                print("👤 Found existing user in Core Data: \(user.displayName ?? user.username ?? "Unknown")")
+                print("👤 Found existing user in Core Data: \(user.displayName)")
             } else {
                 // First login on this device, create a new User entity
                 user = User(context: viewContext)

@@ -17,6 +17,9 @@ class ChatsViewModel: ObservableObject {
 
     // ✅ Store pending first messages from users we don't have sessions with yet
     private var pendingFirstMessages: [String: ChatMessage] = [:]  // [userId: firstMessage]
+    
+    // ✅ Chat ID to open programmatically (e.g., from deep link)
+    @Published var chatToOpen: String?
 
     init() {
         setupSubscribers()
@@ -73,7 +76,7 @@ class ChatsViewModel: ObservableObject {
         do {
             try context.save()
             Log.debug("✅ Chat saved successfully", category: "ChatsViewModel")
-            Log.debug("   chat.id = \(chat.id ?? "nil")", category: "ChatsViewModel")
+            Log.debug("   chat.id = \(chat.id)", category: "ChatsViewModel")
             Log.debug("   chat.otherUser?.id = \(chat.otherUser?.id ?? "nil")", category: "ChatsViewModel")
             Log.debug("   chat.otherUser?.username = \(chat.otherUser?.username ?? "nil")", category: "ChatsViewModel")
             Log.debug("   chat.otherUser?.displayName = \(chat.otherUser?.displayName ?? "nil")", category: "ChatsViewModel")

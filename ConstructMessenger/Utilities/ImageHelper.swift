@@ -80,7 +80,7 @@ struct ImageHelper {
         // Calculate crop rect (center crop)
         let cropX = (scaledWidth - size) / 2
         let cropY = (scaledHeight - size) / 2
-        let cropRect = CGRect(x: cropX, y: cropY, width: size, height: size)
+        _ = CGRect(x: cropX, y: cropY, width: size, height: size)
 
         // Render
         let format = UIGraphicsImageRendererFormat()

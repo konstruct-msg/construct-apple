@@ -30,47 +30,7 @@ struct NewChatView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 32) {
-                Spacer()
-
-                VStack(spacing: 16) {
-                    Image(systemName: "qrcode.viewfinder")
-                        .font(.system(size: 80))
-                        .foregroundColor(.blue)
-
-                    Text("add_contact")
-                        .font(.title2)
-                        .fontWeight(.semibold)
-
-                    Text("scan_qr_code_or_share_link")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 32)
-                }
-
-                VStack(spacing: 16) {
-                    Button {
-                        showingQRScanner = true
-                    } label: {
-                        HStack {
-                            Image(systemName: "qrcode.viewfinder")
-                            Text("scan_qr_code")
-                                .fontWeight(.semibold)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.blue)
-                        .foregroundColor(.white)
-                        .cornerRadius(12)
-                    }
-                    .padding(.horizontal, 32)
-
-                    Text("your_contact_link_is_in_account_settings")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-
-                Spacer()
+                
             }
             .navigationTitle("new_contact")
             .navigationBarTitleDisplayMode(.inline)
@@ -129,7 +89,7 @@ struct NewChatView: View {
             bio: nil
         )
         if let chat = chatsViewModel.startChat(with: publicUserInfo) {
-            print("✅ NewChatView: Chat created with @\(username), chat.id=\(chat.id ?? "nil"), chat.otherUser?.id=\(chat.otherUser?.id ?? "nil")")
+            print("✅ NewChatView: Chat created with @\(username), chat.id=\(chat.id), chat.otherUser?.id=\(chat.otherUser?.id ?? "nil")")
         } else {
             print("❌ NewChatView: Failed to create chat with @\(username)")
         }

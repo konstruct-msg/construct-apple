@@ -16,6 +16,7 @@ struct ChatsListView: View {
 
     @EnvironmentObject var chatsViewModel: ChatsViewModel
     @State private var showingQRScanner = false
+    @State private var navigationPath = NavigationPath()
 
     init() {
         let fetchRequest: NSFetchRequest<Chat> = Chat.fetchRequest()
@@ -25,16 +26,19 @@ struct ChatsListView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $navigationPath) {
             List {
                 ForEach(chats) { chat in
-                    NavigationLink {
-                        ChatView(chat: chat, context: viewContext)
-                    } label: {
+                    NavigationLink(value: chat.id) {
                         ChatRowView(chat: chat)
                     }
                 }
                 .onDelete(perform: deleteItems)
+            }
+            .navigationDestination(for: String.self) { chatId in
+                if let chat = chats.first(where: { $0.id == chatId }) {
+                    ChatView(chat: chat, context: viewContext)
+                }
             }
             .toolbar {
                 ToolbarItem(placement: .principal) {
@@ -56,6 +60,19 @@ struct ChatsListView: View {
             }
             .onAppear {
                 chatsViewModel.setContext(viewContext)
+            }
+            .onChange(of: chatsViewModel.chatToOpen) { chatId in
+                if let chatId = chatId {
+                    // Clear the flag first to prevent re-triggering
+                    chatsViewModel.chatToOpen = nil
+                    // Give CoreData a moment to update the fetch request
+                    Task { @MainActor in
+                        // Small delay to ensure @FetchRequest has updated with the new chat
+                        try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
+                        // Navigate to the chat
+                        navigationPath.append(chatId)
+                    }
+                }
             }
         }
     }

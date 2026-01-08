@@ -16,24 +16,12 @@ struct ContentView: View {
     @AppStorage("appTheme") private var appTheme: AppTheme = .automatic
 
     @StateObject private var chatsViewModel = ChatsViewModel()
-    @State private var showingNewChatSheet = false
-    @State private var contactInfoFromDeepLink: ContactInfo?
 
     var body: some View {
         Group {
             if authViewModel.isAuthenticated {
                 MainTabView()
                     .environmentObject(chatsViewModel)
-                    .sheet(isPresented: $showingNewChatSheet, onDismiss: {
-                        // Clear the deep link after the sheet is dismissed
-                        deepLinkHandler.deepLink = nil
-                    }) {
-                        if let contactInfo = contactInfoFromDeepLink {
-                            // ✅ Use existing chatsViewModel from ContentView
-                            NewChatView(chatsViewModel: chatsViewModel, initialContactInfo: contactInfo)
-                                .environment(\.managedObjectContext, viewContext)
-                        }
-                    }
             } else {
                 AuthView()
             }
@@ -42,6 +30,7 @@ struct ContentView: View {
         .onAppear {
             // This will run once when ContentView first appears
             authViewModel.restoreSession()
+            chatsViewModel.setContext(viewContext)
         }
         .onChange(of: scenePhase) { newPhase in
             if newPhase == .active {
@@ -58,9 +47,25 @@ struct ContentView: View {
         .onChange(of: deepLinkHandler.deepLink) { newDeepLink in
             Log.debug("ContentView: Deep link changed: \(String(describing: newDeepLink))", category: "DeepLink")
             if case .contact(let contactInfo) = newDeepLink {
-                Log.info("ContentView: Opening new chat sheet for userId: \(contactInfo.userId), username: \(contactInfo.username)", category: "DeepLink")
-                contactInfoFromDeepLink = contactInfo
-                showingNewChatSheet = true
+                Log.info("ContentView: Creating chat directly for userId: \(contactInfo.userId), username: \(contactInfo.username)", category: "DeepLink")
+                
+                // ✅ Create chat directly instead of opening modal
+                let publicUserInfo = PublicUserInfo(
+                    id: contactInfo.userId,
+                    username: contactInfo.username,
+                    avatarUrl: nil,
+                    bio: nil
+                )
+                
+                if let chat = chatsViewModel.startChat(with: publicUserInfo) {
+                    Log.info("ContentView: Chat created successfully, opening chat with id: \(chat.id)", category: "DeepLink")
+                    chatsViewModel.chatToOpen = chat.id
+                } else {
+                    Log.error("ContentView: Failed to create chat for userId: \(contactInfo.userId)", category: "DeepLink")
+                }
+                
+                // Clear the deep link
+                deepLinkHandler.deepLink = nil
             }
         }
         .onOpenURL { url in
