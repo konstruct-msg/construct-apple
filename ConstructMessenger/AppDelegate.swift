@@ -51,11 +51,14 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     ) -> Bool {
         guard userActivity.activityType == NSUserActivityTypeBrowsingWeb,
               let url = userActivity.webpageURL else {
+            Log.info("AppDelegate: Not a web browsing activity or no URL")
             return false
         }
-        
-        Log.info("AppDelegate: Received Universal Link: \(url.absoluteString)")
-        return deepLinkHandler.handleURL(url)
+
+        Log.info("AppDelegate: Received Universal Link: \(url.absoluteString)", category: "DeepLink")
+        let result = deepLinkHandler.handleURL(url)
+        Log.info("AppDelegate: Deep link handling result: \(result)", category: "DeepLink")
+        return result
     }
 
     // MARK: - Scene Lifecycle (iOS 13+)

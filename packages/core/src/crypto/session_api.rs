@@ -331,6 +331,24 @@ where
     pub fn messaging_session(&self) -> &M {
         &self.messaging_session
     }
+
+    /// Создать сессию из существующей messaging session
+    ///
+    /// Используется для импорта сессий из persistent storage.
+    ///
+    /// # Параметры
+    /// - `contact_id`: ID контакта
+    /// - `messaging_session`: Восстановленная messaging session
+    ///
+    /// # Возвращает
+    /// Новую Session instance
+    pub fn from_messaging_session(contact_id: String, messaging_session: M) -> Self {
+        Self {
+            contact_id,
+            messaging_session,
+            _phantom: PhantomData,
+        }
+    }
 }
 
 /// Convenience type alias для X3DH + Double Ratchet с Classic Suite

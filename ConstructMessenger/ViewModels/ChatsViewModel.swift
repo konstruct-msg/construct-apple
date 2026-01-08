@@ -179,14 +179,29 @@ class ChatsViewModel: ObservableObject {
             } else {
                 // This shouldn't happen since handleIncomingMessage creates the chat
                 // But if it does, create it with correct username from the start
-                let newUser = User(context: context)
-                newUser.id = data.userId
-                newUser.username = data.username
-                newUser.displayName = data.username
+
+                // ✅ FIX: Check if User already exists before creating
+                let userFetchRequest: NSFetchRequest<User> = User.fetchRequest()
+                userFetchRequest.predicate = NSPredicate(format: "id == %@", data.userId)
+
+                let dbUser: User
+                if let existingUser = try? context.fetch(userFetchRequest).first {
+                    existingUser.username = data.username
+                    existingUser.displayName = data.username
+                    dbUser = existingUser
+                    Log.debug("Using existing user in fallback: id=\(data.userId), username=\(data.username)", category: "ChatsViewModel")
+                } else {
+                    let newUser = User(context: context)
+                    newUser.id = data.userId
+                    newUser.username = data.username
+                    newUser.displayName = data.username
+                    dbUser = newUser
+                    Log.debug("Created new user in fallback: id=\(data.userId), username=\(data.username)", category: "ChatsViewModel")
+                }
 
                 let newChat = Chat(context: context)
                 newChat.id = UUID().uuidString
-                newChat.otherUser = newUser
+                newChat.otherUser = dbUser
                 chat = newChat
                 Log.debug("⚠️ Chat didn't exist, created new one with username: \(data.username) (this shouldn't happen)", category: "ChatsViewModel")
             }
@@ -227,15 +242,29 @@ class ChatsViewModel: ObservableObject {
         } else {
             // Create a new user with only the ID (no server-stored metadata)
             // Username will be updated when we receive publicKeyBundle
-            let newUser = User(context: context)
-            newUser.id = otherUserId
-            newUser.username = otherUserId  // Temporary: will be updated from publicKeyBundle
-            newUser.displayName = otherUserId // ✅ FIX: Set required displayName
+
+            // ✅ FIX: Check if User already exists before creating
+            let userFetchRequest: NSFetchRequest<User> = User.fetchRequest()
+            userFetchRequest.predicate = NSPredicate(format: "id == %@", otherUserId)
+
+            let dbUser: User
+            if let existingUser = try? context.fetch(userFetchRequest).first {
+                // Use existing user (shouldn't happen, but safety check)
+                dbUser = existingUser
+                Log.debug("Using existing user in handleIncomingMessage: id=\(otherUserId)", category: "ChatsViewModel")
+            } else {
+                let newUser = User(context: context)
+                newUser.id = otherUserId
+                newUser.username = otherUserId  // Temporary: will be updated from publicKeyBundle
+                newUser.displayName = otherUserId
+                dbUser = newUser
+                Log.debug("Created new user in handleIncomingMessage: id=\(otherUserId)", category: "ChatsViewModel")
+            }
             // User display info is stored locally only, not fetched from server
 
             let newChat = Chat(context: context)
             newChat.id = UUID().uuidString
-            newChat.otherUser = newUser
+            newChat.otherUser = dbUser
             chat = newChat
             isNewChat = true
 
@@ -274,6 +303,16 @@ class ChatsViewModel: ObservableObject {
             // ✅ Existing session - decrypt normally
             guard let content = try? CryptoManager.shared.decryptMessage(message) else {
                 Log.error("❌ ChatsViewModel: Failed to decrypt incoming message \(message.id)", category: "ChatsViewModel")
+
+                // ✅ Session was corrupted and auto-deleted by CryptoManager
+                // Request fresh public key bundle to reinitialize
+                Log.debug("🔄 Decryption failed, session was deleted. Requesting reinitialization...", category: "ChatsViewModel")
+                wsManager.send(.getPublicKey(GetPublicKeyData(userId: otherUserId)))
+
+                // Store the failed message to retry after reinitialization
+                pendingFirstMessages[otherUserId] = message
+                Log.info("📝 Message stored for retry after session reinitialization", category: "ChatsViewModel")
+
                 return
             }
             decryptedContent = content

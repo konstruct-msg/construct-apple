@@ -590,6 +590,7 @@ impl<P: CryptoProvider> DoubleRatchetSession<P> {
     /// Сериализовать сессию для сохранения
     pub fn to_serializable(&self) -> SerializableSession {
         SerializableSession {
+            version: 1,  // Current protocol version
             suite_id: self.suite_id,
             root_key: self.root_key.as_ref().to_vec(),
             sending_chain_key: self.sending_chain_key.as_ref().to_vec(),
@@ -616,6 +617,11 @@ impl<P: CryptoProvider> DoubleRatchetSession<P> {
 
     /// Десериализовать сессию
     pub fn from_serializable(data: SerializableSession) -> Result<Self, String> {
+        // Check version compatibility
+        if data.version != 1 {
+            return Err(format!("Unsupported session version: {}. Expected version 1.", data.version));
+        }
+
         Ok(Self {
             suite_id: data.suite_id,
             root_key: Self::bytes_to_aead_key(&data.root_key)?,
@@ -648,6 +654,7 @@ impl<P: CryptoProvider> DoubleRatchetSession<P> {
 /// Serializable session format for storage
 #[derive(Serialize, Deserialize)]
 pub struct SerializableSession {
+    version: u16,  // Protocol version for future compatibility
     suite_id: u16,
     root_key: Vec<u8>,
     sending_chain_key: Vec<u8>,

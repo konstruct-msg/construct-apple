@@ -459,6 +459,28 @@ where
         self.sessions.remove(contact_id).is_some()
     }
 
+    /// Импортировать сессию из десериализованного состояния
+    ///
+    /// Используется для восстановления сессий из persistent storage (Keychain).
+    ///
+    /// # Параметры
+    /// - `contact_id`: ID контакта
+    /// - `messaging_session`: Восстановленная messaging session (Double Ratchet)
+    ///
+    /// # Возвращает
+    /// Session ID восстановленной сессии
+    pub fn import_session(&mut self, contact_id: &str, messaging_session: M) -> String {
+        let session_id = messaging_session.session_id().to_string();
+
+        let session = Session::from_messaging_session(
+            contact_id.to_string(),
+            messaging_session
+        );
+
+        self.sessions.insert(contact_id.to_string(), session);
+        session_id
+    }
+
     /// Получить количество активных сессий
     pub fn active_sessions_count(&self) -> usize {
         self.sessions.len()

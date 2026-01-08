@@ -50,9 +50,11 @@ fileprivate extension ForeignBytes {
 
 fileprivate extension Data {
     init(rustBuffer: RustBuffer) {
-        // TODO: This copies the buffer. Can we read directly from a
-        // Rust buffer?
-        self.init(bytes: rustBuffer.data!, count: Int(rustBuffer.len))
+        self.init(
+            bytesNoCopy: rustBuffer.data!,
+            count: Int(rustBuffer.len),
+            deallocator: .none
+        )
     }
 }
 
@@ -168,10 +170,16 @@ fileprivate protocol FfiConverter {
 fileprivate protocol FfiConverterPrimitive: FfiConverter where FfiType == SwiftType { }
 
 extension FfiConverterPrimitive {
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
     public static func lift(_ value: FfiType) throws -> SwiftType {
         return value
     }
 
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
     public static func lower(_ value: SwiftType) -> FfiType {
         return value
     }
@@ -182,6 +190,9 @@ extension FfiConverterPrimitive {
 fileprivate protocol FfiConverterRustBuffer: FfiConverter where FfiType == RustBuffer {}
 
 extension FfiConverterRustBuffer {
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
     public static func lift(_ buf: RustBuffer) throws -> SwiftType {
         var reader = createReader(data: Data(rustBuffer: buf))
         let value = try read(from: &reader)
@@ -192,6 +203,9 @@ extension FfiConverterRustBuffer {
         return value
     }
 
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
     public static func lower(_ value: SwiftType) -> RustBuffer {
           var writer = createWriter()
           write(value, into: &writer)
@@ -382,6 +396,9 @@ fileprivate class UniffiHandleMap<T> {
 // Public interface members begin here.
 
 
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterUInt8: FfiConverterPrimitive {
     typealias FfiType = UInt8
     typealias SwiftType = UInt8
@@ -395,6 +412,9 @@ fileprivate struct FfiConverterUInt8: FfiConverterPrimitive {
     }
 }
 
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterUInt32: FfiConverterPrimitive {
     typealias FfiType = UInt32
     typealias SwiftType = UInt32
@@ -408,6 +428,9 @@ fileprivate struct FfiConverterUInt32: FfiConverterPrimitive {
     }
 }
 
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterBool : FfiConverter {
     typealias FfiType = Int8
     typealias SwiftType = Bool
@@ -429,6 +452,9 @@ fileprivate struct FfiConverterBool : FfiConverter {
     }
 }
 
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterString: FfiConverter {
     typealias SwiftType = String
     typealias FfiType = RustBuffer
@@ -480,6 +506,12 @@ public protocol ClassicCryptoCoreProtocol : AnyObject {
     
     func exportRegistrationBundleJson() throws  -> String
     
+    func exportSessionJson(contactId: String) throws  -> String
+    
+    func getAllSessionContactIds()  -> [String]
+    
+    func importSessionJson(contactId: String, sessionJson: String) throws  -> String
+    
     func initReceivingSession(contactId: String, recipientBundle: [UInt8], firstMessage: [UInt8]) throws  -> SessionInitResult
     
     func initSession(contactId: String, recipientBundle: [UInt8]) throws  -> String
@@ -493,6 +525,9 @@ open class ClassicCryptoCore:
     fileprivate let pointer: UnsafeMutableRawPointer!
 
     /// Used to instantiate a [FFIObject] without an actual pointer, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
     public struct NoPointer {
         public init() {}
     }
@@ -504,15 +539,21 @@ open class ClassicCryptoCore:
         self.pointer = pointer
     }
 
-    /// This constructor can be used to instantiate a fake object.
-    /// - Parameter noPointer: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
-    ///
-    /// - Warning:
-    ///     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing [Pointer] the FFI lower functions will crash.
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noPointer: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing [Pointer] the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
     public init(noPointer: NoPointer) {
         self.pointer = nil
     }
 
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
     public func uniffiClonePointer() -> UnsafeMutableRawPointer {
         return try! rustCall { uniffi_construct_core_fn_clone_classiccryptocore(self.pointer, $0) }
     }
@@ -563,6 +604,30 @@ open func exportRegistrationBundleJson()throws  -> String {
 })
 }
     
+open func exportSessionJson(contactId: String)throws  -> String {
+    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCryptoError.lift) {
+    uniffi_construct_core_fn_method_classiccryptocore_export_session_json(self.uniffiClonePointer(),
+        FfiConverterString.lower(contactId),$0
+    )
+})
+}
+    
+open func getAllSessionContactIds() -> [String] {
+    return try!  FfiConverterSequenceString.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_classiccryptocore_get_all_session_contact_ids(self.uniffiClonePointer(),$0
+    )
+})
+}
+    
+open func importSessionJson(contactId: String, sessionJson: String)throws  -> String {
+    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCryptoError.lift) {
+    uniffi_construct_core_fn_method_classiccryptocore_import_session_json(self.uniffiClonePointer(),
+        FfiConverterString.lower(contactId),
+        FfiConverterString.lower(sessionJson),$0
+    )
+})
+}
+    
 open func initReceivingSession(contactId: String, recipientBundle: [UInt8], firstMessage: [UInt8])throws  -> SessionInitResult {
     return try  FfiConverterTypeSessionInitResult.lift(try rustCallWithError(FfiConverterTypeCryptoError.lift) {
     uniffi_construct_core_fn_method_classiccryptocore_init_receiving_session(self.uniffiClonePointer(),
@@ -593,6 +658,9 @@ open func removeSession(contactId: String) -> Bool {
 
 }
 
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 public struct FfiConverterTypeClassicCryptoCore: FfiConverter {
 
     typealias FfiType = UnsafeMutableRawPointer
@@ -627,10 +695,16 @@ public struct FfiConverterTypeClassicCryptoCore: FfiConverter {
 
 
 
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 public func FfiConverterTypeClassicCryptoCore_lift(_ pointer: UnsafeMutableRawPointer) throws -> ClassicCryptoCore {
     return try FfiConverterTypeClassicCryptoCore.lift(pointer)
 }
 
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 public func FfiConverterTypeClassicCryptoCore_lower(_ value: ClassicCryptoCore) -> UnsafeMutableRawPointer {
     return FfiConverterTypeClassicCryptoCore.lower(value)
 }
@@ -674,6 +748,9 @@ extension EncryptedMessageComponents: Equatable, Hashable {
 }
 
 
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 public struct FfiConverterTypeEncryptedMessageComponents: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> EncryptedMessageComponents {
         return
@@ -692,10 +769,16 @@ public struct FfiConverterTypeEncryptedMessageComponents: FfiConverterRustBuffer
 }
 
 
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 public func FfiConverterTypeEncryptedMessageComponents_lift(_ buf: RustBuffer) throws -> EncryptedMessageComponents {
     return try FfiConverterTypeEncryptedMessageComponents.lift(buf)
 }
 
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 public func FfiConverterTypeEncryptedMessageComponents_lower(_ value: EncryptedMessageComponents) -> RustBuffer {
     return FfiConverterTypeEncryptedMessageComponents.lower(value)
 }
@@ -751,6 +834,9 @@ extension PrivateKeysJson: Equatable, Hashable {
 }
 
 
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 public struct FfiConverterTypePrivateKeysJson: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PrivateKeysJson {
         return
@@ -773,10 +859,16 @@ public struct FfiConverterTypePrivateKeysJson: FfiConverterRustBuffer {
 }
 
 
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 public func FfiConverterTypePrivateKeysJson_lift(_ buf: RustBuffer) throws -> PrivateKeysJson {
     return try FfiConverterTypePrivateKeysJson.lift(buf)
 }
 
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 public func FfiConverterTypePrivateKeysJson_lower(_ value: PrivateKeysJson) -> RustBuffer {
     return FfiConverterTypePrivateKeysJson.lower(value)
 }
@@ -832,6 +924,9 @@ extension RegistrationBundleJson: Equatable, Hashable {
 }
 
 
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 public struct FfiConverterTypeRegistrationBundleJson: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RegistrationBundleJson {
         return
@@ -854,10 +949,16 @@ public struct FfiConverterTypeRegistrationBundleJson: FfiConverterRustBuffer {
 }
 
 
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 public func FfiConverterTypeRegistrationBundleJson_lift(_ buf: RustBuffer) throws -> RegistrationBundleJson {
     return try FfiConverterTypeRegistrationBundleJson.lift(buf)
 }
 
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 public func FfiConverterTypeRegistrationBundleJson_lower(_ value: RegistrationBundleJson) -> RustBuffer {
     return FfiConverterTypeRegistrationBundleJson.lower(value)
 }
@@ -895,6 +996,9 @@ extension SessionInitResult: Equatable, Hashable {
 }
 
 
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 public struct FfiConverterTypeSessionInitResult: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SessionInitResult {
         return
@@ -911,10 +1015,16 @@ public struct FfiConverterTypeSessionInitResult: FfiConverterRustBuffer {
 }
 
 
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 public func FfiConverterTypeSessionInitResult_lift(_ buf: RustBuffer) throws -> SessionInitResult {
     return try FfiConverterTypeSessionInitResult.lift(buf)
 }
 
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 public func FfiConverterTypeSessionInitResult_lower(_ value: SessionInitResult) -> RustBuffer {
     return FfiConverterTypeSessionInitResult.lower(value)
 }
@@ -945,6 +1055,9 @@ public enum CryptoError {
 }
 
 
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 public struct FfiConverterTypeCryptoError: FfiConverterRustBuffer {
     typealias SwiftType = CryptoError
 
@@ -1035,6 +1148,9 @@ extension CryptoError: Foundation.LocalizedError {
     }
 }
 
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceUInt8: FfiConverterRustBuffer {
     typealias SwiftType = [UInt8]
 
@@ -1052,6 +1168,31 @@ fileprivate struct FfiConverterSequenceUInt8: FfiConverterRustBuffer {
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterUInt8.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceString: FfiConverterRustBuffer {
+    typealias SwiftType = [String]
+
+    public static func write(_ value: [String], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterString.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [String] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [String]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterString.read(from: &buf))
         }
         return seq
     }
@@ -1101,6 +1242,15 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_classiccryptocore_export_registration_bundle_json() != 50804) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_classiccryptocore_export_session_json() != 53072) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_classiccryptocore_get_all_session_contact_ids() != 7165) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_classiccryptocore_import_session_json() != 35033) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_classiccryptocore_init_receiving_session() != 47586) {

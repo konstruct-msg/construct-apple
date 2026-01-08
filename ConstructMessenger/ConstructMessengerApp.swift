@@ -15,6 +15,13 @@ struct Construct_MessengerApp: App {
 
     static let persistentContainer: NSPersistentContainer = {
         let container = NSPersistentContainer(name: "ConstructMessenger")
+
+        // Enable automatic lightweight migration for Core Data model changes
+        if let description = container.persistentStoreDescriptions.first {
+            description.shouldInferMappingModelAutomatically = true
+            description.shouldMigrateStoreAutomatically = true
+        }
+
         container.loadPersistentStores { description, error in
             if let error = error {
                 fatalError("Unable to load persistent stores: \(error)")

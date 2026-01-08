@@ -237,8 +237,29 @@ class ChatViewModel: ObservableObject {
             Log.info("✅ wsManager.send() completed", category: "ChatViewModel")
 
         } catch {
-            errorMessage = "Failed to encrypt message: \(error.localizedDescription)"
-            Log.error("Failed to encrypt message: \(error.localizedDescription)", category: "ChatViewModel")
+            // ✅ Session was corrupted and auto-deleted by CryptoManager
+            // Reinitialize session and retry
+            Log.debug("🔄 Encryption failed, session was deleted. Reinitializing...", category: "ChatViewModel")
+
+            // Delete old session from memory (already done by CryptoManager)
+            // Request new public key bundle to reinitialize
+            if let toUserId = chat.otherUser?.id {
+                Log.info("🔑 Requesting fresh public key bundle for reinitialization", category: "ChatViewModel")
+
+                // Mark session as not ready to trigger reinitialization flow
+                isSessionReady = false
+
+                // Queue this message to be sent after session is reinitialized
+                pendingMessages.append((text: text, timestamp: Date()))
+                errorMessage = "Session expired, reinitializing..."
+                Log.info("📝 Message queued for retry after session reinitialization", category: "ChatViewModel")
+
+                // Request fresh public key bundle
+                wsManager.send(.getPublicKey(GetPublicKeyData(userId: toUserId)))
+            } else {
+                errorMessage = "Failed to encrypt message: \(error.localizedDescription)"
+                Log.error("Failed to encrypt message: \(error.localizedDescription)", category: "ChatViewModel")
+            }
         }
         isSending = false
     }

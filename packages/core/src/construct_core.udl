@@ -48,6 +48,14 @@ interface ClassicCryptoCore {
     string export_private_keys_json();
 
     [Throws=CryptoError]
+    string export_session_json(string contact_id);
+
+    [Throws=CryptoError]
+    string import_session_json(string contact_id, string session_json);
+
+    sequence<string> get_all_session_contact_ids();
+
+    [Throws=CryptoError]
     string init_session(string contact_id, sequence<u8> recipient_bundle);
 
     [Throws=CryptoError]

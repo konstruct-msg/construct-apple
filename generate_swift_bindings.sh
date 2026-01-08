@@ -194,6 +194,12 @@ build_for_target() {
         cargo build --lib --target "$target" $build_flag 2>&1 | grep -v "Compiling\|Finished" || true
     fi
 
+    # Patch UniFFI generated files for Rust 1.82+ compatibility
+    cd "$PROJECT_ROOT"
+    if [ -f "./patch_uniffi_unsafe.sh" ]; then
+        bash ./patch_uniffi_unsafe.sh > /dev/null 2>&1
+    fi
+
     print_success "Built successfully for $target"
 }
 

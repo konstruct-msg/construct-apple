@@ -3,6 +3,7 @@
 
 #![warn(clippy::all)]
 #![allow(clippy::too_many_arguments)]
+#![allow(unsafe_attr_outside_unsafe)]  // Allow UniFFI 0.28 generated code on Rust 1.82+
 
 // UniFFI bindings for iOS/macOS
 #[cfg(not(target_arch = "wasm32"))]

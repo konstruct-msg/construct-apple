@@ -176,6 +176,77 @@ impl ClassicCryptoCore {
             .map_err(|_| CryptoError::SerializationFailed)
     }
 
+    /// Export session to JSON for persistence in Keychain
+    ///
+    /// # Parameters
+    /// - `contact_id`: Contact ID to export session for
+    ///
+    /// # Returns
+    /// JSON string containing serialized session state
+    ///
+    /// # Security
+    /// The returned JSON contains sensitive cryptographic material (chain keys, DH private keys).
+    /// Store only in secure storage like iOS Keychain with kSecAttrAccessibleWhenUnlockedThisDeviceOnly.
+    pub fn export_session_json(&self, contact_id: String) -> Result<String, CryptoError> {
+        let client = self.inner.lock().unwrap();
+
+        // Get session from HashMap
+        let session = client.get_session(&contact_id)
+            .ok_or(CryptoError::SessionNotFound)?;
+
+        // Get Double Ratchet session
+        let ratchet_session = session.messaging_session();
+
+        // Serialize using existing method
+        let serializable = ratchet_session.to_serializable();
+
+        // Convert to JSON
+        serde_json::to_string(&serializable)
+            .map_err(|_| CryptoError::SerializationFailed)
+    }
+
+    /// Import session from JSON (restore from Keychain)
+    ///
+    /// # Parameters
+    /// - `contact_id`: Contact ID to restore session for
+    /// - `session_json`: JSON string from export_session_json()
+    ///
+    /// # Returns
+    /// Session ID of the restored session
+    ///
+    /// # Errors
+    /// - `SerializationFailed`: Invalid JSON or unsupported version
+    /// - Other crypto errors during deserialization
+    pub fn import_session_json(&self, contact_id: String, session_json: String) -> Result<String, CryptoError> {
+        use crate::crypto::messaging::double_ratchet::{DoubleRatchetSession, SerializableSession};
+
+        let mut client = self.inner.lock().unwrap();
+
+        // Parse JSON
+        let serializable: SerializableSession = serde_json::from_str(&session_json)
+            .map_err(|_| CryptoError::SerializationFailed)?;
+
+        // Deserialize using existing method (also validates version)
+        let ratchet_session = DoubleRatchetSession::<ClassicSuiteProvider>::from_serializable(serializable)
+            .map_err(|_| CryptoError::SerializationFailed)?;
+
+        // Import into Client
+        let session_id = client.import_session(&contact_id, ratchet_session);
+
+        Ok(session_id)
+    }
+
+    /// Get list of all contact IDs with active sessions
+    ///
+    /// Used for session restore pagination - can load only recent sessions on app startup.
+    ///
+    /// # Returns
+    /// Vector of contact IDs that have active sessions
+    pub fn get_all_session_contact_ids(&self) -> Vec<String> {
+        let client = self.inner.lock().unwrap();
+        client.active_contacts()
+    }
+
     /// Initialize a session with a contact
     pub fn init_session(
         &self,

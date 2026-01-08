@@ -61,9 +61,6 @@ struct AuthView: View {
                 .padding()
             
         }
-        .onAppear {
-            viewModel.restoreSession()
-        }
     }
 }
 

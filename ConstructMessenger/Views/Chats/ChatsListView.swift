@@ -14,7 +14,7 @@ struct ChatsListView: View {
     @FetchRequest
     private var chats: FetchedResults<Chat>
 
-    @StateObject private var chatsViewModel = ChatsViewModel()
+    @EnvironmentObject var chatsViewModel: ChatsViewModel
     @State private var showingQRScanner = false
 
     init() {

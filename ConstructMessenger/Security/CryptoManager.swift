@@ -10,6 +10,7 @@
 //
 
 import Foundation
+import CoreData
 import os.log
 
 class CryptoManager {
@@ -58,6 +59,102 @@ class CryptoManager {
             Log.fault("❌ Unexpected error creating/restoring CryptoCore: \(error)", category: "CryptoManager")
             fatalError("Unexpected error creating/restoring CryptoCore: \(error)")
         }
+
+        // ✅ Restore recent sessions (pagination - first 10 chats)
+        restoreRecentSessions(limit: 10)
+    }
+
+    // MARK: - Session Persistence
+
+    /// Save session to Keychain after state change
+    private func saveSessionToKeychain(for userId: String) {
+        guard let core = core else { return }
+
+        do {
+            let sessionJson = try core.exportSessionJson(contactId: userId)
+            let saved = KeychainManager.shared.saveSessionJson(sessionJson, for: userId)
+
+            if saved {
+                Log.debug("💾 Session saved to Keychain: \(userId)", category: "CryptoManager")
+            } else {
+                Log.debug("⚠️ Failed to save session to Keychain: \(userId)", category: "CryptoManager")
+            }
+        } catch {
+            Log.error("❌ Session export failed: \(error)", category: "CryptoManager")
+        }
+    }
+
+    /// Restore sessions for recent chats (pagination - first 10)
+    func restoreRecentSessions(limit: Int = 10) {
+        guard let core = core else {
+            Log.error("Cannot restore sessions - core not initialized", category: "CryptoManager")
+            return
+        }
+
+        // Get recent chats from Core Data (sorted by lastMessageTime)
+        let recentContactIds = getRecentChatContactIds(limit: limit)
+
+        var restoredCount = 0
+        var failedCount = 0
+
+        for contactId in recentContactIds {
+            if restoreSession(for: contactId) {
+                restoredCount += 1
+            } else {
+                failedCount += 1
+            }
+        }
+
+        Log.info("📦 Session restore: \(restoredCount) restored, \(failedCount) failed", category: "CryptoManager")
+    }
+
+    /// Restore a single session (used for lazy loading)
+    @discardableResult
+    func restoreSession(for userId: String) -> Bool {
+        guard let core = core else { return false }
+
+        // Skip if already in memory
+        if userSessions[userId] != nil {
+            return true
+        }
+
+        // Load from Keychain
+        guard let sessionJson = KeychainManager.shared.loadSessionJson(for: userId) else {
+            return false
+        }
+
+        do {
+            let sessionId = try core.importSessionJson(contactId: userId, sessionJson: sessionJson)
+            self.userSessions[userId] = sessionId
+            Log.debug("✅ Restored session: \(userId)", category: "CryptoManager")
+            return true
+        } catch {
+            Log.debug("⚠️ Failed to restore session for \(userId): \(error)", category: "CryptoManager")
+            return false
+        }
+    }
+
+    /// Get recent chat contact IDs from Core Data
+    private func getRecentChatContactIds(limit: Int) -> [String] {
+        let context = PersistenceController.shared.container.viewContext
+        let fetchRequest: NSFetchRequest<Chat> = Chat.fetchRequest()
+
+        // Sort by last message time
+        fetchRequest.sortDescriptors = [NSSortDescriptor(key: "lastMessageTime", ascending: false)]
+        fetchRequest.fetchLimit = limit
+
+        do {
+            let chats = try context.fetch(fetchRequest)
+            return chats.compactMap { $0.otherUser?.id }
+        } catch {
+            Log.error("Failed to fetch recent chats: \(error)", category: "CryptoManager")
+            return []
+        }
+    }
+
+    /// Get session ID for a user (for Core Data storage)
+    func getSessionId(for userId: String) -> String? {
+        return userSessions[userId]
     }
 
     deinit {
@@ -148,6 +245,9 @@ class CryptoManager {
 
             self.userSessions[userId] = sessionId
             Log.info("✅ Session initialized for user: \(userId)", category: "CryptoManager")
+
+            // ✅ Auto-save session to Keychain
+            saveSessionToKeychain(for: userId)
         } catch let error as CryptoError {
             Log.error("❌ Failed to initialize session: \(error)", category: "CryptoManager")
             throw CryptoManagerError.sessionInitializationFailed
@@ -166,17 +266,21 @@ class CryptoManager {
     func deleteSession(for userId: String) {
         // Remove from the Swift session mapping
         if userSessions.removeValue(forKey: userId) != nil {
-            Log.info("✅ Removed session from Swift mapping for user: \(userId)", category: "CryptoManager")
+            Log.info("✅ Removed session from memory: \(userId)", category: "CryptoManager")
         }
 
-        // Also remove from the Rust core
+        // Remove from the Rust core
         if let core = core {
             if core.removeSession(contactId: userId) {
-                Log.info("✅ Successfully removed session from Rust core for user: \(userId)", category: "CryptoManager")
+                Log.info("✅ Removed session from Rust core: \(userId)", category: "CryptoManager")
             } else {
-                Log.debug("No session found in Rust core for user \(userId), which is normal if one was never established.", category: "CryptoManager")
+                Log.debug("No session found in Rust core for user \(userId)", category: "CryptoManager")
             }
         }
+
+        // ✅ Remove from Keychain
+        KeychainManager.shared.deleteSession(for: userId)
+        Log.info("✅ Removed session from Keychain: \(userId)", category: "CryptoManager")
     }
 
     /// Initialize a receiving session (for responder/Bob) using sender's bundle + first message
@@ -236,6 +340,9 @@ class CryptoManager {
             self.userSessions[userId] = result.sessionId
             Log.info("✅ Receiving session initialized for user: \(userId), decrypted message length: \(result.decryptedMessage.count)", category: "CryptoManager")
 
+            // ✅ Auto-save session to Keychain
+            saveSessionToKeychain(for: userId)
+
             // Return the decrypted first message
             return result.decryptedMessage
         } catch let error as CryptoError {
@@ -262,6 +369,16 @@ class CryptoManager {
         guard let core = core else {
             throw CryptoManagerError.coreNotInitialized
         }
+
+        // ✅ On-demand restore: Try to restore session if not in memory
+        if userSessions[userId] == nil {
+            Log.info("🔄 Session not in memory, attempting restore: \(userId)", category: "CryptoManager")
+
+            if !restoreSession(for: userId) {
+                throw CryptoManagerError.sessionNotFound
+            }
+        }
+
         guard let sessionId = userSessions[userId] else {
             throw CryptoManagerError.sessionNotFound
         }
@@ -278,12 +395,26 @@ class CryptoManager {
             )
 
             Log.debug("✅ ENCRYPT: msgNum=\(components.messageNumber), ephemKey=\(rustComponents.ephemeralPublicKey.prefix(8).map { String(format: "%02x", $0) }.joined()), content=\(components.content.prefix(20))...", category: "CryptoManager")
+
+            // ✅ Auto-save session after ratchet step
+            saveSessionToKeychain(for: userId)
+
             return components
         } catch let error as CryptoError {
             Log.error("❌ Encryption failed: \(error)", category: "CryptoManager")
+
+            // ✅ Auto-delete corrupted session to allow reinitialization
+            Log.debug("🔄 Deleting corrupted session for \(userId) to allow reinitialization", category: "CryptoManager")
+            deleteSession(for: userId)
+
             throw CryptoManagerError.encryptionFailed
         } catch {
             Log.error("❌ Unexpected encryption error: \(error)", category: "CryptoManager")
+
+            // ✅ Auto-delete corrupted session to allow reinitialization
+            Log.debug("🔄 Deleting corrupted session for \(userId) to allow reinitialization", category: "CryptoManager")
+            deleteSession(for: userId)
+
             throw CryptoManagerError.encryptionFailed
         }
     }
@@ -294,6 +425,17 @@ class CryptoManager {
         guard let core = core else {
             throw CryptoManagerError.coreNotInitialized
         }
+
+        // ✅ On-demand restore: Try to restore session if not in memory
+        if userSessions[message.from] == nil {
+            Log.info("🔄 Session not in memory, attempting restore: \(message.from)", category: "CryptoManager")
+
+            if !restoreSession(for: message.from) {
+                Log.error("❌ No session found for user: \(message.from)", category: "CryptoManager")
+                throw CryptoManagerError.sessionNotFound
+            }
+        }
+
         guard let sessionId = userSessions[message.from] else {
             Log.error("❌ No session found for user: \(message.from)", category: "CryptoManager")
             throw CryptoManagerError.sessionNotFound
@@ -311,12 +453,26 @@ class CryptoManager {
             )
 
             Log.debug("✅ Message decrypted successfully, plaintext length: \(plaintext.count)", category: "CryptoManager")
+
+            // ✅ Auto-save session after ratchet step
+            saveSessionToKeychain(for: message.from)
+
             return plaintext
         } catch let error as CryptoError {
             Log.error("❌ Decryption failed: \(error)", category: "CryptoManager")
+
+            // ✅ Auto-delete corrupted session to allow reinitialization
+            Log.debug("🔄 Deleting corrupted session for \(message.from) to allow reinitialization", category: "CryptoManager")
+            deleteSession(for: message.from)
+
             throw CryptoManagerError.decryptionFailed
         } catch {
             Log.error("❌ Unexpected decryption error: \(error)", category: "CryptoManager")
+
+            // ✅ Auto-delete corrupted session to allow reinitialization
+            Log.debug("🔄 Deleting corrupted session for \(message.from) to allow reinitialization", category: "CryptoManager")
+            deleteSession(for: message.from)
+
             throw CryptoManagerError.decryptionFailed
         }
     }

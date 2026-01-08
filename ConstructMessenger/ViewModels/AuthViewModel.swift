@@ -84,10 +84,8 @@ class AuthViewModel: ObservableObject {
         isLoading = true
 
         print("🔌 Connecting to WebSocket...")
+        // WebSocketManager will automatically send Connect message when connection is established
         wsManager.connect()
-
-        print("📤 Sending Connect message with token: \(token.prefix(20))...")
-        wsManager.send(.connect(ConnectData(sessionToken: token)))
 
         startSessionRestoreTimeout()
         print("✅ Session restore initiated, waiting for ConnectSuccess")
@@ -216,6 +214,7 @@ class AuthViewModel: ObservableObject {
             isLoading = false
             errorMessage = "Connection timeout. Please check your internet and try again."
             wsManager.disconnect()
+            print("⏱️ Session restore timeout - showing login screen")
         }
     }
 
@@ -259,8 +258,14 @@ class AuthViewModel: ObservableObject {
     
     private func handleConnectionError(_ error: Error) {
         cancelTimeouts()
-        errorMessage = error.localizedDescription
+        let wasLoading = isLoading
         isLoading = false
+        
+        // Only show error message if we're actively trying to authenticate and not already authenticated
+        // Don't show errors during automatic reconnection attempts when already authenticated
+        if wasLoading && !isAuthenticated {
+            errorMessage = error.localizedDescription
+        }
     }
 
     // MARK: - State Updaters

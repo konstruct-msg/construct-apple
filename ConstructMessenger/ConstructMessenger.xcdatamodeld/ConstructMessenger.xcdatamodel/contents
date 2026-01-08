@@ -17,6 +17,7 @@
         <attribute name="id" attributeType="String"/>
         <attribute name="lastMessageText" optional="YES" attributeType="String"/>
         <attribute name="lastMessageTime" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="sessionId" optional="YES" attributeType="String"/>
         <relationship name="messages" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="Message" inverseName="chat" inverseEntity="Message"/>
         <relationship name="otherUser" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="User" inverseName="chats" inverseEntity="User"/>
         <uniquenessConstraints>

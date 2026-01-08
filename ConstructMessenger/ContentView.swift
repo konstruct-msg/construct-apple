@@ -15,6 +15,7 @@ struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("appTheme") private var appTheme: AppTheme = .automatic
 
+    @StateObject private var chatsViewModel = ChatsViewModel()
     @State private var showingNewChatSheet = false
     @State private var contactInfoFromDeepLink: ContactInfo?
 
@@ -22,13 +23,15 @@ struct ContentView: View {
         Group {
             if authViewModel.isAuthenticated {
                 MainTabView()
+                    .environmentObject(chatsViewModel)
                     .sheet(isPresented: $showingNewChatSheet, onDismiss: {
                         // Clear the deep link after the sheet is dismissed
                         deepLinkHandler.deepLink = nil
                     }) {
                         if let contactInfo = contactInfoFromDeepLink {
-                            // Ensure chatsViewModel is passed correctly
-                            NewChatView(chatsViewModel: ChatsViewModel(), initialContactInfo: contactInfo)
+                            // ✅ Use existing chatsViewModel from ContentView
+                            NewChatView(chatsViewModel: chatsViewModel, initialContactInfo: contactInfo)
+                                .environment(\.managedObjectContext, viewContext)
                         }
                     }
             } else {
@@ -53,10 +56,18 @@ struct ContentView: View {
             }
         }
         .onChange(of: deepLinkHandler.deepLink) { newDeepLink in
+            Log.debug("ContentView: Deep link changed: \(String(describing: newDeepLink))", category: "DeepLink")
             if case .contact(let contactInfo) = newDeepLink {
+                Log.info("ContentView: Opening new chat sheet for userId: \(contactInfo.userId), username: \(contactInfo.username)", category: "DeepLink")
                 contactInfoFromDeepLink = contactInfo
                 showingNewChatSheet = true
             }
+        }
+        .onOpenURL { url in
+            // ✅ Handle Universal Links in SwiftUI (iOS 13+)
+            Log.info("ContentView: Received URL via onOpenURL: \(url.absoluteString)", category: "DeepLink")
+            let result = deepLinkHandler.handleURL(url)
+            Log.info("ContentView: Deep link handling result: \(result)", category: "DeepLink")
         }
     }
 }

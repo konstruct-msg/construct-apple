@@ -13,13 +13,6 @@ serde_bytes = "0.11"
 thiserror = "1.0"
 anyhow = "1.0"
 
-# WASM
-wasm-bindgen = "0.2"
-wasm-bindgen-futures = "0.4"
-js-sys = "0.3"
-web-sys = "0.3"
-serde-wasm-bindgen = "0.6"
-
 # Криптография
 x25519-dalek = { version = "2.0", features = ["reusable_secrets", "static_secrets"] }
 ed25519-dalek = { version = "2.0", features = ["std", "rand_core"] }
@@ -46,16 +39,15 @@ uuid = { version = "1.0", features = ["v4", "serde", "js"] }
 tracing = "0.1"
 
 [workspace.package]
-version = "0.1.1"
-authors = ["Construct Team"]
+version = "0.1.2"
+authors = ["Konstruct Team"]
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.92"
 license = "MIT"
 repository = "https://github.com/maximeliseyev/construct-messenger"
 
 [profile.release]
 lto = true
-opt-level = "s"  # Оптимизация размера для WASM
 codegen-units = 1
 panic = "abort"
 

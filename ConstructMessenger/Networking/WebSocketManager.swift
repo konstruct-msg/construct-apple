@@ -93,10 +93,16 @@ class WebSocketManager: NSObject, ObservableObject {
 
     // MARK: - Send Message
     func send(_ message: ClientMessage) {
-        // ✅ FIX: Check if WebSocket is connected before sending
+        // ✅ FIX: Queue message if not connected, except for Connect which is handled automatically
         guard let task = webSocketTask, isConnected else {
-            Log.error("❌ Cannot send message - WebSocket not connected", category: "WebSocket")
-            errorPublisher.send(NetworkError.notConnected)
+            // Queue non-Connect messages for later sending
+            if case .connect = message {
+                // Connect messages are handled automatically by authenticateSession()
+                Log.info("Connect message queued - will be sent automatically on connection", category: "WebSocket")
+                return
+            }
+            Log.info("Queueing message - WebSocket not yet connected", category: "WebSocket")
+            messageQueue.append(message)
             return
         }
 
@@ -139,10 +145,16 @@ class WebSocketManager: NSObject, ObservableObject {
             case .failure(let error):
                 Log.error("WebSocket receive error: \(error.localizedDescription)", category: "WebSocket")
                 DispatchQueue.main.async {
+                    let wasConnected = self.isConnected
                     self.isConnected = false
                     self.connectionStatus = .disconnected
+                    // Only send error if we were trying to connect (not already connected)
+                    // Connection errors are handled by urlSession:task:didCompleteWithError:
+                    // If connection was established, this is just a receive error and reconnection will handle it
+                    if !wasConnected && !self.isReconnecting {
+                        self.errorPublisher.send(NetworkError.connectionFailed)
+                    }
                 }
-                self.errorPublisher.send(error)
                 self.scheduleReconnect()
             }
         }
@@ -203,6 +215,12 @@ class WebSocketManager: NSObject, ObservableObject {
         reconnectTimer = nil
         flushMessageQueue()
     }
+    
+    private func onConnectionEstablished() {
+        // Clear message queue and flush any queued messages after authentication
+        // Note: authenticateSession() is called automatically in didOpenWithProtocol
+        flushMessageQueue()
+    }
 
     private func flushMessageQueue() {
         let queuedMessages = messageQueue
@@ -221,6 +239,8 @@ class WebSocketManager: NSObject, ObservableObject {
 
         Log.info("🔐 Authenticating WebSocket with session token", category: "WebSocket")
         let connectMessage = ClientMessage.connect(ConnectData(sessionToken: sessionToken))
+        // At this point we should be connected, so send should work
+        // But if not, it will be queued
         send(connectMessage)
     }
 
@@ -249,6 +269,11 @@ extension WebSocketManager: URLSessionWebSocketDelegate {
 
             // ✅ FIX: Authenticate immediately after connection
             self.authenticateSession()
+            
+            // Flush any queued messages after a short delay to ensure authentication completes
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                self.onConnectionEstablished()
+            }
 
             if self.isReconnecting {
                 self.onReconnectSuccess()
@@ -264,6 +289,22 @@ extension WebSocketManager: URLSessionWebSocketDelegate {
             self.isConnected = false
             self.connectionStatus = .disconnected
             if closeCode != .goingAway {
+                self.scheduleReconnect()
+            }
+        }
+    }
+    
+    // Handle URLSession errors (connection failures)
+    nonisolated func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        if let error = error {
+            DispatchQueue.main.async {
+                Log.error("WebSocket task failed: \(error.localizedDescription)", category: "WebSocket")
+                self.isConnected = false
+                self.connectionStatus = .disconnected
+                // Send error only if we're not already reconnecting
+                if !self.isReconnecting {
+                    self.errorPublisher.send(NetworkError.connectionFailed)
+                }
                 self.scheduleReconnect()
             }
         }
