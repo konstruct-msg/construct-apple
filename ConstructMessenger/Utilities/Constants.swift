@@ -68,8 +68,10 @@ struct APIConstants {
 
     // API Timeouts
     static let connectionTimeout: TimeInterval = 10.0
-    static let messageAckTimeout: TimeInterval = 10.0
+    static let messageAckTimeout: TimeInterval = 15.0  // Timeout for message ACK (increased for poor network)
     static let reconnectMaxDelay: TimeInterval = 30.0
+    static let messageSendTimeout: TimeInterval = 20.0  // Timeout for stuck messages in sending state
+    static let queueCheckInterval: TimeInterval = 5.0   // How often to check for stuck messages
 
     // Server Info (для отображения в UI)
     static var serverInfo: String {

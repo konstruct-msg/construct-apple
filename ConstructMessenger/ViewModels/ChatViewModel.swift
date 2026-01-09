@@ -19,6 +19,7 @@ class ChatViewModel: ObservableObject {
     private var recipientBundle: (identityPublic: String, signedPrekeyPublic: String, signature: String, verifyingKey: String)?
 
     private let wsManager = WebSocketManager.shared
+    private let messageQueueManager = MessageQueueManager.shared
     private var cancellables = Set<AnyCancellable>()
     private var viewContext: NSManagedObjectContext
 
@@ -38,6 +39,9 @@ class ChatViewModel: ObservableObject {
         // Load messages immediately since we have context
         Log.debug("🔧 ChatViewModel initialized with viewContext", category: "ChatViewModel")
         loadMessages()
+        
+        // Listen for queued messages processing
+        setupMessageQueueListener()
     }
 
     deinit {
@@ -83,6 +87,16 @@ class ChatViewModel: ObservableObject {
                     Log.info("✅ WebSocket reconnected - processing queued messages", category: "ChatViewModel")
                     self?.sendQueuedMessages()
                 }
+            }
+            .store(in: &cancellables)
+    }
+    
+    private func setupMessageQueueListener() {
+        // Listen for queued messages processing requests
+        NotificationCenter.default.publisher(for: .processQueuedMessages)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] notification in
+                self?.sendQueuedMessages()
             }
             .store(in: &cancellables)
     }
@@ -231,9 +245,9 @@ class ChatViewModel: ObservableObject {
                 replyTo: replyTo
             )
 
-            // Send through WebSocket
+            // Send through WebSocket with message ID tracking
             Log.info("📮 Calling wsManager.send() for message: \(messageId)", category: "ChatViewModel")
-            wsManager.send(.sendMessage(message))
+            wsManager.send(.sendMessage(message), messageId: messageId)
             Log.info("✅ wsManager.send() completed", category: "ChatViewModel")
 
         } catch {
@@ -311,10 +325,12 @@ class ChatViewModel: ObservableObject {
                 )
 
                 message.deliveryStatus = .sending
+                message.retryCount += 1
                 try? viewContext.save()
 
-                wsManager.send(.sendMessage(chatMessage))
-                Log.debug("📮 Re-sent queued message: \(message.id)", category: "ChatViewModel")
+                wsManager.send(.sendMessage(chatMessage), messageId: message.id)
+                messageQueueManager.markMessageAsSending(message.id)
+                Log.debug("📮 Re-sent queued message: \(message.id) (attempt \(message.retryCount))", category: "ChatViewModel")
 
             } catch {
                 Log.error("Failed to re-encrypt queued message: \(error)", category: "ChatViewModel")
@@ -410,35 +426,43 @@ class ChatViewModel: ObservableObject {
     }
     
     private func handleAck(messageId: String, status: String) {
-        Log.debug("📨 Received ACK for message: \(messageId), status: \(status)", category: "ChatViewModel")
+        Log.info("📨 Received ACK for message: \(messageId), status: \(status)", category: "ChatViewModel")
 
+        // Map server status to delivery status
+        // "sent" - message is on server (recipient may be offline)
+        // "delivered" - message was delivered to recipient (they received it)
+        let deliveryStatus: DeliveryStatus = status == "delivered" ? .delivered : .sent
+        
+        // Mark as sent in MessageQueueManager
+        messageQueueManager.markMessageAsSent(messageId)
+        
         // First, try to find the message by ID
         let fetchRequest: NSFetchRequest<Message> = Message.fetchRequest()
         fetchRequest.predicate = NSPredicate(format: "id == %@", messageId)
 
-        if (try? viewContext.fetch(fetchRequest).first) != nil {
-            Log.debug("✅ Found message by ID: \(messageId)", category: "ChatViewModel")
-            updateMessageStatus(messageId: messageId, status: status == "delivered" ? .delivered : .sent)
+        if let message = try? viewContext.fetch(fetchRequest).first {
+            Log.info("✅ Found message by ID: \(messageId), updating status to: \(deliveryStatus)", category: "ChatViewModel")
+            updateMessageStatus(messageId: messageId, status: deliveryStatus)
         } else {
-            Log.debug("❌ Message not found by ID: \(messageId)", category: "ChatViewModel")
+            Log.info("❌ Message not found by ID: \(messageId), trying to match by recent message", category: "ChatViewModel")
 
-            // List all pending messages to debug
+            // Fallback: try to match by most recent message in sending/sent status
+            // This handles cases where message ID might not match exactly
             let allMessagesRequest: NSFetchRequest<Message> = Message.fetchRequest()
             allMessagesRequest.predicate = NSPredicate(format: "chat == %@ AND isSentByMe == YES", chat)
             allMessagesRequest.sortDescriptors = [NSSortDescriptor(key: "timestamp", ascending: false)]
 
             if let allMessages = try? viewContext.fetch(allMessagesRequest) {
-                Log.debug("📋 All sent messages in this chat:", category: "ChatViewModel")
-                for msg in allMessages.prefix(5) {
-                    Log.debug("  - ID: \(msg.id), status: \(msg.deliveryStatus), timestamp: \(msg.timestamp)", category: "ChatViewModel")
-                }
-
-                // Try to match by most recent sending message
-                if let mostRecentSending = allMessages.first(where: { $0.deliveryStatus == .sending }) {
-                    Log.debug("🔄 Assuming ACK is for most recent sending message: \(mostRecentSending.id)", category: "ChatViewModel")
-                    mostRecentSending.deliveryStatus = status == "delivered" ? .delivered : .sent
+                // Try to find message in sending or sent status (not yet delivered)
+                if let pendingMessage = allMessages.first(where: { 
+                    $0.deliveryStatus == .sending || $0.deliveryStatus == .sent 
+                }) {
+                    Log.info("🔄 Matching ACK to most recent pending message: \(pendingMessage.id)", category: "ChatViewModel")
+                    pendingMessage.deliveryStatus = deliveryStatus
                     try? viewContext.save()
                     loadMessages()
+                } else {
+                    Log.info("⚠️ No pending message found to match ACK", category: "ChatViewModel")
                 }
             }
         }

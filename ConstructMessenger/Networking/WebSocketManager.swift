@@ -31,6 +31,9 @@ class WebSocketManager: NSObject, ObservableObject {
 
     // Keep-alive ping
     private var pingTimer: Timer?
+    
+    // Message tracking for offline scenarios
+    private let messageQueueManager = MessageQueueManager.shared
 
     enum ConnectionStatus {
         case connected
@@ -93,6 +96,11 @@ class WebSocketManager: NSObject, ObservableObject {
 
     // MARK: - Send Message
     func send(_ message: ClientMessage) {
+        send(message, messageId: nil)
+    }
+    
+    /// Send message with optional message ID tracking for offline scenarios
+    func send(_ message: ClientMessage, messageId: String? = nil) {
         // ✅ FIX: Queue message if not connected, except for Connect which is handled automatically
         guard let task = webSocketTask, isConnected else {
             // Queue non-Connect messages for later sending
@@ -103,6 +111,11 @@ class WebSocketManager: NSObject, ObservableObject {
             }
             Log.info("Queueing message - WebSocket not yet connected", category: "WebSocket")
             messageQueue.append(message)
+            
+            // If we have a messageId, mark it as queued in Core Data
+            if let messageId = messageId {
+                markMessageAsQueued(messageId: messageId)
+            }
             return
         }
 
@@ -111,16 +124,83 @@ class WebSocketManager: NSObject, ObservableObject {
             Log.debug("Sending: \(message)", category: "WebSocket")
 
             let wsMessage = URLSessionWebSocketTask.Message.data(msgpackData)
+            
+            // Track message if we have an ID
+            if let messageId = messageId {
+                messageQueueManager.markMessageAsSending(messageId)
+            }
 
             task.send(wsMessage) { [weak self] error in
                 if let error = error {
                     Log.error("WebSocket send error: \(error.localizedDescription)", category: "WebSocket")
                     self?.errorPublisher.send(error)
+                    
+                    // If we have a messageId, mark it as failed/queued
+                    if let messageId = messageId {
+                        self?.handleSendError(messageId: messageId, error: error)
+                    }
+                } else {
+                    // Successfully sent to WebSocket (but not necessarily to server)
+                    // ACK will confirm actual delivery
+                    if let messageId = messageId {
+                        Log.debug("✅ Message \(messageId) sent to WebSocket", category: "WebSocket")
+                    }
                 }
             }
         } catch {
             Log.error("Failed to encode client message to MessagePack: \(String(describing: error))", category: "WebSocket")
             errorPublisher.send(NetworkError.encodingFailed)
+            
+            // If we have a messageId, mark it as failed
+            if let messageId = messageId {
+                handleSendError(messageId: messageId, error: NetworkError.encodingFailed)
+            }
+        }
+    }
+    
+    // MARK: - Message Status Helpers
+    
+    private func markMessageAsQueued(messageId: String) {
+        DispatchQueue.global(qos: .utility).async {
+            guard let context = PersistenceController.shared.container.viewContext else { return }
+            
+            context.perform {
+                let fetchRequest: NSFetchRequest<Message> = Message.fetchRequest()
+                fetchRequest.predicate = NSPredicate(format: "id == %@", messageId)
+                
+                if let message = try? context.fetch(fetchRequest).first {
+                    if message.deliveryStatus != .queued {
+                        message.deliveryStatus = .queued
+                        try? context.save()
+                        Log.debug("📝 Marked message \(messageId) as queued", category: "WebSocket")
+                    }
+                }
+            }
+        }
+    }
+    
+    private func handleSendError(messageId: String, error: Error) {
+        messageQueueManager.markMessageAsFailed(messageId)
+        
+        DispatchQueue.global(qos: .utility).async {
+            guard let context = PersistenceController.shared.container.viewContext else { return }
+            
+            context.perform {
+                let fetchRequest: NSFetchRequest<Message> = Message.fetchRequest()
+                fetchRequest.predicate = NSPredicate(format: "id == %@", messageId)
+                
+                if let message = try? context.fetch(fetchRequest).first {
+                    // Check if we should retry or mark as failed
+                    if message.retryCount < FeatureFlags.maxMessageRetryAttempts {
+                        message.deliveryStatus = .queued
+                        Log.warning("⚠️ Message \(messageId) send failed, queued for retry (attempt \(message.retryCount + 1))", category: "WebSocket")
+                    } else {
+                        message.deliveryStatus = .failed
+                        Log.error("❌ Message \(messageId) send failed after \(message.retryCount) attempts, marking as failed", category: "WebSocket")
+                    }
+                    try? context.save()
+                }
+            }
         }
     }
 

@@ -326,6 +326,13 @@ class ChatsViewModel: ObservableObject {
         chat.lastMessageText = decryptedContent
         chat.lastMessageTime = Date(timeIntervalSince1970: TimeInterval(message.timestamp))
 
+        // ✅ NEW: Send ACK to server when message is received and decrypted
+        // This allows the server to notify the sender that their message was delivered
+        // Server should then forward ACK "delivered" to the original sender
+        let ackData = AcknowledgeMessageData(messageId: message.id, status: "delivered")
+        wsManager.send(.acknowledgeMessage(ackData))
+        Log.info("📬 Sent ACK 'delivered' to server for message: \(message.id)", category: "ChatsViewModel")
+
         // ✅ REMOVED DUPLICATE: saveMessage() already calls context.save() internally
     }
     

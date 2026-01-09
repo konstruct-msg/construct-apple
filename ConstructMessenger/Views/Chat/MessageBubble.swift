@@ -146,14 +146,26 @@ struct MessageBubble: View {
                 .frame(width: 12, height: 12)
 
         case .sent:
-            Image(systemName: "checkmark")
-                .font(.system(size: 10))
-                .foregroundColor(.secondary)
+            // Один серый чекмарк - сообщение на сервере, но получатель может быть оффлайн
+            HStack(spacing: 1) {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.secondary)
+            }
+            .frame(width: 14, height: 10)
 
         case .delivered:
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 10))
-                .foregroundColor(.green)
+            // Два зеленых чекмарка - сообщение доставлено получателю
+            HStack(spacing: -2) {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(.green)
+                    .opacity(0.8)
+                Image(systemName: "checkmark")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(.green)
+            }
+            .frame(width: 14, height: 10)
 
         case .queued:
             Button {

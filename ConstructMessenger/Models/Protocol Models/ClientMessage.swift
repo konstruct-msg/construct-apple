@@ -17,6 +17,7 @@ enum ClientMessage: Codable {
     case rotatePrekey(RotatePrekeyData)
     case logout(LogoutData)
     case getOfflineMessages
+    case acknowledgeMessage(AcknowledgeMessageData)
 
     // MARK: - Codable Implementation
     
@@ -26,7 +27,7 @@ enum ClientMessage: Codable {
     }
 
     private enum MessageType: String, Codable {
-        case register, login, connect, getPublicKey, sendMessage, rotatePrekey, logout, getOfflineMessages
+        case register, login, connect, getPublicKey, sendMessage, rotatePrekey, logout, getOfflineMessages, acknowledgeMessage
     }
 
     init(from decoder: Decoder) throws {
@@ -56,6 +57,9 @@ enum ClientMessage: Codable {
             self = .logout(payload)
         case .getOfflineMessages:
             self = .getOfflineMessages
+        case .acknowledgeMessage:
+            let payload = try container.decode(AcknowledgeMessageData.self, forKey: .payload)
+            self = .acknowledgeMessage(payload)
         }
     }
 
@@ -85,6 +89,9 @@ enum ClientMessage: Codable {
             try container.encode(data, forKey: .payload)
         case .getOfflineMessages:
             try container.encode(MessageType.getOfflineMessages, forKey: .type)
+        case .acknowledgeMessage(let data):
+            try container.encode(MessageType.acknowledgeMessage, forKey: .type)
+            try container.encode(data, forKey: .payload)
         }
     }
 }
@@ -139,4 +146,9 @@ struct RotatePrekeyData: Codable {
 
 struct LogoutData: Codable {
     let sessionToken: String
+}
+
+struct AcknowledgeMessageData: Codable {
+    let messageId: String
+    let status: String  // "delivered" when recipient receives the message
 }

@@ -19,9 +19,9 @@ enum DeliveryStatus: Int16 {
     var displayName: String {
         switch self {
         case .sending: return "Sending"
-        case .sent: return "Sent"
-        case .delivered: return "Delivered"
-        case .queued: return "Queued"
+        case .sent: return "Sent to server"  // На сервере, получатель может быть оффлайн
+        case .delivered: return "Delivered"  // Доставлено получателю
+        case .queued: return "Queued locally"  // В локальной очереди
         case .failed: return "Failed"
         }
     }
@@ -29,8 +29,8 @@ enum DeliveryStatus: Int16 {
     var icon: String {
         switch self {
         case .sending: return "clock"
-        case .sent: return "checkmark"
-        case .delivered: return "checkmark.circle.fill"
+        case .sent: return "checkmark"  // Один чекмарк - на сервере
+        case .delivered: return "checkmark.circle.fill"  // Два чекмарка в UI - доставлено получателю
         case .queued: return "tray"
         case .failed: return "exclamationmark.circle.fill"
         }
