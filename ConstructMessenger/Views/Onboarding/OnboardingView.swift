@@ -176,13 +176,16 @@ struct OnboardingView: View {
                 return
             }
             do {
-                let available = try await AuthAPI.shared.checkUsernameAvailability(username: requestedUsername)
+                let result = try await UserServiceClient.shared.checkUsernameAvailability(username: requestedUsername)
                 await MainActor.run {
                     if username.trimmingCharacters(in: .whitespacesAndNewlines) != requestedUsername {
                         return
                     }
                     isCheckingUsername = false
-                    usernameIsAvailable = available
+                    usernameIsAvailable = result.available
+                    if !result.available, let reason = result.reason {
+                        usernameErrorKey = reason
+                    }
                 }
             } catch {
                 await MainActor.run {

@@ -68,4 +68,26 @@ final class UserServiceClient: Sendable {
             return response.success
         }
     }
+
+    // MARK: - Check Username Availability (no auth required)
+
+    struct UsernameAvailability: Sendable {
+        let available: Bool
+        let reason: String?
+    }
+
+    func checkUsernameAvailability(username: String) async throws -> UsernameAvailability {
+        try await GRPCChannelManager.shared.performRPC { grpcClient in
+            let client = Shared_Proto_Services_V1_UserService.Client(wrapping: grpcClient)
+
+            var request = Shared_Proto_Services_V1_CheckUsernameAvailabilityRequest()
+            request.username = username
+
+            let response = try await client.checkUsernameAvailability(request: .init(message: request))
+            return UsernameAvailability(
+                available: response.available,
+                reason: response.hasReason ? response.reason : nil
+            )
+        }
+    }
 }

@@ -10,7 +10,8 @@ struct AuthInterceptor: ClientInterceptor {
         "GetPowChallenge",
         "RegisterDevice",
         "AuthenticateDevice",
-        "RefreshToken"
+        "RefreshToken",
+        "CheckUsernameAvailability"
     ]
 
     func intercept<Input: Sendable, Output: Sendable>(

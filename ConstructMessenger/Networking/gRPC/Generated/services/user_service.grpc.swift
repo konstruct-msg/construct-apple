@@ -128,6 +128,18 @@ public enum Shared_Proto_Services_V1_UserService: Sendable {
                 method: "ExportUserData"
             )
         }
+        /// Namespace for "CheckUsernameAvailability" metadata.
+        public enum CheckUsernameAvailability: Sendable {
+            /// Request type for "CheckUsernameAvailability".
+            public typealias Input = Shared_Proto_Services_V1_CheckUsernameAvailabilityRequest
+            /// Response type for "CheckUsernameAvailability".
+            public typealias Output = Shared_Proto_Services_V1_CheckUsernameAvailabilityResponse
+            /// Descriptor for "CheckUsernameAvailability".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.UserService"),
+                method: "CheckUsernameAvailability"
+            )
+        }
         /// Descriptors for all methods in the "shared.proto.services.v1.UserService" service.
         public static let descriptors: [GRPCCore.MethodDescriptor] = [
             GetUserProfile.descriptor,
@@ -138,7 +150,8 @@ public enum Shared_Proto_Services_V1_UserService: Sendable {
             UnblockUser.descriptor,
             GetBlockedUsers.descriptor,
             DeleteAccount.descriptor,
-            ExportUserData.descriptor
+            ExportUserData.descriptor,
+            CheckUsernameAvailability.descriptor
         ]
     }
 }
@@ -367,6 +380,29 @@ extension Shared_Proto_Services_V1_UserService {
             deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_ExportUserDataResponse>,
             options: GRPCCore.CallOptions,
             onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_ExportUserDataResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "CheckUsernameAvailability" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > CheckUsernameAvailability - Check if username is available (no auth required)
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_CheckUsernameAvailabilityRequest` message.
+        ///   - serializer: A serializer for `Shared_Proto_Services_V1_CheckUsernameAvailabilityRequest` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_CheckUsernameAvailabilityResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response, the result of which is
+        ///       returned to the caller. Returning from the closure will cancel the RPC if it
+        ///       hasn't already finished.
+        /// - Returns: The result of `handleResponse`.
+        func checkUsernameAvailability<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_CheckUsernameAvailabilityRequest>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_CheckUsernameAvailabilityRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_CheckUsernameAvailabilityResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_CheckUsernameAvailabilityResponse>) async throws -> Result
         ) async throws -> Result where Result: Sendable
     }
 
@@ -695,6 +731,40 @@ extension Shared_Proto_Services_V1_UserService {
                 onResponse: handleResponse
             )
         }
+
+        /// Call the "CheckUsernameAvailability" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > CheckUsernameAvailability - Check if username is available (no auth required)
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_CheckUsernameAvailabilityRequest` message.
+        ///   - serializer: A serializer for `Shared_Proto_Services_V1_CheckUsernameAvailabilityRequest` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_CheckUsernameAvailabilityResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response, the result of which is
+        ///       returned to the caller. Returning from the closure will cancel the RPC if it
+        ///       hasn't already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func checkUsernameAvailability<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_CheckUsernameAvailabilityRequest>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_CheckUsernameAvailabilityRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_CheckUsernameAvailabilityResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_CheckUsernameAvailabilityResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Shared_Proto_Services_V1_UserService.Method.CheckUsernameAvailability.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
     }
 }
 
@@ -957,6 +1027,35 @@ extension Shared_Proto_Services_V1_UserService.ClientProtocol {
             request: request,
             serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_ExportUserDataRequest>(),
             deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_ExportUserDataResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "CheckUsernameAvailability" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > CheckUsernameAvailability - Check if username is available (no auth required)
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Shared_Proto_Services_V1_CheckUsernameAvailabilityRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response, the result of which is
+    ///       returned to the caller. Returning from the closure will cancel the RPC if it
+    ///       hasn't already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func checkUsernameAvailability<Result>(
+        request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_CheckUsernameAvailabilityRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_CheckUsernameAvailabilityResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.checkUsernameAvailability(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_CheckUsernameAvailabilityRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_CheckUsernameAvailabilityResponse>(),
             options: options,
             onResponse: handleResponse
         )
@@ -1257,6 +1356,39 @@ extension Shared_Proto_Services_V1_UserService.ClientProtocol {
             metadata: metadata
         )
         return try await self.exportUserData(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "CheckUsernameAvailability" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > CheckUsernameAvailability - Check if username is available (no auth required)
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response, the result of which is
+    ///       returned to the caller. Returning from the closure will cancel the RPC if it
+    ///       hasn't already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func checkUsernameAvailability<Result>(
+        _ message: Shared_Proto_Services_V1_CheckUsernameAvailabilityRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_CheckUsernameAvailabilityResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Shared_Proto_Services_V1_CheckUsernameAvailabilityRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.checkUsernameAvailability(
             request: request,
             options: options,
             onResponse: handleResponse

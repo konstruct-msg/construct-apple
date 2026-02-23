@@ -89,4 +89,48 @@ final class MessagingServiceClient: Sendable {
             )
         }
     }
+
+    // MARK: - Get Pending Messages (for background fetch)
+
+    struct PendingMessagesResult: Sendable {
+        let messages: [ChatMessage]
+        let nextCursor: String
+        let hasMore: Bool
+    }
+
+    func getPendingMessages(sinceCursor: String? = nil, limit: Int32 = 50) async throws -> PendingMessagesResult {
+        try await GRPCChannelManager.shared.performRPC { grpcClient in
+            let msgClient = Shared_Proto_Services_V1_MessagingService.Client(wrapping: grpcClient)
+
+            var request = Shared_Proto_Services_V1_GetPendingMessagesRequest()
+            if let sinceCursor, !sinceCursor.isEmpty {
+                request.sinceCursor = sinceCursor
+            }
+            request.limit = limit
+
+            let response = try await msgClient.getPendingMessages(
+                request: .init(message: request)
+            )
+
+            let chatMessages = response.messages.map { msg in
+                ChatMessage(
+                    id: msg.messageID,
+                    from: msg.senderID,
+                    to: "",
+                    messageType: "DIRECT_MESSAGE",
+                    ephemeralPublicKey: Data(base64Encoded: msg.ephemeralPublicKey) ?? Data(),
+                    messageNumber: msg.messageNumber,
+                    content: msg.ciphertext,
+                    suiteId: UInt16(msg.suiteID),
+                    timestamp: UInt64(msg.timestamp)
+                )
+            }
+
+            return PendingMessagesResult(
+                messages: chatMessages,
+                nextCursor: response.nextCursor,
+                hasMore: response.hasMore_p
+            )
+        }
+    }
 }

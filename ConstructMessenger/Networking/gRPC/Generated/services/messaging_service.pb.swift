@@ -684,6 +684,96 @@ public struct Shared_Proto_Services_V1_ReactionEvent: Sendable {
   fileprivate var _encryptedReaction: Data? = nil
 }
 
+/// Request to fetch pending messages (unary)
+public struct Shared_Proto_Services_V1_GetPendingMessagesRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// Last seen stream cursor (opaque, returned in previous response)
+  /// Omit on first request to get all pending messages
+  public var sinceCursor: String {
+    get {_sinceCursor ?? String()}
+    set {_sinceCursor = newValue}
+  }
+  /// Returns true if `sinceCursor` has been explicitly set.
+  public var hasSinceCursor: Bool {self._sinceCursor != nil}
+  /// Clears the value of `sinceCursor`. Subsequent reads from it will return its default value.
+  public mutating func clearSinceCursor() {self._sinceCursor = nil}
+
+  /// Maximum number of messages to return (default: 50, max: 100)
+  public var limit: Int32 {
+    get {_limit ?? 0}
+    set {_limit = newValue}
+  }
+  /// Returns true if `limit` has been explicitly set.
+  public var hasLimit: Bool {self._limit != nil}
+  /// Clears the value of `limit`. Subsequent reads from it will return its default value.
+  public mutating func clearLimit() {self._limit = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _sinceCursor: String? = nil
+  fileprivate var _limit: Int32? = nil
+}
+
+/// Pending message entry
+public struct Shared_Proto_Services_V1_PendingMessage: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// Message ID (UUID)
+  public var messageID: String = String()
+
+  /// Sender user ID
+  public var senderID: String = String()
+
+  /// Cipher suite ID
+  public var suiteID: Int32 = 0
+
+  /// Base64-encoded ephemeral public key
+  public var ephemeralPublicKey: String = String()
+
+  /// Message number in sending chain (Double Ratchet)
+  public var messageNumber: UInt32 = 0
+
+  /// Number of messages in previous chain
+  public var previousChainLength: UInt32 = 0
+
+  /// Base64-encoded ciphertext
+  public var ciphertext: String = String()
+
+  /// Unix timestamp (seconds)
+  public var timestamp: Int64 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// Response with pending messages
+public struct Shared_Proto_Services_V1_GetPendingMessagesResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// Messages sorted by message_number ascending
+  public var messages: [Shared_Proto_Services_V1_PendingMessage] = []
+
+  /// Cursor for next request (pass as since_cursor)
+  public var nextCursor: String = String()
+
+  /// Whether more messages are available
+  public var hasMore_p: Bool = false
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
 fileprivate let _protobuf_package = "shared.proto.services.v1"
@@ -1614,6 +1704,150 @@ extension Shared_Proto_Services_V1_ReactionEvent: SwiftProtobuf.Message, SwiftPr
     if lhs.reactionID != rhs.reactionID {return false}
     if lhs.timestamp != rhs.timestamp {return false}
     if lhs.senderDeviceID != rhs.senderDeviceID {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Shared_Proto_Services_V1_GetPendingMessagesRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".GetPendingMessagesRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}since_cursor\0\u{1}limit\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self._sinceCursor) }()
+      case 2: try { try decoder.decodeSingularInt32Field(value: &self._limit) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._sinceCursor {
+      try visitor.visitSingularStringField(value: v, fieldNumber: 1)
+    } }()
+    try { if let v = self._limit {
+      try visitor.visitSingularInt32Field(value: v, fieldNumber: 2)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Services_V1_GetPendingMessagesRequest, rhs: Shared_Proto_Services_V1_GetPendingMessagesRequest) -> Bool {
+    if lhs._sinceCursor != rhs._sinceCursor {return false}
+    if lhs._limit != rhs._limit {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Shared_Proto_Services_V1_PendingMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".PendingMessage"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}message_id\0\u{3}sender_id\0\u{3}suite_id\0\u{3}ephemeral_public_key\0\u{3}message_number\0\u{3}previous_chain_length\0\u{1}ciphertext\0\u{1}timestamp\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.messageID) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.senderID) }()
+      case 3: try { try decoder.decodeSingularInt32Field(value: &self.suiteID) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.ephemeralPublicKey) }()
+      case 5: try { try decoder.decodeSingularUInt32Field(value: &self.messageNumber) }()
+      case 6: try { try decoder.decodeSingularUInt32Field(value: &self.previousChainLength) }()
+      case 7: try { try decoder.decodeSingularStringField(value: &self.ciphertext) }()
+      case 8: try { try decoder.decodeSingularInt64Field(value: &self.timestamp) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.messageID.isEmpty {
+      try visitor.visitSingularStringField(value: self.messageID, fieldNumber: 1)
+    }
+    if !self.senderID.isEmpty {
+      try visitor.visitSingularStringField(value: self.senderID, fieldNumber: 2)
+    }
+    if self.suiteID != 0 {
+      try visitor.visitSingularInt32Field(value: self.suiteID, fieldNumber: 3)
+    }
+    if !self.ephemeralPublicKey.isEmpty {
+      try visitor.visitSingularStringField(value: self.ephemeralPublicKey, fieldNumber: 4)
+    }
+    if self.messageNumber != 0 {
+      try visitor.visitSingularUInt32Field(value: self.messageNumber, fieldNumber: 5)
+    }
+    if self.previousChainLength != 0 {
+      try visitor.visitSingularUInt32Field(value: self.previousChainLength, fieldNumber: 6)
+    }
+    if !self.ciphertext.isEmpty {
+      try visitor.visitSingularStringField(value: self.ciphertext, fieldNumber: 7)
+    }
+    if self.timestamp != 0 {
+      try visitor.visitSingularInt64Field(value: self.timestamp, fieldNumber: 8)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Services_V1_PendingMessage, rhs: Shared_Proto_Services_V1_PendingMessage) -> Bool {
+    if lhs.messageID != rhs.messageID {return false}
+    if lhs.senderID != rhs.senderID {return false}
+    if lhs.suiteID != rhs.suiteID {return false}
+    if lhs.ephemeralPublicKey != rhs.ephemeralPublicKey {return false}
+    if lhs.messageNumber != rhs.messageNumber {return false}
+    if lhs.previousChainLength != rhs.previousChainLength {return false}
+    if lhs.ciphertext != rhs.ciphertext {return false}
+    if lhs.timestamp != rhs.timestamp {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Shared_Proto_Services_V1_GetPendingMessagesResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".GetPendingMessagesResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}messages\0\u{3}next_cursor\0\u{3}has_more\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.messages) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.nextCursor) }()
+      case 3: try { try decoder.decodeSingularBoolField(value: &self.hasMore_p) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.messages.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.messages, fieldNumber: 1)
+    }
+    if !self.nextCursor.isEmpty {
+      try visitor.visitSingularStringField(value: self.nextCursor, fieldNumber: 2)
+    }
+    if self.hasMore_p != false {
+      try visitor.visitSingularBoolField(value: self.hasMore_p, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Services_V1_GetPendingMessagesResponse, rhs: Shared_Proto_Services_V1_GetPendingMessagesResponse) -> Bool {
+    if lhs.messages != rhs.messages {return false}
+    if lhs.nextCursor != rhs.nextCursor {return false}
+    if lhs.hasMore_p != rhs.hasMore_p {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

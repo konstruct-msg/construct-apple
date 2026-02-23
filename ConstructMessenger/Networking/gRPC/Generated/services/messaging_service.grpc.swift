@@ -80,13 +80,26 @@ public enum Shared_Proto_Services_V1_MessagingService: Sendable {
                 method: "RemoveReaction"
             )
         }
+        /// Namespace for "GetPendingMessages" metadata.
+        public enum GetPendingMessages: Sendable {
+            /// Request type for "GetPendingMessages".
+            public typealias Input = Shared_Proto_Services_V1_GetPendingMessagesRequest
+            /// Response type for "GetPendingMessages".
+            public typealias Output = Shared_Proto_Services_V1_GetPendingMessagesResponse
+            /// Descriptor for "GetPendingMessages".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MessagingService"),
+                method: "GetPendingMessages"
+            )
+        }
         /// Descriptors for all methods in the "shared.proto.services.v1.MessagingService" service.
         public static let descriptors: [GRPCCore.MethodDescriptor] = [
             MessageStream.descriptor,
             SendMessage.descriptor,
             EditMessage.descriptor,
             AddReaction.descriptor,
-            RemoveReaction.descriptor
+            RemoveReaction.descriptor,
+            GetPendingMessages.descriptor
         ]
     }
 }
@@ -229,6 +242,31 @@ extension Shared_Proto_Services_V1_MessagingService {
             deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_RemoveReactionResponse>,
             options: GRPCCore.CallOptions,
             onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_RemoveReactionResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "GetPendingMessages" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > GetPendingMessages - Fetch pending messages (unary, for background fetch)
+        /// > Use this for iOS BackgroundFetchManager / silent push wake-up.
+        /// > For real-time delivery use MessageStream (bidirectional streaming).
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_GetPendingMessagesRequest` message.
+        ///   - serializer: A serializer for `Shared_Proto_Services_V1_GetPendingMessagesRequest` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_GetPendingMessagesResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response, the result of which is
+        ///       returned to the caller. Returning from the closure will cancel the RPC if it
+        ///       hasn't already finished.
+        /// - Returns: The result of `handleResponse`.
+        func getPendingMessages<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_GetPendingMessagesRequest>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_GetPendingMessagesRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_GetPendingMessagesResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_GetPendingMessagesResponse>) async throws -> Result
         ) async throws -> Result where Result: Sendable
     }
 
@@ -425,6 +463,42 @@ extension Shared_Proto_Services_V1_MessagingService {
                 onResponse: handleResponse
             )
         }
+
+        /// Call the "GetPendingMessages" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > GetPendingMessages - Fetch pending messages (unary, for background fetch)
+        /// > Use this for iOS BackgroundFetchManager / silent push wake-up.
+        /// > For real-time delivery use MessageStream (bidirectional streaming).
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_GetPendingMessagesRequest` message.
+        ///   - serializer: A serializer for `Shared_Proto_Services_V1_GetPendingMessagesRequest` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_GetPendingMessagesResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response, the result of which is
+        ///       returned to the caller. Returning from the closure will cancel the RPC if it
+        ///       hasn't already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func getPendingMessages<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_GetPendingMessagesRequest>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_GetPendingMessagesRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_GetPendingMessagesResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_GetPendingMessagesResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Shared_Proto_Services_V1_MessagingService.Method.GetPendingMessages.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
     }
 }
 
@@ -574,6 +648,37 @@ extension Shared_Proto_Services_V1_MessagingService.ClientProtocol {
             request: request,
             serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_RemoveReactionRequest>(),
             deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_RemoveReactionResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "GetPendingMessages" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > GetPendingMessages - Fetch pending messages (unary, for background fetch)
+    /// > Use this for iOS BackgroundFetchManager / silent push wake-up.
+    /// > For real-time delivery use MessageStream (bidirectional streaming).
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Shared_Proto_Services_V1_GetPendingMessagesRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response, the result of which is
+    ///       returned to the caller. Returning from the closure will cancel the RPC if it
+    ///       hasn't already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func getPendingMessages<Result>(
+        request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_GetPendingMessagesRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_GetPendingMessagesResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.getPendingMessages(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_GetPendingMessagesRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_GetPendingMessagesResponse>(),
             options: options,
             onResponse: handleResponse
         )
@@ -746,6 +851,41 @@ extension Shared_Proto_Services_V1_MessagingService.ClientProtocol {
             metadata: metadata
         )
         return try await self.removeReaction(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "GetPendingMessages" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > GetPendingMessages - Fetch pending messages (unary, for background fetch)
+    /// > Use this for iOS BackgroundFetchManager / silent push wake-up.
+    /// > For real-time delivery use MessageStream (bidirectional streaming).
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response, the result of which is
+    ///       returned to the caller. Returning from the closure will cancel the RPC if it
+    ///       hasn't already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func getPendingMessages<Result>(
+        _ message: Shared_Proto_Services_V1_GetPendingMessagesRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_GetPendingMessagesResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Shared_Proto_Services_V1_GetPendingMessagesRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.getPendingMessages(
             request: request,
             options: options,
             onResponse: handleResponse

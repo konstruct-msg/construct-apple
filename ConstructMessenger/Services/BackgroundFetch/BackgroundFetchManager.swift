@@ -239,14 +239,25 @@ class BackgroundFetchManager: NSObject, ObservableObject {
         let backgroundContext = NSManagedObjectContext(concurrencyType: .privateQueueConcurrencyType)
         backgroundContext.parent = context
         
-        // ✅ Fetch offline messages via REST (no unary gRPC equivalent for background fetch)
+        // ✅ Fetch pending messages via gRPC (unary, cursor-paginated)
         Task {
             do {
-                let response = try await MessagingAPI.shared.pollMessages(sinceId: nil, timeout: 0)
-                let messages = try response.toChatMessages()
-                
+                var allMessages: [ChatMessage] = []
+                var cursor: String? = nil
+
+                repeat {
+                    let result = try await MessagingServiceClient.shared.getPendingMessages(
+                        sinceCursor: cursor,
+                        limit: 50
+                    )
+                    allMessages.append(contentsOf: result.messages)
+                    cursor = result.nextCursor
+
+                    if !result.hasMore { break }
+                } while true
+
                 await MainActor.run {
-                    self.processOfflineMessages(messages, backgroundContext: backgroundContext, completion: completion)
+                    self.processOfflineMessages(allMessages, backgroundContext: backgroundContext, completion: completion)
                 }
             } catch {
                 Log.error("❌ Failed to fetch offline messages: \(error.localizedDescription)", category: "BackgroundFetch")
