@@ -13,37 +13,50 @@ struct PinDisableView: View {
 
     @State private var pin = ""
     @State private var errorKey: String?
+    @State private var shake = false
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                
+            VStack(spacing: 0) {
                 Spacer()
-                
-                VStack(spacing: 20) {
+
+                VStack(spacing: 16) {
                     Text("enter_pin_code")
                         .font(.headline)
 
-                    SecureField("pin_code", text: $pin)
-                        .keyboardType(.numberPad)
-                        .multilineTextAlignment(.center)
-                        .textFieldStyle(.roundedBorder)
-                        .onChange(of: pin) { pin = normalizePin($0) }
+                    PinDotsField(
+                        length: securityViewModel.pinLength ?? 6,
+                        pin: $pin,
+                        shake: $shake
+                    ) { _ in
+                        disablePin()
+                    }
 
                     if let errorKey {
                         Text(LocalizedStringKey(errorKey))
                             .foregroundColor(.red)
+                            .font(.subheadline)
                             .multilineTextAlignment(.center)
                     }
-
-                    Button("disable") {
-                        disablePin()
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(pin.isEmpty)
                 }
                 .padding(.horizontal, 32)
-                .padding(.top, 24)
+
+                Spacer()
+
+                Button {
+                    disablePin()
+                } label: {
+                    Text("disable")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(pin.count >= 6 ? Color.red : Color.gray.opacity(0.4))
+                        .cornerRadius(12)
+                }
+                .disabled(pin.count < 6)
+                .padding(.horizontal, 32)
+                .padding(.bottom, 16)
             }
             .navigationTitle("disable_pin_code")
             .navigationBarTitleDisplayMode(.inline)
@@ -64,15 +77,9 @@ struct PinDisableView: View {
             dismiss()
         } else {
             errorKey = "wrong_pin_code"
+            pin = ""
+            shake = true
         }
-    }
-
-    private func normalizePin(_ value: String) -> String {
-        let digits = value.filter { $0.isNumber }
-        if digits.count > 12 {
-            return String(digits.prefix(12))
-        }
-        return digits
     }
 }
 

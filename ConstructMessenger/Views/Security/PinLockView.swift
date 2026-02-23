@@ -14,11 +14,11 @@ struct PinLockView: View {
     @State private var errorMessage: String?
     @State private var showPinEntry = false
     @State private var didAttemptBiometrics = false
-    @FocusState private var isPinFocused: Bool
+    @State private var shake = false
 
     var body: some View {
         ZStack {
-            Color(.systemBackground)
+            Color.AppBackground.primary
                 .ignoresSafeArea()
 
             VStack(spacing: 24) {
@@ -32,30 +32,41 @@ struct PinLockView: View {
                 Spacer()
 
                 if showPinEntry || !isBiometricMode {
-                    VStack(spacing: 12) {
+                    VStack(spacing: 16) {
                         Text("enter_pin_code")
                             .font(.headline)
 
-                        SecureField("pin_code", text: $pin)
-                            .keyboardType(.numberPad)
-                            .multilineTextAlignment(.center)
-                            .textFieldStyle(.plain)
-                            .onChange(of: pin) { newValue in
-                                let normalized = normalizePin(newValue)
-                                if normalized != newValue {
-                                    pin = normalized
-                                    return
-                                }
-                                handlePinInput()
-                            }
-                            .focused($isPinFocused)
+                        PinDotsField(
+                            length: expectedPinLength ?? 6,
+                            pin: $pin,
+                            shake: $shake
+                        ) { _ in
+                            handlePinInput()
+                        }
                     }
                     .padding(.horizontal, 32)
+                    
+                    if isBiometricMode {
+                        Button {
+                            pin = ""
+                            errorMessage = nil
+                            authenticateWithBiometrics()
+                        } label: {
+                            Label(
+                                String(format: NSLocalizedString("use_biometric", comment: ""), securityViewModel.biometricDisplayName),
+                                systemImage: securityViewModel.biometricIconName
+                            )
+                        }
+                        .padding(.top, 4)
+                    }
                 } else {
                     Button {
                         authenticateWithBiometrics()
                     } label: {
-                        Text(String(format: NSLocalizedString("use_biometric", comment: ""), securityViewModel.biometricDisplayName))
+                        Label(
+                            String(format: NSLocalizedString("use_biometric", comment: ""), securityViewModel.biometricDisplayName),
+                            systemImage: securityViewModel.biometricIconName
+                        )
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.borderedProminent)
@@ -73,6 +84,7 @@ struct PinLockView: View {
                 if let errorMessage {
                     Text(errorMessage)
                         .foregroundColor(.red)
+                        .font(.subheadline)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 32)
                 }
@@ -86,14 +98,6 @@ struct PinLockView: View {
                 authenticateIfNeeded()
             } else {
                 showPinEntry = true
-            }
-            if showPinEntry {
-                isPinFocused = true
-            }
-        }
-        .onChange(of: showPinEntry) { isVisible in
-            if isVisible {
-                isPinFocused = true
             }
         }
     }
@@ -135,34 +139,19 @@ struct PinLockView: View {
     }
 
     private func handlePinInput() {
-        if !pin.isEmpty {
-            errorMessage = nil
-        }
-
-        let length = pin.count
-        guard length >= 6 && length <= 12 else { return }
+        errorMessage = nil
 
         if securityViewModel.verifyPin(pin) {
             securityViewModel.isUnlocked = true
             return
         }
 
-        if let expected = expectedPinLength, length == expected {
-            errorMessage = NSLocalizedString("wrong_pin_code", comment: "")
-            pin = ""
-        } else if expectedPinLength == nil && length == 12 {
-            errorMessage = NSLocalizedString("wrong_pin_code", comment: "")
-            pin = ""
-        }
+        // Wrong PIN
+        errorMessage = NSLocalizedString("wrong_pin_code", comment: "")
+        pin = ""
+        shake = true
     }
 
-    private func normalizePin(_ value: String) -> String {
-        let digits = value.filter { $0.isNumber }
-        if digits.count > 12 {
-            return String(digits.prefix(12))
-        }
-        return digits
-    }
 }
 
 #Preview {

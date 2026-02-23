@@ -129,7 +129,7 @@ struct MessageInputView: View {
             .padding(.horizontal)
             .padding(.vertical, 8)
         }
-        .background(Color(uiColor: .systemBackground))
+        .background(Color.AppBackground.primary)
         .animation(.easeInOut(duration: 0.2), value: canSend)
         .animation(.easeInOut(duration: 0.2), value: replyingTo != nil)
         .animation(.easeInOut(duration: 0.2), value: !selectedImages.isEmpty)

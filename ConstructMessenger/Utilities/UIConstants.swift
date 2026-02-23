@@ -192,9 +192,9 @@ struct FontStyle {
 extension Color {
     /// Standard background colors
     struct AppBackground {
-        /// Primary app background
+        /// Primary app background (warm off-white in light, dark gray in dark)
         static var primary: Color {
-            Color(uiColor: .systemBackground)
+            Color("AppBackgroundPrimary")
         }
         
         /// Secondary background (slightly gray)

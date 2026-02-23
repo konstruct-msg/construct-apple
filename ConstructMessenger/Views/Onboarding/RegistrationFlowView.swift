@@ -393,6 +393,7 @@ struct RegistrationFlowView: View {
             Log.info("✅ Registration successful! userId=\(registerData.userId)", category: "Registration")
             
             // Step 5: Complete
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
             currentStep = .complete
             
             // ========================================

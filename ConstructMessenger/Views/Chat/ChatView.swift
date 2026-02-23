@@ -334,7 +334,7 @@ struct ChatView: View {
         .frame(maxWidth: .infinity)
         .background(
             // ✅ Solid background with blur for overlay
-            Color(uiColor: .systemBackground)
+            Color.AppBackground.primary
                 .opacity(0.95)
         )
         .overlay(
@@ -521,7 +521,7 @@ struct ChatView: View {
                     }
                 }
                 .padding()
-                .background(Color(.systemBackground).shadow(color: .black.opacity(0.1), radius: 2, y: 1))
+                .background(Color.AppBackground.primary.shadow(color: .black.opacity(0.1), radius: 2, y: 1))
                 Spacer()
             }
         }

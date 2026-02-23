@@ -31,7 +31,7 @@ struct SettingsView: View {
                     .padding(.horizontal)
                     .padding(.top, 20)
                     .padding(.bottom, 16)
-                    .background(Color(.systemBackground))
+                    .background(Color.AppBackground.primary)
                     
                     Divider()
                     
