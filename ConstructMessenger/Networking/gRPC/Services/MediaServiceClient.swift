@@ -11,7 +11,7 @@ import CryptoKit
 import GRPCCore
 import GRPCNIOTransportHTTP2
 
-@available(iOS 18.0, *)
+
 final class MediaServiceClient: Sendable {
     static let shared = MediaServiceClient()
 

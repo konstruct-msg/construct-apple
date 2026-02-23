@@ -9,7 +9,7 @@ import Foundation
 import GRPCCore
 import GRPCNIOTransportHTTP2
 
-@available(iOS 18.0, *)
+
 final class KeyServiceClient: Sendable {
     static let shared = KeyServiceClient()
 

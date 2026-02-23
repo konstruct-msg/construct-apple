@@ -355,12 +355,7 @@ struct RegistrationFlowView: View {
             
             // Step 2: Fetch challenge
             currentStep = .fetchingChallenge
-            let challengeResponse: ChallengeResponse
-            if #available(iOS 18.0, *) {
-                challengeResponse = try await AuthServiceClient.shared.getPowChallenge()
-            } else {
-                throw NetworkError.connectionFailed
-            }
+            let challengeResponse = try await AuthServiceClient.shared.getPowChallenge()
             challenge = challengeResponse.challenge
             difficulty = challengeResponse.difficulty
             
@@ -388,18 +383,13 @@ struct RegistrationFlowView: View {
             
             // Step 4: Submit registration
             currentStep = .submittingRegistration
-            let registerData: RegisterSuccessData
-            if #available(iOS 18.0, *) {
-                registerData = try await AuthServiceClient.shared.registerDevice(
-                    username: username,
-                    deviceId: deviceId,
-                    registrationBundle: registrationBundle,
-                    challenge: challenge,
-                    powSolution: solution
-                )
-            } else {
-                throw NetworkError.connectionFailed
-            }
+            let registerData = try await AuthServiceClient.shared.registerDevice(
+                username: username,
+                deviceId: deviceId,
+                registrationBundle: registrationBundle,
+                challenge: challenge,
+                powSolution: solution
+            )
             Log.info("✅ Registration successful! userId=\(registerData.userId)", category: "Registration")
             
             // Step 5: Complete

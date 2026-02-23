@@ -119,16 +119,11 @@ class AuthViewModel: ObservableObject {
             // For now, use base64 of message as placeholder
             let signature = messageData.base64EncodedString()
             
-            let response: AuthResponse
-            if #available(iOS 18.0, *) {
-                response = try await AuthServiceClient.shared.authenticateDevice(
+            let response = try await AuthServiceClient.shared.authenticateDevice(
                     deviceId: deviceId,
                     timestamp: timestamp,
                     signature: signature
                 )
-            } else {
-                throw NetworkError.connectionFailed
-            }
             
             // Save tokens
             let expiresInSeconds: Int
@@ -211,12 +206,7 @@ class AuthViewModel: ObservableObject {
         do {
             Log.info("🔄 Attempting to refresh access token", category: "Auth")
             
-            let response: AuthResponse
-            if #available(iOS 18.0, *) {
-                response = try await AuthServiceClient.shared.refreshToken(refreshToken: refreshToken)
-            } else {
-                throw NetworkError.connectionFailed
-            }
+            let response = try await AuthServiceClient.shared.refreshToken(refreshToken: refreshToken)
             
             // Save new tokens
             await MainActor.run {
@@ -376,9 +366,7 @@ class AuthViewModel: ObservableObject {
             // 1. Logout via gRPC
             if SessionManager.shared.sessionToken != nil {
                 do {
-                    if #available(iOS 18.0, *) {
-                        try await AuthServiceClient.shared.logout()
-                    }
+                    try await AuthServiceClient.shared.logout()
                 } catch {
                     Log.error("Logout API call failed: \(error.localizedDescription)", category: "Auth")
                     // Continue with local logout even if API call fails
@@ -424,42 +412,13 @@ class AuthViewModel: ObservableObject {
     }
 
     private func deleteAccountWithDeviceSignature() async throws {
-        // Prefer gRPC UserService on iOS 18+
-        if #available(iOS 18.0, *) {
-            let response = try await UserServiceClient.shared.deleteAccount(
-                confirmation: "DELETE",
-                reason: "user_requested"
-            )
-            guard response.success else {
-                throw NSError(domain: "AuthViewModel", code: 3, userInfo: [NSLocalizedDescriptionKey: response.message])
-            }
-            return
-        }
-
-        // Fallback: REST challenge-based flow
-        guard let userId = SessionManager.shared.currentUserId else {
-            throw NSError(domain: "AuthViewModel", code: 1, userInfo: [NSLocalizedDescriptionKey: "Missing userId"])
-        }
-        guard let deviceId = KeychainManager.shared.loadDeviceID() else {
-            throw NSError(domain: "AuthViewModel", code: 2, userInfo: [NSLocalizedDescriptionKey: "Missing deviceId"])
-        }
-
-        let challenge = try await AuthAPI.shared.getDeleteChallenge()
-        let ts = Int64(Date().timeIntervalSince1970)
-        let canonical = "DELETE|\(userId)|\(deviceId)|\(challenge.challenge)|\(ts)"
-
-        let signingSecret = try CryptoManager.shared.exportSigningSecretKey()
-        let signature = try signInviteData(data: canonical, identitySecretKey: signingSecret)
-        let signatureBase64 = Data(signature.signature).base64EncodedString()
-
-        let request = DeleteDeviceRequest(
-            deviceId: deviceId,
-            challenge: challenge.challenge,
-            signature: signatureBase64,
-            ts: ts
+        let response = try await UserServiceClient.shared.deleteAccount(
+            confirmation: "DELETE",
+            reason: "user_requested"
         )
-
-        try await AuthAPI.shared.confirmDeleteDevice(request: request)
+        guard response.success else {
+            throw NSError(domain: "AuthViewModel", code: 3, userInfo: [NSLocalizedDescriptionKey: response.message])
+        }
     }
 
     // MARK: - Timeout Helpers

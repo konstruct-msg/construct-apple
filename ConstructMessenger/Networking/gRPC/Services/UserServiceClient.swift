@@ -9,7 +9,7 @@ import Foundation
 import GRPCCore
 import GRPCNIOTransportHTTP2
 
-@available(iOS 18.0, *)
+
 final class UserServiceClient: Sendable {
     static let shared = UserServiceClient()
 

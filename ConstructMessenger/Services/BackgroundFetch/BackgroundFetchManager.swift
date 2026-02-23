@@ -239,7 +239,7 @@ class BackgroundFetchManager: NSObject, ObservableObject {
         let backgroundContext = NSManagedObjectContext(concurrencyType: .privateQueueConcurrencyType)
         backgroundContext.parent = context
         
-        // ✅ Fetch offline messages via REST API (long polling with timeout=0 for immediate response)
+        // ✅ Fetch offline messages via REST (no unary gRPC equivalent for background fetch)
         Task {
             do {
                 let response = try await MessagingAPI.shared.pollMessages(sinceId: nil, timeout: 0)

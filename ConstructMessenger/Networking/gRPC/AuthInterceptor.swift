@@ -3,7 +3,7 @@ import GRPCCore
 
 /// Injects the Bearer auth token into gRPC metadata for every RPC call.
 /// Skips auth for unauthenticated RPCs (challenge, register, authenticate).
-@available(iOS 18.0, *)
+
 struct AuthInterceptor: ClientInterceptor {
     /// RPCs that do not require authentication
     private static let unauthenticatedMethods: Set<String> = [

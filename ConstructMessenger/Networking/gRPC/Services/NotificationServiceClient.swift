@@ -10,7 +10,7 @@ import UIKit
 import GRPCCore
 import GRPCNIOTransportHTTP2
 
-@available(iOS 18.0, *)
+
 final class NotificationServiceClient: Sendable {
     static let shared = NotificationServiceClient()
 

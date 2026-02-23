@@ -33,19 +33,14 @@ final class ChunkedMessageSender {
                 components = try CryptoManager.shared.encryptMessage(payload, for: recipientId)
             }
 
-            let response: SendMessageResponse
-            if #available(iOS 18.0, *) {
-                response = try await MessagingServiceClient.shared.sendMessage(
-                    recipientId: recipientId,
-                    ephemeralPublicKey: components.ephemeralPublicKey,
-                    messageNumber: components.messageNumber,
-                    content: components.content,
-                    timestamp: timestamp,
-                    suiteId: components.suiteId
-                )
-            } else {
-                throw NetworkError.connectionFailed
-            }
+            let response = try await MessagingServiceClient.shared.sendMessage(
+                recipientId: recipientId,
+                ephemeralPublicKey: components.ephemeralPublicKey,
+                messageNumber: components.messageNumber,
+                content: components.content,
+                timestamp: timestamp,
+                suiteId: components.suiteId
+            )
             responses.append(response)
 
             if index < plan.payloads.count - 1 {

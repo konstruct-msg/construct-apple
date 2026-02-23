@@ -24,16 +24,8 @@ class ChatsViewModel: ObservableObject {
     // ✅ Chat ID to open programmatically (e.g., from deep link)
     @Published var chatToOpen: String?
 
-    // ✅ Message stream (gRPC bidirectional) — replaces long polling
-    private var streamManager: AnyObject? = {
-        if #available(iOS 18.0, *) {
-            return MessageStreamManager()
-        }
-        return nil
-    }()
-    
-    // ✅ Legacy long polling fallback (iOS < 18)
-    private let pollingManager = LongPollingManager()
+    // ✅ Message stream (gRPC bidirectional)
+    private let streamManager = MessageStreamManager()
     
     // ✅ Message router
     private let messageRouter = MessageRouter()
@@ -80,7 +72,7 @@ class ChatsViewModel: ObservableObject {
     }
 
     isolated deinit {
-        pollingManager.stopPolling()
+        streamManager.disconnect()
     }
 
     func setContext(_ context: NSManagedObjectContext) {
@@ -156,10 +148,7 @@ class ChatsViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 Log.info("📱 App going to background - pausing messaging", category: "ChatsViewModel")
-                if #available(iOS 18.0, *), let stream = self?.streamManager as? MessageStreamManager {
-                    stream.pause()
-                }
-                self?.pollingManager.pause()
+                self?.streamManager.pause()
             }
             .store(in: &cancellables)
         
@@ -175,49 +164,13 @@ class ChatsViewModel: ObservableObject {
     // MARK: - Message Receiving
 
     func startLongPolling(pollingTimeout: Int, postSuccessDelaySeconds: TimeInterval) {
-        // Prefer gRPC bidirectional stream on iOS 18+
-        if #available(iOS 18.0, *), let stream = streamManager as? MessageStreamManager {
-            stream.connect { [weak self] message in
-                self?.handleIncomingMessage(message)
-            }
-            return
+        streamManager.connect { [weak self] message in
+            self?.handleIncomingMessage(message)
         }
-
-        // Fallback: REST long polling for iOS < 18
-        pollingManager.updateConfiguration(
-            pollingTimeout: pollingTimeout,
-            postSuccessDelaySeconds: postSuccessDelaySeconds
-        )
-        pollingManager.startPolling(
-            getLastMessageId: { [weak self] in
-                return self?.lastMessageId
-            },
-            updateLastMessageId: { [weak self] newId in
-                self?.lastMessageId = newId
-            },
-            onMessagesReceived: { [weak self] messages in
-                guard let self = self else { return }
-                
-                // Process received messages
-                for messageResponse in messages {
-                    do {
-                        let chatMessage = try messageResponse.toChatMessage()
-                        self.handleIncomingMessage(chatMessage)
-                    } catch {
-                        Log.error("❌ Failed to convert message: \(error)", category: "ChatsViewModel")
-                    }
-                }
-            },
-            pollingTimeout: pollingTimeout,
-            postSuccessDelaySeconds: postSuccessDelaySeconds
-        )
     }
 
     func stopLongPolling() {
-        if #available(iOS 18.0, *), let stream = streamManager as? MessageStreamManager {
-            stream.disconnect()
-        }
-        pollingManager.stopPolling()
+        streamManager.disconnect()
     }
 
     // MARK: - Start Chat
@@ -234,12 +187,7 @@ class ChatsViewModel: ObservableObject {
         
         // 1. Send END_SESSION message via API
         do {
-            let response: EndSessionResponse
-            if #available(iOS 18.0, *) {
-                response = try await MessagingServiceClient.shared.sendEndSession(to: userId, reason: reason)
-            } else {
-                throw NetworkError.connectionFailed
-            }
+            let response = try await MessagingServiceClient.shared.sendEndSession(to: userId, reason: reason)
             Log.info("✅ END_SESSION sent successfully: \(response.messageId)", category: "ChatsViewModel")
         } catch {
             Log.error("❌ Failed to send END_SESSION: \(error)", category: "ChatsViewModel")

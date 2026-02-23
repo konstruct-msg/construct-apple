@@ -42,18 +42,10 @@ class MediaManager {
         let optimized = try MediaOptimizer.optimizeImage(image)
         
         // Upload optimized data
-        let uploadResult: MediaAPI.UploadedMedia
-        if #available(iOS 18.0, *) {
-            uploadResult = try await MediaServiceClient.shared.uploadData(
+        let uploadResult = try await MediaServiceClient.shared.uploadData(
                 optimized.data,
                 mimeType: optimized.metadata.mimeType
             )
-        } else {
-            uploadResult = try await MediaAPI.shared.uploadData(
-                optimized.data,
-                mimeType: optimized.metadata.mimeType
-            )
-        }
         Log.info("✅ Image uploaded: \(uploadResult.mediaId)", category: "MediaManager")
         
         // ✅ Use raw base64 key - entire message will be encrypted via Double Ratchet
@@ -90,18 +82,10 @@ class MediaManager {
             throw MediaManagerError.optimizationFailed
         }
         
-        let uploadResult: MediaAPI.UploadedMedia
-        if #available(iOS 18.0, *) {
-            uploadResult = try await MediaServiceClient.shared.uploadData(
+        let uploadResult = try await MediaServiceClient.shared.uploadData(
                 avatarData,
                 mimeType: "image/jpeg"
             )
-        } else {
-            uploadResult = try await MediaAPI.shared.uploadData(
-                avatarData,
-                mimeType: "image/jpeg"
-            )
-        }
         Log.info("✅ Avatar uploaded: \(uploadResult.mediaId)", category: "MediaManager")
         
         // For avatars, return raw base64 key (not Double Ratchet encrypted)
@@ -147,14 +131,8 @@ class MediaManager {
         
         Log.debug("   Decoded media key: \(keyData.count) bytes", category: "MediaManager")
         
-        // Download encrypted data via gRPC (iOS 18+) or REST
-        let encryptedData: Data
-        if #available(iOS 18.0, *) {
-            let mediaId = URL(string: mediaUrl)?.lastPathComponent ?? mediaUrl
-            encryptedData = try await MediaServiceClient.shared.downloadEncryptedFile(mediaId: mediaId)
-        } else {
-            encryptedData = try await MediaAPI.shared.downloadEncryptedFile(from: mediaUrl)
-        }
+        let mediaId = URL(string: mediaUrl)?.lastPathComponent ?? mediaUrl
+        let encryptedData = try await MediaServiceClient.shared.downloadEncryptedFile(mediaId: mediaId)
         Log.debug("   Downloaded encrypted data: \(encryptedData.count) bytes", category: "MediaManager")
         
         // Decrypt media using symmetric AES key

@@ -13,7 +13,7 @@ import GRPCCore
 import GRPCNIOTransportHTTP2
 
 /// Manages bidirectional gRPC MessageStream for real-time messaging
-@available(iOS 18.0, *)
+
 @MainActor
 final class MessageStreamManager: ObservableObject {
 

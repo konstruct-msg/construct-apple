@@ -4,7 +4,7 @@ import GRPCNIOTransportHTTP2
 
 /// Manages the gRPC channel shared by all service clients.
 /// All services route through a single Envoy proxy endpoint.
-@available(iOS 18.0, *)
+
 final class GRPCChannelManager: Sendable {
     static let shared = GRPCChannelManager()
 
