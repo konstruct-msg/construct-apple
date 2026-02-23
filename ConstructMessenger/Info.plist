@@ -2,13 +2,13 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>APIBaseURL</key>
-	<string>https://construct-api-gateway.fly.dev</string>
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
 		<string>com.construct.message-refresh</string>
 		<string>com.construct.maintenance</string>
 	</array>
+	<key>CFBundleGetInfoString</key>
+	<string></string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -27,8 +27,6 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
-	<key>NSFaceIDUsageDescription</key>
-	<string>Use Face ID to unlock Construct Messenger.</string>
 	<key>NSUserNotificationsUsageDescription</key>
 	<string>Construct Messenger sends you notifications for new messages.</string>
 	<key>UIBackgroundModes</key>

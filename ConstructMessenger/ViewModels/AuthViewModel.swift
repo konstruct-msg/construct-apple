@@ -119,18 +119,25 @@ class AuthViewModel: ObservableObject {
             // For now, use base64 of message as placeholder
             let signature = messageData.base64EncodedString()
             
-            let response = try await AuthAPI.shared.authenticateDevice(
-                deviceId: deviceId,
-                timestamp: timestamp,
-                signature: signature
-            )
+            let response: AuthResponse
+            if #available(iOS 18.0, *) {
+                response = try await AuthServiceClient.shared.authenticateDevice(
+                    deviceId: deviceId,
+                    timestamp: timestamp,
+                    signature: signature
+                )
+            } else {
+                throw NetworkError.connectionFailed
+            }
             
             // Save tokens
             let expiresInSeconds: Int
-            if let expiresIn = response.expiresIn {
+            if let expiresAt = response.expiresAt {
+                expiresInSeconds = max(Int(expiresAt - Int64(Date().timeIntervalSince1970)), 3600)
+            } else if let expiresIn = response.expiresIn {
                 expiresInSeconds = expiresIn
             } else {
-                expiresInSeconds = 3600 // 1 hour fallback
+                expiresInSeconds = 3600
             }
             
             SessionManager.shared.saveTokens(
@@ -204,11 +211,21 @@ class AuthViewModel: ObservableObject {
         do {
             Log.info("🔄 Attempting to refresh access token", category: "Auth")
             
-            let response = try await AuthAPI.shared.refreshToken(refreshToken: refreshToken)
+            let response: AuthResponse
+            if #available(iOS 18.0, *) {
+                response = try await AuthServiceClient.shared.refreshToken(refreshToken: refreshToken)
+            } else {
+                throw NetworkError.connectionFailed
+            }
             
             // Save new tokens
             await MainActor.run {
-                let expiresIn = response.expiresIn ?? 3600
+                let expiresIn: Int
+                if let expiresAt = response.expiresAt {
+                    expiresIn = max(Int(expiresAt - Int64(Date().timeIntervalSince1970)), 3600)
+                } else {
+                    expiresIn = response.expiresIn ?? 3600
+                }
                 SessionManager.shared.saveTokens(
                     accessToken: response.accessToken,
                     refreshToken: response.refreshToken,
@@ -356,10 +373,12 @@ class AuthViewModel: ObservableObject {
             await chatsVM.sendEndSessionToAllContacts(reason: "logout")
             Log.info("✅ END_SESSION sent to all contacts on logout", category: "Auth")
             
-            // 1. Logout via REST API
-            if let token = SessionManager.shared.sessionToken {
+            // 1. Logout via gRPC
+            if SessionManager.shared.sessionToken != nil {
                 do {
-                    try await AuthAPI.shared.logout(sessionToken: token)
+                    if #available(iOS 18.0, *) {
+                        try await AuthServiceClient.shared.logout()
+                    }
                 } catch {
                     Log.error("Logout API call failed: \(error.localizedDescription)", category: "Auth")
                     // Continue with local logout even if API call fails
@@ -405,6 +424,19 @@ class AuthViewModel: ObservableObject {
     }
 
     private func deleteAccountWithDeviceSignature() async throws {
+        // Prefer gRPC UserService on iOS 18+
+        if #available(iOS 18.0, *) {
+            let response = try await UserServiceClient.shared.deleteAccount(
+                confirmation: "DELETE",
+                reason: "user_requested"
+            )
+            guard response.success else {
+                throw NSError(domain: "AuthViewModel", code: 3, userInfo: [NSLocalizedDescriptionKey: response.message])
+            }
+            return
+        }
+
+        // Fallback: REST challenge-based flow
         guard let userId = SessionManager.shared.currentUserId else {
             throw NSError(domain: "AuthViewModel", code: 1, userInfo: [NSLocalizedDescriptionKey: "Missing userId"])
         }

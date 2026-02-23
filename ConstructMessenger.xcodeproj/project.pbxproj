@@ -7,10 +7,12 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		BF1412502F1BEFE9005C56C7 /* DMMessagePack in Frameworks */ = {isa = PBXBuildFile; productRef = BF14124F2F1BEFE9005C56C7 /* DMMessagePack */; };
 		BF7098BF2F01D3C400CC6F04 /* libconstruct_core.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BF7098BE2F01D3C400CC6F04 /* libconstruct_core.a */; };
 		BF7098C02F01D3C400CC6F04 /* libconstruct_core.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BF7098BE2F01D3C400CC6F04 /* libconstruct_core.a */; };
-		BF80FA192EFF1716004D88E1 /* DMMessagePack in Frameworks */ = {isa = PBXBuildFile; productRef = BF80FA182EFF1716004D88E1 /* DMMessagePack */; };
+		BFF6FC9D2F4C3E1F00A31F36 /* GRPCCore in Frameworks */ = {isa = PBXBuildFile; productRef = BFF6FC9C2F4C3E1F00A31F36 /* GRPCCore */; };
+		BFF6FCF42F4C4CCA00A31F36 /* GRPCProtobuf in Frameworks */ = {isa = PBXBuildFile; productRef = BFF6FCF32F4C4CCA00A31F36 /* GRPCProtobuf */; };
+		BFF6FCF92F4C4D6600A31F36 /* GRPCNIOTransportHTTP2 in Frameworks */ = {isa = PBXBuildFile; productRef = BFF6FCF82F4C4D6600A31F36 /* GRPCNIOTransportHTTP2 */; };
+		BFF6FD002F4C4E5300A31F36 /* SwiftProtobuf in Frameworks */ = {isa = PBXBuildFile; productRef = BFF6FCFF2F4C4E5300A31F36 /* SwiftProtobuf */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -62,8 +64,11 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				BF1412502F1BEFE9005C56C7 /* DMMessagePack in Frameworks */,
+				BFF6FC9D2F4C3E1F00A31F36 /* GRPCCore in Frameworks */,
+				BFF6FD002F4C4E5300A31F36 /* SwiftProtobuf in Frameworks */,
+				BFF6FCF92F4C4D6600A31F36 /* GRPCNIOTransportHTTP2 in Frameworks */,
 				BF7098BF2F01D3C400CC6F04 /* libconstruct_core.a in Frameworks */,
+				BFF6FCF42F4C4CCA00A31F36 /* GRPCProtobuf in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -71,7 +76,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				BF80FA192EFF1716004D88E1 /* DMMessagePack in Frameworks */,
 				BF7098C02F01D3C400CC6F04 /* libconstruct_core.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -126,7 +130,10 @@
 			);
 			name = ConstructMessenger;
 			packageProductDependencies = (
-				BF14124F2F1BEFE9005C56C7 /* DMMessagePack */,
+				BFF6FC9C2F4C3E1F00A31F36 /* GRPCCore */,
+				BFF6FCF32F4C4CCA00A31F36 /* GRPCProtobuf */,
+				BFF6FCF82F4C4D6600A31F36 /* GRPCNIOTransportHTTP2 */,
+				BFF6FCFF2F4C4E5300A31F36 /* SwiftProtobuf */,
 			);
 			productName = "Construct Messenger";
 			productReference = BF103A6F2EED889800324CEA /* ConstructMessenger.app */;
@@ -150,7 +157,6 @@
 			);
 			name = ConstructMessengerTests;
 			packageProductDependencies = (
-				BF80FA182EFF1716004D88E1 /* DMMessagePack */,
 			);
 			productName = ConstructMessengerTests;
 			productReference = BF8A96FA2EFF0FAF009C5EF7 /* ConstructMessengerTests.xctest */;
@@ -186,7 +192,9 @@
 			mainGroup = BF103A662EED889800324CEA;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				BF8A970A2EFF167E009C5EF7 /* XCRemoteSwiftPackageReference "msgpack-swift" */,
+				BFF6FCF22F4C4CCA00A31F36 /* XCRemoteSwiftPackageReference "grpc-swift-protobuf" */,
+				BFF6FCF72F4C4D6600A31F36 /* XCRemoteSwiftPackageReference "grpc-swift-nio-transport" */,
+				BFF6FCFE2F4C4E5300A31F36 /* XCRemoteSwiftPackageReference "swift-protobuf" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = BF103A702EED889800324CEA /* Products */;
@@ -380,7 +388,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = ConstructMessenger/ConstructMessenger.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 115;
+				CURRENT_PROJECT_VERSION = 116;
 				DEVELOPMENT_TEAM = PK2473XF3P;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -392,6 +400,7 @@
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Construct Messenger needs access to your camera to send photos and videos.";
+				INFOPLIST_KEY_NSFaceIDUsageDescription = "Use Face ID to unlock Construct Messenger.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Construct Messenger needs access to your local network to check network connectivity and ensure reliable message delivery.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Construct Messenger needs access to your microphone to record and send voice messages.";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Construct Messenger needs permission to save photos and videos to your library.";
@@ -413,7 +422,7 @@
 					"$(PROJECT_DIR)/target/aarch64-apple-ios/release",
 					"$(PROJECT_DIR)/target/aarch64-apple-ios-sim/release",
 				);
-				MARKETING_VERSION = 0.7.24;
+				MARKETING_VERSION = 0.8.0;
 				PRODUCT_BUNDLE_IDENTIFIER = maximeliseyev.constructmessenger;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -438,7 +447,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = ConstructMessenger/ConstructMessenger.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 115;
+				CURRENT_PROJECT_VERSION = 116;
 				DEVELOPMENT_TEAM = PK2473XF3P;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -450,6 +459,7 @@
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Construct Messenger needs access to your camera to send photos and videos.";
+				INFOPLIST_KEY_NSFaceIDUsageDescription = "Use Face ID to unlock Construct Messenger.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Construct Messenger needs access to your local network to check network connectivity and ensure reliable message delivery.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Construct Messenger needs access to your microphone to record and send voice messages.";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Construct Messenger needs permission to save photos and videos to your library.";
@@ -471,7 +481,7 @@
 					"$(PROJECT_DIR)/target/aarch64-apple-ios/release",
 					"$(PROJECT_DIR)/target/aarch64-apple-ios-sim/release",
 				);
-				MARKETING_VERSION = 0.7.24;
+				MARKETING_VERSION = 0.8.0;
 				PRODUCT_BUNDLE_IDENTIFIER = maximeliseyev.constructmessenger;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -576,26 +586,52 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		BF8A970A2EFF167E009C5EF7 /* XCRemoteSwiftPackageReference "msgpack-swift" */ = {
+		BFF6FCF22F4C4CCA00A31F36 /* XCRemoteSwiftPackageReference "grpc-swift-protobuf" */ = {
 			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/fumoboy007/msgpack-swift.git";
+			repositoryURL = "https://github.com/grpc/grpc-swift-protobuf";
 			requirement = {
-				kind = upToNextMinorVersion;
-				minimumVersion = 2.0.6;
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.2.0;
+			};
+		};
+		BFF6FCF72F4C4D6600A31F36 /* XCRemoteSwiftPackageReference "grpc-swift-nio-transport" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/grpc/grpc-swift-nio-transport";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.4.2;
+			};
+		};
+		BFF6FCFE2F4C4E5300A31F36 /* XCRemoteSwiftPackageReference "swift-protobuf" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/apple/swift-protobuf";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.35.0;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		BF14124F2F1BEFE9005C56C7 /* DMMessagePack */ = {
+		BFF6FC9C2F4C3E1F00A31F36 /* GRPCCore */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = BF8A970A2EFF167E009C5EF7 /* XCRemoteSwiftPackageReference "msgpack-swift" */;
-			productName = DMMessagePack;
+			package = BFF6FCF22F4C4CCA00A31F36 /* XCRemoteSwiftPackageReference "grpc-swift-protobuf" */;
+			productName = GRPCCore;
 		};
-		BF80FA182EFF1716004D88E1 /* DMMessagePack */ = {
+		BFF6FCF32F4C4CCA00A31F36 /* GRPCProtobuf */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = BF8A970A2EFF167E009C5EF7 /* XCRemoteSwiftPackageReference "msgpack-swift" */;
-			productName = DMMessagePack;
+			package = BFF6FCF22F4C4CCA00A31F36 /* XCRemoteSwiftPackageReference "grpc-swift-protobuf" */;
+			productName = GRPCProtobuf;
+		};
+		BFF6FCF82F4C4D6600A31F36 /* GRPCNIOTransportHTTP2 */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BFF6FCF72F4C4D6600A31F36 /* XCRemoteSwiftPackageReference "grpc-swift-nio-transport" */;
+			productName = GRPCNIOTransportHTTP2;
+		};
+		BFF6FCFF2F4C4E5300A31F36 /* SwiftProtobuf */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BFF6FCFE2F4C4E5300A31F36 /* XCRemoteSwiftPackageReference "swift-protobuf" */;
+			productName = SwiftProtobuf;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

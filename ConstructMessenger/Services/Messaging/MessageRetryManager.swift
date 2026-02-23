@@ -49,14 +49,19 @@ class MessageRetryManager {
 
             Task {
                 do {
-                    let response = try await MessagingAPI.shared.sendMessage(
-                        recipientId: recipientId,
-                        ephemeralPublicKey: components.ephemeralPublicKey,
-                        messageNumber: components.messageNumber,
-                        content: components.content,
-                        timestamp: UInt64(Date().timeIntervalSince1970),
-                        suiteId: components.suiteId
-                    )
+                    let response: SendMessageResponse
+                    if #available(iOS 18.0, *) {
+                        response = try await MessagingServiceClient.shared.sendMessage(
+                            recipientId: recipientId,
+                            ephemeralPublicKey: components.ephemeralPublicKey,
+                            messageNumber: components.messageNumber,
+                            content: components.content,
+                            timestamp: UInt64(Date().timeIntervalSince1970),
+                            suiteId: components.suiteId
+                        )
+                    } else {
+                        throw NetworkError.connectionFailed
+                    }
                     
                     await MainActor.run {
                         // ✅ Use server-provided status

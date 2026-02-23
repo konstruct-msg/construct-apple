@@ -1,1 +1,3 @@
-API_BASE_URL = "https://ams.konstruct.cc"
+// gRPC endpoint (Envoy proxy — all services via single host)
+GRPC_HOST = construct-server-staging.fly.dev
+GRPC_PORT = 443

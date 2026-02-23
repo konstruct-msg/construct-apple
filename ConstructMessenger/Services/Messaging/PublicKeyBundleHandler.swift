@@ -49,9 +49,13 @@ class PublicKeyBundleHandler {
         for attempt in 1...maxAttempts {
             do {
                 Log.info("🔑 SESSION_STATE[fetch_bundle_attempt_\(attempt)]: userId=\(userId.prefix(8))..., maxAttempts=\(maxAttempts)", category: "SessionInit")
-                let bundle = try await CryptoAPI.shared.getPublicKey(userId: userId)
-                Log.info("✅ SESSION_STATE[fetch_bundle_success]: userId=\(userId.prefix(8))..., attempt=\(attempt)", category: "SessionInit")
-                return bundle
+                if #available(iOS 18.0, *) {
+                    let keyBundle = try await KeyServiceClient.shared.getPreKeyBundle(userId: userId)
+                    Log.info("✅ SESSION_STATE[fetch_bundle_success]: userId=\(userId.prefix(8))..., attempt=\(attempt)", category: "SessionInit")
+                    return keyBundle
+                } else {
+                    throw NetworkError.connectionFailed
+                }
             } catch {
                 lastError = error
                 Log.info("⚠️ SESSION_STATE[fetch_bundle_failed]: attempt=\(attempt)/\(maxAttempts), error=\(error.localizedDescription)", category: "SessionInit")

@@ -58,7 +58,12 @@ class ProfileShareViewModel: ObservableObject {
                     // ✅ Use MediaAPI directly - it returns the raw encryption key
                     // For profile sharing, we need raw key (not Double Ratchet encrypted)
                     // because the JSON itself is already E2E encrypted
-                    let uploadResult = try await MediaAPI.shared.uploadImage(avatarImage, quality: 0.8)
+                    let uploadResult: MediaAPI.UploadedMedia
+                    if #available(iOS 18.0, *) {
+                        uploadResult = try await MediaServiceClient.shared.uploadImage(avatarImage, quality: 0.8)
+                    } else {
+                        uploadResult = try await MediaAPI.shared.uploadImage(avatarImage, quality: 0.8)
+                    }
                     
                     avatarMediaId = uploadResult.mediaId
                     avatarMediaUrl = uploadResult.mediaUrl

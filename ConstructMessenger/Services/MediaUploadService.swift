@@ -69,10 +69,18 @@ class MediaUploadService {
         Log.info("📤 Starting media upload (\(optimizedMedia.data.count) bytes)", category: "MediaUpload")
         
         // ✅ Use MediaAPI for upload (handles encryption, multipart upload)
-        let uploadResult = try await MediaAPI.shared.uploadData(
-            optimizedMedia.data,
-            mimeType: optimizedMedia.metadata.mimeType
-        )
+        let uploadResult: MediaAPI.UploadedMedia
+        if #available(iOS 18.0, *) {
+            uploadResult = try await MediaServiceClient.shared.uploadData(
+                optimizedMedia.data,
+                mimeType: optimizedMedia.metadata.mimeType
+            )
+        } else {
+            uploadResult = try await MediaAPI.shared.uploadData(
+                optimizedMedia.data,
+                mimeType: optimizedMedia.metadata.mimeType
+            )
+        }
         Log.info("✅ Media uploaded: \(uploadResult.mediaId)", category: "MediaUpload")
         
         // Use raw base64 key - entire message will be encrypted via Double Ratchet
@@ -95,8 +103,12 @@ class MediaUploadService {
     
     /// Upload image using MediaAPI
     func uploadImage(_ image: UIImage, for recipientId: String) async throws -> MediaMessageData {
-        // ✅ Use MediaAPI.uploadImage directly (handles compression + encryption + upload)
-        let uploadResult = try await MediaAPI.shared.uploadImage(image, quality: 0.8)
+        let uploadResult: MediaAPI.UploadedMedia
+        if #available(iOS 18.0, *) {
+            uploadResult = try await MediaServiceClient.shared.uploadImage(image, quality: 0.8)
+        } else {
+            uploadResult = try await MediaAPI.shared.uploadImage(image, quality: 0.8)
+        }
         Log.info("✅ Image uploaded: \(uploadResult.mediaId)", category: "MediaUpload")
         
         // Use raw base64 key - entire message will be encrypted via Double Ratchet
@@ -135,8 +147,14 @@ class MediaUploadService {
             throw MediaUploadError.encryptionFailed
         }
         
-        // ✅ Use MediaAPI to download encrypted data
-        let encryptedData = try await MediaAPI.shared.downloadEncryptedFile(from: mediaUrl)
+        // Download encrypted data
+        let encryptedData: Data
+        if #available(iOS 18.0, *) {
+            let mediaId = URL(string: mediaUrl)?.lastPathComponent ?? mediaUrl
+            encryptedData = try await MediaServiceClient.shared.downloadEncryptedFile(mediaId: mediaId)
+        } else {
+            encryptedData = try await MediaAPI.shared.downloadEncryptedFile(from: mediaUrl)
+        }
         
         // Decrypt using CryptoManager
         let decryptedData = try CryptoManager.shared.decryptMediaData(encryptedData, with: keyData)

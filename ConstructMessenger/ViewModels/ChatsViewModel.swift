@@ -24,7 +24,15 @@ class ChatsViewModel: ObservableObject {
     // ✅ Chat ID to open programmatically (e.g., from deep link)
     @Published var chatToOpen: String?
 
-    // ✅ Long polling manager
+    // ✅ Message stream (gRPC bidirectional) — replaces long polling
+    private var streamManager: AnyObject? = {
+        if #available(iOS 18.0, *) {
+            return MessageStreamManager()
+        }
+        return nil
+    }()
+    
+    // ✅ Legacy long polling fallback (iOS < 18)
     private let pollingManager = LongPollingManager()
     
     // ✅ Message router
@@ -143,29 +151,39 @@ class ChatsViewModel: ObservableObject {
     // MARK: - App Lifecycle
     
     private func setupAppLifecycleObservers() {
-        // ✅ Pause polling when app goes to background
+        // ✅ Pause messaging when app goes to background
         NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
-                Log.info("📱 App going to background - pausing polling", category: "ChatsViewModel")
+                Log.info("📱 App going to background - pausing messaging", category: "ChatsViewModel")
+                if #available(iOS 18.0, *), let stream = self?.streamManager as? MessageStreamManager {
+                    stream.pause()
+                }
                 self?.pollingManager.pause()
             }
             .store(in: &cancellables)
         
-        // ✅ Resume polling when app becomes active
+        // ✅ Resume messaging when app becomes active
         NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)
             .receive(on: DispatchQueue.main)
             .sink { _ in
-                Log.info("📱 App became active - resuming polling if conditions met", category: "ChatsViewModel")
-                // Don't manually restart - let Combine publisher handle it
-                // based on token + connection status
+                Log.info("📱 App became active - resuming messaging if conditions met", category: "ChatsViewModel")
             }
             .store(in: &cancellables)
     }
 
-    // MARK: - Long Polling
+    // MARK: - Message Receiving
 
     func startLongPolling(pollingTimeout: Int, postSuccessDelaySeconds: TimeInterval) {
+        // Prefer gRPC bidirectional stream on iOS 18+
+        if #available(iOS 18.0, *), let stream = streamManager as? MessageStreamManager {
+            stream.connect { [weak self] message in
+                self?.handleIncomingMessage(message)
+            }
+            return
+        }
+
+        // Fallback: REST long polling for iOS < 18
         pollingManager.updateConfiguration(
             pollingTimeout: pollingTimeout,
             postSuccessDelaySeconds: postSuccessDelaySeconds
@@ -196,6 +214,9 @@ class ChatsViewModel: ObservableObject {
     }
 
     func stopLongPolling() {
+        if #available(iOS 18.0, *), let stream = streamManager as? MessageStreamManager {
+            stream.disconnect()
+        }
         pollingManager.stopPolling()
     }
 
@@ -213,7 +234,12 @@ class ChatsViewModel: ObservableObject {
         
         // 1. Send END_SESSION message via API
         do {
-            let response = try await MessagingAPI.shared.sendEndSession(to: userId, reason: reason)
+            let response: EndSessionResponse
+            if #available(iOS 18.0, *) {
+                response = try await MessagingServiceClient.shared.sendEndSession(to: userId, reason: reason)
+            } else {
+                throw NetworkError.connectionFailed
+            }
             Log.info("✅ END_SESSION sent successfully: \(response.messageId)", category: "ChatsViewModel")
         } catch {
             Log.error("❌ Failed to send END_SESSION: \(error)", category: "ChatsViewModel")

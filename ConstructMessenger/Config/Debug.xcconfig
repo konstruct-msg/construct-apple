@@ -1,8 +1,5 @@
 // Local Development (Docker on same machine)
 // Use localhost for iOS Simulator
 // For physical device on same network, use your Mac's IP address (e.g., 192.168.1.10)
-API_BASE_URL = "http://localhost:8080"
-
-// Production server (comment out when using local)
-// API_BASE_URL = "https://ams.konstruct.cc"
-
+GRPC_HOST = construct-server-staging.fly.dev
+GRPC_PORT = 443

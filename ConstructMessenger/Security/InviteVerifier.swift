@@ -206,10 +206,13 @@ class InviteVerifier {
     /// - Returns: Public key bundle
     /// - Throws: InviteVerificationError
     private func fetchPublicKey(userId: String, server: String) async throws -> PublicKeyBundleData {
-        // Use CryptoAPI to fetch
         do {
-            let bundle = try await CryptoAPI.shared.getPublicKey(userId: userId)
-            return bundle
+            if #available(iOS 18.0, *) {
+                let keyBundle = try await KeyServiceClient.shared.getPreKeyBundle(userId: userId)
+                return keyBundle
+            } else {
+                throw InviteVerificationError.publicKeyFetchFailed(NetworkError.connectionFailed)
+            }
         } catch {
             Log.error("❌ Failed to fetch public key for \(userId): \(error)", category: "InviteVerifier")
             throw InviteVerificationError.publicKeyFetchFailed(error)
