@@ -9,6 +9,12 @@ import Foundation
 import GRPCCore
 import GRPCNIOTransportHTTP2
 
+// Defined here as AuthAPI.swift is removed
+struct ChallengeResponse: Codable {
+    let challenge: String
+    let difficulty: UInt32
+    let expiresAt: Int64
+}
 
 final class AuthServiceClient: Sendable {
     static let shared = AuthServiceClient()
