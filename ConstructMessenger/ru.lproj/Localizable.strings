@@ -153,10 +153,10 @@
 "active_server" = "Активный сервер";
 "connection" = "Соединение";
 "use_custom_server" = "Использовать пользовательский сервер";
-"custom_server_placeholder" = "wss://ваш-сервер.com";
+"custom_server_placeholder" = "https://ваш-сервер.com";
 "apply_changes" = "Применить изменения";
 "server_configuration" = "Конфигурация сервера";
-"custom_server_prefix_warning" = "Адрес пользовательского сервера должен начинаться с wss:// или ws://";
+"custom_server_prefix_warning" = "Адрес пользовательского сервера должен начинаться с https://";
 "environment" = "Окружение";
 "build_configuration" = "Конфигурация сборки";
 "debug" = "Отладка";

@@ -40,7 +40,7 @@ struct AvatarStyle {
 struct ServerConfig {
     // Primary server URL - API Gateway (routes to all services)
     static var defaultRestAPIURL: String {
-        return "https://construct-api-gateway.fly.dev"
+        return "https://ams.konstruct.cc"
     }
 
     // Public invite host (must have .well-known)

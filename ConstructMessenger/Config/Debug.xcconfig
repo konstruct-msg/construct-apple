@@ -1,5 +1,15 @@
-// Local Development (Docker on same machine)
-// Use localhost for iOS Simulator
-// For physical device on same network, use your Mac's IP address (e.g., 192.168.1.10)
-GRPC_HOST = construct-server-staging.fly.dev
+// ─────────────────────────────────────────────────────────────
+// Debug Build Configuration
+// ─────────────────────────────────────────────────────────────
+// GRPC_HOST: hostname or IP only — NO https:// prefix
+//
+// Options:
+//   localhost          — Docker running on this Mac (iOS Simulator only)
+//   192.168.x.x        — Your Mac's LAN IP (physical device on same Wi-Fi)
+//   your.server.com    — Remote server (staging / production)
+//
+// GRPC_PORT: 443 for TLS, 50051 for plaintext local dev
+// ─────────────────────────────────────────────────────────────
+
+GRPC_HOST = ams.konstruct.cc
 GRPC_PORT = 443

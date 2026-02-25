@@ -155,10 +155,10 @@
 "active_server" = "Active Server";
 "connection" = "Connection";
 "use_custom_server" = "Use Custom Server";
-"custom_server_placeholder" = "wss://your-server.com";
+"custom_server_placeholder" = "https://your-server.com";
 "apply_changes" = "Apply Changes";
 "server_configuration" = "Server Configuration";
-"custom_server_prefix_warning" = "Custom server address must start with wss:// or ws://";
+"custom_server_prefix_warning" = "Custom server address must start with https://";
 "environment" = "Environment";
 "build_configuration" = "Build Configuration";
 "debug" = "Debug";

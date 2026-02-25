@@ -164,7 +164,17 @@ class ChatsViewModel: ObservableObject {
     // MARK: - Message Receiving
 
     func startLongPolling(pollingTimeout: Int, postSuccessDelaySeconds: TimeInterval) {
-        streamManager.connect { [weak self] message in
+        // Fetch all known contact user IDs from Core Data for stream subscription
+        var contactIds: [String] = []
+        if let context = viewContext {
+            let fetchRequest = User.fetchRequest()
+            fetchRequest.predicate = NSPredicate(format: "id != %@", SessionManager.shared.currentUserId ?? "")
+            if let users = try? context.fetch(fetchRequest) {
+                contactIds = users.compactMap { $0.id }
+            }
+        }
+
+        streamManager.connect(contactUserIds: contactIds) { [weak self] message in
             self?.handleIncomingMessage(message)
         }
     }

@@ -136,7 +136,7 @@ struct DeviceAuthTestView: View {
         
         Federated: \(DeviceIDManager.formatFederatedID(
             deviceID: deviceID,
-            serverHostname: "construct-user-service.fly.dev"
+            serverHostname: "ams.konstruct.cc"
         ))
         """
         

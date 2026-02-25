@@ -22,6 +22,10 @@
 			</array>
 		</dict>
 	</array>
+	<key>GRPC_HOST</key>
+	<string>$(GRPC_HOST)</string>
+	<key>GRPC_PORT</key>
+	<string>$(GRPC_PORT)</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key>

@@ -32,6 +32,7 @@ final class MessageStreamManager: ObservableObject {
     private var retryCount = 0
     private let maxRetryDelay: TimeInterval = 60
     private var isPaused = false
+    private var subscriptionUserIds: [String] = []
 
     /// Continuation for sending messages into the stream
     private var outboundContinuation: AsyncStream<Shared_Proto_Services_V1_MessageStreamRequest>.Continuation?
@@ -42,16 +43,17 @@ final class MessageStreamManager: ObservableObject {
 
     // MARK: - Public API
 
-    func connect(onMessageReceived: @escaping (ChatMessage) -> Void) {
+    func connect(contactUserIds: [String] = [], onMessageReceived: @escaping (ChatMessage) -> Void) {
         guard !isConnected else {
             Log.info("📡 MessageStream already connected", category: "MessageStream")
             return
         }
 
         self.onMessageReceived = onMessageReceived
+        self.subscriptionUserIds = contactUserIds
         isPaused = false
 
-        Log.info("📡 Starting MessageStream connection", category: "MessageStream")
+        Log.info("📡 Starting MessageStream connection (subscribed to \(contactUserIds.count) contacts)", category: "MessageStream")
         streamTask = Task { [weak self] in
             await self?.connectLoop()
         }
@@ -135,6 +137,7 @@ final class MessageStreamManager: ObservableObject {
         // Send initial subscribe
         var subscribeReq = Shared_Proto_Services_V1_MessageStreamRequest()
         var subscribe = Shared_Proto_Services_V1_SubscribeRequest()
+        subscribe.conversationIds = subscriptionUserIds
         subscribe.includePresence = true
         subscribeReq.request = .subscribe(subscribe)
         continuation.yield(subscribeReq)

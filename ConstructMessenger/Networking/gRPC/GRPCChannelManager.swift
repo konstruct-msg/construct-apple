@@ -13,7 +13,7 @@ final class GRPCChannelManager: Sendable {
 
     private init() {
         self.host = Bundle.main.object(forInfoDictionaryKey: "GRPC_HOST") as? String
-            ?? "construct-server-staging.fly.dev"
+            ?? "ams.konstruct.cc"
         self.port = (Bundle.main.object(forInfoDictionaryKey: "GRPC_PORT") as? String)
             .flatMap(Int.init) ?? 443
     }

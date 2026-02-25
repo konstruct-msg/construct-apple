@@ -183,11 +183,6 @@ struct NetworkSettingsView: View {
         if useCustomServer {
             var url = customServerURL.trimmingCharacters(in: .whitespaces)
 
-            // Ensure URL has wss:// or ws:// prefix
-            if !url.hasPrefix("wss://") && !url.hasPrefix("ws://") {
-                url = "wss://" + url
-            }
-
             storedServerURL = url
             print("⚠️ Using custom server: \(url)")
         } else {

@@ -23,6 +23,7 @@ struct RegistrationFlowView: View {
     let username: String?
     
     @State private var currentStep: RegistrationStep = .generatingKeys
+    @State private var hasStarted = false
     @State private var powProgress: Double = 0.0
     @State private var deviceId: String = ""
     @State private var challenge: String = ""
@@ -81,6 +82,8 @@ struct RegistrationFlowView: View {
         .padding()
         .navigationBarBackButtonHidden(true)
         .task {
+            guard !hasStarted else { return }
+            hasStarted = true
             await startRegistration()
         }
     }
@@ -478,6 +481,7 @@ struct RegistrationFlowView: View {
             }
             
         } catch {
+            Log.error("❌ Registration failed: \(error)", category: "Registration")
             currentStep = .error(error.localizedDescription)
         }
     }

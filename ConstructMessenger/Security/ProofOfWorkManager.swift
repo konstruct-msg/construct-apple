@@ -129,7 +129,7 @@ class DeviceIDManager {
     ///
     /// - Parameters:
     ///   - deviceID: Local device ID (32 hex chars)
-    ///   - serverHostname: Server hostname (e.g., "ams.konstruct.cc")
+    ///   - serverHostname: Server hostname (e.g., "konstruct.cc")
     /// - Returns: Federated ID (e.g., "abc123@ams.konstruct.cc")
     static func formatFederatedID(
         deviceID: String,
@@ -196,7 +196,7 @@ extension DeviceIDManager {
         // Test federated format
         let federated = formatFederatedID(
             deviceID: deviceID,
-            serverHostname: "construct-user-service.fly.dev"
+            serverHostname: "ams.konstruct.cc"
         )
         print("[DeviceID Test] 🌐 Federated: \(federated)")
     }
