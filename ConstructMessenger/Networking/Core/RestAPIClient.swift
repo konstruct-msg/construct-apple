@@ -641,18 +641,6 @@ struct KeyBundleSuite: Codable {
 
 // MARK: - Media Response Types
 
-/// Response from requesting media token
-struct MediaTokenResponse: Codable {
-    let requestId: String?
-    let uploadToken: String
-    let uploadUrl: String
-    let maxFileSize: Int
-    let expiresAt: String
-    
-    // Server returns camelCase, so we don't need CodingKeys
-    // (Swift Codable uses camelCase by default)
-}
-
 // MARK: - Push Notifications Response Types
 
 /// Response from device token registration

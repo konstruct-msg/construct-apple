@@ -17,7 +17,24 @@ final class MediaServiceClient: Sendable {
 
     private init() {}
 
-    // MARK: - Generate Upload Token (replaces MediaAPI.requestMediaToken)
+    // MARK: - Models
+
+    struct UploadedMedia {
+        let mediaId: String
+        let mediaUrl: String
+        let encryptionKey: Data
+        let encryptedData: Data
+        let hash: String
+        let mimeType: String
+        let expiresAt: Int
+    }
+
+    struct UploadResponse {
+        let mediaId: String
+        let expiresAt: Int
+    }
+
+    // MARK: - Generate Upload Token
 
     func generateUploadToken(expectedSize: Int64 = 0, contentType: String = "application/octet-stream") async throws -> MediaTokenData {
         try await GRPCChannelManager.shared.performRPC { grpcClient in
@@ -41,9 +58,9 @@ final class MediaServiceClient: Sendable {
         }
     }
 
-    // MARK: - Upload Media (client streaming, replaces MediaAPI.uploadEncryptedFile)
+    // MARK: - Upload Media (client streaming)
 
-    func uploadEncryptedFile(encryptedData: Data, token: String) async throws -> MediaAPI.UploadResponse {
+    func uploadEncryptedFile(encryptedData: Data, token: String) async throws -> UploadResponse {
         try await GRPCChannelManager.shared.performRPC { grpcClient in
             let client = Shared_Proto_Services_V1_MediaService.Client(wrapping: grpcClient)
 
@@ -76,14 +93,14 @@ final class MediaServiceClient: Sendable {
 
             let response: Shared_Proto_Services_V1_UploadMediaResponse = try await client.uploadMedia(request: request)
 
-            return MediaAPI.UploadResponse(
+            return UploadResponse(
                 mediaId: response.mediaID,
-                expiresAt: Int(response.fileSize) // Use fileSize as placeholder; expiresAt from proto is String
+                expiresAt: Int(response.fileSize)
             )
         }
     }
 
-    // MARK: - Download Media (server streaming, replaces MediaAPI.downloadEncryptedFile)
+    // MARK: - Download Media (server streaming)
 
     nonisolated func downloadEncryptedFile(mediaId: String) async throws -> Data {
         try await GRPCChannelManager.shared.performRPC { grpcClient in
@@ -120,9 +137,9 @@ final class MediaServiceClient: Sendable {
         }
     }
 
-    // MARK: - High-Level: Upload Image (replaces MediaAPI.uploadImage)
+    // MARK: - High-Level: Upload Image
 
-    func uploadImage(_ image: UIImage, quality: CGFloat = 0.8) async throws -> MediaAPI.UploadedMedia {
+    func uploadImage(_ image: UIImage, quality: CGFloat = 0.8) async throws -> UploadedMedia {
         guard let imageData = image.jpegData(compressionQuality: quality) else {
             throw NetworkError.serverError(message: "Failed to compress image", responseBody: nil)
         }
@@ -130,9 +147,9 @@ final class MediaServiceClient: Sendable {
         return try await uploadData(imageData, mimeType: "image/jpeg")
     }
 
-    // MARK: - High-Level: Upload Data (replaces MediaAPI.uploadData)
+    // MARK: - High-Level: Upload Data
 
-    func uploadData(_ data: Data, mimeType: String = "application/octet-stream") async throws -> MediaAPI.UploadedMedia {
+    func uploadData(_ data: Data, mimeType: String = "application/octet-stream") async throws -> UploadedMedia {
         // 1. Generate encryption key
         var keyBytes = [UInt8](repeating: 0, count: 32)
         guard SecRandomCopyBytes(kSecRandomDefault, keyBytes.count, &keyBytes) == errSecSuccess else {
@@ -140,7 +157,7 @@ final class MediaServiceClient: Sendable {
         }
         let encryptionKey = Data(keyBytes)
 
-        // 2. Encrypt
+        // 2. Encrypt (AES-256-GCM: 12-byte nonce + ciphertext + 16-byte tag)
         let symmetricKey = SymmetricKey(data: encryptionKey)
         let sealedBox = try AES.GCM.seal(data, using: symmetricKey)
         var encryptedData = Data()
@@ -167,7 +184,7 @@ final class MediaServiceClient: Sendable {
         let baseUrl = tokenData.uploadUrl.replacingOccurrences(of: "/upload", with: "")
         let downloadUrl = "\(baseUrl)/\(uploadResponse.mediaId)"
 
-        return MediaAPI.UploadedMedia(
+        return UploadedMedia(
             mediaId: uploadResponse.mediaId,
             mediaUrl: downloadUrl,
             encryptionKey: encryptionKey,
@@ -178,13 +195,12 @@ final class MediaServiceClient: Sendable {
         )
     }
 
-    // MARK: - High-Level: Download & Decrypt Image (replaces MediaAPI.downloadAndDecryptImage)
+    // MARK: - High-Level: Download & Decrypt Image
 
     func downloadAndDecryptImage(from mediaUrl: String, encryptionKey: Data) async throws -> UIImage {
         let mediaId = URL(string: mediaUrl)?.lastPathComponent ?? mediaUrl
         let encryptedData = try await downloadEncryptedFile(mediaId: mediaId)
 
-        // Decrypt AES-256-GCM
         let nonceSize = 12
         let tagSize = 16
         guard encryptedData.count >= nonceSize + tagSize else {
