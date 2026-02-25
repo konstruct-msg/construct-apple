@@ -2,57 +2,59 @@
 //  NetworkSettingsView.swift
 //  Construct Messenger
 //
-//  Created by Maxim Eliseyev on 30.12.2025.
-//
 
 import SwiftUI
 
 struct NetworkSettingsView: View {
-    @AppStorage(APIConstants.customServerURLKey) private var storedServerURL: String?
-    @State private var useCustomServer = false
-    @State private var customServerURL = ""
-    @State private var showingReconnectAlert = false
     @ObservedObject private var reachabilityManager = NetworkReachabilityManager.shared
     @ObservedObject private var connectionManager = ConnectionStatusManager.shared
-    @State private var lastConnectionError: String?
-    
-    // Computed: Is using custom server?
-    private var isUsingCustomServer: Bool {
-        storedServerURL != nil && !storedServerURL!.isEmpty
-    }
 
     var body: some View {
         List {
-            // MARK: - Connection Status Section
+            // MARK: - Stream Status
             Section {
-                HStack {
-                    Text("status")
-                        .foregroundColor(.secondary)
-                    Spacer()
-                    HStack(spacing: 4) {
-                        Circle()
-                            .fill(connectionManager.isConnected ? Color.green : Color.red)
-                            .frame(width: 8, height: 8)
-                        Text(connectionManager.isConnected ? "connected" : connectionManager.connectionStatus.displayText)
+                statusRow(
+                    label: NSLocalizedString("status", comment: ""),
+                    value: connectionManager.connectionStatus.displayText,
+                    color: statusColor
+                )
+
+                if let lastSuccess = connectionManager.lastSuccessfulRequest {
+                    HStack {
+                        Text("last_contact")
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Text(lastSuccess, style: .relative)
                             .fontWeight(.medium)
+                            .foregroundColor(.secondary)
                     }
                 }
-                
-                // Network Reachability Status
-                HStack {
-                    Text("network_reachability")
-                        .foregroundColor(.secondary)
-                    Spacer()
-                    HStack(spacing: 4) {
-                        Circle()
-                            .fill(reachabilityManager.isReachable ? Color.green : Color.red)
-                            .frame(width: 8, height: 8)
-                        Text(reachabilityManager.isReachable ? "reachable" : "unreachable")
-                            .fontWeight(.medium)
+
+                if let error = connectionManager.lastError {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("last_error")
+                            .foregroundColor(.secondary)
+                            .font(.caption)
+                        Text(error)
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundColor(.red)
+                            .textSelection(.enabled)
                     }
                 }
-                
-                // Connection Type
+            } header: {
+                Text("connection")
+            }
+
+            // MARK: - Network
+            Section {
+                statusRow(
+                    label: NSLocalizedString("network_reachability", comment: ""),
+                    value: reachabilityManager.isReachable
+                        ? NSLocalizedString("reachable", comment: "")
+                        : NSLocalizedString("unreachable", comment: ""),
+                    color: reachabilityManager.isReachable ? .green : .red
+                )
+
                 if reachabilityManager.isReachable {
                     HStack {
                         Text("connection_type")
@@ -62,99 +64,41 @@ struct NetworkSettingsView: View {
                             .fontWeight(.medium)
                     }
                 }
-                
-                // Last Connection Error (if any)
-                if let error = lastConnectionError {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("last_error")
-                            .foregroundColor(.secondary)
-                            .font(.caption)
-                        Text(error)
-                            .font(.system(size: 10, design: .monospaced))
-                            .foregroundColor(.red)
-                            .textSelection(.enabled)
-                    }
-                }
             } header: {
-                Text("connection")
+                Text("network_reachability")
             }
 
-            // MARK: - Server Configuration Section
+            // MARK: - Server
             Section {
-                // Show current server URL
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(isUsingCustomServer ? "custom_server" : "default_server")
+                HStack {
+                    Text("server")
                         .foregroundColor(.secondary)
-                        .font(.caption)
-                    Text(APIConstants.activeServerURL)
-                        .font(.system(size: 12, design: .monospaced))
+                    Spacer()
+                    Text(grpcHost)
+                        .font(.system(size: 13, design: .monospaced))
                         .foregroundColor(.blue)
                         .textSelection(.enabled)
                 }
-                
-                Toggle("use_custom_server", isOn: $useCustomServer)
-                    .onChange(of: useCustomServer) { newValue in
-                        if !newValue {
-                            // Switching back to default
-                            customServerURL = ""
-                        } else {
-                            // Load existing custom URL if available
-                            customServerURL = storedServerURL ?? ""
-                        }
-                    }
 
-                if useCustomServer {
-                    VStack(alignment: .leading, spacing: 8) {
-                        TextField("custom_server_placeholder", text: $customServerURL)
-                            .autocapitalization(.none)
-                            .keyboardType(.URL)
-                            .textContentType(.URL)
-                            .textFieldStyle(.roundedBorder)
-
-                        Button {
-                            saveCustomServer()
-                        } label: {
-                            HStack {
-                                Spacer()
-                                Text("apply_changes")
-                                    .fontWeight(.semibold)
-                                Spacer()
-                            }
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(customServerURL.trimmingCharacters(in: .whitespaces).isEmpty)
-                    }
+                HStack {
+                    Text("port")
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    Text("\(grpcPort)")
+                        .font(.system(size: 13, design: .monospaced))
+                        .fontWeight(.medium)
                 }
-            } header: {
-                Text("server_configuration")
-            } footer: {
-                VStack(alignment: .leading, spacing: 8) {
-                    if !isUsingCustomServer {
-                        Text("Default server from configuration: \(APIConstants.websocketURL)")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                    
-                    if useCustomServer {
-                        Text("custom_server_prefix_warning")
-                            .font(.caption)
-                            .foregroundColor(.orange)
-                    }
-                }
-            }
 
-            // MARK: - Build Info Section
-            Section {
                 HStack {
                     Text("build_configuration")
                         .foregroundColor(.secondary)
                     Spacer()
-                    Text(BuildConfiguration.current == .debug ? "debug" : "release")
+                    Text(BuildConfiguration.current == .debug ? "Debug" : "Release")
                         .fontWeight(.medium)
                         .foregroundColor(BuildConfiguration.current == .debug ? .orange : .green)
                 }
             } header: {
-                Text("server_information")
+                Text("server_configuration")
             } footer: {
                 Text("server_settings_footer")
                     .font(.caption)
@@ -162,67 +106,50 @@ struct NetworkSettingsView: View {
         }
         .navigationTitle("network")
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear {
-            // Initialize state based on stored value
-            useCustomServer = storedServerURL != nil
-            customServerURL = storedServerURL ?? ""
-            loadLastConnectionError()
-        }
-        .onChange(of: connectionManager.lastError) { newError in
-            lastConnectionError = newError
-        }
-        .alert("reconnect_required", isPresented: $showingReconnectAlert) {
-            Button("ok") { }
-        } message: {
-            Text("reconnect_alert_message")
+    }
+
+    // MARK: - Helpers
+
+    private func statusRow(label: String, value: String, color: Color) -> some View {
+        HStack {
+            Text(label)
+                .foregroundColor(.secondary)
+            Spacer()
+            HStack(spacing: 5) {
+                Circle()
+                    .fill(color)
+                    .frame(width: 8, height: 8)
+                Text(value)
+                    .fontWeight(.medium)
+            }
         }
     }
 
-    // MARK: - Actions
-    private func saveCustomServer() {
-        if useCustomServer {
-            var url = customServerURL.trimmingCharacters(in: .whitespaces)
-
-            storedServerURL = url
-            print("⚠️ Using custom server: \(url)")
-        } else {
-            storedServerURL = nil
-//            print("✅ Reset to default server: \(ServerEnvironment.current.serverURL)")
+    private var statusColor: Color {
+        switch connectionManager.connectionStatus {
+        case .connected:    return .green
+        case .disconnected: return .red
+        case .connecting:   return .orange
+        case .unknown:      return .gray
         }
-
-        // Notify and reconnect
-        NotificationCenter.default.post(name: .serverURLChanged, object: nil)
-        reconnectToServer()
-
-        showingReconnectAlert = true
     }
 
-    private func reconnectToServer() {
-        lastConnectionError = nil
-        // For REST architecture, we mark as connecting and let the next API request verify connectivity
-        ConnectionStatusManager.shared.markConnecting()
+    private var grpcHost: String {
+        Bundle.main.object(forInfoDictionaryKey: "GRPC_HOST") as? String ?? "ams.konstruct.cc"
     }
-    
-    private func loadLastConnectionError() {
-        // This is a placeholder - in a real implementation, you might want to store
-        // the last error in UserDefaults or a shared state
-        lastConnectionError = nil
+
+    private var grpcPort: Int {
+        (Bundle.main.object(forInfoDictionaryKey: "GRPC_PORT") as? String).flatMap(Int.init) ?? 443
     }
-    
+
     private var connectionTypeDisplayName: String {
         switch reachabilityManager.connectionType {
-        case .wifi:
-            return "Wi-Fi"
-        case .cellular:
-            return "Cellular"
-        case .ethernet:
-            return "Ethernet"
-        case .other:
-            return "Other"
-        case .unavailable:
-            return "Unavailable"
-        case .unknown:
-            return "Unknown"
+        case .wifi:       return "Wi-Fi"
+        case .cellular:   return "Cellular"
+        case .ethernet:   return "Ethernet"
+        case .other:      return "Other"
+        case .unavailable: return "Unavailable"
+        case .unknown:    return "Unknown"
         }
     }
 }

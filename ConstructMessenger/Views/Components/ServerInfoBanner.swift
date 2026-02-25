@@ -26,7 +26,7 @@ struct ServerInfoBanner: View {
                     Spacer()
                 }
 
-                Text(APIConstants.activeServerURL)
+                Text(Bundle.main.object(forInfoDictionaryKey: "GRPC_HOST") as? String ?? "ams.konstruct.cc")
                     .font(.system(size: 10, design: .monospaced))
                     .foregroundColor(.secondary)
                     .lineLimit(1)

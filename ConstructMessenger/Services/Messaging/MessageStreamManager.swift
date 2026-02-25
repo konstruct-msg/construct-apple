@@ -54,6 +54,7 @@ final class MessageStreamManager: ObservableObject {
         isPaused = false
 
         Log.info("📡 Starting MessageStream connection (subscribed to \(contactUserIds.count) contacts)", category: "MessageStream")
+        ConnectionStatusManager.shared.markConnecting()
         streamTask = Task { [weak self] in
             await self?.connectLoop()
         }
@@ -69,6 +70,7 @@ final class MessageStreamManager: ObservableObject {
         streamTask?.cancel()
         streamTask = nil
         retryCount = 0
+        ConnectionStatusManager.shared.markStreamDisconnected()
         Log.info("📡 MessageStream disconnected", category: "MessageStream")
     }
 
@@ -109,6 +111,7 @@ final class MessageStreamManager: ObservableObject {
             } catch {
                 guard !Task.isCancelled else { break }
                 Log.error("❌ MessageStream error: \(error)", category: "MessageStream")
+                ConnectionStatusManager.shared.markStreamDisconnected(error: error.localizedDescription)
             }
 
             guard !Task.isCancelled else { break }
@@ -133,6 +136,7 @@ final class MessageStreamManager: ObservableObject {
         let (outboundStream, continuation) = AsyncStream<Shared_Proto_Services_V1_MessageStreamRequest>.makeStream()
         self.outboundContinuation = continuation
         self.isConnected = true
+        ConnectionStatusManager.shared.markStreamConnected()
 
         // Send initial subscribe
         var subscribeReq = Shared_Proto_Services_V1_MessageStreamRequest()
@@ -259,6 +263,7 @@ final class MessageStreamManager: ObservableObject {
             return nil
         case .heartbeatAck(let ack):
             Log.debug("💓 Heartbeat ack: server=\(ack.serverTimestamp)", category: "MessageStream")
+            ConnectionStatusManager.shared.markStreamConnected()
             return nil
         case .none:
             return nil

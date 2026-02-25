@@ -301,3 +301,8 @@
 "username_unavailable" = "Username is already taken.";
 "username_check_failed" = "Could not verify username right now. Try again.";
 "new_messages" = "New Messages";
+
+// Network Settings
+"last_contact" = "Last contact";
+"server" = "Server";
+"port" = "Port";

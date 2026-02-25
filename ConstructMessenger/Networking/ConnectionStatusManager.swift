@@ -173,6 +173,38 @@ class ConnectionStatusManager: ObservableObject {
         }
     }
 
+    // MARK: - gRPC Stream Integration
+
+    /// Call when the gRPC MessageStream establishes a connection
+    func markStreamConnected() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            let old = self.connectionStatus
+            self.lastSuccessfulRequest = Date()
+            self.lastError = nil
+            self.connectionStatus = .connected
+            if old != .connected {
+                Log.info("🟢 Stream connected → status: Connected", category: "ConnectionStatus")
+            }
+        }
+    }
+
+    /// Call when the gRPC MessageStream disconnects or errors
+    func markStreamDisconnected(error: String? = nil) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.lastError = error
+            if self.reachabilityManager.isReachable {
+                if self.connectionStatus == .connected {
+                    self.connectionStatus = .connecting
+                    Log.info("🟡 Stream disconnected → status: Connecting", category: "ConnectionStatus")
+                }
+            } else {
+                self.connectionStatus = .disconnected
+            }
+        }
+    }
+
     /// Check if we should consider the connection stale
     /// (no successful request in the last N seconds)
     func isConnectionStale(threshold: TimeInterval = 60) -> Bool {
