@@ -33,19 +33,24 @@ struct OnboardingView: View {
                     Text("KONSTRUCT")
                         .font(.largeTitle)
                         .fontWeight(.bold)
+                    
+                    Text("post-modern messenger")
+                        .font(.subheadline)
+                    
                 }
                 .padding(.bottom, 80)
                 
                 // Username input (optional)
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Enter username:")
-                        .font(.headline)
                     
-                    TextField("optional", text: $username)
-                        .textFieldStyle(.roundedBorder)
-                        .autocapitalization(.none)
-                        .autocorrectionDisabled()
-                        .onChange(of: username) { newValue in
+                    TextField("take public alias (optional)", text: $username)
+                        .multilineTextAlignment(.center)
+                        .font(.body.monospaced())
+                        .frame(height: 30)
+                        .padding(12)
+                        .background(Color(.systemGray6))
+                        .cornerRadius(18)
+                        .onChange(of: username) { oldValue, newValue in
                             let lowered = newValue.lowercased()
                             if newValue != lowered {
                                 username = lowered
@@ -79,20 +84,20 @@ struct OnboardingView: View {
                     Button {
                         showingRegistration = true
                     } label: {
-                        Text("Create Account")
+                        Text("Create device identity")
                             .font(.headline)
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
                             .padding()
-                            .background(canProceed ? Color.blue : Color.gray)
-                            .cornerRadius(12)
+                            .background(canProceed ? Color("ButtonColor") : Color.gray)
+                            .cornerRadius(18)
                     }
                     .disabled(!canProceed)
-                    
+                                        
                     Button {
                         showingRecovery = true
                     } label: {
-                        Text("Recover Account")
+                        Text("Restore from recovery key")
                             .font(.subheadline)
                             .foregroundColor(.blue)
                     }

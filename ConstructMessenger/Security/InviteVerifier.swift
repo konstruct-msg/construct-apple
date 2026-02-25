@@ -202,15 +202,27 @@ class InviteVerifier {
     /// Fetch public key bundle from server
     /// - Parameters:
     ///   - userId: User UUID
-    ///   - server: Server FQDN
-    /// - Returns: Public key bundle
+    /// Fetches the user's verifying (Ed25519) public key from the server.
+    ///   - userId: The invite owner's UUID
+    ///   - server: Server FQDN (currently unused — client always talks to configured server)
+    /// - Returns: PublicKeyBundleData with verifyingKey populated
     /// - Throws: InviteVerificationError
     private func fetchPublicKey(userId: String, server: String) async throws -> PublicKeyBundleData {
         do {
-                let keyBundle = try await KeyServiceClient.shared.getPreKeyBundle(userId: userId)
-                return keyBundle
+            let identityKeyData = try await KeyServiceClient.shared.getIdentityKey(userId: userId)
+            Log.debug("🔑 Fetched identity key for \(userId.prefix(8)): \(identityKeyData.count) bytes", category: "InviteVerifier")
+            let keyBase64 = identityKeyData.base64EncodedString()
+            return PublicKeyBundleData(
+                userId: userId,
+                username: "",
+                identityPublic: keyBase64,
+                signedPrekeyPublic: "",
+                signature: "",
+                verifyingKey: keyBase64,
+                suiteId: 1
+            )
         } catch {
-            Log.error("❌ Failed to fetch public key for \(userId): \(error)", category: "InviteVerifier")
+            Log.error("❌ Failed to fetch identity key for \(userId): \(error)", category: "InviteVerifier")
             throw InviteVerificationError.publicKeyFetchFailed(error)
         }
     }

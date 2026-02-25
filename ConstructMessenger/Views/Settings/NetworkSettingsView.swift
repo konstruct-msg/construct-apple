@@ -9,6 +9,13 @@ struct NetworkSettingsView: View {
     @ObservedObject private var reachabilityManager = NetworkReachabilityManager.shared
     @ObservedObject private var connectionManager = ConnectionStatusManager.shared
 
+    @State private var useCustomServer = GRPCChannelManager.shared.isUsingCustomServer
+    @State private var customHost = GRPCChannelManager.shared.isUsingCustomServer
+        ? GRPCChannelManager.shared.currentHost : ""
+    @State private var customPort = GRPCChannelManager.shared.isUsingCustomServer
+        ? "\(GRPCChannelManager.shared.currentPort)" : ""
+    @State private var showingAppliedAlert = false
+
     var body: some View {
         List {
             // MARK: - Stream Status
@@ -41,12 +48,6 @@ struct NetworkSettingsView: View {
                             .textSelection(.enabled)
                     }
                 }
-            } header: {
-                Text("connection")
-            }
-
-            // MARK: - Network
-            Section {
                 statusRow(
                     label: NSLocalizedString("network_reachability", comment: ""),
                     value: reachabilityManager.isReachable
@@ -65,7 +66,7 @@ struct NetworkSettingsView: View {
                     }
                 }
             } header: {
-                Text("network_reachability")
+                Text("connection")
             }
 
             // MARK: - Server
@@ -74,9 +75,9 @@ struct NetworkSettingsView: View {
                     Text("server")
                         .foregroundColor(.secondary)
                     Spacer()
-                    Text(grpcHost)
+                    Text(GRPCChannelManager.shared.currentHost)
                         .font(.system(size: 13, design: .monospaced))
-                        .foregroundColor(.blue)
+                        .foregroundColor(GRPCChannelManager.shared.isUsingCustomServer ? .orange : .blue)
                         .textSelection(.enabled)
                 }
 
@@ -84,9 +85,47 @@ struct NetworkSettingsView: View {
                     Text("port")
                         .foregroundColor(.secondary)
                     Spacer()
-                    Text("\(grpcPort)")
+                    Text("\(GRPCChannelManager.shared.currentPort)")
                         .font(.system(size: 13, design: .monospaced))
                         .fontWeight(.medium)
+                }
+
+                Toggle("use_custom_server", isOn: $useCustomServer)
+                    .onChange(of: useCustomServer) { enabled in
+                        if !enabled {
+                            GRPCChannelManager.shared.resetToDefaultServer()
+                            customHost = ""
+                            customPort = ""
+                        } else {
+                            customHost = GRPCChannelManager.shared.currentHost
+                            customPort = "\(GRPCChannelManager.shared.currentPort)"
+                        }
+                    }
+
+                if useCustomServer {
+                    VStack(alignment: .leading, spacing: 8) {
+                        TextField("Host (e.g. dev.konstruct.cc)", text: $customHost)
+                            .autocapitalization(.none)
+                            .keyboardType(.URL)
+                            .textFieldStyle(.roundedBorder)
+
+                        TextField("Port (e.g. 443)", text: $customPort)
+                            .keyboardType(.numberPad)
+                            .textFieldStyle(.roundedBorder)
+
+                        Button {
+                            applyCustomServer()
+                        } label: {
+                            HStack {
+                                Spacer()
+                                Text("apply_changes")
+                                    .fontWeight(.semibold)
+                                Spacer()
+                            }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(customHost.trimmingCharacters(in: .whitespaces).isEmpty)
+                    }
                 }
 
                 HStack {
@@ -106,6 +145,20 @@ struct NetworkSettingsView: View {
         }
         .navigationTitle("network")
         .navigationBarTitleDisplayMode(.inline)
+        .alert("server_applied_title", isPresented: $showingAppliedAlert) {
+            Button("ok") { }
+        } message: {
+            Text("server_applied_message")
+        }
+    }
+
+    // MARK: - Actions
+
+    private func applyCustomServer() {
+        let host = customHost.trimmingCharacters(in: .whitespaces)
+        let port = Int(customPort.trimmingCharacters(in: .whitespaces)) ?? 443
+        GRPCChannelManager.shared.setCustomServer(host: host, port: port)
+        showingAppliedAlert = true
     }
 
     // MARK: - Helpers
@@ -134,22 +187,14 @@ struct NetworkSettingsView: View {
         }
     }
 
-    private var grpcHost: String {
-        Bundle.main.object(forInfoDictionaryKey: "GRPC_HOST") as? String ?? "ams.konstruct.cc"
-    }
-
-    private var grpcPort: Int {
-        (Bundle.main.object(forInfoDictionaryKey: "GRPC_PORT") as? String).flatMap(Int.init) ?? 443
-    }
-
     private var connectionTypeDisplayName: String {
         switch reachabilityManager.connectionType {
-        case .wifi:       return "Wi-Fi"
-        case .cellular:   return "Cellular"
-        case .ethernet:   return "Ethernet"
-        case .other:      return "Other"
+        case .wifi:        return "Wi-Fi"
+        case .cellular:    return "Cellular"
+        case .ethernet:    return "Ethernet"
+        case .other:       return "Other"
         case .unavailable: return "Unavailable"
-        case .unknown:    return "Unknown"
+        case .unknown:     return "Unknown"
         }
     }
 }

@@ -16,70 +16,252 @@ enum RegistrationStep: Equatable {
     case error(String)
 }
 
+// MARK: - Converging Signal Animation
+
+/// Dots oscillate vertically. As `progress` increases from 0→1, dots
+/// settle left-to-right onto the center line — like a signal locking in.
+struct ConvergingSignalView: View {
+    let progress: Double   // 0.0 → 1.0
+
+    private let dotCount = 22
+    @State private var phases: [Double] = []
+    @State private var tick: Double = 0
+    private let animTimer = Timer.publish(every: 1.0 / 30.0, on: .main, in: .common).autoconnect()
+
+    var body: some View {
+        Canvas { context, size in
+            guard phases.count == dotCount else { return }
+            let w = size.width
+            let h = size.height
+            let cy = h / 2.0
+            let spacing = w / CGFloat(dotCount - 1)
+            let maxAmp = h * 0.42
+
+            // Connecting line
+            var line = Path()
+            for i in 0..<dotCount {
+                let x = CGFloat(i) * spacing
+                let y = yForDot(i: i, cy: cy, maxAmp: maxAmp)
+                if i == 0 { line.move(to: .init(x: x, y: y)) }
+                else      { line.addLine(to: .init(x: x, y: y)) }
+            }
+            context.stroke(line, with: .color(.blue.opacity(0.18)), lineWidth: 1.0)
+
+            // Dots
+            for i in 0..<dotCount {
+                let norm = Double(i) / Double(dotCount - 1)
+                let x    = CGFloat(i) * spacing
+                let y    = yForDot(i: i, cy: cy, maxAmp: maxAmp)
+                let settled = norm < progress
+                let r: CGFloat = settled ? 2.5 : 2.0
+                let alpha = settled
+                    ? 0.9
+                    : 0.3 + 0.35 * abs(sin(phases[i] + tick))
+                context.fill(
+                    Path(ellipseIn: CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2)),
+                    with: .color(.blue.opacity(alpha))
+                )
+            }
+        }
+        .onAppear {
+            if phases.isEmpty {
+                phases = (0..<dotCount).map { _ in Double.random(in: 0 ..< 2 * .pi) }
+            }
+        }
+        .onReceive(animTimer) { _ in tick += 0.05 }
+    }
+
+    private func yForDot(i: Int, cy: CGFloat, maxAmp: CGFloat) -> CGFloat {
+        guard !phases.isEmpty else { return cy }
+        let norm = Double(i) / Double(dotCount - 1)
+        guard norm >= progress else { return cy } // settled
+        let relDist = progress < 1.0 ? (norm - progress) / (1.0 - progress) : 0.0
+        return cy + maxAmp * CGFloat(relDist) * CGFloat(sin(phases[i] + tick))
+    }
+}
+
+// MARK: - Pure UI Stage View (no logic, safe for Previews)
+
+struct RegistrationStageView: View {
+    let step: RegistrationStep
+    var powProgress: Double = 0.0
+    var difficulty: UInt32 = 8
+    var deviceId: String = ""
+    var username: String? = nil
+    var onComplete: (() -> Void)? = nil
+    var onDismiss: (() -> Void)? = nil
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Spacer()
+            switch step {
+            case .generatingKeys, .fetchingChallenge, .computingPoW, .submittingRegistration:
+                preparingContent
+            case .complete:
+                completeContent
+            case .error(let msg):
+                errorContent(msg)
+            }
+            Spacer()
+            actionButton.padding(.bottom, 20)
+        }
+        .padding(.horizontal, 32)
+    }
+
+    // MARK: Preparing (all pre-complete steps unified)
+
+    private var preparingContent: some View {
+        VStack(spacing: 44) {
+            VStack(spacing: 8) {
+                Text("Establishing trust")
+                    .font(.title2).fontWeight(.semibold)
+                Text("Your device is joining the network")
+                    .font(.subheadline).foregroundColor(.secondary)
+            }
+
+            ConvergingSignalView(progress: unifiedProgress)
+                .frame(height: 72)
+
+            Text(phaseLabel)
+                .font(.system(.caption, design: .monospaced))
+                .foregroundColor(.secondary)
+                .id(phaseLabel)
+                .transition(.opacity.animation(.easeInOut(duration: 0.4)))
+        }
+    }
+
+    // MARK: Complete
+
+    private var completeContent: some View {
+        VStack(spacing: 32) {
+            
+
+            Text("Welcome")
+                .font(.largeTitle).fontWeight(.bold)
+
+            VStack(spacing: 16) {
+                if let u = username, !u.isEmpty {
+                    DetailRow(label: "Username", value: "@\(u)")
+                } else {
+                    DetailRow(label: "Mode", value: "Anonymous")
+                }
+                if !deviceId.isEmpty {
+                    DetailRow(label: "Device ID", value: String(deviceId.prefix(16)) + "…")
+                }
+                
+            }
+            .padding()
+            .background(Color(.systemGray6))
+            .cornerRadius(12)
+        }
+    }
+
+    // MARK: Error
+
+    private func errorContent(_ message: String) -> some View {
+        VStack(spacing: 24) {
+ 
+            Text("Something went wrong")
+                .font(.title2).fontWeight(.semibold)
+            Text(message)
+                .font(.body).foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+        }
+    }
+
+    // MARK: Action button
+
+    @ViewBuilder
+    private var actionButton: some View {
+        switch step {
+        case .complete:
+            Button { onComplete?() } label: {
+                Text("Continue")
+                    .font(.headline).foregroundColor(.white)
+                    .frame(maxWidth: .infinity).padding()
+                    .background(Color("ButtonColor")).cornerRadius(18)
+            }
+        case .error:
+            Button("Try Again") { onDismiss?() }.buttonStyle(.bordered)
+        default:
+            Button("Cancel") { onDismiss?() }.foregroundColor(.secondary)
+        }
+    }
+
+    // MARK: Helpers
+
+    /// Maps all pre-complete steps to a single 0→1 value for the animation
+    private var unifiedProgress: Double {
+        switch step {
+        case .generatingKeys:         return 0.04
+        case .fetchingChallenge:      return 0.12
+        case .computingPoW:           return 0.18 + powProgress * 0.76
+        case .submittingRegistration: return 0.97
+        default:                      return 1.0
+        }
+    }
+
+    private var phaseLabel: String {
+        switch step {
+        case .generatingKeys, .fetchingChallenge:
+            return "entropy collected"
+        case .computingPoW:
+            return powProgress >= 0.98 ? "solution found" : "nonce search"
+        case .submittingRegistration:
+            return "solution found"
+        default:
+            return ""
+        }
+    }
+
+    // MARK: Sub-views
+
+    struct DetailRow: View {
+        let label: String; let value: String
+        var body: some View {
+            HStack {
+                Text(label).foregroundColor(.secondary)
+                Spacer()
+                Text(value).fontWeight(.medium)
+            }.font(.subheadline)
+        }
+    }
+}
+
+// MARK: - Container (manages logic)
+
 struct RegistrationFlowView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var authViewModel: AuthViewModel
-    
+
     let username: String?
-    
+
     @State private var currentStep: RegistrationStep = .generatingKeys
     @State private var hasStarted = false
     @State private var powProgress: Double = 0.0
     @State private var deviceId: String = ""
     @State private var challenge: String = ""
     @State private var difficulty: UInt32 = 6
-    
+
     // Generated keys
     @State private var registrationBundle: String = ""
     @State private var signingKey: Data = Data()
     @State private var identityKey: Data = Data()
-    
+
     var body: some View {
-        VStack(spacing: 32) {
-            // Progress indicator
-            progressHeader
-            
-            Spacer()
-            
-            // Current step UI
-            stepContent
-            
-            Spacer()
-            
-            // Action button
-            if case .complete = currentStep {
-                Button {
-                    Log.info("👆 User pressed OK button", category: "Registration")
-                    Log.info("   Sending 'DeviceRegistered' notification...", category: "Registration")
-                    
-                    // Notify ContentView to re-check device keys
-                    NotificationCenter.default.post(name: NSNotification.Name("DeviceRegistered"), object: nil)
-                    
-                    Log.info("   Dismissing registration view...", category: "Registration")
-                    dismiss()
-                }
-                label: {
-                    Text("OK")
-                        .font(.headline)
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.blue)
-                        .cornerRadius(12)
-                }
-            } else if case .error(_) = currentStep {
-                Button("Try Again") {
-                    dismiss()
-                }
-                .buttonStyle(.bordered)
-            } else {
-                Button("Cancel") {
-                    dismiss()
-                }
-                .foregroundColor(.red)
-            }
-        }
-        .padding()
+        RegistrationStageView(
+            step: currentStep,
+            powProgress: powProgress,
+            difficulty: difficulty,
+            deviceId: deviceId,
+            username: username,
+            onComplete: {
+                Log.info("👆 User pressed Continue", category: "Registration")
+                NotificationCenter.default.post(name: NSNotification.Name("DeviceRegistered"), object: nil)
+                dismiss()
+            },
+            onDismiss: { dismiss() }
+        )
         .navigationBarBackButtonHidden(true)
         .task {
             guard !hasStarted else { return }
@@ -87,241 +269,7 @@ struct RegistrationFlowView: View {
             await startRegistration()
         }
     }
-    
-    @ViewBuilder
-    private var progressHeader: some View {
-        VStack(spacing: 20) {
-            switch currentStep {
-            case .generatingKeys:
-                stepIcon("key.fill", color: .blue)
-                Text("Generating Keys")
-                    .font(.title2)
-                    .fontWeight(.semibold)
-                ProgressView()
-                    .scaleEffect(1.2)
-                
-            case .fetchingChallenge:
-                stepIcon("network", color: .blue)
-                Text("Connecting to Server")
-                    .font(.title2)
-                    .fontWeight(.semibold)
-                ProgressView()
-                    .scaleEffect(1.2)
-                
-            case .computingPoW:
-                stepIcon("cpu.fill", color: .blue)
-                Text("Proving You're Human")
-                    .font(.title2)
-                    .fontWeight(.semibold)
-                
-                VStack(spacing: 12) {
-                    // Clean single-color progress bar
-                    ZStack(alignment: .leading) {
-                        // Background track
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(Color.gray.opacity(0.2))
-                            .frame(height: 8)
-                        
-                        // Blue fill
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(Color.blue)
-                            .frame(width: max(8, UIScreen.main.bounds.width * 0.8 * CGFloat(powProgress)), height: 8)
-                            .animation(.easeInOut(duration: 0.5), value: powProgress)
-                    }
-                    .frame(maxWidth: .infinity)
-                    
-                    HStack {
-                        Text("\(Int(powProgress * 100))%")
-                            .font(.title3)
-                            .fontWeight(.bold)
-                            .foregroundColor(.blue)
-                            .monospacedDigit() // Prevent width jumping
-                        
-                        Spacer()
-                        
-                        // Show difficulty level
-                        HStack(spacing: 4) {
-                            Image(systemName: "chart.bar.fill")
-                                .font(.caption)
-                            Text("Level \(difficulty)")
-                                .font(.caption)
-                        }
-                        .foregroundColor(.secondary)
-                    }
-                }
-                .padding(.horizontal)
-                
-            case .submittingRegistration:
-                stepIcon("icloud.and.arrow.up", color: .blue)
-                Text("Creating Account")
-                    .font(.title2)
-                    .fontWeight(.semibold)
-                ProgressView()
-                    .scaleEffect(1.2)
-                
-            case .complete:
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 80))
-                    .foregroundColor(.green)
-                Text("Welcome!")
-                    .font(.largeTitle)
-                    .fontWeight(.bold)
-                
-            case .error(_):
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 80))
-                    .foregroundColor(.red)
-                Text("Something Went Wrong")
-                    .font(.title2)
-                    .fontWeight(.semibold)
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 24)
-    }
-    
-    @ViewBuilder
-    private func stepIcon(_ systemName: String, color: Color) -> some View {
-        ZStack {
-            Circle()
-                .fill(color.opacity(0.2))
-                .frame(width: 80, height: 80)
-            Image(systemName: systemName)
-                .font(.system(size: 40))
-                .foregroundColor(color)
-        }
-    }
-    
-    @ViewBuilder
-    private var stepContent: some View {
-        VStack(spacing: 20) {
-            switch currentStep {
-            case .generatingKeys:
-                InfoBubble(
-                    icon: "shield.checkered",
-                    text: "Creating unique cryptographic keys for your device"
-                )
-                
-            case .fetchingChallenge:
-                InfoBubble(
-                    icon: "server.rack",
-                    text: "Requesting anti-spam challenge from server"
-                )
-                
-            case .computingPoW:
-                VStack(spacing: 16) {
-                    InfoBubble(
-                        icon: "sparkles",
-                        text: "This prevents bots and keeps the network spam-free. It may take a few minutes."
-                    )
-                }
-                
-            case .submittingRegistration:
-                InfoBubble(
-                    icon: "paperplane.fill",
-                    text: "Registering your device with the server"
-                )
-                
-            case .complete:
-                VStack(spacing: 16) {
-                    if let username = username, !username.isEmpty {
-                        DetailRow(label: "Username", value: "@\(username)")
-                    } else {
-                        DetailRow(label: "Mode", value: "Anonymous")
-                    }
-                    
-                    DetailRow(label: "Device ID", value: String(deviceId.prefix(16)) + "...")
-                    
-                    Text("Your device has been registered securely")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .multilineTextAlignment(.center)
-                        .padding(.top, 8)
-                }
-                .padding()
-                .background(Color(.systemGray6))
-                .cornerRadius(12)
-                
-            case .error(let message):
-                VStack(spacing: 16) {
-                    Text(message)
-                        .font(.body)
-                        .foregroundColor(.secondary)
-                        .multilineTextAlignment(.center)
-                        .padding()
-                    
-                    Text("Please check your internet connection and try again")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .multilineTextAlignment(.center)
-                }
-            }
-        }
-        .padding(.horizontal, 24)
-    }
-    
-    // MARK: - Helper Views
-    
-    struct InfoBubble: View {
-        let icon: String
-        let text: String
-        
-        var body: some View {
-            HStack(spacing: 12) {
-                Image(systemName: icon)
-                    .font(.title3)
-                    .foregroundColor(.blue)
-                
-                Text(text)
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.leading)
-                
-                Spacer()
-            }
-            .padding()
-            .background(Color(.systemGray6))
-            .cornerRadius(12)
-        }
-    }
-    
-    struct DetailRow: View {
-        let label: String
-        let value: String
-        
-        var body: some View {
-            HStack {
-                Text(label)
-                    .foregroundColor(.secondary)
-                Spacer()
-                Text(value)
-                    .fontWeight(.medium)
-            }
-            .font(.subheadline)
-        }
-    }
-    
-    private func infoCard(icon: String, title: String, description: String) -> some View {
-        HStack(spacing: 16) {
-            Image(systemName: icon)
-                .font(.system(size: 32))
-                .foregroundColor(.blue)
-                .frame(width: 48)
-            
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.headline)
-                Text(description)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-        }
-        .padding()
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.secondary.opacity(0.1))
-        .cornerRadius(12)
-    }
-    
+
     private func startRegistration() async {
         do {
             // Step 1: Generate keys
@@ -487,8 +435,61 @@ struct RegistrationFlowView: View {
     }
 }
 
-#Preview {
+// MARK: - Previews (frozen stages — no logic runs)
+
+#Preview("Entropy collected") {
     NavigationStack {
-        RegistrationFlowView(username: "john_smith")
+        RegistrationStageView(step: .generatingKeys).padding()
+    }
+}
+
+#Preview("Nonce search — 0%") {
+    NavigationStack {
+        RegistrationStageView(step: .computingPoW, powProgress: 0.0, difficulty: 8).padding()
+    }
+}
+
+#Preview("Nonce search — 55%") {
+    NavigationStack {
+        RegistrationStageView(step: .computingPoW, powProgress: 0.55, difficulty: 8).padding()
+    }
+}
+
+#Preview("Solution found") {
+    NavigationStack {
+        RegistrationStageView(step: .computingPoW, powProgress: 1.0, difficulty: 8).padding()
+    }
+}
+
+#Preview("Submitting") {
+    NavigationStack {
+        RegistrationStageView(step: .submittingRegistration).padding()
+    }
+}
+
+#Preview("Complete — with username") {
+    NavigationStack {
+        RegistrationStageView(
+            step: .complete,
+            deviceId: "f3b8d583698feab0eb8ee8008a1944c6",
+            username: "john_smith"
+        ).padding()
+    }
+}
+
+#Preview("Complete — anonymous") {
+    NavigationStack {
+        RegistrationStageView(
+            step: .complete,
+            deviceId: "f3b8d583698feab0eb8ee8008a1944c6"
+        ).padding()
+    }
+}
+
+#Preview("Error") {
+    NavigationStack {
+        RegistrationStageView(
+            step: .error("Could not connect to server. The operation couldn't be completed.")
+        ).padding()
     }
 }

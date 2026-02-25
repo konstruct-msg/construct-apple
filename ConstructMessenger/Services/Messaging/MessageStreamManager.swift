@@ -29,6 +29,7 @@ final class MessageStreamManager: ObservableObject {
 
     private var streamTask: Task<Void, Never>?
     private var heartbeatTask: Task<Void, Never>?
+    private var serverChangedObserver: NSObjectProtocol?
     private var retryCount = 0
     private let maxRetryDelay: TimeInterval = 60
     private var isPaused = false
@@ -53,6 +54,24 @@ final class MessageStreamManager: ObservableObject {
         self.subscriptionUserIds = contactUserIds
         isPaused = false
 
+        // Reconnect when server config changes
+        if serverChangedObserver == nil {
+            serverChangedObserver = NotificationCenter.default.addObserver(
+                forName: .grpcServerChanged,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                guard let self else { return }
+                Log.info("🔄 gRPC server changed — reconnecting stream", category: "MessageStream")
+                Task { @MainActor in
+                    let ids = self.subscriptionUserIds
+                    let cb = self.onMessageReceived
+                    self.forceDisconnect()
+                    if let cb { self.connect(contactUserIds: ids, onMessageReceived: cb) }
+                }
+            }
+        }
+
         Log.info("📡 Starting MessageStream connection (subscribed to \(contactUserIds.count) contacts)", category: "MessageStream")
         ConnectionStatusManager.shared.markConnecting()
         streamTask = Task { [weak self] in
@@ -61,6 +80,15 @@ final class MessageStreamManager: ObservableObject {
     }
 
     func disconnect() {
+        if let obs = serverChangedObserver {
+            NotificationCenter.default.removeObserver(obs)
+            serverChangedObserver = nil
+        }
+        forceDisconnect()
+    }
+
+    /// Disconnect without removing the server-change observer (used for reconnects).
+    private func forceDisconnect() {
         isPaused = false
         isConnected = false
         outboundContinuation?.finish()

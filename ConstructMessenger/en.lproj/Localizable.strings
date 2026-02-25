@@ -306,3 +306,5 @@
 "last_contact" = "Last contact";
 "server" = "Server";
 "port" = "Port";
+"server_applied_title" = "Server Updated";
+"server_applied_message" = "The new gRPC server will be used for all future connections.";

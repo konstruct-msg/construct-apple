@@ -190,6 +190,11 @@ struct FontStyle {
 // MARK: - Color Extensions
 
 extension Color {
+    
+//    static let primaryButton = Color("PrimaryButtonColor")
+//    static let disabledButton = Color("DisabledButtonColor")
+//    static let accentColor = Color("AccentColor")
+    
     /// Standard background colors
     struct AppBackground {
         /// Primary app background (warm off-white in light, dark gray in dark)

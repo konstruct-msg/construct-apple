@@ -8,21 +8,48 @@ import GRPCNIOTransportHTTP2
 final class GRPCChannelManager: Sendable {
     static let shared = GRPCChannelManager()
 
-    private let host: String
-    private let port: Int
+    static let customHostKey = "grpcCustomHost"
+    static let customPortKey = "grpcCustomPort"
 
-    private init() {
-        self.host = Bundle.main.object(forInfoDictionaryKey: "GRPC_HOST") as? String
-            ?? "ams.konstruct.cc"
-        self.port = (Bundle.main.object(forInfoDictionaryKey: "GRPC_PORT") as? String)
-            .flatMap(Int.init) ?? 443
+    private static let defaultHost: String = {
+        Bundle.main.object(forInfoDictionaryKey: "GRPC_HOST") as? String ?? "ams.konstruct.cc"
+    }()
+    private static let defaultPort: Int = {
+        (Bundle.main.object(forInfoDictionaryKey: "GRPC_PORT") as? String).flatMap(Int.init) ?? 443
+    }()
+
+    var currentHost: String {
+        UserDefaults.standard.string(forKey: Self.customHostKey) ?? Self.defaultHost
     }
+
+    var currentPort: Int {
+        let stored = UserDefaults.standard.integer(forKey: Self.customPortKey)
+        return stored > 0 ? stored : Self.defaultPort
+    }
+
+    var isUsingCustomServer: Bool {
+        UserDefaults.standard.string(forKey: Self.customHostKey) != nil
+    }
+
+    func setCustomServer(host: String, port: Int) {
+        UserDefaults.standard.set(host, forKey: Self.customHostKey)
+        UserDefaults.standard.set(port, forKey: Self.customPortKey)
+        NotificationCenter.default.post(name: .grpcServerChanged, object: nil)
+    }
+
+    func resetToDefaultServer() {
+        UserDefaults.standard.removeObject(forKey: Self.customHostKey)
+        UserDefaults.standard.removeObject(forKey: Self.customPortKey)
+        NotificationCenter.default.post(name: .grpcServerChanged, object: nil)
+    }
+
+    private init() {}
 
     /// Creates a new `GRPCClient` with TLS transport.
     /// Caller is responsible for running the client via `runConnections()` in a Task.
     func makeClient() throws -> GRPCClient<HTTP2ClientTransport.Posix> {
         let transport = try HTTP2ClientTransport.Posix(
-            target: .dns(host: host, port: port),
+            target: .dns(host: currentHost, port: currentPort),
             transportSecurity: .tls,
             config: .defaults {
                 $0.connection = .init(
@@ -66,4 +93,8 @@ final class GRPCChannelManager: Sendable {
             return result
         }
     }
+}
+
+extension Notification.Name {
+    static let grpcServerChanged = Notification.Name("grpcServerChanged")
 }

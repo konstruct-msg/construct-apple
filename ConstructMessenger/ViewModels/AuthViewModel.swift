@@ -8,6 +8,7 @@
 import Foundation
 import Combine
 import CoreData
+import CryptoKit
 
 @MainActor
 class AuthViewModel: ObservableObject {
@@ -108,16 +109,17 @@ class AuthViewModel: ObservableObject {
         print("🔑 Device keys found - authenticating with device ID: \(deviceId)")
         
         do {
-            // Create signature: Sign(device_id + timestamp)
+            // Create signature: Sign("KonstruktAuth-v1\n{device_id}\n{timestamp}") with Ed25519
             let timestamp = Int64(Date().timeIntervalSince1970)
-            let message = "\(deviceId)\(timestamp)"
+            let message = "KonstruktAuth-v1\n\(deviceId)\n\(timestamp)"
             guard let messageData = message.data(using: .utf8) else {
                 throw NetworkError.encodingFailed
             }
-            
-            // TODO: Implement proper signing with Ed25519
-            // For now, use base64 of message as placeholder
-            let signature = messageData.base64EncodedString()
+
+            let signingKeyBytes = try CryptoManager.shared.exportSigningSecretKey()
+            let privateKey = try Curve25519.Signing.PrivateKey(rawRepresentation: Data(signingKeyBytes))
+            let signatureData = try privateKey.signature(for: messageData)
+            let signature = signatureData.base64EncodedString()
             
             let response = try await AuthServiceClient.shared.authenticateDevice(
                     deviceId: deviceId,
