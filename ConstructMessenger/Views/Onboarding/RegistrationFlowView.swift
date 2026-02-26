@@ -20,63 +20,87 @@ enum RegistrationStep: Equatable {
 
 /// Dots oscillate vertically. As `progress` increases from 0→1, dots
 /// settle left-to-right onto the center line — like a signal locking in.
+///
+/// Uses TimelineView for CADisplayLink-accurate 60/120Hz rendering.
+/// Amplitude fades smoothly near the settle boundary (no hard snap).
 struct ConvergingSignalView: View {
     let progress: Double   // 0.0 → 1.0
+    var dotColor: Color = Color("SecondColor")
 
     private let dotCount = 22
     @State private var phases: [Double] = []
-    @State private var tick: Double = 0
-    private let animTimer = Timer.publish(every: 1.0 / 30.0, on: .main, in: .common).autoconnect()
+    @State private var startDate = Date()
 
     var body: some View {
-        Canvas { context, size in
-            guard phases.count == dotCount else { return }
-            let w = size.width
-            let h = size.height
-            let cy = h / 2.0
-            let spacing = w / CGFloat(dotCount - 1)
-            let maxAmp = h * 0.42
+        TimelineView(.animation) { timeline in
+            let tick = timeline.date.timeIntervalSince(startDate) * 1.6
+            Canvas { context, size in
+                guard phases.count == dotCount else { return }
+                let w = size.width
+                let h = size.height
+                let cy = h / 2.0
+                let spacing = w / CGFloat(dotCount - 1)
+                let maxAmp = h * 0.42
 
-            // Connecting line
-            var line = Path()
-            for i in 0..<dotCount {
-                let x = CGFloat(i) * spacing
-                let y = yForDot(i: i, cy: cy, maxAmp: maxAmp)
-                if i == 0 { line.move(to: .init(x: x, y: y)) }
-                else      { line.addLine(to: .init(x: x, y: y)) }
-            }
-            context.stroke(line, with: .color(.blue.opacity(0.18)), lineWidth: 1.0)
+                // Smooth connecting line via quadratic Bezier through midpoints
+                var line = Path()
+                let points: [CGPoint] = (0..<dotCount).map { i in
+                    CGPoint(
+                        x: CGFloat(i) * spacing,
+                        y: yForDot(i: i, cy: cy, maxAmp: maxAmp, tick: tick)
+                    )
+                }
+                line.move(to: points[0])
+                for i in 1..<points.count - 1 {
+                    let mid = CGPoint(
+                        x: (points[i].x + points[i + 1].x) / 2,
+                        y: (points[i].y + points[i + 1].y) / 2
+                    )
+                    line.addQuadCurve(to: mid, control: points[i])
+                }
+                line.addLine(to: points[points.count - 1])
+                context.stroke(line, with: .color(dotColor.opacity(0.18)), lineWidth: 1.0)
 
-            // Dots
-            for i in 0..<dotCount {
-                let norm = Double(i) / Double(dotCount - 1)
-                let x    = CGFloat(i) * spacing
-                let y    = yForDot(i: i, cy: cy, maxAmp: maxAmp)
-                let settled = norm < progress
-                let r: CGFloat = settled ? 2.5 : 2.0
-                let alpha = settled
-                    ? 0.9
-                    : 0.3 + 0.35 * abs(sin(phases[i] + tick))
-                context.fill(
-                    Path(ellipseIn: CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2)),
-                    with: .color(.blue.opacity(alpha))
-                )
+                // Dots
+                for i in 0..<dotCount {
+                    let x = CGFloat(i) * spacing
+                    let y = yForDot(i: i, cy: cy, maxAmp: maxAmp, tick: tick)
+                    let norm = Double(i) / Double(dotCount - 1)
+                    // Soft settle boundary: fade amplitude in a window around progress
+                    let settleBlend = smoothstep(norm, lo: progress - 0.08, hi: progress + 0.04)
+                    let isSettled = norm < progress - 0.08
+                    let r: CGFloat = 2.0 + 0.5 * CGFloat(1.0 - settleBlend)
+                    let alpha = isSettled
+                        ? 0.9
+                        : (0.3 + 0.35 * abs(sin(phases[i] + tick))) * (1.0 - settleBlend * 0.4)
+                    context.fill(
+                        Path(ellipseIn: CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2)),
+                        with: .color(dotColor.opacity(alpha))
+                    )
+                }
             }
         }
         .onAppear {
             if phases.isEmpty {
                 phases = (0..<dotCount).map { _ in Double.random(in: 0 ..< 2 * .pi) }
+                startDate = Date()
             }
         }
-        .onReceive(animTimer) { _ in tick += 0.05 }
     }
 
-    private func yForDot(i: Int, cy: CGFloat, maxAmp: CGFloat) -> CGFloat {
+    private func yForDot(i: Int, cy: CGFloat, maxAmp: CGFloat, tick: Double) -> CGFloat {
         guard !phases.isEmpty else { return cy }
         let norm = Double(i) / Double(dotCount - 1)
-        guard norm >= progress else { return cy } // settled
-        let relDist = progress < 1.0 ? (norm - progress) / (1.0 - progress) : 0.0
-        return cy + maxAmp * CGFloat(relDist) * CGFloat(sin(phases[i] + tick))
+        // Smooth amplitude falloff near settle boundary
+        let envelope = 1.0 - smoothstep(norm, lo: progress - 0.08, hi: progress + 0.04)
+        let relDist = progress < 1.0 ? max(0, (norm - progress) / max(0.001, 1.0 - progress)) : 0.0
+        return cy + maxAmp * CGFloat(relDist * envelope) * CGFloat(sin(phases[i] + tick))
+    }
+
+    /// Smooth Hermite interpolation (same as GLSL smoothstep)
+    private func smoothstep(_ x: Double, lo: Double, hi: Double) -> Double {
+        let t = max(0, min(1, (x - lo) / max(0.001, hi - lo)))
+        return t * t * (3 - 2 * t)
     }
 }
 
