@@ -219,6 +219,8 @@ struct RegistrationFlowView: View {
         .navigationBarBackButtonHidden(true)
         .task {
             guard !hasStarted else { return }
+            // Guard against re-running if keys were already saved (e.g. view recreated during dismiss)
+            guard !KeychainManager.shared.isDeviceRegistered() else { return }
             hasStarted = true
             await startRegistration()
         }

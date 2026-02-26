@@ -1,7 +1,7 @@
 import Foundation
 import GRPCCore
 
-/// Injects the Bearer auth token into gRPC metadata for every RPC call.
+/// Injects Bearer token and x-user-id into gRPC metadata for every RPC call.
 /// Skips auth for unauthenticated RPCs (challenge, register, authenticate).
 
 struct AuthInterceptor: ClientInterceptor {
@@ -26,9 +26,14 @@ struct AuthInterceptor: ClientInterceptor {
         var request = request
 
         if !Self.unauthenticatedMethods.contains(methodName) {
-            let token = await MainActor.run { SessionManager.shared.sessionToken }
+            let (token, userId) = await MainActor.run {
+                (SessionManager.shared.sessionToken, SessionManager.shared.currentUserId)
+            }
             if let token {
                 request.metadata.addString("Bearer \(token)", forKey: "authorization")
+            }
+            if let userId {
+                request.metadata.addString(userId, forKey: "x-user-id")
             }
         }
 

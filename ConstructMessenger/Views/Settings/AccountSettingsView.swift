@@ -351,24 +351,24 @@ struct ImagePicker: UIViewControllerRepresentable {
     }
 }
 
-#Preview {
-    let container = PreviewHelpers.createPreviewContainer()
-    let context = container.viewContext
-
-    // Create sample user
-    let user = User(context: context)
-    user.id = "user123"
-    user.username = "john_doe"
-    user.displayName = "John Doe"
-
-    try? context.save()
-
-    let authViewModel = AuthViewModel(context: context)
-    authViewModel.configureMockAuth()
-
-    return NavigationStack {
-        AccountSettingsView()
-            .environment(\.managedObjectContext, context)
-            .environmentObject(authViewModel)
-    }
-}
+//#Preview {
+//    let container = PreviewHelpers.createPreviewContainer()
+//    let context = container.viewContext
+//
+//    // Create sample user
+//    let user = User(context: context)
+//    user.id = "user123"
+//    user.username = "john_doe"
+//    user.displayName = "John Doe"
+//
+//    try? context.save()
+//
+//    let authViewModel = AuthViewModel(context: context)
+//    authViewModel.configureMockAuth()
+//
+//    return NavigationStack {
+//        AccountSettingsView()
+//            .environment(\.managedObjectContext, context)
+//            .environmentObject(authViewModel)
+//    }
+//}
