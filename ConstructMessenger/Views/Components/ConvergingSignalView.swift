@@ -29,8 +29,8 @@ struct ConvergingSignalView: View {
         static let dotCount: Int = 28
         // Timeline tick multiplier — controls overall animation speed
         static let animationSpeed: Double = 1.5
-        // Max vertical oscillation as a fraction of the view height
-        static let amplitudeFraction: Double = 0.46
+        // Max vertical oscillation as a fraction of the view height (stays within frame after normalization)
+        static let amplitudeFraction: Double = 0.40
 
         // Settle front: dots whose norm is below (progress - settleCutoff) snap to center
         static let settleCutoff: Double = 0.04
@@ -62,13 +62,15 @@ struct ConvergingSignalView: View {
         static let wave3Freq: Double = 3.7
         static let wave2Weight: Double = 0.5
         static let wave3Weight: Double = 0.25
+        // Normalizer: max |w1+w2+w3| = 1 + wave2Weight + wave3Weight
+        static let waveNorm: Double = 1.0 + wave2Weight + wave3Weight
     }
 
     // MARK: - State
 
-    @State private var phase1: [Double] = []
-    @State private var phase2: [Double] = []
-    @State private var phase3: [Double] = []
+    @State private var phase1: [Double] = (0..<Config.dotCount).map { _ in .random(in: 0..<2 * .pi) }
+    @State private var phase2: [Double] = (0..<Config.dotCount).map { _ in .random(in: 0..<2 * .pi) }
+    @State private var phase3: [Double] = (0..<Config.dotCount).map { _ in .random(in: 0..<2 * .pi) }
     @State private var startDate = Date()
 
     // MARK: - Body
@@ -77,7 +79,6 @@ struct ConvergingSignalView: View {
         TimelineView(.animation) { timeline in
             let tick = timeline.date.timeIntervalSince(startDate) * Config.animationSpeed
             Canvas { context, size in
-                guard phase1.count == Config.dotCount else { return }
                 let cy = size.height / 2.0
                 let spacing = size.width / CGFloat(Config.dotCount - 1)
                 let maxAmp = size.height * Config.amplitudeFraction
@@ -121,11 +122,6 @@ struct ConvergingSignalView: View {
             }
         }
         .onAppear {
-            guard phase1.isEmpty else { return }
-            let range = 0.0 ..< 2 * Double.pi
-            phase1 = (0..<Config.dotCount).map { _ in .random(in: range) }
-            phase2 = (0..<Config.dotCount).map { _ in .random(in: range) }
-            phase3 = (0..<Config.dotCount).map { _ in .random(in: range) }
             startDate = Date()
         }
     }
@@ -133,18 +129,18 @@ struct ConvergingSignalView: View {
     // MARK: - Helpers
 
     private func yForDot(i: Int, cy: CGFloat, maxAmp: CGFloat, tick: Double) -> CGFloat {
-        guard !phase1.isEmpty else { return cy }
         let norm = Double(i) / Double(Config.dotCount - 1)
         guard norm >= progress - Config.settleCutoff else { return cy }
-        let unsettled = max(0.0, (norm - progress) / max(0.001, 1.0 - progress))
-        let envelope = unsettled * (1.0 - smoothstep(norm,
-                                                      lo: progress - Config.settleCutoff,
-                                                      hi: progress + Config.envelopeBlendFront))
-        // Three overlapping waves at different frequencies → irregular/chaotic shape
+        // Uniform amplitude ahead of the front: 0 on settled side, 1 past transition
+        let envelope = smoothstep(norm,
+                                  lo: progress - Config.settleCutoff,
+                                  hi: progress + Config.envelopeBlendFront)
         let w1 = sin(phase1[i] + tick)
         let w2 = sin(phase2[i] + tick * Config.wave2Freq) * Config.wave2Weight
         let w3 = sin(phase3[i] + tick * Config.wave3Freq) * Config.wave3Weight
-        return cy + maxAmp * CGFloat(envelope) * CGFloat(w1 + w2 + w3)
+        // Normalize so combined waves never exceed [-1, 1] → dots stay inside frame
+        let wave = (w1 + w2 + w3) / Config.waveNorm
+        return cy + maxAmp * CGFloat(envelope) * CGFloat(wave)
     }
 
     private func smoothstep(_ x: Double, lo: Double, hi: Double) -> Double {
