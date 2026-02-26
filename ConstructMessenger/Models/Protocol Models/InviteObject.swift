@@ -140,10 +140,14 @@ struct InviteObject: Codable, Equatable {
     ///
     /// - Returns: String to sign/verify
     func canonicalString() -> String {
+        // Rust's Uuid formats with lowercase hex — match that to ensure
+        // client-signed canonical string matches server-verified canonical string.
+        let jtiLower = jti.lowercased()
+        let uuidLower = uuid.lowercased()
         if v == 1 {
-            return "\(v)|\(jti)|\(uuid)|\(server)|\(ephKey)|\(ts)"
+            return "\(v)|\(jtiLower)|\(uuidLower)|\(server)|\(ephKey)|\(ts)"
         }
-        return "\(v)|\(jti)|\(uuid)|\(deviceId)|\(server)|\(ephKey)|\(ts)"
+        return "\(v)|\(jtiLower)|\(uuidLower)|\(deviceId)|\(server)|\(ephKey)|\(ts)"
     }
 }
 

@@ -66,7 +66,7 @@ class InviteGenerator {
         Log.debug("🔐 Generated ephemeral keypair for invite", category: "InviteGenerator")
         
         // Step 2: Generate JTI
-        let jti = UUID().uuidString
+        let jti = UUID().uuidString.lowercased()
         
         // Step 3: Current timestamp
         let timestamp = Int(Date().timeIntervalSince1970)
@@ -83,7 +83,7 @@ class InviteGenerator {
         let unsignedInvite = InviteObject(
             v: InviteConfig.currentVersion,
             jti: jti,
-            uuid: userId,
+            uuid: userId.lowercased(),
             deviceId: deviceId,
             server: server,
             ephKey: ephKeyBase64,
