@@ -12,152 +12,115 @@ struct AccountSettingsView: View {
     @Environment(\.managedObjectContext) private var viewContext
     @EnvironmentObject var authViewModel: AuthViewModel
     @StateObject private var viewModel = SettingsViewModel()
-    
-    // Profile Picture
+
     @State private var showingImagePicker = false
     @State private var showingAvatarViewer = false
-    
-    @State private var showingDeleteAccountWarning = false
-    @State private var showingDeleteAccountConfirmation = false
-    @State private var deleteAccountError: String?
-    
+    @State private var showingDeleteConfirmation = false
+    @State private var showingExportAlert = false
+
     var body: some View {
         List {
-            // MARK: - Profile Picture Section
+            // MARK: - Avatar + Identity
             Section {
                 HStack {
                     Spacer()
-                    VStack(spacing: 12) {
-                        if let image = viewModel.profileImage {
-                            Image(uiImage: image)
-                                .resizable()
-                                .scaledToFill()
-                                .frame(width: AvatarStyle.accountSize, height: AvatarStyle.accountSize)
-                                .clipShape(RoundedRectangle(cornerRadius: AvatarStyle.accountCornerRadius, style: .continuous))
-                        } else {
-                            RoundedRectangle(cornerRadius: AvatarStyle.accountCornerRadius, style: .continuous)
-                                .fill(Color.blue.opacity(0.2))
-                                .frame(width: AvatarStyle.accountSize, height: AvatarStyle.accountSize)
-                                .overlay {
-                                    Text(viewModel.displayName.prefix(1).uppercased())
-                                        .font(.system(size: 40, weight: .semibold))
-                                        .foregroundColor(.blue)
-                                }
+                    VStack(spacing: 10) {
+                        Group {
+                            if let image = viewModel.profileImage {
+                                Image(uiImage: image)
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: AvatarStyle.accountSize, height: AvatarStyle.accountSize)
+                                    .clipShape(RoundedRectangle(cornerRadius: AvatarStyle.accountCornerRadius, style: .continuous))
+                            } else {
+                                RoundedRectangle(cornerRadius: AvatarStyle.accountCornerRadius, style: .continuous)
+                                    .fill(Color.blue.opacity(0.2))
+                                    .frame(width: AvatarStyle.accountSize, height: AvatarStyle.accountSize)
+                                    .overlay {
+                                        Text(viewModel.displayName.prefix(1).uppercased())
+                                            .font(.system(size: 40, weight: .semibold))
+                                            .foregroundColor(.blue)
+                                    }
+                            }
                         }
-                    }
-                    .onTapGesture {
-                        if viewModel.profileImage != nil {
-                            showingAvatarViewer = true
-                        } else {
-                            showingImagePicker = true
+                        .onTapGesture {
+                            if viewModel.profileImage != nil {
+                                showingAvatarViewer = true
+                            } else {
+                                showingImagePicker = true
+                            }
                         }
+
+                        Text(viewModel.username.isEmpty
+                             ? DisplayNameGenerator.generate(from: viewModel.userId)
+                             : "@\(viewModel.username)")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
                     }
                     Spacer()
                 }
                 .listRowBackground(Color.clear)
             }
-            
-            if !viewModel.username.isEmpty {
-                Text("@\(viewModel.username)")
-                    .fontWeight(.medium)
-                    .foregroundColor(.gray)
-            } else {
-                Text(DisplayNameGenerator.generate(from: viewModel.userId))
-                    .fontWeight(.medium)
-                    .foregroundColor(.gray)
-            }
-            
-            // MARK: - Account Information Section
+
+            // MARK: - Account Information
             Section {
+                TextField("username", text: $viewModel.username)
+                    .font(.body.monospaced())
+                
                 TextField("display_name", text: $viewModel.displayName)
                     .onChange(of: viewModel.displayName) { _, newValue in
                         viewModel.saveDisplayName(newValue, authViewModel: authViewModel)
                     }
-                
             } header: {
                 Text("account_information")
             }
-            
-            
-            // MARK: - Debug Tools (temporary)
+
+            // MARK: - Privacy
             Section {
-                // Reset Long-Polling Cursor
+                Label("privacy_who_can_find_me", systemImage: "person.fill.questionmark")
+                    .foregroundColor(.secondary)
+                Label("privacy_read_receipts", systemImage: "checkmark.message")
+                    .foregroundColor(.secondary)
+            } header: {
+                Text("privacy")
+            } 
+
+            // MARK: - Data & Privacy
+            Section {
                 Button {
-                    UserDefaults.standard.removeObject(forKey: "construct.lastMessageId")
-                    Log.info("🔄 [DEBUG] Long-polling cursor reset - restart app to take effect", category: "AccountSettings")
+                    showingExportAlert = true
                 } label: {
-                    Label("Reset Polling Cursor", systemImage: "arrow.clockwise.circle")
-                        .foregroundColor(.orange)
-                }
-                
-                Button(role: .destructive) {
-                    // Clear local crypto keys without server call
-                    CryptoManager.shared.deleteAllCryptoKeys()
-                    KeychainManager.shared.deleteDeviceKeys()
-                    
-                    // Also clear Core Data
-                    let context = PersistenceController.shared.container.viewContext
-                    
-                    // Delete all chats and messages
-                    let chatFetchRequest: NSFetchRequest<Chat> = Chat.fetchRequest()
-                    if let chats = try? context.fetch(chatFetchRequest) {
-                        for chat in chats {
-                            context.delete(chat)
-                        }
-                    }
-                    
-                    // Delete all users
-                    let userFetchRequest: NSFetchRequest<User> = User.fetchRequest()
-                    if let users = try? context.fetch(userFetchRequest) {
-                        for user in users {
-                            context.delete(user)
-                        }
-                    }
-                    
-                    try? context.save()
-                    
-                    Log.info("🗑️ [DEBUG] Local keys and data cleared", category: "AccountSettings")
-                } label: {
-                    debugButtonLabel
+                    Label("export_my_data", systemImage: "square.and.arrow.up")
                 }
             } header: {
-                Text("DEBUG TOOLS")
-                    .foregroundColor(.orange)
-            }
-            
-            // MARK: - Danger Zone
-            Section {
-                // Delete Account (only truly destructive action)
-                Button(role: .destructive) {
-                    showingDeleteAccountWarning = true
-                } label: {
-                    VStack(spacing: 8) {
-                        HStack {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                                .foregroundColor(.red)
-                            Text("delete_my_account")
-                                .fontWeight(.bold)
-                            Spacer()
-                        }
-                        
-                        HStack {
-                            Text("delete_account_warning")
-                                .font(.caption)
-                                .foregroundColor(.red.opacity(0.8))
-                                .multilineTextAlignment(.leading)
-                            Spacer()
-                        }
-                    }
-                    .padding(.vertical, 4)
-                }
-            } header: {
-                Text("DANGER_ZONE")
-                    .foregroundColor(.red)
+                Text("data_and_privacy")
             } footer: {
-                Text("Permanent account deletion. Cannot be undone.")
-                    .font(.caption)
+                Text("export_my_data_footer")
             }
 
+            // MARK: - Danger Zone
+            Section {
+                Button(role: .destructive) {
+                    showingDeleteConfirmation = true
+                } label: {
+                    Label("delete_my_account", systemImage: "trash")
+                }
+            } header: {
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundColor(.red)
+                        .font(.caption)
+                    Text("danger_zone")
+                        .foregroundColor(.red)
+                }
+            } footer: {
+                Text("delete_account_footer")
+            }
+        }
+        .alert("export_my_data", isPresented: $showingExportAlert) {
+            Button("ok", role: .cancel) { }
+        } message: {
+            Text("export_coming_soon_message")
         }
         .navigationTitle("account")
         .navigationBarTitleDisplayMode(.inline)
@@ -165,39 +128,17 @@ struct AccountSettingsView: View {
             viewModel.setContext(viewContext)
             viewModel.loadUserInfo(from: authViewModel)
         }
-        // MARK: - Delete Account Dialog
-        .alert("delete_account_warning_title", isPresented: $showingDeleteAccountWarning) {
-            Button("cancel", role: .cancel) { }
-            Button("continue", role: .destructive) {
-                showingDeleteAccountWarning = false
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                    showingDeleteAccountConfirmation = true
-                }
-            }
-        } message: {
-            Text("delete_account_warning_message")
-        }
-        .sheet(isPresented: $showingDeleteAccountConfirmation) {
+        .sheet(isPresented: $showingDeleteConfirmation) {
             DeleteAccountConfirmationView(
-                error: $deleteAccountError,
-                isDeleting: authViewModel.isLoading,
                 onDelete: {
-                    deleteAccountError = nil
+                    showingDeleteConfirmation = false
                     authViewModel.deleteAccount()
                 },
                 onCancel: {
-                    showingDeleteAccountConfirmation = false
-                    deleteAccountError = nil
+                    showingDeleteConfirmation = false
                 }
             )
-        }
-        .onChange(of: authViewModel.errorMessage) { _, errorMessage in
-            if let error = errorMessage, showingDeleteAccountConfirmation {
-                deleteAccountError = error
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("AccountDeleted"))) { _ in
-            showingDeleteAccountConfirmation = false
+            .environmentObject(authViewModel)
         }
         .sheet(isPresented: $showingAvatarViewer) {
             AvatarViewerSheet(
@@ -216,95 +157,121 @@ struct AccountSettingsView: View {
             })
         }
     }
-    
-    // MARK: - Computed Properties
-    
-    private var debugButtonLabel: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Image(systemName: "key.slash.fill")
-                Text("Clear Local Keys (Debug)")
-                    .fontWeight(.medium)
-                Spacer()
-            }
-            Text("Removes all crypto keys and data from this device only. Server account remains.")
-                .font(.caption)
-                .foregroundColor(.secondary)
-        }
-        .padding(.vertical, 4)
-    }
 }
 
 // MARK: - Delete Account Confirmation View
 struct DeleteAccountConfirmationView: View {
     @Environment(\.dismiss) private var dismiss
-    @Binding var error: String?
-    let isDeleting: Bool
+    @EnvironmentObject var authViewModel: AuthViewModel
+
     let onDelete: () -> Void
     let onCancel: () -> Void
 
-    @State private var countdownSeconds: Int = 10
-    private let countdownTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
-    
+    @State private var countdown = 7
+    @State private var errorMessage: String?
+    private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+
     var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    Text("delete_account_confirmation_message")
-                        .font(.body)
-                        .foregroundColor(.primary)
-                    if let error = error {
-                        Text(error)
-                            .font(.caption)
-                            .foregroundColor(.red)
-                    }
-                } header: {
-                    Text("warning")
-                } footer: {
-                    Text("delete_account_irreversible_warning")
-                        .font(.caption)
-                        .foregroundColor(.red)
+        VStack(spacing: 0) {
+            // Drag indicator
+            Capsule()
+                .fill(Color.secondary.opacity(0.4))
+                .frame(width: 36, height: 4)
+                .padding(.top, 12)
+                .padding(.bottom, 24)
+
+            Spacer()
+
+            // Icon
+            Image(systemName: "person.crop.circle.badge.minus")
+                .font(.system(size: 52, weight: .light))
+                .foregroundColor(.red.opacity(0.85))
+                .padding(.bottom, 20)
+
+            Text("delete_my_account")
+                .font(.title2).fontWeight(.semibold)
+                .padding(.bottom, 8)
+
+            Text("delete_account_confirmation_message")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 32)
+                .padding(.bottom, 32)
+
+            // Countdown ring
+            if countdown > 0 && !authViewModel.isLoading {
+                ZStack {
+                    Circle()
+                        .stroke(Color.red.opacity(0.15), lineWidth: 4)
+                    Circle()
+                        .trim(from: 0, to: CGFloat(7 - countdown) / 7.0)
+                        .stroke(Color.red.opacity(0.7), style: StrokeStyle(lineWidth: 4, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                        .animation(.linear(duration: 1), value: countdown)
+                    Text("\(countdown)")
+                        .font(.system(size: 22, weight: .semibold, design: .monospaced))
+                        .foregroundColor(.red.opacity(0.8))
                 }
-                
+                .frame(width: 64, height: 64)
+                .padding(.bottom, 28)
             }
-            .navigationTitle("delete_my_account")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("cancel") {
-                        onCancel()
-                        dismiss()
-                    }
-                    .disabled(isDeleting)
-                }
-                
-                ToolbarItem(placement: .confirmationAction) {
+
+            // Error message
+            if let err = errorMessage {
+                Text(err)
+                    .font(.footnote)
+                    .foregroundColor(.red)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 32)
+                    .padding(.bottom, 16)
+            }
+
+            Spacer()
+
+            // Delete button (full-width, appears after countdown)
+            VStack(spacing: 12) {
+                if authViewModel.isLoading {
+                    ProgressView()
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 50)
+                } else {
                     Button(role: .destructive) {
                         onDelete()
                     } label: {
-                        if isDeleting {
-                            ProgressView()
-                                .scaleEffect(0.8)
-                        } else if countdownSeconds > 0 {
-                            Text(String(format: NSLocalizedString("delete_account_countdown", comment: ""), countdownSeconds))
-                                .fontWeight(.semibold)
-                        } else {
-                            Text("delete_account")
-                                .fontWeight(.semibold)
-                        }
+                        Text("delete_account")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 50)
+                            .background(countdown > 0 ? Color.red.opacity(0.3) : Color.red)
+                            .foregroundColor(.white)
+                            .cornerRadius(14)
                     }
-                    .disabled(isDeleting || countdownSeconds > 0)
+                    .disabled(countdown > 0)
+                    .animation(.easeInOut(duration: 0.25), value: countdown)
                 }
+
+                Button("cancel") {
+                    onCancel()
+                    dismiss()
+                }
+                .foregroundColor(.secondary)
+                .disabled(authViewModel.isLoading)
             }
+            .padding(.horizontal, 24)
+            .padding(.bottom, 36)
         }
-        .interactiveDismissDisabled(isDeleting)
-        .onReceive(countdownTimer) { _ in
-            if countdownSeconds > 0 {
-                countdownSeconds -= 1
-            }
+        .presentationDetents([.medium])
+        .presentationDragIndicator(.hidden)
+        .onReceive(timer) { _ in
+            if countdown > 0 { countdown -= 1 }
         }
-        .onAppear {
-            countdownSeconds = 10
+        .onChange(of: authViewModel.errorMessage) { _, msg in
+            if let msg { errorMessage = msg }
+        }
+        .onChange(of: authViewModel.isLoading) { _, loading in
+            // Clear error when new attempt starts
+            if loading { errorMessage = nil }
         }
     }
 }
@@ -385,24 +352,24 @@ struct ImagePicker: UIViewControllerRepresentable {
     }
 }
 
-//#Preview {
-//    let container = PreviewHelpers.createPreviewContainer()
-//    let context = container.viewContext
-//
-//    // Create sample user
-//    let user = User(context: context)
-//    user.id = "user123"
-//    user.username = "john_doe"
-//    user.displayName = "John Doe"
-//
-//    try? context.save()
-//
-//    let authViewModel = AuthViewModel(context: context)
-//    authViewModel.configureMockAuth()
-//
-//    return NavigationStack {
-//        AccountSettingsView()
-//            .environment(\.managedObjectContext, context)
-//            .environmentObject(authViewModel)
-//    }
-//}
+#Preview {
+    let container = PreviewHelpers.createPreviewContainer()
+    let context = container.viewContext
+
+    // Create sample user
+    let user = User(context: context)
+    user.id = "user123"
+    user.username = "john_doe"
+    user.displayName = "John Doe"
+
+    try? context.save()
+
+    let authViewModel = AuthViewModel(context: context)
+    authViewModel.configureMockAuth()
+
+    return NavigationStack {
+        AccountSettingsView()
+            .environment(\.managedObjectContext, context)
+            .environmentObject(authViewModel)
+    }
+}

@@ -329,3 +329,19 @@
 "reg_phase_entropy" = "энтропия собрана";
 "reg_phase_nonce" = "поиск nonce";
 "reg_phase_solution" = "решение найдено";
+
+// Delete Account
+"delete_account_footer" = "Навсегда удаляет аккаунт и все связанные данные.";
+"delete_account_not_available" = "Удаление аккаунта пока недоступно. Попробуйте позже.";
+"delete_account_failed" = "Ошибка удаления: %@";
+
+// Account Settings — new sections
+"privacy" = "Конфиденциальность";
+"privacy_who_can_find_me" = "Кто может найти меня по нику";
+"privacy_read_receipts" = "Уведомления о прочтении";
+"privacy_coming_soon_footer" = "Настройки приватности появятся в ближайшем обновлении.";
+"data_and_privacy" = "Данные и конфиденциальность";
+"export_my_data" = "Экспортировать мои данные";
+"export_my_data_footer" = "Скачайте копию переписок, контактов и данных аккаунта. Требуется по GDPR и применимому законодательству о конфиденциальности.";
+"export_coming_soon_message" = "Экспорт данных пока недоступен. Функция обязательна по закону и будет добавлена до публичного запуска.";
+"danger_zone" = "Опасная зона";

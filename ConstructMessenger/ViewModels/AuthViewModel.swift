@@ -286,18 +286,24 @@ class AuthViewModel: ObservableObject {
         Task {
             do {
                 try await deleteAccountWithDeviceSignature()
-                
-                await MainActor.run {
-                    handleDeleteAccountSuccess()
-                }
+                await MainActor.run { handleDeleteAccountSuccess() }
             } catch {
                 await MainActor.run {
                     cancelTimeouts()
                     self.isLoading = false
-                    self.errorMessage = "Account deletion failed: \(error.localizedDescription)"
+                    self.errorMessage = Self.friendlyDeleteError(error)
                 }
             }
         }
+    }
+
+    private static func friendlyDeleteError(_ error: Error) -> String {
+        let desc = error.localizedDescription
+        // GRPCCore.RPCError error 1 = cancelled, error 12 = unimplemented (stub)
+        if desc.contains("RPCError") || desc.contains("unimplemented") || desc.contains("error 1") || desc.contains("error 12") {
+            return NSLocalizedString("delete_account_not_available", comment: "")
+        }
+        return String(format: NSLocalizedString("delete_account_failed", comment: ""), desc)
     }
 
     private func deleteAccountWithDeviceSignature() async throws {

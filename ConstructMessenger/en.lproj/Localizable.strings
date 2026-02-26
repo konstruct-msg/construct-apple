@@ -334,3 +334,19 @@
 "reg_phase_entropy" = "entropy collected";
 "reg_phase_nonce" = "nonce search";
 "reg_phase_solution" = "solution found";
+
+// Delete Account
+"delete_account_footer" = "Permanently deletes your account and all associated data.";
+"delete_account_not_available" = "Account deletion is not yet available. Please try again later.";
+"delete_account_failed" = "Deletion failed: %@";
+
+// Account Settings — new sections
+"privacy" = "Privacy";
+"privacy_who_can_find_me" = "Who can find me by username";
+"privacy_read_receipts" = "Read receipts";
+"privacy_coming_soon_footer" = "Privacy controls are coming soon.";
+"data_and_privacy" = "Data & Privacy";
+"export_my_data" = "Export My Data";
+"export_my_data_footer" = "Download a copy of your messages, contacts and account data. Required under GDPR and applicable privacy laws.";
+"export_coming_soon_message" = "Data export is not yet available. This feature is required by law and will be added before public launch.";
+"danger_zone" = "Danger Zone";
