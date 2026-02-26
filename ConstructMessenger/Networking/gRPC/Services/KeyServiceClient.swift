@@ -18,12 +18,15 @@ final class KeyServiceClient: Sendable {
     // MARK: - Get Pre-Key Bundle (replaces CryptoAPI.getPublicKey)
 
     /// Fetch a user's pre-key bundle for establishing an E2EE session.
-    func getPreKeyBundle(userId: String) async throws -> PublicKeyBundleData {
+    func getPreKeyBundle(userId: String, deviceId: String? = nil) async throws -> PublicKeyBundleData {
         try await GRPCChannelManager.shared.performRPC { grpcClient in
             let keyClient = Shared_Proto_Services_V1_KeyService.Client(wrapping: grpcClient)
 
             var request = Shared_Proto_Services_V1_GetPreKeyBundleRequest()
             request.userID = userId
+            if let deviceId, !deviceId.isEmpty {
+                request.deviceID = deviceId
+            }
 
             let response = try await keyClient.getPreKeyBundle(
                 request: .init(message: request)
@@ -34,13 +37,17 @@ final class KeyServiceClient: Sendable {
             }
             let bundle = response.bundle
 
+            let verifyingKeyB64 = response.verifyingKey.isEmpty
+                ? ""
+                : response.verifyingKey.base64EncodedString()
+
             return PublicKeyBundleData(
                 userId: userId,
                 username: "",
                 identityPublic: bundle.identityKey.base64EncodedString(),
                 signedPrekeyPublic: bundle.signedPreKey.base64EncodedString(),
                 signature: bundle.signedPreKeySignature.base64EncodedString(),
-                verifyingKey: "",
+                verifyingKey: verifyingKeyB64,
                 suiteId: UInt16(bundle.cryptoSuite.isEmpty ? 1 : (UInt16(bundle.cryptoSuite) ?? 1))
             )
         }

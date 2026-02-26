@@ -42,6 +42,7 @@ struct PublicUserInfo: Codable, Identifiable {
     let username: String
     let avatarUrl: String?
     let bio: String?
+    var deviceId: String?    // Set when known (e.g. from Dynamic Invite)
 }
 
 // MARK: - Key Bundles

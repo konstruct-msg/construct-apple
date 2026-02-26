@@ -78,7 +78,8 @@ struct ContentView: View {
                     id: contactInfo.userId,
                     username: contactInfo.username,
                     avatarUrl: nil,
-                    bio: nil
+                    bio: nil,
+                    deviceId: contactInfo.deviceId
                 )
                 
                 if let chat = chatsViewModel.startChat(with: publicUserInfo) {

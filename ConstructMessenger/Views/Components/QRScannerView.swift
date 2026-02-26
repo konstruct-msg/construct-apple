@@ -222,31 +222,29 @@ struct QRScannerView: View {
 
     // ✅ Simulate QR code scan for testing
     private func simulateQRCodeScan() {
-        // Generate Dynamic Invite for testing
+        // Generate Dynamic Invite for testing using the CURRENT user's real keys.
+        // This lets the server verify the signature against a real registered user.
         let generator = InviteGenerator()
-        let testUserId = UUID().uuidString
-        let testDeviceId = "a1b2c3d4e5f67890a1b2c3d4e5f67890"  // Mock deviceId
-        
+        guard let realUserId = SessionManager.shared.currentUserId,
+              let realDeviceId = KeychainManager.shared.loadDeviceID() else {
+            print("⚠️ No authenticated user — cannot simulate invite")
+            return
+        }
+
         do {
-            // ✅ Generate test invite with both userId and deviceId
             let testCode = try generator.generateDeepLink(
-                userId: testUserId,
-                deviceId: testDeviceId,
+                userId: realUserId,
+                deviceId: realDeviceId,
                 useHTTPS: false
             )
-            
+
             print("🧪 QRScannerView: Simulating Dynamic Invite scan")
             print("   Generated URL: \(testCode.prefix(100))...")
-            print("   UserId: \(testUserId)")
-            print("   DeviceId: \(testDeviceId)")
+            print("   UserId: \(realUserId)")
+            print("   DeviceId: \(realDeviceId)")
             handleScannedCode(testCode)
         } catch {
             print("❌ Failed to generate test invite: \(error)")
-            // Fallback to legacy format
-            let testUsername = "test_user_\(Int.random(in: 100...999))"
-            let testCode = "https://konstruct.cc/c/\(testUserId)?username=\(testUsername)"
-            print("🧪 Using legacy format: \(testCode)")
-            handleScannedCode(testCode)
         }
     }
 

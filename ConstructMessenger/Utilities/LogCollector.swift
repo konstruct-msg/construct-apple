@@ -78,9 +78,6 @@ class LogCollector {
     /// Append log message to file
     func append(level: String, category: String, message: String) {
         // Production safety: double-check even if isEnabled somehow got set
-        #if !DEBUG
-        return // NEVER log to file in production builds
-        #endif
         
         guard isEnabled else { return }
         guard DeveloperMode.shared.canEnableLogCollection else { return }

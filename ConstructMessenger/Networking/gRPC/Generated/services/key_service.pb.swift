@@ -136,6 +136,9 @@ public struct Shared_Proto_Services_V1_GetPreKeyBundleResponse: Sendable {
   /// If false, only signed pre-key available (less forward secrecy)
   public var hasOneTimeKey_p: Bool = false
 
+  /// Ed25519 public key for verifying device signatures
+  public var verifyingKey: Data = Data()
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -623,7 +626,7 @@ extension Shared_Proto_Services_V1_GetPreKeyBundleRequest: SwiftProtobuf.Message
 
 extension Shared_Proto_Services_V1_GetPreKeyBundleResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetPreKeyBundleResponse"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}bundle\0\u{3}device_id\0\u{3}has_one_time_key\0\u{c}\u{4}\u{7}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}bundle\0\u{3}device_id\0\u{3}has_one_time_key\0\u{4}\u{8}verifying_key\0\u{c}\u{4}\u{7}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -634,6 +637,7 @@ extension Shared_Proto_Services_V1_GetPreKeyBundleResponse: SwiftProtobuf.Messag
       case 1: try { try decoder.decodeSingularMessageField(value: &self._bundle) }()
       case 2: try { try decoder.decodeSingularStringField(value: &self.deviceID) }()
       case 3: try { try decoder.decodeSingularBoolField(value: &self.hasOneTimeKey_p) }()
+      case 11: try { try decoder.decodeSingularBytesField(value: &self.verifyingKey) }()
       default: break
       }
     }
@@ -653,6 +657,9 @@ extension Shared_Proto_Services_V1_GetPreKeyBundleResponse: SwiftProtobuf.Messag
     if self.hasOneTimeKey_p != false {
       try visitor.visitSingularBoolField(value: self.hasOneTimeKey_p, fieldNumber: 3)
     }
+    if !self.verifyingKey.isEmpty {
+      try visitor.visitSingularBytesField(value: self.verifyingKey, fieldNumber: 11)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -660,6 +667,7 @@ extension Shared_Proto_Services_V1_GetPreKeyBundleResponse: SwiftProtobuf.Messag
     if lhs._bundle != rhs._bundle {return false}
     if lhs.deviceID != rhs.deviceID {return false}
     if lhs.hasOneTimeKey_p != rhs.hasOneTimeKey_p {return false}
+    if lhs.verifyingKey != rhs.verifyingKey {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

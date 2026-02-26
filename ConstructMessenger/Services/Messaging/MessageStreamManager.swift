@@ -45,14 +45,31 @@ final class MessageStreamManager: ObservableObject {
     // MARK: - Public API
 
     func connect(contactUserIds: [String] = [], onMessageReceived: @escaping (ChatMessage) -> Void) {
+        self.onMessageReceived = onMessageReceived
+
+        let subscriptionChanged = contactUserIds != subscriptionUserIds
+
+        // If subscriptions changed and a loop is running, force reconnect so the
+        // new contact's conversation ID is included in the subscribe request.
+        if subscriptionChanged && (isConnected || streamTask != nil) {
+            Log.info("📡 Subscriptions changed (\(subscriptionUserIds.count)→\(contactUserIds.count)) — reconnecting stream", category: "MessageStream")
+            forceDisconnect()
+        }
+
+        self.subscriptionUserIds = contactUserIds
+        isPaused = false
+
+        // Already fully connected with up-to-date subscriptions.
         guard !isConnected else {
             Log.info("📡 MessageStream already connected", category: "MessageStream")
             return
         }
 
-        self.onMessageReceived = onMessageReceived
-        self.subscriptionUserIds = contactUserIds
-        isPaused = false
+        // connectLoop is already running (in backoff between retries) — don't stack tasks.
+        guard streamTask == nil else {
+            Log.info("📡 MessageStream already reconnecting", category: "MessageStream")
+            return
+        }
 
         // Reconnect when server config changes
         if serverChangedObserver == nil {

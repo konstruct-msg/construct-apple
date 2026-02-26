@@ -114,7 +114,7 @@ struct ChatsListView: View {
                 Log.info("✅ Parsed contact: userId=\(contactInfo.userId), username=\(contactInfo.username)", category: "ChatsListView")
                 
                 await MainActor.run {
-                    addContact(userId: contactInfo.userId, username: contactInfo.username)
+                    addContact(contactInfo: contactInfo)
                     showingQRScanner = false
                 }
             } catch {
@@ -127,7 +127,9 @@ struct ChatsListView: View {
         }
     }
 
-    private func addContact(userId: String, username: String) {
+    private func addContact(contactInfo: ContactInfo) {
+        let userId = contactInfo.userId
+        let username = contactInfo.username
         Log.info("📱 ChatsListView: Adding contact userId=\(userId), username=\(username)", category: "ChatsListView")
 
         if userId == SessionManager.shared.currentUserId {
@@ -136,12 +138,12 @@ struct ChatsListView: View {
             return
         }
 
-        // Start chat with user - ChatsViewModel handles User creation
         let publicUserInfo = PublicUserInfo(
             id: userId,
             username: username,
             avatarUrl: nil,
-            bio: nil
+            bio: nil,
+            deviceId: contactInfo.deviceId
         )
         if let chat = chatsViewModel.startChat(with: publicUserInfo) {
             Log.info("✅ ChatsListView: Chat created with @\(username), chat.id=\(chat.id)", category: "ChatsListView")

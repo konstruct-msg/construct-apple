@@ -49,7 +49,7 @@ struct ConvergingSignalView: View {
         static let wave3Weight: Double = 0.25
         static let waveNorm: Double = 1.0 + wave2Weight + wave3Weight
         /// Duration of the collapse-to-center animation
-        static let collapseDuration: Double = 0.55
+        static let collapseDuration: Double = 1.2
     }
 
     // MARK: - State

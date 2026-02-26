@@ -10,6 +10,7 @@ class SessionInitializationService {
     /// Fetch public key bundle with exponential backoff retry
     func fetchPublicKeyWithRetry(
         userId: String,
+        deviceId: String? = nil,
         maxAttempts: Int = 3,
         initialDelay: TimeInterval = 1.0
     ) async throws -> PublicKeyBundleData {
@@ -18,13 +19,13 @@ class SessionInitializationService {
         
         for attempt in 1...maxAttempts {
             do {
-                Log.info("🔑 SESSION_STATE[fetch_bundle_attempt_\(attempt)]: userId=\(userId.prefix(8))..., maxAttempts=\(maxAttempts)", category: "SessionInit")
-                let keyBundle = try await KeyServiceClient.shared.getPreKeyBundle(userId: userId)
-                Log.info("✅ SESSION_STATE[fetch_bundle_success]: userId=\(userId.prefix(8))..., attempt=\(attempt)", category: "SessionInit")
+                Log.info("🔑 SESSION_STATE[fetch_bundle_attempt_\(attempt)]: userId=\(userId.prefix(8))..., deviceId=\(deviceId?.prefix(8) ?? "nil")...", category: "SessionInit")
+                let keyBundle = try await KeyServiceClient.shared.getPreKeyBundle(userId: userId, deviceId: deviceId)
+                Log.info("✅ SESSION_STATE[fetch_bundle_success]: userId=\(userId.prefix(8))..., hasVerifyingKey=\(!keyBundle.verifyingKey.isEmpty)", category: "SessionInit")
                 return keyBundle
             } catch {
                 lastError = error
-                Log.info("⚠️ SESSION_STATE[fetch_bundle_failed]: attempt=\(attempt)/\(maxAttempts), error=\(error.localizedDescription)", category: "SessionInit")
+                Log.error("⚠️ SESSION_STATE[fetch_bundle_failed]: attempt=\(attempt)/\(maxAttempts), error=\(error) (\(type(of: error)))", category: "SessionInit")
                 
                 if attempt < maxAttempts {
                     Log.info("⏳ Retrying public key fetch in \(delay)s...", category: "SessionInit")

@@ -55,7 +55,7 @@ struct NewChatView: View {
             }
             .onAppear {
                 if let contactInfo = initialContactInfo {
-                    addContact(userId: contactInfo.userId, username: contactInfo.username)
+                    addContact(contactInfo: contactInfo)
                     initialContactInfo = nil // Consume the deep link
                 }
             }
@@ -77,7 +77,7 @@ struct NewChatView: View {
                 Log.info("✅ Parsed contact: userId=\(contactInfo.userId), username=\(contactInfo.username), isDynamic=\(contactInfo.isDynamic)", category: "NewChatView")
                 
                 await MainActor.run {
-                    addContact(userId: contactInfo.userId, username: contactInfo.username)
+                    addContact(contactInfo: contactInfo)
                     showingQRScanner = false
                     dismiss()
                 }
@@ -85,22 +85,23 @@ struct NewChatView: View {
                 Log.error("❌ Failed to parse contact link: \(error.localizedDescription)", category: "NewChatView")
                 await MainActor.run {
                     showErrorAfterDismiss(error.localizedDescription)
-                    // Keep scanner closed but show error
                     showingQRScanner = false
                 }
             }
         }
     }
 
-    private func addContact(userId: String, username: String) {
+    private func addContact(contactInfo: ContactInfo) {
+        let userId = contactInfo.userId
+        let username = contactInfo.username
         Log.info("📱 NewChatView: Adding contact userId=\(userId), username=\(username)", category: "NewChatView")
 
-        // Start chat with user - let ChatsViewModel handle User creation
         let publicUserInfo = PublicUserInfo(
             id: userId,
             username: username,
             avatarUrl: nil,
-            bio: nil
+            bio: nil,
+            deviceId: contactInfo.deviceId
         )
         if let chat = chatsViewModel.startChat(with: publicUserInfo) {
             Log.info("✅ NewChatView: Chat created with @\(username), chat.id=\(chat.id)", category: "NewChatView")
