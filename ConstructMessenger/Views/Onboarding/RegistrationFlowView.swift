@@ -27,14 +27,23 @@ struct RegistrationStageView: View {
     var onComplete: (() -> Void)? = nil
     var onDismiss: (() -> Void)? = nil
 
+    @State private var signalCollapsed = false
+    @State private var showComplete = false
+
     var body: some View {
         VStack(spacing: 0) {
             Spacer()
             switch step {
             case .generatingKeys, .fetchingChallenge, .computingPoW, .submittingRegistration:
                 preparingContent
+                    .transition(.opacity)
             case .complete:
-                completeContent
+                if showComplete {
+                    completeContent
+                        .transition(.opacity.animation(.easeIn(duration: 0.4)))
+                } else {
+                    preparingContent
+                }
             case .error(let msg):
                 errorContent(msg)
             }
@@ -42,6 +51,15 @@ struct RegistrationStageView: View {
             actionButton.padding(.bottom, 20)
         }
         .padding(.horizontal, 32)
+        .onChange(of: step) { _, newStep in
+            if newStep == .complete {
+                signalCollapsed = true
+                // Wait for collapse animation, then show complete screen
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.65) {
+                    withAnimation { showComplete = true }
+                }
+            }
+        }
     }
 
     // MARK: Preparing (all pre-complete steps unified)
@@ -55,7 +73,7 @@ struct RegistrationStageView: View {
                     .font(.subheadline).foregroundColor(.secondary)
             }
 
-            ConvergingSignalView(progress: unifiedProgress)
+            ConvergingSignalView(progress: unifiedProgress, collapsed: signalCollapsed)
                 .frame(height: 72)
 
             Text(phaseLabel)

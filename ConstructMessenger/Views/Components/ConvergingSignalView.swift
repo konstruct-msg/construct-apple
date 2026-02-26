@@ -14,56 +14,42 @@ import SwiftUI
 
 /// Dots start chaotic (jagged polyline), settle left-to-right into the center
 /// line as `progress` increases from 0→1 — like a signal locking in.
+/// When `collapsed = true` all dots converge to center and fade out.
 ///
 /// Uses `TimelineView` for CADisplayLink-accurate 60/120Hz rendering.
-/// The unsettled segment uses multiple overlapping sine waves (chaos).
-/// Connecting line is a raw polyline (no smoothing) → visible jagged shape.
 struct ConvergingSignalView: View {
     let progress: Double   // 0.0 → 1.0
     var dotColor: Color = Color("SecondColor")
+    /// Set to true to trigger the collapse-to-dot exit animation
+    var collapsed: Bool = false
 
     // MARK: - Configuration
 
     private enum Config {
-        // How many dots in the line
         static let dotCount: Int = 28
-        // Timeline tick multiplier — controls overall animation speed
         static let animationSpeed: Double = 1.5
-        // Max vertical oscillation as a fraction of the view height (stays within frame after normalization)
         static let amplitudeFraction: Double = 0.40
-
-        // Settle front: dots whose norm is below (progress - settleCutoff) snap to center
         static let settleCutoff: Double = 0.04
-        // Blend window around the settle front used for dot radius/opacity
-        static let dotBlendBack: Double = 0.08   // progress - this
-        static let dotBlendFront: Double = 0.02  // progress + this
-        // Blend window used for the amplitude envelope in yForDot
-        static let envelopeBlendFront: Double = 0.06  // progress + this
-
-        // Dot radii
+        static let dotBlendBack: Double = 0.08
+        static let dotBlendFront: Double = 0.02
+        static let envelopeBlendFront: Double = 0.06
         static let settledRadius: CGFloat = 2.2
         static let unsettledRadius: CGFloat = 2.5
-        static let dotRadiusVariance: CGFloat = 0.5   // shrinks unsettledRadius by blend * this
-
-        // Dot opacity
+        static let dotRadiusVariance: CGFloat = 0.5
         static let settledAlpha: Double = 0.92
         static let unsettledAlphaBase: Double = 0.25
         static let unsettledAlphaRange: Double = 0.45
-        // Phase/tick scale for the unsettled dot flicker
         static let flickerPhaseScale: Double = 0.7
         static let flickerTickScale: Double = 0.9
-
-        // Connecting polyline
         static let lineOpacity: Double = 0.22
         static let lineWidth: CGFloat = 1.2
-
-        // Wave frequencies (multiples of base) and amplitude weights
         static let wave2Freq: Double = 2.3
         static let wave3Freq: Double = 3.7
         static let wave2Weight: Double = 0.5
         static let wave3Weight: Double = 0.25
-        // Normalizer: max |w1+w2+w3| = 1 + wave2Weight + wave3Weight
         static let waveNorm: Double = 1.0 + wave2Weight + wave3Weight
+        /// Duration of the collapse-to-center animation
+        static let collapseDuration: Double = 0.55
     }
 
     // MARK: - State
@@ -72,6 +58,8 @@ struct ConvergingSignalView: View {
     @State private var phase2: [Double] = (0..<Config.dotCount).map { _ in .random(in: 0..<2 * .pi) }
     @State private var phase3: [Double] = (0..<Config.dotCount).map { _ in .random(in: 0..<2 * .pi) }
     @State private var startDate = Date()
+    /// 0 = normal, 1 = fully collapsed to center dot
+    @State private var collapseT: Double = 0.0
 
     // MARK: - Body
 
@@ -79,40 +67,49 @@ struct ConvergingSignalView: View {
         TimelineView(.animation) { timeline in
             let tick = timeline.date.timeIntervalSince(startDate) * Config.animationSpeed
             Canvas { context, size in
+                let cx = size.width / 2.0
                 let cy = size.height / 2.0
                 let spacing = size.width / CGFloat(Config.dotCount - 1)
                 let maxAmp = size.height * Config.amplitudeFraction
 
                 let points: [CGPoint] = (0..<Config.dotCount).map { i in
-                    CGPoint(
-                        x: CGFloat(i) * spacing,
-                        y: yForDot(i: i, cy: cy, maxAmp: maxAmp, tick: tick)
-                    )
+                    let xNormal = CGFloat(i) * spacing
+                    // During collapse, x also converges to center
+                    let x = xNormal + (cx - xNormal) * CGFloat(collapseT)
+                    let y = yForDot(i: i, cy: cy, maxAmp: maxAmp, tick: tick,
+                                    collapseT: collapseT)
+                    return CGPoint(x: x, y: y)
                 }
 
-                // Jagged polyline — no Bezier, intentionally angular
+                let globalAlpha = 1.0 - collapseT * 0.85
+
+                // Polyline fades out during collapse
                 var line = Path()
                 line.move(to: points[0])
                 for i in 1..<Config.dotCount { line.addLine(to: points[i]) }
-                context.stroke(line, with: .color(dotColor.opacity(Config.lineOpacity)),
+                context.stroke(line,
+                               with: .color(dotColor.opacity(Config.lineOpacity * globalAlpha)),
                                lineWidth: Config.lineWidth)
 
-                // Dots
+                // Dots converge and merge into one bright point
                 for i in 0..<Config.dotCount {
                     let norm = Double(i) / Double(Config.dotCount - 1)
                     let settled = norm < progress - Config.settleCutoff
                     let blend = smoothstep(norm,
                                            lo: progress - Config.dotBlendBack,
                                            hi: progress + Config.dotBlendFront)
-                    let r: CGFloat = settled
+                    // During collapse all dots grow toward center dot size
+                    let baseR: CGFloat = settled
                         ? Config.settledRadius
                         : Config.unsettledRadius - Config.dotRadiusVariance * CGFloat(blend)
-                    let alpha: Double = settled
+                    let r = baseR + (Config.settledRadius * 1.4 - baseR) * CGFloat(collapseT)
+                    let baseAlpha: Double = settled
                         ? Config.settledAlpha
                         : Config.unsettledAlphaBase
                             + Config.unsettledAlphaRange
                             * abs(sin(phase1[i] * Config.flickerPhaseScale
                                       + tick * Config.flickerTickScale))
+                    let alpha = (baseAlpha + (1.0 - baseAlpha) * collapseT) * globalAlpha
                     context.fill(
                         Path(ellipseIn: CGRect(x: points[i].x - r, y: points[i].y - r,
                                                width: r * 2, height: r * 2)),
@@ -121,26 +118,34 @@ struct ConvergingSignalView: View {
                 }
             }
         }
-        .onAppear {
-            startDate = Date()
+        .onAppear { startDate = Date() }
+        .onChange(of: collapsed) { _, isCollapsed in
+            guard isCollapsed else { return }
+            withAnimation(.easeInOut(duration: Config.collapseDuration)) {
+                collapseT = 1.0
+            }
         }
     }
 
     // MARK: - Helpers
 
-    private func yForDot(i: Int, cy: CGFloat, maxAmp: CGFloat, tick: Double) -> CGFloat {
+    private func yForDot(i: Int, cy: CGFloat, maxAmp: CGFloat,
+                         tick: Double, collapseT: Double) -> CGFloat {
         let norm = Double(i) / Double(Config.dotCount - 1)
-        guard norm >= progress - Config.settleCutoff else { return cy }
-        // Uniform amplitude ahead of the front: 0 on settled side, 1 past transition
+        guard norm >= progress - Config.settleCutoff else {
+            // Settled dots also pull toward cy during collapse
+            return cy
+        }
         let envelope = smoothstep(norm,
                                   lo: progress - Config.settleCutoff,
                                   hi: progress + Config.envelopeBlendFront)
         let w1 = sin(phase1[i] + tick)
         let w2 = sin(phase2[i] + tick * Config.wave2Freq) * Config.wave2Weight
         let w3 = sin(phase3[i] + tick * Config.wave3Freq) * Config.wave3Weight
-        // Normalize so combined waves never exceed [-1, 1] → dots stay inside frame
         let wave = (w1 + w2 + w3) / Config.waveNorm
-        return cy + maxAmp * CGFloat(envelope) * CGFloat(wave)
+        let normalY = cy + maxAmp * CGFloat(envelope) * CGFloat(wave)
+        // Collapse: lerp toward center line
+        return normalY + (cy - normalY) * CGFloat(collapseT)
     }
 
     private func smoothstep(_ x: Double, lo: Double, hi: Double) -> Double {

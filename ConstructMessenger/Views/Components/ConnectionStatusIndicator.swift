@@ -9,6 +9,7 @@ import SwiftUI
 struct ConnectionStatusIndicator: View {
     @ObservedObject var connectionManager = ConnectionStatusManager.shared
     @State private var animationScale: CGFloat = 1.0
+    @State private var introScale: CGFloat = 0.0
 
     var body: some View {
         ZStack {
@@ -27,7 +28,13 @@ struct ConnectionStatusIndicator: View {
                 .animation(.easeInOut(duration: 0.3), value: indicatorColor)
         }
         .frame(width: 20, height: 20)
-        .onAppear { startPulse() }
+        .scaleEffect(introScale)
+        .onAppear {
+            startPulse()
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) {
+                introScale = 1.0
+            }
+        }
         .onChange(of: connectionManager.connectionStatus) { startPulse() }
     }
 
