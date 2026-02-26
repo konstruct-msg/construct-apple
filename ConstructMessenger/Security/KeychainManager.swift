@@ -273,6 +273,7 @@ class KeychainManager {
         delete(forKey: "signed_prekey")
         delete(forKey: "signing_key")
         delete(forKey: "userId")
+        deletePrivateKeysJson()
         deleteAllSessions()
         Log.info("🗑️ All cryptographic keys and sessions deleted", category: "Keychain")
     }

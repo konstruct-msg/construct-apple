@@ -306,13 +306,16 @@ class CryptoManager {
     /// After calling this, the app will generate fresh keys on next registration
     func deleteAllCryptoKeys() {
         Log.info("🗑️ Deleting all cryptographic data from Keychain...", category: "CryptoManager")
-        
+
+        // Nullify in-memory core so next registration generates a fresh keypair
+        self.core = nil
+
         // Delete private keys JSON (identity, signed prekey, signing key)
         KeychainManager.shared.deletePrivateKeysJson()
-        
+
         // Delete all individual keys and ALL sessions
         KeychainManager.shared.deleteAllKeys()
-        
+
         Log.info("✅ All cryptographic keys and sessions deleted from Keychain", category: "CryptoManager")
         Log.info("ℹ️ On next app launch, fresh cryptographic keys will be generated", category: "CryptoManager")
     }
