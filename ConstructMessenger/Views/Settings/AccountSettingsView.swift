@@ -15,6 +15,7 @@ struct AccountSettingsView: View {
     
     // Profile Picture
     @State private var showingImagePicker = false
+    @State private var showingAvatarViewer = false
     
     @State private var showingDeleteAccountWarning = false
     @State private var showingDeleteAccountConfirmation = false
@@ -45,7 +46,11 @@ struct AccountSettingsView: View {
                         }
                     }
                     .onTapGesture {
-                        showingImagePicker = true
+                        if viewModel.profileImage != nil {
+                            showingAvatarViewer = true
+                        } else {
+                            showingImagePicker = true
+                        }
                     }
                     Spacer()
                 }
@@ -194,6 +199,17 @@ struct AccountSettingsView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("AccountDeleted"))) { _ in
             showingDeleteAccountConfirmation = false
         }
+        .sheet(isPresented: $showingAvatarViewer) {
+            AvatarViewerSheet(
+                image: viewModel.profileImage,
+                onChangeAvatar: {
+                    showingAvatarViewer = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                        showingImagePicker = true
+                    }
+                }
+            )
+        }
         .sheet(isPresented: $showingImagePicker) {
             ImagePicker(onImagePicked: { image in
                 viewModel.saveAvatar(image, authViewModel: authViewModel)
@@ -289,6 +305,41 @@ struct DeleteAccountConfirmationView: View {
         }
         .onAppear {
             countdownSeconds = 10
+        }
+    }
+}
+
+// MARK: - Avatar Viewer Sheet
+struct AvatarViewerSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let image: UIImage?
+    let onChangeAvatar: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Color.black.ignoresSafeArea()
+                if let image {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFit()
+                        .ignoresSafeArea(edges: .bottom)
+                }
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("close") { dismiss() }
+                        .foregroundColor(.white)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("change_avatar") { onChangeAvatar() }
+                        .foregroundColor(.white)
+                }
+            }
+            .toolbarBackground(.black, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
         }
     }
 }

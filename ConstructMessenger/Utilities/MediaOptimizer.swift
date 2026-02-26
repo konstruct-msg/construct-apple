@@ -135,6 +135,36 @@ struct MediaOptimizer {
         }
     }
 
+    /// Optimizes an image for use as avatar (512×512 square crop, JPEG 0.8)
+    /// No artificial size cap — uploaded via gRPC media service (not WebSocket)
+    static func optimizeAvatar(_ image: UIImage) throws -> Data {
+        let targetSize: CGFloat = 512
+        let size = image.size
+        let scale = max(targetSize / size.width, targetSize / size.height)
+        let scaledSize = CGSize(width: size.width * scale, height: size.height * scale)
+        let cropX = (scaledSize.width - targetSize) / 2
+        let cropY = (scaledSize.height - targetSize) / 2
+
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1.0
+        format.opaque = true
+        let renderer = UIGraphicsImageRenderer(
+            size: CGSize(width: targetSize, height: targetSize),
+            format: format
+        )
+        let cropped = renderer.image { _ in
+            UIColor.white.setFill()
+            UIRectFill(CGRect(origin: .zero, size: CGSize(width: targetSize, height: targetSize)))
+            image.draw(in: CGRect(x: -cropX, y: -cropY, width: scaledSize.width, height: scaledSize.height))
+        }
+
+        guard let data = cropped.jpegData(compressionQuality: 0.8) else {
+            throw MediaOptimizationError.conversionFailed
+        }
+        Log.info("Avatar optimized: \(data.count) bytes (512×512)", category: "MediaOptimizer")
+        return data
+    }
+
     /// Optimizes an image from file URL
     /// - Parameter url: File URL to image
     /// - Returns: OptimizedMedia

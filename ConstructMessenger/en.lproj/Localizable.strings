@@ -308,3 +308,29 @@
 "port" = "Port";
 "server_applied_title" = "Server Updated";
 "server_applied_message" = "The new gRPC server will be used for all future connections.";
+"close" = "Close";
+"change_avatar" = "Change Photo";
+
+// Onboarding
+"onboarding_tagline" = "post-modern messenger";
+"onboarding_username_placeholder" = "choose a public alias (optional)";
+"onboarding_create_identity" = "Create device identity";
+"onboarding_restore" = "Restore from recovery key";
+"onboarding_recovery_coming_soon" = "Recovery coming soon";
+"onboarding_network_settings" = "Network settings";
+
+// Registration flow
+"reg_establishing_trust" = "Establishing trust";
+"reg_joining_network" = "Your device is joining the network";
+"reg_welcome" = "Welcome";
+"reg_label_username" = "Username";
+"reg_label_mode" = "Mode";
+"reg_label_device_id" = "Device ID";
+"reg_mode_anonymous" = "Anonymous";
+"reg_error_title" = "Something went wrong";
+"reg_continue" = "Continue";
+"reg_try_again" = "Try Again";
+"reg_cancel" = "Cancel";
+"reg_phase_entropy" = "entropy collected";
+"reg_phase_nonce" = "nonce search";
+"reg_phase_solution" = "solution found";

@@ -303,3 +303,29 @@
 "port" = "Порт";
 "server_applied_title" = "Сервер обновлён";
 "server_applied_message" = "Новый gRPC сервер будет использоваться для всех последующих подключений.";
+"close" = "Закрыть";
+"change_avatar" = "Сменить фото";
+
+// Onboarding
+"onboarding_tagline" = "постмодерн мессенджер";
+"onboarding_username_placeholder" = "выберите публичный псевдоним (опционально)";
+"onboarding_create_identity" = "Создать идентификатор устройства";
+"onboarding_restore" = "Восстановить из ключа восстановления";
+"onboarding_recovery_coming_soon" = "Восстановление скоро будет доступно";
+"onboarding_network_settings" = "Настройки сети";
+
+// Registration flow
+"reg_establishing_trust" = "Установка доверия";
+"reg_joining_network" = "Ваше устройство подключается к сети";
+"reg_welcome" = "Добро пожаловать";
+"reg_label_username" = "Имя пользователя";
+"reg_label_mode" = "Режим";
+"reg_label_device_id" = "ID устройства";
+"reg_mode_anonymous" = "Анонимный";
+"reg_error_title" = "Что-то пошло не так";
+"reg_continue" = "Продолжить";
+"reg_try_again" = "Попробовать снова";
+"reg_cancel" = "Отмена";
+"reg_phase_entropy" = "энтропия собрана";
+"reg_phase_nonce" = "поиск nonce";
+"reg_phase_solution" = "решение найдено";

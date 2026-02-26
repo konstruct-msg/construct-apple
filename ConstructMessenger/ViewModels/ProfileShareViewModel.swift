@@ -53,23 +53,15 @@ class ProfileShareViewModel: ObservableObject {
             if let avatarData = currentUser.avatarData,
                let avatarImage = ImageHelper.imageFromData(avatarData) {
                 do {
-                    Log.info("📤 Uploading avatar via Media Upload API", category: "ProfileShare")
-                    
-                    // ✅ Use MediaAPI directly - it returns the raw encryption key
-                    // For profile sharing, we need raw key (not Double Ratchet encrypted)
-                    // because the JSON itself is already E2E encrypted
-                    let uploadResult = try await MediaServiceClient.shared.uploadImage(avatarImage, quality: 0.8)
-                    
+                    Log.info("📤 Uploading avatar via MediaManager", category: "ProfileShare")
+                    let uploadResult = try await MediaManager.shared.uploadAvatar(avatarImage)
                     avatarMediaId = uploadResult.mediaId
                     avatarMediaUrl = uploadResult.mediaUrl
-                    // Use raw key (base64) - JSON is already E2E encrypted
-                    avatarMediaKey = uploadResult.encryptionKey.base64EncodedString()
-                    avatarMediaType = uploadResult.mimeType
-                    
+                    avatarMediaKey = uploadResult.encryptionKey
+                    avatarMediaType = "image/jpeg"
                     Log.info("✅ Avatar uploaded: \(uploadResult.mediaId)", category: "ProfileShare")
                 } catch {
                     Log.error("❌ Failed to upload avatar: \(error.localizedDescription)", category: "ProfileShare")
-                    // Continue without avatar - displayName will still be shared
                 }
             }
             
@@ -214,7 +206,7 @@ class ProfileShareViewModel: ObservableObject {
                     // Let's update shareProfile() to use the raw key instead of encrypting it again.
                     
                     // The mediaKey is base64-encoded raw key (JSON is already E2E encrypted)
-                    let avatarData = try await MediaUploadService.shared.downloadAndDecryptMedia(
+                    let avatarData = try await MediaManager.shared.downloadAndDecryptMedia(
                         mediaUrl: avatarMediaUrl,
                         mediaKeyBase64: avatarMediaKey
                     )

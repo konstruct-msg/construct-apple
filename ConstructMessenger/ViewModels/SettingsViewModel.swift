@@ -77,8 +77,8 @@ class SettingsViewModel: ObservableObject {
             return
         }
 
-        // Process image using ImageHelper (resize, compress, etc.)
-        guard let processedData = ImageHelper.prepareAvatarImage(image) else {
+        // Optimize image using MediaOptimizer (512×512 square, JPEG 0.8)
+        guard let processedData = try? MediaOptimizer.optimizeAvatar(image) else {
             print("⚠️ Failed to process avatar image")
             return
         }

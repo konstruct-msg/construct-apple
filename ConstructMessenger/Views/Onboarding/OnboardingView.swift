@@ -34,7 +34,7 @@ struct OnboardingView: View {
                         .font(.largeTitle)
                         .fontWeight(.bold)
                     
-                    Text("post-modern messenger")
+                    Text("onboarding_tagline")
                         .font(.subheadline)
                         .padding(.vertical, 8)
                     
@@ -44,7 +44,7 @@ struct OnboardingView: View {
                 // Username input (optional)
                 VStack(alignment: .leading, spacing: 8) {
                     
-                    TextField("take public alias (optional)", text: $username)
+                    TextField("onboarding_username_placeholder", text: $username)
                         .multilineTextAlignment(.center)
                         .font(.body.monospaced())
                         .frame(height: 30)
@@ -85,7 +85,7 @@ struct OnboardingView: View {
                     Button {
                         showingRegistration = true
                     } label: {
-                        Text("Create device identity")
+                        Text("onboarding_create_identity")
                             .font(.headline)
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
@@ -99,7 +99,7 @@ struct OnboardingView: View {
                     Button {
                         showingRecovery = true
                     } label: {
-                        Text("Restore from recovery key")
+                        Text("onboarding_restore")
                             .font(.subheadline)
                             .foregroundColor(Color("SecondColor"))
                     }
@@ -113,7 +113,7 @@ struct OnboardingView: View {
             }
             .sheet(isPresented: $showingRecovery) {
                 // TODO: Recovery flow (Week 5)
-                Text("Recovery coming soon")
+                Text("onboarding_recovery_coming_soon")
             }
             .sheet(isPresented: $showingNetworkSettings) {
                 NavigationStack {
@@ -128,7 +128,7 @@ struct OnboardingView: View {
                         Image(systemName: "network")
                     }
                     .foregroundStyle(Color("SecondColor"))
-                    .accessibilityLabel(Text("network"))
+                    .accessibilityLabel(Text("onboarding_network_settings"))
                 }
             }
         }

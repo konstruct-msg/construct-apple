@@ -113,9 +113,9 @@ struct RegistrationStageView: View {
     private var preparingContent: some View {
         VStack(spacing: 44) {
             VStack(spacing: 8) {
-                Text("Establishing trust")
+                Text("reg_establishing_trust")
                     .font(.title2).fontWeight(.semibold)
-                Text("Your device is joining the network")
+                Text("reg_joining_network")
                     .font(.subheadline).foregroundColor(.secondary)
             }
 
@@ -136,17 +136,17 @@ struct RegistrationStageView: View {
         VStack(spacing: 32) {
             
 
-            Text("Welcome")
+            Text("reg_welcome")
                 .font(.largeTitle).fontWeight(.bold)
 
             VStack(spacing: 16) {
                 if let u = username, !u.isEmpty {
-                    DetailRow(label: "Username", value: "@\(u)")
+                    DetailRow(label: NSLocalizedString("reg_label_username", comment: ""), value: "@\(u)")
                 } else {
-                    DetailRow(label: "Mode", value: "Anonymous")
+                    DetailRow(label: NSLocalizedString("reg_label_mode", comment: ""), value: NSLocalizedString("reg_mode_anonymous", comment: ""))
                 }
                 if !deviceId.isEmpty {
-                    DetailRow(label: "Device ID", value: String(deviceId.prefix(16)) + "…")
+                    DetailRow(label: NSLocalizedString("reg_label_device_id", comment: ""), value: String(deviceId.prefix(16)) + "…")
                 }
                 
             }
@@ -161,7 +161,7 @@ struct RegistrationStageView: View {
     private func errorContent(_ message: String) -> some View {
         VStack(spacing: 24) {
  
-            Text("Something went wrong")
+            Text("reg_error_title")
                 .font(.title2).fontWeight(.semibold)
             Text(message)
                 .font(.body).foregroundColor(.secondary)
@@ -176,15 +176,15 @@ struct RegistrationStageView: View {
         switch step {
         case .complete:
             Button { onComplete?() } label: {
-                Text("Continue")
+                Text("reg_continue")
                     .font(.headline).foregroundColor(.white)
                     .frame(maxWidth: .infinity).padding()
                     .background(Color("ButtonColor")).cornerRadius(18)
             }
         case .error:
-            Button("Try Again") { onDismiss?() }.buttonStyle(.bordered)
+            Button("reg_try_again") { onDismiss?() }.buttonStyle(.bordered)
         default:
-            Button("Cancel") { onDismiss?() }.foregroundColor(.secondary)
+            Button("reg_cancel") { onDismiss?() }.foregroundColor(.secondary)
         }
     }
 
@@ -204,11 +204,11 @@ struct RegistrationStageView: View {
     private var phaseLabel: String {
         switch step {
         case .generatingKeys, .fetchingChallenge:
-            return "entropy collected"
+            return NSLocalizedString("reg_phase_entropy", comment: "")
         case .computingPoW:
-            return powProgress >= 0.98 ? "solution found" : "nonce search"
+            return NSLocalizedString(powProgress >= 0.98 ? "reg_phase_solution" : "reg_phase_nonce", comment: "")
         case .submittingRegistration:
-            return "solution found"
+            return NSLocalizedString("reg_phase_solution", comment: "")
         default:
             return ""
         }
