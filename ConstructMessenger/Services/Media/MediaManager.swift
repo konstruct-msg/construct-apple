@@ -168,25 +168,13 @@ class MediaManager {
     func downloadAndDecryptAvatar(mediaUrl: String, mediaKeyBase64: String) async throws -> Data {
         Log.info("📥 Downloading avatar from: \(mediaUrl)", category: "MediaManager")
         
-        // Decode media key
         guard let keyData = Data(base64Encoded: mediaKeyBase64) else {
             throw MediaManagerError.invalidMediaKey
         }
         
-        // Download encrypted data
-        guard let url = URL(string: mediaUrl) else {
-            throw MediaManagerError.invalidURL
-        }
+        let mediaId = URL(string: mediaUrl)?.lastPathComponent ?? mediaUrl
+        let encryptedData = try await MediaServiceClient.shared.downloadEncryptedFile(mediaId: mediaId)
         
-        let (encryptedData, response) = try await URLSession.shared.data(from: url)
-        
-        guard let httpResponse = response as? HTTPURLResponse,
-              httpResponse.statusCode == 200 else {
-            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
-            throw MediaManagerError.downloadFailed(statusCode)
-        }
-        
-        // Decrypt using CryptoManager
         let decryptedData = try CryptoManager.shared.decryptMediaData(encryptedData, with: keyData)
         
         Log.info("✅ Avatar decrypted: \(decryptedData.count) bytes", category: "MediaManager")
@@ -288,8 +276,6 @@ struct AvatarUploadResult {
 /// Media manager errors
 enum MediaManagerError: LocalizedError {
     case invalidMediaKey
-    case invalidURL
-    case downloadFailed(Int)  // HTTP status code
     case decryptionFailed
     case optimizationFailed
     
@@ -297,10 +283,6 @@ enum MediaManagerError: LocalizedError {
         switch self {
         case .invalidMediaKey:
             return "Invalid media encryption key"
-        case .invalidURL:
-            return "Invalid media URL"
-        case .downloadFailed(let statusCode):
-            return "Download failed with HTTP \(statusCode)"
         case .decryptionFailed:
             return "Failed to decrypt media"
         case .optimizationFailed:

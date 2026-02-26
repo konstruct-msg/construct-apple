@@ -53,9 +53,6 @@ enum MediaUploadError: LocalizedError {
 class MediaUploadService {
     static let shared = MediaUploadService()
     
-    private var pendingTokenRequests: [String: CheckedContinuation<MediaTokenData, Error>] = [:]
-    private let queue = DispatchQueue(label: "com.construct.mediaupload", attributes: .concurrent)
-    
     private init() {}
     
     // MARK: - Public API

@@ -33,6 +33,18 @@ final class MediaServiceClient: Sendable {
         let mediaId: String
         let expiresAt: Int
     }
+}
+
+// MARK: - Media Token Data
+struct MediaTokenData: Codable {
+    let requestId: String
+    let uploadToken: String
+    let uploadUrl: String
+    let maxFileSize: Int
+    let expiresAt: String
+}
+
+extension MediaServiceClient {
 
     // MARK: - Generate Upload Token
 

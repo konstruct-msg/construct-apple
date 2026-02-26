@@ -21,8 +21,6 @@ enum ServerMessage: Codable {
     case logoutSuccess
     case deleteAccountSuccess
     case offlineMessages(OfflineMessagesData)
-    case mediaToken(MediaTokenData)
-    case mediaTokenError(MediaTokenErrorData)
 
     // MARK: - Codable Implementation
     
@@ -32,7 +30,7 @@ enum ServerMessage: Codable {
     }
     
     private enum MessageType: String, Codable {
-        case registerSuccess, loginSuccess, connectSuccess, sessionExpired, publicKeyBundle, message, ack, keyRotationSuccess, error, logoutSuccess, deleteAccountSuccess, offlineMessages, mediaToken, mediaTokenError
+        case registerSuccess, loginSuccess, connectSuccess, sessionExpired, publicKeyBundle, message, ack, keyRotationSuccess, error, logoutSuccess, deleteAccountSuccess, offlineMessages
     }
 
     init(from decoder: Decoder) throws {
@@ -72,12 +70,6 @@ enum ServerMessage: Codable {
         case .offlineMessages:
             let payload = try container.decode(OfflineMessagesData.self, forKey: .payload)
             self = .offlineMessages(payload)
-        case .mediaToken:
-            let payload = try container.decode(MediaTokenData.self, forKey: .payload)
-            self = .mediaToken(payload)
-        case .mediaTokenError:
-            let payload = try container.decode(MediaTokenErrorData.self, forKey: .payload)
-            self = .mediaTokenError(payload)
         }
     }
 
@@ -115,12 +107,6 @@ enum ServerMessage: Codable {
             try container.encode(MessageType.deleteAccountSuccess, forKey: .type)
         case .offlineMessages(let data):
             try container.encode(MessageType.offlineMessages, forKey: .type)
-            try container.encode(data, forKey: .payload)
-        case .mediaToken(let data):
-            try container.encode(MessageType.mediaToken, forKey: .type)
-            try container.encode(data, forKey: .payload)
-        case .mediaTokenError(let data):
-            try container.encode(MessageType.mediaTokenError, forKey: .type)
             try container.encode(data, forKey: .payload)
         }
     }
@@ -161,19 +147,4 @@ struct ErrorData: Codable {
 
 struct OfflineMessagesData: Codable {
     let messages: [ChatMessage]
-}
-
-// MARK: - Media Token Response
-struct MediaTokenData: Codable {
-    let requestId: String
-    let uploadToken: String
-    let uploadUrl: String
-    let maxFileSize: Int
-    let expiresAt: String
-}
-
-struct MediaTokenErrorData: Codable {
-    let requestId: String
-    let error: String
-    let code: String
 }

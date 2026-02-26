@@ -36,6 +36,7 @@ struct OnboardingView: View {
                     
                     Text("post-modern messenger")
                         .font(.subheadline)
+                        .padding(.vertical, 8)
                     
                 }
                 .padding(.bottom, 80)
@@ -92,6 +93,7 @@ struct OnboardingView: View {
                             .background(canProceed ? Color("ButtonColor") : Color.gray)
                             .cornerRadius(18)
                     }
+                    .padding(.vertical, 8)
                     .disabled(!canProceed)
                                         
                     Button {
@@ -99,8 +101,9 @@ struct OnboardingView: View {
                     } label: {
                         Text("Restore from recovery key")
                             .font(.subheadline)
-                            .foregroundColor(Color("BackColor"))
+                            .foregroundColor(Color("SecondColor"))
                     }
+                    .padding(.vertical, 8)
                 }
                 .padding(.horizontal, 32)
                 .padding(.bottom, 32)
@@ -123,8 +126,8 @@ struct OnboardingView: View {
                         showingNetworkSettings = true
                     } label: {
                         Image(systemName: "network")
-//                            .colorInvert(Color("BackColor"))
                     }
+                    .foregroundStyle(Color("SecondColor"))
                     .accessibilityLabel(Text("network"))
                 }
             }

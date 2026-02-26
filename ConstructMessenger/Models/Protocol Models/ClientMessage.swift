@@ -19,7 +19,6 @@ enum ClientMessage: Codable {
     case getOfflineMessages
     case acknowledgeMessage(AcknowledgeMessageData)
     case dummy(DummyMessageData)  // Traffic protection: dummy message
-    case requestMediaToken(RequestMediaTokenData)  // Request upload token for media
 
     // MARK: - Codable Implementation
     
@@ -29,7 +28,7 @@ enum ClientMessage: Codable {
     }
 
     private enum MessageType: String, Codable {
-        case register, login, connect, getPublicKey, sendMessage, rotatePrekey, logout, getOfflineMessages, acknowledgeMessage, dummy, requestMediaToken
+        case register, login, connect, getPublicKey, sendMessage, rotatePrekey, logout, getOfflineMessages, acknowledgeMessage, dummy
     }
 
     init(from decoder: Decoder) throws {
@@ -65,9 +64,6 @@ enum ClientMessage: Codable {
         case .dummy:
             let payload = try container.decode(DummyMessageData.self, forKey: .payload)
             self = .dummy(payload)
-        case .requestMediaToken:
-            let payload = try container.decode(RequestMediaTokenData.self, forKey: .payload)
-            self = .requestMediaToken(payload)
         }
     }
 
@@ -102,9 +98,6 @@ enum ClientMessage: Codable {
             try container.encode(data, forKey: .payload)
         case .dummy(let data):
             try container.encode(MessageType.dummy, forKey: .type)
-            try container.encode(data, forKey: .payload)
-        case .requestMediaToken(let data):
-            try container.encode(MessageType.requestMediaToken, forKey: .type)
             try container.encode(data, forKey: .payload)
         }
     }
@@ -172,9 +165,4 @@ struct AcknowledgeMessageData: Codable {
 /// Server will ignore these messages but they help mask real traffic patterns
 struct DummyMessageData: Codable {
     let payload: String  // Base64-encoded random bytes
-}
-
-/// Request for media upload token
-struct RequestMediaTokenData: Codable {
-    let requestId: String
 }

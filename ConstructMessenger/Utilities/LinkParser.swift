@@ -122,7 +122,7 @@ struct LinkParser {
         let userId = response.userID.isEmpty ? invite.uuid : response.userID
         let deviceId = response.hasDeviceID ? response.deviceID : invite.deviceId
         
-        Log.info("✅ Invite accepted: userId=\(userId.prefix(8))..., deviceId=\(deviceId ?? "none")", category: "LinkParser")
+        Log.info("✅ Invite accepted: userId=\(userId.prefix(8))..., deviceId=\(deviceId)", category: "LinkParser")
         
         return ContactInfo(
             userId: userId,
