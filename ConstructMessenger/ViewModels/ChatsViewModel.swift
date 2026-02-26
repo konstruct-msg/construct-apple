@@ -112,29 +112,22 @@ class ChatsViewModel: ObservableObject {
         .removeDuplicates()
         .receive(on: DispatchQueue.main)
         .sink { [weak self] (state: PollingState) in
-            Log.info("📡 State change: token=\(state.hasToken ? "present" : "nil"), status=\(state.status.displayText), push=\(state.pushEnabled)", category: "ChatsViewModel")
-            
+            Log.debug("📡 Stream state: token=\(state.hasToken ? "present" : "nil"), status=\(state.status.displayText), push=\(state.pushEnabled)", category: "ChatsViewModel")
+
             if state.hasToken && state.status != ConnectionStatusManager.ConnectionStatus.disconnected {
                 if state.pushEnabled {
-                    Log.info("📱 Push enabled - using minimal background polling", category: "ChatsViewModel")
-                    self?.startLongPolling(
-                        pollingTimeout: LongPollingConfig.minimalTimeoutSeconds,
-                        postSuccessDelaySeconds: LongPollingConfig.minimalPostPollDelaySeconds
-                    )
+                    Log.info("📱 Push active — stream connected", category: "ChatsViewModel")
                 } else {
-                    Log.info("📡 Push disabled - using full long-polling", category: "ChatsViewModel")
-                    self?.startLongPolling(
-                        pollingTimeout: LongPollingConfig.fullTimeoutSeconds,
-                        postSuccessDelaySeconds: 0
-                    )
+                    Log.info("📡 Connecting message stream", category: "ChatsViewModel")
                 }
+                self?.startMessageStream()
             } else {
                 if !state.hasToken {
-                    Log.info("📡 No session token - stopping polling", category: "ChatsViewModel")
-                } else if state.status != ConnectionStatusManager.ConnectionStatus.connected {
-                    Log.info("📡 Not connected (\(state.status.displayText)) - stopping polling", category: "ChatsViewModel")
+                    Log.info("📡 No session — stream stopped", category: "ChatsViewModel")
+                } else {
+                    Log.info("📡 Disconnected (\(state.status.displayText)) — stream stopped", category: "ChatsViewModel")
                 }
-                self?.stopLongPolling()
+                self?.stopMessageStream()
             }
         }
         .store(in: &cancellables)
@@ -163,8 +156,7 @@ class ChatsViewModel: ObservableObject {
 
     // MARK: - Message Receiving
 
-    func startLongPolling(pollingTimeout: Int, postSuccessDelaySeconds: TimeInterval) {
-        // Fetch all known contact user IDs from Core Data for stream subscription
+    func startMessageStream() {
         var contactIds: [String] = []
         if let context = viewContext {
             let fetchRequest = User.fetchRequest()
@@ -173,13 +165,12 @@ class ChatsViewModel: ObservableObject {
                 contactIds = users.compactMap { $0.id }
             }
         }
-
         streamManager.connect(contactUserIds: contactIds) { [weak self] message in
             self?.handleIncomingMessage(message)
         }
     }
 
-    func stopLongPolling() {
+    func stopMessageStream() {
         streamManager.disconnect()
     }
 

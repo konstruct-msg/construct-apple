@@ -131,7 +131,6 @@ struct AccountSettingsView: View {
         .sheet(isPresented: $showingDeleteConfirmation) {
             DeleteAccountConfirmationView(
                 onDelete: {
-                    showingDeleteConfirmation = false
                     authViewModel.deleteAccount()
                 },
                 onCancel: {
