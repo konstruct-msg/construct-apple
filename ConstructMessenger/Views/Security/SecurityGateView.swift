@@ -32,7 +32,7 @@ struct SecurityGateView<Content: View>: View {
             securityViewModel.refreshPinState()
             securityViewModel.refreshBiometricAvailability()
         }
-        .onChange(of: scenePhase) { newPhase in
+        .onChange(of: scenePhase) { _, newPhase in
             switch newPhase {
             case .background, .inactive:
                 securityViewModel.lockIfNeeded()

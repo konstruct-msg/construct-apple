@@ -28,7 +28,7 @@ struct ConnectionStatusIndicator: View {
         }
         .frame(width: 20, height: 20)
         .onAppear { startPulse() }
-        .onChange(of: connectionManager.connectionStatus) { _ in startPulse() }
+        .onChange(of: connectionManager.connectionStatus) { startPulse() }
     }
 
     private var indicatorColor: Color {

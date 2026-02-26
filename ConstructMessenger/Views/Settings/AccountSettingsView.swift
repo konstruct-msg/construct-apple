@@ -65,7 +65,7 @@ struct AccountSettingsView: View {
             // MARK: - Account Information Section
             Section {
                 TextField("display_name", text: $viewModel.displayName)
-                    .onChange(of: viewModel.displayName) { newValue in
+                    .onChange(of: viewModel.displayName) { _, newValue in
                         viewModel.saveDisplayName(newValue, authViewModel: authViewModel)
                     }
                 
@@ -186,7 +186,7 @@ struct AccountSettingsView: View {
                 }
             )
         }
-        .onChange(of: authViewModel.errorMessage) { errorMessage in
+        .onChange(of: authViewModel.errorMessage) { _, errorMessage in
             if let error = errorMessage, showingDeleteAccountConfirmation {
                 deleteAccountError = error
             }

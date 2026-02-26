@@ -133,7 +133,7 @@ struct MessageInputView: View {
         .animation(.easeInOut(duration: 0.2), value: canSend)
         .animation(.easeInOut(duration: 0.2), value: replyingTo != nil)
         .animation(.easeInOut(duration: 0.2), value: !selectedImages.isEmpty)
-        .onChange(of: selectedPhotos) { _ in
+        .onChange(of: selectedPhotos) {
             Task {
                 await loadSelectedPhotos()
             }

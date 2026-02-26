@@ -76,7 +76,7 @@ struct ChatsListView: View {
                 // ✅ Clear badge when user opens chats list
                 LocalNotificationManager.shared.clearBadge()
             }
-            .onChange(of: chatsViewModel.chatToOpen) { chatId in
+            .onChange(of: chatsViewModel.chatToOpen) { _, chatId in
                 if let chatId = chatId {
                     // Clear the flag first to prevent re-triggering
                     chatsViewModel.chatToOpen = nil

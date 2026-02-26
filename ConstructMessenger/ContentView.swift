@@ -57,7 +57,7 @@ struct ContentView: View {
             Log.info("📢 Received 'DeviceRegistered' notification", category: "ContentView")
             checkDeviceKeys()
         }
-        .onChange(of: scenePhase) { newPhase in
+        .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
                 // Always restore connection when coming from background to foreground
                 print("📱 App became active, attempting to restore connection...")
@@ -68,7 +68,7 @@ struct ContentView: View {
                 // Long polling will resume when app becomes active
             }
         }
-        .onChange(of: deepLinkHandler.deepLink) { newDeepLink in
+        .onChange(of: deepLinkHandler.deepLink) { _, newDeepLink in
             Log.debug("ContentView: Deep link changed: \(String(describing: newDeepLink))", category: "DeepLink")
             if case .contact(let contactInfo) = newDeepLink {
                 Log.info("ContentView: Creating chat directly for userId: \(contactInfo.userId), username: \(contactInfo.username)", category: "DeepLink")

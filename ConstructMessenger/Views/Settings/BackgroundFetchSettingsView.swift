@@ -52,7 +52,7 @@ struct BackgroundFetchSettingsView: View {
                 }
             }
             .disabled(isLowPowerModeEnabled)
-            .onChange(of: isEnabled) { newValue in
+            .onChange(of: isEnabled) { _, newValue in
                 handleToggleChange(newValue)
             }
         } footer: {
@@ -130,7 +130,7 @@ struct BackgroundFetchSettingsView: View {
                 .font(.caption)
                 .foregroundColor(.secondary)
         }
-        .onChange(of: intervalMinutes) { newValue in
+        .onChange(of: intervalMinutes) { _, newValue in
             handleIntervalChange(newValue)
         }
     }

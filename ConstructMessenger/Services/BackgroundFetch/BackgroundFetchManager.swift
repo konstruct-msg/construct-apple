@@ -256,7 +256,7 @@ class BackgroundFetchManager: NSObject, ObservableObject {
                     if !result.hasMore { break }
                 } while true
 
-                await MainActor.run {
+                await MainActor.run { [allMessages] in
                     self.processOfflineMessages(allMessages, backgroundContext: backgroundContext, completion: completion)
                 }
             } catch {

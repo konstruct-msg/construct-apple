@@ -165,7 +165,7 @@ struct ChatView: View {
                     // No need to scroll manually - rotation makes top=bottom visually
                     scrollManager.hasScrolledToBottom = true
                 }
-                .onChange(of: viewModel.messages.count) { count in
+                .onChange(of: viewModel.messages.count) { _, count in
                     if AppConstants.enableDebugLogging {
                         print("ChatView: messages count changed to \(count)")
                     }
@@ -180,7 +180,7 @@ struct ChatView: View {
                         }
                     }
                 }
-                .onChange(of: searchText) { newValue in
+                .onChange(of: searchText) { _, newValue in
                     // ✅ Scroll to first search result
                     if !newValue.isEmpty, !filteredMessages.isEmpty, let firstMatch = filteredMessages.first {
                         DispatchQueue.main.asyncAfter(deadline: .now() + ChatViewConstants.SearchDelay.scrollToResult) {
@@ -194,7 +194,7 @@ struct ChatView: View {
                         }
                     }
                 }
-                .onChange(of: isSearchActive) { active in
+                .onChange(of: isSearchActive) { _, active in
                     if active {
                         // When search is activated, exit edit mode
                         if isEditMode {
@@ -210,7 +210,7 @@ struct ChatView: View {
                         }
                     }
                 }
-                .onChange(of: isEditMode) { editMode in
+                .onChange(of: isEditMode) { _, editMode in
                     if editMode {
                         // When edit mode is activated, exit search
                         if isSearchActive {

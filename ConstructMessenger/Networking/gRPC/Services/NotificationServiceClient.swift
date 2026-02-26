@@ -19,12 +19,13 @@ final class NotificationServiceClient: Sendable {
     // MARK: - Register Device Token
 
     func registerDeviceToken(token: String) async throws -> DeviceTokenResponse {
-        try await GRPCChannelManager.shared.performRPC { grpcClient in
+        let deviceName = await MainActor.run { UIDevice.current.name }
+        return try await GRPCChannelManager.shared.performRPC { grpcClient in
             let client = Shared_Proto_Services_V1_NotificationService.Client(wrapping: grpcClient)
 
             var request = Shared_Proto_Services_V1_RegisterDeviceTokenRequest()
             request.deviceToken = token
-            request.deviceName = UIDevice.current.name
+            request.deviceName = deviceName
 
             let response = try await client.registerDeviceToken(
                 request: .init(message: request)

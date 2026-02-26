@@ -78,8 +78,8 @@ final class SecurityViewModel: ObservableObject {
     func setPin(_ pin: String) {
         let salt = randomSalt()
         let hash = hashPin(pin, salt: salt)
-        KeychainManager.shared.saveData(hash, forKey: Self.pinHashKey)
-        KeychainManager.shared.saveData(salt, forKey: Self.pinSaltKey)
+        _ = KeychainManager.shared.saveData(hash, forKey: Self.pinHashKey)
+        _ = KeychainManager.shared.saveData(salt, forKey: Self.pinSaltKey)
         UserDefaults.standard.set(pin.count, forKey: Self.pinLengthKey)
         isPinEnabled = true
         isUnlocked = true

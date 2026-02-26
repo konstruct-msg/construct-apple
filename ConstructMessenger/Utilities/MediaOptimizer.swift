@@ -206,20 +206,30 @@ struct MediaOptimizer {
     /// - Parameter url: Video file URL
     /// - Returns: Thumbnail JPEG data
     /// - Throws: MediaOptimizationError if generation fails
-    static func generateVideoThumbnail(from url: URL) throws -> Data {
-        let asset = AVAsset(url: url)
+    static func generateVideoThumbnail(from url: URL) async throws -> Data {
+        let asset = AVURLAsset(url: url)
         let imageGenerator = AVAssetImageGenerator(asset: asset)
         imageGenerator.appliesPreferredTrackTransform = true
 
-        // Get first frame at 0 seconds
         let time = CMTime(seconds: 0, preferredTimescale: 60)
 
-        do {
-            let cgImage = try imageGenerator.copyCGImage(at: time, actualTime: nil)
-            let image = UIImage(cgImage: cgImage)
-            return try generateThumbnail(from: image)
-        } catch {
-            throw MediaOptimizationError.thumbnailGenerationFailed
+        return try await withCheckedThrowingContinuation { continuation in
+            imageGenerator.generateCGImageAsynchronously(for: time) { cgImage, _, error in
+                if error != nil {
+                    continuation.resume(throwing: MediaOptimizationError.thumbnailGenerationFailed)
+                    return
+                }
+                guard let cgImage else {
+                    continuation.resume(throwing: MediaOptimizationError.thumbnailGenerationFailed)
+                    return
+                }
+                do {
+                    let data = try generateThumbnail(from: UIImage(cgImage: cgImage))
+                    continuation.resume(returning: data)
+                } catch {
+                    continuation.resume(throwing: MediaOptimizationError.thumbnailGenerationFailed)
+                }
+            }
         }
     }
 
@@ -230,9 +240,9 @@ struct MediaOptimizer {
     static func optimizeVideo(from url: URL) async throws -> OptimizedMedia {
         // For now, just read original file and generate thumbnail
         let videoData = try Data(contentsOf: url)
-        let thumbnail = try generateVideoThumbnail(from: url)
+        let thumbnail = try await generateVideoThumbnail(from: url)
 
-        let asset = AVAsset(url: url)
+        let asset = AVURLAsset(url: url)
         let duration = try await asset.load(.duration).seconds
         let tracks = try await asset.load(.tracks)
         let videoTrack = tracks.first(where: { $0.mediaType == .video })

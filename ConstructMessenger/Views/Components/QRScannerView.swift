@@ -108,7 +108,7 @@ struct QRScannerView: View {
             } message: {
                 Text("allow_camera_access_for_qr")
             }
-            .onChange(of: scanner.scannedCode) { newValue in
+            .onChange(of: scanner.scannedCode) { _, newValue in
                 if let code = newValue {
                     handleScannedCode(code)
                 }
@@ -408,8 +408,10 @@ class QRCodeScanner: NSObject, ObservableObject, AVCaptureMetadataOutputObjectsD
         previewLayer.videoGravity = .resizeAspectFill
 
         // Set orientation to portrait since app is portrait-only
-        if let connection = previewLayer.connection, connection.isVideoOrientationSupported {
-            connection.videoOrientation = .portrait
+        if let connection = previewLayer.connection {
+            if connection.isVideoRotationAngleSupported(0) {
+                connection.videoRotationAngle = 90 // portrait
+            }
         }
 
         return previewLayer

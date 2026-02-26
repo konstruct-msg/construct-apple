@@ -89,28 +89,45 @@ struct LinkParser {
             throw ContactLinkError.inviteInvalid("Malformed invite data")
         }
         
-        // Check expiry
+        // Quick local TTL check (no server round-trip)
         if invite.isExpired(ttl: InviteConfig.ttlSeconds) {
             Log.info("⚠️ Invite expired: jti=\(invite.jti.prefix(8))...", category: "LinkParser")
             throw ContactLinkError.inviteExpired
         }
         
-        // Verify signature
+        // Call AcceptInvite — server verifies signature and burns JTI (one-time use)
+        var inviteToken = Shared_Proto_Services_V1_InviteToken()
+        inviteToken.v = Int32(invite.v)
+        inviteToken.jti = invite.jti
+        inviteToken.uuid = invite.uuid
+        inviteToken.server = invite.server
+        inviteToken.ts = Int64(invite.ts)
+        inviteToken.ephPub = invite.ephKey
+        inviteToken.sig = invite.sig
+        if !invite.deviceId.isEmpty {
+            inviteToken.deviceID = invite.deviceId
+        }
+        
+        var acceptRequest = Shared_Proto_Services_V1_AcceptInviteRequest()
+        acceptRequest.invite = inviteToken
+        
+        let response: Shared_Proto_Services_V1_AcceptInviteResponse
         do {
-            _ = try await verifier.verify(invite, ttl: InviteConfig.ttlSeconds)
+            response = try await InviteServiceClient.shared.acceptInvite(invite: acceptRequest)
         } catch {
-            Log.error("❌ Invite verification failed: \(error)", category: "LinkParser")
+            Log.error("❌ AcceptInvite failed: \(error)", category: "LinkParser")
             throw ContactLinkError.verificationFailed(error)
         }
         
-        Log.info("✅ Dynamic Invite verified: userId=\(invite.uuid.prefix(8))..., deviceId=\(invite.deviceId), jti=\(invite.jti.prefix(8))...", category: "LinkParser")
+        let userId = response.userID.isEmpty ? invite.uuid : response.userID
+        let deviceId = response.hasDeviceID ? response.deviceID : invite.deviceId
         
-        // Return contact info with both userId and deviceId
-        // Note: username will be fetched from server using userId
+        Log.info("✅ Invite accepted: userId=\(userId.prefix(8))..., deviceId=\(deviceId ?? "none")", category: "LinkParser")
+        
         return ContactInfo(
-            userId: invite.uuid,
-            deviceId: invite.deviceId,
-            username: invite.uuid, // Placeholder, will be resolved by ChatsViewModel
+            userId: userId,
+            deviceId: deviceId,
+            username: userId, // Placeholder, will be resolved by ChatsViewModel
             ephemeralKey: invite.ephKey,
             isDynamic: true
         )

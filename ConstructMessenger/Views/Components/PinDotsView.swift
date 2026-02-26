@@ -42,7 +42,7 @@ struct PinDotsView: View {
                 .focused($isFocused)
                 .frame(width: 1, height: 1)
                 .opacity(0.01)
-                .onChange(of: pin) { newValue in
+                .onChange(of: pin) { _, newValue in
                     let digits = newValue.filter { $0.isNumber }
                     let clamped = String(digits.prefix(length))
                     if clamped != newValue { pin = clamped }
@@ -95,7 +95,7 @@ struct PinDotsField: View {
     var body: some View {
         PinDotsView(length: length, pin: $pin, onComplete: onComplete)
             .offset(x: shakeOffset)
-            .onChange(of: shake) { shouldShake in
+            .onChange(of: shake) { _, shouldShake in
                 guard shouldShake else { return }
                 runShake()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
