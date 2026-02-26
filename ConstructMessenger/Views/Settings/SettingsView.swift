@@ -308,14 +308,14 @@ struct SettingsView: View {
     }
 }
 
-//#Preview {
-//    let container = PreviewHelpers.createPreviewContainer()
-//    let context = container.viewContext
-//    let authViewModel = AuthViewModel(context: context)
-//    authViewModel.configureMockAuth()
-//
-//    return SettingsView()
-//        .environment(\.managedObjectContext, context)
-//        .environmentObject(authViewModel)
-//        .environmentObject(SecurityViewModel())
-//}
+#Preview {
+    let container = PreviewHelpers.createPreviewContainer()
+    let context = container.viewContext
+    let authViewModel = AuthViewModel(context: context)
+    authViewModel.configureMockAuth()
+
+    return SettingsView()
+        .environment(\.managedObjectContext, context)
+        .environmentObject(authViewModel)
+        .environmentObject(SecurityViewModel())
+}

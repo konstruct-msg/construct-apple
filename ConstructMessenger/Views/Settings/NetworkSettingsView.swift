@@ -91,7 +91,7 @@ struct NetworkSettingsView: View {
                 }
 
                 Toggle("use_custom_server", isOn: $useCustomServer)
-                    .onChange(of: useCustomServer) { enabled in
+                    .onChange(of: useCustomServer) { _, enabled in
                         if !enabled {
                             GRPCChannelManager.shared.resetToDefaultServer()
                             customHost = ""

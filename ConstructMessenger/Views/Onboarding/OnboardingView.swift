@@ -99,7 +99,7 @@ struct OnboardingView: View {
                     } label: {
                         Text("Restore from recovery key")
                             .font(.subheadline)
-                            .foregroundColor(.blue)
+                            .foregroundColor(Color("BackColor"))
                     }
                 }
                 .padding(.horizontal, 32)
@@ -123,6 +123,7 @@ struct OnboardingView: View {
                         showingNetworkSettings = true
                     } label: {
                         Image(systemName: "network")
+//                            .colorInvert(Color("BackColor"))
                     }
                     .accessibilityLabel(Text("network"))
                 }
