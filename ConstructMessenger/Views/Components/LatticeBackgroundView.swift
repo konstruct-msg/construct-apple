@@ -31,8 +31,8 @@ struct LatticeBackgroundView: View {
 
     var nodeCount: Int       = 48
     var maxEdgeDistance: CGFloat = 160
-    var nodeOpacity: Double  = 0.50
-    var edgeBaseOpacity: Double = 0.16
+    var nodeOpacity: Double  = 0.65
+    var edgeBaseOpacity: Double = 0.28
     var color: Color         = Color.AppBrand.second
 
     @State private var nodes: [LatticeNode] = []
@@ -40,7 +40,13 @@ struct LatticeBackgroundView: View {
     var body: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
             Canvas { context, size in
-                guard !nodes.isEmpty else { return }
+                // Lazy init: if nodes are empty but Canvas has a real size, generate them
+                if nodes.isEmpty {
+                    if size.width > 0 {
+                        DispatchQueue.main.async { rebuildNodes(in: size) }
+                    }
+                    return
+                }
 
                 let t = timeline.date.timeIntervalSinceReferenceDate
                 let positions = nodes.map { $0.position(at: t) }
