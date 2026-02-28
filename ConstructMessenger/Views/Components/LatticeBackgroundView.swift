@@ -30,9 +30,9 @@ private struct LatticeNode {
 struct LatticeBackgroundView: View {
 
     var nodeCount: Int       = 48
-    var maxEdgeDistance: CGFloat = 160
-    var nodeOpacity: Double  = 0.65
-    var edgeBaseOpacity: Double = 0.28
+    var maxEdgeDistance: CGFloat = 200    // connect nodes within 200 pt
+    var nodeOpacity: Double  = 0.60
+    var edgeBaseOpacity: Double = 0.38
     var color: Color         = Color.AppBrand.second
 
     @State private var nodes: [LatticeNode] = []
@@ -59,8 +59,9 @@ struct LatticeBackgroundView: View {
                         let dist = hypot(b.x - a.x, b.y - a.y)
                         guard dist < maxEdgeDistance else { continue }
 
+                        // Linear falloff — remains visible across full distance range
                         let strength = 1.0 - dist / maxEdgeDistance
-                        let opacity  = edgeBaseOpacity * strength * strength
+                        let opacity  = edgeBaseOpacity * strength
 
                         var path = Path()
                         path.move(to: a)
@@ -68,13 +69,13 @@ struct LatticeBackgroundView: View {
                         context.stroke(
                             path,
                             with: .color(color.opacity(opacity)),
-                            lineWidth: 0.6
+                            lineWidth: 0.7
                         )
                     }
                 }
 
                 // Nodes
-                let r: CGFloat = 1.8
+                let r: CGFloat = 2.0
                 for pos in positions {
                     let rect = CGRect(x: pos.x - r, y: pos.y - r, width: r * 2, height: r * 2)
                     context.fill(
@@ -110,8 +111,8 @@ struct LatticeBackgroundView: View {
             for col in 0 ..< cols {
                 guard built.count < nodeCount else { break }
 
-                let jitterX = CGFloat.random(in: -0.45 ... 0.45) * cellW
-                let jitterY = CGFloat.random(in: -0.45 ... 0.45) * cellH
+                let jitterX = CGFloat.random(in: -0.30 ... 0.30) * cellW
+                let jitterY = CGFloat.random(in: -0.30 ... 0.30) * cellH
                 let ox = (CGFloat(col) + 0.5) * cellW + jitterX
                 let oy = (CGFloat(row) + 0.5) * cellH + jitterY
 
