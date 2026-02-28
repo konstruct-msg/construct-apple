@@ -29,7 +29,7 @@ struct PinLockView: View {
                 Image("KonstructLogo")
                     .resizable()
                     .aspectRatio(contentMode: .fit)
-                    .frame(width: 96, height: 96)
+                    .frame(width: 134, height: 134)
 
                 Spacer().frame(height: 52)
 
@@ -84,10 +84,13 @@ struct PinLockView: View {
     // MARK: - PIN Entry UI
 
     private var pinEntryContent: some View {
-        VStack(spacing: 28) {
+        VStack(spacing: 36) {
+            
             dotsIndicator
-
+                .padding(24)
+            
             numpad
+                .padding(24)
 
             if let errorMessage {
                 Text(errorMessage)
@@ -148,7 +151,7 @@ struct PinLockView: View {
     private var numpad: some View {
         VStack(spacing: 12) {
             ForEach(Self.numpadRows, id: \.self) { row in
-                HStack(spacing: 16) {
+                HStack(spacing: 18) {
                     ForEach(row, id: \.self) { key in
                         numpadButton(key)
                     }
@@ -165,7 +168,7 @@ struct PinLockView: View {
             Button { numpadTap(key) } label: {
                 ZStack {
                     Circle()
-                        .fill(Color.primary.opacity(0.10))
+                        .fill(Color.primary.opacity(0.20))
                     if key == "⌫" {
                         Image(systemName: "delete.left")
                             .font(.system(size: 20, weight: .medium))
@@ -245,7 +248,15 @@ struct PinLockView: View {
     }
 }
 
-#Preview {
+#Preview("PIN entry") {
     PinLockView()
         .environmentObject(SecurityViewModel())
+}
+
+#Preview("Biometric") {
+    let vm = SecurityViewModel()
+    vm.isBiometricAvailable = true
+    vm.isBiometricEnabled = true
+    return PinLockView()
+        .environmentObject(vm)
 }
