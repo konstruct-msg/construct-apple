@@ -53,7 +53,7 @@ struct NetworkSettingsView: View {
                     value: reachabilityManager.isReachable
                         ? NSLocalizedString("reachable", comment: "")
                         : NSLocalizedString("unreachable", comment: ""),
-                    color: reachabilityManager.isReachable ? .green : .red
+                    color: reachabilityManager.isReachable ? Color.AppStatus.success : .red
                 )
 
                 if reachabilityManager.isReachable {
@@ -77,7 +77,7 @@ struct NetworkSettingsView: View {
                     Spacer()
                     Text(GRPCChannelManager.shared.currentHost)
                         .font(.system(size: 13, design: .monospaced))
-                        .foregroundColor(GRPCChannelManager.shared.isUsingCustomServer ? .orange : .blue)
+                        .foregroundColor(GRPCChannelManager.shared.isUsingCustomServer ? .orange : Color.AppBrand.second)
                         .textSelection(.enabled)
                 }
 
@@ -134,7 +134,7 @@ struct NetworkSettingsView: View {
                     Spacer()
                     Text(BuildConfiguration.current == .debug ? "Debug" : "Release")
                         .fontWeight(.medium)
-                        .foregroundColor(BuildConfiguration.current == .debug ? .orange : .green)
+                        .foregroundColor(BuildConfiguration.current == .debug ? .orange : Color.AppStatus.success)
                 }
             } header: {
                 Text("server_configuration")
@@ -180,7 +180,7 @@ struct NetworkSettingsView: View {
 
     private var statusColor: Color {
         switch connectionManager.connectionStatus {
-        case .connected:    return .green
+        case .connected:    return Color.AppStatus.success
         case .disconnected: return .red
         case .connecting:   return .orange
         case .unknown:      return .gray

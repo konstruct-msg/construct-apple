@@ -30,7 +30,7 @@ struct NotificationsSettingsView: View {
                         Text("enable_notifications")
                     } icon: {
                         Image(systemName: notificationsEnabled ? "bell.fill" : "bell.slash.fill")
-                            .foregroundColor(notificationsEnabled ? .blue : .gray)
+                            .foregroundColor(notificationsEnabled ? Color.AppBrand.second : .gray)
                     }
                 }
             } footer: {
@@ -75,12 +75,7 @@ struct NotificationsSettingsView: View {
                                 .foregroundColor(.primary)
                         } icon: {
                             Image(systemName: "checkmark.circle.fill")
-                                .foregroundColor(.green)
-                        }
-                    }
-                }
-            } header: {
-                Text("system_notification_settings")
+                                .foregroundColor(Color.AppStatus.success)
             } footer: {
                 if authorizationStatus == .denied {
                     Text("notification_permissions_required")
@@ -100,7 +95,7 @@ struct NotificationsSettingsView: View {
                             Text("show_message_notifications")
                         } icon: {
                             Image(systemName: "message.fill")
-                                .foregroundColor(.green)
+                                .foregroundColor(Color.AppStatus.success)
                         }
                     }
 
@@ -111,7 +106,7 @@ struct NotificationsSettingsView: View {
                                 Text("notification_sound")
                             } icon: {
                                 Image(systemName: notificationSound ? "speaker.wave.2.fill" : "speaker.slash.fill")
-                                    .foregroundColor(notificationSound ? .blue : .gray)
+                                    .foregroundColor(notificationSound ? Color.AppBrand.second : .gray)
                             }
                         }
 
@@ -146,8 +141,7 @@ struct NotificationsSettingsView: View {
                     // Privacy Notice
                     HStack(alignment: .top, spacing: 12) {
                         Image(systemName: "lock.shield.fill")
-                            .foregroundColor(.green)
-                            .font(.title3)
+                            .foregroundColor(Color.AppStatus.success)
 
                         VStack(alignment: .leading, spacing: 4) {
                             Text("push_privacy_notice")
@@ -194,15 +188,15 @@ struct NotificationsSettingsView: View {
     private var statusColor: Color {
         switch authorizationStatus {
         case .authorized:
-            return .green
+            return Color.AppStatus.success
         case .denied:
             return .red
         case .notDetermined:
             return .orange
         case .provisional:
-            return .blue
+            return Color.AppBrand.second
         case .ephemeral:
-            return .blue
+            return Color.AppBrand.second
         @unknown default:
             return .gray
         }

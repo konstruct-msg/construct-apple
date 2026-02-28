@@ -28,7 +28,7 @@ struct AppearanceSettingsView: View {
 
                             if appTheme == theme {
                                 Image(systemName: "checkmark")
-                                    .foregroundColor(.blue)
+                                    .foregroundColor(Color.AppBrand.second)
                             }
                         }
                     }
@@ -69,7 +69,7 @@ enum AppTheme: String, CaseIterable {
 
     var color: Color {
         switch self {
-        case .automatic: return .blue
+        case .automatic: return Color.AppBrand.second
         case .light: return .orange
         case .dark: return .indigo
         }

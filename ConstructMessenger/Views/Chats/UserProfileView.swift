@@ -35,12 +35,12 @@ struct UserProfileView: View {
                                     .clipShape(Circle())
                             } else {
                                 Circle()
-                                    .fill(Color.blue.opacity(0.2))
+                                    .fill(Color.AppBrand.second.opacity(0.2))
                                     .frame(width: 100, height: 100)
                                     .overlay {
                                         Text(initials)
                                             .font(.system(size: 40, weight: .semibold))
-                                            .foregroundColor(.blue)
+                                            .foregroundColor(Color.AppBrand.second)
                                     }
                             }
                             
@@ -68,7 +68,7 @@ struct UserProfileView: View {
                 Section {
                     HStack {
                         Image(systemName: user.isSharingWithMe ? "checkmark.circle.fill" : "xmark.circle.fill")
-                            .foregroundColor(user.isSharingWithMe ? .green : .gray)
+                            .foregroundColor(user.isSharingWithMe ? Color.AppStatus.success : .gray)
                         
                         VStack(alignment: .leading, spacing: 4) {
                             Text("profile_sharing_status")
@@ -100,8 +100,7 @@ struct UserProfileView: View {
                         VStack(alignment: .leading, spacing: 12) {
                             HStack {
                                 Image(systemName: "checkmark.circle.fill")
-                                    .foregroundColor(.green)
-                                Text("profile_currently_shared")
+                                    .foregroundColor(Color.AppStatus.success)
                                     .foregroundColor(.secondary)
                                 Spacer()
                             }
@@ -124,7 +123,7 @@ struct UserProfileView: View {
                         } label: {
                             HStack {
                                 Image(systemName: "person.crop.circle.badge.plus")
-                                    .foregroundColor(.blue)
+                                    .foregroundColor(Color.AppBrand.second)
                                 Text("share_my_profile")
                                 Spacer()
                                 Image(systemName: "chevron.right")

@@ -48,7 +48,7 @@ struct SettingsView: View {
                                                 .scaledToFill()
                                         } else {
                                             RoundedRectangle(cornerRadius: AvatarStyle.settingsCornerRadius, style: .continuous)
-                                                .fill(Color.blue)
+                                                .fill(Color.AppBrand.second)
                                                 .overlay {
                                                     Text(profileInitials)
                                                         .foregroundColor(.white)
@@ -92,7 +92,7 @@ struct SettingsView: View {
                                         .foregroundColor(.primary)
                                 } icon: {
                                     Image(systemName: linkCopied ? "checkmark.circle.fill" : "link")
-                                        .foregroundColor(linkCopied ? .green : .gray)
+                                        .foregroundColor(linkCopied ? Color.AppStatus.success : .gray)
                                 }
                             }
                             .disabled(linkCopied)
@@ -142,7 +142,7 @@ struct SettingsView: View {
                                         Text("background_fetch")
                                         HStack(spacing: 4) {
                                             Circle()
-                                                .fill(BackgroundFetchConfig.shouldBeEnabled ? Color.green : Color.gray)
+                                                .fill(BackgroundFetchConfig.shouldBeEnabled ? Color.AppStatus.success : Color.gray)
                                                 .frame(width: 6, height: 6)
                                             Text(BackgroundFetchConfig.shouldBeEnabled ? "enabled" : "disabled")
                                                 .font(.caption)
@@ -161,7 +161,7 @@ struct SettingsView: View {
                                         Text("network")
                                         HStack(spacing: 4) {
                                             Circle()
-                                                .fill(connectionStatus.isConnected ? Color.green : Color.red)
+                                                .fill(connectionStatus.isConnected ? Color.AppStatus.success : Color.red)
                                                 .frame(width: 6, height: 6)
                                             Text(connectionStatus.connectionStatus.localizedKey)
                                                 .font(.caption)

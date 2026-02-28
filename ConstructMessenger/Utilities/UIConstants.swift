@@ -208,11 +208,10 @@ extension Color {
     struct AppBrand {
         /// Primary action color — buttons, CTAs (ButtonColor asset)
         static var button: Color { Color("ButtonColor") }
-        /// Secondary accent — icons, links
+        /// Secondary accent — CustomTeal: icons, links, interactive elements
         static var second: Color { Color("CustomTeal") }
-        
+        /// Tertiary accent — StillGreen: success, delivered, positive states
         static var third: Color { Color("StillGreen") }
-        
     }
 
     /// Standard background colors
@@ -241,10 +240,12 @@ extension Color {
 
     /// Semantic status colors
     struct AppStatus {
-        static var success: Color { Color.green }
+        /// Success / delivered / connected — uses StillGreen brand color
+        static var success: Color { Color.AppBrand.third }
         static var error: Color { Color.red }
         static var warning: Color { Color.orange }
-        static var info: Color { Color.blue }
+        /// Info / action / interactive — uses CustomTeal brand color
+        static var info: Color { Color.AppBrand.second }
     }
 }
 

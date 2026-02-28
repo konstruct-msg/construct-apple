@@ -23,7 +23,7 @@ struct ChatRowView: View {
                         .clipShape(RoundedRectangle(cornerRadius: AvatarStyle.chatCornerRadius, style: .continuous))
                 } else {
                     RoundedRectangle(cornerRadius: AvatarStyle.chatCornerRadius, style: .continuous)
-                        .fill(Color.blue)
+                        .fill(Color.AppBrand.second)
                         .frame(width: AvatarStyle.chatSize, height: AvatarStyle.chatSize)
                         .overlay {
                             Text(initials)

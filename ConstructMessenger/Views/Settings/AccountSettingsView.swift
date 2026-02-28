@@ -34,12 +34,12 @@ struct AccountSettingsView: View {
                                     .clipShape(RoundedRectangle(cornerRadius: AvatarStyle.accountCornerRadius, style: .continuous))
                             } else {
                                 RoundedRectangle(cornerRadius: AvatarStyle.accountCornerRadius, style: .continuous)
-                                    .fill(Color.blue.opacity(0.2))
+                                    .fill(Color.AppBrand.second.opacity(0.2))
                                     .frame(width: AvatarStyle.accountSize, height: AvatarStyle.accountSize)
                                     .overlay {
                                         Text(viewModel.displayName.prefix(1).uppercased())
                                             .font(.system(size: 40, weight: .semibold))
-                                            .foregroundColor(.blue)
+                                            .foregroundColor(Color.AppBrand.second)
                                     }
                             }
                         }

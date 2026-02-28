@@ -22,7 +22,7 @@ struct DiagnosticsView: View {
                     Label("Log collection", systemImage: "doc.text")
                     Spacer()
                     Text(LogCollector.shared.isEnabled ? "Active" : "Off")
-                        .foregroundStyle(LogCollector.shared.isEnabled ? .green : .secondary)
+                        .foregroundStyle(LogCollector.shared.isEnabled ? Color.AppStatus.success : .secondary)
                         .font(.footnote)
                 }
                 if !logSize.isEmpty {

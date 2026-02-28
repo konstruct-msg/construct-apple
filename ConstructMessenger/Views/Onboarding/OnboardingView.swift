@@ -72,7 +72,7 @@ struct OnboardingView: View {
                     } else if let available = usernameIsAvailable {
                         Text(LocalizedStringKey(available ? "username_available" : "username_unavailable"))
                             .font(.caption)
-                            .foregroundColor(available ? .green : .red)
+                            .foregroundColor(available ? Color.AppStatus.success : .red)
                     }
                     
                 }

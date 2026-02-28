@@ -43,7 +43,7 @@ struct ServerInfoBanner: View {
     private var statusColor: Color {
         switch connectionStatusManager.connectionStatus {
         case .connected:
-            return .green
+            return Color.AppStatus.success
         case .disconnected:
             return .red
         case .connecting:

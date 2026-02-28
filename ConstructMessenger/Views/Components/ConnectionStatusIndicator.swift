@@ -40,7 +40,7 @@ struct ConnectionStatusIndicator: View {
 
     private var indicatorColor: Color {
         switch connectionManager.connectionStatus {
-        case .connected:    return .green
+        case .connected:    return Color.AppStatus.success
         case .disconnected: return .red
         case .connecting:   return .orange
         case .unknown:      return .gray

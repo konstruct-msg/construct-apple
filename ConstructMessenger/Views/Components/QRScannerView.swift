@@ -124,7 +124,7 @@ struct QRScannerView: View {
                 Button { simulateQRCodeScan() } label: {
                     Label("Simulate QR Scan", systemImage: "camera.viewfinder")
                         .padding()
-                        .background(Color.blue)
+                        .background(Color.AppBrand.second)
                         .foregroundColor(.white)
                         .cornerRadius(8)
                 }
@@ -148,7 +148,7 @@ struct QRScannerView: View {
 
             debugInfoRow("Session Ready",
                          value: scanner.isSessionReady ? "✅ Yes" : "❌ No",
-                         color: scanner.isSessionReady ? .green : .red)
+                         color: scanner.isSessionReady ? Color.AppStatus.success : .red)
             debugInfoRow("Permission", value: permissionStatusString, color: permissionStatusColor)
             debugInfoRow("Device", value: deviceInfo, color: .white)
 
@@ -164,7 +164,7 @@ struct QRScannerView: View {
                 .font(.caption)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
-                .background(Color.blue)
+                .background(Color.AppBrand.second)
                 .foregroundColor(.white)
                 .cornerRadius(6)
             }
@@ -197,7 +197,7 @@ struct QRScannerView: View {
 
     private var permissionStatusColor: Color {
         switch AVCaptureDevice.authorizationStatus(for: .video) {
-        case .authorized: .green
+        case .authorized: Color.AppStatus.success
         case .notDetermined: .orange
         case .denied, .restricted: .red
         @unknown default: .gray

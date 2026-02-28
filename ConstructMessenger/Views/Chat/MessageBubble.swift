@@ -319,22 +319,22 @@ struct MessageBubble: View {
 
         switch status {
         case .sending:
-            // Сообщение только отправлено - серый пустой круг с галочкой
-            Image(systemName: "checkmark.circle")
-                .font(.system(size: 12))
-                .foregroundColor(.secondary)
+            // Uploading — outline circle, message in transit
+            Circle()
+                .stroke(Color.secondary.opacity(0.5), lineWidth: 1.5)
+                .frame(width: 10, height: 10)
 
         case .sent:
-            // Сервер подтвердил получение - серый заполненный круг с галочкой
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 12))
-                .foregroundColor(.secondary)
+            // Server acknowledged — filled gray circle
+            Circle()
+                .fill(Color.secondary.opacity(0.6))
+                .frame(width: 10, height: 10)
 
         case .delivered:
-            // Получатель подтвердил доставку (HMAC-SHA256 ACK) - зелёный заполненный
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 12))
-                .foregroundColor(.green)
+            // Delivered to recipient — filled StillGreen circle
+            Circle()
+                .fill(Color.AppBrand.third)
+                .frame(width: 10, height: 10)
 
         case .queued:
             Button {

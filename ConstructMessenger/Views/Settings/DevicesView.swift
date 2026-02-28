@@ -24,7 +24,7 @@ struct DevicesView: View {
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .background(Color.blue)
+                        .background(Color.AppBrand.second)
                         .cornerRadius(12)
                 }
             }

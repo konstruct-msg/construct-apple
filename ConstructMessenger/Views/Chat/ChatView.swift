@@ -443,7 +443,7 @@ struct ChatView: View {
                     }
                 } label: {
                     Image(systemName: "ellipsis.circle")
-                        .foregroundColor(.blue)
+                        .foregroundColor(Color.AppBrand.second)
                 }
             } else {
                 Button {

@@ -62,7 +62,7 @@ struct PinSetupView: View {
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
                             .padding()
-                            .background(canProceed ? Color.blue : Color.gray.opacity(0.4))
+                            .background(canProceed ? Color.AppBrand.second : Color.gray.opacity(0.4))
                             .cornerRadius(12)
                     }
                     .disabled(!canProceed)
@@ -176,7 +176,7 @@ struct PinSetupView: View {
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
                             .padding()
-                            .background(Color.blue)
+                            .background(Color.AppBrand.second)
                             .cornerRadius(12)
                     }
                     .padding(.top, 8)

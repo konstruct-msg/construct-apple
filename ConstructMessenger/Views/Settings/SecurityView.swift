@@ -35,10 +35,7 @@ struct SecurityView: View {
                             Text(String(format: NSLocalizedString("use_biometric", comment: ""), securityViewModel.biometricDisplayName))
                         } icon: {
                             Image(systemName: securityViewModel.biometricIconName)
-                                .foregroundColor(.blue)
-                        }
-                    }
-                    .disabled(!securityViewModel.isBiometricAvailable)
+                                .foregroundColor(Color.AppBrand.second)
                     
                     Button(role: .destructive) {
                         showingDisablePinSheet = true

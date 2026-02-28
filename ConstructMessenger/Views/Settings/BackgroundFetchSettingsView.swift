@@ -77,7 +77,7 @@ struct BackgroundFetchSettingsView: View {
     }
     
     private var toggleIconColor: Color {
-        isEnabled ? .blue : .gray
+        isEnabled ? Color.AppBrand.second : .gray
     }
     
     @ViewBuilder
@@ -226,7 +226,7 @@ struct BackgroundFetchSettingsView: View {
         if isLowPowerModeEnabled {
             return .orange
         } else if isEnabled {
-            return .green
+            return Color.AppStatus.success
         } else {
             return .gray
         }
@@ -298,7 +298,7 @@ struct QuickIntervalButton: View {
                 .padding(.vertical, 6)
                 .background(
                     RoundedRectangle(cornerRadius: 8)
-                        .fill(current == minutes ? Color.blue : Color.gray.opacity(0.2))
+                        .fill(current == minutes ? Color.AppBrand.second : Color.gray.opacity(0.2))
                 )
         }
     }
