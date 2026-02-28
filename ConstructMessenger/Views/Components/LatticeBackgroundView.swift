@@ -45,7 +45,6 @@ struct LatticeBackgroundView: View {
 
                     let t = timeline.date.timeIntervalSinceReferenceDate
                     let positions = nodes.map { $0.position(at: t) }
-                    let resolved = context.resolve(color)
 
                     // Edges (drawn first, underneath nodes)
                     for i in 0 ..< positions.count {
@@ -63,7 +62,7 @@ struct LatticeBackgroundView: View {
                             path.addLine(to: b)
                             context.stroke(
                                 path,
-                                with: .color(resolved.color.opacity(opacity)),
+                                with: .color(color.opacity(opacity)),
                                 lineWidth: 0.6
                             )
                         }
@@ -75,7 +74,7 @@ struct LatticeBackgroundView: View {
                         let rect = CGRect(x: pos.x - r, y: pos.y - r, width: r * 2, height: r * 2)
                         context.fill(
                             Path(ellipseIn: rect),
-                            with: .color(resolved.color.opacity(nodeOpacity))
+                            with: .color(color.opacity(nodeOpacity))
                         )
                     }
                 }
