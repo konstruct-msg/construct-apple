@@ -36,6 +36,9 @@ struct SecurityView: View {
                         } icon: {
                             Image(systemName: securityViewModel.biometricIconName)
                                 .foregroundColor(Color.AppBrand.second)
+                        }
+                    }
+                    .disabled(!securityViewModel.isBiometricAvailable)
                     
                     Button(role: .destructive) {
                         showingDisablePinSheet = true
