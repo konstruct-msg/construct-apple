@@ -14,8 +14,8 @@ private struct LatticeNode {
     let origin: CGPoint     // rest position
     let phaseX: Double      // sin phase for horizontal drift
     let phaseY: Double      // cos phase for vertical drift
-    let speed: Double       // drift speed (subtle variation per node)
-    let amplitude: CGFloat  // max drift radius
+    let speed: Double       // drift speed — very slow, barely perceptible
+    let amplitude: CGFloat  // max drift radius (pixels)
 
     func position(at t: Double) -> CGPoint {
         CGPoint(
@@ -29,71 +29,59 @@ private struct LatticeNode {
 
 struct LatticeBackgroundView: View {
 
-    // Configuration
-    var nodeCount: Int = 48
+    var nodeCount: Int       = 48
     var maxEdgeDistance: CGFloat = 160
-    var nodeOpacity: Double = 0.55
-    var edgeBaseOpacity: Double = 0.18
-    var color: Color = Color.AppBrand.second
+    var nodeOpacity: Double  = 0.50
+    var edgeBaseOpacity: Double = 0.16
+    var color: Color         = Color.AppBrand.second
 
     @State private var nodes: [LatticeNode] = []
-    @State private var canvasSize: CGSize = .zero
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
-            Canvas { context, size in
-                guard !nodes.isEmpty else { return }
+        GeometryReader { proxy in
+            TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
+                Canvas { context, _ in
+                    guard !nodes.isEmpty else { return }
 
-                let t = timeline.date.timeIntervalSinceReferenceDate
-                let positions = nodes.map { $0.position(at: t) }
-                let resolved = context.resolve(color)
+                    let t = timeline.date.timeIntervalSinceReferenceDate
+                    let positions = nodes.map { $0.position(at: t) }
+                    let resolved = context.resolve(color)
 
-                // Draw edges first (underneath nodes)
-                for i in 0 ..< positions.count {
-                    for j in (i + 1) ..< positions.count {
-                        let a = positions[i]
-                        let b = positions[j]
-                        let dist = hypot(b.x - a.x, b.y - a.y)
-                        guard dist < maxEdgeDistance else { continue }
+                    // Edges (drawn first, underneath nodes)
+                    for i in 0 ..< positions.count {
+                        for j in (i + 1) ..< positions.count {
+                            let a = positions[i]
+                            let b = positions[j]
+                            let dist = hypot(b.x - a.x, b.y - a.y)
+                            guard dist < maxEdgeDistance else { continue }
 
-                        // Fade out as distance approaches threshold
-                        let strength = 1.0 - dist / maxEdgeDistance
-                        let opacity = edgeBaseOpacity * strength * strength
+                            let strength = 1.0 - dist / maxEdgeDistance
+                            let opacity  = edgeBaseOpacity * strength * strength
 
-                        var path = Path()
-                        path.move(to: a)
-                        path.addLine(to: b)
-                        context.stroke(
-                            path,
-                            with: .color(resolved.color.opacity(opacity)),
-                            lineWidth: 0.6
+                            var path = Path()
+                            path.move(to: a)
+                            path.addLine(to: b)
+                            context.stroke(
+                                path,
+                                with: .color(resolved.color.opacity(opacity)),
+                                lineWidth: 0.6
+                            )
+                        }
+                    }
+
+                    // Nodes
+                    let r: CGFloat = 1.8
+                    for pos in positions {
+                        let rect = CGRect(x: pos.x - r, y: pos.y - r, width: r * 2, height: r * 2)
+                        context.fill(
+                            Path(ellipseIn: rect),
+                            with: .color(resolved.color.opacity(nodeOpacity))
                         )
                     }
                 }
-
-                // Draw nodes
-                let nodeRadius: CGFloat = 1.8
-                for pos in positions {
-                    let rect = CGRect(
-                        x: pos.x - nodeRadius,
-                        y: pos.y - nodeRadius,
-                        width: nodeRadius * 2,
-                        height: nodeRadius * 2
-                    )
-                    context.fill(
-                        Path(ellipseIn: rect),
-                        with: .color(resolved.color.opacity(nodeOpacity))
-                    )
-                }
             }
-            .onGeometryChange(for: CGSize.self) { proxy in
-                proxy.size
-            } action: { newSize in
-                if newSize != canvasSize {
-                    canvasSize = newSize
-                    rebuildNodes(in: newSize)
-                }
-            }
+            .onAppear { rebuildNodes(in: proxy.size) }
+            .onChange(of: proxy.size) { _, newSize in rebuildNodes(in: newSize) }
         }
         .allowsHitTesting(false)
     }
@@ -103,8 +91,6 @@ struct LatticeBackgroundView: View {
     private func rebuildNodes(in size: CGSize) {
         guard size.width > 0, size.height > 0 else { return }
 
-        // Distribute nodes using a jittered grid for even coverage,
-        // then add random variation so it looks irregular — not a grid.
         let cols = Int(ceil(sqrt(Double(nodeCount) * size.width / size.height)))
         let rows = Int(ceil(Double(nodeCount) / Double(cols)))
         let cellW = size.width  / CGFloat(cols)
@@ -115,7 +101,6 @@ struct LatticeBackgroundView: View {
             for col in 0 ..< cols {
                 guard built.count < nodeCount else { break }
 
-                // Cell center + random jitter up to 45% of cell size
                 let jitterX = CGFloat.random(in: -0.45 ... 0.45) * cellW
                 let jitterY = CGFloat.random(in: -0.45 ... 0.45) * cellH
                 let ox = (CGFloat(col) + 0.5) * cellW + jitterX
@@ -125,8 +110,8 @@ struct LatticeBackgroundView: View {
                     origin:    CGPoint(x: ox, y: oy),
                     phaseX:    Double.random(in: 0 ..< .pi * 2),
                     phaseY:    Double.random(in: 0 ..< .pi * 2),
-                    speed:     Double.random(in: 0.12 ... 0.28),
-                    amplitude: CGFloat.random(in: 12 ... 28)
+                    speed:     Double.random(in: 0.006 ... 0.014), // ~1–2 min full cycle
+                    amplitude: CGFloat.random(in: 5 ... 12)         // 5–12 pt drift radius
                 ))
             }
         }
