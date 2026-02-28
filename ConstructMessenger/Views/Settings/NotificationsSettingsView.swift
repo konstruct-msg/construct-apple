@@ -76,6 +76,11 @@ struct NotificationsSettingsView: View {
                         } icon: {
                             Image(systemName: "checkmark.circle.fill")
                                 .foregroundColor(Color.AppStatus.success)
+                        }
+                    }
+                }
+            } header: {
+                Text("system_notification_settings")
             } footer: {
                 if authorizationStatus == .denied {
                     Text("notification_permissions_required")
