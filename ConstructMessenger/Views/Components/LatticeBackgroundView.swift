@@ -38,50 +38,54 @@ struct LatticeBackgroundView: View {
     @State private var nodes: [LatticeNode] = []
 
     var body: some View {
-        GeometryReader { proxy in
-            TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
-                Canvas { context, _ in
-                    guard !nodes.isEmpty else { return }
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
+            Canvas { context, size in
+                guard !nodes.isEmpty else { return }
 
-                    let t = timeline.date.timeIntervalSinceReferenceDate
-                    let positions = nodes.map { $0.position(at: t) }
+                let t = timeline.date.timeIntervalSinceReferenceDate
+                let positions = nodes.map { $0.position(at: t) }
 
-                    // Edges (drawn first, underneath nodes)
-                    for i in 0 ..< positions.count {
-                        for j in (i + 1) ..< positions.count {
-                            let a = positions[i]
-                            let b = positions[j]
-                            let dist = hypot(b.x - a.x, b.y - a.y)
-                            guard dist < maxEdgeDistance else { continue }
+                // Edges (drawn first, underneath nodes)
+                for i in 0 ..< positions.count {
+                    for j in (i + 1) ..< positions.count {
+                        let a = positions[i]
+                        let b = positions[j]
+                        let dist = hypot(b.x - a.x, b.y - a.y)
+                        guard dist < maxEdgeDistance else { continue }
 
-                            let strength = 1.0 - dist / maxEdgeDistance
-                            let opacity  = edgeBaseOpacity * strength * strength
+                        let strength = 1.0 - dist / maxEdgeDistance
+                        let opacity  = edgeBaseOpacity * strength * strength
 
-                            var path = Path()
-                            path.move(to: a)
-                            path.addLine(to: b)
-                            context.stroke(
-                                path,
-                                with: .color(color.opacity(opacity)),
-                                lineWidth: 0.6
-                            )
-                        }
-                    }
-
-                    // Nodes
-                    let r: CGFloat = 1.8
-                    for pos in positions {
-                        let rect = CGRect(x: pos.x - r, y: pos.y - r, width: r * 2, height: r * 2)
-                        context.fill(
-                            Path(ellipseIn: rect),
-                            with: .color(color.opacity(nodeOpacity))
+                        var path = Path()
+                        path.move(to: a)
+                        path.addLine(to: b)
+                        context.stroke(
+                            path,
+                            with: .color(color.opacity(opacity)),
+                            lineWidth: 0.6
                         )
                     }
                 }
+
+                // Nodes
+                let r: CGFloat = 1.8
+                for pos in positions {
+                    let rect = CGRect(x: pos.x - r, y: pos.y - r, width: r * 2, height: r * 2)
+                    context.fill(
+                        Path(ellipseIn: rect),
+                        with: .color(color.opacity(nodeOpacity))
+                    )
+                }
             }
-            .onAppear { rebuildNodes(in: proxy.size) }
-            .onChange(of: proxy.size) { _, newSize in rebuildNodes(in: newSize) }
         }
+        // Use a hidden GeometryReader in background to measure size without affecting layout
+        .background(
+            GeometryReader { proxy in
+                Color.clear
+                    .onAppear { rebuildNodes(in: proxy.size) }
+                    .onChange(of: proxy.size) { _, newSize in rebuildNodes(in: newSize) }
+            }
+        )
         .allowsHitTesting(false)
     }
 

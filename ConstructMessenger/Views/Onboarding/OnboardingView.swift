@@ -19,14 +19,7 @@ struct OnboardingView: View {
     
     var body: some View {
         NavigationStack {
-            ZStack {
-                // Lattice background — visual nod to lattice-based cryptography
-                Color(uiColor: .systemBackground).ignoresSafeArea()
-                LatticeBackgroundView()
-                    .ignoresSafeArea()
-                    .opacity(0.6)
-
-                VStack(spacing: 32) {
+            VStack(spacing: 32) {
                 Spacer()
                 
                 // Logo/Branding
@@ -115,6 +108,13 @@ struct OnboardingView: View {
                 .padding(.horizontal, 32)
                 .padding(.bottom, 32)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background {
+                // Lattice background — visual nod to lattice-based cryptography
+                LatticeBackgroundView()
+                    .ignoresSafeArea()
+                    .opacity(0.55)
+            }
             .navigationDestination(isPresented: $showingRegistration) {
                 RegistrationFlowView(username: username.isEmpty ? nil : username)
             }
@@ -138,7 +138,6 @@ struct OnboardingView: View {
                     .accessibilityLabel(Text("onboarding_network_settings"))
                 }
             }
-            } // ZStack
         }
     }
 
