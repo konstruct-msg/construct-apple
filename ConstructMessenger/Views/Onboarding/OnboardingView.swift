@@ -19,7 +19,14 @@ struct OnboardingView: View {
     
     var body: some View {
         NavigationStack {
-            VStack(spacing: 32) {
+            ZStack {
+                // Lattice background — visual nod to lattice-based cryptography
+                Color(uiColor: .systemBackground).ignoresSafeArea()
+                LatticeBackgroundView()
+                    .ignoresSafeArea()
+                    .opacity(0.6)
+
+                VStack(spacing: 32) {
                 Spacer()
                 
                 // Logo/Branding
@@ -131,6 +138,7 @@ struct OnboardingView: View {
                     .accessibilityLabel(Text("onboarding_network_settings"))
                 }
             }
+            } // ZStack
         }
     }
 
