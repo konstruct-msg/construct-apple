@@ -34,6 +34,7 @@ final class MessageStreamManager: ObservableObject {
     private let maxRetryDelay: TimeInterval = 60
     private var isPaused = false
     private var subscriptionUserIds: [String] = []
+    private var lastPendingCursor: String = ""
 
     /// Continuation for sending messages into the stream
     private var outboundContinuation: AsyncStream<Shared_Proto_Services_V1_MessageStreamRequest>.Continuation?
@@ -170,6 +171,25 @@ final class MessageStreamManager: ObservableObject {
 
             Log.info("⏳ MessageStream reconnecting in \(String(format: "%.1f", totalDelay))s (attempt #\(retryCount))", category: "MessageStream")
             try? await Task.sleep(for: .seconds(totalDelay))
+            await fetchMissedMessages()
+        }
+    }
+
+    private func fetchMissedMessages() async {
+        do {
+            let cursor = lastPendingCursor.isEmpty ? nil : lastPendingCursor
+            let result = try await MessagingServiceClient.shared.getPendingMessages(sinceCursor: cursor)
+            if !result.messages.isEmpty {
+                Log.info("📨 Fetched \(result.messages.count) missed message(s) after reconnect", category: "MessageStream")
+                for msg in result.messages {
+                    onMessageReceived?(msg)
+                }
+            }
+            if !result.nextCursor.isEmpty {
+                lastPendingCursor = result.nextCursor
+            }
+        } catch {
+            Log.debug("⚠️ fetchMissedMessages failed: \(error)", category: "MessageStream")
         }
     }
 
@@ -279,15 +299,20 @@ final class MessageStreamManager: ObservableObject {
     ) -> ChatMessage? {
         switch response.response {
         case .message(let envelope):
+            // Unpack wire payload blob into crypto components
+            guard let decoded = try? WirePayloadCoder.decode(envelope.encryptedPayload) else {
+                Log.info("⚠️ Failed to decode encrypted_payload for message \(envelope.messageID)", category: "MessageStream")
+                return nil
+            }
             return ChatMessage(
                 id: envelope.messageID,
                 from: envelope.sender.userID,
                 to: envelope.recipient.userID,
                 messageType: envelope.contentType == .sessionReset ? "CONTROL_MESSAGE" : "DIRECT_MESSAGE",
-                ephemeralPublicKey: Data(),
-                messageNumber: UInt32(envelope.serverMetadata.messageNumber),
-                content: envelope.encryptedPayload.base64EncodedString(),
-                suiteId: 0,
+                ephemeralPublicKey: Data(decoded.ephemeralPublicKey),
+                messageNumber: decoded.messageNumber,
+                content: decoded.content,
+                suiteId: 1,
                 timestamp: UInt64(envelope.timestamp)
             )
         case .receipt(let receipt):
@@ -308,7 +333,7 @@ final class MessageStreamManager: ObservableObject {
             return nil
         case .heartbeatAck(let ack):
             Log.debug("💓 Heartbeat ack: server=\(ack.serverTimestamp)", category: "MessageStream")
-            ConnectionStatusManager.shared.markStreamConnected()
+            Task { @MainActor in ConnectionStatusManager.shared.markStreamConnected() }
             return nil
         case .none:
             return nil

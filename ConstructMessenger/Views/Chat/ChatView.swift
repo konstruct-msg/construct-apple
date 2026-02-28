@@ -25,6 +25,7 @@ struct ChatView: View {
     
     // ✅ Swipe-to-dismiss gesture state (not scroll-related)
     @GestureState private var dragState: CGFloat = 0
+    @State private var containerWidth: CGFloat = 390
     
     // ❌ REMOVED: Scroll-related @State variables (moved to ChatScrollManager)
     // - hasScrolledToBottom
@@ -45,8 +46,34 @@ struct ChatView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: 0) {
-                        // ✅ Messages already in correct order from filteredMessages (oldest-first)
-                        // Combined with 180° rotation, newest will be at bottom visually
+                        // Load more indicator at TOP of list (oldest messages)
+                        if viewModel.hasMoreMessages && !filteredMessages.isEmpty {
+                            HStack {
+                                Spacer()
+                                if viewModel.isLoadingMore {
+                                    ProgressView()
+                                        .padding()
+                                } else {
+                                    Button {
+                                        viewModel.loadMoreMessages()
+                                    } label: {
+                                        Text(NSLocalizedString("load_older_messages", comment: "Load older messages button"))
+                                            .font(FontStyle.caption)
+                                            .foregroundColor(Color.AppText.accent)
+                                            .padding(.vertical, Spacing.small)
+                                    }
+                                }
+                                Spacer()
+                            }
+                            .id("loadMoreIndicator")
+                            .onAppear {
+                                if !viewModel.isLoadingMore && !isSearchActive {
+                                    viewModel.loadMoreMessages()
+                                }
+                            }
+                        }
+
+                        // Messages in oldest-first order (ScrollView anchored to bottom via .defaultScrollAnchor)
                         ForEach(Array(filteredMessages.enumerated()), id: \.element.id) { index, message in
                             VStack(spacing: 0) {
                                 MessageBubble(
@@ -71,8 +98,8 @@ struct ChatView: View {
                                             isEditMode = true
                                             isSearchActive = false
                                             searchText = ""
-                                            selectedMessages.insert(msg.id)
                                         }
+                                        selectedMessages.insert(msg.id)
                                     }
                                 )
                                 .id(message.id)
@@ -83,86 +110,29 @@ struct ChatView: View {
                                         .frame(height: message.spacingAfterMessage(at: index, in: filteredMessages))
                                 }
                             }
-                            .listRowBackground(Color.AppBackground.clear)  // ✅ FIX: Remove default selection background
-                            .listRowInsets(EdgeInsets())  // ✅ FIX: Remove default list row insets
-                            .onAppear {
-                                // ✅ Auto-scroll to bottom on last message appear
-                                if index == filteredMessages.count - 1 && scrollManager.shouldScrollToBottom && !scrollManager.hasScrolledToBottom {
-                                    DispatchQueue.main.async {
-                                        scrollManager.scrollToBottom(messageId: message.id)
-                                    }
-                                }
-                            }
-                        }
-                        
-                        // ✅ Load more indicator at END (visually at TOP after rotation)
-                        if viewModel.hasMoreMessages && !filteredMessages.isEmpty {
-                            HStack {
-                                Spacer()
-                                if viewModel.isLoadingMore {
-                                    ProgressView()
-                                        .padding()
-                                } else {
-                                    Button {
-                                        viewModel.loadMoreMessages()
-                                    } label: {
-                                        Text(NSLocalizedString("load_older_messages", comment: "Load older messages button"))
-                                            .font(FontStyle.caption)
-                                            .foregroundColor(Color.AppText.accent)
-                                            .padding(.vertical, Spacing.small)
-                                    }
-                                }
-                                Spacer()
-                            }
-                            .rotationEffect(.degrees(180)) // Rotate load more indicator back
-                            .id("loadMoreIndicator")
-                            .onAppear {
-                                // Auto-load when scrolling to older messages
-                                if !viewModel.isLoadingMore && !isSearchActive {
-                                    viewModel.loadMoreMessages()
-                                }
-                            }
                         }
                     }
                     .padding()
-                    .rotationEffect(.degrees(180)) // ✅ Rotate content back to normal
-                    .background(
-                        GeometryReader { geometry in
-                            Color.clear.preference(key: ScrollOffsetPreferenceKey.self, value: geometry.frame(in: .named("scroll")).minY)
-                            Color.clear.onAppear {
-                                // ✅ Register ScrollViewProxy with manager
-                                scrollManager.registerProxy(proxy)
-                            }
-                        }
-                    )
                 }
-                .rotationEffect(.degrees(180)) // ✅ Rotate entire ScrollView 180°
-                .coordinateSpace(name: "scroll")
+                .defaultScrollAnchor(.bottom)
+                .scrollDismissesKeyboard(.interactively)
+                .environment(\.containerWidth, containerWidth)
                 .onTapGesture {
-                    // ✅ FIX: Dismiss keyboard when tapping chat area
                     hideKeyboard()
                 }
-                .onPreferenceChange(ScrollOffsetPreferenceKey.self) { value in
-                    scrollManager.updateScrollOffset(value)
+                .onScrollGeometryChange(for: CGFloat.self) { geo in
+                    geo.contentOffset.y + geo.containerSize.height - geo.contentSize.height
+                } action: { _, offsetFromBottom in
+                    scrollManager.updateScrollOffset(offsetFromBottom)
+                }
+                .onScrollGeometryChange(for: CGFloat.self) { geo in
+                    geo.containerSize.width
+                } action: { _, width in
+                    if width > 0 { containerWidth = width }
                 }
                 .onAppear {
-                    // ✅ Register proxy with scroll manager
                     scrollManager.registerProxy(proxy)
-                    if AppConstants.enableDebugLogging {
-                        print("ChatView appeared with \(viewModel.messages.count) messages")
-                        if let first = viewModel.messages.first, let last = viewModel.messages.last {
-                            let firstTime = first.timestamp.timeIntervalSince1970
-                            let lastTime = last.timestamp.timeIntervalSince1970
-                            print("  viewModel.messages order: first=\(firstTime), last=\(lastTime)")
-                            print("  Expected: first < last (oldest-first)")
-                        }
-                    }
-
-                    // ✅ Clear badge when user opens a chat
                     LocalNotificationManager.shared.clearBadge()
-                    
-                    // ✅ With rotation approach, scroll starts at bottom automatically
-                    // No need to scroll manually - rotation makes top=bottom visually
                     scrollManager.hasScrolledToBottom = true
                 }
                 .onChange(of: viewModel.messages.count) { _, count in
@@ -235,14 +205,14 @@ struct ChatView: View {
                 .updating($dragState) { value, state, _ in
                     // Only allow swipe from left edge (right swipe)
                     if value.startLocation.x < 20 && value.translation.width > 0 {
-                        state = min(value.translation.width, UIScreen.main.bounds.width * ChatViewConstants.Gesture.maxDragRatio)
+                        state = min(value.translation.width, containerWidth * ChatViewConstants.Gesture.maxDragRatio)
                     }
                 }
                 .onEnded { value in
                     // If swiped more than threshold, dismiss
                     let threshold = max(
                         ChatViewConstants.Gesture.dismissThreshold,
-                        UIScreen.main.bounds.width * ChatViewConstants.Gesture.dismissThresholdRatio
+                        containerWidth * ChatViewConstants.Gesture.dismissThresholdRatio
                     )
                     if value.translation.width > threshold && value.startLocation.x < 20 {
                         withAnimation(.spring(
@@ -412,7 +382,7 @@ struct ChatView: View {
                         Text(NSLocalizedString("new_messages", comment: "Scroll to new messages"))
                             .font(.system(size: 14, weight: .medium))
                     }
-                    .foregroundColor(.white)
+                    .foregroundColor(Color.AppBackground.primary)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
                     .background(
@@ -531,17 +501,13 @@ struct ChatView: View {
     
     private var filteredMessages: [Message] {
         if searchText.isEmpty {
-            // ✅ Messages already sorted oldest-first from FRC
-            // With 180° rotation: oldest-first in data = newest-first visually (at bottom)
-            return viewModel.messages
+            return viewModel.messages // oldest-first from FRC; ScrollView anchored to bottom
         }
         return viewModel.messages.filter { message in
             message.decryptedContent?.localizedCaseInsensitiveContains(searchText) ?? false
-        }  // ✅ Search results also oldest-first
+        }
     }
 
-    // MARK: - Actions
-    
     // MARK: - Actions
     
     private func toggleMessageSelection(_ message: Message) {
@@ -569,14 +535,6 @@ struct ChatView: View {
     /// Hide keyboard
     private func hideKeyboard() {
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-    }
-}
-
-// ✅ NEW: Preference key for tracking scroll offset
-private struct ScrollOffsetPreferenceKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
     }
 }
 

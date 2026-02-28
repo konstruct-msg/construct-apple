@@ -10,7 +10,7 @@ import CoreData
 import Combine
 import os.log
 
-/// Manages message queue and automatic retry logic for offline scenarios
+@MainActor
 class MessageQueueManager: ObservableObject {
     static let shared = MessageQueueManager()
     
@@ -18,9 +18,7 @@ class MessageQueueManager: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private var checkTimer: Timer?
     
-    // Track messages being sent to detect timeouts
-    private var pendingSends: [String: Date] = [:] // messageId -> sendTimestamp
-    private let pendingSendsQueue = DispatchQueue(label: "MessageQueueManager.pendingSends")
+    private var pendingSends: [String: Date] = [:]
     
     private init() {
         // Skip setup in preview mode
@@ -32,15 +30,15 @@ class MessageQueueManager: ObservableObject {
     }
     
     deinit {
-        stopPeriodicCheck()
+        checkTimer?.invalidate()
+        checkTimer = nil
     }
     
     // MARK: - Setup
     
     private func setupSubscribers() {
-        // Monitor network reachability (REST API doesn't require WebSocket)
+        // Monitor network reachability (gRPC reconnects automatically)
         networkManager.reachabilityPublisher
-            .receive(on: DispatchQueue.main)
             .sink { [weak self] isReachable in
                 if isReachable {
                     Log.info("📡 Network available - checking for queued messages", category: "MessageQueue")
@@ -52,25 +50,16 @@ class MessageQueueManager: ObservableObject {
     
     // MARK: - Message Tracking
     
-    /// Mark a message as being sent (for timeout detection)
     func markMessageAsSending(_ messageId: String) {
-        pendingSendsQueue.async { [weak self] in
-            self?.pendingSends[messageId] = Date()
-        }
+        pendingSends[messageId] = Date()
     }
     
-    /// Mark a message as successfully sent (remove from pending)
     func markMessageAsSent(_ messageId: String) {
-        pendingSendsQueue.async { [weak self] in
-            self?.pendingSends.removeValue(forKey: messageId)
-        }
+        pendingSends.removeValue(forKey: messageId)
     }
     
-    /// Mark a message as failed (remove from pending)
     func markMessageAsFailed(_ messageId: String) {
-        pendingSendsQueue.async { [weak self] in
-            self?.pendingSends.removeValue(forKey: messageId)
-        }
+        pendingSends.removeValue(forKey: messageId)
     }
     
     // MARK: - Periodic Check
@@ -98,23 +87,12 @@ class MessageQueueManager: ObservableObject {
         }
         
         let timeout = APIConstants.messageSendTimeout
-        
-        // Check pending sends for timeouts
-        pendingSendsQueue.async { [weak self] in
-            guard let self = self else { return }
-            let now = Date()
-            let timedOutIds = self.pendingSends.compactMap { (messageId, timestamp) -> String? in
-                if now.timeIntervalSince(timestamp) > timeout {
-                    return messageId
-                }
-                return nil
-            }
-            
-            if !timedOutIds.isEmpty {
-                DispatchQueue.main.async {
-                    self.handleTimedOutMessages(timedOutIds, context: context)
-                }
-            }
+        let now = Date()
+        let timedOutIds = pendingSends.compactMap { (messageId, timestamp) -> String? in
+            now.timeIntervalSince(timestamp) > timeout ? messageId : nil
+        }
+        if !timedOutIds.isEmpty {
+            handleTimedOutMessages(timedOutIds, context: context)
         }
         
         // Check Core Data for messages stuck in .sending state
@@ -177,7 +155,7 @@ class MessageQueueManager: ObservableObject {
             
             try? context.save()
             
-            // Try to resend if network is available (REST API doesn't require WebSocket)
+            // Try to resend if network is available (gRPC reconnects automatically)
             if self.networkManager.isReachable {
                 self.processQueuedMessages()
             }

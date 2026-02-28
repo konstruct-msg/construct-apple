@@ -27,32 +27,8 @@ class LogCollector {
     /// Current log file
     private let currentLogFile: URL
     
-    /// Whether logging to file is enabled
-    var isEnabled: Bool {
-        get {
-            #if DEBUG
-            return UserDefaults.standard.bool(forKey: "LogCollector.isEnabled")
-            #else
-            return false // ALWAYS disabled in production
-            #endif
-        }
-        set {
-            #if DEBUG
-            // Only allow enabling in DEBUG builds with developer mode
-            if DeveloperMode.shared.canEnableLogCollection {
-                UserDefaults.standard.set(newValue, forKey: "LogCollector.isEnabled")
-                if newValue {
-                    Log.info("📝 Log collection enabled", category: "LogCollector")
-                } else {
-                    Log.info("📝 Log collection disabled", category: "LogCollector")
-                }
-            }
-            #else
-            // Production: do nothing, always disabled
-            UserDefaults.standard.set(false, forKey: "LogCollector.isEnabled")
-            #endif
-        }
-    }
+    /// Whether logging to file is enabled (always on for diagnostics)
+    let isEnabled: Bool = true
     
     private let queue = DispatchQueue(label: "cc.konstruct.logcollector", qos: .utility)
     
@@ -77,10 +53,7 @@ class LogCollector {
     
     /// Append log message to file
     func append(level: String, category: String, message: String) {
-        // Production safety: double-check even if isEnabled somehow got set
-        
         guard isEnabled else { return }
-        guard DeveloperMode.shared.canEnableLogCollection else { return }
         
         queue.async { [weak self] in
             guard let self = self else { return }

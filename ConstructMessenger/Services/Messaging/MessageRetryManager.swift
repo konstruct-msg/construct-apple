@@ -46,16 +46,17 @@ class MessageRetryManager {
         // ✅ Re-encrypt and resend using SAME message ID
         do {
             let components = try CryptoManager.shared.encryptMessage(decryptedText, for: recipientId)
+            let encryptedPayload = try WirePayloadCoder.encode(components)
 
             Task {
                 do {
                     let response = try await MessagingServiceClient.shared.sendMessage(
+                        messageId: message.id,
                         recipientId: recipientId,
-                        ephemeralPublicKey: components.ephemeralPublicKey,
-                        messageNumber: components.messageNumber,
-                        content: components.content,
-                        timestamp: UInt64(Date().timeIntervalSince1970),
-                        suiteId: components.suiteId
+                        senderId: message.fromUserId,
+                        conversationId: message.chat?.id ?? "",
+                        encryptedPayload: encryptedPayload,
+                        timestamp: UInt64(Date().timeIntervalSince1970)
                     )
                     
                     await MainActor.run {
@@ -127,18 +128,20 @@ class MessageRetryManager {
             message.retryCount += 1
             try? context.save()
 
-            // ✅ Send via REST API
+            // ✅ Send via gRPC
             Task {
                 do {
                     let _ = try await ChunkedMessageSender.shared.sendChunks(
                         plan: plan,
+                        senderId: currentUserId,
                         recipientId: recipientId,
+                        conversationId: chat.id,
                         timestamp: UInt64(Date().timeIntervalSince1970)
                     )
                     await MainActor.run {
                         message.deliveryStatus = .sent
                         try? context.save()
-                        Log.debug("📮 Re-sent queued message via REST: \(message.id) (attempt \(message.retryCount))", category: "MessageRetryManager")
+                        Log.debug("📮 Re-sent queued message via gRPC: \(message.id) (attempt \(message.retryCount))", category: "MessageRetryManager")
                     }
                 } catch {
                     await MainActor.run {

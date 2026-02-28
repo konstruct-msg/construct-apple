@@ -114,19 +114,21 @@ class ProfileShareViewModel: ObservableObject {
                     
                 )
 
-                // ✅ FIXED: Send via REST API instead of WebSocket
+                // ✅ Send via gRPC
                 Task {
                     do {
                         let responses = try await ChunkedMessageSender.shared.sendChunks(
                             plan: plan,
+                            senderId: currentUserId,
                             recipientId: userId,
+                            conversationId: message.id, // profile share: use message ID as conversation context
                             timestamp: message.timestamp,
                             preEncryptedFirst: firstComponents
                         )
                         let response = responses.first ?? SendMessageResponse(messageId: message.id, status: "sent")
-                        Log.info("✅ Profile shared with user \(userId) via REST API: \(response.messageId)", category: "ProfileShare")
+                        Log.info("✅ Profile shared with user \(userId) via gRPC: \(response.messageId)", category: "ProfileShare")
                     } catch {
-                        Log.error("❌ Failed to send profile message via REST: \(error.localizedDescription)", category: "ProfileShare")
+                        Log.error("❌ Failed to send profile message via gRPC: \(error.localizedDescription)", category: "ProfileShare")
                         await MainActor.run {
                             completion(false, error.localizedDescription)
                         }

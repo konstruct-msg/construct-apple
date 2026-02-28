@@ -231,7 +231,7 @@ public struct Shared_Proto_Services_V1_DevicePublicKeys: Sendable {
 
   public var signedPrekeySignature: String = String()
 
-  public var suiteID: String = String()
+  public var cryptoSuite: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -1017,7 +1017,7 @@ extension Shared_Proto_Services_V1_GetPowChallengeResponse: SwiftProtobuf.Messag
 
 extension Shared_Proto_Services_V1_DevicePublicKeys: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".DevicePublicKeys"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}verifying_key\0\u{3}identity_public\0\u{3}signed_prekey_public\0\u{3}signed_prekey_signature\0\u{3}suite_id\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}verifying_key\0\u{3}identity_public\0\u{3}signed_prekey_public\0\u{3}signed_prekey_signature\0\u{3}crypto_suite\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1029,7 +1029,7 @@ extension Shared_Proto_Services_V1_DevicePublicKeys: SwiftProtobuf.Message, Swif
       case 2: try { try decoder.decodeSingularStringField(value: &self.identityPublic) }()
       case 3: try { try decoder.decodeSingularStringField(value: &self.signedPrekeyPublic) }()
       case 4: try { try decoder.decodeSingularStringField(value: &self.signedPrekeySignature) }()
-      case 5: try { try decoder.decodeSingularStringField(value: &self.suiteID) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.cryptoSuite) }()
       default: break
       }
     }
@@ -1048,8 +1048,8 @@ extension Shared_Proto_Services_V1_DevicePublicKeys: SwiftProtobuf.Message, Swif
     if !self.signedPrekeySignature.isEmpty {
       try visitor.visitSingularStringField(value: self.signedPrekeySignature, fieldNumber: 4)
     }
-    if !self.suiteID.isEmpty {
-      try visitor.visitSingularStringField(value: self.suiteID, fieldNumber: 5)
+    if !self.cryptoSuite.isEmpty {
+      try visitor.visitSingularStringField(value: self.cryptoSuite, fieldNumber: 5)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -1059,7 +1059,7 @@ extension Shared_Proto_Services_V1_DevicePublicKeys: SwiftProtobuf.Message, Swif
     if lhs.identityPublic != rhs.identityPublic {return false}
     if lhs.signedPrekeyPublic != rhs.signedPrekeyPublic {return false}
     if lhs.signedPrekeySignature != rhs.signedPrekeySignature {return false}
-    if lhs.suiteID != rhs.suiteID {return false}
+    if lhs.cryptoSuite != rhs.cryptoSuite {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

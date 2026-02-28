@@ -42,7 +42,7 @@
 "add_contact" = "Add Contact";
 "scan_qr_code_or_share_link" = "Scan a QR code or share your contact link to add verified contacts";
 "scan_qr_code" = "Scan QR Code";
-"your_contact_link_is_in_account_settings" = "Your contact link is in Account Settings";
+"your_contact_link_is_in_account_settings" = "Your contact link is in Identity Settings";
 "new_contact" = "New Contact";
 
 // MARK: - Chat
@@ -92,7 +92,7 @@
 "preferences" = "Preferences";
 "version" = "Version";
 "about" = "About";
-"account" = "Account";
+"account" = "Identity";
 "appearance" = "Appearance";
 "network" = "Network";
 "notifications" = "Notifications";
@@ -100,7 +100,7 @@
 
 // MARK: - Settings -> Account
 "display_name" = "Display Name";
-"account_information" = "Account Information";
+"account_information" = "Identity";
 "current_password" = "Current Password";
 "new_password" = "New Password";
 "confirm_new_password" = "Confirm New Password";
@@ -278,16 +278,16 @@
 "connection_type" = "Connection Type";
 "default_server" = "Default Server";
 "last_error" = "Last Connection Error";
-"delete_my_account" = "Delete My Account";
-"delete_account_warning" = "Permanently deletes your account from the server. After successful deletion, all local encryption keys and app data will be automatically cleared from this device.";
-"delete_account_warning_title" = "Delete Account?";
-"delete_account_warning_message" = "This will permanently delete your account from the server. After server confirms deletion, all local keys and data will be automatically cleared from this device. You cannot undo this action.";
-"delete_account_confirmation_message" = "Final confirmation: Your account will be deleted from the server, and all local encryption keys will be cleared after server confirmation. This action is irreversible.";
+"delete_my_account" = "Delete My Identity";
+"delete_account_warning" = "Permanently deletes your identity from the server. After successful deletion, all local encryption keys and app data will be automatically cleared from this device.";
+"delete_account_warning_title" = "Delete Identity?";
+"delete_account_warning_message" = "This will permanently delete your identity from the server. After server confirms deletion, all local keys and data will be automatically cleared from this device. You cannot undo this action.";
+"delete_account_confirmation_message" = "Final confirmation: Your identity will be deleted from the server, and all local encryption keys will be cleared after server confirmation. This action is irreversible.";
 "delete_account_irreversible_warning" = "This action is irreversible. All your data will be permanently deleted from the server and cannot be recovered.";
-"delete_account" = "Delete Account";
+"delete_account" = "Delete Identity";
 "delete_account_countdown" = "Delete in %ds";
 "warning" = "Warning";"DANGER_ZONE" = "Danger Zone";
-"account_recovery_seed" = "Account Recovery (Seed Phrase)";
+"account_recovery_seed" = "Identity Recovery (Seed Phrase)";
 "account_recovery_seed_hint" = "Restore access using your recovery seed phrase.";
 "account_recovery_seed_coming_soon" = "Seed phrase recovery will be available in a future update.";
 "profile_currently_shared" = "Profile currently shared";
@@ -336,8 +336,8 @@
 "reg_phase_solution" = "solution found";
 
 // Delete Account
-"delete_account_footer" = "Permanently deletes your account and all associated data.";
-"delete_account_not_available" = "Account deletion is not yet available. Please try again later.";
+"delete_account_footer" = "Permanently deletes your identity and all associated data.";
+"delete_account_not_available" = "Identity deletion is not yet available. Please try again later.";
 "delete_account_failed" = "Deletion failed: %@";
 
 // Account Settings — new sections
@@ -350,3 +350,7 @@
 "export_my_data_footer" = "Download a copy of your messages, contacts and account data. Required under GDPR and applicable privacy laws.";
 "export_coming_soon_message" = "Data export is not yet available. This feature is required by law and will be added before public launch.";
 "danger_zone" = "Danger Zone";
+
+// QR Scanner
+"paste_invite_link" = "Paste invite link";
+"clipboard_no_valid_invite" = "No valid invite link found in clipboard.";

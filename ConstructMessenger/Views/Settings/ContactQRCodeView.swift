@@ -11,6 +11,7 @@ import CoreImage.CIFilterBuiltins
 
 struct ContactQRCodeView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.containerWidth) private var containerWidth
     let userId: String
     let username: String
     
@@ -38,7 +39,7 @@ struct ContactQRCodeView: View {
                             .interpolation(.none)
                             .resizable()
                             .scaledToFit()
-                            .frame(width: QRCodeSize.standard, height: QRCodeSize.standard)
+                            .frame(width: QRCodeSize.standard(in: containerWidth), height: QRCodeSize.standard(in: containerWidth))
                             .padding(QRCodeSize.padding)
                             .background(Color.white)
                             .cornerRadius(QRCodeSize.cornerRadius)
@@ -46,7 +47,7 @@ struct ContactQRCodeView: View {
                     } else if let error = generationError {
                         Rectangle()
                             .fill(Color.gray.opacity(0.2))
-                            .frame(width: QRCodeSize.standard, height: QRCodeSize.standard)
+                            .frame(width: QRCodeSize.standard(in: containerWidth), height: QRCodeSize.standard(in: containerWidth))
                             .cornerRadius(QRCodeSize.cornerRadius)
                             .overlay {
                                 VStack(spacing: 8) {
@@ -62,7 +63,7 @@ struct ContactQRCodeView: View {
                             }
                     } else {
                         ProgressView()
-                            .frame(width: QRCodeSize.standard, height: QRCodeSize.standard)
+                            .frame(width: QRCodeSize.standard(in: containerWidth), height: QRCodeSize.standard(in: containerWidth))
                     }
 
                     VStack(spacing: 8) {

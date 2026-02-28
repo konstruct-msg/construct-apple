@@ -30,7 +30,7 @@ class BackgroundFetchManager: NSObject, ObservableObject {
     /// Energy monitor for battery and network checks
     private let energyMonitor = EnergyMonitor()
     
-    // ✅ WebSocket removed - using REST API for fetching messages
+    // ✅ Using gRPC for fetching messages (WebSocket removed)
     
     /// Cancellables for Combine subscriptions
     private var cancellables = Set<AnyCancellable>()
@@ -514,7 +514,7 @@ class BackgroundFetchManager: NSObject, ObservableObject {
     
     /// Cleanup fetch resources
     private func cleanupFetch() {
-        // WebSocket cleanup is handled by fetchOfflineMessages
+        // WebSocket cleanup is handled by gRPC channel teardown
         // which creates its own temporary connection
         Log.info("Cleaning up fetch resources", category: "BackgroundFetch")
     }

@@ -105,11 +105,6 @@ class ChatScrollManager: ObservableObject {
     /// - Parameter offset: Current scroll offset
     func updateScrollOffset(_ offset: CGFloat) {
         scrollOffset = offset
-        
-        // Auto-hide keyboard when scrolling up significantly
-        if offset < -50 {
-            hideKeyboard()
-        }
     }
     
     /// Update drag offset for pull-to-refresh
@@ -139,9 +134,8 @@ class ChatScrollManager: ObservableObject {
             }
             .sink { [weak self] height in
                 self?.keyboardHeight = height
-                
-                // Auto-scroll to bottom when keyboard appears
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                Task { @MainActor [weak self] in
+                    try? await Task.sleep(for: .milliseconds(100))
                     self?.scrollToBottom()
                 }
             }
@@ -154,15 +148,6 @@ class ChatScrollManager: ObservableObject {
             }
             .store(in: &cancellables)
     }
-    
-    private func hideKeyboard() {
-        UIApplication.shared.sendAction(
-            #selector(UIResponder.resignFirstResponder),
-            to: nil,
-            from: nil,
-            for: nil
-        )
-    }
 }
 
 // MARK: - Computed Properties
@@ -173,20 +158,9 @@ extension ChatScrollManager {
         keyboardHeight > 0
     }
     
-    /// Whether view is scrolled near the bottom (within 100 points)
-    var isNearBottom: Bool {
-        scrollOffset > -100
-    }
-    
     /// Whether to show "scroll to bottom" button (scrolled far from newest messages)
-    /// With rotation approach: scrolling up = away from newest (at visual bottom)
     var shouldShowScrollToBottomButton: Bool {
-        // Get screen height for dynamic threshold
-        let screenHeight = UIScreen.main.bounds.height
-        let threshold = screenHeight * 2  // 2 screen heights
-        
-        // With rotation: positive offset = scrolled up (away from newest)
-        // Negative offset = at or near newest messages
-        return scrollOffset > threshold
+        // offsetFromBottom ≈ 0 means at bottom; large negative = scrolled up
+        return scrollOffset < -200
     }
 }

@@ -19,7 +19,7 @@ import SwiftUI
 /// Uses `TimelineView` for CADisplayLink-accurate 60/120Hz rendering.
 struct ConvergingSignalView: View {
     let progress: Double   // 0.0 → 1.0
-    var dotColor: Color = Color("SecondColor")
+    var dotColor: Color = Color.AppBrand.second
     /// Set to true to trigger the collapse-to-dot exit animation
     var collapsed: Bool = false
 

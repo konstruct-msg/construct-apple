@@ -187,53 +187,64 @@ struct FontStyle {
     static let title = Font.title2
 }
 
+// MARK: - Container Width Environment Key
+
+private struct ContainerWidthKey: EnvironmentKey {
+    static let defaultValue: CGFloat = 390 // Safe default for iPhone 15 Pro
+}
+
+extension EnvironmentValues {
+    var containerWidth: CGFloat {
+        get { self[ContainerWidthKey.self] }
+        set { self[ContainerWidthKey.self] = newValue }
+    }
+}
+
 // MARK: - Color Extensions
 
 extension Color {
-    
-//    static let primaryButton = Color("PrimaryButtonColor")
-//    static let disabledButton = Color("DisabledButtonColor")
-//    static let accentColor = Color("AccentColor")
-    
+
+    /// Brand colors from Assets catalog
+    struct AppBrand {
+        /// Primary action color — buttons, CTAs (ButtonColor asset)
+        static var button: Color { Color("ButtonColor") }
+        /// Secondary accent — icons, links
+        static var second: Color { Color("CustomTeal") }
+        
+        static var third: Color { Color("StillGreen") }
+        
+    }
+
     /// Standard background colors
     struct AppBackground {
-        /// Primary app background (warm off-white in light, dark gray in dark)
-        static var primary: Color {
-            Color("AppBackgroundPrimary")
-        }
-        
+        /// Primary app background (AppBackgroundPrimary asset)
+        static var primary: Color { Color("AppBackgroundPrimary") }
         /// Secondary background (slightly gray)
-        static var secondary: Color {
-            Color(uiColor: .systemGray6)
-        }
-        
+        static var secondary: Color { Color(uiColor: .systemGray6) }
         /// Clear background
-        static var clear: Color {
-            Color.clear
-        }
+        static var clear: Color { Color.clear }
     }
-    
+
     /// Standard text colors
     struct AppText {
         /// Primary text color
-        static var primary: Color {
-            Color.primary
-        }
-        
+        static var primary: Color { Color.primary }
         /// Secondary text color
-        static var secondary: Color {
-            Color.secondary
-        }
-        
-        /// Blue accent color
-        static var accent: Color {
-            Color.blue
-        }
-        
+        static var secondary: Color { Color.secondary }
+        /// Accent color (AccentColor asset)
+        static var accent: Color { Color.accentColor }
+        /// Text on colored surfaces (buttons, filled bubbles)
+        static var onAccent: Color { Color.white }
         /// Red for errors
-        static var error: Color {
-            Color.red
-        }
+        static var error: Color { Color.red }
+    }
+
+    /// Semantic status colors
+    struct AppStatus {
+        static var success: Color { Color.green }
+        static var error: Color { Color.red }
+        static var warning: Color { Color.orange }
+        static var info: Color { Color.blue }
     }
 }
 
@@ -274,16 +285,10 @@ extension View {
 // MARK: - QR Code Constants
 
 struct QRCodeSize {
-    /// Standard QR code size for contact sharing
-    /// ~80% of iPhone screen width, but max 350pt for larger devices
-    static let standard: CGFloat = min(UIScreen.main.bounds.width * 0.8, 350)
-    
-    /// Padding around QR code
+    static func standard(in containerWidth: CGFloat) -> CGFloat {
+        min(containerWidth * 0.8, 350)
+    }
     static let padding: CGFloat = 20
-    
-    /// Corner radius for QR code container
     static let cornerRadius: CGFloat = 20
-    
-    /// Shadow radius for QR code container
     static let shadowRadius: CGFloat = 10
 }

@@ -62,15 +62,6 @@ struct SettingsView: View {
                                     VStack(alignment: .leading, spacing: 4) {
                                         Text(profileDisplayName)
                                             .font(.headline)
-                                        if !viewModel.username.isEmpty {
-                                            Text("@\(viewModel.username)")
-                                                .font(.subheadline)
-                                                .foregroundColor(.secondary)
-                                        } else {
-                                            Text("account")
-                                                .font(.subheadline)
-                                                .foregroundColor(.secondary)
-                                        }
                                     }
 
                                     Spacer()
@@ -207,6 +198,14 @@ struct SettingsView: View {
                                     .foregroundColor(.secondary)
                             }
                         }
+
+                        // MARK: - Developer Section (DEBUG only)
+                        Section(header: Text("Developer").foregroundStyle(.orange)) {
+                            NavigationLink(destination: DiagnosticsView()) {
+                                Label("Diagnostics & Logs", systemImage: "ladybug")
+                                    .foregroundStyle(.orange)
+                            }
+                        }
                     }
                     .listStyle(.insetGrouped)
                     .padding(.vertical, 0)
@@ -308,14 +307,14 @@ struct SettingsView: View {
     }
 }
 
-#Preview {
-    let container = PreviewHelpers.createPreviewContainer()
-    let context = container.viewContext
-    let authViewModel = AuthViewModel(context: context)
-    authViewModel.configureMockAuth()
-
-    return SettingsView()
-        .environment(\.managedObjectContext, context)
-        .environmentObject(authViewModel)
-        .environmentObject(SecurityViewModel())
-}
+//#Preview {
+//    let container = PreviewHelpers.createPreviewContainer()
+//    let context = container.viewContext
+//    let authViewModel = AuthViewModel(context: context)
+//    authViewModel.configureMockAuth()
+//
+//    return SettingsView()
+//        .environment(\.managedObjectContext, context)
+//        .environmentObject(authViewModel)
+//        .environmentObject(SecurityViewModel())
+//}

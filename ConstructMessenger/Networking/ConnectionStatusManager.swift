@@ -2,18 +2,18 @@
 //  ConnectionStatusManager.swift
 //  Construct Messenger
 //
-//  Manages connection status for REST API architecture
-//  Replaces WebSocket-based connection status tracking
+//  Manages connection status for gRPC stream architecture
 //
 
 import Foundation
 import Combine
 
 /// Manages and publishes connection status for the app
-/// In REST architecture, connection status is based on:
+/// In gRPC architecture, connection status is based on:
 /// 1. Network reachability (device has internet)
-/// 2. Last API request success/failure
+/// 2. gRPC MessageStream connection state
 /// 3. Session validity
+@MainActor
 class ConnectionStatusManager: ObservableObject {
     static let shared = ConnectionStatusManager()
 
@@ -79,7 +79,6 @@ class ConnectionStatusManager: ObservableObject {
     private func setupReachabilityObserving() {
         // Observe network reachability changes
         reachabilityManager.$isReachable
-            .receive(on: DispatchQueue.main)
             .sink { [weak self] isReachable in
                 self?.handleReachabilityChange(isReachable: isReachable)
             }
@@ -105,103 +104,73 @@ class ConnectionStatusManager: ObservableObject {
         }
     }
 
-    /// Call this when an API request succeeds
     func markRequestSucceeded() {
-        DispatchQueue.main.async { [weak self] in
-            guard let self = self else { return }
-            let oldStatus = self.connectionStatus
-            self.lastSuccessfulRequest = Date()
-            self.lastError = nil
-            self.connectionStatus = .connected
-            
-            if oldStatus != .connected {
-                Log.info("🟢 Connection status changed: \(oldStatus.displayText) -> Connected", category: "ConnectionStatus")
-            }
+        let oldStatus = connectionStatus
+        lastSuccessfulRequest = Date()
+        lastError = nil
+        connectionStatus = .connected
+        if oldStatus != .connected {
+            Log.info("🟢 Connection status changed: \(oldStatus.displayText) -> Connected", category: "ConnectionStatus")
         }
     }
 
-    /// Call this when an API request fails
-    /// - Parameter error: Optional error description
-    /// - Parameter isCritical: If true, immediately change status. If false, only change after grace period.
     func markRequestFailed(error: String? = nil, isCritical: Bool = false) {
-        DispatchQueue.main.async { [weak self] in
-            guard let self = self else { return }
+        let oldStatus = connectionStatus
+        lastError = error
 
-            let oldStatus = self.connectionStatus
-            self.lastError = error
-
-            // Only mark as disconnected if network is unreachable
-            if !self.reachabilityManager.isReachable {
-                self.connectionStatus = .disconnected
-            } else if isCritical {
-                // Critical errors (auth failures, etc.) should immediately change status
-                if self.connectionStatus == .connected {
-                    self.connectionStatus = .connecting
-                }
-            } else {
-                // Non-critical errors (timeouts, temporary failures):
-                // Stay "Connected" if we had a successful request in the last 2 minutes
-                // This prevents flickering status on temporary network hiccups or long-polling timeouts
-                if self.connectionStatus == .connected {
-                    let gracePeriod: TimeInterval = 120  // 2 minutes
-                    if !self.isConnectionStale(threshold: gracePeriod) {
-                        // Had successful request recently - stay connected
-                        Log.debug("⚠️ Non-critical error, but staying Connected (last success was recent)", category: "ConnectionStatus")
-                        return
-                    } else {
-                        // No successful request in 2 minutes - mark as connecting
-                        self.connectionStatus = .connecting
-                    }
+        if !reachabilityManager.isReachable {
+            connectionStatus = .disconnected
+        } else if isCritical {
+            if connectionStatus == .connected {
+                connectionStatus = .connecting
+            }
+        } else {
+            if connectionStatus == .connected {
+                let gracePeriod: TimeInterval = 120
+                if !isConnectionStale(threshold: gracePeriod) {
+                    Log.debug("⚠️ Non-critical error, but staying Connected (last success was recent)", category: "ConnectionStatus")
+                    return
+                } else {
+                    connectionStatus = .connecting
                 }
             }
-            
-            if oldStatus != self.connectionStatus {
-                Log.info("🔴 Connection status changed: \(oldStatus.displayText) -> \(self.connectionStatus.displayText)", category: "ConnectionStatus")
-                if let error = error {
-                    Log.info("   Error: \(error)", category: "ConnectionStatus")
-                }
+        }
+
+        if oldStatus != connectionStatus {
+            Log.info("🔴 Connection status changed: \(oldStatus.displayText) -> \(connectionStatus.displayText)", category: "ConnectionStatus")
+            if let error = error {
+                Log.info("   Error: \(error)", category: "ConnectionStatus")
             }
         }
     }
 
-    /// Call this when starting to connect/check server
     func markConnecting() {
-        DispatchQueue.main.async { [weak self] in
-            if self?.connectionStatus != .connected {
-                self?.connectionStatus = .connecting
-            }
+        if connectionStatus != .connected {
+            connectionStatus = .connecting
         }
     }
 
     // MARK: - gRPC Stream Integration
 
-    /// Call when the gRPC MessageStream establishes a connection
     func markStreamConnected() {
-        DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
-            let old = self.connectionStatus
-            self.lastSuccessfulRequest = Date()
-            self.lastError = nil
-            self.connectionStatus = .connected
-            if old != .connected {
-                Log.info("🟢 Stream connected → status: Connected", category: "ConnectionStatus")
-            }
+        let old = connectionStatus
+        lastSuccessfulRequest = Date()
+        lastError = nil
+        connectionStatus = .connected
+        if old != .connected {
+            Log.info("🟢 Stream connected → status: Connected", category: "ConnectionStatus")
         }
     }
 
-    /// Call when the gRPC MessageStream disconnects or errors
     func markStreamDisconnected(error: String? = nil) {
-        DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
-            self.lastError = error
-            if self.reachabilityManager.isReachable {
-                if self.connectionStatus == .connected {
-                    self.connectionStatus = .connecting
-                    Log.info("🟡 Stream disconnected → status: Connecting", category: "ConnectionStatus")
-                }
-            } else {
-                self.connectionStatus = .disconnected
+        lastError = error
+        if reachabilityManager.isReachable {
+            if connectionStatus == .connected {
+                connectionStatus = .connecting
+                Log.info("🟡 Stream disconnected → status: Connecting", category: "ConnectionStatus")
             }
+        } else {
+            connectionStatus = .disconnected
         }
     }
 

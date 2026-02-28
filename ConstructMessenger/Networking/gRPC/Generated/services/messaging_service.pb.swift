@@ -720,6 +720,11 @@ public struct Shared_Proto_Services_V1_GetPendingMessagesRequest: Sendable {
 }
 
 /// Pending message entry
+/// PendingMessage - an undelivered message waiting for pickup by the recipient device.
+///
+/// E2EE design note: encrypted_payload is opaque bytes that the server never reads.
+/// All Signal Protocol parameters (ephemeral key, message number, ratchet state)
+/// are encoded inside encrypted_payload by the sender and decoded only by the recipient.
 public struct Shared_Proto_Services_V1_PendingMessage: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -728,25 +733,17 @@ public struct Shared_Proto_Services_V1_PendingMessage: Sendable {
   /// Message ID (UUID)
   public var messageID: String = String()
 
-  /// Sender user ID
+  /// Sender user ID — needed for UI "who sent this" before decryption
   public var senderID: String = String()
 
-  /// Cipher suite ID
-  public var suiteID: Int32 = 0
+  /// Opaque ciphertext. Contains inner envelope:
+  ///   crypto_params_length (2 bytes BE) || crypto_params || ciphertext
+  /// where crypto_params is client-defined binary encoding of ephemeral key,
+  /// message_number, previous_chain_length, suite_id etc.
+  /// Server never reads this field.
+  public var encryptedPayload: Data = Data()
 
-  /// Base64-encoded ephemeral public key
-  public var ephemeralPublicKey: String = String()
-
-  /// Message number in sending chain (Double Ratchet)
-  public var messageNumber: UInt32 = 0
-
-  /// Number of messages in previous chain
-  public var previousChainLength: UInt32 = 0
-
-  /// Base64-encoded ciphertext
-  public var ciphertext: String = String()
-
-  /// Unix timestamp (seconds)
+  /// Server-assigned receive timestamp (Unix seconds). Client ignores sender's timestamp.
   public var timestamp: Int64 = 0
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -1750,7 +1747,7 @@ extension Shared_Proto_Services_V1_GetPendingMessagesRequest: SwiftProtobuf.Mess
 
 extension Shared_Proto_Services_V1_PendingMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".PendingMessage"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}message_id\0\u{3}sender_id\0\u{3}suite_id\0\u{3}ephemeral_public_key\0\u{3}message_number\0\u{3}previous_chain_length\0\u{1}ciphertext\0\u{1}timestamp\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}message_id\0\u{3}sender_id\0\u{4}\u{5}encrypted_payload\0\u{1}timestamp\0\u{c}\u{3}\u{1}\u{c}\u{4}\u{1}\u{c}\u{5}\u{1}\u{c}\u{6}\u{1}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1760,11 +1757,7 @@ extension Shared_Proto_Services_V1_PendingMessage: SwiftProtobuf.Message, SwiftP
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.messageID) }()
       case 2: try { try decoder.decodeSingularStringField(value: &self.senderID) }()
-      case 3: try { try decoder.decodeSingularInt32Field(value: &self.suiteID) }()
-      case 4: try { try decoder.decodeSingularStringField(value: &self.ephemeralPublicKey) }()
-      case 5: try { try decoder.decodeSingularUInt32Field(value: &self.messageNumber) }()
-      case 6: try { try decoder.decodeSingularUInt32Field(value: &self.previousChainLength) }()
-      case 7: try { try decoder.decodeSingularStringField(value: &self.ciphertext) }()
+      case 7: try { try decoder.decodeSingularBytesField(value: &self.encryptedPayload) }()
       case 8: try { try decoder.decodeSingularInt64Field(value: &self.timestamp) }()
       default: break
       }
@@ -1778,20 +1771,8 @@ extension Shared_Proto_Services_V1_PendingMessage: SwiftProtobuf.Message, SwiftP
     if !self.senderID.isEmpty {
       try visitor.visitSingularStringField(value: self.senderID, fieldNumber: 2)
     }
-    if self.suiteID != 0 {
-      try visitor.visitSingularInt32Field(value: self.suiteID, fieldNumber: 3)
-    }
-    if !self.ephemeralPublicKey.isEmpty {
-      try visitor.visitSingularStringField(value: self.ephemeralPublicKey, fieldNumber: 4)
-    }
-    if self.messageNumber != 0 {
-      try visitor.visitSingularUInt32Field(value: self.messageNumber, fieldNumber: 5)
-    }
-    if self.previousChainLength != 0 {
-      try visitor.visitSingularUInt32Field(value: self.previousChainLength, fieldNumber: 6)
-    }
-    if !self.ciphertext.isEmpty {
-      try visitor.visitSingularStringField(value: self.ciphertext, fieldNumber: 7)
+    if !self.encryptedPayload.isEmpty {
+      try visitor.visitSingularBytesField(value: self.encryptedPayload, fieldNumber: 7)
     }
     if self.timestamp != 0 {
       try visitor.visitSingularInt64Field(value: self.timestamp, fieldNumber: 8)
@@ -1802,11 +1783,7 @@ extension Shared_Proto_Services_V1_PendingMessage: SwiftProtobuf.Message, SwiftP
   public static func ==(lhs: Shared_Proto_Services_V1_PendingMessage, rhs: Shared_Proto_Services_V1_PendingMessage) -> Bool {
     if lhs.messageID != rhs.messageID {return false}
     if lhs.senderID != rhs.senderID {return false}
-    if lhs.suiteID != rhs.suiteID {return false}
-    if lhs.ephemeralPublicKey != rhs.ephemeralPublicKey {return false}
-    if lhs.messageNumber != rhs.messageNumber {return false}
-    if lhs.previousChainLength != rhs.previousChainLength {return false}
-    if lhs.ciphertext != rhs.ciphertext {return false}
+    if lhs.encryptedPayload != rhs.encryptedPayload {return false}
     if lhs.timestamp != rhs.timestamp {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true

@@ -103,7 +103,7 @@ struct MessageBubble: View {
     let onSelect: ((Message) -> Void)?
     let onEnterSelectMode: ((Message) -> Void)?
 
-    @State private var showMessageInfo = false
+    @Environment(\.containerWidth) private var containerWidth
 
     init(
         message: Message,
@@ -165,7 +165,7 @@ struct MessageBubble: View {
                     onSelect?(message)
                 } label: {
                     Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                        .foregroundColor(isSelected ? .blue : .gray)
+                        .foregroundColor(isSelected ? Color.AppBrand.second : .gray)
                         .font(.title3)
                 }
                 .buttonStyle(.plain)
@@ -183,7 +183,7 @@ struct MessageBubble: View {
                     ProfileShareBubbleView(profileData: profileData)
                         .overlay(
                             RoundedRectangle(cornerRadius: 16)
-                                .stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2)
+                                .stroke(isSelected ? Color.AppBrand.second : Color.clear, lineWidth: 2)
                         )
                 }
                 // ✅ Check if this is a media message
@@ -197,7 +197,7 @@ struct MessageBubble: View {
                         if let replyContent = message.replyToContent {
                             HStack(spacing: 4) {
                                 Rectangle()
-                                    .fill(message.isSentByMe ? Color.white.opacity(0.5) : Color.blue.opacity(0.5))
+                                    .fill(message.isSentByMe ? Color.white.opacity(0.5) : Color.AppBrand.second.opacity(0.5))
                                     .frame(width: 3)
 
                                 Text(replyContent)
@@ -220,12 +220,12 @@ struct MessageBubble: View {
                         .padding(.vertical, message.replyToContent != nil ? 4 : 8)
                         .padding(.bottom, message.replyToContent != nil ? 8 : 0)
                     }
-                    .background(message.isSentByMe ? Color.blue : Color.gray.opacity(0.2))
+                    .background(message.isSentByMe ? Color.AppBrand.second : Color.gray.opacity(0.2))
                     .foregroundColor(message.isSentByMe ? .white : .primary)
                     .cornerRadius(16)
                     .overlay(
                         RoundedRectangle(cornerRadius: 16)
-                            .stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2)
+                            .stroke(isSelected ? Color.AppBrand.second : Color.clear, lineWidth: 2)
                     )
                 }
 
@@ -242,11 +242,56 @@ struct MessageBubble: View {
                     .padding(.horizontal, 4)
                 }
             }
-            .frame(maxWidth: UIScreen.main.bounds.width * 0.7, alignment: message.isSentByMe ? .trailing : .leading)
-            .contentShape(Rectangle())
+            .frame(maxWidth: containerWidth * 0.7, alignment: message.isSentByMe ? .trailing : .leading)
+            .contentShape(.interaction, Rectangle())
+            .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 16))
             .onTapGesture {
                 if isEditMode {
                     onSelect?(message)
+                }
+            }
+            .contextMenu {
+                if !isEditMode {
+                    if let onReply = onReply {
+                        Button {
+                            onReply(message)
+                        } label: {
+                            Label("reply", systemImage: "arrowshape.turn.up.left")
+                        }
+                    }
+
+                    Button {
+                        UIPasteboard.general.string = message.decryptedContent
+                    } label: {
+                        Label("copy", systemImage: "doc.on.doc")
+                    }
+
+                    if let onEnterSelectMode = onEnterSelectMode {
+                        Button {
+                            onEnterSelectMode(message)
+                        } label: {
+                            Label("select_messages", systemImage: "checkmark.circle")
+                        }
+                    }
+
+                    Divider()
+
+                    if let onDelete = onDelete {
+                        Button(role: .destructive) {
+                            onDelete(message)
+                        } label: {
+                            Label("delete", systemImage: "trash")
+                        }
+                    }
+
+                    if (message.deliveryStatus == .failed || message.deliveryStatus == .queued),
+                       let onRetry = onRetry {
+                        Button {
+                            onRetry(message)
+                        } label: {
+                            Label("retry", systemImage: "arrow.clockwise")
+                        }
+                    }
                 }
             }
 
@@ -256,76 +301,14 @@ struct MessageBubble: View {
             
             // Selection checkbox in edit mode - positioned based on message direction
             if isEditMode && message.isSentByMe {
-                // Checkbox on RIGHT for outgoing messages
                 Button {
                     onSelect?(message)
                 } label: {
                     Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                        .foregroundColor(isSelected ? .blue : .gray)
+                        .foregroundColor(isSelected ? Color.AppBrand.second : .gray)
                         .font(.title3)
                 }
                 .buttonStyle(.plain)
-            }
-        }
-        .contextMenu {
-            // Context menu only available when not in edit mode
-            if !isEditMode {
-                // Reply - только для чужих сообщений или если есть callback
-                if let onReply = onReply {
-                    Button {
-                        onReply(message)
-                    } label: {
-                        Label("reply", systemImage: "arrowshape.turn.up.left")
-                    }
-                }
-
-                // Copy text
-                Button {
-                    UIPasteboard.general.string = message.decryptedContent
-                } label: {
-                    Label("copy", systemImage: "doc.on.doc")
-                }
-                
-                // Select messages - включить режим выбора нескольких сообщений
-                if let onEnterSelectMode = onEnterSelectMode {
-                    Button {
-                        // Включаем режим выбора и автоматически выделяем это сообщение
-                        onEnterSelectMode(message)
-                    } label: {
-                        Label("select_messages", systemImage: "checkmark.circle")
-                    }
-                }
-
-                // Message info - только для debug режима
-                // ⚠️ SECURITY: This code is completely removed in Release builds via #if DEBUG
-                #if DEBUG
-                Button {
-                    showMessageInfo = true
-                } label: {
-                    Label("info", systemImage: "info.circle")
-                }
-                #endif
-
-                Divider()
-
-                // Delete - теперь можно удалять любые сообщения (локально)
-                if let onDelete = onDelete {
-                    Button(role: .destructive) {
-                        onDelete(message)
-                    } label: {
-                        Label("delete", systemImage: "trash")
-                    }
-                }
-
-                // Retry - только для failed/queued сообщений
-                if (message.deliveryStatus == .failed || message.deliveryStatus == .queued),
-                   let onRetry = onRetry {
-                    Button {
-                        onRetry(message)
-                    } label: {
-                        Label("retry", systemImage: "arrow.clockwise")
-                    }
-                }
             }
         }
     }
@@ -438,12 +421,12 @@ struct ProfileShareBubbleView: View {
                         .clipShape(Circle())
                 } else {
                     Circle()
-                        .fill(Color.blue.opacity(0.2))
+                        .fill(Color.AppBrand.second.opacity(0.2))
                         .frame(width: 60, height: 60)
                         .overlay(
                             Text(String(profileData.displayName.prefix(1)).uppercased())
                                 .font(.title2)
-                                .foregroundColor(.blue)
+                                .foregroundColor(Color.AppBrand.second)
                         )
                 }
                 
@@ -497,7 +480,7 @@ struct MediaMessageView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
-                            .stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2)
+                            .stroke(isSelected ? Color.AppBrand.second : Color.clear, lineWidth: 2)
                     )
                     .onTapGesture {
                         showFullScreen = true
@@ -511,7 +494,7 @@ struct MediaMessageView: View {
                         VStack(spacing: 12) {
                             ProgressView()
                                 .scaleEffect(1.5)
-                                .tint(.blue)
+                                .tint(Color.AppBrand.second)
                             
                             if downloadProgress > 0 && downloadProgress < 1 {
                                 Text("\(Int(downloadProgress * 100))%")
@@ -547,17 +530,17 @@ struct MediaMessageView: View {
                                     Text("Retry")
                                 }
                                 .font(.caption)
-                                .foregroundColor(.blue)
+                                .foregroundColor(Color.AppBrand.second)
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 6)
-                                .background(Color.blue.opacity(0.1))
+                                .background(Color.AppBrand.second.opacity(0.1))
                                 .cornerRadius(8)
                             }
                         }
                     }
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
-                            .stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2)
+                            .stroke(isSelected ? Color.AppBrand.second : Color.clear, lineWidth: 2)
                     )
             } else {
                 // Placeholder - initial state
@@ -571,7 +554,7 @@ struct MediaMessageView: View {
                     }
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
-                            .stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2)
+                            .stroke(isSelected ? Color.AppBrand.second : Color.clear, lineWidth: 2)
                     )
             }
             

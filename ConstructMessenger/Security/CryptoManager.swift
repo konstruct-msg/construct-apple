@@ -376,6 +376,13 @@ class CryptoManager {
         }
     }
 
+    /// Set the local user ID in the crypto core so AAD correctly binds sender identity.
+    /// Must be called after login/registration with the server-assigned userId.
+    func setLocalUserId(_ userId: String) {
+        core?.setLocalUserId(userId: userId)
+        Log.debug("🔑 CryptoManager: local user ID set to \(userId)", category: "CryptoManager")
+    }
+
     /// Check if a session exists for a user
     func hasSession(for userId: String) -> Bool {
         let exists = sessionStore.hasSession(for: userId)

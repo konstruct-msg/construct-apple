@@ -65,7 +65,7 @@ final class AuthServiceClient: Sendable {
             publicKeys.identityPublic = bundleDict["identity_public"] as? String ?? ""
             publicKeys.signedPrekeyPublic = bundleDict["signed_prekey_public"] as? String ?? ""
             publicKeys.signedPrekeySignature = signedPrekeySignature
-            publicKeys.suiteID = "Curve25519+Ed25519"
+            publicKeys.cryptoSuite = "Curve25519+Ed25519"
 
             var pow = Shared_Proto_Services_V1_PowSolution()
             pow.challenge = challenge

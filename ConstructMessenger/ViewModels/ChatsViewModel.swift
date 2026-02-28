@@ -110,7 +110,6 @@ class ChatsViewModel: ObservableObject {
             PollingState(hasToken: token != nil, status: status, pushEnabled: pushEnabled)
         }
         .removeDuplicates()
-        .receive(on: DispatchQueue.main)
         .sink { [weak self] (state: PollingState) in
             Log.debug("📡 Stream state: token=\(state.hasToken ? "present" : "nil"), status=\(state.status.displayText), push=\(state.pushEnabled)", category: "ChatsViewModel")
 
@@ -138,7 +137,6 @@ class ChatsViewModel: ObservableObject {
     private func setupAppLifecycleObservers() {
         // ✅ Pause messaging when app goes to background
         NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)
-            .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 Log.info("📱 App going to background - pausing messaging", category: "ChatsViewModel")
                 self?.streamManager.pause()
@@ -147,7 +145,6 @@ class ChatsViewModel: ObservableObject {
         
         // ✅ Resume messaging when app becomes active
         NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)
-            .receive(on: DispatchQueue.main)
             .sink { _ in
                 Log.info("📱 App became active - resuming messaging if conditions met", category: "ChatsViewModel")
             }

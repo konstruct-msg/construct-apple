@@ -64,7 +64,7 @@ struct ContentView: View {
                 authViewModel.restoreSession()
             } else if newPhase == .background {
                 print("⏹️ App went to background.")
-                // REST API architecture - no WebSocket to disconnect
+                // gRPC architecture - stream disconnected gracefully
                 // Long polling will resume when app becomes active
             }
         }

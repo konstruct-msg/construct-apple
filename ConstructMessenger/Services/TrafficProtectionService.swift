@@ -11,6 +11,7 @@ import Foundation
 import UIKit
 import Combine
 
+@MainActor
 class TrafficProtectionService: ObservableObject {
     static let shared = TrafficProtectionService()
 
@@ -73,7 +74,8 @@ class TrafficProtectionService: ObservableObject {
     }
 
     deinit {
-        stopScheduler()
+        schedulerTimer?.invalidate()
+        schedulerTimer = nil
         if let observer = batteryObserver {
             NotificationCenter.default.removeObserver(observer)
         }
@@ -162,9 +164,8 @@ class TrafficProtectionService: ObservableObject {
         // Generate dummy message
         let dummyData = manager.generateDummy()
 
-        // ✅ Cover traffic disabled - REST API doesn't support dummy messages
-        // TODO: Implement REST API endpoint for cover traffic if needed
-        Log.debug("⚠️ Cover traffic disabled (no REST API support), skipping dummy (\(dummyData.count) bytes)", category: LogCategory.trafficProtection.name)
+        // ✅ Cover traffic disabled - TODO: Implement gRPC cover traffic endpoint
+        Log.debug("⚠️ Cover traffic disabled, skipping dummy (\(dummyData.count) bytes)", category: LogCategory.trafficProtection.name)
     }
 
     // MARK: - Real Message Recording
@@ -187,11 +188,11 @@ class TrafficProtectionService: ObservableObject {
     /// - Parameter message: Message to send
     /// - Parameter isHighPriority: Priority of message
     /// - Parameter sendAction: Closure to actually send the message
-    func applyTimingJitter(isHighPriority: Bool, sendAction: @escaping () -> Void) {
+    func applyTimingJitter(isHighPriority: Bool, sendAction: @escaping @MainActor () -> Void) {
         let delayMs = recommendedSendDelay(isHighPriority: isHighPriority)
-
         if delayMs > 0 {
-            DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(Int(delayMs))) {
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(Int(delayMs)))
                 sendAction()
             }
         } else {

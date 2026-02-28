@@ -592,6 +592,8 @@ public protocol ClassicCryptoCoreProtocol: AnyObject, Sendable {
     
     func removeSession(contactId: String)  -> Bool
     
+    func setLocalUserId(userId: String) 
+    
     func signBundleData(bundleDataJson: [UInt8]) throws  -> String
     
 }
@@ -736,6 +738,14 @@ open func removeSession(contactId: String) -> Bool  {
         FfiConverterString.lower(contactId),$0
     )
 })
+}
+    
+open func setLocalUserId(userId: String)  {try! rustCall() {
+    uniffi_construct_core_fn_method_classiccryptocore_set_local_user_id(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(userId),$0
+    )
+}
 }
     
 open func signBundleData(bundleDataJson: [UInt8])throws  -> String  {
@@ -2276,6 +2286,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_classiccryptocore_remove_session() != 11481) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_classiccryptocore_set_local_user_id() != 65330) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_classiccryptocore_sign_bundle_data() != 39138) {

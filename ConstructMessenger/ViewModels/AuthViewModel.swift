@@ -42,7 +42,7 @@ class AuthViewModel: ObservableObject {
         self.viewContext = context
         setupSubscribers()
         startTokenRefreshMonitoring()  // ✅ Monitor token expiration
-        setupSessionExpiredListener()  // ✅ Listen for session expiration from REST API
+        setupSessionExpiredListener()  // ✅ Listen for session expiration from auth service
         
         // ✅ Device-based auth: Try to restore session OR authenticate with device keys
         Task {
@@ -50,17 +50,15 @@ class AuthViewModel: ObservableObject {
         }
     }
     
-    // ✅ NEW: Listen for session expiration notifications from REST API
+    // ✅ Listen for session expiration notifications from gRPC auth service
     private func setupSessionExpiredListener() {
         NotificationCenter.default.publisher(for: NSNotification.Name("SessionExpired"))
-            .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.handleSessionExpired()
             }
             .store(in: &cancellables)
 
         NotificationCenter.default.publisher(for: NSNotification.Name("SessionInvalidated"))
-            .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 Task {
                     await self?.restoreOrAuthenticateDevice()
@@ -71,10 +69,12 @@ class AuthViewModel: ObservableObject {
 
     deinit {
         tokenRefreshTimer?.invalidate()
+        authOperationTimer?.invalidate()
+        sessionRestoreTimer?.invalidate()
     }
 
     private func setupSubscribers() {
-        // ✅ WebSocket removed - using REST API only
+        // ✅ Using gRPC for all messaging
         // Session expiration is handled via setupSessionExpiredListener()
     }
 
@@ -146,6 +146,7 @@ class AuthViewModel: ObservableObject {
             await MainActor.run {
                 self.currentUserId = response.userId
                 self.isAuthenticated = true
+                CryptoManager.shared.setLocalUserId(response.userId)
                 print("✅ Device-based authentication successful")
             }
             
@@ -351,7 +352,7 @@ class AuthViewModel: ObservableObject {
     }
 
     // MARK: - State Updaters
-    // ✅ WebSocket message handling removed - using REST API only
+    // ✅ Using gRPC for all messaging (WebSocket removed)
     private func handleAuthSuccess(userId: String, username: String, token: String, refreshToken: String, expires: Int64) {
         // ✅ DEBUG: Log token before saving
         Log.info("💾 Saving session tokens (access token length: \(token.count))", category: "Auth")
@@ -386,8 +387,7 @@ class AuthViewModel: ObservableObject {
         
         currentUserId = userId
         isAuthenticated = true
-        
-        // ✅ REFACTOR Phase 1.2: Load User entity and set currentUser
+        CryptoManager.shared.setLocalUserId(userId)
         // Pass username parameter so it gets saved to Core Data
         loadUserFromCoreData(userId: userId, username: username)
         
@@ -551,6 +551,7 @@ class AuthViewModel: ObservableObject {
             // ✅ REFACTOR Phase 1.2: Set currentUser - single source of truth!
             self.currentUserId = user.id
             self.currentUser = user
+            CryptoManager.shared.setLocalUserId(user.id)
             
             print("✅ Restored user data from Core Data:")
             print("   userId: \(user.id)")

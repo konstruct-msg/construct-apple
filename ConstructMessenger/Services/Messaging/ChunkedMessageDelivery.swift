@@ -19,7 +19,9 @@ final class ChunkedMessageSender {
 
     func sendChunks(
         plan: ChunkedMessagePlan,
+        senderId: String,
         recipientId: String,
+        conversationId: String,
         timestamp: UInt64,
         preEncryptedFirst: CryptoManager.EncryptedMessageComponents? = nil
     ) async throws -> [SendMessageResponse] {
@@ -33,13 +35,19 @@ final class ChunkedMessageSender {
                 components = try CryptoManager.shared.encryptMessage(payload, for: recipientId)
             }
 
+            // Each chunk gets a unique message ID derived from plan + chunk index
+            let chunkMessageId = index == 0 ? plan.messageId.uuidString.lowercased()
+                : "\(plan.messageId.uuidString.lowercased())-c\(index)"
+
+            let encryptedPayload = try WirePayloadCoder.encode(components)
+
             let response = try await MessagingServiceClient.shared.sendMessage(
+                messageId: chunkMessageId,
                 recipientId: recipientId,
-                ephemeralPublicKey: components.ephemeralPublicKey,
-                messageNumber: components.messageNumber,
-                content: components.content,
-                timestamp: timestamp,
-                suiteId: components.suiteId
+                senderId: senderId,
+                conversationId: conversationId,
+                encryptedPayload: encryptedPayload,
+                timestamp: timestamp
             )
             responses.append(response)
 

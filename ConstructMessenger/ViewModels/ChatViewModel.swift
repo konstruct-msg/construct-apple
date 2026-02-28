@@ -3,6 +3,7 @@ import Combine
 import CoreData
 import UIKit
 import os.log
+import GRPCCore
 
 // MARK: - Message Queue Models
 
@@ -84,7 +85,7 @@ class ChatViewModel: NSObject, ObservableObject {
     }
 
     deinit {
-        // ✅ FIX: Clean up subscriptions when ViewModel is destroyed
+        publicKeyFetchTimer?.invalidate()
         cancellables.removeAll()
         Log.debug("🔧 ChatViewModel deinitialized", category: "ChatViewModel")
     }
@@ -126,11 +127,10 @@ class ChatViewModel: NSObject, ObservableObject {
     }
 
     private func setupSubscribers() {
-        // ✅ Listen for connection status changes (REST API based)
+        // ✅ Listen for connection status changes (gRPC stream based)
         // Incoming messages are received via long polling in ChatsViewModel
         // and saved to Core Data, then picked up via NSManagedObjectContextObjectsDidChange
         connectionStatusManager.$connectionStatus
-            .receive(on: DispatchQueue.main)
             .sink { [weak self] status in
                 if status == .connected {
                     Log.info("✅ Network connected - processing queued messages", category: "ChatViewModel")
@@ -143,7 +143,6 @@ class ChatViewModel: NSObject, ObservableObject {
     private func setupMessageQueueListener() {
         // Listen for queued messages processing requests
         NotificationCenter.default.publisher(for: .processQueuedMessages)
-            .receive(on: DispatchQueue.main)
             .sink { [weak self] notification in
                 self?.sendQueuedMessages()
             }
@@ -210,7 +209,7 @@ class ChatViewModel: NSObject, ObservableObject {
                 }
             } catch {
                 await MainActor.run {
-                    Log.error("❌ Failed to fetch public key via REST after retries: \(error.localizedDescription)", category: "ChatViewModel")
+                    Log.error("❌ Failed to fetch public key via gRPC after retries: \(error.localizedDescription)", category: "ChatViewModel")
                     self.errorMessage = "Failed to fetch public key after retries: \(error.localizedDescription)"
                     self.isSessionReady = false
                 }
@@ -479,7 +478,7 @@ class ChatViewModel: NSObject, ObservableObject {
             return
         }
 
-        Log.info("✅ Session is ready, sending via REST API...", category: "ChatViewModel")
+        Log.info("✅ Session is ready, sending via gRPC...", category: "ChatViewModel")
 
         isSending = true
         errorMessage = nil
@@ -517,18 +516,29 @@ class ChatViewModel: NSObject, ObservableObject {
                 suiteId: firstComponents.suiteId
             )
 
-            // ✅ Send through REST API (no WebSocket dependency)
-            Log.info("📮 Sending message via REST API: \(messageId)", category: "ChatViewModel")
+            // ✅ Send via gRPC
+        Log.info("📮 Sending message via gRPC: \(messageId)", category: "ChatViewModel")
             Task {
+                // Apply timing jitter for traffic analysis resistance (0–50ms for user messages)
+                let jitterMs = TrafficProtectionService.shared.recommendedSendDelay(isHighPriority: true)
+                if jitterMs > 0 {
+                    try? await Task.sleep(for: .milliseconds(Int(jitterMs)))
+                }
+
                 do {
                     let responses = try await ChunkedMessageSender.shared.sendChunks(
                         plan: plan,
+                        senderId: currentUserId,
                         recipientId: recipientId,
+                        conversationId: chat.id,
                         timestamp: message.timestamp,
                         preEncryptedFirst: firstComponents
                     )
                     let response = responses.first ?? SendMessageResponse(messageId: messageId, status: "sent")
-                    
+
+                    // Record real message sent for cover traffic coalescing
+                    TrafficProtectionService.shared.recordRealMessageSent()
+
                     await MainActor.run {
                         // ✅ IMPROVED: Use server-provided status if available
                         let deliveryStatus: DeliveryStatus
@@ -547,15 +557,17 @@ class ChatViewModel: NSObject, ObservableObject {
                         
                         Log.info("🔄 Updating message status from sending → \(deliveryStatus) for \(messageId)", category: "ChatViewModel")
                         updateMessageStatus(messageId: messageId, status: deliveryStatus)
-                        Log.info("✅ Message sent via REST API: \(response.messageId), server status: \(response.status)", category: "ChatViewModel")
+                        Log.info("✅ Message sent via gRPC: \(response.messageId), server status: \(response.status)", category: "ChatViewModel")
                     }
                 } catch {
                     await MainActor.run {
                         if let networkError = error as? NetworkError,
                            case .serverError(let message, let responseBody) = networkError {
-                            Log.error("❌ Failed to send message via REST: \(message)\nResponse: \(responseBody ?? "empty")", category: "ChatViewModel")
+                            Log.error("❌ Failed to send message via gRPC: \(message)\nResponse: \(responseBody ?? "empty")", category: "ChatViewModel")
+                        } else if let rpcError = error as? RPCError {
+                            Log.error("❌ SendMessage gRPC error: code=\(rpcError.code), message=\(rpcError.message)", category: "ChatViewModel")
                         } else {
-                            Log.error("❌ Failed to send message via REST: \(error.localizedDescription)", category: "ChatViewModel")
+                            Log.error("❌ Failed to send message: \(error)", category: "ChatViewModel")
                         }
                         updateMessageStatus(messageId: messageId, status: .failed)
                         errorMessage = "Failed to send message: \(error.localizedDescription)"
@@ -583,7 +595,7 @@ class ChatViewModel: NSObject, ObservableObject {
                 isInitializingSession = true
                 Log.info("📝 Message queued for retry after session reinitialization", category: "ChatViewModel")
 
-                // ✅ FIXED: Request fresh public key bundle via REST API with retry
+                // ✅ Request fresh public key bundle via gRPC with retry
                 Task {
                     await initializeSessionProactively(userId: toUserId)
                 }
@@ -635,10 +647,10 @@ class ChatViewModel: NSObject, ObservableObject {
         )
     }
 
-    // ✅ NOTE: WebSocket removed - using REST API only
+    // ✅ NOTE: Using gRPC for all messaging
     // Incoming messages are received via long polling in ChatsViewModel
     // and saved to Core Data, then picked up via NSManagedObjectContextObjectsDidChange
-    // ACKs are received directly from REST API response when sending messages
+    // ACKs are received from gRPC SendMessage response
 
     // MARK: - Core Data Operations
     // MARK: - Media Messages
@@ -709,12 +721,14 @@ class ChatViewModel: NSObject, ObservableObject {
 
             saveMessage(message, decryptedContent: text, isSentByMe: true, status: .sending, replyTo: replyTo, localThumbnails: localThumbnails, suiteId: firstComponents.suiteId)
 
-            // ✅ Send via REST API (no WebSocket dependency)
+            // ✅ Send via gRPC
             Task {
                 do {
                     let _ = try await ChunkedMessageSender.shared.sendChunks(
                         plan: plan,
+                        senderId: currentUserId,
                         recipientId: recipientId,
+                        conversationId: chat.id,
                         timestamp: message.timestamp,
                         preEncryptedFirst: firstComponents
                     )
@@ -727,9 +741,9 @@ class ChatViewModel: NSObject, ObservableObject {
                     await MainActor.run {
                         if let networkError = error as? NetworkError,
                            case .serverError(let message, let responseBody) = networkError {
-                            Log.error("❌ Failed to send message via REST: \(message)\nResponse: \(responseBody ?? "empty")", category: "ChatViewModel")
+                            Log.error("❌ Failed to send message via gRPC: \(message)\nResponse: \(responseBody ?? "empty")", category: "ChatViewModel")
                         } else {
-                            Log.error("❌ Failed to send message via REST: \(error.localizedDescription)", category: "ChatViewModel")
+                            Log.error("❌ Failed to send message via gRPC: \(error.localizedDescription)", category: "ChatViewModel")
                         }
                         updateMessageStatus(messageId: message.id, status: .failed)
                         errorMessage = "Failed to send message: \(error.localizedDescription)"

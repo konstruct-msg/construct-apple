@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct ChatRowView: View {
-    let chat: Chat
+    @ObservedObject var chat: Chat
 
     var body: some View {
         HStack(spacing: 12) {

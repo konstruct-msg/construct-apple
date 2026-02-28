@@ -18,38 +18,38 @@ final class MessagingServiceClient: Sendable {
     // MARK: - Send Message (replaces MessagingAPI.sendMessage)
 
     func sendMessage(
+        messageId: String,
         recipientId: String,
-        ephemeralPublicKey: Data,
-        messageNumber: UInt32,
-        content: String,
-        timestamp: UInt64,
-        suiteId: UInt16
+        senderId: String,
+        conversationId: String,
+        encryptedPayload: Data,
+        timestamp: UInt64
     ) async throws -> SendMessageResponse {
         try await GRPCChannelManager.shared.performRPC { grpcClient in
             let msgClient = Shared_Proto_Services_V1_MessagingService.Client(wrapping: grpcClient)
 
+            var sender = Shared_Proto_Core_V1_UserId()
+            sender.userID = senderId
+
             var recipient = Shared_Proto_Core_V1_UserId()
             recipient.userID = recipientId
 
-            var clientMeta = Shared_Proto_Core_V1_ClientMetadata()
-            clientMeta.clientTimestamp = Int64(timestamp)
-
             var envelope = Shared_Proto_Core_V1_Envelope()
+            envelope.messageID = messageId
+            envelope.sender = sender
             envelope.recipient = recipient
+            envelope.conversationID = conversationId
             envelope.contentType = .e2EeSignal
-            envelope.timestamp = Int64(timestamp)
-            envelope.encryptedPayload = Data(content.utf8)
-            envelope.clientMetadata = clientMeta
+            envelope.encryptedPayload = encryptedPayload
 
             var request = Shared_Proto_Services_V1_SendMessageRequest()
             request.message = envelope
-            request.idempotencyKey = UUID().uuidString
+            request.idempotencyKey = messageId
 
             let response = try await msgClient.sendMessage(
                 request: .init(message: request)
             )
 
-            // Map to existing SendMessageResponse type
             return SendMessageResponse(
                 messageId: response.messageID,
                 status: response.success ? "sent" : "failed"
@@ -112,16 +112,21 @@ final class MessagingServiceClient: Sendable {
                 request: .init(message: request)
             )
 
-            let chatMessages = response.messages.map { msg in
-                ChatMessage(
+            let chatMessages = response.messages.compactMap { msg -> ChatMessage? in
+                // Unpack wire payload blob into crypto components
+                guard let decoded = try? WirePayloadCoder.decode(msg.encryptedPayload) else {
+                    Log.info("⚠️ Failed to decode encrypted_payload for message \(msg.messageID)", category: "MessagingServiceClient")
+                    return nil
+                }
+                return ChatMessage(
                     id: msg.messageID,
                     from: msg.senderID,
                     to: "",
                     messageType: "DIRECT_MESSAGE",
-                    ephemeralPublicKey: Data(base64Encoded: msg.ephemeralPublicKey) ?? Data(),
-                    messageNumber: msg.messageNumber,
-                    content: msg.ciphertext,
-                    suiteId: UInt16(msg.suiteID),
+                    ephemeralPublicKey: Data(decoded.ephemeralPublicKey),
+                    messageNumber: decoded.messageNumber,
+                    content: decoded.content,
+                    suiteId: 1,
                     timestamp: UInt64(msg.timestamp)
                 )
             }

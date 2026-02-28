@@ -335,7 +335,7 @@ class RestAPIClient {
                 Log.info("✅ Successfully connected to: \(serverURL)", category: "Network")
 
                 // Update connection status
-                connectionStatusManager.markRequestSucceeded()
+                Task { @MainActor in connectionStatusManager.markRequestSucceeded() }
                 
                 // Decode successful response
                 do {
@@ -374,7 +374,7 @@ class RestAPIClient {
                 // SPECIAL CASE: Long-polling timeout is NORMAL
                 if isLongPolling && urlError.code == .timedOut {
                     Log.debug("⏱️ Long-polling timeout (normal behavior) - no new messages", category: "Network")
-                    connectionStatusManager.markRequestSucceeded()
+                    Task { @MainActor in connectionStatusManager.markRequestSucceeded() }
                     if T.self == PollMessagesResponse.self {
                         guard let emptyResponse = PollMessagesResponse(messages: [], nextSince: nil, hasMore: false) as? T else {
                             // This should never happen, but handle gracefully
@@ -416,7 +416,7 @@ class RestAPIClient {
         }
         
         // All servers failed
-        connectionStatusManager.markRequestFailed(error: "Failed to connect to server", isCritical: true)
+        Task { @MainActor in connectionStatusManager.markRequestFailed(error: "Failed to connect to server", isCritical: true) }
 
         if let lastError = lastError {
             throw lastError

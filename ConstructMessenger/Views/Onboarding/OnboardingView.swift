@@ -90,7 +90,7 @@ struct OnboardingView: View {
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
                             .padding()
-                            .background(canProceed ? Color("ButtonColor") : Color.gray)
+                            .background(canProceed ? Color.AppBrand.button : Color.gray)
                             .cornerRadius(18)
                     }
                     .padding(.vertical, 8)
@@ -101,7 +101,7 @@ struct OnboardingView: View {
                     } label: {
                         Text("onboarding_restore")
                             .font(.subheadline)
-                            .foregroundColor(Color("SecondColor"))
+                            .foregroundColor(Color.AppBrand.second)
                     }
                     .padding(.vertical, 8)
                 }
@@ -127,7 +127,7 @@ struct OnboardingView: View {
                     } label: {
                         Image(systemName: "network")
                     }
-                    .foregroundStyle(Color("SecondColor"))
+                    .foregroundStyle(Color.AppBrand.second)
                     .accessibilityLabel(Text("onboarding_network_settings"))
                 }
             }

@@ -133,7 +133,7 @@ struct RegistrationStageView: View {
                 Text("reg_continue")
                     .font(.headline).foregroundColor(.white)
                     .frame(maxWidth: .infinity).padding()
-                    .background(Color("ButtonColor")).cornerRadius(18)
+                    .background(Color.AppBrand.button).cornerRadius(18)
             }
         case .error:
             Button("reg_try_again") { onDismiss?() }.buttonStyle(.bordered)
