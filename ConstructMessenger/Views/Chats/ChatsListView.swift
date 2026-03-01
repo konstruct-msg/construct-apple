@@ -94,7 +94,9 @@ struct ChatsListView: View {
 
     private func deleteItems(offsets: IndexSet) {
         withAnimation {
-            offsets.map { chats[$0] }.forEach(chatsViewModel.deleteChat)
+            offsets.map { chats[$0] }.forEach { chat in
+                Task { await chatsViewModel.deleteChatWithEndSession(chat: chat) }
+            }
         }
     }
 

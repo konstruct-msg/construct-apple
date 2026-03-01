@@ -137,8 +137,15 @@ struct ChatsSplitView: View {
             ForEach(chats) { chat in
                 ChatRowView(chat: chat)
                     .tag(chat.id ?? "")
+                    .contextMenu {
+                        Button(role: .destructive) {
+                            deleteChat(chat)
+                        } label: {
+                            Label("delete_chat", systemImage: "trash")
+                        }
+                    }
             }
-            .onDelete(perform: deleteChats)
+            .onDelete(perform: deleteChatsAtOffsets)
         }
     }
 
@@ -162,15 +169,15 @@ struct ChatsSplitView: View {
 
     // MARK: - Actions
 
-    private func deleteChats(at offsets: IndexSet) {
-        for index in offsets {
-            let chat = chats[index]
-            if selectedChatId == chat.id {
-                selectedChatId = nil
-            }
-            viewContext.delete(chat)
+    private func deleteChat(_ chat: Chat) {
+        if selectedChatId == chat.id {
+            selectedChatId = nil
         }
-        try? viewContext.save()
+        Task { await chatsViewModel.deleteChatWithEndSession(chat: chat) }
+    }
+
+    private func deleteChatsAtOffsets(at offsets: IndexSet) {
+        offsets.map { chats[$0] }.forEach { deleteChat($0) }
     }
 
     private func handleScannedContact(_ urlString: String) {

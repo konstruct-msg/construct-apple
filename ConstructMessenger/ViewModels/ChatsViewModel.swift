@@ -264,10 +264,23 @@ class ChatsViewModel: ObservableObject {
     }
 
     // MARK: - Delete Chat
+
     func deleteChat(chat: Chat) {
         chatManagementService.deleteChat(chat)
     }
-    
+
+    /// Send END_SESSION to peer, then delete the chat locally.
+    func deleteChatWithEndSession(chat: Chat) async {
+        if let userId = chat.otherUser?.id {
+            do {
+                try await sendEndSession(to: userId, reason: "chat_deleted")
+            } catch {
+                Log.error("❌ END_SESSION failed before chat delete (continuing): \(error)", category: "ChatsViewModel")
+            }
+        }
+        chatManagementService.deleteChat(chat)
+    }
+
     // MARK: - Message Router Setup
     
     private func setupMessageRouterCallbacks() {
