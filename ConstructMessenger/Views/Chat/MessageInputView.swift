@@ -109,6 +109,7 @@ struct MessageInputView: View {
                         .padding(.leading, 12)
                         .padding(.trailing, canSend ? 8 : 12)
                         .padding(.vertical, 8)
+                        .modifier(MacReturnToSendModifier(text: $text, canSend: canSend, onSend: sendMessage))
 
                     if canSend {
                         Button {
@@ -209,5 +210,35 @@ struct MessageInputView: View {
         // Clear photos after sending
         selectedPhotos.removeAll()
         selectedImages.removeAll()
+    }
+}
+
+// MARK: - Mac Catalyst: Return = send, Shift+Return = newline
+
+/// On Mac Catalyst, intercepts the Return key so pressing Return sends the message
+/// and Shift+Return inserts a newline. Has no effect on iOS/iPadOS.
+private struct MacReturnToSendModifier: ViewModifier {
+    @Binding var text: String
+    let canSend: Bool
+    let onSend: () -> Void
+
+    func body(content: Content) -> some View {
+#if targetEnvironment(macCatalyst)
+        content
+            .onKeyPress(.return) { press in
+                if press.modifiers.contains(.shift) {
+                    // Shift+Return → insert newline at end of text
+                    text += "\n"
+                    return .handled
+                }
+                // Return → send (if there is content to send)
+                if canSend {
+                    onSend()
+                }
+                return .handled
+            }
+#else
+        content
+#endif
     }
 }
