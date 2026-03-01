@@ -43,7 +43,7 @@ final class MessageStreamManager: ObservableObject {
     private var retryCount = 0
     private let maxRetryDelay: TimeInterval = 60
     private var isPaused = false
-    private var subscriptionUserIds: [String] = []
+    private(set) var subscriptionUserIds: [String] = []
     private var lastPendingCursor: String = ""
 
     /// Continuation for sending messages into the stream

@@ -80,6 +80,11 @@ class ChatsViewModel: ObservableObject {
         messageRouter.setContext(context)
         publicKeyBundleHandler.setContext(context)
         chatManagementService.setContext(context)
+        // Resubscribe with actual contacts now that DB is available.
+        // Only force-reconnect if we previously had 0 subscriptions (startup race condition).
+        if streamManager.subscriptionUserIds.isEmpty {
+            forceReconnectStream()
+        }
     }
 
     private func setupSubscribers() {
@@ -193,7 +198,10 @@ class ChatsViewModel: ObservableObject {
 
     // MARK: - Start Chat
     func startChat(with user: PublicUserInfo) -> Chat? {
-        return chatManagementService.startChat(with: user)
+        let chat = chatManagementService.startChat(with: user)
+        // New contact added — resubscribe stream so server pushes messages from this contact.
+        forceReconnectStream()
+        return chat
     }
 
     // MARK: - END_SESSION Protocol
