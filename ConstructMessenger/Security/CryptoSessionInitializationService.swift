@@ -176,8 +176,12 @@ final class CryptoSessionInitializationService {
             "suite_id": suiteID,
         ]
 
+        // Rust expects content as a Base64 string (not raw bytes).
+        // Unpad only — do NOT base64-decode; the string is passed directly to serde.
         let unpaddedContent = MessagePadding.unpadCiphertextBase64(firstMessage.content)
-        guard let contentData = Data(base64Encoded: unpaddedContent) else {
+
+        // Validate the base64 (guard against malformed payloads)
+        guard Data(base64Encoded: unpaddedContent) != nil else {
             Log.error("❌ Invalid base64: firstMessage.content", category: "CryptoManager")
             Log.error("   Original content length: \(firstMessage.content.count)", category: "CryptoManager")
             Log.error("   Unpadded content length: \(unpaddedContent.count)", category: "CryptoManager")
@@ -188,13 +192,13 @@ final class CryptoSessionInitializationService {
         Log.debug("🔐 First message details:", category: "CryptoManager")
         Log.debug("   ephemeralPublicKey: \(firstMessage.ephemeralPublicKey.count) bytes", category: "CryptoManager")
         Log.debug("   messageNumber: \(firstMessage.messageNumber)", category: "CryptoManager")
-        Log.debug("   content: \(contentData.count) bytes (after unpadding + decode)", category: "CryptoManager")
+        Log.debug("   content: \(unpaddedContent.count) chars (base64, unpadded)", category: "CryptoManager")
         Log.debug("   suiteId: \(suiteID)", category: "CryptoManager")
 
         let messageDict: [String: Any] = [
             "ephemeral_public_key": [UInt8](firstMessage.ephemeralPublicKey),
             "message_number": firstMessage.messageNumber,
-            "content": [UInt8](contentData)
+            "content": unpaddedContent   // Base64 string — Rust serde deserializes as String
         ]
 
         do {
