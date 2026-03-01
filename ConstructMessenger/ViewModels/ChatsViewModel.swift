@@ -162,6 +162,9 @@ class ChatsViewModel: ObservableObject {
                 contactIds = users.compactMap { $0.id }
             }
         }
+        streamManager.onDeliveryReceipt = { [weak self] messageIds in
+            self?.handleDeliveryReceipts(messageIds)
+        }
         streamManager.connect(contactUserIds: contactIds) { [weak self] message in
             self?.handleIncomingMessage(message)
         }
@@ -311,6 +314,23 @@ class ChatsViewModel: ObservableObject {
         
         // Delegate to MessageRouter
         messageRouter.routeIncomingMessage(message, in: context, pendingMessages: &pendingFirstMessages)
+    }
+
+    /// Update delivery status to .delivered for messages confirmed by a DeliveryReceipt from the stream.
+    private func handleDeliveryReceipts(_ messageIds: [String]) {
+        guard let context = viewContext else { return }
+        context.perform {
+            for messageId in messageIds {
+                let fetchRequest = Message.fetchRequest()
+                fetchRequest.predicate = NSPredicate(format: "id == %@", messageId)
+                guard let message = try? context.fetch(fetchRequest).first,
+                      message.isSentByMe,
+                      message.deliveryStatus == .sent else { continue }
+                message.deliveryStatus = .delivered
+                Log.info("📬 Receipt: message \(messageId) marked delivered", category: "MessageStream")
+            }
+            try? context.save()
+        }
     }
     
     /// Helper to save message (used by handlePublicKeyBundleForIncomingMessage)

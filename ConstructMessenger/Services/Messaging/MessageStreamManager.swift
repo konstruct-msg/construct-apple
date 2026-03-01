@@ -14,6 +14,13 @@ import GRPCNIOTransportHTTP2
 
 /// Manages bidirectional gRPC MessageStream for real-time messaging
 
+// MARK: - Stream Event
+
+private enum StreamEvent: Sendable {
+    case message(ChatMessage)
+    case deliveryReceipt([String])    // message IDs confirmed delivered to recipient
+}
+
 @MainActor
 final class MessageStreamManager: ObservableObject {
 
@@ -24,6 +31,9 @@ final class MessageStreamManager: ObservableObject {
     // MARK: - Callbacks
 
     private var onMessageReceived: ((ChatMessage) -> Void)?
+    /// Called when a DeliveryReceipt arrives from the server.
+    /// Provides the IDs of messages confirmed delivered to the recipient.
+    var onDeliveryReceipt: (([String]) -> Void)?
 
     // MARK: - Private State
 
@@ -242,12 +252,17 @@ final class MessageStreamManager: ObservableObject {
         }
 
         // Use an async stream to bridge responses back to MainActor
-        let (incomingStream, incomingContinuation) = AsyncStream<ChatMessage>.makeStream()
+        let (incomingStream, incomingContinuation) = AsyncStream<StreamEvent>.makeStream()
 
-        // Process incoming messages on MainActor
+        // Process incoming events on MainActor
         let processingTask = Task { [weak self] in
-            for await msg in incomingStream {
-                self?.onMessageReceived?(msg)
+            for await event in incomingStream {
+                switch event {
+                case .message(let msg):
+                    self?.onMessageReceived?(msg)
+                case .deliveryReceipt(let ids):
+                    self?.onDeliveryReceipt?(ids)
+                }
             }
         }
 
@@ -263,7 +278,7 @@ final class MessageStreamManager: ObservableObject {
     private nonisolated func runMessageStream(
         client: Shared_Proto_Services_V1_MessagingService.Client<HTTP2ClientTransport.Posix>,
         request: StreamingClientRequest<Shared_Proto_Services_V1_MessageStreamRequest>,
-        incomingContinuation: AsyncStream<ChatMessage>.Continuation
+        incomingContinuation: AsyncStream<StreamEvent>.Continuation
     ) async throws {
         try await client.messageStream(
             request: request,
@@ -296,7 +311,7 @@ final class MessageStreamManager: ObservableObject {
 
     private nonisolated static func convertStreamResponse(
         _ response: Shared_Proto_Services_V1_MessageStreamResponse
-    ) -> ChatMessage? {
+    ) -> StreamEvent? {
         switch response.response {
         case .message(let envelope):
             // Unpack wire payload blob into crypto components
@@ -304,7 +319,7 @@ final class MessageStreamManager: ObservableObject {
                 Log.info("⚠️ Failed to decode encrypted_payload for message \(envelope.messageID)", category: "MessageStream")
                 return nil
             }
-            return ChatMessage(
+            return .message(ChatMessage(
                 id: envelope.messageID,
                 from: envelope.sender.userID,
                 to: envelope.recipient.userID,
@@ -314,10 +329,14 @@ final class MessageStreamManager: ObservableObject {
                 content: decoded.content,
                 suiteId: 1,
                 timestamp: UInt64(envelope.timestamp)
-            )
+            ))
         case .receipt(let receipt):
-            Log.debug("📬 Delivery receipt received", category: "MessageStream")
-            _ = receipt
+            // Deliver receipt: extract confirmed message IDs and propagate
+            if case .direct(let directReceipt) = receipt.receiptType,
+               directReceipt.status == .delivered,
+               !directReceipt.messageIds.isEmpty {
+                return .deliveryReceipt(directReceipt.messageIds)
+            }
             return nil
         case .typing(let indicator):
             Log.debug("✍️ Typing: \(indicator.userID) in \(indicator.conversationID)", category: "MessageStream")

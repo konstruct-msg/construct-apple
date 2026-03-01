@@ -114,27 +114,6 @@ class MessageQueueManager: ObservableObject {
                     }
                 }
             }
-            
-            // ✅ FIX: Auto-mark old .sent messages as .delivered to clean up queue
-            // Messages in .sent state for > 1 hour are definitely delivered (server confirmed receipt)
-            let sentFetchRequest: NSFetchRequest<Message> = Message.fetchRequest()
-            sentFetchRequest.predicate = NSPredicate(format: "deliveryStatusRaw == %d", DeliveryStatus.sent.rawValue)
-            
-            if let sentMessages = try? context.fetch(sentFetchRequest) {
-                let now = Date()
-                let autoDeliverThreshold: TimeInterval = 3600 // 1 hour
-                
-                for message in sentMessages {
-                    let timeSinceSent = now.timeIntervalSince(message.timestamp)
-                    
-                    // Auto-mark as delivered after 1 hour
-                    if timeSinceSent > autoDeliverThreshold {
-                        Log.info("✅ Auto-marking message \(message.id) as delivered (sent \(Int(timeSinceSent/60)) minutes ago)", category: "MessageQueue")
-                        message.deliveryStatus = .delivered
-                        try? context.save()
-                    }
-                }
-            }
         }
     }
     
