@@ -181,11 +181,9 @@ class PublicKeyBundleHandler {
             Log.info("✅ Receiving session initialized for \(data.userId), message decrypted", category: "PublicKeyBundleHandler")
             Log.info("🔐 SESSION_STATE[init_receiving_success]: userId=\(data.userId.prefix(8))..., duration=\(String(format: "%.2f", initDuration))s", category: "SessionInit")
             
-            // Find or create chat
+            // Find chat for this user
             let chatFetchRequest = Chat.fetchRequest()
-            let chatOwnerPredicate = chatFetchRequest.predicate!
-            let otherUserPredicate = NSPredicate(format: "otherUser.id == %@", data.userId)
-            chatFetchRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [chatOwnerPredicate, otherUserPredicate])
+            chatFetchRequest.predicate = NSPredicate(format: "otherUser.id == %@", data.userId)
             
             if let chat = try? context.fetch(chatFetchRequest).first {
                 // Call success callback with the decrypted data
