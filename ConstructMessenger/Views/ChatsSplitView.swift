@@ -25,16 +25,25 @@ struct ChatsSplitView: View {
 
     @State private var selectedChatId: String?
     @State private var showingQRScanner = false
-    @State private var showingSettings = false
+    @State private var sidebarContent: SidebarTab = .chats
     @State private var showingDrafts = false
     @State private var showingError = false
     @State private var errorMessage = ""
 
+    private enum SidebarTab { case chats, settings }
+
     var body: some View {
         NavigationSplitView {
-            sidebarContent
-                .navigationTitle("chats")
-                .toolbar {
+            Group {
+                if sidebarContent == .chats {
+                    sidebarChats
+                } else {
+                    SettingsView()
+                }
+            }
+            .navigationTitle(sidebarContent == .chats ? "chats" : "settings")
+            .toolbar {
+                if sidebarContent == .chats {
                     ToolbarItem(placement: .navigationBarTrailing) {
                         Button {
                             showingQRScanner = true
@@ -44,7 +53,7 @@ struct ChatsSplitView: View {
                     }
                     ToolbarItem(placement: .navigationBarLeading) {
                         Button {
-                            showingSettings = true
+                            sidebarContent = .settings
                         } label: {
                             Image(systemName: "gear")
                         }
@@ -52,23 +61,29 @@ struct ChatsSplitView: View {
                     ToolbarItem(placement: .principal) {
                         ConnectionStatusIndicator()
                     }
-                }
-                .sheet(isPresented: $showingQRScanner) {
-                    QRScannerView { contactURL in
-                        handleScannedContact(contactURL)
+                } else {
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Button {
+                            sidebarContent = .chats
+                        } label: {
+                            Label("chats", systemImage: "chevron.left")
+                        }
                     }
                 }
-                .sheet(isPresented: $showingSettings) {
-                    SettingsView()
+            }
+            .sheet(isPresented: $showingQRScanner) {
+                QRScannerView { contactURL in
+                    handleScannedContact(contactURL)
                 }
-                .sheet(isPresented: $showingDrafts) {
-                    DraftsView()
-                }
-                .alert("error", isPresented: $showingError) {
-                    Button("ok") {}
-                } message: {
-                    Text(errorMessage)
-                }
+            }
+            .sheet(isPresented: $showingDrafts) {
+                DraftsView()
+            }
+            .alert("error", isPresented: $showingError) {
+                Button("ok") {}
+            } message: {
+                Text(errorMessage)
+            }
         } detail: {
             detailContent
         }
@@ -83,9 +98,9 @@ struct ChatsSplitView: View {
         }
     }
 
-    // MARK: - Sidebar
+    // MARK: - Sidebar: Chats
 
-    private var sidebarContent: some View {
+    private var sidebarChats: some View {
         List(selection: $selectedChatId) {
             ForEach(chats) { chat in
                 ChatRowView(chat: chat)
