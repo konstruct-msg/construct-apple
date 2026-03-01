@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		BF7098BF2F01D3C400CC6F04 /* libconstruct_core.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BF7098BE2F01D3C400CC6F04 /* libconstruct_core.a */; platformFilter = ios; };
 		BF7098C02F01D3C400CC6F04 /* libconstruct_core.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BF7098BE2F01D3C400CC6F04 /* libconstruct_core.a */; platformFilter = ios; };
+		BF7098C12F01D3C400CC6F04 /* libconstruct_core_catalyst.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BF7098C32F01D3C400CC6F04 /* libconstruct_core_catalyst.a */; platformFilter = maccatalyst; };
 		BFF6FC9D2F4C3E1F00A31F36 /* GRPCCore in Frameworks */ = {isa = PBXBuildFile; productRef = BFF6FC9C2F4C3E1F00A31F36 /* GRPCCore */; };
 		BFF6FCF42F4C4CCA00A31F36 /* GRPCProtobuf in Frameworks */ = {isa = PBXBuildFile; productRef = BFF6FCF32F4C4CCA00A31F36 /* GRPCProtobuf */; };
 		BFF6FCF92F4C4D6600A31F36 /* GRPCNIOTransportHTTP2 in Frameworks */ = {isa = PBXBuildFile; productRef = BFF6FCF82F4C4D6600A31F36 /* GRPCNIOTransportHTTP2 */; };
@@ -28,6 +29,7 @@
 /* Begin PBXFileReference section */
 		BF103A6F2EED889800324CEA /* ConstructMessenger.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ConstructMessenger.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		BF7098BE2F01D3C400CC6F04 /* libconstruct_core.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = libconstruct_core.a; sourceTree = "<group>"; };
+		BF7098C32F01D3C400CC6F04 /* libconstruct_core_catalyst.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = libconstruct_core_catalyst.a; sourceTree = "<group>"; };
 		BF8A96FA2EFF0FAF009C5EF7 /* ConstructMessengerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ConstructMessengerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -68,6 +70,7 @@
 				BFF6FD002F4C4E5300A31F36 /* SwiftProtobuf in Frameworks */,
 				BFF6FCF92F4C4D6600A31F36 /* GRPCNIOTransportHTTP2 in Frameworks */,
 				BF7098BF2F01D3C400CC6F04 /* libconstruct_core.a in Frameworks */,
+				BF7098C12F01D3C400CC6F04 /* libconstruct_core_catalyst.a in Frameworks */,
 				BFF6FCF42F4C4CCA00A31F36 /* GRPCProtobuf in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -106,6 +109,7 @@
 			isa = PBXGroup;
 			children = (
 				BF7098BE2F01D3C400CC6F04 /* libconstruct_core.a */,
+				BF7098C32F01D3C400CC6F04 /* libconstruct_core_catalyst.a */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -422,6 +426,7 @@
 					"$(PROJECT_DIR)",
 					"$(PROJECT_DIR)/target/aarch64-apple-ios/release",
 					"$(PROJECT_DIR)/target/aarch64-apple-ios-sim/release",
+					"$(PROJECT_DIR)/target/aarch64-apple-ios-macabi/release",
 				);
 				MARKETING_VERSION = 0.8.16;
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
@@ -482,6 +487,7 @@
 					"$(PROJECT_DIR)",
 					"$(PROJECT_DIR)/target/aarch64-apple-ios/release",
 					"$(PROJECT_DIR)/target/aarch64-apple-ios-sim/release",
+					"$(PROJECT_DIR)/target/aarch64-apple-ios-macabi/release",
 				);
 				MARKETING_VERSION = 0.8.16;
 				MACOSX_DEPLOYMENT_TARGET = 13.0;

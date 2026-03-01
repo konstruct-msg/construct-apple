@@ -23,6 +23,7 @@ ARCHITECTURES=("aarch64-apple-ios-sim")  # Default to iOS simulator
 CLEAN_BUILD=false
 FORCE_REBUILD=false  # cargo clean + clear DerivedData
 VERBOSE=false
+CREATE_XCFRAMEWORK=false
 
 # Helper functions
 print_info() {
@@ -90,13 +91,18 @@ OPTIONS:
     -d, --debug             Build in debug mode (default: release)
     -a, --arch ARCH         Target architecture (can be specified multiple times)
                             Options:
-                              aarch64-apple-ios           - iOS ARM64
+                              aarch64-apple-ios           - iOS ARM64 (device)
                               aarch64-apple-ios-sim       - iOS Simulator ARM64 (default)
                               x86_64-apple-ios            - iOS Simulator x86_64
-                              aarch64-apple-darwin        - macOS ARM64
-                              x86_64-apple-darwin         - macOS x86_64
+                              aarch64-apple-ios-macabi    - Mac Catalyst ARM64
+                              x86_64-apple-ios-macabi     - Mac Catalyst x86_64
+                              aarch64-apple-darwin        - macOS ARM64 (native)
+                              x86_64-apple-darwin         - macOS x86_64 (native)
     -A, --all-ios           Build for all iOS targets (device + simulators)
-    -M, --all-macos         Build for all macOS targets
+    -C, --catalyst          Build for Mac Catalyst (aarch64-apple-ios-macabi)
+    -X, --xcframework       Build all targets + package into XCFramework
+                            Produces: construct_core.xcframework
+    -M, --all-macos         Build for all macOS targets (native)
     -c, --clean             Clean build (remove old bindings first)
     -f, --force             Force full rebuild (cargo clean + DerivedData)
                             Use this to fix "UniFFI API checksum mismatch" errors
@@ -107,6 +113,8 @@ EXAMPLES:
     $(basename "$0") --debug                   # Build in debug mode
     $(basename "$0") -a aarch64-apple-ios      # Build for iOS device
     $(basename "$0") --all-ios                 # Build for all iOS targets
+    $(basename "$0") --catalyst                # Build for Mac Catalyst
+    $(basename "$0") --xcframework             # Full XCFramework (iOS + Catalyst + Sim)
     $(basename "$0") -c -v                     # Clean build with verbose output
 
 EOF
@@ -137,6 +145,20 @@ while [[ $# -gt 0 ]]; do
             ;;
         -A|--all-ios)
             ARCHITECTURES=("aarch64-apple-ios" "aarch64-apple-ios-sim" "x86_64-apple-ios")
+            shift
+            ;;
+        -C|--catalyst)
+            # Clear default if first custom arch is specified
+            if [ ${#ARCHITECTURES[@]} -eq 1 ] && [ "${ARCHITECTURES[0]}" == "aarch64-apple-ios-sim" ]; then
+                ARCHITECTURES=()
+            fi
+            ARCHITECTURES+=("aarch64-apple-ios-macabi")
+            shift
+            ;;
+        -X|--xcframework)
+            # Full XCFramework: device + simulator fat + catalyst
+            ARCHITECTURES=("aarch64-apple-ios" "aarch64-apple-ios-sim" "x86_64-apple-ios" "aarch64-apple-ios-macabi")
+            CREATE_XCFRAMEWORK=true
             shift
             ;;
         -M|--all-macos)
@@ -443,6 +465,11 @@ main() {
     # Copy library to project root if it exists
     copy_library_to_project_root
 
+    # Create XCFramework if requested
+    if [ "$CREATE_XCFRAMEWORK" = true ]; then
+        create_xcframework
+    fi
+
     # Cleanup temporary directory if we cloned it
     if [ "$CORE_PATH" == "$PROJECT_ROOT/.construct-core-temp" ]; then
         print_info "Cleaning up temporary construct-core clone..."
@@ -462,31 +489,105 @@ main() {
 copy_library_to_project_root() {
     print_header "Copying Library to Project Root"
     
-    # Find the most recently built library
-    local latest_lib=""
-    local latest_time=0
-    
-    for arch in "${ARCHITECTURES[@]}"; do
-        local build_dir="release"
-        if [ "$BUILD_TYPE" == "debug" ]; then
-            build_dir="debug"
-        fi
-        local lib_path="$CORE_PATH/target/$arch/$build_dir/libconstruct_core.a"
-        if [ -f "$lib_path" ]; then
-            local lib_time=$(stat -f "%m" "$lib_path" 2>/dev/null || echo "0")
-            if [ "$lib_time" -gt "$latest_time" ]; then
-                latest_time=$lib_time
-                latest_lib="$lib_path"
-            fi
-        fi
-    done
-    
-    if [ -n "$latest_lib" ] && [ -f "$latest_lib" ]; then
-        cp "$latest_lib" "$PROJECT_ROOT/libconstruct_core.a"
-        print_success "Copied library to project root: $PROJECT_ROOT/libconstruct_core.a"
-    else
-        print_warning "Library not found, skipping copy"
+    local build_dir="release"
+    if [ "$BUILD_TYPE" == "debug" ]; then
+        build_dir="debug"
     fi
+
+    # iOS device library (used on iPhone/iPad)
+    local ios_lib="$CORE_PATH/target/aarch64-apple-ios/$build_dir/libconstruct_core.a"
+    if [ -f "$ios_lib" ]; then
+        cp "$ios_lib" "$PROJECT_ROOT/libconstruct_core.a"
+        print_success "Copied iOS device library → libconstruct_core.a"
+    fi
+
+    # Mac Catalyst library (used for My Mac / Catalyst target)
+    local macabi_lib="$CORE_PATH/target/aarch64-apple-ios-macabi/$build_dir/libconstruct_core.a"
+    if [ -f "$macabi_lib" ]; then
+        cp "$macabi_lib" "$PROJECT_ROOT/libconstruct_core_catalyst.a"
+        print_success "Copied Mac Catalyst library → libconstruct_core_catalyst.a"
+    fi
+
+    # If no device lib was built, fall back to the most-recently-built arch
+    if [ ! -f "$PROJECT_ROOT/libconstruct_core.a" ]; then
+        local latest_lib=""
+        local latest_time=0
+        for arch in "${ARCHITECTURES[@]}"; do
+            local lib_path="$CORE_PATH/target/$arch/$build_dir/libconstruct_core.a"
+            if [ -f "$lib_path" ]; then
+                local lib_time
+                lib_time=$(stat -f "%m" "$lib_path" 2>/dev/null || echo "0")
+                if [ "$lib_time" -gt "$latest_time" ]; then
+                    latest_time=$lib_time
+                    latest_lib="$lib_path"
+                fi
+            fi
+        done
+        if [ -n "$latest_lib" ]; then
+            cp "$latest_lib" "$PROJECT_ROOT/libconstruct_core.a"
+            print_success "Copied fallback library → libconstruct_core.a (from $latest_lib)"
+        else
+            print_warning "No library found to copy"
+        fi
+    fi
+}
+
+# Create XCFramework bundling iOS device, simulator fat binary, and Mac Catalyst
+create_xcframework() {
+    print_header "Creating XCFramework"
+
+    local build_dir="release"
+    if [ "$BUILD_TYPE" == "debug" ]; then
+        build_dir="debug"
+    fi
+
+    local xcfw_out="$PROJECT_ROOT/construct_core.xcframework"
+
+    # Collect available slices
+    local ios_lib="$CORE_PATH/target/aarch64-apple-ios/$build_dir/libconstruct_core.a"
+    local sim_arm64="$CORE_PATH/target/aarch64-apple-ios-sim/$build_dir/libconstruct_core.a"
+    local sim_x86="$CORE_PATH/target/x86_64-apple-ios/$build_dir/libconstruct_core.a"
+    local macabi_lib="$CORE_PATH/target/aarch64-apple-ios-macabi/$build_dir/libconstruct_core.a"
+    local headers_dir="$PROJECT_ROOT/ConstructMessenger"
+
+    # Build xcodebuild -create-xcframework args
+    local xc_args=()
+
+    # iOS device slice
+    if [ -f "$ios_lib" ]; then
+        xc_args+=(-library "$ios_lib" -headers "$headers_dir")
+        print_info "Including iOS device slice"
+    fi
+
+    # iOS Simulator fat binary (arm64 + x86_64 merged with lipo)
+    if [ -f "$sim_arm64" ] || [ -f "$sim_x86" ]; then
+        local sim_fat="$PROJECT_ROOT/target/sim_fat/libconstruct_core.a"
+        mkdir -p "$(dirname "$sim_fat")"
+        local lipo_inputs=()
+        [ -f "$sim_arm64" ] && lipo_inputs+=("$sim_arm64")
+        [ -f "$sim_x86" ]   && lipo_inputs+=("$sim_x86")
+        lipo "${lipo_inputs[@]}" -create -output "$sim_fat"
+        xc_args+=(-library "$sim_fat" -headers "$headers_dir")
+        print_info "Including iOS Simulator slice (fat: ${lipo_inputs[*]})"
+    fi
+
+    # Mac Catalyst slice
+    if [ -f "$macabi_lib" ]; then
+        xc_args+=(-library "$macabi_lib" -headers "$headers_dir")
+        print_info "Including Mac Catalyst slice"
+    fi
+
+    if [ ${#xc_args[@]} -eq 0 ]; then
+        print_warning "No library slices found — skipping XCFramework creation"
+        return
+    fi
+
+    # Remove old xcframework
+    rm -rf "$xcfw_out"
+
+    xcodebuild -create-xcframework "${xc_args[@]}" -output "$xcfw_out"
+    print_success "XCFramework created: $xcfw_out"
+    print_info "Add construct_core.xcframework to your Xcode project to replace libconstruct_core.a"
 }
 
 # Run main function
