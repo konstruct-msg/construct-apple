@@ -8,13 +8,18 @@
 //
 
 import Foundation
+#if canImport(UIKit)
+import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
 
 enum PlatformClipboard {
     /// Copy a string to the system clipboard.
     static func copy(_ string: String) {
-        #if os(iOS)
+        #if canImport(UIKit)
         UIPasteboard.general.string = string
-        #elseif os(macOS)
+        #elseif canImport(AppKit)
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(string, forType: .string)
         #endif
@@ -22,9 +27,9 @@ enum PlatformClipboard {
 
     /// Paste the current string from the system clipboard, if any.
     static func paste() -> String? {
-        #if os(iOS)
+        #if canImport(UIKit)
         return UIPasteboard.general.string
-        #elseif os(macOS)
+        #elseif canImport(AppKit)
         return NSPasteboard.general.string(forType: .string)
         #else
         return nil
