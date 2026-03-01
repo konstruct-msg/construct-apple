@@ -92,7 +92,7 @@ struct ChatsSplitView: View {
         HStack(spacing: 0) {
             sidebarTabButton(
                 title: "chats",
-                systemImage: "bubble.left.and.bubble.right",
+                systemImage: "message",
                 tab: .chats
             )
             sidebarTabButton(
@@ -161,7 +161,7 @@ struct ChatsSplitView: View {
         } else {
             ContentUnavailableView(
                 String(localized: "select_chat"),
-                systemImage: "bubble.left.and.bubble.right",
+                systemImage: "message",
                 description: Text("select_chat_description")
             )
         }
