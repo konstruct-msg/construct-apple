@@ -107,6 +107,22 @@ final class MessageStreamManager: ObservableObject {
         }
     }
 
+    /// Cancel any in-progress backoff/connection and start fresh immediately.
+    /// Use when returning from background or recovering from a known-bad state.
+    func forceReconnect(contactUserIds: [String], onMessageReceived: @escaping (ChatMessage) -> Void) {
+        Log.info("🔁 Force reconnecting stream", category: "MessageStream")
+        // Cancel current task even if it's sleeping in backoff
+        streamTask?.cancel()
+        streamTask = nil
+        isConnected = false
+        outboundContinuation?.finish()
+        outboundContinuation = nil
+        heartbeatTask?.cancel()
+        heartbeatTask = nil
+        retryCount = 0
+        connect(contactUserIds: contactUserIds, onMessageReceived: onMessageReceived)
+    }
+
     func disconnect() {
         if let obs = serverChangedObserver {
             NotificationCenter.default.removeObserver(obs)
@@ -117,7 +133,6 @@ final class MessageStreamManager: ObservableObject {
 
     /// Disconnect without removing the server-change observer (used for reconnects).
     private func forceDisconnect() {
-        isPaused = false
         isConnected = false
         outboundContinuation?.finish()
         outboundContinuation = nil
@@ -157,53 +172,82 @@ final class MessageStreamManager: ObservableObject {
     // MARK: - Private: Connection Loop
 
     private func connectLoop() async {
+        let host = GRPCChannelManager.shared.currentHost
+        let port = GRPCChannelManager.shared.currentPort
+        Log.info("🔄 MessageStream connectLoop started → \(host):\(port)", category: "MessageStream")
+
         while !Task.isCancelled {
             do {
                 try await openStream()
-                // Stream ended normally — reconnect
+                // Stream ended cleanly — immediate reconnect, reset counter
+                Log.info("📡 MessageStream ended cleanly, reconnecting immediately", category: "MessageStream")
                 retryCount = 0
             } catch is CancellationError {
+                Log.info("🛑 MessageStream cancelled — connectLoop exiting", category: "MessageStream")
                 break
             } catch {
                 guard !Task.isCancelled else { break }
-                Log.error("❌ MessageStream error: \(error)", category: "MessageStream")
+                // Log full error details for diagnosis
+                if let rpcError = error as? RPCError {
+                    Log.error("""
+                        ❌ MessageStream RPC error:
+                           code    = \(rpcError.code)
+                           message = \(rpcError.message)
+                           host    = \(host):\(port)
+                           attempt = #\(retryCount + 1)
+                        """, category: "MessageStream")
+                } else {
+                    Log.error("❌ MessageStream error (attempt #\(retryCount + 1)): \(error)", category: "MessageStream")
+                }
                 ConnectionStatusManager.shared.markStreamDisconnected(error: error.localizedDescription)
             }
 
             guard !Task.isCancelled else { break }
 
-            // Exponential backoff
+            // Exponential backoff with jitter
             retryCount += 1
             let base: TimeInterval = 2
             let delay = min(base * pow(2, Double(min(retryCount - 1, 5))), maxRetryDelay)
             let jitter = Double.random(in: 0...(delay * 0.25))
             let totalDelay = delay + jitter
 
-            Log.info("⏳ MessageStream reconnecting in \(String(format: "%.1f", totalDelay))s (attempt #\(retryCount))", category: "MessageStream")
+            Log.info("⏳ MessageStream reconnecting in \(String(format: "%.1f", totalDelay))s (attempt #\(retryCount)) → \(host):\(port)", category: "MessageStream")
             try? await Task.sleep(for: .seconds(totalDelay))
             await fetchMissedMessages()
         }
+        Log.info("🏁 MessageStream connectLoop finished", category: "MessageStream")
     }
 
     private func fetchMissedMessages() async {
         do {
             let cursor = lastPendingCursor.isEmpty ? nil : lastPendingCursor
+            Log.debug("🔍 fetchMissedMessages cursor=\(cursor ?? "nil")", category: "MessageStream")
             let result = try await MessagingServiceClient.shared.getPendingMessages(sinceCursor: cursor)
             if !result.messages.isEmpty {
                 Log.info("📨 Fetched \(result.messages.count) missed message(s) after reconnect", category: "MessageStream")
                 for msg in result.messages {
                     onMessageReceived?(msg)
                 }
+            } else {
+                Log.debug("📭 fetchMissedMessages: no pending messages", category: "MessageStream")
             }
             if !result.nextCursor.isEmpty {
                 lastPendingCursor = result.nextCursor
             }
         } catch {
-            Log.debug("⚠️ fetchMissedMessages failed: \(error)", category: "MessageStream")
+            if let rpcError = error as? RPCError {
+                Log.error("⚠️ fetchMissedMessages RPC error: code=\(rpcError.code) message=\"\(rpcError.message)\"", category: "MessageStream")
+            } else {
+                Log.debug("⚠️ fetchMissedMessages failed: \(error)", category: "MessageStream")
+            }
         }
     }
 
     private func openStream() async throws {
+        let host = GRPCChannelManager.shared.currentHost
+        let port = GRPCChannelManager.shared.currentPort
+        Log.info("📡 openStream → \(host):\(port) subscriptions=[\(subscriptionUserIds.joined(separator: ", "))]", category: "MessageStream")
+
         let grpcClient = try GRPCChannelManager.shared.makeClient()
         let msgClient = Shared_Proto_Services_V1_MessagingService.Client(wrapping: grpcClient)
 
@@ -212,6 +256,7 @@ final class MessageStreamManager: ObservableObject {
         self.outboundContinuation = continuation
         self.isConnected = true
         ConnectionStatusManager.shared.markStreamConnected()
+        Log.info("✅ MessageStream connected to \(host):\(port)", category: "MessageStream")
 
         // Send initial subscribe
         var subscribeReq = Shared_Proto_Services_V1_MessageStreamRequest()
@@ -220,6 +265,7 @@ final class MessageStreamManager: ObservableObject {
         subscribe.includePresence = true
         subscribeReq.request = .subscribe(subscribe)
         continuation.yield(subscribeReq)
+        Log.debug("📤 MessageStream subscribe sent: \(subscriptionUserIds.count) conversation(s)", category: "MessageStream")
 
         // Start heartbeat
         let hbInterval = self.heartbeatInterval
@@ -249,6 +295,7 @@ final class MessageStreamManager: ObservableObject {
             grpcClient.beginGracefulShutdown()
             self.isConnected = false
             self.outboundContinuation = nil
+            Log.info("🔌 MessageStream disconnected from \(host):\(port)", category: "MessageStream")
         }
 
         // Use an async stream to bridge responses back to MainActor
@@ -259,8 +306,10 @@ final class MessageStreamManager: ObservableObject {
             for await event in incomingStream {
                 switch event {
                 case .message(let msg):
+                    Log.debug("📩 MessageStream received message from=\(msg.from) id=\(msg.id)", category: "MessageStream")
                     self?.onMessageReceived?(msg)
                 case .deliveryReceipt(let ids):
+                    Log.info("📬 MessageStream receipt: \(ids.count) message(s) delivered → \(ids.joined(separator: ", "))", category: "MessageStream")
                     self?.onDeliveryReceipt?(ids)
                 }
             }

@@ -135,7 +135,7 @@ class ChatsViewModel: ObservableObject {
     // MARK: - App Lifecycle
     
     private func setupAppLifecycleObservers() {
-        // ✅ Pause messaging when app goes to background
+        // Pause stream when app goes to background
         NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)
             .sink { [weak self] _ in
                 Log.info("📱 App going to background - pausing messaging", category: "ChatsViewModel")
@@ -143,10 +143,12 @@ class ChatsViewModel: ObservableObject {
             }
             .store(in: &cancellables)
         
-        // ✅ Resume messaging when app becomes active
+        // Force reconnect when app becomes active — always kick the stream,
+        // even if PollingState didn't change (Combine wouldn't fire in that case).
         NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)
-            .sink { _ in
-                Log.info("📱 App became active - resuming messaging if conditions met", category: "ChatsViewModel")
+            .sink { [weak self] _ in
+                Log.info("📱 App became active — force reconnecting stream", category: "ChatsViewModel")
+                self?.forceReconnectStream()
             }
             .store(in: &cancellables)
     }
@@ -154,20 +156,35 @@ class ChatsViewModel: ObservableObject {
     // MARK: - Message Receiving
 
     func startMessageStream() {
-        var contactIds: [String] = []
-        if let context = viewContext {
-            let fetchRequest = User.fetchRequest()
-            fetchRequest.predicate = NSPredicate(format: "id != %@", SessionManager.shared.currentUserId ?? "")
-            if let users = try? context.fetch(fetchRequest) {
-                contactIds = users.compactMap { $0.id }
-            }
+        streamManager.onDeliveryReceipt = { [weak self] messageIds in
+            self?.handleDeliveryReceipts(messageIds)
+        }
+        streamManager.connect(contactUserIds: currentContactIds()) { [weak self] message in
+            self?.handleIncomingMessage(message)
+        }
+    }
+
+    /// Cancel any in-progress backoff and reconnect immediately.
+    /// Called when app returns to foreground to skip any pending retry delay.
+    private func forceReconnectStream() {
+        guard SessionManager.shared.sessionToken != nil else {
+            Log.info("📱 No session — skipping reconnect", category: "ChatsViewModel")
+            return
         }
         streamManager.onDeliveryReceipt = { [weak self] messageIds in
             self?.handleDeliveryReceipts(messageIds)
         }
-        streamManager.connect(contactUserIds: contactIds) { [weak self] message in
+        streamManager.forceReconnect(contactUserIds: currentContactIds()) { [weak self] message in
             self?.handleIncomingMessage(message)
         }
+    }
+
+    private func currentContactIds() -> [String] {
+        guard let context = viewContext else { return [] }
+        let fetchRequest = User.fetchRequest()
+        fetchRequest.predicate = NSPredicate(format: "id != %@", SessionManager.shared.currentUserId ?? "")
+        let users = (try? context.fetch(fetchRequest)) ?? []
+        return users.compactMap { $0.id }
     }
 
     func stopMessageStream() {
