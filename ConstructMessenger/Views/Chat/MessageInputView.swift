@@ -225,7 +225,7 @@ private struct MacReturnToSendModifier: ViewModifier {
     func body(content: Content) -> some View {
 #if targetEnvironment(macCatalyst)
         content
-            .onKeyPress(.return) { press in
+            .onKeyPress(.return, phases: .down) { press in
                 if press.modifiers.contains(.shift) {
                     // Shift+Return → insert newline at end of text
                     text += "\n"
