@@ -33,6 +33,7 @@ struct OnboardingView: View {
                     Text("KONSTRUCT")
                         .font(.largeTitle)
                         .fontWeight(.bold)
+                        .tracking(9)
                     
                     Text("onboarding_tagline")
                         .font(.subheadline)
@@ -76,6 +77,7 @@ struct OnboardingView: View {
                     }
                     
                 }
+                .frame(maxWidth: 420)
                 .padding(.horizontal, 32)
                 
                 Spacer()
@@ -105,6 +107,7 @@ struct OnboardingView: View {
                     }
                     .padding(.vertical, 8)
                 }
+                .frame(maxWidth: 420)
                 .padding(.horizontal, 32)
                 .padding(.bottom, 32)
             }
