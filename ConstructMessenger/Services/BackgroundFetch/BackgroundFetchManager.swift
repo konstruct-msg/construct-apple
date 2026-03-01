@@ -313,10 +313,7 @@ class BackgroundFetchManager: NSObject, ObservableObject {
                 
                 // Find chat
                 let chatFetch = Chat.fetchRequest()
-                // Combine with additional predicate
-                let chatOwnerPredicate = chatFetch.predicate!
-                let chatIdPredicate = NSPredicate(format: "id == %@", chatId)
-                chatFetch.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [chatOwnerPredicate, chatIdPredicate])
+                chatFetch.predicate = NSPredicate(format: "id == %@", chatId)
                 guard let chat = try? backgroundContext.fetch(chatFetch).first else {
                     Log.error("❌ Chat not found: \(chatId)", category: "BackgroundFetch")
                     continue
@@ -326,10 +323,7 @@ class BackgroundFetchManager: NSObject, ObservableObject {
                 for messageData in chatMessages {
                     // Check if message already exists
                     let messageFetch = Message.fetchRequest()
-                    // Combine with additional predicate
-                    let messageOwnerPredicate = messageFetch.predicate!
-                    let messageIdPredicate = NSPredicate(format: "id == %@", messageData.id)
-                    messageFetch.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [messageOwnerPredicate, messageIdPredicate])
+                    messageFetch.predicate = NSPredicate(format: "id == %@", messageData.id)
                     
                     if (try? backgroundContext.fetch(messageFetch).first) != nil {
                         continue // Already exists
@@ -411,10 +405,7 @@ class BackgroundFetchManager: NSObject, ObservableObject {
         currentUserId: String
     ) -> String? {
         let chatFetch = Chat.fetchRequest()
-        // Combine with additional predicate
-        let chatOwnerPredicate = chatFetch.predicate!
-        let otherUserPredicate = NSPredicate(format: "otherUser.id == %@", userId)
-        chatFetch.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [chatOwnerPredicate, otherUserPredicate])
+        chatFetch.predicate = NSPredicate(format: "otherUser.id == %@", userId)
         
         if let existingChat = try? context.fetch(chatFetch).first {
             return existingChat.id
@@ -422,10 +413,7 @@ class BackgroundFetchManager: NSObject, ObservableObject {
         
         // Create new chat
         let userFetch = User.fetchRequest()
-        // Combine with additional predicate
-        let userOwnerPredicate = userFetch.predicate!
-        let userIdPredicate = NSPredicate(format: "id == %@", userId)
-        userFetch.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [userOwnerPredicate, userIdPredicate])
+        userFetch.predicate = NSPredicate(format: "id == %@", userId)
         
         let dbUser: User
         if let existingUser = try? context.fetch(userFetch).first {
@@ -466,10 +454,7 @@ class BackgroundFetchManager: NSObject, ObservableObject {
             // Get user display name from Core Data
             let context = PersistenceController.shared.container.viewContext
             let userFetch = User.fetchRequest()
-            // Combine with additional predicate
-            let userOwnerPredicate = userFetch.predicate!
-            let userIdPredicate = NSPredicate(format: "id == %@", userId)
-            userFetch.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [userOwnerPredicate, userIdPredicate])
+            userFetch.predicate = NSPredicate(format: "id == %@", userId)
             
             let senderName: String
             if let user = try? context.fetch(userFetch).first {
@@ -481,10 +466,7 @@ class BackgroundFetchManager: NSObject, ObservableObject {
             let preview = messages.first.flatMap { msg -> String? in
                 // Try to get decrypted content if available
                 let messageFetch = Message.fetchRequest()
-                // Combine with additional predicate
-                let messageOwnerPredicate = messageFetch.predicate!
-                let messageIdPredicate = NSPredicate(format: "id == %@", msg.id)
-                messageFetch.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [messageOwnerPredicate, messageIdPredicate])
+                messageFetch.predicate = NSPredicate(format: "id == %@", msg.id)
                 if let savedMessage = try? context.fetch(messageFetch).first,
                    let decrypted = savedMessage.decryptedContent {
                     return decrypted

@@ -342,8 +342,8 @@ class RestAPIClient {
                     let decoder = JSONDecoder()
                     // Handle empty response
                     if data.isEmpty {
-                        if T.self == EmptyResponse.self {
-                            return EmptyResponse() as! T
+                        if T.self == EmptyResponse.self, let response = EmptyResponse() as? T {
+                            return response
                         }
                     }
                     return try decoder.decode(T.self, from: data)

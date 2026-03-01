@@ -48,8 +48,12 @@ final class GRPCChannelManager: Sendable {
     /// Creates a new `GRPCClient` with TLS transport.
     /// Caller is responsible for running the client via `runConnections()` in a Task.
     func makeClient() throws -> GRPCClient<HTTP2ClientTransport.Posix> {
+        let host = currentHost
+        let port = currentPort
+        Log.info("🔌 gRPC creating channel → \(host):\(port) TLS=true", category: "gRPC")
+
         let transport = try HTTP2ClientTransport.Posix(
-            target: .dns(host: currentHost, port: currentPort),
+            target: .dns(host: host, port: port),
             transportSecurity: .tls,
             config: .defaults {
                 $0.connection = .init(
@@ -88,9 +92,12 @@ final class GRPCChannelManager: Sendable {
                 return result
             }
 
-            let result = try await group.next()!
-            group.cancelAll()
-            return result
+            guard let result = try await group.next() else {
+                    group.cancelAll()
+                    throw NetworkError.connectionFailed
+                }
+                group.cancelAll()
+                return result
         }
     }
 }
