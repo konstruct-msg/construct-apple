@@ -34,12 +34,18 @@ struct ChatsSplitView: View {
 
     var body: some View {
         NavigationSplitView {
-            Group {
-                if sidebarContent == .chats {
-                    sidebarChats
-                } else {
-                    SettingsView()
+            VStack(spacing: 0) {
+                Group {
+                    if sidebarContent == .chats {
+                        sidebarChats
+                    } else {
+                        SettingsView()
+                    }
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                Divider()
+                sidebarTabBar
             }
             .navigationTitle(sidebarContent == .chats ? "chats" : "settings")
             .toolbar {
@@ -51,23 +57,8 @@ struct ChatsSplitView: View {
                             Image(systemName: "qrcode.viewfinder")
                         }
                     }
-                    ToolbarItem(placement: .navigationBarLeading) {
-                        Button {
-                            sidebarContent = .settings
-                        } label: {
-                            Image(systemName: "gear")
-                        }
-                    }
                     ToolbarItem(placement: .principal) {
                         ConnectionStatusIndicator()
-                    }
-                } else {
-                    ToolbarItem(placement: .navigationBarLeading) {
-                        Button {
-                            sidebarContent = .chats
-                        } label: {
-                            Label("chats", systemImage: "chevron.left")
-                        }
                     }
                 }
             }
@@ -96,6 +87,43 @@ struct ChatsSplitView: View {
                 chatsViewModel.chatToOpen = nil
             }
         }
+    }
+
+    // MARK: - Sidebar: Tab Bar
+
+    private var sidebarTabBar: some View {
+        HStack(spacing: 0) {
+            sidebarTabButton(
+                title: "chats",
+                systemImage: "bubble.left.and.bubble.right",
+                tab: .chats
+            )
+            sidebarTabButton(
+                title: "settings",
+                systemImage: "gear",
+                tab: .settings
+            )
+        }
+        .frame(height: 56)
+        .background(.bar)
+    }
+
+    @ViewBuilder
+    private func sidebarTabButton(title: LocalizedStringKey, systemImage: String, tab: SidebarTab) -> some View {
+        let selected = sidebarContent == tab
+        Button {
+            sidebarContent = tab
+        } label: {
+            VStack(spacing: 3) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 18, weight: selected ? .semibold : .regular))
+                Text(title)
+                    .font(.caption2)
+            }
+            .foregroundStyle(selected ? Color.accentColor : .secondary)
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Sidebar: Chats
