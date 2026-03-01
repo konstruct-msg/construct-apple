@@ -1,11 +1,3 @@
-/*
-  Localizable.strings
-  ConstructMessenger
-
-  Created by Gemini on 2026-01-02.
-  
-*/
-
 // MARK: - General
 "error" = "Error";
 "ok" = "OK";
@@ -278,7 +270,7 @@
 "connection_type" = "Connection Type";
 "default_server" = "Default Server";
 "last_error" = "Last Connection Error";
-"delete_my_account" = "Delete My Identity";
+"delete_my_account" = "Delete identity";
 "delete_account_warning" = "Permanently deletes your identity from the server. After successful deletion, all local encryption keys and app data will be automatically cleared from this device.";
 "delete_account_warning_title" = "Delete Identity?";
 "delete_account_warning_message" = "This will permanently delete your identity from the server. After server confirms deletion, all local keys and data will be automatically cleared from this device. You cannot undo this action.";
@@ -354,3 +346,7 @@
 // QR Scanner
 "paste_invite_link" = "Paste invite link";
 "clipboard_no_valid_invite" = "No valid invite link found in clipboard.";
+
+// iPad Split View
+"select_chat" = "Select a Chat";
+"select_chat_description" = "Choose a conversation from the sidebar to start messaging.";

@@ -12,18 +12,29 @@ struct MainTabView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
     @EnvironmentObject var chatsViewModel: ChatsViewModel
 
-    var body: some View {
-        TabView {
-            ChatsListView()
-                .environmentObject(chatsViewModel)
-                .tabItem {
-                    Label("chats", systemImage: "message")
-                }
+    /// Compact = iPhone (or iPad in narrow split-screen multitasking)
+    /// Regular = iPad full-screen or landscape
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
-            SettingsView()
-                .tabItem {
-                    Label("settings", systemImage: "gear")
-                }
+    var body: some View {
+        if horizontalSizeClass == .regular {
+            // iPad: sidebar + detail split layout
+            ChatsSplitView()
+                .environmentObject(chatsViewModel)
+        } else {
+            // iPhone: classic tab bar navigation
+            TabView {
+                ChatsListView()
+                    .environmentObject(chatsViewModel)
+                    .tabItem {
+                        Label("chats", systemImage: "message")
+                    }
+
+                SettingsView()
+                    .tabItem {
+                        Label("settings", systemImage: "gear")
+                    }
+            }
         }
     }
 }

@@ -1,11 +1,3 @@
-/*
-  Localizable.strings
-  ConstructMessenger
-
-  Created by Gemini on 2026-01-02.
-  
-*/
-
 // MARK: - General
 "error" = "Ошибка";
 "ok" = "OK";
@@ -349,3 +341,7 @@
 // QR Scanner
 "paste_invite_link" = "Вставить ссылку-приглашение";
 "clipboard_no_valid_invite" = "В буфере обмена не найдено действительной ссылки-приглашения.";
+
+// iPad Split View
+"select_chat" = "Выберите чат";
+"select_chat_description" = "Выберите разговор на боковой панели, чтобы начать общение.";
