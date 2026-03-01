@@ -3,8 +3,9 @@
 # Generate Swift bindings using UniFFI from the compiled library
 # Supports multiple architectures and build configurations
 
-set -e  # Exit on error
-set -u  # Exit on undefined variable
+set -e          # Exit on error
+set -u          # Exit on undefined variable
+set -o pipefail # Catch errors in pipelines (e.g. cargo ... | grep ...)
 
 # Colors for output
 RED='\033[0;31m'
@@ -274,12 +275,19 @@ build_for_target() {
 
     cd "$CORE_PATH"
 
-    # ✅ IMPORTANT: Build library first - this ensures UniFFI scaffolding is generated
-    # The scaffolding must exist before we can generate Swift bindings
+    # Ensure the rustup target is installed
+    if ! rustup target list --installed | grep -q "^${target}$"; then
+        print_info "Installing rustup target: $target"
+        rustup target add "$target"
+    fi
+
+    # Build the library — use PIPESTATUS to detect failures when filtering output
     if [ "$VERBOSE" = true ]; then
         cargo build --lib --target "$target" --features ios $build_flag
     else
-        cargo build --lib --target "$target" --features ios $build_flag 2>&1 | grep -v "Compiling\|Finished" || true
+        cargo build --lib --target "$target" --features ios $build_flag 2>&1 \
+            | grep -v "^\s*Compiling\|^\s*Finished\|^\s*Fresh"
+        # pipefail catches cargo exit code through the pipe
     fi
 
     # Patch UniFFI generated files for Rust 1.82+ compatibility
