@@ -47,9 +47,20 @@ final class MessagingServiceClient: Sendable {
             request.message = envelope
             request.idempotencyKey = messageId
 
+            Log.debug("""
+                📤 sendMessage RPC →
+                   messageId      = \(messageId)
+                   senderId       = \(senderId)
+                   recipientId    = \(recipientId)
+                   conversationId = \(conversationId)
+                   payloadBytes   = \(encryptedPayload.count)
+                """, category: "MessagingServiceClient")
+
             let response = try await msgClient.sendMessage(
                 request: .init(message: request)
             )
+
+            Log.info("✅ sendMessage response: success=\(response.success) messageId=\(response.messageID)", category: "MessagingServiceClient")
 
             return SendMessageResponse(
                 messageId: response.messageID,

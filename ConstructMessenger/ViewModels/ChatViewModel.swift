@@ -550,6 +550,9 @@ class ChatViewModel: NSObject, ObservableObject {
                             deliveryStatus = .queued
                         case "sent", "success":
                             deliveryStatus = .sent
+                        case "failed":
+                            deliveryStatus = .failed
+                            Log.error("❌ Server rejected message \(messageId): status=failed", category: "ChatViewModel")
                         default:
                             deliveryStatus = .sent  // Fallback to sent
                             Log.info("⚠️ Unknown server status: \(response.status), using .sent", category: "ChatViewModel")

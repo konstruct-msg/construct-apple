@@ -177,6 +177,13 @@ final class MessageStreamManager: ObservableObject {
         Log.info("🔄 MessageStream connectLoop started → \(host):\(port)", category: "MessageStream")
 
         while !Task.isCancelled {
+            // Fetch any messages that arrived while we were disconnected.
+            // Done at the top of the loop so it always runs from the current
+            // (non-cancelled) task, before each connection attempt.
+            await fetchMissedMessages()
+
+            guard !Task.isCancelled else { break }
+
             do {
                 try await openStream()
                 // Stream ended cleanly — immediate reconnect, reset counter
@@ -212,8 +219,12 @@ final class MessageStreamManager: ObservableObject {
             let totalDelay = delay + jitter
 
             Log.info("⏳ MessageStream reconnecting in \(String(format: "%.1f", totalDelay))s (attempt #\(retryCount)) → \(host):\(port)", category: "MessageStream")
-            try? await Task.sleep(for: .seconds(totalDelay))
-            await fetchMissedMessages()
+            do {
+                try await Task.sleep(for: .seconds(totalDelay))
+            } catch {
+                // Task was cancelled during backoff sleep — exit immediately
+                break
+            }
         }
         Log.info("🏁 MessageStream connectLoop finished", category: "MessageStream")
     }
