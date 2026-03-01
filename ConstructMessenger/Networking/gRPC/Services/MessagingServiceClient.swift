@@ -41,6 +41,7 @@ final class MessagingServiceClient: Sendable {
             envelope.conversationID = conversationId
             envelope.contentType = .e2EeSignal
             envelope.encryptedPayload = encryptedPayload
+            envelope.timestamp = Int64(timestamp)
 
             var request = Shared_Proto_Services_V1_SendMessageRequest()
             request.message = envelope
@@ -63,20 +64,26 @@ final class MessagingServiceClient: Sendable {
         try await GRPCChannelManager.shared.performRPC { grpcClient in
             let msgClient = Shared_Proto_Services_V1_MessagingService.Client(wrapping: grpcClient)
 
+            let messageId = UUID().uuidString
+
+            var sender = Shared_Proto_Core_V1_UserId()
+            sender.userID = SessionManager.shared.currentUserId ?? ""
+
             var recipient = Shared_Proto_Core_V1_UserId()
             recipient.userID = recipientId
 
             var envelope = Shared_Proto_Core_V1_Envelope()
+            envelope.messageID = messageId
+            envelope.sender = sender
             envelope.recipient = recipient
             envelope.contentType = .sessionReset
             envelope.timestamp = Int64(Date().timeIntervalSince1970)
-            if let reason {
-                envelope.encryptedPayload = Data(reason.utf8)
-            }
+            // Always populate encrypted_payload — server validates it is non-empty.
+            envelope.encryptedPayload = Data((reason ?? "END_SESSION").utf8)
 
             var request = Shared_Proto_Services_V1_SendMessageRequest()
             request.message = envelope
-            request.idempotencyKey = UUID().uuidString
+            request.idempotencyKey = messageId
 
             let response = try await msgClient.sendMessage(
                 request: .init(message: request)
