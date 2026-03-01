@@ -45,7 +45,7 @@ class MessageRouter {
     func routeIncomingMessage(
         _ message: ChatMessage,
         in context: NSManagedObjectContext,
-        pendingMessages: inout [String: ChatMessage]
+        pendingMessages: inout [String: [ChatMessage]]
     ) {
         guard let currentUserId = SessionManager.shared.currentUserId else { return }
         
@@ -225,15 +225,17 @@ class MessageRouter {
         chat: Chat,
         isNewChat: Bool,
         in context: NSManagedObjectContext,
-        pendingMessages: inout [String: ChatMessage]
+        pendingMessages: inout [String: [ChatMessage]]
     ) {
-        Log.info("📩 First message from \(userId) - requesting public key bundle", category: "MessageRouter")
-        Log.info("🔐 SESSION_STATE[first_message]: userId=\(userId.prefix(8))..., action=fetch_bundle", category: "SessionInit")
-        
-        // Store the first message temporarily
-        pendingMessages[userId] = message
-        
-        // If we created a new chat, save it now so it appears in UI
+        let isFirstForUser = pendingMessages[userId] == nil || pendingMessages[userId]!.isEmpty
+
+        // Append to the queue (do NOT overwrite — we need message_number=0 for session init)
+        pendingMessages[userId, default: []].append(message)
+
+        Log.info("📩 Message queued for session init from \(userId) — queue size: \(pendingMessages[userId]!.count)", category: "MessageRouter")
+        Log.info("🔐 SESSION_STATE[first_message]: userId=\(userId.prefix(8))..., messageNumber=\(message.messageNumber), action=\(isFirstForUser ? "fetch_bundle" : "queued")", category: "SessionInit")
+
+        // If we created a new chat, save it so it appears in UI
         if isNewChat {
             do {
                 try context.save()
@@ -243,9 +245,11 @@ class MessageRouter {
                 Log.error("❌ Failed to save new chat: \(error)", category: "MessageRouter")
             }
         }
-        
-        // Request public key bundle via callback
-        onPublicKeyBundleNeeded?(userId, message)
+
+        // Request bundle only once (on the first message; subsequent messages just queue)
+        if isFirstForUser {
+            onPublicKeyBundleNeeded?(userId, message)
+        }
     }
     
     // MARK: - Session Message Handling
@@ -257,7 +261,7 @@ class MessageRouter {
         from userId: String,
         chat: Chat,
         in context: NSManagedObjectContext,
-        pendingMessages: inout [String: ChatMessage]
+        pendingMessages: inout [String: [ChatMessage]]
     ) -> String? {
         Log.info("🔐 SESSION_STATE[decrypt_attempt]: userId=\(userId.prefix(8))..., hasSession=true", category: "SessionInit")
         
@@ -269,8 +273,8 @@ class MessageRouter {
             Log.debug("🔄 Decryption failed, requesting reinitialization...", category: "MessageRouter")
             Log.info("🔐 SESSION_STATE[reinit_start]: userId=\(userId.prefix(8))..., reason=decrypt_failed", category: "SessionInit")
             
-            // Store message for retry
-            pendingMessages[userId] = message
+            // Queue message for retry (clear previous queue — fresh session init needed)
+            pendingMessages[userId] = [message]
             
             // Request public key bundle via callback
             onPublicKeyBundleNeeded?(userId, message)
@@ -336,7 +340,7 @@ class MessageRouter {
     private func handleEndSession(
         from userId: String,
         in context: NSManagedObjectContext,
-        pendingMessages: inout [String: ChatMessage]
+        pendingMessages: inout [String: [ChatMessage]]
     ) {
         Log.info("🛑 Handling END_SESSION from \(userId)", category: "MessageRouter")
         

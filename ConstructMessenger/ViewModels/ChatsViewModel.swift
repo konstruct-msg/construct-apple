@@ -15,8 +15,10 @@ class ChatsViewModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private var viewContext: NSManagedObjectContext?
 
-    // ✅ Store pending first messages from users we don't have sessions with yet
-    private var pendingFirstMessages: [String: ChatMessage] = [:]  // [userId: firstMessage]
+    // ✅ Pending messages from users we don't have sessions with yet.
+    // Keyed by userId; array is ordered by arrival (first = lowest messageNumber).
+    // The first element is used for initReceivingSession; the rest are decrypted afterwards.
+    private var pendingFirstMessages: [String: [ChatMessage]] = [:]
     
     // 🚦 Track users currently initializing session (prevents parallel init attempts)
     private var usersInitializingSession: Set<String> = []
@@ -299,8 +301,19 @@ class ChatsViewModel: ObservableObject {
                     }
                     
                     if success {
-                        // Remove from pending messages
+                        // Decrypt any messages that queued up while we were initialising the session.
+                        let queued = self.pendingFirstMessages[userId] ?? []
                         self.pendingFirstMessages.removeValue(forKey: userId)
+
+                        // Skip the first message (already handled by handlePublicKeyBundleForIncomingMessage).
+                        let remaining = queued.dropFirst()
+                        if !remaining.isEmpty {
+                            Log.info("🔐 Decrypting \(remaining.count) queued message(s) for \(userId.prefix(8))...", category: "SessionInit")
+                            guard let context = self.viewContext else { return }
+                            for queuedMsg in remaining {
+                                self.messageRouter.routeIncomingMessage(queuedMsg, in: context, pendingMessages: &self.pendingFirstMessages)
+                            }
+                        }
                     } else {
                         Log.info("🔄 Keeping message in pending for retry", category: "ChatsViewModel")
                     }
