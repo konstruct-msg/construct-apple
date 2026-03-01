@@ -261,7 +261,7 @@ struct MessageBubble: View {
                     }
 
                     Button {
-                        UIPasteboard.general.string = message.decryptedContent
+                        PlatformClipboard.copy(message.decryptedContent ?? "")
                     } label: {
                         Label("copy", systemImage: "doc.on.doc")
                     }

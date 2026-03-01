@@ -69,7 +69,7 @@ struct DiagnosticsView: View {
         .onAppear { refresh() }
         .sheet(isPresented: $isSharing) {
             if let url = archiveURL {
-                ShareSheet(activityItems: [url])
+                ShareLink(item: url, subject: Text("Construct Logs"), message: Text("Exported log archive"))
             }
         }
     }
@@ -106,18 +106,6 @@ struct DiagnosticsView: View {
         LogCollector.shared.clearLogs()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { refresh() }
     }
-}
-
-// MARK: - UIActivityViewController wrapper
-
-private struct ShareSheet: UIViewControllerRepresentable {
-    let activityItems: [Any]
-
-    func makeUIViewController(context: Context) -> UIActivityViewController {
-        UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
-    }
-
-    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
 #Preview {

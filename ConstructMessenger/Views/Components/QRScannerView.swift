@@ -229,7 +229,7 @@ struct QRScannerView: View {
     }
 
     private func handleClipboardPaste() {
-        guard let text = UIPasteboard.general.string?.trimmingCharacters(in: .whitespacesAndNewlines),
+        guard let text = PlatformClipboard.paste()?.trimmingCharacters(in: .whitespacesAndNewlines),
               !text.isEmpty else {
             errorMessage = NSLocalizedString("clipboard_no_valid_invite", comment: "")
             showingError = true

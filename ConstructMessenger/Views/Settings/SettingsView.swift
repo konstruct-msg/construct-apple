@@ -200,9 +200,9 @@ struct SettingsView: View {
                         }
 
                         // MARK: - Developer Section (DEBUG only)
-                        Section(header: Text("Developer").foregroundStyle(.orange)) {
+                        Section(header: Text("Developer")) {
                             NavigationLink(destination: DiagnosticsView()) {
-                                Label("Diagnostics & Logs", systemImage: "ladybug")
+                                Text("Diagnostics & Logs")
                                     .foregroundStyle(.orange)
                             }
                         }
@@ -290,7 +290,7 @@ struct SettingsView: View {
         }
 
         let link = contactLink
-        UIPasteboard.general.string = link
+        PlatformClipboard.copy(link)
         Log.info("Contact link copied: \(link.prefix(50))...", category: "SettingsView")
 
         // Show visual feedback
@@ -307,14 +307,16 @@ struct SettingsView: View {
     }
 }
 
-//#Preview {
-//    let container = PreviewHelpers.createPreviewContainer()
-//    let context = container.viewContext
-//    let authViewModel = AuthViewModel(context: context)
-//    authViewModel.configureMockAuth()
-//
-//    return SettingsView()
-//        .environment(\.managedObjectContext, context)
-//        .environmentObject(authViewModel)
-//        .environmentObject(SecurityViewModel())
-//}
+#if DEBUG
+#Preview {
+    let container = PreviewHelpers.createPreviewContainer()
+    let context = container.viewContext
+    let authViewModel = AuthViewModel(context: context)
+    authViewModel.configureMockAuth()
+
+    return SettingsView()
+        .environment(\.managedObjectContext, context)
+        .environmentObject(authViewModel)
+        .environmentObject(SecurityViewModel())
+}
+#endif

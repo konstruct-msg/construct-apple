@@ -7,6 +7,7 @@
 
 import SwiftUI
 import CoreData
+import PhotosUI
 
 struct AccountSettingsView: View {
     @Environment(\.managedObjectContext) private var viewContext
@@ -14,6 +15,7 @@ struct AccountSettingsView: View {
     @StateObject private var viewModel = SettingsViewModel()
 
     @State private var showingImagePicker = false
+    @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var showingAvatarViewer = false
     @State private var showingDeleteConfirmation = false
     @State private var showingExportAlert = false
@@ -74,16 +76,9 @@ struct AccountSettingsView: View {
             } header: {
                 Text("account_information")
             }
-
-            // MARK: - Privacy
-            Section {
-                Label("privacy_who_can_find_me", systemImage: "person.fill.questionmark")
-                    .foregroundColor(.secondary)
-                Label("privacy_read_receipts", systemImage: "checkmark.message")
-                    .foregroundColor(.secondary)
-            } header: {
-                Text("privacy")
-            } 
+            
+            Spacer()
+            Spacer()
 
             // MARK: - Data & Privacy
             Section {
@@ -94,27 +89,21 @@ struct AccountSettingsView: View {
                 }
             } header: {
                 Text("data_and_privacy")
-            } footer: {
-                Text("export_my_data_footer")
             }
-
+            
+            Spacer()
+            Spacer()
+            
             // MARK: - Danger Zone
             Section {
                 Button(role: .destructive) {
                     showingDeleteConfirmation = true
                 } label: {
-                    Label("delete_my_account", systemImage: "trash")
+                    Text("delete_my_account")
                 }
-            } header: {
-                HStack(spacing: 6) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundColor(.red)
-                        .font(.caption)
-                    Text("danger_zone")
-                        .foregroundColor(.red)
-                }
-            } footer: {
-                Text("delete_account_footer")
+            }
+            header: {
+                Text("danger_zone")
             }
         }
         .alert("export_my_data", isPresented: $showingExportAlert) {
@@ -150,10 +139,18 @@ struct AccountSettingsView: View {
                 }
             )
         }
-        .sheet(isPresented: $showingImagePicker) {
-            ImagePicker(onImagePicked: { image in
-                viewModel.saveAvatar(image, authViewModel: authViewModel)
-            })
+        .photosPicker(isPresented: $showingImagePicker, selection: $selectedPhotoItem, matching: .images)
+        .onChange(of: selectedPhotoItem) { _, newItem in
+            guard let newItem else { return }
+            Task {
+                if let data = try? await newItem.loadTransferable(type: Data.self),
+                   let image = UIImage(data: data) {
+                    await MainActor.run {
+                        viewModel.saveAvatar(image, authViewModel: authViewModel)
+                    }
+                }
+                selectedPhotoItem = nil
+            }
         }
     }
 }
@@ -310,65 +307,27 @@ struct AvatarViewerSheet: View {
     }
 }
 
-// MARK: - Image Picker
-struct ImagePicker: UIViewControllerRepresentable {
-    let onImagePicked: (UIImage) -> Void
-    @Environment(\.dismiss) var dismiss
 
-    func makeUIViewController(context: Context) -> UIImagePickerController {
-        let picker = UIImagePickerController()
-        picker.delegate = context.coordinator
-        picker.allowsEditing = true
-        return picker
-    }
+#if DEBUG
+#Preview {
+    let container = PreviewHelpers.createPreviewContainer()
+    let context = container.viewContext
 
-    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
+    // Create sample user
+    let user = User(context: context)
+    user.id = "user123"
+    user.username = "john_doe"
+    user.displayName = "John Doe"
 
-    func makeCoordinator() -> Coordinator {
-        Coordinator(self)
-    }
+    try? context.save()
 
-    class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
-        let parent: ImagePicker
+    let authViewModel = AuthViewModel(context: context)
+    authViewModel.configureMockAuth()
 
-        init(_ parent: ImagePicker) {
-            self.parent = parent
-        }
-
-        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
-            if let editedImage = info[.editedImage] as? UIImage {
-                parent.onImagePicked(editedImage)
-            } else if let originalImage = info[.originalImage] as? UIImage {
-                parent.onImagePicked(originalImage)
-            }
-
-            parent.dismiss()
-        }
-
-        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
-            parent.dismiss()
-        }
+    return NavigationStack {
+        AccountSettingsView()
+            .environment(\.managedObjectContext, context)
+            .environmentObject(authViewModel)
     }
 }
-
-//#Preview {
-//    let container = PreviewHelpers.createPreviewContainer()
-//    let context = container.viewContext
-//
-//    // Create sample user
-//    let user = User(context: context)
-//    user.id = "user123"
-//    user.username = "john_doe"
-//    user.displayName = "John Doe"
-//
-//    try? context.save()
-//
-//    let authViewModel = AuthViewModel(context: context)
-//    authViewModel.configureMockAuth()
-//
-//    return NavigationStack {
-//        AccountSettingsView()
-//            .environment(\.managedObjectContext, context)
-//            .environmentObject(authViewModel)
-//    }
-//}
+#endif

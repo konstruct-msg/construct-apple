@@ -5,9 +5,13 @@
 //
 
 import Foundation
+#if os(iOS)
 import BackgroundTasks
+#endif
 import Combine
+#if os(iOS)
 import UIKit
+#endif
 import os.log
 import CoreData
 
@@ -78,7 +82,7 @@ class BackgroundFetchManager: NSObject, ObservableObject {
     /// Must be called in AppDelegate application(_:didFinishLaunchingWithOptions:)
     /// BEFORE the app finishes launching
     func registerBackgroundTasks() {
-        // Register BGAppRefreshTask
+        #if os(iOS)
         BGTaskScheduler.shared.register(
             forTaskWithIdentifier: Self.messageRefreshTaskID,
             using: nil
@@ -91,7 +95,6 @@ class BackgroundFetchManager: NSObject, ObservableObject {
             self.handleMessageRefresh(task: refreshTask)
         }
         
-        // Register BGProcessingTask
         BGTaskScheduler.shared.register(
             forTaskWithIdentifier: Self.maintenanceTaskID,
             using: nil
@@ -103,65 +106,60 @@ class BackgroundFetchManager: NSObject, ObservableObject {
             }
             self.handleMaintenance(task: processingTask)
         }
-        
         Log.info("Background tasks registered successfully")
+        #endif
     }
     
     // MARK: - Scheduling
     
     /// Schedule next background fetch task
-    /// iOS will intelligently decide when to run based on usage patterns
     func scheduleBackgroundFetch() {
-        // Check if background fetch should be enabled (respects Low Power Mode)
+        #if os(iOS)
         guard BackgroundFetchConfig.shouldBeEnabled else {
             Log.info("Background fetch disabled (user setting or Low Power Mode)", category: "BackgroundFetch")
             cancelAllBackgroundTasks()
             return
         }
-        
         let request = BGAppRefreshTaskRequest(identifier: Self.messageRefreshTaskID)
-        
-        // Use configured interval
         let interval = BackgroundFetchConfig.interval
         request.earliestBeginDate = Date(timeIntervalSinceNow: interval)
-        
         do {
             try BGTaskScheduler.shared.submit(request)
-            Log.info("Background fetch scheduled successfully (interval: \(Int(interval / 60)) minutes)", category: "BackgroundFetch")
+            Log.info("Background fetch scheduled (interval: \(Int(interval / 60)) min)", category: "BackgroundFetch")
         } catch {
             Log.error("Failed to schedule background fetch: \(error)", category: "BackgroundFetch")
         }
+        #endif
     }
     
     /// Schedule maintenance task
-    /// Runs less frequently, only during optimal conditions
     func scheduleMaintenanceTask() {
+        #if os(iOS)
         let request = BGProcessingTaskRequest(identifier: Self.maintenanceTaskID)
-        
-        // Request execution no earlier than 1 hour from now
         request.earliestBeginDate = Date(timeIntervalSinceNow: 60 * 60)
-        
-        // Require network and external power for maintenance
         request.requiresNetworkConnectivity = true
-        request.requiresExternalPower = false // Set to true for heavy operations
-        
+        request.requiresExternalPower = false
         do {
             try BGTaskScheduler.shared.submit(request)
             Log.info("Maintenance task scheduled successfully")
         } catch {
             Log.error("Failed to schedule maintenance task: \(error)")
         }
+        #endif
     }
     
     /// Cancel all scheduled background tasks
     func cancelAllBackgroundTasks() {
+        #if os(iOS)
         BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: Self.messageRefreshTaskID)
         BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: Self.maintenanceTaskID)
+        #endif
         Log.info("All background tasks cancelled")
     }
     
     // MARK: - Task Handlers
     
+    #if os(iOS)
     /// Handle BGAppRefreshTask for message fetching
     private func handleMessageRefresh(task: BGAppRefreshTask) {
         Log.info("📬 Background message refresh started")
@@ -214,11 +212,10 @@ class BackgroundFetchManager: NSObject, ObservableObject {
         performMaintenance { success in
             Log.info("Maintenance task completed: \(success)")
             task.setTaskCompleted(success: success)
-            
-            // Schedule next maintenance
             self.scheduleMaintenanceTask()
         }
     }
+    #endif
     
     // MARK: - Fetch Logic
     
