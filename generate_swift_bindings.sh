@@ -337,7 +337,7 @@ generate_bindings() {
         exit 1
     fi
     
-    # ✅ IMPORTANT: Verify that library was built before generating bindings
+    # Verify that library was built before generating bindings
     # UniFFI needs the compiled library to extract metadata
     local lib_built=false
     for arch in "${ARCHITECTURES[@]}"; do
@@ -345,7 +345,9 @@ generate_bindings() {
         if [ "$BUILD_TYPE" == "debug" ]; then
             build_dir="debug"
         fi
-        local lib_path="$CORE_PATH/target/$arch/$build_dir/libconstruct_core.a"
+        # Check PROJECT_ROOT/target first, then CORE_PATH/target
+        local lib_path="$PROJECT_ROOT/target/$arch/$build_dir/libconstruct_core.a"
+        [ -f "$lib_path" ] || lib_path="$CORE_PATH/target/$arch/$build_dir/libconstruct_core.a"
         if [ -f "$lib_path" ]; then
             lib_built=true
             break
@@ -361,16 +363,16 @@ generate_bindings() {
     cd "$CORE_PATH"
     
     # Generate bindings using LIBRARY MODE (not UDL mode)
-    # ✅ CRITICAL: Library mode reads metadata from compiled library, ensuring checksums match
-    # This is required because we use proc-macro exports in addition to UDL
     local lib_path=""
     for arch in "${ARCHITECTURES[@]}"; do
         local build_dir="release"
         if [ "$BUILD_TYPE" == "debug" ]; then
             build_dir="debug"
         fi
-        lib_path="$CORE_PATH/target/$arch/$build_dir/libconstruct_core.a"
-        if [ -f "$lib_path" ]; then
+        local candidate="$PROJECT_ROOT/target/$arch/$build_dir/libconstruct_core.a"
+        [ -f "$candidate" ] || candidate="$CORE_PATH/target/$arch/$build_dir/libconstruct_core.a"
+        if [ -f "$candidate" ]; then
+            lib_path="$candidate"
             break
         fi
     done
@@ -496,32 +498,49 @@ main() {
 # Copy library to project root
 copy_library_to_project_root() {
     print_header "Copying Library to Project Root"
-    
+
     local build_dir="release"
     if [ "$BUILD_TYPE" == "debug" ]; then
         build_dir="debug"
     fi
 
-    # iOS device library (used on iPhone/iPad)
-    local ios_lib="$CORE_PATH/target/aarch64-apple-ios/$build_dir/libconstruct_core.a"
+    # Rust outputs to PROJECT_ROOT/target/ (via CARGO_TARGET_DIR or cargo config).
+    # Fall back to CORE_PATH/target/ for setups without target-dir redirect.
+    _lib_path() {
+        local arch=$1
+        local candidate="$PROJECT_ROOT/target/$arch/$build_dir/libconstruct_core.a"
+        if [ -f "$candidate" ]; then
+            echo "$candidate"
+        else
+            echo "$CORE_PATH/target/$arch/$build_dir/libconstruct_core.a"
+        fi
+    }
+
+    # iOS device library
+    local ios_lib
+    ios_lib=$(_lib_path "aarch64-apple-ios")
     if [ -f "$ios_lib" ]; then
         cp "$ios_lib" "$PROJECT_ROOT/libconstruct_core.a"
         print_success "Copied iOS device library → libconstruct_core.a"
     fi
 
-    # Mac Catalyst library (used for My Mac / Catalyst target)
-    local macabi_lib="$CORE_PATH/target/aarch64-apple-ios-macabi/$build_dir/libconstruct_core.a"
+    # Mac Catalyst library — always named libconstruct_core_catalyst.a at project root
+    local macabi_lib
+    macabi_lib=$(_lib_path "aarch64-apple-ios-macabi")
     if [ -f "$macabi_lib" ]; then
         cp "$macabi_lib" "$PROJECT_ROOT/libconstruct_core_catalyst.a"
         print_success "Copied Mac Catalyst library → libconstruct_core_catalyst.a"
     fi
 
-    # If no device lib was built, fall back to the most-recently-built arch
+    # Fallback: if no device lib, copy the first non-macabi arch built
     if [ ! -f "$PROJECT_ROOT/libconstruct_core.a" ]; then
         local latest_lib=""
         local latest_time=0
         for arch in "${ARCHITECTURES[@]}"; do
-            local lib_path="$CORE_PATH/target/$arch/$build_dir/libconstruct_core.a"
+            # macabi belongs in libconstruct_core_catalyst.a, never in libconstruct_core.a
+            [[ "$arch" == *macabi* ]] && continue
+            local lib_path
+            lib_path=$(_lib_path "$arch")
             if [ -f "$lib_path" ]; then
                 local lib_time
                 lib_time=$(stat -f "%m" "$lib_path" 2>/dev/null || echo "0")
@@ -535,7 +554,7 @@ copy_library_to_project_root() {
             cp "$latest_lib" "$PROJECT_ROOT/libconstruct_core.a"
             print_success "Copied fallback library → libconstruct_core.a (from $latest_lib)"
         else
-            print_warning "No library found to copy"
+            print_info "No iOS library built — skipping libconstruct_core.a"
         fi
     fi
 }
@@ -551,11 +570,19 @@ create_xcframework() {
 
     local xcfw_out="$PROJECT_ROOT/construct_core.xcframework"
 
+    # Helper: resolve lib path — PROJECT_ROOT/target first, then CORE_PATH/target
+    _xcfw_lib() {
+        local arch=$1
+        local p="$PROJECT_ROOT/target/$arch/$build_dir/libconstruct_core.a"
+        [ -f "$p" ] || p="$CORE_PATH/target/$arch/$build_dir/libconstruct_core.a"
+        echo "$p"
+    }
+
     # Collect available slices
-    local ios_lib="$CORE_PATH/target/aarch64-apple-ios/$build_dir/libconstruct_core.a"
-    local sim_arm64="$CORE_PATH/target/aarch64-apple-ios-sim/$build_dir/libconstruct_core.a"
-    local sim_x86="$CORE_PATH/target/x86_64-apple-ios/$build_dir/libconstruct_core.a"
-    local macabi_lib="$CORE_PATH/target/aarch64-apple-ios-macabi/$build_dir/libconstruct_core.a"
+    local ios_lib;    ios_lib=$(_xcfw_lib "aarch64-apple-ios")
+    local sim_arm64;  sim_arm64=$(_xcfw_lib "aarch64-apple-ios-sim")
+    local sim_x86;    sim_x86=$(_xcfw_lib "x86_64-apple-ios")
+    local macabi_lib; macabi_lib=$(_xcfw_lib "aarch64-apple-ios-macabi")
     local headers_dir="$PROJECT_ROOT/ConstructMessenger"
 
     # Build xcodebuild -create-xcframework args
