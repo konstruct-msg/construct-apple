@@ -25,7 +25,7 @@ struct ChatsSplitView: View {
 
     @State private var selectedChatId: String?
     @State private var showingQRScanner = false
-    @State private var sidebarContent: SidebarTab = .chats
+    @State private var activeTab: SidebarTab = .chats
     @State private var showingDrafts = false
     @State private var showingError = false
     @State private var errorMessage = ""
@@ -35,31 +35,22 @@ struct ChatsSplitView: View {
     var body: some View {
         NavigationSplitView {
             VStack(spacing: 0) {
-                Group {
-                    if sidebarContent == .chats {
-                        sidebarChats
-                    } else {
-                        SettingsView()
-                    }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-
+                sidebarChats
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 Divider()
                 sidebarTabBar
             }
-            .navigationTitle(sidebarContent == .chats ? "chats" : "settings")
+            .navigationTitle("chats")
             .toolbar {
-                if sidebarContent == .chats {
-                    ToolbarItem(placement: .navigationBarTrailing) {
-                        Button {
-                            showingQRScanner = true
-                        } label: {
-                            Image(systemName: "qrcode.viewfinder")
-                        }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        showingQRScanner = true
+                    } label: {
+                        Image(systemName: "qrcode.viewfinder")
                     }
-                    ToolbarItem(placement: .principal) {
-                        ConnectionStatusIndicator()
-                    }
+                }
+                ToolbarItem(placement: .principal) {
+                    ConnectionStatusIndicator()
                 }
             }
             .sheet(isPresented: $showingQRScanner) {
@@ -84,7 +75,13 @@ struct ChatsSplitView: View {
         .onChange(of: chatsViewModel.chatToOpen) { _, chatId in
             if let chatId {
                 selectedChatId = chatId
+                activeTab = .chats
                 chatsViewModel.chatToOpen = nil
+            }
+        }
+        .onChange(of: selectedChatId) { _, newId in
+            if newId != nil {
+                activeTab = .chats
             }
         }
     }
@@ -110,9 +107,16 @@ struct ChatsSplitView: View {
 
     @ViewBuilder
     private func sidebarTabButton(title: LocalizedStringKey, systemImage: String, tab: SidebarTab) -> some View {
-        let selected = sidebarContent == tab
+        let selected = activeTab == tab
         Button {
-            sidebarContent = tab
+            activeTab = tab
+            if tab == .chats {
+                // Switching back to chats: deselect settings (detail shows selected chat)
+                selectedChatId = selectedChatId  // no-op, just refresh
+            } else {
+                // Switching to settings: clear chat selection so detail shows SettingsView
+                selectedChatId = nil
+            }
         } label: {
             VStack(spacing: 3) {
                 Image(systemName: systemImage)
@@ -142,7 +146,9 @@ struct ChatsSplitView: View {
 
     @ViewBuilder
     private var detailContent: some View {
-        if let chatId = selectedChatId,
+        if activeTab == .settings && selectedChatId == nil {
+            SettingsView()
+        } else if let chatId = selectedChatId,
            let chat = chats.first(where: { $0.id == chatId }) {
             ChatView(chat: chat, context: viewContext)
         } else {
