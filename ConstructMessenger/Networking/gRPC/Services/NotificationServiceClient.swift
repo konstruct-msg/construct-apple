@@ -6,7 +6,9 @@
 //
 
 import Foundation
+#if canImport(UIKit)
 import UIKit
+#endif
 import GRPCCore
 import GRPCNIOTransportHTTP2
 
@@ -19,7 +21,11 @@ final class NotificationServiceClient: Sendable {
     // MARK: - Register Device Token
 
     func registerDeviceToken(token: String) async throws -> DeviceTokenResponse {
+        #if canImport(UIKit)
         let deviceName = await MainActor.run { UIDevice.current.name }
+        #else
+        let deviceName = Host.current().localizedName ?? "Mac"
+        #endif
         return try await GRPCChannelManager.shared.performRPC { grpcClient in
             let client = Shared_Proto_Services_V1_NotificationService.Client(wrapping: grpcClient)
 

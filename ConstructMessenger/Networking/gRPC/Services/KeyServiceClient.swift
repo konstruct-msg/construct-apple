@@ -48,8 +48,21 @@ final class KeyServiceClient: Sendable {
                 signedPrekeyPublic: bundle.signedPreKey.base64EncodedString(),
                 signature: bundle.signedPreKeySignature.base64EncodedString(),
                 verifyingKey: verifyingKeyB64,
-                suiteId: UInt16(bundle.cryptoSuite.isEmpty ? 1 : (UInt16(bundle.cryptoSuite) ?? 1))
+                suiteId: Self.parseSuiteId(bundle.cryptoSuite)
             )
+        }
+    }
+
+    /// Map proto crypto_suite string → numeric suite ID used by CryptoCore.
+    /// Server returns named strings ("X25519_CHACHA20") per proto spec; also
+    /// accepts legacy numeric strings ("1") from older server versions.
+    private static func parseSuiteId(_ cryptoSuite: String) -> UInt16 {
+        switch cryptoSuite {
+        case "X25519_CHACHA20", "Curve25519+ChaCha20": return 1
+        case "X25519_AES256", "Curve25519+AES256":    return 2
+        case "KYBER_HYBRID":                           return 3
+        default:
+            return UInt16(cryptoSuite) ?? 1
         }
     }
 

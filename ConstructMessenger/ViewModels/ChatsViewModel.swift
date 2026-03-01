@@ -164,7 +164,7 @@ class ChatsViewModel: ObservableObject {
         streamManager.onDeliveryReceipt = { [weak self] messageIds in
             self?.handleDeliveryReceipts(messageIds)
         }
-        streamManager.connect(contactUserIds: currentContactIds()) { [weak self] message in
+        streamManager.connect(contactUserIds: currentConversationIds()) { [weak self] message in
             self?.handleIncomingMessage(message)
         }
     }
@@ -179,7 +179,7 @@ class ChatsViewModel: ObservableObject {
         streamManager.onDeliveryReceipt = { [weak self] messageIds in
             self?.handleDeliveryReceipts(messageIds)
         }
-        streamManager.forceReconnect(contactUserIds: currentContactIds()) { [weak self] message in
+        streamManager.forceReconnect(contactUserIds: currentConversationIds()) { [weak self] message in
             self?.handleIncomingMessage(message)
         }
     }
@@ -190,6 +190,12 @@ class ChatsViewModel: ObservableObject {
         fetchRequest.predicate = NSPredicate(format: "id != %@", SessionManager.shared.currentUserId ?? "")
         let users = (try? context.fetch(fetchRequest)) ?? []
         return users.compactMap { $0.id }
+    }
+
+    /// Canonical conversation IDs for all known contacts (used for stream subscription).
+    private func currentConversationIds() -> [String] {
+        let myId = SessionManager.shared.currentUserId ?? ""
+        return currentContactIds().map { ConversationId.direct(myUserId: myId, theirUserId: $0) }
     }
 
     func stopMessageStream() {

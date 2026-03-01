@@ -530,7 +530,7 @@ class ChatViewModel: NSObject, ObservableObject {
                         plan: plan,
                         senderId: currentUserId,
                         recipientId: recipientId,
-                        conversationId: chat.id,
+                        conversationId: ConversationId.direct(myUserId: currentUserId, theirUserId: recipientId),
                         timestamp: message.timestamp,
                         preEncryptedFirst: firstComponents
                     )
@@ -728,7 +728,7 @@ class ChatViewModel: NSObject, ObservableObject {
                         plan: plan,
                         senderId: currentUserId,
                         recipientId: recipientId,
-                        conversationId: chat.id,
+                        conversationId: ConversationId.direct(myUserId: currentUserId, theirUserId: recipientId),
                         timestamp: message.timestamp,
                         preEncryptedFirst: firstComponents
                     )

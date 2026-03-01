@@ -54,7 +54,7 @@ class MessageRetryManager {
                         messageId: message.id,
                         recipientId: recipientId,
                         senderId: message.fromUserId,
-                        conversationId: message.chat?.id ?? "",
+                        conversationId: ConversationId.direct(myUserId: message.fromUserId, theirUserId: recipientId),
                         encryptedPayload: encryptedPayload,
                         timestamp: UInt64(Date().timeIntervalSince1970)
                     )
@@ -135,7 +135,7 @@ class MessageRetryManager {
                         plan: plan,
                         senderId: currentUserId,
                         recipientId: recipientId,
-                        conversationId: chat.id,
+                        conversationId: ConversationId.direct(myUserId: currentUserId, theirUserId: recipientId),
                         timestamp: UInt64(Date().timeIntervalSince1970)
                     )
                     await MainActor.run {
