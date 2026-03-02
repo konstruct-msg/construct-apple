@@ -20,23 +20,9 @@ struct SettingsView: View {
         
         var body: some View {
             NavigationStack {
-                VStack(spacing: 0) {
-                    // MARK: - Custom Header
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Settings")
-                            .font(.largeTitle)
-                            .fontWeight(.bold)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal)
-                    .padding(.top, 20)
-                    .padding(.bottom, 16)
-                    .background(Color.AppBackground.primary)
-                    
-                    Divider()
-                    
-                    // MARK: - Settings List
+                VStack {
                     List {
+                        
                         // MARK: - Profile Section
                         Section {
                             NavigationLink(destination: AccountSettingsView().environmentObject(authViewModel)) {
@@ -220,6 +206,8 @@ struct SettingsView: View {
                         userId: viewModel.userId,
                         username: viewModel.username
                     )
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
                 }
             }
         }

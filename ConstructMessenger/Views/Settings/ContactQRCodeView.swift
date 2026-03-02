@@ -33,7 +33,7 @@ struct ContactQRCodeView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        ZStack(alignment: .topTrailing) {
             VStack(spacing: 32) {
                 Spacer()
 
@@ -130,15 +130,20 @@ struct ContactQRCodeView: View {
                     .padding(.horizontal, 32)
                     .padding(.bottom, 32)
             }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("done") {
-                        dismiss()
-                    }
-                }
+
+            // Close button — rendered as overlay so it always sits inside the sheet
+            Button {
+                dismiss()
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 28))
+                    .symbolRenderingMode(.hierarchical)
+                    .foregroundStyle(.secondary)
             }
-            .onAppear {
+            .padding(16)
+            .buttonStyle(.plain)
+        }
+        .onAppear {
                 if let preview = previewPayload {
                     qrPayload = preview
                     generatedAt = Date()
@@ -150,7 +155,6 @@ struct ContactQRCodeView: View {
                 updateTimeRemaining()
             }
         }
-    }
 
     // MARK: - QR Code Generation
     
@@ -240,8 +244,9 @@ struct ContactQRCodeView: View {
         let remaining = max(InviteConfig.ttlSeconds - elapsed, 0)
         if remaining != timeRemaining {
             timeRemaining = remaining
-        }
-    }
+            }
+}
+
 }
 
 #Preview {

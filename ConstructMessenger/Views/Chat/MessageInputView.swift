@@ -16,6 +16,7 @@ struct MessageInputView: View {
     let onCancelReply: () -> Void
 
     // Photo attachment state
+    @FocusState private var isTextFieldFocused: Bool
     @State private var selectedPhotos: [PhotosPickerItem] = []
     @State private var selectedImages: [UIImage] = []
     @State private var optimizedMedia: [OptimizedMedia] = []  // Optimized photos ready to send
@@ -109,6 +110,7 @@ struct MessageInputView: View {
                         .padding(.leading, 12)
                         .padding(.trailing, canSend ? 8 : 12)
                         .padding(.vertical, 8)
+                        .focused($isTextFieldFocused)
                         .modifier(MacReturnToSendModifier(text: $text, canSend: canSend, onSend: sendMessage))
 
                     if canSend {
@@ -233,6 +235,8 @@ private struct MacReturnToSendModifier: ViewModifier {
                 }
                 // Return → send (if there is content to send)
                 if canSend {
+                    // Strip any trailing newline UIKit may have already inserted
+                    text = text.trimmingCharacters(in: .newlines)
                     onSend()
                 }
                 return .handled
