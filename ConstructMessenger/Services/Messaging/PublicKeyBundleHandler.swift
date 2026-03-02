@@ -188,10 +188,7 @@ class PublicKeyBundleHandler {
             if let chat = try? context.fetch(chatFetchRequest).first {
                 // Call success callback with the decrypted data
                 onSuccess(chat, message, decryptedContent)
-                
-                // Update chat preview
-                chat.lastMessageText = Chat.formatPreviewText(decryptedContent)
-                chat.lastMessageTime = Date(timeIntervalSince1970: TimeInterval(message.timestamp))
+                // Note: chat.lastMessageText is updated by onSuccess (saveMessage) with correct plaintext
                 try? context.save()
                 Log.info("✅ Successfully saved decrypted pending message", category: "PublicKeyBundleHandler")
                 return true

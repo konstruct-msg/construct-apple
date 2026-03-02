@@ -34,6 +34,9 @@ class ChatsViewModel: ObservableObject {
     
     // ✅ Public key bundle handler
     private let publicKeyBundleHandler = PublicKeyBundleHandler()
+
+    // Reassembler for KNST1 envelope unwrapping in the session-init message path
+    private let initMessageReassembler = ChunkedMessageReassembler()
     
     // ✅ Chat management service
     private let chatManagementService = ChatManagementService()
@@ -393,6 +396,19 @@ class ChatsViewModel: ObservableObject {
     /// Helper to save message (used by handlePublicKeyBundleForIncomingMessage)
     private func saveMessage(for chat: Chat, with messageData: ChatMessage, decryptedContent: String) {
         guard let context = viewContext else { return }
+
+        // Unwrap KNST1 chunk envelope to get the actual plaintext
+        let plaintext: String
+        switch initMessageReassembler.process(decryptedText: decryptedContent) {
+        case .legacy(let text), .complete(let text):
+            plaintext = text
+        case .incomplete:
+            Log.debug("⏳ Session-init message is a partial chunk — will be reassembled later", category: "ChatsViewModel")
+            return
+        case .invalid(let reason):
+            Log.error("❌ Session-init message envelope invalid: \(reason) — saving raw", category: "ChatsViewModel")
+            plaintext = decryptedContent
+        }
         
         let fetchRequest = Message.fetchRequest()
         let messagePredicate = NSPredicate(format: "id == %@", messageData.id)
@@ -401,7 +417,7 @@ class ChatsViewModel: ObservableObject {
         // Check if message already exists
         if let existingMessage = try? context.fetch(fetchRequest).first {
             if existingMessage.decryptedContent == nil {
-                existingMessage.decryptedContent = decryptedContent
+                existingMessage.decryptedContent = plaintext
                 try? context.save()
             }
             return
@@ -413,12 +429,16 @@ class ChatsViewModel: ObservableObject {
         message.fromUserId = messageData.from
         message.toUserId = messageData.to
         message.encryptedContent = messageData.content
-        message.decryptedContent = decryptedContent
+        message.decryptedContent = plaintext
         message.timestamp = Date(timeIntervalSince1970: TimeInterval(messageData.timestamp))
         message.isSentByMe = false
         message.deliveryStatus = .delivered
         message.retryCount = 0
         message.chat = chat
+
+        // Update chat preview with correct plaintext
+        chat.lastMessageText = Chat.formatPreviewText(plaintext)
+        chat.lastMessageTime = message.timestamp
         
         try? context.save()
     }
