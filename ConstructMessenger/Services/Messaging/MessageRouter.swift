@@ -37,12 +37,12 @@ class MessageRouter {
     /// Caller should send END_SESSION to that userId so the sender restarts from messageNumber=0.
     var onEndSessionNeeded: ((String) -> Void)?
 
-    private let chunkReassembler = ChunkedMessageReassembler()
+    /// Called when an existing session failed to decrypt a `messageNumber==0` message.
+    /// The remote peer re-keyed — caller should archive the current session and
+    /// attempt `initReceivingSession` with the supplied message as the new X3DH init.
+    var onSessionHealNeeded: ((String, ChatMessage) -> Void)?
 
-    /// In-memory set of message IDs that have been successfully decrypted and processed.
-    /// Handles messages that don't get saved to CoreData (e.g. profile shares) to prevent
-    /// the duplicate-delivery re-decryption loop.
-    private var processedMessageIds: Set<String> = []
+    private let chunkReassembler = ChunkedMessageReassembler()
     
     // MARK: - Message Routing
     
@@ -81,9 +81,9 @@ class MessageRouter {
             return
         }
         
-        // 2. Skip if already processed in-memory (catches profile-share and other non-CoreData messages)
-        if processedMessageIds.contains(message.id) {
-            Log.debug("⏭️ Skipping in-memory deduped message \(message.id.prefix(8))...", category: "MessageRouter")
+        // 2. Skip if already processed (persistent ACK — survives app restart)
+        if PersistentACKStore.shared.isProcessed(message.id, in: context) {
+            Log.debug("⏭️ Skipping already-processed message \(message.id.prefix(8))… (ACK store)", category: "MessageRouter")
             return
         }
 
@@ -92,7 +92,7 @@ class MessageRouter {
         existingFetch.predicate = NSPredicate(format: "id == %@", message.id)
         existingFetch.fetchLimit = 1
         if (try? context.fetch(existingFetch))?.first != nil {
-            Log.debug("⏭️ Skipping already-saved message \(message.id.prefix(8))...", category: "MessageRouter")
+            Log.debug("⏭️ Skipping already-saved message \(message.id.prefix(8))…", category: "MessageRouter")
             return
         }
 
@@ -164,11 +164,11 @@ class MessageRouter {
             from: otherUserId,
             in: context
         ), specialMessageHandled {
-            processedMessageIds.insert(message.id)  // Prevent re-processing on re-delivery
+            PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
             return  // Special message handled, don't save as regular message
         }
 
-        processedMessageIds.insert(message.id)
+        PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
         // 5. Save regular message
         saveMessage(for: chat, with: message, decryptedContent: decryptedContent, in: context)
 
@@ -315,21 +315,31 @@ class MessageRouter {
         
         guard let content = try? CryptoManager.shared.decryptMessage(message) else {
             Log.error("❌ Failed to decrypt incoming message \(message.id)", category: "MessageRouter")
-            Log.error("🔐 SESSION_STATE[decrypt_failed]: userId=\(userId.prefix(8))..., messageId=\(message.id.prefix(8))...", category: "SessionInit")
+            Log.error("🔐 SESSION_STATE[decrypt_failed]: userId=\(userId.prefix(8))..., messageId=\(message.id.prefix(8))..., messageNumber=\(message.messageNumber)", category: "SessionInit")
 
-            // The prekey for this session may be exhausted — attempting initReceivingSession
-            // again with the same message will always fail with InvalidCiphertext.
-            // Instead, signal the sender to restart their session from scratch.
-            Log.info("🔄 Decrypt failed — requesting END_SESSION so sender re-establishes session", category: "SessionInit")
-            pendingMessages.removeValue(forKey: userId)
-            onEndSessionNeeded?(userId)
-            
+            if SessionHealingService.shared.canHeal(message) {
+                // messageNumber == 0 means the sender RE-KEYED (new X3DH session init).
+                // Archive the broken session and attempt healing without END_SESSION.
+                Log.info("🩹 SESSION_STATE[heal_triggered]: messageNumber=0 from \(userId.prefix(8))… — sender re-keyed, archiving + healing", category: "SessionInit")
+                CryptoManager.shared.archiveSession(for: userId, reason: .remoteRekeying)
+                SessionHealingService.shared.enqueue(message, in: context)
+                pendingMessages[userId, default: []].append(message)
+                onSessionHealNeeded?(userId, message)
+            } else {
+                // messageNumber > 0 → DR ratchet diverged, healing is impossible.
+                // Only now do we fall back to END_SESSION.
+                Log.info("🔄 SESSION_STATE[heal_impossible]: messageNumber=\(message.messageNumber) — ratchet diverged, requesting END_SESSION", category: "SessionInit")
+                pendingMessages.removeValue(forKey: userId)
+                SessionHealingService.shared.clearQueue(for: userId, in: context)
+                onEndSessionNeeded?(userId)
+            }
+
             return nil
         }
-        
+
         // Check if username is still UUID - request update if needed
         checkUsernameUpdate(for: userId, chat: chat, in: context)
-        
+
         return content
     }
     
@@ -400,8 +410,9 @@ class MessageRouter {
             in: context
         )
         
-        // 3. Remove any pending messages for this user
+        // 3. Remove any pending messages and healing queue for this user
         pendingMessages.removeValue(forKey: userId)
+        SessionHealingService.shared.clearQueue(for: userId, in: context)
         
         Log.info("✅ END_SESSION handled for \(userId)", category: "MessageRouter")
     }

@@ -50,4 +50,27 @@
             </uniquenessConstraint>
         </uniquenessConstraints>
     </entity>
+    <entity name="ProcessedMessage" representedClassName="ProcessedMessage" syncable="YES">
+        <attribute name="messageId" attributeType="String"/>
+        <attribute name="senderId" attributeType="String"/>
+        <attribute name="processedAt" attributeType="Date" usesScalarValueType="NO"/>
+        <uniquenessConstraints>
+            <uniquenessConstraint>
+                <constraint value="messageId"/>
+            </uniquenessConstraint>
+        </uniquenessConstraints>
+    </entity>
+    <entity name="HealingMessage" representedClassName="HealingMessage" syncable="YES">
+        <attribute name="messageId" attributeType="String"/>
+        <attribute name="senderId" attributeType="String"/>
+        <attribute name="receivedAt" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="messageData" attributeType="Binary"/>
+        <attribute name="healAttempts" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="lastAttemptAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <uniquenessConstraints>
+            <uniquenessConstraint>
+                <constraint value="messageId"/>
+            </uniquenessConstraint>
+        </uniquenessConstraints>
+    </entity>
 </model>

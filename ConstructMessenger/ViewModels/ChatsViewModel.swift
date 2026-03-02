@@ -90,6 +90,9 @@ class ChatsViewModel: ObservableObject {
         if streamManager.subscriptionUserIds.isEmpty {
             forceReconnectStream()
         }
+        // Prune expired ACK and healing records once per app session
+        PersistentACKStore.shared.pruneExpired(in: context)
+        SessionHealingService.shared.pruneExpired(in: context)
     }
 
     private func setupSubscribers() {
@@ -385,6 +388,78 @@ class ChatsViewModel: ObservableObject {
             Task {
                 Log.info("🔄 Sending END_SESSION to \(userId.prefix(8))... (session out of sync)", category: "ChatsViewModel")
                 try? await self.sendEndSession(to: userId, reason: "session_out_of_sync")
+            }
+        }
+
+        // Callback when existing session failed to decrypt a messageNumber=0 message (remote re-keyed).
+        // We attempt to heal by fetching a fresh bundle and re-running initReceivingSession,
+        // WITHOUT sending END_SESSION to the remote peer.
+        messageRouter.onSessionHealNeeded = { [weak self] userId, failedMessage in
+            guard let self = self else { return }
+
+            Task { @MainActor in
+                // Reuse the same gate as normal session init to prevent concurrent heal+init
+                if self.usersInitializingSession.contains(userId) {
+                    Log.info("⏸️ Heal skipped — session init already in progress for \(userId.prefix(8))…", category: "SessionInit")
+                    return
+                }
+                self.usersInitializingSession.insert(userId)
+                Log.info("🩹 SESSION_STATE[heal_start]: fetching fresh bundle for \(userId.prefix(8))…", category: "SessionInit")
+
+                defer {
+                    self.usersInitializingSession.remove(userId)
+                    Log.debug("🔓 Heal lock released for \(userId.prefix(8))…", category: "SessionInit")
+                }
+
+                guard let context = self.viewContext else { return }
+
+                // Track attempt count
+                let canContinue = SessionHealingService.shared.recordAttempt(
+                    for: failedMessage.id, in: context
+                )
+
+                do {
+                    let bundle = try await self.publicKeyBundleHandler.fetchPublicKeyWithRetry(userId: userId)
+
+                    let healed = self.publicKeyBundleHandler.handlePublicKeyBundleForIncomingMessage(
+                        bundle,
+                        message: failedMessage
+                    ) { chat, msg, decryptedContent in
+                        self.saveMessage(for: chat, with: msg, decryptedContent: decryptedContent)
+                    }
+
+                    if healed {
+                        Log.info("✅ SESSION_STATE[heal_success]: session healed for \(userId.prefix(8))…", category: "SessionInit")
+                        SessionHealingService.shared.removeRecord(for: failedMessage.id, in: context)
+
+                        // Drain any remaining queued messages now that the session is live
+                        let queued = self.pendingFirstMessages[userId] ?? []
+                        self.pendingFirstMessages.removeValue(forKey: userId)
+                        for queuedMsg in queued.dropFirst() {
+                            self.messageRouter.routeIncomingMessage(
+                                queuedMsg, in: context, pendingMessages: &self.pendingFirstMessages
+                            )
+                        }
+                    } else {
+                        Log.error("❌ SESSION_STATE[heal_failed]: initReceivingSession still failing for \(userId.prefix(8))…", category: "SessionInit")
+
+                        if !canContinue {
+                            // Exhausted all heal attempts — escalate to END_SESSION
+                            Log.info("⛔ Heal exhausted — sending END_SESSION to \(userId.prefix(8))…", category: "SessionInit")
+                            self.pendingFirstMessages.removeValue(forKey: userId)
+                            SessionHealingService.shared.clearQueue(for: userId, in: context)
+                            try? await self.sendEndSession(to: userId, reason: "heal_exhausted")
+                        }
+                        // Otherwise leave the HealingMessage in CoreData; next reconnect retries
+                    }
+                } catch {
+                    Log.error("❌ SESSION_STATE[heal_bundle_error]: \(error.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
+                    if !canContinue {
+                        self.pendingFirstMessages.removeValue(forKey: userId)
+                        SessionHealingService.shared.clearQueue(for: userId, in: context)
+                        try? await self.sendEndSession(to: userId, reason: "heal_bundle_unreachable")
+                    }
+                }
             }
         }
     }

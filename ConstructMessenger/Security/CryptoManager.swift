@@ -668,6 +668,8 @@ enum ArchiveReason: String, Codable {
     case endSessionReceived = "end_session_received"
     case manualReset = "manual_reset"
     case preKeyChanged = "prekey_changed"
+    /// Remote peer re-keyed: messageNumber=0 arrived for an existing session.
+    case remoteRekeying = "remote_rekeying"
 }
 
 /// Archived session data for fallback decryption
