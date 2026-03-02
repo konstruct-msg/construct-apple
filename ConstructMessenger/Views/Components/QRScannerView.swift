@@ -45,11 +45,11 @@ struct QRScannerView: View {
 
                     ScannerDimOverlay(scanRect: scanRect)
                         .fill(Color.black.opacity(0.6), style: FillStyle(eoFill: true))
-                        .ignoresSafeArea()
 
                     ScannerCornerBrackets(scanRect: scanRect)
                         .stroke(Color.AppBrand.button, lineWidth: 3)
                 }
+                .ignoresSafeArea()
 
                 // UI panels
                 VStack {
