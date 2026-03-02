@@ -190,43 +190,33 @@ struct MessageBubble: View {
                         if let replyContent = message.replyToContent {
                             HStack(spacing: 6) {
                                 Rectangle()
-                                    .fill(message.isSentByMe
-                                          ? Color.white.opacity(0.5)
-                                          : Color.AppBrand.second)
+                                    .fill(Color.AppBrand.second)
                                     .frame(width: 2)
                                 Text(replyContent)
                                     .font(.system(.caption, design: .default))
-                                    .foregroundColor(message.isSentByMe ? .white.opacity(0.75) : .secondary)
+                                    .foregroundColor(.secondary)
                                     .lineLimit(2)
                                     .padding(.vertical, 4)
                                     .padding(.trailing, 8)
                             }
-                            .padding(.leading, 10)
-                            .padding(.top, 8)
+                            .padding(.top, 4)
                         }
 
                         LinkDetectingText(
                             message.decryptedContent ?? NSLocalizedString("encrypted", comment: ""),
-                            color: message.isSentByMe ? .white : .primary
+                            color: .primary
                         )
-                        .padding(.horizontal, 10)
+                        .padding(.horizontal, 2)
                         .padding(.vertical, message.replyToContent != nil ? 4 : 8)
                         .padding(.bottom, message.replyToContent != nil ? 8 : 0)
                     }
-                    // Sent: cyan-tinted fill; Received: hairline border only
-                    .background(
-                        message.isSentByMe
-                            ? Color.AppBrand.second.opacity(0.85)
-                            : Color.AppBackground.secondary
-                    )
+                    .background(isSelected ? Color.AppBrand.second.opacity(0.08) : Color.clear)
                     .overlay(
-                        Rectangle()
-                            .strokeBorder(
-                                isSelected
-                                    ? Color.AppBrand.second
-                                    : (message.isSentByMe ? Color.clear : Color.AppBorder.hairline),
-                                lineWidth: isSelected ? 1.5 : 0.5
-                            )
+                        Group {
+                            if isSelected {
+                                Rectangle().strokeBorder(Color.AppBrand.second, lineWidth: 1)
+                            }
+                        }
                     )
                 }
 

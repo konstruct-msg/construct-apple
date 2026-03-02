@@ -80,8 +80,6 @@ struct MessageInputView: View {
                     Image(systemName: "plus")
                         .font(.system(size: 16, weight: .medium))
                         .foregroundColor(Color.AppBrand.second)
-                        .frame(width: 32, height: 32)
-                        .overlay(Rectangle().strokeBorder(Color.AppBrand.second.opacity(0.5), lineWidth: 1))
                 }
                 .confirmationDialog("Attach", isPresented: $showAttachmentMenu) {
                     Button {

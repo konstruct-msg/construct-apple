@@ -434,8 +434,7 @@ struct ChatView: View {
                     Image(systemName: "ellipsis")
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(Color.AppBrand.second)
-                        .frame(width: 28, height: 28)
-                        .overlay(Rectangle().strokeBorder(Color.AppBrand.second.opacity(0.4), lineWidth: 1))
+                        
                 }
             } else {
                 Button {
