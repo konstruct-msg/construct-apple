@@ -69,6 +69,20 @@ final class UserServiceClient: Sendable {
         }
     }
 
+    // MARK: - Update Username
+
+    func updateUsername(userId: String, username: String) async throws {
+        try await GRPCChannelManager.shared.performRPC { grpcClient in
+            let client = Shared_Proto_Services_V1_UserService.Client(wrapping: grpcClient)
+
+            var request = Shared_Proto_Services_V1_UpdateUserProfileRequest()
+            request.userID = userId
+            request.username = username
+
+            _ = try await client.updateUserProfile(request: .init(message: request))
+        }
+    }
+
     // MARK: - Check Username Availability (no auth required)
 
     struct UsernameAvailability: Sendable {

@@ -17,7 +17,12 @@ class SettingsViewModel: ObservableObject {
     @Published var userId: String = ""
     @Published var profileImage: UIImage?
     @Published var showResetAllSessionsConfirm = false
-    @Published var showDeleteKeysConfirm = false  // ← NEW for developer mode
+    @Published var showDeleteKeysConfirm = false
+
+    // Username save state
+    @Published var isSavingUsername = false
+    @Published var usernameSaveError: String?
+    @Published var usernameSaved = false
 
     private var viewContext: NSManagedObjectContext?
 
@@ -105,6 +110,47 @@ class SettingsViewModel: ObservableObject {
         } catch {
             print("⚠️ Failed to save avatar: \(error)")
         }
+    }
+
+    /// Saves username to the server and updates local state
+    func saveUsername(_ newUsername: String, authViewModel: AuthViewModel) async {
+        let trimmed = newUsername.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !trimmed.isEmpty, trimmed != authViewModel.currentUsername else { return }
+
+        isSavingUsername = true
+        usernameSaveError = nil
+        usernameSaved = false
+
+        do {
+            // Check availability first
+            let availability = try await UserServiceClient.shared.checkUsernameAvailability(username: trimmed)
+            guard availability.available else {
+                usernameSaveError = availability.reason ?? "username_already_taken"
+                isSavingUsername = false
+                return
+            }
+
+            // Update on server
+            try await UserServiceClient.shared.updateUsername(userId: userId, username: trimmed)
+
+            // Persist locally
+            if let context = viewContext {
+                let fetchRequest = User.fetchRequest()
+                fetchRequest.predicate = NSPredicate(format: "id == %@", userId)
+                fetchRequest.fetchLimit = 1
+                if let user = try? context.fetch(fetchRequest).first {
+                    user.username = trimmed
+                    try? context.save()
+                }
+            }
+            username = trimmed
+            authViewModel.objectWillChange.send()
+            usernameSaved = true
+        } catch {
+            usernameSaveError = error.localizedDescription
+        }
+
+        isSavingUsername = false
     }
 
     /// Saves display name to Core Data

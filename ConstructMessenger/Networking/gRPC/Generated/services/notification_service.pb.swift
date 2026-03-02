@@ -159,6 +159,16 @@ public struct Shared_Proto_Services_V1_RegisterDeviceTokenRequest: Sendable {
   /// Фильтр уведомлений
   public var notificationFilter: Shared_Proto_Services_V1_NotificationFilter = .unspecified
 
+  /// ID устройства из Keychain — стабильный идентификатор для upsert.
+  /// Позволяет обновить токен при его ротации, не создавая дубликат.
+  public var deviceID: String = String()
+
+  /// Провайдер push-уведомлений
+  public var provider: Shared_Proto_Services_V1_PushProvider = .unspecified
+
+  /// Окружение APNs (sandbox для debug-сборок, production для релиза)
+  public var environment: Shared_Proto_Services_V1_PushEnvironment = .pushEnvUnspecified
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -338,7 +348,7 @@ extension Shared_Proto_Services_V1_SendBlindNotificationResponse: SwiftProtobuf.
 
 extension Shared_Proto_Services_V1_RegisterDeviceTokenRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".RegisterDeviceTokenRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_token\0\u{3}device_name\0\u{3}notification_filter\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_token\0\u{3}device_name\0\u{3}notification_filter\0\u{3}device_id\0\u{1}provider\0\u{1}environment\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -349,6 +359,9 @@ extension Shared_Proto_Services_V1_RegisterDeviceTokenRequest: SwiftProtobuf.Mes
       case 1: try { try decoder.decodeSingularStringField(value: &self.deviceToken) }()
       case 2: try { try decoder.decodeSingularStringField(value: &self._deviceName) }()
       case 3: try { try decoder.decodeSingularEnumField(value: &self.notificationFilter) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.deviceID) }()
+      case 5: try { try decoder.decodeSingularEnumField(value: &self.provider) }()
+      case 6: try { try decoder.decodeSingularEnumField(value: &self.environment) }()
       default: break
       }
     }
@@ -368,6 +381,15 @@ extension Shared_Proto_Services_V1_RegisterDeviceTokenRequest: SwiftProtobuf.Mes
     if self.notificationFilter != .unspecified {
       try visitor.visitSingularEnumField(value: self.notificationFilter, fieldNumber: 3)
     }
+    if !self.deviceID.isEmpty {
+      try visitor.visitSingularStringField(value: self.deviceID, fieldNumber: 4)
+    }
+    if self.provider != .unspecified {
+      try visitor.visitSingularEnumField(value: self.provider, fieldNumber: 5)
+    }
+    if self.environment != .pushEnvUnspecified {
+      try visitor.visitSingularEnumField(value: self.environment, fieldNumber: 6)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -375,6 +397,9 @@ extension Shared_Proto_Services_V1_RegisterDeviceTokenRequest: SwiftProtobuf.Mes
     if lhs.deviceToken != rhs.deviceToken {return false}
     if lhs._deviceName != rhs._deviceName {return false}
     if lhs.notificationFilter != rhs.notificationFilter {return false}
+    if lhs.deviceID != rhs.deviceID {return false}
+    if lhs.provider != rhs.provider {return false}
+    if lhs.environment != rhs.environment {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

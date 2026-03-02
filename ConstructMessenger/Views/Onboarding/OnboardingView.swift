@@ -112,12 +112,12 @@ struct OnboardingView: View {
                 .padding(.bottom, 32)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-//            .background {
-//                // Lattice background — visual nod to lattice-based cryptography
-//                LatticeBackgroundView()
-//                    .ignoresSafeArea()
-//                    .opacity(0.8)
-//            }
+            .background {
+                // Lattice background — visual nod to lattice-based cryptography
+                LatticeBackgroundView()
+                    .ignoresSafeArea()
+                    .opacity(0.8)
+            }
             .navigationDestination(isPresented: $showingRegistration) {
                 RegistrationFlowView(username: username.isEmpty ? nil : username)
             }

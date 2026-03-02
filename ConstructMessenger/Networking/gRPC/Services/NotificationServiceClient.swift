@@ -26,12 +26,24 @@ final class NotificationServiceClient: Sendable {
         #else
         let deviceName = Host.current().localizedName ?? "Mac"
         #endif
+
+        let deviceId = KeychainManager.shared.loadDeviceID() ?? ""
+
+        #if DEBUG
+        let environment = Shared_Proto_Services_V1_PushEnvironment.pushEnvSandbox
+        #else
+        let environment = Shared_Proto_Services_V1_PushEnvironment.pushEnvProduction
+        #endif
+
         return try await GRPCChannelManager.shared.performRPC { grpcClient in
             let client = Shared_Proto_Services_V1_NotificationService.Client(wrapping: grpcClient)
 
             var request = Shared_Proto_Services_V1_RegisterDeviceTokenRequest()
             request.deviceToken = token
             request.deviceName = deviceName
+            request.deviceID = deviceId
+            request.provider = .apns
+            request.environment = environment
 
             let response = try await client.registerDeviceToken(
                 request: .init(message: request)

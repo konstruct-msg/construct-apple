@@ -19,6 +19,11 @@ struct AccountSettingsView: View {
     @State private var showingAvatarViewer = false
     @State private var showingDeleteConfirmation = false
     @State private var showingExportAlert = false
+    @State private var imageToCrop: UIImage?
+    @State private var showingCropView = false
+
+    // Username editing
+    @State private var originalUsername: String = ""
 
     var body: some View {
         List {
@@ -66,9 +71,38 @@ struct AccountSettingsView: View {
 
             // MARK: - Account Information
             Section {
-                TextField("username", text: $viewModel.username)
-                    .font(.body.monospaced())
-                
+                HStack {
+                    TextField("username", text: $viewModel.username)
+                        .font(.body.monospaced())
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.never)
+                        .onSubmit {
+                            Task { await viewModel.saveUsername(viewModel.username, authViewModel: authViewModel) }
+                        }
+
+                    if viewModel.isSavingUsername {
+                        ProgressView().scaleEffect(0.8)
+                    } else if viewModel.username != originalUsername {
+                        Button {
+                            Task { await viewModel.saveUsername(viewModel.username, authViewModel: authViewModel) }
+                        } label: {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundColor(.accentColor)
+                        }
+                        .buttonStyle(.plain)
+                    } else if viewModel.usernameSaved {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundColor(.green)
+                            .transition(.opacity)
+                    }
+                }
+
+                if let error = viewModel.usernameSaveError {
+                    Text(error)
+                        .font(.caption)
+                        .foregroundColor(.red)
+                }
+
                 TextField("display_name", text: $viewModel.displayName)
                     .onChange(of: viewModel.displayName) { _, newValue in
                         viewModel.saveDisplayName(newValue, authViewModel: authViewModel)
@@ -116,6 +150,10 @@ struct AccountSettingsView: View {
         .onAppear {
             viewModel.setContext(viewContext)
             viewModel.loadUserInfo(from: authViewModel)
+            originalUsername = viewModel.username
+        }
+        .onChange(of: viewModel.usernameSaved) { _, saved in
+            if saved { originalUsername = viewModel.username }
         }
         .sheet(isPresented: $showingDeleteConfirmation) {
             DeleteAccountConfirmationView(
@@ -146,10 +184,27 @@ struct AccountSettingsView: View {
                 if let data = try? await newItem.loadTransferable(type: Data.self),
                    let image = UIImage(data: data) {
                     await MainActor.run {
-                        viewModel.saveAvatar(image, authViewModel: authViewModel)
+                        imageToCrop = image
+                        showingCropView = true
                     }
                 }
                 selectedPhotoItem = nil
+            }
+        }
+        .fullScreenCover(isPresented: $showingCropView) {
+            if let img = imageToCrop {
+                ImageCropView(
+                    image: img,
+                    onConfirm: { cropped in
+                        showingCropView = false
+                        imageToCrop = nil
+                        viewModel.saveAvatar(cropped, authViewModel: authViewModel)
+                    },
+                    onCancel: {
+                        showingCropView = false
+                        imageToCrop = nil
+                    }
+                )
             }
         }
     }
