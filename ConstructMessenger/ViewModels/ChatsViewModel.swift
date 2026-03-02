@@ -339,7 +339,14 @@ class ChatsViewModel: ObservableObject {
                             }
                         }
                     } else {
-                        Log.info("🔄 Keeping message in pending for retry", category: "ChatsViewModel")
+                        // initReceivingSession failed — the sender's prekey for this session is
+                        // exhausted and cannot be reused. Clear the pending queue and ask the
+                        // sender to start a fresh X3DH session with new prekeys.
+                        Log.info("🔄 initReceivingSession failed — clearing queue, sending END_SESSION to \(userId.prefix(8))...", category: "SessionInit")
+                        self.pendingFirstMessages.removeValue(forKey: userId)
+                        Task {
+                            try? await self.sendEndSession(to: userId, reason: "session_init_failed")
+                        }
                     }
                     
                     // ✅ Always unlock after completion (success or failure)

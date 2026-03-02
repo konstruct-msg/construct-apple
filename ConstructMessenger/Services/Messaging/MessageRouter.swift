@@ -38,6 +38,11 @@ class MessageRouter {
     var onEndSessionNeeded: ((String) -> Void)?
 
     private let chunkReassembler = ChunkedMessageReassembler()
+
+    /// In-memory set of message IDs that have been successfully decrypted and processed.
+    /// Handles messages that don't get saved to CoreData (e.g. profile shares) to prevent
+    /// the duplicate-delivery re-decryption loop.
+    private var processedMessageIds: Set<String> = []
     
     // MARK: - Message Routing
     
@@ -76,7 +81,13 @@ class MessageRouter {
             return
         }
         
-        // 2. Skip if already saved to Core Data (deduplication for duplicate deliveries)
+        // 2. Skip if already processed in-memory (catches profile-share and other non-CoreData messages)
+        if processedMessageIds.contains(message.id) {
+            Log.debug("⏭️ Skipping in-memory deduped message \(message.id.prefix(8))...", category: "MessageRouter")
+            return
+        }
+
+        // 3. Skip if already saved to Core Data (deduplication for duplicate deliveries)
         let existingFetch = Message.fetchRequest()
         existingFetch.predicate = NSPredicate(format: "id == %@", message.id)
         existingFetch.fetchLimit = 1
@@ -153,9 +164,11 @@ class MessageRouter {
             from: otherUserId,
             in: context
         ), specialMessageHandled {
+            processedMessageIds.insert(message.id)  // Prevent re-processing on re-delivery
             return  // Special message handled, don't save as regular message
         }
 
+        processedMessageIds.insert(message.id)
         // 5. Save regular message
         saveMessage(for: chat, with: message, decryptedContent: decryptedContent, in: context)
 
@@ -303,16 +316,13 @@ class MessageRouter {
         guard let content = try? CryptoManager.shared.decryptMessage(message) else {
             Log.error("❌ Failed to decrypt incoming message \(message.id)", category: "MessageRouter")
             Log.error("🔐 SESSION_STATE[decrypt_failed]: userId=\(userId.prefix(8))..., messageId=\(message.id.prefix(8))...", category: "SessionInit")
-            
-            // Session was corrupted - reinitialize
-            Log.debug("🔄 Decryption failed, requesting reinitialization...", category: "MessageRouter")
-            Log.info("🔐 SESSION_STATE[reinit_start]: userId=\(userId.prefix(8))..., reason=decrypt_failed", category: "SessionInit")
-            
-            // Queue message for retry (clear previous queue — fresh session init needed)
-            pendingMessages[userId] = [message]
-            
-            // Request public key bundle via callback
-            onPublicKeyBundleNeeded?(userId, message)
+
+            // The prekey for this session may be exhausted — attempting initReceivingSession
+            // again with the same message will always fail with InvalidCiphertext.
+            // Instead, signal the sender to restart their session from scratch.
+            Log.info("🔄 Decrypt failed — requesting END_SESSION so sender re-establishes session", category: "SessionInit")
+            pendingMessages.removeValue(forKey: userId)
+            onEndSessionNeeded?(userId)
             
             return nil
         }
