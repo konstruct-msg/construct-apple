@@ -27,13 +27,14 @@ struct AccountDeletionConfig {
 }
 
 // MARK: - Avatar Styling
+// Flat design: square avatars everywhere.
 struct AvatarStyle {
-    static let chatSize: CGFloat = 50
-    static let chatCornerRadius: CGFloat = 12
-    static let settingsSize: CGFloat = 54
-    static let settingsCornerRadius: CGFloat = 12
-    static let accountSize: CGFloat = 100
-    static let accountCornerRadius: CGFloat = 22
+    static let chatSize: CGFloat = 44
+    static let chatCornerRadius: CGFloat = 0        // Square
+    static let settingsSize: CGFloat = 52
+    static let settingsCornerRadius: CGFloat = 0    // Square
+    static let accountSize: CGFloat = 96
+    static let accountCornerRadius: CGFloat = 0     // Square
 }
 
 // MARK: - Server Configuration

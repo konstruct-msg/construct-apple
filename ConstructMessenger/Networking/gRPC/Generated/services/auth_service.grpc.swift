@@ -128,6 +128,18 @@ public enum Shared_Proto_Services_V1_AuthService: Sendable {
                 method: "RecoverAccount"
             )
         }
+        /// Namespace for "GetSenderCertificate" metadata.
+        public enum GetSenderCertificate: Sendable {
+            /// Request type for "GetSenderCertificate".
+            public typealias Input = Shared_Proto_Services_V1_GetSenderCertificateRequest
+            /// Response type for "GetSenderCertificate".
+            public typealias Output = Shared_Proto_Services_V1_GetSenderCertificateResponse
+            /// Descriptor for "GetSenderCertificate".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.AuthService"),
+                method: "GetSenderCertificate"
+            )
+        }
         /// Descriptors for all methods in the "shared.proto.services.v1.AuthService" service.
         public static let descriptors: [GRPCCore.MethodDescriptor] = [
             GetPowChallenge.descriptor,
@@ -138,7 +150,8 @@ public enum Shared_Proto_Services_V1_AuthService: Sendable {
             Logout.descriptor,
             SetRecoveryKey.descriptor,
             GetRecoveryStatus.descriptor,
-            RecoverAccount.descriptor
+            RecoverAccount.descriptor,
+            GetSenderCertificate.descriptor
         ]
     }
 }
@@ -372,6 +385,32 @@ extension Shared_Proto_Services_V1_AuthService {
             deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_RecoverAccountResponse>,
             options: GRPCCore.CallOptions,
             onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_RecoverAccountResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "GetSenderCertificate" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > GetSenderCertificate - Get a signed sender certificate for sealed sender
+        /// > Certificate proves sender identity to recipients without revealing it to servers.
+        /// > Signed by this server's Ed25519 federation key.
+        /// > Client should cache the certificate for up to 24 hours.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_GetSenderCertificateRequest` message.
+        ///   - serializer: A serializer for `Shared_Proto_Services_V1_GetSenderCertificateRequest` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_GetSenderCertificateResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response, the result of which is
+        ///       returned to the caller. Returning from the closure will cancel the RPC if it
+        ///       hasn't already finished.
+        /// - Returns: The result of `handleResponse`.
+        func getSenderCertificate<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_GetSenderCertificateRequest>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_GetSenderCertificateRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_GetSenderCertificateResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_GetSenderCertificateResponse>) async throws -> Result
         ) async throws -> Result where Result: Sendable
     }
 
@@ -705,6 +744,43 @@ extension Shared_Proto_Services_V1_AuthService {
                 onResponse: handleResponse
             )
         }
+
+        /// Call the "GetSenderCertificate" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > GetSenderCertificate - Get a signed sender certificate for sealed sender
+        /// > Certificate proves sender identity to recipients without revealing it to servers.
+        /// > Signed by this server's Ed25519 federation key.
+        /// > Client should cache the certificate for up to 24 hours.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_GetSenderCertificateRequest` message.
+        ///   - serializer: A serializer for `Shared_Proto_Services_V1_GetSenderCertificateRequest` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_GetSenderCertificateResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response, the result of which is
+        ///       returned to the caller. Returning from the closure will cancel the RPC if it
+        ///       hasn't already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func getSenderCertificate<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_GetSenderCertificateRequest>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_GetSenderCertificateRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_GetSenderCertificateResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_GetSenderCertificateResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Shared_Proto_Services_V1_AuthService.Method.GetSenderCertificate.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
     }
 }
 
@@ -972,6 +1048,38 @@ extension Shared_Proto_Services_V1_AuthService.ClientProtocol {
             request: request,
             serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_RecoverAccountRequest>(),
             deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_RecoverAccountResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "GetSenderCertificate" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > GetSenderCertificate - Get a signed sender certificate for sealed sender
+    /// > Certificate proves sender identity to recipients without revealing it to servers.
+    /// > Signed by this server's Ed25519 federation key.
+    /// > Client should cache the certificate for up to 24 hours.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Shared_Proto_Services_V1_GetSenderCertificateRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response, the result of which is
+    ///       returned to the caller. Returning from the closure will cancel the RPC if it
+    ///       hasn't already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func getSenderCertificate<Result>(
+        request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_GetSenderCertificateRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_GetSenderCertificateResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.getSenderCertificate(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_GetSenderCertificateRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_GetSenderCertificateResponse>(),
             options: options,
             onResponse: handleResponse
         )
@@ -1277,6 +1385,42 @@ extension Shared_Proto_Services_V1_AuthService.ClientProtocol {
             metadata: metadata
         )
         return try await self.recoverAccount(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "GetSenderCertificate" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > GetSenderCertificate - Get a signed sender certificate for sealed sender
+    /// > Certificate proves sender identity to recipients without revealing it to servers.
+    /// > Signed by this server's Ed25519 federation key.
+    /// > Client should cache the certificate for up to 24 hours.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response, the result of which is
+    ///       returned to the caller. Returning from the closure will cancel the RPC if it
+    ///       hasn't already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func getSenderCertificate<Result>(
+        _ message: Shared_Proto_Services_V1_GetSenderCertificateRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_GetSenderCertificateResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Shared_Proto_Services_V1_GetSenderCertificateRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.getSenderCertificate(
             request: request,
             options: options,
             onResponse: handleResponse

@@ -287,34 +287,26 @@ struct ChatView: View {
     
     @ViewBuilder
     private func statusBannerRow(text: String, color: Color, showProgress: Bool = false, isLocalized: Bool = true) -> some View {
+        let displayText = isLocalized ? NSLocalizedString(text, comment: "") : text
         HStack(spacing: 8) {
             if showProgress {
-                ProgressView()
-                    .scaleEffect(0.7)
+                ProgressView().scaleEffect(0.7).tint(color)
             }
-            // If text is already a full message (contains spaces or special chars), use it directly
-            // Otherwise, try to localize it
-            let displayText = isLocalized ? NSLocalizedString(text, comment: "") : text
-            Text(displayText)
-                .font(.caption)
+            Text(displayText.uppercased())
+                .font(.system(.caption2, design: .monospaced))
                 .foregroundColor(color)
+            Spacer()
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, 6)
         .padding(.horizontal, 12)
         .frame(maxWidth: .infinity)
-        .background(
-            // ✅ Solid background with blur for overlay
-            Color.AppBackground.primary
-                .opacity(0.95)
-        )
-        .overlay(
-            Rectangle()
-                .fill(color.opacity(0.2))
-        )
-        .cornerRadius(8)
-        .padding(.horizontal, 12)
-        .padding(.top, 4)
-        .shadow(color: Color.black.opacity(0.1), radius: 4, x: 0, y: 2)
+        .background(Color.AppBackground.secondary)
+        .overlay(alignment: .leading) {
+            Rectangle().fill(color).frame(width: 2)
+        }
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(Color.AppBorder.hairline).frame(height: 0.5)
+        }
     }
     
     @ViewBuilder
@@ -411,11 +403,10 @@ struct ChatView: View {
             Button {
                 showingUserProfile = true
             } label: {
-                VStack(spacing: 2) {
-                    Text(viewModel.chat.otherUser?.displayName ?? NSLocalizedString("chat", comment: "Default chat title"))
-                        .font(.headline)
-                        .foregroundColor(.primary)
-                }
+                Text((viewModel.chat.otherUser?.displayName ?? NSLocalizedString("chat", comment: "")).uppercased())
+                    .font(.system(.subheadline, design: .default).weight(.semibold))
+                    .foregroundColor(.primary)
+                    .kerning(0.5)
             }
         }
         
@@ -426,46 +417,48 @@ struct ChatView: View {
     
     @ViewBuilder
     private var toolbarTrailingButtons: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 10) {
             if !isEditMode {
-                // Menu with additional actions
                 Menu {
                     Button {
                         isSearchActive.toggle()
                     } label: {
                         Label("Search", systemImage: "magnifyingglass")
                     }
-                    
                     Button(role: .destructive) {
                         showResetSessionConfirm = true
                     } label: {
                         Label("Reset Session", systemImage: "arrow.triangle.2.circlepath")
                     }
                 } label: {
-                    Image(systemName: "ellipsis.circle")
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 14, weight: .medium))
                         .foregroundColor(Color.AppBrand.second)
+                        .frame(width: 28, height: 28)
+                        .overlay(Rectangle().strokeBorder(Color.AppBrand.second.opacity(0.4), lineWidth: 1))
                 }
             } else {
                 Button {
                     withAnimation {
                         isSearchActive.toggle()
-                        if !isSearchActive {
-                            searchText = ""
-                        }
+                        if !isSearchActive { searchText = "" }
                     }
                 } label: {
-                    Image(systemName: isSearchActive ? "xmark.circle.fill" : "magnifyingglass")
+                    Image(systemName: isSearchActive ? "xmark" : "magnifyingglass")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(Color.AppBrand.second)
+                        .frame(width: 28, height: 28)
+                        .overlay(Rectangle().strokeBorder(Color.AppBrand.second.opacity(0.4), lineWidth: 1))
                 }
-            }
-            
-            if isEditMode {
                 Button {
                     withAnimation {
                         isEditMode = false
                         selectedMessages.removeAll()
                     }
                 } label: {
-                    Text("done")
+                    Text("DONE")
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundColor(Color.AppBrand.second)
                 }
             }
         }
@@ -475,23 +468,33 @@ struct ChatView: View {
     private func searchOverlay() -> some View {
         if isSearchActive {
             VStack(spacing: 0) {
-                HStack(spacing: 12) {
+                HStack(spacing: 8) {
                     TextField("search_messages", text: $searchText)
-                        .textFieldStyle(.roundedBorder)
+                        .font(.system(.body, design: .monospaced))
                         .autocapitalization(.none)
                         .autocorrectionDisabled()
                         .submitLabel(.search)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 8)
+                        .background(Color.AppBackground.secondary)
+                        .overlay(Rectangle().strokeBorder(Color.AppBorder.hairline, lineWidth: 1))
                     Button {
                         withAnimation {
                             isSearchActive = false
                             searchText = ""
                         }
                     } label: {
-                        Text("cancel")
+                        Text("CANCEL")
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundColor(Color.AppBrand.second)
                     }
                 }
-                .padding()
-                .background(Color.AppBackground.primary.shadow(color: .black.opacity(0.1), radius: 2, y: 1))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color.AppBackground.primary)
+                .overlay(alignment: .bottom) {
+                    Rectangle().fill(Color.AppBorder.hairline).frame(height: 0.5)
+                }
                 Spacer()
             }
         }

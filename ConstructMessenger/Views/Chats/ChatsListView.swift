@@ -37,9 +37,15 @@ struct ChatsListView: View {
                     NavigationLink(value: chat.id) {
                         ChatRowView(chat: chat)
                     }
+                    .listRowInsets(EdgeInsets())
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.AppBackground.primary)
+                    .buttonStyle(.plain)
                 }
                 .onDelete(perform: deleteItems)
             }
+            .listStyle(.plain)
+            .background(Color.AppBackground.primary)
             .navigationDestination(for: String.self) { chatId in
                 if let chat = chats.first(where: { $0.id == chatId }) {
                     ChatView(chat: chat, context: viewContext)
@@ -49,15 +55,20 @@ struct ChatsListView: View {
                 ToolbarItem(placement: .principal) {
                     ConnectionStatusIndicator()
                 }
-
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
                         showingQRScanner = true
                     } label: {
-                        Image(systemName: "qrcode.viewfinder")
+                        Image(systemName: "qrcode")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(Color.AppBrand.second)
+                            .frame(width: 28, height: 28)
+                            .overlay(Rectangle().strokeBorder(Color.AppBrand.second.opacity(0.4), lineWidth: 1))
                     }
                 }
             }
+            .toolbarBackground(Color.AppBackground.primary, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
             .sheet(isPresented: $showingQRScanner) {
                 QRScannerView { contactURL in
                     handleScannedContact(contactURL)

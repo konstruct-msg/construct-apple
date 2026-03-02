@@ -143,170 +143,145 @@ struct MessageBubble: View {
     private func systemMessageView(_ content: String) -> some View {
         HStack {
             Spacer()
-            Text(content)
-                .font(.caption)
+            Text(content.uppercased())
+                .font(.system(.caption2, design: .monospaced))
                 .foregroundColor(.secondary)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(Color(.systemGray6))
-                .cornerRadius(12)
+                .kerning(0.5)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
             Spacer()
         }
         .padding(.vertical, 4)
     }
     
-    // MARK: - Regular Message View
+// MARK: - Regular Message View
     private var regularMessageView: some View {
         HStack(spacing: 8) {
-            // Selection checkbox in edit mode - positioned based on message direction
+            // Selection checkbox in edit mode
             if isEditMode && !message.isSentByMe {
-                // Checkbox on LEFT for incoming messages
-                Button {
-                    onSelect?(message)
-                } label: {
-                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                        .foregroundColor(isSelected ? Color.AppBrand.second : .gray)
-                        .font(.title3)
+                Button { onSelect?(message) } label: {
+                    Image(systemName: isSelected ? "checkmark.square.fill" : "square")
+                        .foregroundColor(isSelected ? Color.AppBrand.second : .secondary)
+                        .font(.body)
                 }
                 .buttonStyle(.plain)
             }
-            
-            if message.isSentByMe {
-                Spacer(minLength: 60)
-            }
 
-            VStack(alignment: message.isSentByMe ? .trailing : .leading, spacing: 4) {
-                // ✅ Check if this is a profile share message
+            if message.isSentByMe { Spacer(minLength: 50) }
+
+            VStack(alignment: message.isSentByMe ? .trailing : .leading, spacing: 3) {
+                // Profile share
                 if let content = message.decryptedContent,
                    let profileData = parseProfileMessage(content) {
-                    // Display profile card
                     ProfileShareBubbleView(profileData: profileData)
                         .overlay(
-                            RoundedRectangle(cornerRadius: 16)
-                                .stroke(isSelected ? Color.AppBrand.second : Color.clear, lineWidth: 2)
+                            Rectangle()
+                                .strokeBorder(isSelected ? Color.AppBrand.second : Color.clear, lineWidth: 1.5)
                         )
                 }
-                // ✅ Check if this is a media message
+                // Media
                 else if let mediaContent = parseMediaMessage(message.decryptedContent) {
-                    // Display media message without bubble - just rounded corners
                     MediaMessageView(mediaContent: mediaContent, message: message, isSelected: isSelected)
-                } else {
-                    // Regular text message with bubble
+                }
+                // Text message — flat rectangle
+                else {
                     VStack(alignment: .leading, spacing: 0) {
-                        // Reply/Quote preview
+                        // Reply bar
                         if let replyContent = message.replyToContent {
-                            HStack(spacing: 4) {
+                            HStack(spacing: 6) {
                                 Rectangle()
-                                    .fill(message.isSentByMe ? Color.white.opacity(0.5) : Color.AppBrand.second.opacity(0.5))
-                                    .frame(width: 3)
-
+                                    .fill(message.isSentByMe
+                                          ? Color.white.opacity(0.5)
+                                          : Color.AppBrand.second)
+                                    .frame(width: 2)
                                 Text(replyContent)
-                                    .font(.caption)
-                                    .foregroundColor(message.isSentByMe ? .white.opacity(0.8) : .secondary)
+                                    .font(.system(.caption, design: .default))
+                                    .foregroundColor(message.isSentByMe ? .white.opacity(0.75) : .secondary)
                                     .lineLimit(2)
                                     .padding(.vertical, 4)
                                     .padding(.trailing, 8)
                             }
-                            .padding(.leading, 8)
+                            .padding(.leading, 10)
                             .padding(.top, 8)
                         }
 
-                        // Main message content with link detection
                         LinkDetectingText(
-                            message.decryptedContent ?? NSLocalizedString("encrypted", comment: "Fallback for encrypted content"),
+                            message.decryptedContent ?? NSLocalizedString("encrypted", comment: ""),
                             color: message.isSentByMe ? .white : .primary
                         )
-                        .padding(.horizontal, 12)
+                        .padding(.horizontal, 10)
                         .padding(.vertical, message.replyToContent != nil ? 4 : 8)
                         .padding(.bottom, message.replyToContent != nil ? 8 : 0)
                     }
-                    .background(message.isSentByMe ? Color.AppBrand.second : Color.gray.opacity(0.2))
-                    .foregroundColor(message.isSentByMe ? .white : .primary)
-                    .cornerRadius(16)
+                    // Sent: cyan-tinted fill; Received: hairline border only
+                    .background(
+                        message.isSentByMe
+                            ? Color.AppBrand.second.opacity(0.85)
+                            : Color.AppBackground.secondary
+                    )
                     .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(isSelected ? Color.AppBrand.second : Color.clear, lineWidth: 2)
+                        Rectangle()
+                            .strokeBorder(
+                                isSelected
+                                    ? Color.AppBrand.second
+                                    : (message.isSentByMe ? Color.clear : Color.AppBorder.hairline),
+                                lineWidth: isSelected ? 1.5 : 0.5
+                            )
                     )
                 }
 
+                // Timestamp + delivery status
                 if isLastInGroup {
                     HStack(spacing: 4) {
-                        if message.isSentByMe {
-                            deliveryStatusView
-                        }
-
+                        if message.isSentByMe { deliveryStatusView }
                         Text(message.timestamp, style: .time)
-                            .font(.caption2)
+                            .font(.system(.caption2, design: .monospaced))
                             .foregroundColor(.secondary)
                     }
-                    .padding(.horizontal, 4)
+                    .padding(.horizontal, 2)
                 }
             }
-            .frame(maxWidth: containerWidth * 0.7, alignment: message.isSentByMe ? .trailing : .leading)
+            .frame(maxWidth: containerWidth * 0.72, alignment: message.isSentByMe ? .trailing : .leading)
             .contentShape(.interaction, Rectangle())
-            .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 16))
-            .onTapGesture {
-                if isEditMode {
-                    onSelect?(message)
-                }
-            }
+            .contentShape(.contextMenuPreview, Rectangle())
+            .onTapGesture { if isEditMode { onSelect?(message) } }
             .contextMenu {
                 if !isEditMode {
-                    if let onReply = onReply {
-                        Button {
-                            onReply(message)
-                        } label: {
+                    if let onReply {
+                        Button { onReply(message) } label: {
                             Label("reply", systemImage: "arrowshape.turn.up.left")
                         }
                     }
-
-                    Button {
-                        PlatformClipboard.copy(message.decryptedContent ?? "")
-                    } label: {
+                    Button { PlatformClipboard.copy(message.decryptedContent ?? "") } label: {
                         Label("copy", systemImage: "doc.on.doc")
                     }
-
-                    if let onEnterSelectMode = onEnterSelectMode {
-                        Button {
-                            onEnterSelectMode(message)
-                        } label: {
+                    if let onEnterSelectMode {
+                        Button { onEnterSelectMode(message) } label: {
                             Label("select_messages", systemImage: "checkmark.circle")
                         }
                     }
-
                     Divider()
-
-                    if let onDelete = onDelete {
-                        Button(role: .destructive) {
-                            onDelete(message)
-                        } label: {
+                    if let onDelete {
+                        Button(role: .destructive) { onDelete(message) } label: {
                             Label("delete", systemImage: "trash")
                         }
                     }
-
                     if (message.deliveryStatus == .failed || message.deliveryStatus == .queued),
-                       let onRetry = onRetry {
-                        Button {
-                            onRetry(message)
-                        } label: {
+                       let onRetry {
+                        Button { onRetry(message) } label: {
                             Label("retry", systemImage: "arrow.clockwise")
                         }
                     }
                 }
             }
 
-            if !message.isSentByMe {
-                Spacer(minLength: 60)
-            }
-            
-            // Selection checkbox in edit mode - positioned based on message direction
+            if !message.isSentByMe { Spacer(minLength: 50) }
+
             if isEditMode && message.isSentByMe {
-                Button {
-                    onSelect?(message)
-                } label: {
-                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                        .foregroundColor(isSelected ? Color.AppBrand.second : .gray)
-                        .font(.title3)
+                Button { onSelect?(message) } label: {
+                    Image(systemName: isSelected ? "checkmark.square.fill" : "square")
+                        .foregroundColor(isSelected ? Color.AppBrand.second : .secondary)
+                        .font(.body)
                 }
                 .buttonStyle(.plain)
             }
@@ -315,57 +290,40 @@ struct MessageBubble: View {
 
     @ViewBuilder
     private var deliveryStatusView: some View {
-        let status = message.deliveryStatus
-
-        switch status {
+        switch message.deliveryStatus {
         case .sending:
-            // Uploading — outline circle, message in transit
-            Circle()
-                .stroke(Color.secondary.opacity(0.5), lineWidth: 1.5)
-                .frame(width: 10, height: 10)
+            Rectangle()
+                .stroke(Color.secondary.opacity(0.4), lineWidth: 1)
+                .frame(width: 8, height: 8)
 
         case .sent:
-            // Server acknowledged — filled gray circle
-            Circle()
-                .fill(Color.secondary.opacity(0.6))
-                .frame(width: 10, height: 10)
+            Rectangle()
+                .fill(Color.secondary.opacity(0.5))
+                .frame(width: 8, height: 8)
 
         case .delivered:
-            // Delivered to recipient — filled StillGreen circle
-            Circle()
-                .fill(Color.AppBrand.third)
-                .frame(width: 10, height: 10)
+            Rectangle()
+                .fill(Color.AppBrand.second)
+                .frame(width: 8, height: 8)
 
         case .queued:
-            Button {
-                if let onRetry = onRetry {
-                    onRetry(message)
-                }
-            } label: {
+            Button { onRetry?(message) } label: {
                 HStack(spacing: 2) {
                     Image(systemName: "tray")
-                        .font(.system(size: 10))
-                        .foregroundColor(.orange)
-                    Text("retry")
-                        .font(.caption2)
-                        .foregroundColor(.orange)
+                        .font(.system(size: 9))
+                    Text("retry").font(.system(.caption2, design: .monospaced))
                 }
+                .foregroundColor(Color.AppBrand.third)
             }
 
         case .failed:
-            Button {
-                if let onRetry = onRetry {
-                    onRetry(message)
-                }
-            } label: {
+            Button { onRetry?(message) } label: {
                 HStack(spacing: 2) {
-                    Image(systemName: "exclamationmark.circle.fill")
-                        .font(.system(size: 10))
-                        .foregroundColor(.red)
-                    Text("retry")
-                        .font(.caption2)
-                        .foregroundColor(.red)
+                    Image(systemName: "exclamationmark")
+                        .font(.system(size: 9, weight: .bold))
+                    Text("retry").font(.system(.caption2, design: .monospaced))
                 }
+                .foregroundColor(Color.AppStatus.error)
             }
         }
     }
@@ -406,46 +364,43 @@ struct MessageBubble: View {
 // MARK: - Profile Share Bubble View
 struct ProfileShareBubbleView: View {
     let profileData: ProfileShareData
-    
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 12) {
-                // Avatar placeholder or image
-                if let avatarData = profileData.avatarData,
-                   let imageData = Data(base64Encoded: avatarData),
-                   let uiImage = UIImage(data: imageData) {
-                    Image(uiImage: uiImage)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: 60, height: 60)
-                        .clipShape(Circle())
-                } else {
-                    Circle()
-                        .fill(Color.AppBrand.second.opacity(0.2))
-                        .frame(width: 60, height: 60)
-                        .overlay(
-                            Text(String(profileData.displayName.prefix(1)).uppercased())
-                                .font(.title2)
-                                .foregroundColor(Color.AppBrand.second)
-                        )
-                }
-                
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(profileData.displayName)
-                        .font(.headline)
-                        .foregroundColor(.primary)
-                    
-                    Text("Shared profile")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                
-                Spacer()
+        HStack(spacing: 12) {
+            // Square avatar
+            if let avatarData = profileData.avatarData,
+               let imageData = Data(base64Encoded: avatarData),
+               let uiImage = UIImage(data: imageData) {
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 44, height: 44)
+                    .clipped()
+            } else {
+                Rectangle()
+                    .fill(Color.AppBrand.second.opacity(0.15))
+                    .frame(width: 44, height: 44)
+                    .overlay(
+                        Text(String(profileData.displayName.prefix(1)).uppercased())
+                            .font(.system(.headline, design: .monospaced))
+                            .foregroundColor(Color.AppBrand.second)
+                    )
+                    .overlay(Rectangle().strokeBorder(Color.AppBrand.second.opacity(0.4), lineWidth: 1))
             }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(profileData.displayName.uppercased())
+                    .font(.system(.subheadline, design: .default).weight(.semibold))
+                    .foregroundColor(.primary)
+                Text("SHARED PROFILE")
+                    .font(.system(.caption2, design: .monospaced))
+                    .foregroundColor(.secondary)
+            }
+            Spacer()
         }
-        .padding(12)
-        .background(Color.gray.opacity(0.1))
-        .cornerRadius(16)
+        .padding(10)
+        .background(Color.AppBackground.secondary)
+        .overlay(Rectangle().strokeBorder(Color.AppBorder.hairline, lineWidth: 0.5))
     }
 }
 
@@ -475,87 +430,63 @@ struct MediaMessageView: View {
                 Image(uiImage: thumbnail)
                     .resizable()
                     .scaledToFill()
-                    .frame(maxWidth: 250, maxHeight: 250)
+                    .frame(maxWidth: 240, maxHeight: 240)
                     .aspectRatio(contentMode: .fit)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .clipped()
                     .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(isSelected ? Color.AppBrand.second : Color.clear, lineWidth: 2)
+                        Rectangle()
+                            .strokeBorder(isSelected ? Color.AppBrand.second : Color.AppBorder.hairline,
+                                          lineWidth: isSelected ? 1.5 : 0.5)
                     )
-                    .onTapGesture {
-                        showFullScreen = true
-                    }
+                    .onTapGesture { showFullScreen = true }
             } else if isLoading {
-                // ✅ Loading state with progress indicator
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.gray.opacity(0.2))
+                Rectangle()
+                    .fill(Color.AppBackground.secondary)
                     .frame(width: 200, height: 200)
                     .overlay {
-                        VStack(spacing: 12) {
-                            ProgressView()
-                                .scaleEffect(1.5)
-                                .tint(Color.AppBrand.second)
-                            
+                        VStack(spacing: 10) {
+                            ProgressView().tint(Color.AppBrand.second)
                             if downloadProgress > 0 && downloadProgress < 1 {
                                 Text("\(Int(downloadProgress * 100))%")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            } else {
-                                Text("Loading...")
-                                    .font(.caption)
+                                    .font(.system(.caption2, design: .monospaced))
                                     .foregroundColor(.secondary)
                             }
                         }
                     }
+                    .overlay(Rectangle().strokeBorder(Color.AppBorder.hairline, lineWidth: 0.5))
             } else if loadError != nil {
-                // ✅ Error state with retry button
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.gray.opacity(0.2))
+                Rectangle()
+                    .fill(Color.AppBackground.secondary)
                     .frame(width: 200, height: 200)
                     .overlay {
-                        VStack(spacing: 12) {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                                .font(.system(size: 40))
-                                .foregroundColor(.orange)
-                            
-                            Text("Failed to load")
-                                .font(.caption)
+                        VStack(spacing: 10) {
+                            Image(systemName: "exclamationmark.triangle")
+                                .font(.system(size: 32))
+                                .foregroundColor(Color.AppBrand.third)
+                            Text("FAILED TO LOAD")
+                                .font(.system(.caption2, design: .monospaced))
                                 .foregroundColor(.secondary)
-                            
-                            Button {
-                                loadThumbnail()
-                            } label: {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "arrow.clockwise")
-                                    Text("Retry")
-                                }
-                                .font(.caption)
-                                .foregroundColor(Color.AppBrand.second)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 6)
-                                .background(Color.AppBrand.second.opacity(0.1))
-                                .cornerRadius(8)
+                            Button { loadThumbnail() } label: {
+                                Text("RETRY")
+                                    .font(.system(.caption2, design: .monospaced))
+                                    .foregroundColor(Color.AppBrand.second)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 4)
+                                    .overlay(Rectangle().strokeBorder(Color.AppBrand.second, lineWidth: 1))
                             }
                         }
                     }
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(isSelected ? Color.AppBrand.second : Color.clear, lineWidth: 2)
-                    )
+                    .overlay(Rectangle().strokeBorder(Color.AppBorder.hairline, lineWidth: 0.5))
             } else {
-                // Placeholder - initial state
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.gray.opacity(0.2))
+                Rectangle()
+                    .fill(Color.AppBackground.secondary)
                     .frame(width: 200, height: 200)
                     .overlay {
                         Image(systemName: "photo")
-                            .font(.system(size: 40))
-                            .foregroundColor(.gray)
+                            .font(.system(size: 32))
+                            .foregroundColor(.secondary)
                     }
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(isSelected ? Color.AppBrand.second : Color.clear, lineWidth: 2)
-                    )
+                    .overlay(Rectangle().strokeBorder(Color.AppBorder.hairline, lineWidth: 0.5))
             }
             
             // Caption if present - displayed below image without bubble

@@ -27,14 +27,15 @@ struct MainTabView: View {
                 ChatsListView()
                     .environmentObject(chatsViewModel)
                     .tabItem {
-                        Label("chats", systemImage: "message")
+                        Label("chats", systemImage: "bubble.left.and.bubble.right")
                     }
 
                 SettingsView()
                     .tabItem {
-                        Label("settings", systemImage: "gear")
+                        Label("settings", systemImage: "slider.horizontal.3")
                     }
             }
+            .tint(Color.AppBrand.second)
         }
     }
 }

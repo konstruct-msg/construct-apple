@@ -31,52 +31,36 @@ struct Spacing {
 }
 
 // MARK: - Corner Radius
+// Flat design: no rounding by default. Use micro (2pt) only where hard corners
+// feel uncomfortable (e.g. inline tags). Message bubbles: 0.
 
 struct CornerRadius {
-    /// 8pt - Standard corner radius for cards, banners
-    static let small: CGFloat = 8
-    
-    /// 12pt - Medium corner radius
-    static let medium: CGFloat = 12
-    
-    /// 16pt - Large corner radius for message bubbles
-    static let large: CGFloat = 16
-    
-    /// 20pt - Extra large corner radius
-    static let extraLarge: CGFloat = 20
+    /// 0pt — Flat, no rounding (default for surfaces and bubbles)
+    static let none: CGFloat = 0
+
+    /// 2pt — Micro rounding for inline labels / badges only
+    static let micro: CGFloat = 2
+
+    /// Legacy aliases kept so existing call-sites compile without changes.
+    /// Prefer CornerRadius.none or CornerRadius.micro in new code.
+    static let small: CGFloat = 2
+    static let medium: CGFloat = 2
+    static let large: CGFloat = 0
+    static let extraLarge: CGFloat = 0
 }
 
 // MARK: - Shadow
+// All shadows disabled — flat design language.
 
 struct ShadowStyle {
     let color: Color
     let radius: CGFloat
     let x: CGFloat
     let y: CGFloat
-    
-    /// Light shadow for elevated cards
-    static let card = ShadowStyle(
-        color: Color.black.opacity(0.1),
-        radius: 4,
-        x: 0,
-        y: 2
-    )
-    
-    /// Subtle shadow for input bars
-    static let inputBar = ShadowStyle(
-        color: Color.black.opacity(0.1),
-        radius: 2,
-        x: 0,
-        y: 1
-    )
-    
-    /// No shadow
-    static let none = ShadowStyle(
-        color: Color.clear,
-        radius: 0,
-        x: 0,
-        y: 0
-    )
+
+    static let card     = ShadowStyle(color: .clear, radius: 0, x: 0, y: 0)
+    static let inputBar = ShadowStyle(color: .clear, radius: 0, x: 0, y: 0)
+    static let none     = ShadowStyle(color: .clear, radius: 0, x: 0, y: 0)
 }
 
 // MARK: - Animation Duration
@@ -204,48 +188,61 @@ extension EnvironmentValues {
 
 extension Color {
 
-    /// Brand colors from Assets catalog
+    // MARK: Brand / Accent
+    // Two unsaturated accents: cyan and amber/orange.
+    // Avoid using these for decorative purposes — reserve for state and interaction.
+
     struct AppBrand {
-        /// Primary action color — buttons, CTAs (ButtonColor asset)
-        static var button: Color { Color("ButtonColor") }
-        /// Secondary accent — CustomTeal: icons, links, interactive elements
-        static var second: Color { Color("CustomTeal") }
-        /// Tertiary accent — StillGreen: success, delivered, positive states
-        static var third: Color { Color("StillGreen") }
+        /// Cyan — interactive elements, active state, outgoing message tint.
+        /// Desaturated to avoid visual noise.
+        static let second = Color(red: 0.25, green: 0.75, blue: 0.78)   // #40BFC7
+
+        /// Amber — warnings, errors, pending states.
+        static let third  = Color(red: 0.85, green: 0.55, blue: 0.22)   // #D98C38
+
+        /// Primary action color (buttons, CTAs) — same as second for now.
+        static var button: Color { second }
     }
 
-    /// Standard background colors
+    // MARK: Semantic status
+
+    struct AppStatus {
+        static var success: Color { AppBrand.second }
+        static var error:   Color { Color(red: 0.85, green: 0.25, blue: 0.25) }
+        static var warning: Color { AppBrand.third }
+        static var info:    Color { AppBrand.second }
+    }
+
+    // MARK: Background
+
     struct AppBackground {
-        /// Primary app background (AppBackgroundPrimary asset)
-        static var primary: Color { Color("AppBackgroundPrimary") }
-        /// Secondary background (slightly gray)
-        static var secondary: Color { Color(uiColor: .systemGray6) }
-        /// Clear background
+        /// Primary surface — system white (light) / pure black (dark).
+        static var primary: Color { Color(.systemBackground) }
+
+        /// Secondary surface — near-white in light mode, near-black in dark mode.
+        static var secondary: Color { Color(.secondarySystemBackground) }
+
+        /// Clear
         static var clear: Color { Color.clear }
     }
 
-    /// Standard text colors
+    // MARK: Text
+
     struct AppText {
-        /// Primary text color
-        static var primary: Color { Color.primary }
-        /// Secondary text color
+        static var primary:   Color { Color.primary }
         static var secondary: Color { Color.secondary }
-        /// Accent color (AccentColor asset)
-        static var accent: Color { Color.accentColor }
-        /// Text on colored surfaces (buttons, filled bubbles)
-        static var onAccent: Color { Color.white }
-        /// Red for errors
-        static var error: Color { Color.red }
+        static var accent:    Color { AppBrand.second }
+        static var onAccent:  Color { Color.white }
+        static var error:     Color { AppStatus.error }
     }
 
-    /// Semantic status colors
-    struct AppStatus {
-        /// Success / delivered / connected — uses StillGreen brand color
-        static var success: Color { Color.AppBrand.third }
-        static var error: Color { Color.red }
-        static var warning: Color { Color.orange }
-        /// Info / action / interactive — uses CustomTeal brand color
-        static var info: Color { Color.AppBrand.second }
+    // MARK: Divider / Border
+
+    struct AppBorder {
+        /// Standard thin separator line (0.5pt)
+        static var hairline: Color { Color(.separator) }
+        /// Slightly more visible line for section framing
+        static var regular:  Color { Color(.opaqueSeparator) }
     }
 }
 

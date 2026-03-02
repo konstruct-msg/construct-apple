@@ -58,7 +58,10 @@ struct MessageInputView: View {
                 .padding(.horizontal)
                 .padding(.vertical, 8)
                 .frame(maxHeight: 50)
-                .background(Color(uiColor: .systemGray6))
+                .background(Color.AppBackground.secondary)
+                .overlay(alignment: .bottom) {
+                    Rectangle().fill(Color.AppBorder.hairline).frame(height: 0.5)
+                }
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
@@ -70,13 +73,15 @@ struct MessageInputView: View {
 
             // Input field
             HStack(spacing: 8) {
-                // Attachment button (+ icon)
+                // Attachment button
                 Button {
                     showAttachmentMenu = true
                 } label: {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 28))
+                    Image(systemName: "plus")
+                        .font(.system(size: 16, weight: .medium))
                         .foregroundColor(Color.AppBrand.second)
+                        .frame(width: 32, height: 32)
+                        .overlay(Rectangle().strokeBorder(Color.AppBrand.second.opacity(0.5), lineWidth: 1))
                 }
                 .confirmationDialog("Attach", isPresented: $showAttachmentMenu) {
                     Button {
@@ -106,8 +111,9 @@ struct MessageInputView: View {
                 HStack(spacing: 0) {
                     TextField("message_placeholder", text: $text, axis: .vertical)
                         .lineLimit(1...5)
-                        .padding(.leading, 12)
-                        .padding(.trailing, canSend ? 8 : 12)
+                        .font(.system(.body, design: .default))
+                        .padding(.leading, 10)
+                        .padding(.trailing, canSend ? 6 : 10)
                         .padding(.vertical, 8)
                         .modifier(MacReturnToSendModifier(text: $text, canSend: canSend, onSend: sendMessage))
 
@@ -115,20 +121,25 @@ struct MessageInputView: View {
                         Button {
                             sendMessage()
                         } label: {
-                            Image(systemName: "arrow.up.circle.fill")
-                                .font(.system(size: 32))
-                                .foregroundColor(canSend ? Color.AppBrand.second : .gray)
+                            Image(systemName: "arrow.up")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(.black)
+                                .frame(width: 28, height: 28)
+                                .background(Color.AppBrand.second)
                                 .padding(.trailing, 4)
                         }
                         .disabled(!canSend || isSending)
                         .transition(.scale.combined(with: .opacity))
                     }
                 }
-                .background(Color(uiColor: .systemGray6))
-                .clipShape(RoundedRectangle(cornerRadius: 20))
+                .background(Color.AppBackground.secondary)
+                .overlay(Rectangle().strokeBorder(Color.AppBorder.hairline, lineWidth: 0.5))
             }
             .padding(.horizontal)
             .padding(.vertical, 8)
+            .overlay(alignment: .top) {
+                Rectangle().fill(Color.AppBorder.hairline).frame(height: 0.5)
+            }
         }
         .background(Color.AppBackground.primary)
         .animation(.easeInOut(duration: 0.2), value: canSend)
@@ -145,34 +156,36 @@ struct MessageInputView: View {
         !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !selectedImages.isEmpty
     }
 
-    // MARK: - Photo Preview
     private var photoPreviewView: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: 6) {
                 ForEach(Array(selectedImages.enumerated()), id: \.offset) { index, image in
                     ZStack(alignment: .topTrailing) {
                         Image(uiImage: image)
                             .resizable()
                             .scaledToFill()
-                            .frame(width: 80, height: 80)
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                            .frame(width: 72, height: 72)
+                            .clipped()
+                            .overlay(Rectangle().strokeBorder(Color.AppBorder.hairline, lineWidth: 0.5))
 
-                        // Remove button
-                        Button {
-                            removePhoto(at: index)
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
+                        Button { removePhoto(at: index) } label: {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 8, weight: .bold))
                                 .foregroundColor(.white)
-                                .background(Circle().fill(Color.black.opacity(0.5)))
+                                .frame(width: 16, height: 16)
+                                .background(Color.black.opacity(0.7))
                         }
-                        .offset(x: 4, y: -4)
+                        .offset(x: 2, y: -2)
                     }
                 }
             }
-            .padding(.horizontal)
+            .padding(.horizontal, 16)
             .padding(.vertical, 8)
         }
-        .background(Color(uiColor: .systemGray6))
+        .background(Color.AppBackground.secondary)
+        .overlay(alignment: .top) {
+            Rectangle().fill(Color.AppBorder.hairline).frame(height: 0.5)
+        }
     }
 
     // MARK: - Photo Loading

@@ -125,10 +125,7 @@ struct UserProfileView: View {
                                 Image(systemName: "person.crop.circle.badge.plus")
                                     .foregroundColor(Color.AppBrand.second)
                                 Text("share_my_profile")
-                                Spacer()
-                                Image(systemName: "chevron.right")
-                                    .foregroundColor(.secondary)
-                                    .font(.caption)
+
                             }
                         }
                     }
