@@ -56,14 +56,14 @@ struct PinLockView: View {
 
     private var biometricContent: some View {
         VStack(spacing: 20) {
-//            Image(systemName: securityViewModel.biometricIconName)
-//                .font(.system(size: 52, weight: .thin))
-//                .foregroundColor(Color.AppBrand.second)
+            Image(systemName: securityViewModel.biometricIconName)
+                .font(.system(size: 52, weight: .thin))
+                .foregroundColor(Color.AppBrand.second)
 
-//            Text(String(format: NSLocalizedString("use_biometric", comment: ""),
-//                        securityViewModel.biometricDisplayName))
-//                .font(.headline)
-//                .foregroundColor(.secondary)
+            Text(String(format: NSLocalizedString("use_biometric", comment: ""),
+                        securityViewModel.biometricDisplayName))
+                .font(.headline)
+                .foregroundColor(.secondary)
 
             if let errorMessage {
                 Text(errorMessage)

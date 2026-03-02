@@ -5,9 +5,7 @@
 //
 
 import Foundation
-#if os(iOS)
 import UIKit
-#endif
 import Network
 
 /// Monitors device energy state and network conditions to optimize background fetch
@@ -79,37 +77,36 @@ class EnergyMonitor {
 
     /// Check if battery level is below threshold (20%)
     func isBatteryLow() -> Bool {
-        #if os(iOS)
         UIDevice.current.isBatteryMonitoringEnabled = true
         let batteryLevel = UIDevice.current.batteryLevel
-        if batteryLevel < 0 { return false }
-        return batteryLevel < 0.20
-        #else
-        return false // macOS: no battery concern for desktop app
-        #endif
+
+        // batteryLevel returns -1.0 if battery state is unknown
+        if batteryLevel < 0 {
+            // If we can't determine battery level, assume it's safe to proceed
+            return false
+        }
+
+        return batteryLevel < 0.20 // Less than 20%
     }
 
     /// Check if device is currently charging
     func isCharging() -> Bool {
-        #if os(iOS)
         UIDevice.current.isBatteryMonitoringEnabled = true
         let batteryState = UIDevice.current.batteryState
+
         return batteryState == .charging || batteryState == .full
-        #else
-        return true // macOS: always treat as "plugged in"
-        #endif
     }
 
     /// Get current battery level as percentage (0-100)
     func batteryLevelPercentage() -> Int {
-        #if os(iOS)
         UIDevice.current.isBatteryMonitoringEnabled = true
         let batteryLevel = UIDevice.current.batteryLevel
-        if batteryLevel < 0 { return -1 }
+
+        if batteryLevel < 0 {
+            return -1 // Unknown
+        }
+
         return Int(batteryLevel * 100)
-        #else
-        return -1 // macOS: unavailable
-        #endif
     }
 
     /// Check if Low Power Mode is enabled

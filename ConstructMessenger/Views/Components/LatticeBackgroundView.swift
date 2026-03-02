@@ -30,14 +30,14 @@ private struct LatticeNode {
 struct LatticeBackgroundView: View {
 
     var nodeCount: Int           = 72
-    var maxEdgeDistance: CGFloat = 240
+    var maxEdgeDistance: CGFloat = 220
     var nodeOpacity: Double      = 0.60
     var edgeBaseOpacity: Double  = 0.48
     var color: Color             = Color.AppBrand.second
     /// Extra padding beyond the visible canvas on each side — nodes placed here
     /// are invisible (Canvas clips them) but their edges enter the frame from the
     /// border, giving the illusion of a much larger network extending off-screen.
-    var overflow: CGFloat        = 120
+    var overflow: CGFloat        = 100
 
     @State private var nodes: [LatticeNode] = []
 

@@ -8,9 +8,7 @@
 //
 
 import Foundation
-#if os(iOS)
 import UIKit
-#endif
 import Combine
 
 @MainActor
@@ -81,9 +79,7 @@ class TrafficProtectionService: ObservableObject {
         if let observer = batteryObserver {
             NotificationCenter.default.removeObserver(observer)
         }
-        #if os(iOS)
         UIDevice.current.isBatteryMonitoringEnabled = false
-        #endif
     }
 
     // MARK: - Configuration
@@ -103,9 +99,13 @@ class TrafficProtectionService: ObservableObject {
     // MARK: - Battery Monitoring
 
     private func setupBatteryMonitoring() {
-        #if os(iOS)
+        // Enable battery monitoring
         UIDevice.current.isBatteryMonitoringEnabled = true
+
+        // Update initial level
         updateBatteryLevel()
+
+        // Observe battery level changes
         batteryObserver = NotificationCenter.default.addObserver(
             forName: UIDevice.batteryLevelDidChangeNotification,
             object: nil,
@@ -113,19 +113,17 @@ class TrafficProtectionService: ObservableObject {
         ) { [weak self] _ in
             self?.updateBatteryLevel()
         }
-        #endif
-        // macOS: no battery monitoring needed — desktop runs on power
     }
 
     private func updateBatteryLevel() {
-        #if os(iOS)
         let level = UIDevice.current.batteryLevel
+
+        // Update manager (level is 0.0-1.0, or -1.0 if unknown)
         if level >= 0 {
             self.batteryLevel = level
             manager?.updateBatteryLevel(level: level)
             Log.debug("🔋 Battery updated: \(Int(level * 100))%", category: LogCategory.trafficProtection.name)
         }
-        #endif
     }
 
     // MARK: - Dummy Message Scheduler

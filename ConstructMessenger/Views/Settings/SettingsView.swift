@@ -47,18 +47,17 @@ struct SettingsView: View {
                                                 .resizable()
                                                 .scaledToFill()
                                         } else {
-                                            Rectangle()
-                                                .fill(Color.AppBrand.second.opacity(0.15))
+                                            RoundedRectangle(cornerRadius: AvatarStyle.settingsCornerRadius, style: .continuous)
+                                                .fill(Color.AppBrand.second)
                                                 .overlay {
                                                     Text(profileInitials)
-                                                        .foregroundColor(Color.AppBrand.second)
+                                                        .foregroundColor(.white)
                                                         .fontWeight(.semibold)
                                                 }
-                                                .overlay(Rectangle().strokeBorder(Color.AppBrand.second.opacity(0.4), lineWidth: 1))
                                         }
                                     }
                                     .frame(width: AvatarStyle.settingsSize, height: AvatarStyle.settingsSize)
-                                    .clipShape(Rectangle())
+                                    .clipShape(RoundedRectangle(cornerRadius: AvatarStyle.settingsCornerRadius, style: .continuous))
 
                                     VStack(alignment: .leading, spacing: 4) {
                                         Text(profileDisplayName)
@@ -142,8 +141,8 @@ struct SettingsView: View {
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text("background_fetch")
                                         HStack(spacing: 4) {
-                                            Rectangle()
-                                                .fill(BackgroundFetchConfig.shouldBeEnabled ? Color.AppBrand.second : Color.AppText.secondary)
+                                            Circle()
+                                                .fill(BackgroundFetchConfig.shouldBeEnabled ? Color.AppStatus.success : Color.gray)
                                                 .frame(width: 6, height: 6)
                                             Text(BackgroundFetchConfig.shouldBeEnabled ? "enabled" : "disabled")
                                                 .font(.caption)
@@ -161,8 +160,8 @@ struct SettingsView: View {
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text("network")
                                         HStack(spacing: 4) {
-                                            Rectangle()
-                                                .fill(connectionStatus.isConnected ? Color.AppBrand.second : Color.AppBrand.third)
+                                            Circle()
+                                                .fill(connectionStatus.isConnected ? Color.AppStatus.success : Color.red)
                                                 .frame(width: 6, height: 6)
                                             Text(connectionStatus.connectionStatus.localizedKey)
                                                 .font(.caption)
@@ -209,8 +208,6 @@ struct SettingsView: View {
                         }
                     }
                     .listStyle(.insetGrouped)
-                    .scrollContentBackground(.hidden)
-                    .background(Color.AppBackground.primary)
                     .padding(.vertical, 0)
                 }
                 .navigationBarHidden(true) // Скрываем стандартную навигационную панель

@@ -328,18 +328,6 @@ public struct Shared_Proto_Core_V1_Envelope: @unchecked Sendable {
     set {_uniqueStorage()._mentions = newValue}
   }
 
-  /// Sealed sender (fields 61-70)
-  /// Used only for cross-server (federation) messages where sender must be hidden
-  /// from destination server. For local messages, use regular sender field above.
-  public var sealedSender: Shared_Proto_Core_V1_SealedSenderEnvelope {
-    get {_storage._sealedSender ?? Shared_Proto_Core_V1_SealedSenderEnvelope()}
-    set {_uniqueStorage()._sealedSender = newValue}
-  }
-  /// Returns true if `sealedSender` has been explicitly set.
-  public var hasSealedSender: Bool {_storage._sealedSender != nil}
-  /// Clears the value of `sealedSender`. Subsequent reads from it will return its default value.
-  public mutating func clearSealedSender() {_uniqueStorage()._sealedSender = nil}
-
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   /// Message ID (for 1-to-1 direct messages)
@@ -519,113 +507,6 @@ public struct Shared_Proto_Core_V1_Reaction: Sendable {
   public init() {}
 }
 
-/// SealedSenderEnvelope — outer wrapper visible to the home server
-/// Home server uses recipient_server for S2S routing, then forwards sealed_inner
-/// opaquely to the destination server.
-public struct Shared_Proto_Core_V1_SealedSenderEnvelope: Sendable {
-  // SwiftProtobuf.Message conformance is added in an extension below. See the
-  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
-  // methods supported on all messages.
-
-  /// Destination federation server domain
-  /// Example: "eu.konstruct.cc"
-  public var recipientServer: String = String()
-
-  /// Serialized SealedInner — opaque to home server (do NOT parse)
-  public var sealedInner: Data = Data()
-
-  /// Anti-replay HMAC: HMAC-SHA256(server_secret, sealed_inner || timestamp)
-  /// Home server validates freshness before forwarding
-  public var forwardingToken: Data = Data()
-
-  /// Timestamp for freshness check (reject if >5 min old)
-  public var timestamp: Int64 = 0
-
-  public var unknownFields = SwiftProtobuf.UnknownStorage()
-
-  public init() {}
-}
-
-/// SealedInner — delivered to the destination server
-/// Server sees recipient but NOT sender identity.
-public struct Shared_Proto_Core_V1_SealedInner: Sendable {
-  // SwiftProtobuf.Message conformance is added in an extension below. See the
-  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
-  // methods supported on all messages.
-
-  /// Recipient user ID (local to destination server)
-  public var recipientUserID: String = String()
-
-  /// Random anti-replay tag (32 bytes)
-  /// Destination server stores tags for 24h; duplicate tag = drop
-  public var deliveryTag: Data = Data()
-
-  /// SenderCertificate encrypted to recipient's identity key
-  /// X25519-AEAD-encrypt(ephemeral_key, recipient.identity_key, cert + signature)
-  /// Server MUST NOT attempt to decrypt this field
-  public var senderCertCiphertext: Data = Data()
-
-  /// Opaque E2EE payload (Double Ratchet encrypted message)
-  public var encryptedPayload: Data = Data()
-
-  /// Content type (needed by server for priority routing / notification text)
-  public var contentType: Shared_Proto_Core_V1_ContentType = .unspecitied
-
-  /// Message priority
-  public var priority: Shared_Proto_Core_V1_MessagePriority = .normal
-
-  /// TTL in seconds (0 = no expiration)
-  public var ttl: UInt32 = 0
-
-  public var unknownFields = SwiftProtobuf.UnknownStorage()
-
-  public init() {}
-}
-
-/// SenderCertificate — encrypted inside sender_cert_ciphertext
-/// Only the recipient can decrypt and verify this.
-/// Proves sender identity without revealing it to any server.
-///
-/// Trust chain:
-///   1. Sender's home server signs this cert (Ed25519, same key as .well-known/konstruct)
-///   2. Sender encrypts cert to recipient's identity key
-///   3. Recipient decrypts → verifies server_signature against home server's public key
-///   4. Recipient checks sender_identity_key matches existing session
-public struct Shared_Proto_Core_V1_SenderCertificate: Sendable {
-  // SwiftProtobuf.Message conformance is added in an extension below. See the
-  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
-  // methods supported on all messages.
-
-  /// Sender user ID (local to sender's home server)
-  public var senderUserID: String = String()
-
-  /// Sender's home server domain
-  /// Used to look up server's public key for signature verification
-  public var senderDomain: String = String()
-
-  /// Sender's X25519 identity public key (32 bytes)
-  /// Recipient verifies this matches the existing Signal session
-  public var senderIdentityKey: Data = Data()
-
-  /// Sender's device ID
-  public var senderDeviceID: String = String()
-
-  /// Certificate issue time (Unix seconds)
-  public var issuedAt: Int64 = 0
-
-  /// Certificate expiry (Unix seconds, typically issued_at + 24h)
-  /// Recipient rejects expired certificates
-  public var expiresAt: Int64 = 0
-
-  /// Ed25519 signature by sender's home server
-  /// Signs: sender_user_id || sender_domain || sender_identity_key || sender_device_id || issued_at || expires_at
-  public var serverSignature: Data = Data()
-
-  public var unknownFields = SwiftProtobuf.UnknownStorage()
-
-  public init() {}
-}
-
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
 fileprivate let _protobuf_package = "shared.proto.core.v1"
@@ -640,7 +521,7 @@ extension Shared_Proto_Core_V1_MessagePriority: SwiftProtobuf._ProtoNameProvidin
 
 extension Shared_Proto_Core_V1_Envelope: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Envelope"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}sender\0\u{3}sender_device\0\u{1}recipient\0\u{3}recipient_device\0\u{3}content_type\0\u{3}message_id\0\u{1}timestamp\0\u{1}ttl\0\u{1}priority\0\u{3}encrypted_payload\0\u{3}conversation_id\0\u{3}server_metadata\0\u{3}client_metadata\0\u{3}forwarding_path\0\u{4}\u{2}ephemeral_seconds\0\u{3}reply_to_message_id\0\u{3}edits_message_id\0\u{1}reactions\0\u{1}mentions\0\u{3}group_message_id\0\u{4}(sealed_sender\0\u{c}\u{f}\u{1}\u{c}\u{16}\u{1d}\u{c}3\u{a}\u{c}>\u{9}\u{c}G\u{1}\u{a}\u{c}Q\u{1}\u{14}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}sender\0\u{3}sender_device\0\u{1}recipient\0\u{3}recipient_device\0\u{3}content_type\0\u{3}message_id\0\u{1}timestamp\0\u{1}ttl\0\u{1}priority\0\u{3}encrypted_payload\0\u{3}conversation_id\0\u{3}server_metadata\0\u{3}client_metadata\0\u{3}forwarding_path\0\u{4}\u{2}ephemeral_seconds\0\u{3}reply_to_message_id\0\u{3}edits_message_id\0\u{1}reactions\0\u{1}mentions\0\u{3}group_message_id\0\u{c}\u{f}\u{1}\u{c}\u{16}\u{1d}\u{c}3\u{a}\u{c}=\u{a}\u{c}G\u{1}\u{a}\u{c}Q\u{1}\u{14}")
 
   fileprivate class _StorageClass {
     var _sender: Shared_Proto_Core_V1_UserId? = nil
@@ -662,7 +543,6 @@ extension Shared_Proto_Core_V1_Envelope: SwiftProtobuf.Message, SwiftProtobuf._M
     var _editsMessageID: String? = nil
     var _reactions: [Shared_Proto_Core_V1_Reaction] = []
     var _mentions: [String] = []
-    var _sealedSender: Shared_Proto_Core_V1_SealedSenderEnvelope? = nil
 
       // This property is used as the initial default value for new instances of the type.
       // The type itself is protecting the reference to its storage via CoW semantics.
@@ -692,7 +572,6 @@ extension Shared_Proto_Core_V1_Envelope: SwiftProtobuf.Message, SwiftProtobuf._M
       _editsMessageID = source._editsMessageID
       _reactions = source._reactions
       _mentions = source._mentions
-      _sealedSender = source._sealedSender
     }
   }
 
@@ -750,7 +629,6 @@ extension Shared_Proto_Core_V1_Envelope: SwiftProtobuf.Message, SwiftProtobuf._M
             _storage._messageIDType = .groupMessageID(v)
           }
         }()
-        case 61: try { try decoder.decodeSingularMessageField(value: &_storage._sealedSender) }()
         default: break
         }
       }
@@ -823,9 +701,6 @@ extension Shared_Proto_Core_V1_Envelope: SwiftProtobuf.Message, SwiftProtobuf._M
       try { if case .groupMessageID(let v)? = _storage._messageIDType {
         try visitor.visitSingularMessageField(value: v, fieldNumber: 21)
       } }()
-      try { if let v = _storage._sealedSender {
-        try visitor.visitSingularMessageField(value: v, fieldNumber: 61)
-      } }()
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -854,7 +729,6 @@ extension Shared_Proto_Core_V1_Envelope: SwiftProtobuf.Message, SwiftProtobuf._M
         if _storage._editsMessageID != rhs_storage._editsMessageID {return false}
         if _storage._reactions != rhs_storage._reactions {return false}
         if _storage._mentions != rhs_storage._mentions {return false}
-        if _storage._sealedSender != rhs_storage._sealedSender {return false}
         return true
       }
       if !storagesAreEqual {return false}
@@ -1082,171 +956,6 @@ extension Shared_Proto_Core_V1_Reaction: SwiftProtobuf.Message, SwiftProtobuf._M
     if lhs.userID != rhs.userID {return false}
     if lhs.emoji != rhs.emoji {return false}
     if lhs.timestamp != rhs.timestamp {return false}
-    if lhs.unknownFields != rhs.unknownFields {return false}
-    return true
-  }
-}
-
-extension Shared_Proto_Core_V1_SealedSenderEnvelope: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".SealedSenderEnvelope"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}recipient_server\0\u{3}sealed_inner\0\u{3}forwarding_token\0\u{1}timestamp\0\u{c}\u{5}\u{b}")
-
-  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularStringField(value: &self.recipientServer) }()
-      case 2: try { try decoder.decodeSingularBytesField(value: &self.sealedInner) }()
-      case 3: try { try decoder.decodeSingularBytesField(value: &self.forwardingToken) }()
-      case 4: try { try decoder.decodeSingularInt64Field(value: &self.timestamp) }()
-      default: break
-      }
-    }
-  }
-
-  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    if !self.recipientServer.isEmpty {
-      try visitor.visitSingularStringField(value: self.recipientServer, fieldNumber: 1)
-    }
-    if !self.sealedInner.isEmpty {
-      try visitor.visitSingularBytesField(value: self.sealedInner, fieldNumber: 2)
-    }
-    if !self.forwardingToken.isEmpty {
-      try visitor.visitSingularBytesField(value: self.forwardingToken, fieldNumber: 3)
-    }
-    if self.timestamp != 0 {
-      try visitor.visitSingularInt64Field(value: self.timestamp, fieldNumber: 4)
-    }
-    try unknownFields.traverse(visitor: &visitor)
-  }
-
-  public static func ==(lhs: Shared_Proto_Core_V1_SealedSenderEnvelope, rhs: Shared_Proto_Core_V1_SealedSenderEnvelope) -> Bool {
-    if lhs.recipientServer != rhs.recipientServer {return false}
-    if lhs.sealedInner != rhs.sealedInner {return false}
-    if lhs.forwardingToken != rhs.forwardingToken {return false}
-    if lhs.timestamp != rhs.timestamp {return false}
-    if lhs.unknownFields != rhs.unknownFields {return false}
-    return true
-  }
-}
-
-extension Shared_Proto_Core_V1_SealedInner: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".SealedInner"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}recipient_user_id\0\u{3}delivery_tag\0\u{3}sender_cert_ciphertext\0\u{3}encrypted_payload\0\u{3}content_type\0\u{1}priority\0\u{1}ttl\0\u{c}\u{8}\u{8}")
-
-  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularStringField(value: &self.recipientUserID) }()
-      case 2: try { try decoder.decodeSingularBytesField(value: &self.deliveryTag) }()
-      case 3: try { try decoder.decodeSingularBytesField(value: &self.senderCertCiphertext) }()
-      case 4: try { try decoder.decodeSingularBytesField(value: &self.encryptedPayload) }()
-      case 5: try { try decoder.decodeSingularEnumField(value: &self.contentType) }()
-      case 6: try { try decoder.decodeSingularEnumField(value: &self.priority) }()
-      case 7: try { try decoder.decodeSingularUInt32Field(value: &self.ttl) }()
-      default: break
-      }
-    }
-  }
-
-  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    if !self.recipientUserID.isEmpty {
-      try visitor.visitSingularStringField(value: self.recipientUserID, fieldNumber: 1)
-    }
-    if !self.deliveryTag.isEmpty {
-      try visitor.visitSingularBytesField(value: self.deliveryTag, fieldNumber: 2)
-    }
-    if !self.senderCertCiphertext.isEmpty {
-      try visitor.visitSingularBytesField(value: self.senderCertCiphertext, fieldNumber: 3)
-    }
-    if !self.encryptedPayload.isEmpty {
-      try visitor.visitSingularBytesField(value: self.encryptedPayload, fieldNumber: 4)
-    }
-    if self.contentType != .unspecitied {
-      try visitor.visitSingularEnumField(value: self.contentType, fieldNumber: 5)
-    }
-    if self.priority != .normal {
-      try visitor.visitSingularEnumField(value: self.priority, fieldNumber: 6)
-    }
-    if self.ttl != 0 {
-      try visitor.visitSingularUInt32Field(value: self.ttl, fieldNumber: 7)
-    }
-    try unknownFields.traverse(visitor: &visitor)
-  }
-
-  public static func ==(lhs: Shared_Proto_Core_V1_SealedInner, rhs: Shared_Proto_Core_V1_SealedInner) -> Bool {
-    if lhs.recipientUserID != rhs.recipientUserID {return false}
-    if lhs.deliveryTag != rhs.deliveryTag {return false}
-    if lhs.senderCertCiphertext != rhs.senderCertCiphertext {return false}
-    if lhs.encryptedPayload != rhs.encryptedPayload {return false}
-    if lhs.contentType != rhs.contentType {return false}
-    if lhs.priority != rhs.priority {return false}
-    if lhs.ttl != rhs.ttl {return false}
-    if lhs.unknownFields != rhs.unknownFields {return false}
-    return true
-  }
-}
-
-extension Shared_Proto_Core_V1_SenderCertificate: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".SenderCertificate"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}sender_user_id\0\u{3}sender_domain\0\u{3}sender_identity_key\0\u{3}sender_device_id\0\u{3}issued_at\0\u{3}expires_at\0\u{3}server_signature\0\u{c}\u{8}\u{8}")
-
-  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularStringField(value: &self.senderUserID) }()
-      case 2: try { try decoder.decodeSingularStringField(value: &self.senderDomain) }()
-      case 3: try { try decoder.decodeSingularBytesField(value: &self.senderIdentityKey) }()
-      case 4: try { try decoder.decodeSingularStringField(value: &self.senderDeviceID) }()
-      case 5: try { try decoder.decodeSingularInt64Field(value: &self.issuedAt) }()
-      case 6: try { try decoder.decodeSingularInt64Field(value: &self.expiresAt) }()
-      case 7: try { try decoder.decodeSingularBytesField(value: &self.serverSignature) }()
-      default: break
-      }
-    }
-  }
-
-  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    if !self.senderUserID.isEmpty {
-      try visitor.visitSingularStringField(value: self.senderUserID, fieldNumber: 1)
-    }
-    if !self.senderDomain.isEmpty {
-      try visitor.visitSingularStringField(value: self.senderDomain, fieldNumber: 2)
-    }
-    if !self.senderIdentityKey.isEmpty {
-      try visitor.visitSingularBytesField(value: self.senderIdentityKey, fieldNumber: 3)
-    }
-    if !self.senderDeviceID.isEmpty {
-      try visitor.visitSingularStringField(value: self.senderDeviceID, fieldNumber: 4)
-    }
-    if self.issuedAt != 0 {
-      try visitor.visitSingularInt64Field(value: self.issuedAt, fieldNumber: 5)
-    }
-    if self.expiresAt != 0 {
-      try visitor.visitSingularInt64Field(value: self.expiresAt, fieldNumber: 6)
-    }
-    if !self.serverSignature.isEmpty {
-      try visitor.visitSingularBytesField(value: self.serverSignature, fieldNumber: 7)
-    }
-    try unknownFields.traverse(visitor: &visitor)
-  }
-
-  public static func ==(lhs: Shared_Proto_Core_V1_SenderCertificate, rhs: Shared_Proto_Core_V1_SenderCertificate) -> Bool {
-    if lhs.senderUserID != rhs.senderUserID {return false}
-    if lhs.senderDomain != rhs.senderDomain {return false}
-    if lhs.senderIdentityKey != rhs.senderIdentityKey {return false}
-    if lhs.senderDeviceID != rhs.senderDeviceID {return false}
-    if lhs.issuedAt != rhs.issuedAt {return false}
-    if lhs.expiresAt != rhs.expiresAt {return false}
-    if lhs.serverSignature != rhs.serverSignature {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

@@ -5,59 +5,56 @@
 
 import SwiftUI
 
-/// Compact connection status indicator (flat square in navigation bar)
+/// Compact connection status indicator (colored dot in navigation bar)
 struct ConnectionStatusIndicator: View {
     @ObservedObject var connectionManager = ConnectionStatusManager.shared
-    @State private var blinkOpacity: Double = 1.0
+    @State private var animationScale: CGFloat = 1.0
     @State private var introScale: CGFloat = 0.0
 
     var body: some View {
-        HStack(spacing: 5) {
-            Rectangle()
-                .fill(indicatorColor)
-                .frame(width: 6, height: 6)
-                .opacity(connectionManager.connectionStatus == .connecting ? blinkOpacity : 1.0)
-                .animation(.easeInOut(duration: 0.3), value: indicatorColor)
+        ZStack {
+            // Pulsing outer ring while connecting
+            if connectionManager.connectionStatus == .connecting {
+                Circle()
+                    .stroke(Color.orange.opacity(0.35), lineWidth: 2)
+                    .frame(width: 18, height: 18)
+                    .scaleEffect(animationScale)
+            }
 
-            Text(statusLabel)
-                .font(.system(.caption2, design: .monospaced))
-                .foregroundColor(indicatorColor)
+            // Main status dot
+            Circle()
+                .fill(indicatorColor)
+                .frame(width: 10, height: 10)
                 .animation(.easeInOut(duration: 0.3), value: indicatorColor)
         }
+        .frame(width: 20, height: 20)
         .scaleEffect(introScale)
         .onAppear {
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) { introScale = 1.0 }
-            startBlink()
+            startPulse()
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) {
+                introScale = 1.0
+            }
         }
-        .onChange(of: connectionManager.connectionStatus) { startBlink() }
+        .onChange(of: connectionManager.connectionStatus) { startPulse() }
     }
 
     private var indicatorColor: Color {
         switch connectionManager.connectionStatus {
-        case .connected:    return Color.AppBrand.second
-        case .disconnected: return Color.AppBrand.third
-        case .connecting:   return Color.AppBrand.third
-        case .unknown:      return Color.AppText.secondary
+        case .connected:    return Color.AppStatus.success
+        case .disconnected: return .red
+        case .connecting:   return .orange
+        case .unknown:      return .gray
         }
     }
 
-    private var statusLabel: String {
-        switch connectionManager.connectionStatus {
-        case .connected:    return "ONLINE"
-        case .disconnected: return "OFFLINE"
-        case .connecting:   return "CONNECTING"
-        case .unknown:      return "UNKNOWN"
-        }
-    }
-
-    private func startBlink() {
+    private func startPulse() {
         guard connectionManager.connectionStatus == .connecting else {
-            blinkOpacity = 1.0
+            animationScale = 1.0
             return
         }
-        blinkOpacity = 1.0
-        withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) {
-            blinkOpacity = 0.2
+        animationScale = 1.0
+        withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
+            animationScale = 1.4
         }
     }
 }
