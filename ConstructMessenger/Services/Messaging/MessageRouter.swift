@@ -72,10 +72,19 @@ class MessageRouter {
             return
         }
         
-        // 2. Find or create chat
+        // 2. Skip if already saved to Core Data (deduplication for duplicate deliveries)
+        let existingFetch = Message.fetchRequest()
+        existingFetch.predicate = NSPredicate(format: "id == %@", message.id)
+        existingFetch.fetchLimit = 1
+        if (try? context.fetch(existingFetch))?.first != nil {
+            Log.debug("⏭️ Skipping already-saved message \(message.id.prefix(8))...", category: "MessageRouter")
+            return
+        }
+
+        // 3. Find or create chat
         let (chat, isNewChat) = findOrCreateChat(for: otherUserId, in: context)
         
-        // 3. Check if we have a session for this user
+        // 4. Check if we have a session for this user
         let hasSession = CryptoManager.shared.hasSession(for: otherUserId)
         Log.info("🔐 SESSION_STATE[incoming_message]: userId=\(otherUserId.prefix(8))..., hasSession=\(hasSession), messageId=\(message.id.prefix(8))...", category: "SessionInit")
         
@@ -228,6 +237,12 @@ class MessageRouter {
         pendingMessages: inout [String: [ChatMessage]]
     ) {
         let isFirstForUser = pendingMessages[userId] == nil || pendingMessages[userId]!.isEmpty
+
+        // Deduplicate: skip if same message ID is already in the queue
+        if pendingMessages[userId]?.contains(where: { $0.id == message.id }) == true {
+            Log.debug("⏭️ Skipping duplicate queued message \(message.id.prefix(8))...", category: "MessageRouter")
+            return
+        }
 
         // Append to the queue (do NOT overwrite — we need message_number=0 for session init)
         pendingMessages[userId, default: []].append(message)
