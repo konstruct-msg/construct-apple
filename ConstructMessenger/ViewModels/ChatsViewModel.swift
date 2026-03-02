@@ -298,6 +298,11 @@ class ChatsViewModel: ObservableObject {
     // MARK: - Message Router Setup
     
     private func setupMessageRouterCallbacks() {
+        // Send delivery receipts via stream (DELIVERED or FAILED)
+        messageRouter.onReceiptNeeded = { [weak self] messageIds, status in
+            self?.streamManager.sendReceipt(messageIds, status: status)
+        }
+
         // Callback when public key bundle is needed for incoming message
         messageRouter.onPublicKeyBundleNeeded = { [weak self] userId, message in
             guard let self = self else { return }
@@ -328,6 +333,16 @@ class ChatsViewModel: ObservableObject {
                     }
                     
                     if success {
+                        // Check server-side prekey count; log a warning if depleted.
+                        // Full OTPK replenishment requires Rust core support — tracked separately.
+                        Task {
+                            let deviceId = KeychainManager.shared.loadDeviceID() ?? ""
+                            if let count = try? await KeyServiceClient.shared.getPreKeyCount(deviceId: deviceId),
+                               count == 0 {
+                                Log.error("⚠️ Server has 0 prekeys for this device — signed prekey may need re-upload", category: "SessionInit")
+                            }
+                        }
+
                         // Decrypt any messages that queued up while we were initialising the session.
                         let queued = self.pendingFirstMessages[userId] ?? []
                         self.pendingFirstMessages.removeValue(forKey: userId)

@@ -42,6 +42,10 @@ class MessageRouter {
     /// attempt `initReceivingSession` with the supplied message as the new X3DH init.
     var onSessionHealNeeded: ((String, ChatMessage) -> Void)?
 
+    /// Called when a receipt should be sent via the stream.
+    /// Provides message IDs and receipt status (.delivered or .failed).
+    var onReceiptNeeded: (([String], Shared_Proto_Signaling_V1_ReceiptStatus) -> Void)?
+
     private let chunkReassembler = ChunkedMessageReassembler()
     
     // MARK: - Message Routing
@@ -172,7 +176,10 @@ class MessageRouter {
         // 5. Save regular message
         saveMessage(for: chat, with: message, decryptedContent: decryptedContent, in: context)
 
-        // 6. Update chat metadata
+        // 6. Acknowledge delivery to sender via stream
+        onReceiptNeeded?([message.id], .delivered)
+
+        // 7. Update chat metadata
         chat.lastMessageText = Chat.formatPreviewText(decryptedContent)
         chat.lastMessageTime = Date(timeIntervalSince1970: TimeInterval(message.timestamp))
 
@@ -327,8 +334,9 @@ class MessageRouter {
                 onSessionHealNeeded?(userId, message)
             } else {
                 // messageNumber > 0 → DR ratchet diverged, healing is impossible.
-                // Only now do we fall back to END_SESSION.
+                // Notify sender that decryption failed before requesting END_SESSION.
                 Log.info("🔄 SESSION_STATE[heal_impossible]: messageNumber=\(message.messageNumber) — ratchet diverged, requesting END_SESSION", category: "SessionInit")
+                onReceiptNeeded?([message.id], .failed)
                 pendingMessages.removeValue(forKey: userId)
                 SessionHealingService.shared.clearQueue(for: userId, in: context)
                 onEndSessionNeeded?(userId)
