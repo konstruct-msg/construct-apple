@@ -161,6 +161,14 @@ class ChatsViewModel: ObservableObject {
                 self?.forceReconnectStream()
             }
             .store(in: &cancellables)
+
+        // Wake up when silent push arrives (app is in background)
+        NotificationCenter.default.publisher(for: .silentPushReceived)
+            .sink { [weak self] _ in
+                Log.info("📱 Silent push — reconnecting stream to fetch pending messages", category: "ChatsViewModel")
+                self?.forceReconnectStream()
+            }
+            .store(in: &cancellables)
     }
 
     // MARK: - Message Receiving

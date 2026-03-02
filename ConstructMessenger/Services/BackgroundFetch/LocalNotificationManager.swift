@@ -25,7 +25,7 @@ class LocalNotificationManager: NSObject {
 
     private override init() {
         super.init()
-        notificationCenter.delegate = self
+        // Note: UNUserNotificationCenterDelegate is handled by PushNotificationManager
         checkAuthorizationStatus()
     }
 
@@ -65,34 +65,21 @@ class LocalNotificationManager: NSObject {
 
     // MARK: - Show Notifications
 
-    /// Show notification for new message
-    /// - Parameters:
-    ///   - senderName: Name of the message sender (may be "Unknown" for privacy)
-    ///   - messagePreview: Preview of the message content (optional)
-    ///   - chatID: Chat identifier for deep linking
-    func showNewMessageNotification(
-        senderName: String,
-        messagePreview: String? = nil,
-        chatID: String
-    ) {
+    /// Show a generic "New Message" notification.
+    /// No sender name or content is included to preserve privacy.
+    func showNewMessageNotification() {
         guard isAuthorized else {
             Log.debug("Cannot show notification: not authorized")
             return
         }
 
         let content = UNMutableNotificationContent()
-        content.title = "construct_new_message".localized // Localized "New Message"
-        content.body = formatNotificationBody(senderName: senderName, preview: messagePreview)
+        content.title = NSLocalizedString("construct_app_name", comment: "App name")
+        content.body = NSLocalizedString("construct_new_message", comment: "New message")
         content.sound = .default
         content.badge = NSNumber(value: 1)
+        content.userInfo = ["type": "newMessage"]
 
-        // Add userInfo for handling tap
-        content.userInfo = [
-            "type": "newMessage",
-            "chatID": chatID
-        ]
-
-        // Create request with unique identifier
         let identifier = "message-\(UUID().uuidString)"
         let request = UNNotificationRequest(
             identifier: identifier,
@@ -100,7 +87,6 @@ class LocalNotificationManager: NSObject {
             trigger: nil // Show immediately
         )
 
-        // Add notification
         notificationCenter.add(request) { error in
             if let error = error {
                 Log.error("Failed to show notification: \(error)")
@@ -180,22 +166,6 @@ class LocalNotificationManager: NSObject {
         )
 
         notificationCenter.add(request) { _ in }
-    }
-
-    // MARK: - Helpers
-
-    /// Format notification body based on privacy settings
-    private func formatNotificationBody(senderName: String, preview: String?) -> String {
-        // TODO: Check user's notification privacy settings
-
-        // For now, default to showing sender name but not message preview
-        // This balances privacy with usefulness
-        if let preview = preview {
-            return "\(senderName): \(preview)"
-        } else {
-            return "construct_new_message_from".localized.replacingOccurrences(of: "%@", with: senderName)
-            // "New message from %@"
-        }
     }
 
     // MARK: - Badge Management

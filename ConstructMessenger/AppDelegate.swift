@@ -71,6 +71,28 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         PushNotificationManager.shared.handleRegistrationError(error)
     }
 
+    // MARK: - Silent Push (background wakeup)
+
+    /// Called when a silent push arrives (content-available: 1).
+    /// Server sends this when a new message is waiting. We wake up, trigger
+    /// stream reconnect to fetch pending messages, then call the completion handler.
+    func application(
+        _ application: UIApplication,
+        didReceiveRemoteNotification userInfo: [AnyHashable: Any],
+        fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
+    ) {
+        Log.info("📱 Silent push received: \(userInfo["type"] ?? "unknown")", category: "Push")
+
+        // Signal ChatsViewModel to reconnect the stream and pick up pending messages
+        NotificationCenter.default.post(name: .silentPushReceived, object: nil)
+
+        // Give the stream up to 25s to connect and fetch (system limit is 30s)
+        Task {
+            try? await Task.sleep(nanoseconds: 25_000_000_000)
+            completionHandler(.newData)
+        }
+    }
+
     // MARK: - Universal Links
     func application(
         _ application: UIApplication,
@@ -151,4 +173,11 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             BackgroundFetchManager.shared.cancelAllBackgroundTasks()
         }
     }
+}
+
+// MARK: - Notification Names
+
+extension Notification.Name {
+    /// Posted when a silent APNs push arrives — ChatsViewModel reconnects the stream.
+    static let silentPushReceived = Notification.Name("com.construct.silentPushReceived")
 }

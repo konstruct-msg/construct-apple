@@ -474,11 +474,7 @@ class BackgroundFetchManager: NSObject, ObservableObject {
                 return nil
             }
             
-            notificationManager.showNewMessageNotification(
-                senderName: senderName,
-                messagePreview: preview,
-                chatID: chatId
-            )
+            notificationManager.showNewMessageNotification()
         } else {
             // Multiple chats - show batch notification
             notificationManager.showMultipleMessagesNotification(
