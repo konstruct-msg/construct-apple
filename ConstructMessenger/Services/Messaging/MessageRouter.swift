@@ -33,6 +33,10 @@ class MessageRouter {
     /// Called when public key bundle is needed for session initialization
     var onPublicKeyBundleNeeded: ((String, ChatMessage) -> Void)?
 
+    /// Called when receiver cannot init session (messageNumber > 0, no session).
+    /// Caller should send END_SESSION to that userId so the sender restarts from messageNumber=0.
+    var onEndSessionNeeded: ((String) -> Void)?
+
     private let chunkReassembler = ChunkedMessageReassembler()
     
     // MARK: - Message Routing
@@ -110,8 +114,9 @@ class MessageRouter {
                 pendingMessages: &pendingMessages
             ) ?? ""
             
-            // If decryption failed, handleMessageWithSession already initiated recovery
+            // If decryption failed, roll back any newly-created chat so it isn't persisted empty
             if decryptedContent.isEmpty {
+                if isNewChat { context.delete(chat) }
                 return
             }
         }
@@ -241,6 +246,21 @@ class MessageRouter {
         // Deduplicate: skip if same message ID is already in the queue
         if pendingMessages[userId]?.contains(where: { $0.id == message.id }) == true {
             Log.debug("⏭️ Skipping duplicate queued message \(message.id.prefix(8))...", category: "MessageRouter")
+            return
+        }
+
+        // Guard: initReceivingSession requires messageNumber=0 (X3DH handshake).
+        // If we have no session and the message is already mid-ratchet, we can never
+        // initialize from it — request the sender to restart their session instead.
+        if message.messageNumber > 0 && isFirstForUser {
+            Log.info("⚠️ No session for \(userId.prefix(8)) but messageNumber=\(message.messageNumber) — requesting END_SESSION so sender restarts", category: "MessageRouter")
+            addSystemMessage(
+                "Encrypted session out of sync. Asking contact to restart...",
+                toUserId: userId,
+                in: context
+            )
+            if isNewChat { context.delete(chat) }
+            onEndSessionNeeded?(userId)
             return
         }
 

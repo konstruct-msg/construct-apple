@@ -124,7 +124,7 @@ struct QRScannerView: View {
                 Button { simulateQRCodeScan() } label: {
                     Label("Simulate QR Scan", systemImage: "camera.viewfinder")
                         .padding()
-                        .background(Color.AppBrand.second)
+                        .background(Color.blue)
                         .foregroundColor(.white)
                         .cornerRadius(8)
                 }
@@ -148,7 +148,7 @@ struct QRScannerView: View {
 
             debugInfoRow("Session Ready",
                          value: scanner.isSessionReady ? "✅ Yes" : "❌ No",
-                         color: scanner.isSessionReady ? Color.AppStatus.success : .red)
+                         color: scanner.isSessionReady ? Color.green : .red)
             debugInfoRow("Permission", value: permissionStatusString, color: permissionStatusColor)
             debugInfoRow("Device", value: deviceInfo, color: .white)
 
@@ -164,7 +164,7 @@ struct QRScannerView: View {
                 .font(.caption)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
-                .background(Color.AppBrand.second)
+                .background(Color.blue)
                 .foregroundColor(.white)
                 .cornerRadius(6)
             }

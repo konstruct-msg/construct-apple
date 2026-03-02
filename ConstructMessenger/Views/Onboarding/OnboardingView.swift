@@ -103,7 +103,7 @@ struct OnboardingView: View {
                     } label: {
                         Text("onboarding_restore")
                             .font(.subheadline)
-                            .foregroundColor(Color.AppBrand.second)
+                            .foregroundColor(Color.blue)
                     }
                     .padding(.vertical, 8)
                 }
@@ -112,12 +112,12 @@ struct OnboardingView: View {
                 .padding(.bottom, 32)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background {
-                // Lattice background — visual nod to lattice-based cryptography
-                LatticeBackgroundView()
-                    .ignoresSafeArea()
-                    .opacity(0.8)
-            }
+//            .background {
+//                // Lattice background — visual nod to lattice-based cryptography
+//                LatticeBackgroundView()
+//                    .ignoresSafeArea()
+//                    .opacity(0.8)
+//            }
             .navigationDestination(isPresented: $showingRegistration) {
                 RegistrationFlowView(username: username.isEmpty ? nil : username)
             }
@@ -137,7 +137,7 @@ struct OnboardingView: View {
                     } label: {
                         Image(systemName: "network")
                     }
-                    .foregroundStyle(Color.AppBrand.second)
+                    .foregroundStyle(Color.blue)
                     .accessibilityLabel(Text("onboarding_network_settings"))
                 }
             }

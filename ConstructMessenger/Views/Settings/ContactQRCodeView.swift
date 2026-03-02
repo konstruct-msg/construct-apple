@@ -22,6 +22,15 @@ struct ContactQRCodeView: View {
     
     private let timer = Timer.publish(every: InviteConfig.qrCountdownTickSeconds, on: .main, in: .common).autoconnect()
     private let generator = InviteGenerator()
+    
+    /// Pass a pre-built payload only in Previews to skip Keychain/network calls.
+    private let previewPayload: String?
+    
+    init(userId: String, username: String, previewPayload: String? = nil) {
+        self.userId = userId
+        self.username = username
+        self.previewPayload = previewPayload
+    }
 
     var body: some View {
         NavigationStack {
@@ -29,9 +38,6 @@ struct ContactQRCodeView: View {
                 Spacer()
 
                 VStack(spacing: 24) {
-                    Text("my_qr_code")
-                        .font(.title2)
-                        .fontWeight(.semibold)
 
                     // QR Code
                     if let payload = qrPayload, let qrImage = generateQRCode(from: payload) {
@@ -43,7 +49,6 @@ struct ContactQRCodeView: View {
                             .padding(QRCodeSize.padding)
                             .background(Color.white)
                             .cornerRadius(QRCodeSize.cornerRadius)
-                            .shadow(radius: QRCodeSize.shadowRadius)
                     } else if let error = generationError {
                         Rectangle()
                             .fill(Color.gray.opacity(0.2))
@@ -134,7 +139,12 @@ struct ContactQRCodeView: View {
                 }
             }
             .onAppear {
-                generateInitialQRCode()
+                if let preview = previewPayload {
+                    qrPayload = preview
+                    generatedAt = Date()
+                } else {
+                    generateInitialQRCode()
+                }
             }
             .onReceive(timer) { _ in
                 updateTimeRemaining()
@@ -237,6 +247,7 @@ struct ContactQRCodeView: View {
 #Preview {
     ContactQRCodeView(
         userId: "user123",
-        username: "john_doe"
+        username: "john_doe",
+        previewPayload: "konstrukt://invite?userId=user123&username=john_doe&deviceId=device456&server=ams.konstruct.cc"
     )
 }

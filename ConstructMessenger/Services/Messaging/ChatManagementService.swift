@@ -144,13 +144,21 @@ class ChatManagementService {
         
         // Archive crypto session when deleting chat
         // This ensures we don't have orphaned sessions that could cause security issues
-        if let userId = chat.otherUser?.id {
+        let otherUser = chat.otherUser
+        if let userId = otherUser?.id {
             CryptoManager.shared.archiveSession(for: userId, reason: .manualReset)
             Log.info("🗑️ Archived crypto session for user: \(userId)", category: "ChatManagementService")
         }
         
         // Delete the chat (Core Data cascade rules will delete associated messages)
         context.delete(chat)
+        
+        // Also delete the User entity so the stream no longer subscribes to this contact
+        // and findOrCreateChat cannot recreate an empty chat on restart.
+        if let user = otherUser {
+            context.delete(user)
+            Log.info("🗑️ Deleted user entity: \(user.id)", category: "ChatManagementService")
+        }
         
         do {
             try context.save()

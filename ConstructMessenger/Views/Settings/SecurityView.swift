@@ -35,7 +35,7 @@ struct SecurityView: View {
                             Text(String(format: NSLocalizedString("use_biometric", comment: ""), securityViewModel.biometricDisplayName))
                         } icon: {
                             Image(systemName: securityViewModel.biometricIconName)
-                                .foregroundColor(Color.AppBrand.second)
+                                .foregroundColor(Color.blue)
                         }
                     }
                     .disabled(!securityViewModel.isBiometricAvailable)

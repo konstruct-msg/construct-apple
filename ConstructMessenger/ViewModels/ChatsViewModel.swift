@@ -363,6 +363,15 @@ class ChatsViewModel: ObservableObject {
                 }
             }
         }
+
+        // Callback when receiver has no session but messageNumber > 0 — sender must restart
+        messageRouter.onEndSessionNeeded = { [weak self] userId in
+            guard let self = self else { return }
+            Task {
+                Log.info("🔄 Sending END_SESSION to \(userId.prefix(8))... (session out of sync)", category: "ChatsViewModel")
+                try? await self.sendEndSession(to: userId, reason: "session_out_of_sync")
+            }
+        }
     }
     
     // MARK: - Handle END_SESSION

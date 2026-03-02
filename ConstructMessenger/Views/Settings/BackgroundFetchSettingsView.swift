@@ -77,7 +77,7 @@ struct BackgroundFetchSettingsView: View {
     }
     
     private var toggleIconColor: Color {
-        isEnabled ? Color.AppBrand.second : .gray
+        isEnabled ? Color.blue : .gray
     }
     
     @ViewBuilder
@@ -298,7 +298,7 @@ struct QuickIntervalButton: View {
                 .padding(.vertical, 6)
                 .background(
                     RoundedRectangle(cornerRadius: 8)
-                        .fill(current == minutes ? Color.AppBrand.second : Color.gray.opacity(0.2))
+                        .fill(current == minutes ? Color.blue : Color.gray.opacity(0.2))
                 )
         }
     }

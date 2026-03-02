@@ -35,12 +35,12 @@ struct UserProfileView: View {
                                     .clipShape(Circle())
                             } else {
                                 Circle()
-                                    .fill(Color.AppBrand.second.opacity(0.2))
+                                    .fill(Color.blue.opacity(0.2))
                                     .frame(width: 100, height: 100)
                                     .overlay {
                                         Text(initials)
                                             .font(.system(size: 40, weight: .semibold))
-                                            .foregroundColor(Color.AppBrand.second)
+                                            .foregroundColor(Color.blue)
                                     }
                             }
                             
@@ -67,15 +67,14 @@ struct UserProfileView: View {
                 // MARK: - Profile Sharing Status
                 Section {
                     HStack {
-                        Image(systemName: user.isSharingWithMe ? "checkmark.circle.fill" : "xmark.circle.fill")
-                            .foregroundColor(user.isSharingWithMe ? Color.AppStatus.success : .gray)
-                        
                         VStack(alignment: .leading, spacing: 4) {
                             Text("profile_sharing_status")
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
+                                .padding(.horizontal, 8)
                             Text(user.isSharingWithMe ? "sharing_with_you" : "not_sharing_with_you")
                                 .font(.headline)
+                                .padding(.horizontal, 8)
                         }
                         Spacer()
                         
@@ -122,13 +121,8 @@ struct UserProfileView: View {
                             handleShareToggle(true)
                         } label: {
                             HStack {
-                                Image(systemName: "person.crop.circle.badge.plus")
-                                    .foregroundColor(Color.AppBrand.second)
                                 Text("share_my_profile")
-                                Spacer()
-                                Image(systemName: "chevron.right")
-                                    .foregroundColor(.secondary)
-                                    .font(.caption)
+                                    .padding(.horizontal, 8)
                             }
                         }
                     }
@@ -138,8 +132,7 @@ struct UserProfileView: View {
                         showingBlockConfirmation = true
                     } label: {
                         HStack {
-                            Image(systemName: user.isBlocked ? "hand.raised.fill" : "hand.raised")
-                            Text(user.isBlocked ? "unblock_user" : "block_user")
+                            Text(user.isBlocked ? "unblock_user" : "block_user").padding(.horizontal, 8)
                         }
                     }
                 } header: {

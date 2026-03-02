@@ -77,7 +77,7 @@ struct NetworkSettingsView: View {
                     Spacer()
                     Text(GRPCChannelManager.shared.currentHost)
                         .font(.system(size: 13, design: .monospaced))
-                        .foregroundColor(GRPCChannelManager.shared.isUsingCustomServer ? .orange : Color.AppBrand.second)
+                        .foregroundColor(GRPCChannelManager.shared.isUsingCustomServer ? .orange : Color.blue)
                         .textSelection(.enabled)
                 }
 

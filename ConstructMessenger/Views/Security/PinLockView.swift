@@ -58,7 +58,7 @@ struct PinLockView: View {
         VStack(spacing: 20) {
             Image(systemName: securityViewModel.biometricIconName)
                 .font(.system(size: 52, weight: .thin))
-                .foregroundColor(Color.AppBrand.second)
+                .foregroundColor(Color.blue)
 
             Text(String(format: NSLocalizedString("use_biometric", comment: ""),
                         securityViewModel.biometricDisplayName))
@@ -76,7 +76,7 @@ struct PinLockView: View {
             Button("use_pin_code") {
                 withAnimation { showPinEntry = true; errorMessage = nil }
             }
-            .foregroundColor(Color.AppBrand.second)
+            .foregroundColor(Color.blue)
             .padding(.top, 8)
         }
     }
@@ -111,7 +111,7 @@ struct PinLockView: View {
                                securityViewModel.biometricDisplayName),
                         systemImage: securityViewModel.biometricIconName
                     )
-                    .foregroundColor(Color.AppBrand.second)
+                    .foregroundColor(Color.blue)
                 }
             }
         }

@@ -136,7 +136,7 @@ struct ChatsSplitView: View {
         List(selection: $selectedChatId) {
             ForEach(chats) { chat in
                 ChatRowView(chat: chat)
-                    .tag(chat.id ?? "")
+                    .tag(chat.id)
                     .contextMenu {
                         Button(role: .destructive) {
                             deleteChat(chat)

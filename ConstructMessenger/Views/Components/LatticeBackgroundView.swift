@@ -33,7 +33,7 @@ struct LatticeBackgroundView: View {
     var maxEdgeDistance: CGFloat = 220
     var nodeOpacity: Double      = 0.60
     var edgeBaseOpacity: Double  = 0.48
-    var color: Color             = Color.AppBrand.second
+    var color: Color             = Color.blue
     /// Extra padding beyond the visible canvas on each side — nodes placed here
     /// are invisible (Canvas clips them) but their edges enter the frame from the
     /// border, giving the illusion of a much larger network extending off-screen.

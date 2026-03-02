@@ -30,7 +30,7 @@ struct NotificationsSettingsView: View {
                         Text("enable_notifications")
                     } icon: {
                         Image(systemName: notificationsEnabled ? "bell.fill" : "bell.slash.fill")
-                            .foregroundColor(notificationsEnabled ? Color.AppBrand.second : .gray)
+                            .foregroundColor(notificationsEnabled ? Color.blue : .gray)
                     }
                 }
             } footer: {
@@ -111,7 +111,7 @@ struct NotificationsSettingsView: View {
                                 Text("notification_sound")
                             } icon: {
                                 Image(systemName: notificationSound ? "speaker.wave.2.fill" : "speaker.slash.fill")
-                                    .foregroundColor(notificationSound ? Color.AppBrand.second : .gray)
+                                    .foregroundColor(notificationSound ? Color.blue : .gray)
                             }
                         }
 
@@ -199,9 +199,9 @@ struct NotificationsSettingsView: View {
         case .notDetermined:
             return .orange
         case .provisional:
-            return Color.AppBrand.second
+            return Color.blue
         case .ephemeral:
-            return Color.AppBrand.second
+            return Color.blue
         @unknown default:
             return .gray
         }

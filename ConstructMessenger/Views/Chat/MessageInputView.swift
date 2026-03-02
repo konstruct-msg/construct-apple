@@ -30,7 +30,7 @@ struct MessageInputView: View {
             if let replyMessage = replyingTo {
                 HStack(spacing: 12) {
                     Rectangle()
-                        .fill(Color.AppBrand.second)
+                        .fill(Color.blue)
                         .frame(width: 3)
 
                     VStack(alignment: .leading, spacing: 2) {
@@ -76,7 +76,7 @@ struct MessageInputView: View {
                 } label: {
                     Image(systemName: "plus.circle.fill")
                         .font(.system(size: 28))
-                        .foregroundColor(Color.AppBrand.second)
+                        .foregroundColor(Color.blue)
                 }
                 .confirmationDialog("Attach", isPresented: $showAttachmentMenu) {
                     Button {
@@ -117,7 +117,7 @@ struct MessageInputView: View {
                         } label: {
                             Image(systemName: "arrow.up.circle.fill")
                                 .font(.system(size: 32))
-                                .foregroundColor(canSend ? Color.AppBrand.second : .gray)
+                                .foregroundColor(canSend ? Color.blue : .gray)
                                 .padding(.trailing, 4)
                         }
                         .disabled(!canSend || isSending)

@@ -48,7 +48,7 @@ struct SettingsView: View {
                                                 .scaledToFill()
                                         } else {
                                             RoundedRectangle(cornerRadius: AvatarStyle.settingsCornerRadius, style: .continuous)
-                                                .fill(Color.AppBrand.second)
+                                                .fill(Color.blue)
                                                 .overlay {
                                                     Text(profileInitials)
                                                         .foregroundColor(.white)

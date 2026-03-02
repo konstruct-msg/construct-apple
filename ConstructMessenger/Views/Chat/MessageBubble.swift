@@ -165,7 +165,7 @@ struct MessageBubble: View {
                     onSelect?(message)
                 } label: {
                     Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                        .foregroundColor(isSelected ? Color.AppBrand.second : .gray)
+                        .foregroundColor(isSelected ? Color.blue : .gray)
                         .font(.title3)
                 }
                 .buttonStyle(.plain)
@@ -183,7 +183,7 @@ struct MessageBubble: View {
                     ProfileShareBubbleView(profileData: profileData)
                         .overlay(
                             RoundedRectangle(cornerRadius: 16)
-                                .stroke(isSelected ? Color.AppBrand.second : Color.clear, lineWidth: 2)
+                                .stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2)
                         )
                 }
                 // ✅ Check if this is a media message
@@ -197,7 +197,7 @@ struct MessageBubble: View {
                         if let replyContent = message.replyToContent {
                             HStack(spacing: 4) {
                                 Rectangle()
-                                    .fill(message.isSentByMe ? Color.white.opacity(0.5) : Color.AppBrand.second.opacity(0.5))
+                                    .fill(message.isSentByMe ? Color.white.opacity(0.5) : Color.blue.opacity(0.5))
                                     .frame(width: 3)
 
                                 Text(replyContent)
@@ -220,12 +220,12 @@ struct MessageBubble: View {
                         .padding(.vertical, message.replyToContent != nil ? 4 : 8)
                         .padding(.bottom, message.replyToContent != nil ? 8 : 0)
                     }
-                    .background(message.isSentByMe ? Color.AppBrand.second : Color.gray.opacity(0.2))
+                    .background(message.isSentByMe ? Color.blue : Color.gray.opacity(0.2))
                     .foregroundColor(message.isSentByMe ? .white : .primary)
                     .cornerRadius(16)
                     .overlay(
                         RoundedRectangle(cornerRadius: 16)
-                            .stroke(isSelected ? Color.AppBrand.second : Color.clear, lineWidth: 2)
+                            .stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2)
                     )
                 }
 
@@ -305,7 +305,7 @@ struct MessageBubble: View {
                     onSelect?(message)
                 } label: {
                     Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                        .foregroundColor(isSelected ? Color.AppBrand.second : .gray)
+                        .foregroundColor(isSelected ? Color.blue : .gray)
                         .font(.title3)
                 }
                 .buttonStyle(.plain)
@@ -333,7 +333,7 @@ struct MessageBubble: View {
         case .delivered:
             // Delivered to recipient — filled StillGreen circle
             Circle()
-                .fill(Color.AppBrand.third)
+                .fill(Color.green)
                 .frame(width: 10, height: 10)
 
         case .queued:
@@ -421,12 +421,12 @@ struct ProfileShareBubbleView: View {
                         .clipShape(Circle())
                 } else {
                     Circle()
-                        .fill(Color.AppBrand.second.opacity(0.2))
+                        .fill(Color.blue.opacity(0.2))
                         .frame(width: 60, height: 60)
                         .overlay(
                             Text(String(profileData.displayName.prefix(1)).uppercased())
                                 .font(.title2)
-                                .foregroundColor(Color.AppBrand.second)
+                                .foregroundColor(Color.blue)
                         )
                 }
                 
@@ -480,7 +480,7 @@ struct MediaMessageView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
-                            .stroke(isSelected ? Color.AppBrand.second : Color.clear, lineWidth: 2)
+                            .stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2)
                     )
                     .onTapGesture {
                         showFullScreen = true
@@ -494,7 +494,7 @@ struct MediaMessageView: View {
                         VStack(spacing: 12) {
                             ProgressView()
                                 .scaleEffect(1.5)
-                                .tint(Color.AppBrand.second)
+                                .tint(Color.blue)
                             
                             if downloadProgress > 0 && downloadProgress < 1 {
                                 Text("\(Int(downloadProgress * 100))%")
@@ -530,17 +530,17 @@ struct MediaMessageView: View {
                                     Text("Retry")
                                 }
                                 .font(.caption)
-                                .foregroundColor(Color.AppBrand.second)
+                                .foregroundColor(Color.blue)
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 6)
-                                .background(Color.AppBrand.second.opacity(0.1))
+                                .background(Color.blue.opacity(0.1))
                                 .cornerRadius(8)
                             }
                         }
                     }
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
-                            .stroke(isSelected ? Color.AppBrand.second : Color.clear, lineWidth: 2)
+                            .stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2)
                     )
             } else {
                 // Placeholder - initial state
@@ -554,7 +554,7 @@ struct MediaMessageView: View {
                     }
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
-                            .stroke(isSelected ? Color.AppBrand.second : Color.clear, lineWidth: 2)
+                            .stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2)
                     )
             }
             
