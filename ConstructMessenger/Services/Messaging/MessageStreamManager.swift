@@ -44,7 +44,11 @@ final class MessageStreamManager: ObservableObject {
     private let maxRetryDelay: TimeInterval = 60
     private var isPaused = false
     private(set) var subscriptionUserIds: [String] = []
-    private var lastPendingCursor: String = ""
+    private var lastPendingCursor: String = UserDefaults.standard.string(forKey: "construct.pendingCursor") ?? "" {
+        didSet {
+            UserDefaults.standard.set(lastPendingCursor, forKey: "construct.pendingCursor")
+        }
+    }
 
     /// Continuation for sending messages into the stream
     private var outboundContinuation: AsyncStream<Shared_Proto_Services_V1_MessageStreamRequest>.Continuation?
