@@ -34,6 +34,7 @@ class ChatsViewModel: ObservableObject {
     
     // ✅ Public key bundle handler
     private let publicKeyBundleHandler = PublicKeyBundleHandler()
+    private let sessionInitService = SessionInitializationService()
 
     // Reassembler for KNST1 envelope unwrapping in the session-init message path
     private let initMessageReassembler = ChunkedMessageReassembler()
@@ -180,6 +181,9 @@ class ChatsViewModel: ObservableObject {
         streamManager.onDeliveryReceipt = { [weak self] messageIds in
             self?.handleDeliveryReceipts(messageIds)
         }
+        streamManager.onKeySyncReceived = { [weak self] userId in
+            self?.handleKeySyncRequest(for: userId)
+        }
         streamManager.connect(contactUserIds: currentConversationIds()) { [weak self] message in
             self?.handleIncomingMessage(message)
         }
@@ -194,6 +198,9 @@ class ChatsViewModel: ObservableObject {
         }
         streamManager.onDeliveryReceipt = { [weak self] messageIds in
             self?.handleDeliveryReceipts(messageIds)
+        }
+        streamManager.onKeySyncReceived = { [weak self] userId in
+            self?.handleKeySyncRequest(for: userId)
         }
         streamManager.forceReconnect(contactUserIds: currentConversationIds()) { [weak self] message in
             self?.handleIncomingMessage(message)
@@ -507,7 +514,27 @@ class ChatsViewModel: ObservableObject {
         }
     }
     
-    /// Helper to save message (used by handlePublicKeyBundleForIncomingMessage)
+    /// Handle KEY_SYNC from server: proactively re-init our SENDING session for the peer.
+    /// Next message we send will carry a fresh X3DH header (messageNumber=0).
+    private func handleKeySyncRequest(for userId: String) {
+        guard !usersInitializingSession.contains(userId) else {
+            Log.info("⏸️ KEY_SYNC skipped — session init already in progress for \(userId.prefix(8))…", category: "SessionInit")
+            return
+        }
+        usersInitializingSession.insert(userId)
+        Log.info("🔑 SESSION_STATE[key_sync]: re-keying sending session for \(userId.prefix(8))…", category: "SessionInit")
+        Task {
+            defer { usersInitializingSession.remove(userId) }
+            do {
+                let bundle = try await publicKeyBundleHandler.fetchPublicKeyWithRetry(userId: userId)
+                try sessionInitService.initializeSession(userId: userId, bundle: bundle, deleteExisting: true)
+                Log.info("✅ SESSION_STATE[key_sync_success]: session re-keyed for \(userId.prefix(8))…", category: "SessionInit")
+            } catch {
+                Log.error("❌ SESSION_STATE[key_sync_failed]: \(error.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
+            }
+        }
+    }
+    
     private func saveMessage(for chat: Chat, with messageData: ChatMessage, decryptedContent: String) {
         guard let context = viewContext else { return }
 

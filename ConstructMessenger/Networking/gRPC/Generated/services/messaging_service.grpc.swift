@@ -92,6 +92,18 @@ public enum Shared_Proto_Services_V1_MessagingService: Sendable {
                 method: "GetPendingMessages"
             )
         }
+        /// Namespace for "RequestKeySync" metadata.
+        public enum RequestKeySync: Sendable {
+            /// Request type for "RequestKeySync".
+            public typealias Input = Shared_Proto_Services_V1_RequestKeySyncRequest
+            /// Response type for "RequestKeySync".
+            public typealias Output = Shared_Proto_Services_V1_RequestKeySyncResponse
+            /// Descriptor for "RequestKeySync".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MessagingService"),
+                method: "RequestKeySync"
+            )
+        }
         /// Descriptors for all methods in the "shared.proto.services.v1.MessagingService" service.
         public static let descriptors: [GRPCCore.MethodDescriptor] = [
             MessageStream.descriptor,
@@ -99,7 +111,8 @@ public enum Shared_Proto_Services_V1_MessagingService: Sendable {
             EditMessage.descriptor,
             AddReaction.descriptor,
             RemoveReaction.descriptor,
-            GetPendingMessages.descriptor
+            GetPendingMessages.descriptor,
+            RequestKeySync.descriptor
         ]
     }
 }
@@ -267,6 +280,31 @@ extension Shared_Proto_Services_V1_MessagingService {
             deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_GetPendingMessagesResponse>,
             options: GRPCCore.CallOptions,
             onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_GetPendingMessagesResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "RequestKeySync" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > Trigger a KEY_SYNC to a recipient: server delivers a CONTENT_TYPE_KEY_SYNC = 22
+        /// > envelope so the recipient performs a full X3DH re-init with the caller.
+        /// > Use when a broken ratchet is detected and END_SESSION is too disruptive.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_RequestKeySyncRequest` message.
+        ///   - serializer: A serializer for `Shared_Proto_Services_V1_RequestKeySyncRequest` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_RequestKeySyncResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response, the result of which is
+        ///       returned to the caller. Returning from the closure will cancel the RPC if it
+        ///       hasn't already finished.
+        /// - Returns: The result of `handleResponse`.
+        func requestKeySync<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_RequestKeySyncRequest>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_RequestKeySyncRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_RequestKeySyncResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_RequestKeySyncResponse>) async throws -> Result
         ) async throws -> Result where Result: Sendable
     }
 
@@ -499,6 +537,42 @@ extension Shared_Proto_Services_V1_MessagingService {
                 onResponse: handleResponse
             )
         }
+
+        /// Call the "RequestKeySync" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > Trigger a KEY_SYNC to a recipient: server delivers a CONTENT_TYPE_KEY_SYNC = 22
+        /// > envelope so the recipient performs a full X3DH re-init with the caller.
+        /// > Use when a broken ratchet is detected and END_SESSION is too disruptive.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_RequestKeySyncRequest` message.
+        ///   - serializer: A serializer for `Shared_Proto_Services_V1_RequestKeySyncRequest` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_RequestKeySyncResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response, the result of which is
+        ///       returned to the caller. Returning from the closure will cancel the RPC if it
+        ///       hasn't already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func requestKeySync<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_RequestKeySyncRequest>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_RequestKeySyncRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_RequestKeySyncResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_RequestKeySyncResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Shared_Proto_Services_V1_MessagingService.Method.RequestKeySync.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
     }
 }
 
@@ -679,6 +753,37 @@ extension Shared_Proto_Services_V1_MessagingService.ClientProtocol {
             request: request,
             serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_GetPendingMessagesRequest>(),
             deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_GetPendingMessagesResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "RequestKeySync" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > Trigger a KEY_SYNC to a recipient: server delivers a CONTENT_TYPE_KEY_SYNC = 22
+    /// > envelope so the recipient performs a full X3DH re-init with the caller.
+    /// > Use when a broken ratchet is detected and END_SESSION is too disruptive.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Shared_Proto_Services_V1_RequestKeySyncRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response, the result of which is
+    ///       returned to the caller. Returning from the closure will cancel the RPC if it
+    ///       hasn't already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func requestKeySync<Result>(
+        request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_RequestKeySyncRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_RequestKeySyncResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.requestKeySync(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_RequestKeySyncRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_RequestKeySyncResponse>(),
             options: options,
             onResponse: handleResponse
         )
@@ -886,6 +991,41 @@ extension Shared_Proto_Services_V1_MessagingService.ClientProtocol {
             metadata: metadata
         )
         return try await self.getPendingMessages(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "RequestKeySync" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > Trigger a KEY_SYNC to a recipient: server delivers a CONTENT_TYPE_KEY_SYNC = 22
+    /// > envelope so the recipient performs a full X3DH re-init with the caller.
+    /// > Use when a broken ratchet is detected and END_SESSION is too disruptive.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response, the result of which is
+    ///       returned to the caller. Returning from the closure will cancel the RPC if it
+    ///       hasn't already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func requestKeySync<Result>(
+        _ message: Shared_Proto_Services_V1_RequestKeySyncRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_RequestKeySyncResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Shared_Proto_Services_V1_RequestKeySyncRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.requestKeySync(
             request: request,
             options: options,
             onResponse: handleResponse

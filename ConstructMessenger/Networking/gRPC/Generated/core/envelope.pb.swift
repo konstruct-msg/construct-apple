@@ -45,6 +45,12 @@ public enum Shared_Proto_Core_V1_ContentType: SwiftProtobuf.Enum, Swift.CaseIter
 
   /// Session reset request
   case sessionReset // = 21
+
+  /// KEY_SYNC — server-triggered silent key renegotiation (Matrix-inspired).
+  /// Recipient receives this, fetches a fresh PreKeyBundle from the sender,
+  /// and performs a full X3DH re-init without resetting the visible session.
+  /// No UI shown to user. Triggered when sender detects a broken session.
+  case keySync // = 22
   case UNRECOGNIZED(Int)
 
   public init() {
@@ -60,6 +66,7 @@ public enum Shared_Proto_Core_V1_ContentType: SwiftProtobuf.Enum, Swift.CaseIter
     case 11: self = .presence
     case 20: self = .keyExchange
     case 21: self = .sessionReset
+    case 22: self = .keySync
     default: self = .UNRECOGNIZED(rawValue)
     }
   }
@@ -73,6 +80,7 @@ public enum Shared_Proto_Core_V1_ContentType: SwiftProtobuf.Enum, Swift.CaseIter
     case .presence: return 11
     case .keyExchange: return 20
     case .sessionReset: return 21
+    case .keySync: return 22
     case .UNRECOGNIZED(let i): return i
     }
   }
@@ -86,6 +94,7 @@ public enum Shared_Proto_Core_V1_ContentType: SwiftProtobuf.Enum, Swift.CaseIter
     .presence,
     .keyExchange,
     .sessionReset,
+    .keySync,
   ]
 
 }
@@ -631,7 +640,7 @@ public struct Shared_Proto_Core_V1_SenderCertificate: Sendable {
 fileprivate let _protobuf_package = "shared.proto.core.v1"
 
 extension Shared_Proto_Core_V1_ContentType: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0CONTENT_TYPE_UNSPECITIED\0\u{1}CONTENT_TYPE_E2EE_SIGNAL\0\u{1}CONTENT_TYPE_E2EE_MLS\0\u{2}\u{8}CONTENT_TYPE_WEBRTC_SIGNAL\0\u{1}CONTENT_TYPE_PRESENCE\0\u{2}\u{9}CONTENT_TYPE_KEY_EXCHANGE\0\u{1}CONTENT_TYPE_SESSION_RESET\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0CONTENT_TYPE_UNSPECITIED\0\u{1}CONTENT_TYPE_E2EE_SIGNAL\0\u{1}CONTENT_TYPE_E2EE_MLS\0\u{2}\u{8}CONTENT_TYPE_WEBRTC_SIGNAL\0\u{1}CONTENT_TYPE_PRESENCE\0\u{2}\u{9}CONTENT_TYPE_KEY_EXCHANGE\0\u{1}CONTENT_TYPE_SESSION_RESET\0\u{1}CONTENT_TYPE_KEY_SYNC\0")
 }
 
 extension Shared_Proto_Core_V1_MessagePriority: SwiftProtobuf._ProtoNameProviding {

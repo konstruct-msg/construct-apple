@@ -19,6 +19,7 @@ import GRPCNIOTransportHTTP2
 private enum StreamEvent: Sendable {
     case message(ChatMessage)
     case deliveryReceipt([String])    // message IDs confirmed delivered to recipient
+    case keySyncRequest(String)       // server-triggered X3DH re-init for userId
 }
 
 @MainActor
@@ -34,6 +35,8 @@ final class MessageStreamManager: ObservableObject {
     /// Called when a DeliveryReceipt arrives from the server.
     /// Provides the IDs of messages confirmed delivered to the recipient.
     var onDeliveryReceipt: (([String]) -> Void)?
+    /// Called when server sends KEY_SYNC (contentType=22) — triggers X3DH re-init for userId.
+    var onKeySyncReceived: ((String) -> Void)?
 
     // MARK: - Private State
 
@@ -347,6 +350,9 @@ final class MessageStreamManager: ObservableObject {
                 case .deliveryReceipt(let ids):
                     Log.info("📬 MessageStream receipt: \(ids.count) message(s) delivered → \(ids.joined(separator: ", "))", category: "MessageStream")
                     self?.onDeliveryReceipt?(ids)
+                case .keySyncRequest(let userId):
+                    Log.info("🔑 KEY_SYNC received — re-keying session for \(userId.prefix(8))…", category: "MessageStream")
+                    self?.onKeySyncReceived?(userId)
                 }
             }
         }
@@ -399,6 +405,11 @@ final class MessageStreamManager: ObservableObject {
     ) -> StreamEvent? {
         switch response.response {
         case .message(let envelope):
+            // KEY_SYNC: server-triggered re-key signal — no encrypted payload, route directly
+            if envelope.contentType == .keySync {
+                Log.info("🔑 KEY_SYNC envelope from \(envelope.sender.userID.prefix(8))…", category: "MessageStream")
+                return .keySyncRequest(envelope.sender.userID)
+            }
             // Unpack wire payload blob into crypto components
             guard let decoded = try? WirePayloadCoder.decode(envelope.encryptedPayload) else {
                 Log.info("⚠️ Failed to decode encrypted_payload for message \(envelope.messageID)", category: "MessageStream")
