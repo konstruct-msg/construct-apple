@@ -33,6 +33,13 @@ class PushNotificationManager: NSObject, ObservableObject {
     
     /// Current device token (hex string)
     @Published private(set) var deviceToken: String?
+
+    /// Fires each time a silent push is received (for stream reconnection)
+    @Published private(set) var lastSilentPushDate: Date?
+
+    func signalSilentPush() {
+        lastSilentPushDate = Date()
+    }
     
     // MARK: - Private Properties
     

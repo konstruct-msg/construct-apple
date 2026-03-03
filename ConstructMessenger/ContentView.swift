@@ -16,18 +16,14 @@ struct ContentView: View {
     @AppStorage("appTheme") private var appTheme: AppTheme = .automatic
 
     @StateObject private var chatsViewModel = ChatsViewModel()
-    
-    @State private var isCheckingAuth = true
-    @State private var hasDeviceKeys = false
 
     var body: some View {
         Group {
-            if isCheckingAuth {
+            if authViewModel.hasRegisteredDeviceKeys == nil {
                 // Loading screen while checking Keychain
                 ProgressView("Loading...")
-            } else if hasDeviceKeys {
+            } else if authViewModel.hasRegisteredDeviceKeys == true {
                 // Device is registered - show main app
-                // (Session token will be obtained via device-based auth)
                 MainTabView()
                     .environmentObject(authViewModel)
                     .environmentObject(chatsViewModel)
@@ -35,27 +31,14 @@ struct ContentView: View {
                 // No device keys = new user -> show onboarding
                 OnboardingView()
                     .onDisappear {
-                        // Re-check device keys when onboarding dismisses
-                        checkDeviceKeys()
+                        authViewModel.refreshDeviceKeyState()
                     }
             }
         }
         .preferredColorScheme(appTheme.colorScheme)
         .onAppear {
-            // Check for device keys first
-            checkDeviceKeys()
-            
-            // ✅ Session is now restored in AuthViewModel.init()
-            // Just set the context for ChatsViewModel
+            authViewModel.refreshDeviceKeyState()
             chatsViewModel.setContext(viewContext)
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("DeviceKeysDeleted"))) { _ in
-            Log.info("📢 Received 'DeviceKeysDeleted' notification", category: "ContentView")
-            checkDeviceKeys()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("DeviceRegistered"))) { _ in
-            Log.info("📢 Received 'DeviceRegistered' notification", category: "ContentView")
-            checkDeviceKeys()
         }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
@@ -101,24 +84,6 @@ struct ContentView: View {
         }
     }
     
-    private func checkDeviceKeys() {
-        Log.info("🔍 Checking device keys in Keychain...", category: "ContentView")
-        
-        // Check if device keys exist in Keychain
-        let wasRegistered = hasDeviceKeys
-        hasDeviceKeys = KeychainManager.shared.isDeviceRegistered()
-        isCheckingAuth = false
-        
-        if hasDeviceKeys != wasRegistered {
-            Log.info("   📱 Device registration status CHANGED: \(wasRegistered) → \(hasDeviceKeys)", category: "ContentView")
-        }
-        
-        if hasDeviceKeys {
-            Log.info("   ✅ Device is registered - showing main app", category: "ContentView")
-        } else {
-            Log.info("   ❌ Device NOT registered - showing onboarding", category: "ContentView")
-        }
-    }
 }
 
 #if DEBUG

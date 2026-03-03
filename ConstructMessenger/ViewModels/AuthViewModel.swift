@@ -14,6 +14,13 @@ import CryptoKit
 class AuthViewModel: ObservableObject {
     @Published var isAuthenticated = false
     @Published var currentUserId: String?
+
+    /// Tracks whether device keys are registered in Keychain (drives ContentView routing)
+    @Published var hasRegisteredDeviceKeys: Bool? = nil
+
+    func refreshDeviceKeyState() {
+        hasRegisteredDeviceKeys = KeychainManager.shared.isDeviceRegistered()
+    }
     
     // ✅ REFACTOR Phase 1.2: Single source of truth - Core Data User entity
     @Published var currentUser: User?
@@ -42,7 +49,8 @@ class AuthViewModel: ObservableObject {
         self.viewContext = context
         setupSubscribers()
         startTokenRefreshMonitoring()  // ✅ Monitor token expiration
-        setupSessionExpiredListener()  // ✅ Listen for session expiration from auth service
+        setupSessionExpiredListener()  // Subscribe to session invalidation
+        refreshDeviceKeyState()        // Sync Keychain state into @Published
         
         // ✅ Device-based auth: Try to restore session OR authenticate with device keys
         Task {
@@ -50,16 +58,14 @@ class AuthViewModel: ObservableObject {
         }
     }
     
-    // ✅ Listen for session expiration notifications from gRPC auth service
+    // Subscribe to session invalidation from SessionManager (@Published replaces NotificationCenter)
     private func setupSessionExpiredListener() {
-        NotificationCenter.default.publisher(for: NSNotification.Name("SessionExpired"))
+        // "SessionExpired" was never posted — removed
+        // "SessionInvalidated" -> SessionManager.$isSessionInvalidated
+        SessionManager.shared.$isSessionInvalidated
+            .filter { $0 }
             .sink { [weak self] _ in
-                self?.handleSessionExpired()
-            }
-            .store(in: &cancellables)
-
-        NotificationCenter.default.publisher(for: NSNotification.Name("SessionInvalidated"))
-            .sink { [weak self] _ in
+                SessionManager.shared.resetSessionInvalidated()
                 Task {
                     await self?.restoreOrAuthenticateDevice()
                 }
@@ -161,7 +167,7 @@ class AuthViewModel: ObservableObject {
             await MainActor.run {
                 Log.error("🗑️ Device auth failed - clearing device keys to show onboarding", category: "Auth")
                 KeychainManager.shared.deleteDeviceKeys()
-                NotificationCenter.default.post(name: NSNotification.Name("DeviceKeysDeleted"), object: nil)
+                hasRegisteredDeviceKeys = false
             }
         }
     }
@@ -445,7 +451,7 @@ class AuthViewModel: ObservableObject {
             isAuthenticated = false
             currentUserId = nil
             currentUser = nil  // ✅ REFACTOR Phase 1.2
-            NotificationCenter.default.post(name: NSNotification.Name("AccountDeleted"), object: nil)
+            hasRegisteredDeviceKeys = false
             return
         }
         
@@ -477,11 +483,8 @@ class AuthViewModel: ObservableObject {
         isAuthenticated = false
         currentUserId = nil
         currentUser = nil  // ✅ REFACTOR Phase 1.2
-        
-        // Notify UI that account was deleted
-        NotificationCenter.default.post(name: NSNotification.Name("AccountDeleted"), object: nil)
-        NotificationCenter.default.post(name: NSNotification.Name("DeviceKeysDeleted"), object: nil)
-        
+        hasRegisteredDeviceKeys = false
+
         Log.info("✅ Account deletion complete - user logged out", category: "AuthViewModel")
     }
     

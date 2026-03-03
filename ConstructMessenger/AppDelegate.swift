@@ -84,7 +84,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         Log.info("📱 Silent push received: \(userInfo["type"] ?? "unknown")", category: "Push")
 
         // Signal ChatsViewModel to reconnect the stream and pick up pending messages
-        NotificationCenter.default.post(name: .silentPushReceived, object: nil)
+        PushNotificationManager.shared.signalSilentPush()
 
         // Give the stream up to 25s to connect and fetch (system limit is 30s)
         Task {
@@ -175,9 +175,5 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     }
 }
 
-// MARK: - Notification Names
-
-extension Notification.Name {
-    /// Posted when a silent APNs push arrives — ChatsViewModel reconnects the stream.
-    static let silentPushReceived = Notification.Name("com.construct.silentPushReceived")
-}
+// MARK: - Notification Names (system notifications only)
+// Custom app notifications replaced with @Published properties

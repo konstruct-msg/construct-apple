@@ -20,6 +20,13 @@ class SessionManager: ObservableObject {
     
     // ✅ User ID from server (UUID)
     @Published private(set) var userId: String?
+
+    // Signals that the session was invalidated due to an unsupported token algorithm
+    @Published private(set) var isSessionInvalidated: Bool = false
+
+    func resetSessionInvalidated() {
+        isSessionInvalidated = false
+    }
     
     // ✅ Get userId (prefer stored userId, fallback to deviceId for compatibility)
     var currentUserId: String? {
@@ -63,7 +70,7 @@ class SessionManager: ObservableObject {
            alg != "RS256" {
             Log.error("❌ Unsupported JWT alg in cached token: \(alg). Clearing session.", category: "SessionManager")
             clearSession()
-            NotificationCenter.default.post(name: NSNotification.Name("SessionInvalidated"), object: nil)
+            isSessionInvalidated = true
         }
     }
     

@@ -211,7 +211,7 @@ struct RegistrationFlowView: View {
             username: username,
             onComplete: {
                 Log.info("👆 User pressed Continue", category: "Registration")
-                NotificationCenter.default.post(name: NSNotification.Name("DeviceRegistered"), object: nil)
+                authViewModel.hasRegisteredDeviceKeys = true
                 dismiss()
             },
             onDismiss: { dismiss() }
