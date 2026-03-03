@@ -212,6 +212,7 @@ final class MessageStreamManager: ObservableObject {
 
             guard !Task.isCancelled else { break }
 
+            ConnectionStatusManager.shared.markConnecting()
             do {
                 try await openStream()
                 // Stream ended cleanly — immediate reconnect, reset counter
@@ -294,8 +295,7 @@ final class MessageStreamManager: ObservableObject {
         let (outboundStream, continuation) = AsyncStream<Shared_Proto_Services_V1_MessageStreamRequest>.makeStream()
         self.outboundContinuation = continuation
         self.isConnected = true
-        ConnectionStatusManager.shared.markStreamConnected()
-        Log.info("✅ MessageStream connected to \(host):\(port)", category: "MessageStream")
+        Log.info("⏳ MessageStream opening to \(host):\(port)", category: "MessageStream")
 
         // Send initial subscribe
         var subscribeReq = Shared_Proto_Services_V1_MessageStreamRequest()
@@ -377,6 +377,10 @@ final class MessageStreamManager: ObservableObject {
                 let contents: StreamingClientResponse<Shared_Proto_Services_V1_MessageStreamResponse>.Contents
                 switch response.accepted {
                 case .success(let c):
+                    Task { @MainActor in
+                        ConnectionStatusManager.shared.markStreamConnected()
+                        Log.info("✅ MessageStream RPC accepted — stream connected", category: "MessageStream")
+                    }
                     contents = c
                 case .failure(let error):
                     incomingContinuation.finish()
