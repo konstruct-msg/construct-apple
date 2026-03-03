@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct PinSetupView: View {
-    @EnvironmentObject var securityViewModel: SecurityViewModel
+    @Environment(SecurityViewModel.self) private var securityViewModel
     @Environment(\.dismiss) private var dismiss
 
     private enum Step {
@@ -230,5 +230,5 @@ struct PinSetupView: View {
 
 #Preview {
     PinSetupView(isChanging: false)
-        .environmentObject(SecurityViewModel())
+        .environment(SecurityViewModel())
 }

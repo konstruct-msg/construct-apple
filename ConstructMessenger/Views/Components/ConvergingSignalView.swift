@@ -26,7 +26,7 @@ struct ConvergingSignalView: View {
     // MARK: - Configuration
 
     private enum Config {
-        static let dotCount: Int = 28
+        static let dotCount: Int = 24
         static let animationSpeed: Double = 1.5
         static let amplitudeFraction: Double = 0.40
         static let settleCutoff: Double = 0.04

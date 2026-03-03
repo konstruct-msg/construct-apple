@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct PinDisableView: View {
-    @EnvironmentObject var securityViewModel: SecurityViewModel
+    @Environment(SecurityViewModel.self) private var securityViewModel
     @Environment(\.dismiss) private var dismiss
 
     @State private var pin = ""
@@ -85,5 +85,5 @@ struct PinDisableView: View {
 
 #Preview {
     PinDisableView()
-        .environmentObject(SecurityViewModel())
+        .environment(SecurityViewModel())
 }

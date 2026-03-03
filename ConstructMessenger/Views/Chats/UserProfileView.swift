@@ -13,7 +13,7 @@ struct UserProfileView: View {
     @Environment(\.managedObjectContext) private var viewContext
     @Environment(\.dismiss) private var dismiss
     
-    @StateObject private var viewModel = ProfileShareViewModel()
+    @State private var viewModel = ProfileShareViewModel()
     @State private var showingBlockConfirmation = false
     @State private var showingShareAlert = false
     @State private var shareAlertMessage = ""

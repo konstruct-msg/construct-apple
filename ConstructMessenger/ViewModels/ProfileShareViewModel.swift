@@ -7,11 +7,12 @@
 
 import Foundation
 import CoreData
-import Combine
 import UIKit
+import Observation
 
 @MainActor
-class ProfileShareViewModel: ObservableObject {
+@Observable
+class ProfileShareViewModel {
     private var viewContext: NSManagedObjectContext?
 
     func setContext(_ context: NSManagedObjectContext) {

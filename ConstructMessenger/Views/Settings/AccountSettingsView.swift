@@ -12,7 +12,7 @@ import PhotosUI
 struct AccountSettingsView: View {
     @Environment(\.managedObjectContext) private var viewContext
     @EnvironmentObject var authViewModel: AuthViewModel
-    @StateObject private var viewModel = SettingsViewModel()
+    @State private var viewModel = SettingsViewModel()
 
     @State private var showingImagePicker = false
     @State private var selectedPhotoItem: PhotosPickerItem?

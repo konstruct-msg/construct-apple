@@ -4,6 +4,7 @@
 "cancel" = "Cancel";
 "done" = "Done";
 "unknown" = "Unknown";
+"constrcut_title" = "KONSTRUCT";
 
 // MARK: - Main Tabs
 "chats" = "Chats";

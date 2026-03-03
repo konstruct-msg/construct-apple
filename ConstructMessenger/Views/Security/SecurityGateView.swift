@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct SecurityGateView<Content: View>: View {
-    @EnvironmentObject var securityViewModel: SecurityViewModel
+    @Environment(SecurityViewModel.self) private var securityViewModel
     @Environment(\.scenePhase) private var scenePhase
 
     private let content: Content
@@ -49,5 +49,5 @@ struct SecurityGateView<Content: View>: View {
     SecurityGateView {
         Text("Preview")
     }
-    .environmentObject(SecurityViewModel())
+    .environment(SecurityViewModel())
 }

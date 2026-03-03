@@ -8,6 +8,7 @@
 
 import SwiftUI
 import Combine
+import Observation
 
 /// Manages scroll state and behavior for ChatView
 ///
@@ -23,20 +24,21 @@ import Combine
 /// - Easier to debug scroll issues
 /// - Can be reused in other chat-like views
 @MainActor
-class ChatScrollManager: ObservableObject {
+@Observable
+class ChatScrollManager {
     // MARK: - Published State
     
     /// Whether the view should scroll to bottom on next layout
-    @Published var shouldScrollToBottom = true
+    var shouldScrollToBottom = true
     
     /// Whether the view has scrolled to bottom at least once
-    @Published var hasScrolledToBottom = false
+    var hasScrolledToBottom = false
     
     /// Current vertical scroll offset
-    @Published var scrollOffset: CGFloat = 0
+    var scrollOffset: CGFloat = 0
     
     /// Keyboard height when visible
-    @Published var keyboardHeight: CGFloat = 0
+    var keyboardHeight: CGFloat = 0
     
     // MARK: - Private State
     

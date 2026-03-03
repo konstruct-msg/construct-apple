@@ -9,13 +9,15 @@ import Foundation
 import LocalAuthentication
 import CryptoKit
 import Security
+import Observation
 
-final class SecurityViewModel: ObservableObject {
-    @Published private(set) var isPinEnabled: Bool
-    @Published var isUnlocked: Bool
-    @Published var isBiometricAvailable: Bool = false
-    @Published private(set) var biometricType: LABiometryType = .none
-    @Published var isBiometricEnabled: Bool {
+@Observable
+final class SecurityViewModel {
+    private(set) var isPinEnabled: Bool
+    var isUnlocked: Bool
+    var isBiometricAvailable: Bool = false
+    private(set) var biometricType: LABiometryType = .none
+    var isBiometricEnabled: Bool {
         didSet {
             UserDefaults.standard.set(isBiometricEnabled, forKey: Self.biometricEnabledKey)
         }

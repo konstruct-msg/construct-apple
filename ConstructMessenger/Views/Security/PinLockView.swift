@@ -10,7 +10,7 @@
 import SwiftUI
 
 struct PinLockView: View {
-    @EnvironmentObject var securityViewModel: SecurityViewModel
+    @Environment(SecurityViewModel.self) private var securityViewModel
 
     @State private var pin = ""
     @State private var errorMessage: String?
@@ -250,7 +250,7 @@ struct PinLockView: View {
 
 #Preview("PIN entry") {
     PinLockView()
-        .environmentObject(SecurityViewModel())
+        .environment(SecurityViewModel())
 }
 
 #Preview("Biometric") {
@@ -258,5 +258,5 @@ struct PinLockView: View {
     vm.isBiometricAvailable = true
     vm.isBiometricEnabled = true
     return PinLockView()
-        .environmentObject(vm)
+        .environment(vm)
 }

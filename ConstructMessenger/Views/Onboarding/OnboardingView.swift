@@ -30,7 +30,7 @@ struct OnboardingView: View {
                         .frame(width: 130, height: 130)
                         .padding(.bottom, 40)
                                         
-                    Text("KONSTRUCT")
+                    Text("constrcut_title")
                         .font(.largeTitle)
                         .fontWeight(.bold)
                         .tracking(9)
@@ -47,11 +47,11 @@ struct OnboardingView: View {
                     
                     TextField("onboarding_username_placeholder", text: $username)
                         .multilineTextAlignment(.center)
-                        .font(.body.monospaced())
+                        .font(.system(size: 14, weight: .regular, design: .monospaced))
                         .frame(height: 30)
                         .padding(12)
                         .background(Color(.systemGray6))
-                        .cornerRadius(18)
+                        .cornerRadius(8)
                         .onChange(of: username) { oldValue, newValue in
                             let lowered = newValue.lowercased()
                             if newValue != lowered {
@@ -80,7 +80,6 @@ struct OnboardingView: View {
                 .frame(maxWidth: 420)
                 .padding(.horizontal, 32)
                 
-                Spacer()
                 
                 // Primary actions
                 VStack(spacing: 16) {
@@ -93,7 +92,7 @@ struct OnboardingView: View {
                             .frame(maxWidth: .infinity)
                             .padding()
                             .background(canProceed ? Color.AppBrand.button : Color.gray)
-                            .cornerRadius(18)
+                            .cornerRadius(8)
                     }
                     .padding(.vertical, 8)
                     .disabled(!canProceed)
@@ -112,12 +111,12 @@ struct OnboardingView: View {
                 .padding(.bottom, 32)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background {
-                // Lattice background — visual nod to lattice-based cryptography
-                LatticeBackgroundView()
-                    .ignoresSafeArea()
-                    .opacity(0.8)
-            }
+//            .background {
+//                // Lattice background — visual nod to lattice-based cryptography
+//                LatticeBackgroundView()
+//                    .ignoresSafeArea()
+//                    .opacity(0.8)
+//            }
             .navigationDestination(isPresented: $showingRegistration) {
                 RegistrationFlowView(username: username.isEmpty ? nil : username)
             }

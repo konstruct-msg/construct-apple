@@ -35,7 +35,7 @@ struct Construct_MessengerApp: App {
     }()
 
     @StateObject private var authViewModel = AuthViewModel(context: Construct_MessengerApp.persistentContainer.viewContext)
-    @StateObject private var securityViewModel = SecurityViewModel()
+    @State private var securityViewModel = SecurityViewModel()
 
     var body: some Scene {
         WindowGroup {
@@ -45,7 +45,7 @@ struct Construct_MessengerApp: App {
                     .environmentObject(authViewModel)
                     .environmentObject(appDelegate.deepLinkHandler)
             }
-            .environmentObject(securityViewModel)
+            .environment(securityViewModel)
         }
     }
 }

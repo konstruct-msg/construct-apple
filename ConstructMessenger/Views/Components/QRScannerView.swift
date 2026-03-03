@@ -7,12 +7,13 @@
 
 import SwiftUI
 import AVFoundation
+import Observation
 
 struct QRScannerView: View {
     @Environment(\.dismiss) private var dismiss
     let onCodeScanned: (String) -> Void
 
-    @StateObject private var scanner = QRCodeScanner()
+    @State private var scanner = QRCodeScanner()
     @State private var showingError = false
     @State private var errorMessage = ""
     @State private var showingPermissionAlert = false
@@ -350,9 +351,10 @@ private enum QRScannerConfig {
 }
 
 // MARK: - QR Code Scanner Logic
-class QRCodeScanner: NSObject, ObservableObject, AVCaptureMetadataOutputObjectsDelegate {
-    @Published var scannedCode: String?
-    @Published var isSessionReady = false  // ✅ NEW: Track when session is ready
+@Observable
+class QRCodeScanner: NSObject, AVCaptureMetadataOutputObjectsDelegate {
+    var scannedCode: String?
+    var isSessionReady = false  // ✅ NEW: Track when session is ready
 
     private var captureSession: AVCaptureSession?
     private var previewLayer: AVCaptureVideoPreviewLayer?
@@ -443,7 +445,7 @@ class QRCodeScanner: NSObject, ObservableObject, AVCaptureMetadataOutputObjectsD
 
 // MARK: - UIViewRepresentable for Camera Preview
 struct QRCodeScannerViewRepresentable: UIViewRepresentable {
-    @ObservedObject var scanner: QRCodeScanner
+    var scanner: QRCodeScanner
 
     func makeUIView(context: Context) -> UIView {
         let view = UIView(frame: .zero)

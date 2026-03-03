@@ -10,7 +10,7 @@ import SwiftUI
 struct SettingsView: View {
     @Environment(\.managedObjectContext) private var viewContext
     @EnvironmentObject var authViewModel: AuthViewModel
-    @StateObject private var viewModel = SettingsViewModel()
+    @State private var viewModel = SettingsViewModel()
     @ObservedObject private var connectionStatus = ConnectionStatusManager.shared
     @State private var showingQRCode = false
     @State private var linkCopied = false
@@ -305,6 +305,6 @@ struct SettingsView: View {
     return SettingsView()
         .environment(\.managedObjectContext, context)
         .environmentObject(authViewModel)
-        .environmentObject(SecurityViewModel())
+        .environment(SecurityViewModel())
 }
 #endif

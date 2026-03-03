@@ -6,23 +6,24 @@
 //
 
 import Foundation
-import Combine
 import SwiftUI
 import CoreData
+import Observation
 
 @MainActor
-class SettingsViewModel: ObservableObject {
-    @Published var displayName: String = ""
-    @Published var username: String = ""
-    @Published var userId: String = ""
-    @Published var profileImage: UIImage?
-    @Published var showResetAllSessionsConfirm = false
-    @Published var showDeleteKeysConfirm = false
+@Observable
+class SettingsViewModel {
+    var displayName: String = ""
+    var username: String = ""
+    var userId: String = ""
+    var profileImage: UIImage?
+    var showResetAllSessionsConfirm = false
+    var showDeleteKeysConfirm = false
 
     // Username save state
-    @Published var isSavingUsername = false
-    @Published var usernameSaveError: String?
-    @Published var usernameSaved = false
+    var isSavingUsername = false
+    var usernameSaveError: String?
+    var usernameSaved = false
 
     private var viewContext: NSManagedObjectContext?
 

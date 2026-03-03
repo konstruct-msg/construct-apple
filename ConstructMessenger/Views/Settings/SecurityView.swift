@@ -8,13 +8,14 @@
 import SwiftUI
 
 struct SecurityView: View {
-    @EnvironmentObject var securityViewModel: SecurityViewModel
+    @Environment(SecurityViewModel.self) private var securityViewModel
     
     @State private var showingPinSetup = false
     @State private var showingDisablePinSheet = false
     @State private var showingSeedRecovery = false
     
     var body: some View {
+        @Bindable var securityViewModel = securityViewModel
         List {
             Section {
                 Button {
@@ -74,11 +75,11 @@ struct SecurityView: View {
         }
         .sheet(isPresented: $showingPinSetup) {
             PinSetupView(isChanging: securityViewModel.isPinEnabled)
-                .environmentObject(securityViewModel)
+                .environment(securityViewModel)
         }
         .sheet(isPresented: $showingDisablePinSheet) {
             PinDisableView()
-                .environmentObject(securityViewModel)
+                .environment(securityViewModel)
         }
         .alert("account_recovery_seed", isPresented: $showingSeedRecovery) {
             Button("ok", role: .cancel) { }
