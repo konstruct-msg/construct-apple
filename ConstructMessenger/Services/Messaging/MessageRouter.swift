@@ -334,7 +334,8 @@ class MessageRouter {
                 onSessionHealNeeded?(userId, message)
             } else {
                 // messageNumber > 0 → DR ratchet diverged, healing is impossible.
-                // Notify sender that decryption failed before requesting END_SESSION.
+                // Send FAILED receipt: server automatically relays SESSION_RESET to sender (server-side item 12).
+                // Also send explicit END_SESSION message for defense-in-depth (sender handles both idempotently).
                 Log.info("🔄 SESSION_STATE[heal_impossible]: messageNumber=\(message.messageNumber) — ratchet diverged, requesting END_SESSION", category: "SessionInit")
                 onReceiptNeeded?([message.id], .failed)
                 pendingMessages.removeValue(forKey: userId)
