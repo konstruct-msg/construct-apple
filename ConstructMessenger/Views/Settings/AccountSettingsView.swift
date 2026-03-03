@@ -222,7 +222,6 @@ struct DeleteAccountConfirmationView: View {
 
     @State private var countdown = 7
     @State private var errorMessage: String?
-    private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -316,8 +315,13 @@ struct DeleteAccountConfirmationView: View {
         }
         .presentationDetents([.medium])
         .presentationDragIndicator(.hidden)
-        .onReceive(timer) { _ in
-            if countdown > 0 { countdown -= 1 }
+        .task {
+            // Count down from 7 to 0 using structured concurrency — avoids RunLoop blocking on macOS.
+            while countdown > 0 {
+                try? await Task.sleep(for: .seconds(1))
+                guard countdown > 0 else { break }
+                countdown -= 1
+            }
         }
         .onChange(of: authViewModel.errorMessage) { _, msg in
             if let msg { errorMessage = msg }
