@@ -13,6 +13,7 @@ final class MessageCryptoService {
         let messageNumber: UInt32
         let content: String
         let suiteId: UInt16
+        let oneTimePreKeyId: UInt32  // OTPK key_id used in X3DH (0 = no OTPK)
     }
 
     func encryptMessage(
@@ -65,7 +66,8 @@ final class MessageCryptoService {
                 ephemeralPublicKey: Data(rustComponents.ephemeralPublicKey),
                 messageNumber: rustComponents.messageNumber,
                 content: MessagePadding.padCiphertextBase64(rustComponents.content),
-                suiteId: suiteId
+                suiteId: suiteId,
+                oneTimePreKeyId: rustComponents.oneTimePrekeyId
             )
             
             #if DEBUG

@@ -348,11 +348,13 @@ class CryptoManager {
     // MARK: - Session Management
 
     /// Initializes a secure session with a recipient using the Rust core.
-    func initializeSession(for userId: String, recipientBundle: (identityPublic: String, signedPrekeyPublic: String, signature: String, verifyingKey: String, suiteId: String)) throws {
+    func initializeSession(for userId: String, recipientBundle: (identityPublic: String, signedPrekeyPublic: String, signature: String, verifyingKey: String, suiteId: String), oneTimePreKeyPublic: Data? = nil, oneTimePreKeyId: UInt32? = nil) throws {
         do {
             try sessionInitService.initializeSession(
                 for: userId,
                 recipientBundle: recipientBundle,
+                oneTimePreKeyPublic: oneTimePreKeyPublic,
+                oneTimePreKeyId: oneTimePreKeyId,
                 core: core,
                 sessionStore: sessionStore,
                 archiveSession: { [weak self] userId, reason in

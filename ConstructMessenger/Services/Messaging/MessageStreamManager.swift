@@ -424,7 +424,8 @@ final class MessageStreamManager: ObservableObject {
                 messageNumber: decoded.messageNumber,
                 content: decoded.content,
                 suiteId: 1,
-                timestamp: UInt64(envelope.timestamp)
+                timestamp: UInt64(envelope.timestamp),
+                oneTimePreKeyId: decoded.oneTimePreKeyId
             ))
         case .receipt(let receipt):
             // Deliver receipt: extract confirmed message IDs and propagate

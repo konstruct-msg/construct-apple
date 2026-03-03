@@ -24,6 +24,10 @@ struct ChatMessage: Codable, Identifiable {
     let suiteId: UInt16
 
     let timestamp: UInt64
+
+    /// OTPK key_id used by sender in X3DH (0 = no OTPK / fallback 3-DH).
+    /// Only meaningful when messageNumber == 0 (X3DH handshake message).
+    var oneTimePreKeyId: UInt32 = 0
     
     /// Check if this is an END_SESSION control message
     var isEndSession: Bool {
@@ -67,6 +71,8 @@ struct PublicKeyBundleData: Codable {
     let signature: String
     let verifyingKey: String
     let suiteId: UInt16
+    var oneTimePreKeyPublic: String?  // Base64; nil if server has no OTPKs left
+    var oneTimePreKeyId: UInt32?      // nil if no OTPK available
 }
 
 struct EncryptedMessageV3: Codable {

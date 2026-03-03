@@ -12,6 +12,8 @@ final class CryptoSessionInitializationService {
     func initializeSession(
         for userId: String,
         recipientBundle: (identityPublic: String, signedPrekeyPublic: String, signature: String, verifyingKey: String, suiteId: String),
+        oneTimePreKeyPublic: Data? = nil,
+        oneTimePreKeyId: UInt32? = nil,
         core: ClassicCryptoCore?,
         sessionStore: SessionStore,
         archiveSession: (String, ArchiveReason) -> Void,
@@ -58,13 +60,17 @@ final class CryptoSessionInitializationService {
             throw CryptoManagerError.invalidKeyData
         }
 
-        let bundleDict: [String: Any] = [
+        var bundleDict: [String: Any] = [
             "identity_public": [UInt8](identityPublicData),
             "signed_prekey_public": [UInt8](signedPrekeyPublicData),
             "signature": [UInt8](signatureData),
             "verifying_key": [UInt8](verifyingKeyData),
             "suite_id": suiteID,
         ]
+        if let otpkPublic = oneTimePreKeyPublic, let otpkId = oneTimePreKeyId, otpkId > 0 {
+            bundleDict["one_time_prekey_public"] = [UInt8](otpkPublic)
+            bundleDict["one_time_prekey_id"] = otpkId
+        }
 
         do {
             let bundleData = try JSONSerialization.data(withJSONObject: bundleDict)
@@ -198,7 +204,8 @@ final class CryptoSessionInitializationService {
         let messageDict: [String: Any] = [
             "ephemeral_public_key": [UInt8](firstMessage.ephemeralPublicKey),
             "message_number": firstMessage.messageNumber,
-            "content": unpaddedContent   // Base64 string — Rust serde deserializes as String
+            "content": unpaddedContent,   // Base64 string — Rust serde deserializes as String
+            "one_time_prekey_id": firstMessage.oneTimePreKeyId
         ]
 
         do {

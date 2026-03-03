@@ -5,8 +5,9 @@
 //  Encodes/decodes the encrypted_payload blob sent to/from the server.
 //
 //  Wire format (little-endian):
-//    [4 bytes]  message_number  (UInt32 LE)
-//    [32 bytes] dh_public_key   (X25519 ephemeral public key)
+//    [4 bytes]  message_number      (UInt32 LE)
+//    [32 bytes] dh_public_key       (X25519 ephemeral public key)
+//    [4 bytes]  one_time_prekey_id  (UInt32 LE; 0 = no OTPK / fallback 3-DH mode)
 //    [rest]     nonce || ciphertext || auth_tag  (ChaCha20-Poly1305 sealed box)
 //
 //  The server stores and forwards this blob opaquely — it never parses the contents.
@@ -20,7 +21,8 @@ enum WirePayloadCoder {
 
     private static let messageNumberSize = 4
     private static let dhPublicKeySize = 32
-    static let headerSize = messageNumberSize + dhPublicKeySize  // 36 bytes
+    private static let otpkIdSize = 4
+    static let headerSize = messageNumberSize + dhPublicKeySize + otpkIdSize  // 40 bytes
 
     // MARK: - Encode
 
@@ -42,6 +44,10 @@ enum WirePayloadCoder {
         // 32 bytes: dh_public_key
         payload.append(contentsOf: components.ephemeralPublicKey)
 
+        // 4 bytes: one_time_prekey_id (LE); 0 = no OTPK used
+        var otpkId = components.oneTimePreKeyId.littleEndian
+        withUnsafeBytes(of: &otpkId) { payload.append(contentsOf: $0) }
+
         // rest: nonce || ciphertext || auth_tag
         payload.append(sealedBox)
 
@@ -53,6 +59,7 @@ enum WirePayloadCoder {
     struct DecodedPayload {
         let messageNumber: UInt32
         let ephemeralPublicKey: [UInt8]   // 32 bytes
+        let oneTimePreKeyId: UInt32       // 0 = no OTPK
         let content: String               // Base64(nonce || ciphertext || auth_tag)
     }
 
@@ -69,12 +76,18 @@ enum WirePayloadCoder {
         let dhPubKeyRange = messageNumberSize ..< (messageNumberSize + dhPublicKeySize)
         let ephemeralPublicKey = [UInt8](data[dhPubKeyRange])
 
+        let otpkIdOffset = messageNumberSize + dhPublicKeySize
+        let oneTimePreKeyId = data[otpkIdOffset ..< (otpkIdOffset + otpkIdSize)]
+            .withUnsafeBytes { $0.load(as: UInt32.self) }
+            .littleEndian
+
         let sealedBoxData = data[headerSize...]
         let content = sealedBoxData.base64EncodedString()
 
         return DecodedPayload(
             messageNumber: messageNumber,
             ephemeralPublicKey: ephemeralPublicKey,
+            oneTimePreKeyId: oneTimePreKeyId,
             content: content
         )
     }

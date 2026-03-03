@@ -340,14 +340,11 @@ class ChatsViewModel: ObservableObject {
                     }
                     
                     if success {
-                        // Check server-side prekey count; log a warning if depleted.
-                        // Full OTPK replenishment requires Rust core support — tracked separately.
+                        // Replenish OTPKs if server count drops below low-water mark.
+                        // Bob consumes one OTPK per incoming session-init, so we top up asynchronously.
                         Task {
                             let deviceId = KeychainManager.shared.loadDeviceID() ?? ""
-                            if let count = try? await KeyServiceClient.shared.getPreKeyCount(deviceId: deviceId),
-                               count == 0 {
-                                Log.error("⚠️ Server has 0 prekeys for this device — signed prekey may need re-upload", category: "SessionInit")
-                            }
+                            await OtpkReplenishmentService.replenishIfNeeded(deviceId: deviceId)
                         }
 
                         // Decrypt any messages that queued up while we were initialising the session.

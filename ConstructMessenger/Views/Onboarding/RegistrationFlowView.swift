@@ -364,10 +364,22 @@ struct RegistrationFlowView: View {
                 authViewModel.finalizeDeviceRegistration(userId: registerData.userId, username: username)
             }
             
+            // 6. Upload initial one-time prekeys (100 OTPKs for full Signal Protocol)
+            Log.info("6️⃣ Uploading initial one-time prekeys...", category: "Registration")
+            do {
+                let uploadedCount = try await OtpkReplenishmentService.generateAndUpload(
+                    count: 100,
+                    deviceId: deviceId
+                )
+                Log.info("   ✅ Uploaded \(uploadedCount) one-time prekeys", category: "Registration")
+            } catch {
+                Log.error("   ⚠️ OTPK upload failed (non-fatal): \(error)", category: "Registration")
+            }
+            
             Log.info("   ✅ isAuthenticated: \(authViewModel.isAuthenticated)", category: "Registration")
             Log.info("   ✅ currentUserId: \(authViewModel.currentUserId ?? "nil")", category: "Registration")
             
-            // 6. Final verification summary
+            // 7. Final verification summary
             Log.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", category: "Registration")
             Log.info("📊 REGISTRATION DATA SUMMARY:", category: "Registration")
             Log.info("   Device ID:    \(savedDeviceId?.prefix(16) ?? "MISSING")...", category: "Registration")

@@ -41,6 +41,9 @@ final class KeyServiceClient: Sendable {
                 ? ""
                 : response.verifyingKey.base64EncodedString()
 
+            let otpkPublic = bundle.oneTimePreKey.isEmpty ? nil : bundle.oneTimePreKey.base64EncodedString()
+            let otpkId: UInt32? = bundle.oneTimePreKeyID > 0 ? bundle.oneTimePreKeyID : nil
+
             return PublicKeyBundleData(
                 userId: userId,
                 username: "",
@@ -48,7 +51,9 @@ final class KeyServiceClient: Sendable {
                 signedPrekeyPublic: bundle.signedPreKey.base64EncodedString(),
                 signature: bundle.signedPreKeySignature.base64EncodedString(),
                 verifyingKey: verifyingKeyB64,
-                suiteId: Self.parseSuiteId(bundle.cryptoSuite)
+                suiteId: Self.parseSuiteId(bundle.cryptoSuite),
+                oneTimePreKeyPublic: otpkPublic,
+                oneTimePreKeyId: otpkId
             )
         }
     }

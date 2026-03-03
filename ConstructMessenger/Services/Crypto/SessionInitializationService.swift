@@ -60,9 +60,17 @@ class SessionInitializationService {
             verifyingKey: bundle.verifyingKey,
             suiteId: String(bundle.suiteId)
         )
+
+        let otpkPublic = bundle.oneTimePreKeyPublic.flatMap { Data(base64Encoded: $0) }
+        let otpkId = bundle.oneTimePreKeyId
         
         do {
-            try CryptoManager.shared.initializeSession(for: userId, recipientBundle: bundleWithSuite)
+            try CryptoManager.shared.initializeSession(
+                for: userId,
+                recipientBundle: bundleWithSuite,
+                oneTimePreKeyPublic: otpkPublic,
+                oneTimePreKeyId: otpkId
+            )
         } catch {
             Log.error("❌ Session init failed for \(userId): \(error)", category: "SessionInit")
             Log.error("   bundle.suiteId=\(bundle.suiteId), identityPublic.len=\(bundle.identityPublic.count), signedPrekeyPublic.len=\(bundle.signedPrekeyPublic.count)", category: "SessionInit")
