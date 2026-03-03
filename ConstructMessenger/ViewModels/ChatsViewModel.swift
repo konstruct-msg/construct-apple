@@ -23,6 +23,9 @@ class ChatsViewModel: ObservableObject {
     // 🚦 Track users currently initializing session (prevents parallel init attempts)
     private var usersInitializingSession: Set<String> = []
 
+    // 🔑 OTPK replenishment: check server count once per app session on stream connect
+    private var hasPerformedStartupOtpkCheck = false
+
     // ✅ Chat ID to open programmatically (e.g., from deep link)
     @Published var chatToOpen: String?
 
@@ -186,6 +189,18 @@ class ChatsViewModel: ObservableObject {
         }
         streamManager.connect(contactUserIds: currentConversationIds()) { [weak self] message in
             self?.handleIncomingMessage(message)
+        }
+
+        // On first stream connect per app session, check if OTPKs need replenishment.
+        // Covers the case where OTPKs were consumed while the app was offline.
+        if !hasPerformedStartupOtpkCheck {
+            hasPerformedStartupOtpkCheck = true
+            Task { [weak self] in
+                guard self != nil else { return }
+                let deviceId = KeychainManager.shared.loadDeviceID() ?? ""
+                guard !deviceId.isEmpty else { return }
+                await OtpkReplenishmentService.replenishIfNeeded(deviceId: deviceId)
+            }
         }
     }
 
