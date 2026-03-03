@@ -191,7 +191,9 @@ struct AccountSettingsView: View {
                 selectedPhotoItem = nil
             }
         }
-        .fullScreenCover(isPresented: $showingCropView) {
+        // Use .sheet instead of .fullScreenCover — fullScreenCover is not supported on macOS Catalyst
+        // and conflicts with other sheet presentations on the same view.
+        .sheet(isPresented: $showingCropView) {
             if let img = imageToCrop {
                 ImageCropView(
                     image: img,
@@ -323,6 +325,11 @@ struct DeleteAccountConfirmationView: View {
         .onChange(of: authViewModel.isLoading) { _, loading in
             // Clear error when new attempt starts
             if loading { errorMessage = nil }
+        }
+        // On macOS Catalyst, sheets are child windows and don't auto-close
+        // when parent view changes — explicitly dismiss when account is deleted.
+        .onChange(of: authViewModel.isAuthenticated) { _, isAuthenticated in
+            if !isAuthenticated { dismiss() }
         }
     }
 }
