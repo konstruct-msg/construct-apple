@@ -290,6 +290,20 @@
 "account_recovery_seed" = "Identity Recovery (Seed Phrase)";
 "account_recovery_seed_hint" = "Restore access using your recovery seed phrase.";
 "account_recovery_seed_coming_soon" = "Seed phrase recovery will be available in a future update.";
+
+// Duress PIN
+"duress_pin" = "Destruction PIN";
+"duress_pin_hint" = "A separate PIN that silently wipes all data when entered on the lock screen.";
+"duress_pin_coming_soon" = "Destruction PIN will be available in a future update.";
+"enable_duress_pin" = "Enable Destruction PIN";
+"disable_duress_pin" = "Disable Destruction PIN";
+
+// Linked Devices
+"linked_devices" = "Linked Devices";
+"linked_devices_hint" = "Use your account on multiple devices simultaneously.";
+"linked_devices_coming_soon" = "Linking additional devices will be available in a future update.";
+"link_new_device" = "Link New Device";
+"this_device" = "This Device";
 "profile_currently_shared" = "Profile currently shared";
 "stop_sharing_profile" = "Stop Sharing Profile";
 "share_my_profile" = "Share My Profile";
@@ -358,3 +372,12 @@
 // iPad Split View
 "select_chat" = "Select a Chat";
 "select_chat_description" = "Choose a conversation from the sidebar to start messaging.";
+
+// QR Code
+"my_qr_code" = "My QR Code";
+"show_this_code_to_someone_nearby" = "Show this code to someone nearby";
+"scan_with_camera_or_screenshot" = "They can scan this with their camera or take a screenshot";
+"failed_to_generate_qr_code" = "Failed to generate QR code";
+
+// Account Settings
+"DANGER_ZONE" = "Danger Zone";

@@ -13,6 +13,7 @@ struct SecurityView: View {
     @State private var showingPinSetup = false
     @State private var showingDisablePinSheet = false
     @State private var showingSeedRecovery = false
+    @State private var showingDuressPin = false
     
     var body: some View {
         @Bindable var securityViewModel = securityViewModel
@@ -72,6 +73,24 @@ struct SecurityView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
+
+            Section {
+                Button {
+                    showingDuressPin = true
+                } label: {
+                    Label {
+                        Text("duress_pin")
+                            .foregroundColor(.primary)
+                    } icon: {
+                        Image(systemName: "bolt.shield.fill")
+                            .foregroundColor(.gray)
+                    }
+                }
+            } footer: {
+                Text("duress_pin_hint")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
         }
         .sheet(isPresented: $showingPinSetup) {
             PinSetupView(isChanging: securityViewModel.isPinEnabled)
@@ -85,6 +104,11 @@ struct SecurityView: View {
             Button("ok", role: .cancel) { }
         } message: {
             Text("account_recovery_seed_coming_soon")
+        }
+        .alert("duress_pin", isPresented: $showingDuressPin) {
+            Button("ok", role: .cancel) { }
+        } message: {
+            Text("duress_pin_coming_soon")
         }
     }
 }

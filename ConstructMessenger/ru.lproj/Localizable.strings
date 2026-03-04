@@ -353,3 +353,33 @@
 // iPad Split View
 "select_chat" = "Выберите чат";
 "select_chat_description" = "Выберите разговор на боковой панели, чтобы начать общение.";
+
+// Security — Recovery & Duress (from EN)
+"account_recovery_seed" = "Восстановление аккаунта (Seed-фраза)";
+"account_recovery_seed_hint" = "Восстановите доступ с помощью резервной seed-фразы.";
+"account_recovery_seed_coming_soon" = "Восстановление по seed-фразе появится в одном из следующих обновлений.";
+
+// Duress PIN
+"duress_pin" = "Пин самоуничтожения";
+"duress_pin_hint" = "Отдельный пин-код, который при вводе на экране блокировки незаметно уничтожает все данные.";
+"duress_pin_coming_soon" = "Пин самоуничтожения появится в одном из следующих обновлений.";
+"enable_duress_pin" = "Включить пин самоуничтожения";
+"disable_duress_pin" = "Отключить пин самоуничтожения";
+
+// Linked Devices
+"linked_devices" = "Связанные устройства";
+"linked_devices_hint" = "Используйте аккаунт одновременно на нескольких устройствах.";
+"linked_devices_coming_soon" = "Привязка дополнительных устройств появится в одном из следующих обновлений.";
+"link_new_device" = "Привязать устройство";
+"this_device" = "Это устройство";
+
+// App Settings / Appearance
+"app_settings" = "Настройки приложения";
+"theme" = "Тема";
+"light" = "Светлая";
+"dark" = "Тёмная";
+"automatic" = "Автоматически";
+"theme_footer" = "Выберите оформление. Автоматически — подстраивается под системные настройки.";
+
+// Account deletion
+"delete_account_countdown" = "Удалить через %dс";
