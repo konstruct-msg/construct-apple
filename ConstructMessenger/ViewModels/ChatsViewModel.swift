@@ -184,6 +184,10 @@ class ChatsViewModel {
     // MARK: - Message Receiving
 
     func startMessageStream() {
+        guard !streamManager.isPaused else {
+            Log.debug("📡 Stream paused — skipping startMessageStream", category: "ChatsViewModel")
+            return
+        }
         streamManager.onDeliveryReceipt = { [weak self] messageIds in
             self?.handleDeliveryReceipts(messageIds)
         }

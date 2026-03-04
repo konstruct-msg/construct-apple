@@ -50,7 +50,7 @@ final class MessageStreamManager {
     private var serverChangedObserver: NSObjectProtocol?
     private var retryCount = 0
     private let maxRetryDelay: TimeInterval = 60
-    private var isPaused = false
+    private(set) var isPaused = false
     private(set) var subscriptionUserIds: [String] = []
     private var lastPendingCursor: String = UserDefaults.standard.string(forKey: "construct.pendingCursor") ?? "" {
         didSet {

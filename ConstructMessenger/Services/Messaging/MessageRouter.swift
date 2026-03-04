@@ -88,6 +88,9 @@ class MessageRouter {
         // 2. Skip if already processed (persistent ACK — survives app restart)
         if PersistentACKStore.shared.isProcessed(message.id, in: context) {
             Log.debug("⏭️ Skipping already-processed message \(message.id.prefix(8))… (ACK store)", category: "MessageRouter")
+            // Re-send receipt so the server advances past this message in the pending queue.
+            // Without this the cursor stays stuck and the same message is fetched on every reconnect.
+            onReceiptNeeded?([message.id], .delivered)
             return
         }
 
@@ -274,6 +277,11 @@ class MessageRouter {
         // initialize from it — request the sender to restart their session instead.
         if message.messageNumber > 0 && isFirstForUser {
             Log.info("⚠️ No session for \(userId.prefix(8)) but messageNumber=\(message.messageNumber) — requesting END_SESSION so sender restarts", category: "MessageRouter")
+            // Mark as processed + send failed receipt so server removes it from pending queue.
+            // Without this the same message is re-fetched on every reconnect, inserting a
+            // duplicate system message each time.
+            PersistentACKStore.shared.markProcessed(message.id, senderId: userId, in: context)
+            onReceiptNeeded?([message.id], .failed)
             addSystemMessage(
                 "Encrypted session out of sync. Asking contact to restart...",
                 toUserId: userId,
