@@ -18,13 +18,15 @@ struct SettingsView: View {
     
     private let inviteGenerator = InviteGenerator()
         
+    private let sectionCornerRadius: CGFloat = 8   // Change to adjust rounding
+
         var body: some View {
             NavigationStack {
-                VStack {
-                    List {
-                        
+                ScrollView {
+                    VStack(spacing: 18) {
+
                         // MARK: - Profile Section
-                        Section {
+                        settingsSection {
                             NavigationLink(destination: AccountSettingsView().environmentObject(authViewModel)) {
                                 HStack(spacing: 12) {
                                     Group {
@@ -49,154 +51,129 @@ struct SettingsView: View {
                                         Text(profileDisplayName)
                                             .font(.headline)
                                     }
-
                                     Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundColor(Color(.tertiaryLabel))
                                 }
-                                .padding(.vertical, 4)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 12)
                             }
+                            .buttonStyle(.plain)
                         }
-                        
-                        Section {
-                            
-                            Button {
-                                showingQRCode = true
-                            } label: {
-                                Label {
-                                    Text("show_my_qr_code")
-                                        .foregroundColor(.primary)
-                                } icon: {
-                                    Image(systemName: "qrcode")
-                                        .foregroundColor(.gray)
-                                }
+
+                        // MARK: - Share Section
+                        settingsSection {
+                            Button { showingQRCode = true } label: {
+                                settingsRow(icon: "qrcode", text: "show_my_qr_code")
                             }
-                            
-                            Button {
-                                copyContactLink()
-                            } label: {
-                                Label {
-                                    Text(linkCopied ? "link_copied" : "copy_contact_link")
-                                        .foregroundColor(.primary)
-                                } icon: {
-                                    Image(systemName: linkCopied ? "checkmark.circle.fill" : "link")
-                                        .foregroundColor(linkCopied ? Color.AppStatus.success : .gray)
-                                }
+                            .buttonStyle(.plain)
+                            settingsDivider()
+                            Button { copyContactLink() } label: {
+                                settingsRow(
+                                    icon: linkCopied ? "checkmark.circle.fill" : "link",
+                                    text: linkCopied ? "link_copied" : "copy_contact_link",
+                                    iconColor: linkCopied ? Color.AppStatus.success : .gray
+                                )
                             }
+                            .buttonStyle(.plain)
                             .disabled(linkCopied)
                         }
-                        
+
                         // MARK: - App Settings Section
-                        Section {
-                            NavigationLink(destination: SecurityView()) {
-                                Label {
-                                    Text("Security")
-                                } icon: {
-                                    Image(systemName: "lock")
-                                        .foregroundColor(.gray)
-                                }
-                            }
-                            
-                            NavigationLink(destination: DevicesView()) {
-                                Label {
-                                    Text("Devices")
-                                } icon: {
-                                    Image(systemName: "laptopcomputer")
-                                        .foregroundColor(.gray)
-                                }
-                            }
-                            
-                            NavigationLink(destination: AppearanceSettingsView()) {
-                                Label {
-                                    Text("appearance")
-                                } icon: {
-                                    Image(systemName: "paintbrush")
-                                        .foregroundColor(.gray)
-                                }
-                            }
-                            
-                            NavigationLink(destination: NotificationsSettingsView()) {
-                                Label {
-                                    Text("notifications")
-                                } icon: {
-                                    Image(systemName: "bell")
-                                        .foregroundColor(.gray)
-                                }
-                            }
-                            
+                        settingsSection {
+                            settingsNavRow(icon: "lock", text: "Security", destination: SecurityView())
+                            settingsDivider()
+                            settingsNavRow(icon: "laptopcomputer", text: "Devices", destination: DevicesView())
+                            settingsDivider()
+                            settingsNavRow(icon: "paintbrush", text: "appearance", destination: AppearanceSettingsView())
+                            settingsDivider()
+                            settingsNavRow(icon: "bell", text: "notifications", destination: NotificationsSettingsView())
+                            settingsDivider()
                             NavigationLink(destination: BackgroundFetchSettingsView()) {
-                                Label {
+                                HStack {
+                                    Image(systemName: "arrow.clockwise.circle").foregroundColor(.gray).frame(width: 22)
                                     VStack(alignment: .leading, spacing: 2) {
-                                        Text("background_fetch")
+                                        Text(LocalizedStringKey("background_fetch"))
                                         HStack(spacing: 4) {
                                             Circle()
                                                 .fill(BackgroundFetchConfig.shouldBeEnabled ? Color.AppStatus.success : Color.gray)
                                                 .frame(width: 6, height: 6)
-                                            Text(BackgroundFetchConfig.shouldBeEnabled ? "enabled" : "disabled")
-                                                .font(.caption)
-                                                .foregroundColor(.secondary)
+                                            Text(LocalizedStringKey(BackgroundFetchConfig.shouldBeEnabled ? "enabled" : "disabled"))
+                                                .font(.caption).foregroundColor(.secondary)
                                         }
                                     }
-                                } icon: {
-                                    Image(systemName: "arrow.clockwise.circle")
-                                        .foregroundColor(.gray)
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundColor(Color(.tertiaryLabel))
                                 }
+                                .padding(.horizontal, 16)
+                                .frame(minHeight: 44)
                             }
-                            
+                            .buttonStyle(.plain)
+                            settingsDivider()
                             NavigationLink(destination: NetworkSettingsView()) {
-                                Label {
+                                HStack {
+                                    Image(systemName: "network").foregroundColor(.gray).frame(width: 22)
                                     VStack(alignment: .leading, spacing: 2) {
-                                        Text("network")
+                                        Text(LocalizedStringKey("network"))
                                         HStack(spacing: 4) {
                                             Circle()
                                                 .fill(connectionStatus.isConnected ? Color.AppStatus.success : Color.red)
                                                 .frame(width: 6, height: 6)
-                                            Text(connectionStatus.connectionStatus.localizedKey)
-                                                .font(.caption)
-                                                .foregroundColor(.secondary)
+                                            Text(LocalizedStringKey(connectionStatus.connectionStatus.localizedKey))
+                                                .font(.caption).foregroundColor(.secondary)
                                         }
                                     }
-                                } icon: {
-                                    Image(systemName: "network")
-                                        .foregroundColor(.gray)
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundColor(Color(.tertiaryLabel))
                                 }
+                                .padding(.horizontal, 16)
+                                .frame(minHeight: 44)
                             }
-                            
-                            NavigationLink(destination: DraftsView()) {
-                                Label {
-                                    Text("Drafts")
-                                } icon: {
-                                    Image(systemName: "folder")
-                                        .foregroundColor(.gray)
-                                }
-                            }
+                            .buttonStyle(.plain)
+                            settingsDivider()
+                            settingsNavRow(icon: "folder", text: "Drafts", destination: DraftsView())
                         }
-                        
+
                         // MARK: - About Section
-                        Section {
+                        settingsSection {
                             HStack {
-                                Label {
-                                    Text("version")
-                                } icon: {
-                                    Image(systemName: "info.circle")
-                                        .foregroundColor(.gray)
-                                }
+                                Image(systemName: "info.circle").foregroundColor(.gray).frame(width: 22)
+                                Text(LocalizedStringKey("version"))
                                 Spacer()
-                                Text("Construct v\(AppConstants.appVersion)")
-                                    .foregroundColor(.secondary)
+                                Text("Construct v\(AppConstants.appVersion)").foregroundColor(.secondary)
                             }
+                            .padding(.horizontal, 16)
+                            .frame(minHeight: 44)
                         }
 
                         // MARK: - Developer Section (DEBUG only)
-                        Section(header: Text("Developer")) {
+                        #if DEBUG
+                        settingsSection(header: "Developer") {
                             NavigationLink(destination: DiagnosticsView()) {
-                                Text("Diagnostics & Logs")
-                                    .foregroundStyle(.orange)
+                                HStack {
+                                    Text("Diagnostics & Logs").foregroundStyle(.orange)
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundColor(Color(.tertiaryLabel))
+                                }
+                                .padding(.horizontal, 16)
+                                .frame(minHeight: 44)
                             }
+                            .buttonStyle(.plain)
                         }
+                        #endif
                     }
-                    .listStyle(.insetGrouped)
-                    .padding(.vertical, 0)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
                 }
-                .navigationBarHidden(true) // Скрываем стандартную навигационную панель
+                .background(Color(uiColor: .systemGroupedBackground))
+                .navigationBarHidden(true)
                 .onAppear {
                     viewModel.setContext(viewContext)
                     viewModel.loadUserInfo(from: authViewModel)
@@ -212,6 +189,67 @@ struct SettingsView: View {
             }
         }
         
+    // MARK: - Section Helpers
+
+    @ViewBuilder
+    private func settingsSection<Content: View>(
+        header: String? = nil,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if let header {
+                Text(header)
+                    .font(.footnote)
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 6)
+            }
+            VStack(spacing: 0) {
+                content()
+            }
+            .background(Color(uiColor: .secondarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: sectionCornerRadius, style: .continuous))
+        }
+    }
+
+    private func settingsRow(
+        icon: String,
+        text: String,
+        iconColor: Color = .gray
+    ) -> some View {
+        HStack {
+            Image(systemName: icon).foregroundColor(iconColor).frame(width: 22)
+            Text(LocalizedStringKey(text))
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .frame(minHeight: 44)
+    }
+
+    private func settingsNavRow<Destination: View>(
+        icon: String,
+        text: String,
+        destination: Destination
+    ) -> some View {
+        NavigationLink(destination: destination) {
+            HStack {
+                Image(systemName: icon).foregroundColor(.gray).frame(width: 22)
+                Text(LocalizedStringKey(text))
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(Color(.tertiaryLabel))
+            }
+            .padding(.horizontal, 16)
+            .frame(minHeight: 44)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func settingsDivider() -> some View {
+        Divider().padding(.leading, 54)
+    }
+
     // MARK: - Contact Link
     private var contactLink: String {
         guard let userId = authViewModel.currentUserId else {
