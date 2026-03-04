@@ -132,6 +132,7 @@ struct ContactQRCodeView: View {
                     .padding(.bottom, 32)
             }
             .padding(.horizontal)
+            .scrollIndicators(.hidden)
             } // ScrollView
 
             // Close button — overlay, always visible at top right
