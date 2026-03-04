@@ -109,7 +109,8 @@ struct SettingsView: View {
                                         .foregroundColor(Color(.tertiaryLabel))
                                 }
                                 .padding(.horizontal, 16)
-                                .frame(minHeight: 44)
+                                .padding(.vertical, 12)
+                                .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
                             settingsDivider()
@@ -132,7 +133,8 @@ struct SettingsView: View {
                                         .foregroundColor(Color(.tertiaryLabel))
                                 }
                                 .padding(.horizontal, 16)
-                                .frame(minHeight: 44)
+                                .padding(.vertical, 12)
+                                .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
                             settingsDivider()
@@ -148,7 +150,7 @@ struct SettingsView: View {
                                 Text("Construct v\(AppConstants.appVersion)").foregroundColor(.secondary)
                             }
                             .padding(.horizontal, 16)
-                            .frame(minHeight: 44)
+                            .padding(.vertical, 12)
                         }
 
                         // MARK: - Developer Section (DEBUG only)
@@ -163,7 +165,8 @@ struct SettingsView: View {
                                         .foregroundColor(Color(.tertiaryLabel))
                                 }
                                 .padding(.horizontal, 16)
-                                .frame(minHeight: 44)
+                                .padding(.vertical, 12)
+                                .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
                         }
@@ -223,7 +226,8 @@ struct SettingsView: View {
             Spacer()
         }
         .padding(.horizontal, 16)
-        .frame(minHeight: 44)
+        .padding(.vertical, 12)
+        .contentShape(Rectangle())
     }
 
     private func settingsNavRow<Destination: View>(
@@ -241,7 +245,8 @@ struct SettingsView: View {
                     .foregroundColor(Color(.tertiaryLabel))
             }
             .padding(.horizontal, 16)
-            .frame(minHeight: 44)
+            .padding(.vertical, 12)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
