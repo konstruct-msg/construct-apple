@@ -688,7 +688,7 @@ class ChatViewModel: NSObject {
                 }
             } catch {
                 await MainActor.run {
-                    Log.error("❌ Media upload failed: \(error.localizedDescription)", category: "ChatViewModel")
+                    Log.error("❌ Media upload failed: \(error.localizedDescription) | raw: \(error)", category: "ChatViewModel")
                     errorMessage = error.localizedDescription
                     isSending = false
                 }

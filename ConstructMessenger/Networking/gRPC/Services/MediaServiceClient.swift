@@ -171,21 +171,54 @@ extension MediaServiceClient {
         let hash = SHA256.hash(data: encryptedData)
         let hashHex = hash.map { String(format: "%02x", $0) }.joined()
 
-        // 3. Get token
-        let tokenData = try await generateUploadToken(
-            expectedSize: Int64(encryptedData.count),
-            contentType: mimeType
-        )
+        // 3. Get token + upload on the SAME channel to prevent CANCELLED errors.
+        // Upload tokens are tied to the connection that generated them — using two
+        // separate performRPC calls (two separate channels) causes the server to
+        // cancel the upload stream (RPCError code 1 = CANCELLED).
+        let capturedEncryptedData = encryptedData
+        let (mediaId, downloadUrl) = try await GRPCChannelManager.shared.performRPC { grpcClient in
+            let client = Shared_Proto_Services_V1_MediaService.Client(wrapping: grpcClient)
 
-        // 4. Upload
-        let uploadResponse = try await uploadEncryptedFile(
-            encryptedData: encryptedData,
-            token: tokenData.uploadToken
-        )
+            // 3a. Generate upload token
+            var tokenRequest = Shared_Proto_Services_V1_GenerateUploadTokenRequest()
+            tokenRequest.expectedSize = Int64(capturedEncryptedData.count)
+            tokenRequest.contentType = mimeType
+            let tokenResponse = try await client.generateUploadToken(
+                request: .init(message: tokenRequest)
+            )
+            let uploadToken = tokenResponse.uploadToken
+
+            // 3b. Stream upload on the same channel
+            let chunkSize = 64 * 1024
+            let totalChunks = (capturedEncryptedData.count + chunkSize - 1) / chunkSize
+            let fileHash = hashHex
+
+            let uploadRequest = StreamingClientRequest<Shared_Proto_Services_V1_UploadMediaRequest>(
+                metadata: [],
+                producer: { writer in
+                    for i in 0..<totalChunks {
+                        let start = i * chunkSize
+                        let end = min(start + chunkSize, capturedEncryptedData.count)
+                        var req = Shared_Proto_Services_V1_UploadMediaRequest()
+                        req.uploadToken = uploadToken
+                        req.chunk = capturedEncryptedData.subdata(in: start..<end)
+                        req.chunkNumber = Int32(i)
+                        req.isLast = (i == totalChunks - 1)
+                        req.totalSize = Int64(capturedEncryptedData.count)
+                        req.fileHash = fileHash
+                        try await writer.write(req)
+                    }
+                }
+            )
+
+            let uploadResponse: Shared_Proto_Services_V1_UploadMediaResponse =
+                try await client.uploadMedia(request: uploadRequest)
+            return (uploadResponse.mediaID, uploadResponse.downloadURL)
+        }
 
         return UploadedMedia(
-            mediaId: uploadResponse.mediaId,
-            mediaUrl: uploadResponse.downloadUrl,
+            mediaId: mediaId,
+            mediaUrl: downloadUrl,
             encryptionKey: encryptionKey,
             encryptedData: encryptedData,
             hash: hashHex,
