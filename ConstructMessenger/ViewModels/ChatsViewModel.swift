@@ -390,6 +390,19 @@ class ChatsViewModel {
                         self.pendingFirstMessages.removeValue(forKey: userId)
                         Task {
                             try? await self.sendEndSession(to: userId, reason: "session_init_failed")
+                            // Force-upload fresh OTPKs. Our Keychain no longer holds the private key
+                            // for the OTPK the server served to the sender (e.g. after reinstall).
+                            // Adding fresh keys increases the chance the next GET bundle returns a
+                            // working key. A server-side fix is also required: remove the OTPK from
+                            // the pool at bundle-serve time, not only on session-init confirmation.
+                            let deviceId = KeychainManager.shared.loadDeviceID() ?? ""
+                            if !deviceId.isEmpty {
+                                Log.info("🔑 Force-uploading \(OtpkReplenishmentService.replenishBatchSize) fresh OTPKs after init failure", category: "OTPK")
+                                try? await OtpkReplenishmentService.generateAndUpload(
+                                    count: OtpkReplenishmentService.replenishBatchSize,
+                                    deviceId: deviceId
+                                )
+                            }
                         }
                     }
                     
@@ -490,6 +503,15 @@ class ChatsViewModel {
                             self.pendingFirstMessages.removeValue(forKey: userId)
                             SessionHealingService.shared.clearQueue(for: userId, in: context)
                             try? await self.sendEndSession(to: userId, reason: "heal_exhausted")
+                            // Force-upload fresh OTPKs so next session attempt gets working keys.
+                            let deviceId = KeychainManager.shared.loadDeviceID() ?? ""
+                            if !deviceId.isEmpty {
+                                Log.info("🔑 Force-uploading \(OtpkReplenishmentService.replenishBatchSize) fresh OTPKs after heal exhaustion", category: "OTPK")
+                                try? await OtpkReplenishmentService.generateAndUpload(
+                                    count: OtpkReplenishmentService.replenishBatchSize,
+                                    deviceId: deviceId
+                                )
+                            }
                         }
                         // Otherwise leave the HealingMessage in CoreData; next reconnect retries
                     }
