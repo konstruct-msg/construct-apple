@@ -326,9 +326,8 @@ class MessageRouter {
 
             if SessionHealingService.shared.canHeal(message) {
                 // messageNumber == 0 means the sender RE-KEYED (new X3DH session init).
-                // Archive the broken session and attempt healing without END_SESSION.
-                Log.info("🩹 SESSION_STATE[heal_triggered]: messageNumber=0 from \(userId.prefix(8))… — sender re-keyed, archiving + healing", category: "SessionInit")
-                CryptoManager.shared.archiveSession(for: userId, reason: .remoteRekeying)
+                // Session was already archived by decryptMessage (reason: decryptionFailed) — skip redundant archive.
+                Log.info("🩹 SESSION_STATE[heal_triggered]: messageNumber=0 from \(userId.prefix(8))… — sender re-keyed, healing", category: "SessionInit")
                 SessionHealingService.shared.enqueue(message, in: context)
                 pendingMessages[userId, default: []].append(message)
                 onSessionHealNeeded?(userId, message)

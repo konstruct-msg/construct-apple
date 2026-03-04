@@ -69,7 +69,6 @@ class ChatScrollManager {
     /// - Parameter messageId: Optional specific message ID to scroll to (defaults to "bottom")
     func scrollToBottom(messageId: String = "bottom") {
         guard let proxy = proxy else {
-            Log.debug("⚠️ ScrollViewProxy not registered yet", category: "ChatScrollManager")
             return
         }
         
@@ -88,7 +87,6 @@ class ChatScrollManager {
     ///   - animated: Whether to animate the scroll (default: true)
     func scrollTo(messageId: String, anchor: UnitPoint = .center, animated: Bool = true) {
         guard let proxy = proxy else {
-            Log.debug("⚠️ ScrollViewProxy not registered yet", category: "ChatScrollManager")
             return
         }
         

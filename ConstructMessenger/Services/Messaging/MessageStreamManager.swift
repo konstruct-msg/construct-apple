@@ -274,11 +274,13 @@ final class MessageStreamManager: ObservableObject {
             if !result.nextCursor.isEmpty {
                 lastPendingCursor = result.nextCursor
             }
+        } catch is CancellationError {
+            // Task was cancelled during force-reconnect or backgrounding — expected, no log needed
         } catch {
             if let rpcError = error as? RPCError {
                 Log.error("⚠️ fetchMissedMessages RPC error: code=\(rpcError.code) message=\"\(rpcError.message)\"", category: "MessageStream")
             } else {
-                Log.debug("⚠️ fetchMissedMessages failed: \(error)", category: "MessageStream")
+                Log.debug("fetchMissedMessages failed: \(error)", category: "MessageStream")
             }
         }
     }
