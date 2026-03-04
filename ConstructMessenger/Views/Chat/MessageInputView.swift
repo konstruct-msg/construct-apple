@@ -75,9 +75,16 @@ struct MessageInputView: View {
                 Button {
                     showAttachmentMenu = true
                 } label: {
+#if targetEnvironment(macCatalyst)
+                    Image(systemName: "paperclip")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 28, height: 28)
+#else
                     Image(systemName: "plus.circle.fill")
                         .font(.system(size: 28))
                         .foregroundColor(Color.blue)
+#endif
                 }
                 .confirmationDialog("Attach", isPresented: $showAttachmentMenu) {
                     Button {
@@ -117,17 +124,34 @@ struct MessageInputView: View {
                         Button {
                             sendMessage()
                         } label: {
+#if targetEnvironment(macCatalyst)
+                            ZStack {
+                                Circle()
+                                    .fill(Color.accentColor)
+                                    .frame(width: 26, height: 26)
+                                Image(systemName: "paperplane.fill")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundStyle(.white)
+                                    .offset(x: 1)
+                            }
+                            .padding(.trailing, 6)
+#else
                             Image(systemName: "arrow.up.circle.fill")
                                 .font(.system(size: 32))
                                 .foregroundColor(canSend ? Color.blue : .gray)
                                 .padding(.trailing, 4)
+#endif
                         }
                         .disabled(!canSend || isSending)
                         .transition(.scale.combined(with: .opacity))
                     }
                 }
                 .background(Color(uiColor: .systemGray6))
+#if targetEnvironment(macCatalyst)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+#else
                 .clipShape(RoundedRectangle(cornerRadius: 20))
+#endif
             }
             .padding(.horizontal)
             .padding(.vertical, 8)
