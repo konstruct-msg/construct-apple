@@ -8,23 +8,42 @@ import SwiftUI
 struct NetworkSettingsView: View {
     @ObservedObject private var reachabilityManager = NetworkReachabilityManager.shared
     @ObservedObject private var connectionManager = ConnectionStatusManager.shared
+    @ObservedObject private var streamManager = MessageStreamManager.shared
 
-    @State private var useCustomServer = GRPCChannelManager.shared.isUsingCustomServer
-    @State private var customHost = GRPCChannelManager.shared.isUsingCustomServer
-        ? GRPCChannelManager.shared.currentHost : ""
-    @State private var customPort = GRPCChannelManager.shared.isUsingCustomServer
-        ? "\(GRPCChannelManager.shared.currentPort)" : ""
+    // Custom server (Debug only)
+    @State private var customHost = GRPCChannelManager.shared.currentHost
+    @State private var customPort = "\(GRPCChannelManager.shared.currentPort)"
     @State private var showingAppliedAlert = false
 
     var body: some View {
         List {
-            // MARK: - Stream Status
+            // MARK: - gRPC Stream
             Section {
                 statusRow(
                     label: NSLocalizedString("status", comment: ""),
                     value: connectionManager.connectionStatus.displayText,
                     color: statusColor
                 )
+
+                HStack {
+                    Text("subscriptions")
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    Text("\(streamManager.subscriptionUserIds.count)")
+                        .fontWeight(.medium)
+                        .monospacedDigit()
+                }
+
+                if let heartbeat = streamManager.lastHeartbeatDate {
+                    HStack {
+                        Text("last_heartbeat")
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Text(heartbeat, style: .relative)
+                            .fontWeight(.medium)
+                            .foregroundColor(.secondary)
+                    }
+                }
 
                 if let lastSuccess = connectionManager.lastSuccessfulRequest {
                     HStack {
@@ -48,6 +67,12 @@ struct NetworkSettingsView: View {
                             .textSelection(.enabled)
                     }
                 }
+            } header: {
+                Text("grpc_stream")
+            }
+
+            // MARK: - Network
+            Section {
                 statusRow(
                     label: NSLocalizedString("network_reachability", comment: ""),
                     value: reachabilityManager.isReachable
@@ -66,7 +91,7 @@ struct NetworkSettingsView: View {
                     }
                 }
             } header: {
-                Text("connection")
+                Text("network")
             }
 
             // MARK: - Server
@@ -75,10 +100,19 @@ struct NetworkSettingsView: View {
                     Text("server")
                         .foregroundColor(.secondary)
                     Spacer()
-                    Text(GRPCChannelManager.shared.currentHost)
-                        .font(.system(size: 13, design: .monospaced))
-                        .foregroundColor(GRPCChannelManager.shared.isUsingCustomServer ? .orange : Color.blue)
-                        .textSelection(.enabled)
+                    HStack(spacing: 6) {
+                        Text(GRPCChannelManager.shared.currentHost)
+                            .font(.system(size: 13, design: .monospaced))
+                            .foregroundColor(.primary)
+                        Text("TLS")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundColor(Color.AppStatus.success)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(Color.AppStatus.success.opacity(0.12))
+                            .clipShape(Capsule())
+                    }
+                    .textSelection(.enabled)
                 }
 
                 HStack {
@@ -88,44 +122,6 @@ struct NetworkSettingsView: View {
                     Text("\(GRPCChannelManager.shared.currentPort)")
                         .font(.system(size: 13, design: .monospaced))
                         .fontWeight(.medium)
-                }
-
-                Toggle("use_custom_server", isOn: $useCustomServer)
-                    .onChange(of: useCustomServer) { _, enabled in
-                        if !enabled {
-                            GRPCChannelManager.shared.resetToDefaultServer()
-                            customHost = ""
-                            customPort = ""
-                        } else {
-                            customHost = GRPCChannelManager.shared.currentHost
-                            customPort = "\(GRPCChannelManager.shared.currentPort)"
-                        }
-                    }
-
-                if useCustomServer {
-                    VStack(alignment: .leading, spacing: 8) {
-                        TextField("Host (e.g. dev.konstruct.cc)", text: $customHost)
-                            .autocapitalization(.none)
-                            .keyboardType(.URL)
-                            .textFieldStyle(.roundedBorder)
-
-                        TextField("Port (e.g. 443)", text: $customPort)
-                            .keyboardType(.numberPad)
-                            .textFieldStyle(.roundedBorder)
-
-                        Button {
-                            applyCustomServer()
-                        } label: {
-                            HStack {
-                                Spacer()
-                                Text("apply_changes")
-                                    .fontWeight(.semibold)
-                                Spacer()
-                            }
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(customHost.trimmingCharacters(in: .whitespaces).isEmpty)
-                    }
                 }
 
                 HStack {
@@ -138,10 +134,50 @@ struct NetworkSettingsView: View {
                 }
             } header: {
                 Text("server_configuration")
+            }
+
+            // MARK: - Custom Server (Debug only)
+            #if DEBUG
+            Section {
+                VStack(alignment: .leading, spacing: 8) {
+                    TextField("Host (e.g. dev.konstruct.cc)", text: $customHost)
+                        .autocapitalization(.none)
+                        .keyboardType(.URL)
+                        .textFieldStyle(.roundedBorder)
+
+                    TextField("Port (e.g. 443)", text: $customPort)
+                        .keyboardType(.numberPad)
+                        .textFieldStyle(.roundedBorder)
+
+                    HStack {
+                        Button(role: .destructive) {
+                            GRPCChannelManager.shared.resetToDefaultServer()
+                            customHost = GRPCChannelManager.shared.currentHost
+                            customPort = "\(GRPCChannelManager.shared.currentPort)"
+                        } label: {
+                            Text("Reset to default")
+                        }
+                        .buttonStyle(.bordered)
+
+                        Spacer()
+
+                        Button {
+                            applyCustomServer()
+                        } label: {
+                            Text("apply_changes")
+                                .fontWeight(.semibold)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(customHost.trimmingCharacters(in: .whitespaces).isEmpty)
+                    }
+                }
+            } header: {
+                Text("custom_server_debug")
             } footer: {
                 Text("server_settings_footer")
                     .font(.caption)
             }
+            #endif
         }
         .navigationTitle("network")
         .navigationBarTitleDisplayMode(.inline)

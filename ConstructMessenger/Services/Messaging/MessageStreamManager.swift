@@ -20,14 +20,19 @@ private enum StreamEvent: Sendable {
     case message(ChatMessage)
     case deliveryReceipt([String])    // message IDs confirmed delivered to recipient
     case keySyncRequest(String)       // server-triggered X3DH re-init for userId
+    case heartbeat                    // server heartbeat ack
 }
 
 @MainActor
 final class MessageStreamManager: ObservableObject {
 
+    static let shared = MessageStreamManager()
+
     // MARK: - Published State
 
     @Published private(set) var isConnected = false
+    /// Set to the current time whenever a heartbeat ack is received from the server.
+    @Published private(set) var lastHeartbeatDate: Date?
 
     // MARK: - Callbacks
 
@@ -355,6 +360,8 @@ final class MessageStreamManager: ObservableObject {
                 case .keySyncRequest(let userId):
                     Log.info("🔑 KEY_SYNC received — re-keying session for \(userId.prefix(8))…", category: "MessageStream")
                     self?.onKeySyncReceived?(userId)
+                case .heartbeat:
+                    self?.lastHeartbeatDate = Date()
                 }
             }
         }
@@ -455,8 +462,10 @@ final class MessageStreamManager: ObservableObject {
             return nil
         case .heartbeatAck(let ack):
             Log.debug("💓 Heartbeat ack: server=\(ack.serverTimestamp)", category: "MessageStream")
-            Task { @MainActor in ConnectionStatusManager.shared.markStreamConnected() }
-            return nil
+            Task { @MainActor in
+                ConnectionStatusManager.shared.markStreamConnected()
+            }
+            return .heartbeat
         case .none:
             return nil
         }

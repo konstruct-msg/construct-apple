@@ -30,7 +30,7 @@ class ChatsViewModel: ObservableObject {
     @Published var chatToOpen: String?
 
     // ✅ Message stream (gRPC bidirectional)
-    private let streamManager = MessageStreamManager()
+    private let streamManager = MessageStreamManager.shared
     
     // ✅ Message router
     private let messageRouter = MessageRouter()

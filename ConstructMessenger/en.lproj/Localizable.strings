@@ -150,6 +150,10 @@
 "disconnected" = "Disconnected";
 "active_server" = "Active Server";
 "connection" = "Connection";
+"grpc_stream" = "gRPC Stream";
+"subscriptions" = "Subscriptions";
+"last_heartbeat" = "Last Heartbeat";
+"custom_server_debug" = "Custom Server (Debug)";
 "use_custom_server" = "Use Custom Server";
 "custom_server_placeholder" = "https://your-server.com";
 "apply_changes" = "Apply Changes";
