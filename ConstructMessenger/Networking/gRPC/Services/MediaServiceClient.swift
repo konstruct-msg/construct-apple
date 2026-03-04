@@ -26,17 +26,11 @@ final class MediaServiceClient: Sendable {
         let encryptedData: Data
         let hash: String
         let mimeType: String
-        let expiresAt: Int
-    }
-
-    struct UploadResponse {
-        let mediaId: String
-        let expiresAt: Int
     }
 }
 
 // MARK: - Media Token Data
-struct MediaTokenData: Codable {
+struct MediaTokenData {
     let requestId: String
     let uploadToken: String
     let uploadUrl: String
@@ -72,7 +66,7 @@ extension MediaServiceClient {
 
     // MARK: - Upload Media (client streaming)
 
-    func uploadEncryptedFile(encryptedData: Data, token: String) async throws -> UploadResponse {
+    func uploadEncryptedFile(encryptedData: Data, token: String) async throws -> (mediaId: String, downloadUrl: String) {
         try await GRPCChannelManager.shared.performRPC { grpcClient in
             let client = Shared_Proto_Services_V1_MediaService.Client(wrapping: grpcClient)
 
@@ -105,10 +99,7 @@ extension MediaServiceClient {
 
             let response: Shared_Proto_Services_V1_UploadMediaResponse = try await client.uploadMedia(request: request)
 
-            return UploadResponse(
-                mediaId: response.mediaID,
-                expiresAt: Int(response.fileSize)
-            )
+            return (mediaId: response.mediaID, downloadUrl: response.downloadURL)
         }
     }
 
@@ -192,18 +183,13 @@ extension MediaServiceClient {
             token: tokenData.uploadToken
         )
 
-        // 5. Construct download URL
-        let baseUrl = tokenData.uploadUrl.replacingOccurrences(of: "/upload", with: "")
-        let downloadUrl = "\(baseUrl)/\(uploadResponse.mediaId)"
-
         return UploadedMedia(
             mediaId: uploadResponse.mediaId,
-            mediaUrl: downloadUrl,
+            mediaUrl: uploadResponse.downloadUrl,
             encryptionKey: encryptionKey,
             encryptedData: encryptedData,
             hash: hashHex,
-            mimeType: mimeType,
-            expiresAt: uploadResponse.expiresAt
+            mimeType: mimeType
         )
     }
 
