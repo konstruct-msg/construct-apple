@@ -6,9 +6,9 @@
 import SwiftUI
 
 struct NetworkSettingsView: View {
-    @ObservedObject private var reachabilityManager = NetworkReachabilityManager.shared
-    @ObservedObject private var connectionManager = ConnectionStatusManager.shared
-    @ObservedObject private var streamManager = MessageStreamManager.shared
+    private var reachabilityManager = NetworkReachabilityManager.shared
+    private var connectionManager = ConnectionStatusManager.shared
+    private var streamManager = MessageStreamManager.shared
 
     // Custom server (Debug only)
     @State private var customHost = GRPCChannelManager.shared.currentHost

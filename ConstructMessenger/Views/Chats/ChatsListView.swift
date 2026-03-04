@@ -14,7 +14,7 @@ struct ChatsListView: View {
     @FetchRequest
     private var chats: FetchedResults<Chat>
 
-    @EnvironmentObject var chatsViewModel: ChatsViewModel
+    @Environment(ChatsViewModel.self) private var chatsViewModel
     @State private var showingQRScanner = false
     @State private var navigationPath = NavigationPath()
     @State private var showingError = false
@@ -186,5 +186,5 @@ struct ChatsListView: View {
 
     return ChatsListView()
         .environment(\.managedObjectContext, context)
-        .environmentObject(chatsViewModel)
+        .environment(chatsViewModel)
 }

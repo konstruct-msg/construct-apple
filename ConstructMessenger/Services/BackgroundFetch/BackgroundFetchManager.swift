@@ -8,7 +8,6 @@ import Foundation
 #if os(iOS)
 import BackgroundTasks
 #endif
-import Combine
 #if os(iOS)
 import UIKit
 #endif
@@ -17,7 +16,8 @@ import CoreData
 
 /// Manages background task scheduling and execution for message fetching
 /// Uses BGTaskScheduler for intelligent, energy-efficient background operations
-class BackgroundFetchManager: NSObject, ObservableObject {
+@Observable
+class BackgroundFetchManager: NSObject {
     
     // MARK: - Task Identifiers
     
@@ -36,17 +36,14 @@ class BackgroundFetchManager: NSObject, ObservableObject {
     
     // ✅ Using gRPC for fetching messages (WebSocket removed)
     
-    /// Cancellables for Combine subscriptions
-    private var cancellables = Set<AnyCancellable>()
-    
     /// Indicates if background fetch is enabled by user
-    @Published private(set) var isBackgroundFetchEnabled = false
+    private(set) var isBackgroundFetchEnabled = false
     
     /// Last successful fetch timestamp
-    @Published private(set) var lastFetchDate: Date?
+    private(set) var lastFetchDate: Date?
     
     /// Last fetch result
-    @Published private(set) var lastFetchResult: Result<Int, Error>?
+    private(set) var lastFetchResult: Result<Int, Error>?
     
     // MARK: - Initialization
     

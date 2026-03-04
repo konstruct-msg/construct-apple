@@ -14,7 +14,7 @@ import SwiftUI
 import CoreData
 
 struct ChatsSplitView: View {
-    @EnvironmentObject var chatsViewModel: ChatsViewModel
+    @Environment(ChatsViewModel.self) private var chatsViewModel
     @Environment(\.managedObjectContext) private var viewContext
 
     @FetchRequest(

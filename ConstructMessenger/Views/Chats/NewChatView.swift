@@ -17,7 +17,7 @@ import CoreData
 struct NewChatView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.managedObjectContext) private var viewContext
-    @ObservedObject var chatsViewModel: ChatsViewModel
+    var chatsViewModel: ChatsViewModel
 
     @State private var showingQRScanner = false
     @State private var showingError = false

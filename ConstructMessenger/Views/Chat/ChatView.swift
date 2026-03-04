@@ -11,7 +11,7 @@ import CoreData
 struct ChatView: View {
     @Environment(\.managedObjectContext) private var viewContext
     @Environment(\.dismiss) private var dismiss
-    @StateObject private var viewModel: ChatViewModel  // ✅ FIX: StateObject persists across view updates
+    @State private var viewModel: ChatViewModel  // ✅ FIX: State persists across view updates
     @State private var scrollManager = ChatScrollManager()  // ✅ NEW: Isolated scroll management
     @ObservedObject private var connectionManager = ConnectionStatusManager.shared
     @State private var messageText = ""
@@ -36,8 +36,7 @@ struct ChatView: View {
     // - dragOffset
 
     init(chat: Chat, context: NSManagedObjectContext) {
-        // ✅ FIX: Use StateObject initializer to create ViewModel only once
-        _viewModel = StateObject(wrappedValue: ChatViewModel(chat: chat, context: context))
+        _viewModel = State(wrappedValue: ChatViewModel(chat: chat, context: context))
     }
 
     var body: some View {

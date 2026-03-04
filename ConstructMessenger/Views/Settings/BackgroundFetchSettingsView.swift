@@ -13,7 +13,7 @@ struct BackgroundFetchSettingsView: View {
     @State private var intervalMinutes: Int = BackgroundFetchConfig.defaultIntervalMinutes
     @State private var isLowPowerModeEnabled: Bool = false
     @State private var showingLowPowerModeAlert = false
-    @ObservedObject private var fetchManager = BackgroundFetchManager.shared
+    private var fetchManager = BackgroundFetchManager.shared
     
     // MARK: - Body
     var body: some View {

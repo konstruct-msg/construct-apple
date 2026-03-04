@@ -10,8 +10,9 @@ import Combine
 import CoreData
 import UIKit  // ✅ Required for UIApplication notifications
 
+@Observable
 @MainActor
-class ChatsViewModel: ObservableObject {
+class ChatsViewModel {
     private var cancellables = Set<AnyCancellable>()
     private var viewContext: NSManagedObjectContext?
 
@@ -27,7 +28,7 @@ class ChatsViewModel: ObservableObject {
     private var hasPerformedStartupOtpkCheck = false
 
     // ✅ Chat ID to open programmatically (e.g., from deep link)
-    @Published var chatToOpen: String?
+    var chatToOpen: String?
 
     // ✅ Message stream (gRPC bidirectional)
     private let streamManager = MessageStreamManager.shared

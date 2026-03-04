@@ -18,7 +18,7 @@ struct SettingsView: View {
     
     private let inviteGenerator = InviteGenerator()
         
-    private let sectionCornerRadius: CGFloat = 8   // Change to adjust rounding
+    private let sectionCornerRadius: CGFloat = 16  // Change to adjust rounding
 
         var body: some View {
             NavigationStack {

@@ -10,7 +10,7 @@ import CoreData
 
 struct MainTabView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
-    @EnvironmentObject var chatsViewModel: ChatsViewModel
+    @Environment(ChatsViewModel.self) private var chatsViewModel
 
     /// Compact = iPhone (or iPad in narrow split-screen multitasking)
     /// Regular = iPad full-screen or landscape
@@ -20,12 +20,12 @@ struct MainTabView: View {
         if horizontalSizeClass == .regular {
             // iPad: sidebar + detail split layout
             ChatsSplitView()
-                .environmentObject(chatsViewModel)
+                .environment(chatsViewModel)
         } else {
             // iPhone: classic tab bar navigation
             TabView {
                 ChatsListView()
-                    .environmentObject(chatsViewModel)
+                    .environment(chatsViewModel)
                     .tabItem {
                         Label("chats", systemImage: "message")
                     }
@@ -64,7 +64,7 @@ struct MainTabView: View {
     return MainTabView()
         .environment(\.managedObjectContext, context)
         .environmentObject(authViewModel)
-        .environmentObject(chatsViewModel)
+        .environment(chatsViewModel)
         .environment(SecurityViewModel())
 }
 #endif

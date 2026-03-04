@@ -7,7 +7,6 @@
 //
 
 import Foundation
-import Combine
 import UIKit
 import GRPCCore
 import GRPCNIOTransportHTTP2
@@ -24,15 +23,16 @@ private enum StreamEvent: Sendable {
 }
 
 @MainActor
-final class MessageStreamManager: ObservableObject {
+@Observable
+final class MessageStreamManager {
 
     static let shared = MessageStreamManager()
 
-    // MARK: - Published State
+    // MARK: - State
 
-    @Published private(set) var isConnected = false
+    private(set) var isConnected = false
     /// Set to the current time whenever a heartbeat ack is received from the server.
-    @Published private(set) var lastHeartbeatDate: Date?
+    private(set) var lastHeartbeatDate: Date?
 
     // MARK: - Callbacks
 

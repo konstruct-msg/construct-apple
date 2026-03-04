@@ -23,22 +23,23 @@ struct QueuedMessage {
 }
 
 @MainActor
-class ChatViewModel: NSObject, ObservableObject {
-    @Published var messages: [Message] = []
-    @Published var isSending = false
-    @Published var errorMessage: String?
-    @Published var isLoadingMore = false
-    @Published var hasMoreMessages = true
+@Observable
+class ChatViewModel: NSObject {
+    var messages: [Message] = []
+    var isSending = false
+    var errorMessage: String?
+    var isLoadingMore = false
+    var hasMoreMessages = true
 
     // ✅ FIXED: Track session initialization state
-    @Published var isSessionReady = false
-    @Published var isInitializingSession = false  // NEW: Show UI indicator
+    var isSessionReady = false
+    var isInitializingSession = false  // NEW: Show UI indicator
 
     // ✅ REFACTORED: Enhanced message queue with full support
     private var queuedMessages: [QueuedMessage] = []
     
     // ✅ NEW: Track public key fetch timeout
-    private var publicKeyFetchTimer: Timer?
+    nonisolated(unsafe) private var publicKeyFetchTimer: Timer?
     private let publicKeyFetchTimeout: TimeInterval = 10.0 // 10 seconds timeout
     
     // ✅ Pagination support - optimized for performance
@@ -86,7 +87,6 @@ class ChatViewModel: NSObject, ObservableObject {
 
     deinit {
         publicKeyFetchTimer?.invalidate()
-        cancellables.removeAll()
         Log.debug("🔧 ChatViewModel deinitialized", category: "ChatViewModel")
     }
 
@@ -785,11 +785,8 @@ class ChatViewModel: NSObject, ObservableObject {
     }
 
     private func updateMessageStatus(messageId: String, status: DeliveryStatus) {
-        // ✅ REFACTOR: Use MessagePersistenceService
         do {
             try persistenceService.updateMessageStatus(messageId: messageId, status: status, in: viewContext)
-            // ✅ Force UI update immediately
-            objectWillChange.send()
         } catch {
             Log.error("❌ Failed to save message status: \(error)", category: "ChatViewModel")
         }

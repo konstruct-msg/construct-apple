@@ -15,7 +15,7 @@ struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("appTheme") private var appTheme: AppTheme = .automatic
 
-    @StateObject private var chatsViewModel = ChatsViewModel()
+    @State private var chatsViewModel = ChatsViewModel()
 
     var body: some View {
         Group {
@@ -26,7 +26,7 @@ struct ContentView: View {
                 // Device is registered - show main app
                 MainTabView()
                     .environmentObject(authViewModel)
-                    .environmentObject(chatsViewModel)
+                    .environment(chatsViewModel)
             } else {
                 // No device keys = new user -> show onboarding
                 OnboardingView()
@@ -126,6 +126,6 @@ struct ContentView: View {
         .environment(\.managedObjectContext, context)
         .environmentObject(authViewModel)
         .environmentObject(deepLinkHandler)
-        .environmentObject(chatsViewModel)
+        .environment(chatsViewModel)
 }
 #endif
