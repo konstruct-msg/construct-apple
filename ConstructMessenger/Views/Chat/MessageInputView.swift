@@ -7,6 +7,7 @@
 
 import SwiftUI
 import PhotosUI
+import UniformTypeIdentifiers
 
 struct MessageInputView: View {
     @Binding var text: String
@@ -22,6 +23,8 @@ struct MessageInputView: View {
     @State private var optimizedMedia: [OptimizedMedia] = []  // Optimized photos ready to send
     @State private var showAttachmentMenu = false
     @State private var showPhotoPicker = false  // Separate state for PhotosPicker
+    @State private var showFilePicker = false   // macOS: file importer
+    @State private var isDropTargeted = false   // macOS: drag-and-drop highlight
     @State private var validationError: String?
     @State private var isOptimizing = false
 
@@ -73,7 +76,11 @@ struct MessageInputView: View {
             HStack(spacing: 8) {
                 // Attachment button (+ icon)
                 Button {
+#if targetEnvironment(macCatalyst)
+                    showFilePicker = true
+#else
                     showAttachmentMenu = true
+#endif
                 } label: {
 #if targetEnvironment(macCatalyst)
                     Image(systemName: "paperclip")
@@ -86,6 +93,7 @@ struct MessageInputView: View {
                         .foregroundColor(Color.blue)
 #endif
                 }
+#if !targetEnvironment(macCatalyst)
                 .confirmationDialog("Attach", isPresented: $showAttachmentMenu) {
                     Button {
                         showPhotoPicker = true
@@ -98,7 +106,7 @@ struct MessageInputView: View {
                     }
 
                     Button("Files") {
-                        // TODO: Implement file picker
+                        showFilePicker = true
                     }
 
                     Button("Cancel", role: .cancel) {}
@@ -110,6 +118,7 @@ struct MessageInputView: View {
                     maxSelectionCount: 10,
                     matching: .images
                 )
+#endif
 
                 HStack(spacing: 0) {
                     TextField("message_placeholder", text: $text, axis: .vertical)
@@ -163,6 +172,36 @@ struct MessageInputView: View {
         .onChange(of: selectedPhotos) {
             Task {
                 await loadSelectedPhotos()
+            }
+        }
+        // macOS / iOS: file importer (Finder open panel)
+        .fileImporter(
+            isPresented: $showFilePicker,
+            allowedContentTypes: [.image, .jpeg, .png, .heic, .gif, .webP, .bmp, .tiff],
+            allowsMultipleSelection: true
+        ) { result in
+            switch result {
+            case .success(let urls):
+                loadImagesFromURLs(urls)
+            case .failure(let error):
+                Log.error("❌ File picker error: \(error)", category: "MessageInput")
+            }
+        }
+        // macOS: drag-and-drop images from Finder onto the input bar
+        .onDrop(of: [.image, .fileURL], isTargeted: $isDropTargeted) { providers in
+            handleDrop(providers: providers)
+        }
+        .overlay(alignment: .center) {
+            if isDropTargeted {
+                RoundedRectangle(cornerRadius: 8)
+                    .strokeBorder(Color.accentColor, lineWidth: 2)
+                    .background(Color.accentColor.opacity(0.08).clipShape(RoundedRectangle(cornerRadius: 8)))
+                    .overlay(
+                        Label("Drop images here", systemImage: "photo.badge.plus")
+                            .foregroundColor(.accentColor)
+                            .font(.headline)
+                    )
+                    .allowsHitTesting(false)
             }
         }
     }
@@ -229,6 +268,42 @@ struct MessageInputView: View {
         guard index < selectedImages.count && index < selectedPhotos.count else { return }
         selectedImages.remove(at: index)
         selectedPhotos.remove(at: index)
+    }
+
+    private func loadImagesFromURLs(_ urls: [URL]) {
+        for url in urls {
+            guard url.startAccessingSecurityScopedResource() else { continue }
+            defer { url.stopAccessingSecurityScopedResource() }
+            guard let data = try? Data(contentsOf: url),
+                  let image = UIImage(data: data) else { continue }
+            if let jpeg = image.jpegData(compressionQuality: 0.8),
+               Int64(jpeg.count) > MessageSizeLimits.maxImageBytes {
+                Log.error("Photo too large: \(url.lastPathComponent)", category: "MessageInput")
+                continue
+            }
+            selectedImages.append(image)
+        }
+    }
+
+    private func handleDrop(providers: [NSItemProvider]) -> Bool {
+        var handled = false
+        for provider in providers {
+            if provider.hasItemConformingToTypeIdentifier(UTType.image.identifier) {
+                provider.loadDataRepresentation(forTypeIdentifier: UTType.image.identifier) { data, _ in
+                    guard let data, let image = UIImage(data: data) else { return }
+                    DispatchQueue.main.async { selectedImages.append(image) }
+                }
+                handled = true
+            } else if provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {
+                provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier) { item, _ in
+                    guard let data = item as? Data,
+                          let url = URL(dataRepresentation: data, relativeTo: nil) else { return }
+                    DispatchQueue.main.async { loadImagesFromURLs([url]) }
+                }
+                handled = true
+            }
+        }
+        return handled
     }
 
     private func sendMessage() {
