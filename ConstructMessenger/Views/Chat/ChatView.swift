@@ -22,6 +22,7 @@ struct ChatView: View {
     @State private var isSearchActive = false
     @State private var isEditMode = false
     @State private var selectedMessages: Set<String> = []
+    @State private var galleryStartItem: GalleryStartItem?  // media gallery presenter
     
     // ✅ Swipe-to-dismiss gesture state (not scroll-related)
     @GestureState private var dragState: CGFloat = 0
@@ -100,6 +101,9 @@ struct ChatView: View {
                                             searchText = ""
                                         }
                                         selectedMessages.insert(msg.id)
+                                    },
+                                    onTapMedia: { msg in
+                                        galleryStartItem = GalleryStartItem(id: msg.id)
                                     }
                                 )
                                 .id(message.id)
@@ -237,6 +241,16 @@ struct ChatView: View {
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
             }
+        }
+        .fullScreenCover(item: $galleryStartItem) { item in
+            MediaGalleryViewer(
+                messages: mediaMessages,
+                initialMessageId: item.id,
+                isPresented: Binding(
+                    get: { galleryStartItem != nil },
+                    set: { if !$0 { galleryStartItem = nil } }
+                )
+            )
         }
         .confirmationDialog(
             "Reset Session?",
@@ -519,6 +533,11 @@ struct ChatView: View {
         return viewModel.messages.filter { message in
             message.decryptedContent?.localizedCaseInsensitiveContains(searchText) ?? false
         }
+    }
+
+    /// All media messages in this chat, in display order. Used by the gallery viewer.
+    private var mediaMessages: [Message] {
+        viewModel.messages.filter { parseMediaContent(from: $0.decryptedContent) != nil }
     }
 
     // MARK: - Actions

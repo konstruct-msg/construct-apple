@@ -7,91 +7,6 @@
 
 import SwiftUI
 
-// MARK: - Full Screen Image Viewer
-struct FullScreenImageViewer: View {
-    let image: UIImage
-    @Binding var isPresented: Bool
-    
-    @State private var scale: CGFloat = 1.0
-    @State private var lastScale: CGFloat = 1.0
-    @State private var offset: CGSize = .zero
-    @State private var lastOffset: CGSize = .zero
-    
-    var body: some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
-            
-            VStack {
-                // Close button
-                HStack {
-                    Spacer()
-                    Button {
-                        isPresented = false
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 28))
-                            .foregroundColor(.white.opacity(0.8))
-                            .padding()
-                    }
-                }
-                
-                Spacer()
-                
-                // Zoomable image
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFit()
-                    .scaleEffect(scale)
-                    .offset(offset)
-                    .gesture(
-                        MagnificationGesture()
-                            .onChanged { value in
-                                let delta = value / lastScale
-                                lastScale = value
-                                scale = min(max(scale * delta, 1), 5) // Limit zoom 1x-5x
-                            }
-                            .onEnded { _ in
-                                lastScale = 1.0
-                                if scale < 1 {
-                                    withAnimation(.spring()) {
-                                        scale = 1
-                                        offset = .zero
-                                    }
-                                }
-                            }
-                    )
-                    .gesture(
-                        DragGesture()
-                            .onChanged { value in
-                                if scale > 1 {
-                                    offset = CGSize(
-                                        width: lastOffset.width + value.translation.width,
-                                        height: lastOffset.height + value.translation.height
-                                    )
-                                }
-                            }
-                            .onEnded { _ in
-                                lastOffset = offset
-                            }
-                    )
-                    .onTapGesture(count: 2) {
-                        withAnimation(.spring()) {
-                            if scale > 1 {
-                                scale = 1
-                                offset = .zero
-                                lastOffset = .zero
-                            } else {
-                                scale = 2.5
-                            }
-                        }
-                    }
-                
-                Spacer()
-            }
-        }
-    }
-}
-
 struct MessageBubble: View {
     let message: Message
     let isLastInGroup: Bool
@@ -102,6 +17,7 @@ struct MessageBubble: View {
     let onDelete: ((Message) -> Void)?
     let onSelect: ((Message) -> Void)?
     let onEnterSelectMode: ((Message) -> Void)?
+    let onTapMedia: ((Message) -> Void)?
 
     @Environment(\.containerWidth) private var containerWidth
 
@@ -114,7 +30,8 @@ struct MessageBubble: View {
         onReply: ((Message) -> Void)? = nil,
         onDelete: ((Message) -> Void)? = nil,
         onSelect: ((Message) -> Void)? = nil,
-        onEnterSelectMode: ((Message) -> Void)? = nil
+        onEnterSelectMode: ((Message) -> Void)? = nil,
+        onTapMedia: ((Message) -> Void)? = nil
     ) {
         self.message = message
         self.isLastInGroup = isLastInGroup
@@ -125,6 +42,7 @@ struct MessageBubble: View {
         self.onDelete = onDelete
         self.onSelect = onSelect
         self.onEnterSelectMode = onEnterSelectMode
+        self.onTapMedia = onTapMedia
     }
 
     var body: some View {
@@ -189,7 +107,7 @@ struct MessageBubble: View {
                 // ✅ Check if this is a media message
                 else if let mediaContent = parseMediaMessage(message.decryptedContent) {
                     // Display media message without bubble - just rounded corners
-                    MediaMessageView(mediaContent: mediaContent, message: message, isSelected: isSelected)
+                    MediaMessageView(mediaContent: mediaContent, message: message, isSelected: isSelected, onTapFullScreen: { onTapMedia?(message) })
                 } else {
                     // Regular text message with bubble
                     VStack(alignment: .leading, spacing: 0) {
@@ -386,20 +304,7 @@ struct MessageBubble: View {
     }
     
     private func parseMediaMessage(_ content: String?) -> MediaMessageContent? {
-        guard let content = content,
-              let data = content.data(using: .utf8),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let type = json["type"] as? String,
-              type == "media",
-              let mediaArray = json["media"] as? [[String: Any]],
-              let firstMedia = mediaArray.first else {
-            return nil
-        }
-        
-        return MediaMessageContent(
-            caption: json["caption"] as? String ?? "",
-            media: firstMedia
-        )
+        parseMediaContent(from: content)
     }
 }
 
@@ -460,30 +365,28 @@ struct MediaMessageView: View {
     let mediaContent: MediaMessageContent
     let message: Message
     let isSelected: Bool
-    
+    let onTapFullScreen: (() -> Void)?
+
     @State private var thumbnailImage: UIImage?
-    @State private var fullImage: UIImage?
     @State private var isLoading = false
     @State private var loadError: String?
-    @State private var showFullScreen = false
     @State private var downloadProgress: Double = 0
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            // Thumbnail or placeholder - no bubble, just rounded corners
+            // Thumbnail — preserves natural aspect ratio, max 250×250
             if let thumbnail = thumbnailImage {
                 Image(uiImage: thumbnail)
                     .resizable()
-                    .scaledToFill()
+                    .scaledToFit()
                     .frame(maxWidth: 250, maxHeight: 250)
-                    .aspectRatio(contentMode: .fit)
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
                             .stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2)
                     )
                     .onTapGesture {
-                        showFullScreen = true
+                        onTapFullScreen?()
                     }
             } else if isLoading {
                 // ✅ Loading state with progress indicator
@@ -569,11 +472,6 @@ struct MediaMessageView: View {
         .onAppear {
             loadThumbnail()
         }
-        .fullScreenCover(isPresented: $showFullScreen) {
-            if let image = fullImage ?? thumbnailImage {
-                FullScreenImageViewer(image: image, isPresented: $showFullScreen)
-            }
-        }
     }
     
     private func loadThumbnail() {
@@ -586,7 +484,7 @@ struct MediaMessageView: View {
             if let thumbnailData = MediaManager.shared.retrieveThumbnail(for: message.id),
                let image = UIImage(data: thumbnailData) {
                 thumbnailImage = image
-                fullImage = image
+                MediaImageCache.shared.store(image, for: message.id)
                 Log.debug("✅ Loaded local thumbnail", category: "MediaMessage")
                 return
             }
@@ -638,7 +536,7 @@ struct MediaMessageView: View {
                 let thumbnail = MediaManager.shared.generateThumbnailImage(from: image, maxSize: 250)
                 
                 await MainActor.run {
-                    fullImage = image  // Store full-res for viewer
+                    MediaImageCache.shared.store(image, for: message.id)
                     thumbnailImage = thumbnail
                     isLoading = false
                     downloadProgress = 1.0
