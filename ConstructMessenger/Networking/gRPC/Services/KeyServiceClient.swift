@@ -77,7 +77,8 @@ final class KeyServiceClient: Sendable {
     func uploadPreKeys(
         deviceId: String,
         preKeys: [(keyId: UInt32, publicKey: Data)],
-        signedPreKey: (keyId: UInt32, publicKey: Data, signature: Data)? = nil
+        signedPreKey: (keyId: UInt32, publicKey: Data, signature: Data)? = nil,
+        replaceExisting: Bool = false
     ) async throws -> UInt32 {
         try await GRPCChannelManager.shared.performRPC { grpcClient in
             let keyClient = Shared_Proto_Services_V1_KeyService.Client(wrapping: grpcClient)
@@ -97,6 +98,7 @@ final class KeyServiceClient: Sendable {
                 signed.signature = spk.signature
                 request.signedPreKey = signed
             }
+            request.replaceExisting = replaceExisting
 
             let response = try await keyClient.uploadPreKeys(
                 request: .init(message: request)

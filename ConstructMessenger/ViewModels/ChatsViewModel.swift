@@ -400,7 +400,8 @@ class ChatsViewModel {
                                 Log.info("🔑 Force-uploading \(OtpkReplenishmentService.replenishBatchSize) fresh OTPKs after init failure", category: "OTPK")
                                 try? await OtpkReplenishmentService.generateAndUpload(
                                     count: OtpkReplenishmentService.replenishBatchSize,
-                                    deviceId: deviceId
+                                    deviceId: deviceId,
+                                    replaceExisting: true
                                 )
                             }
                         }
@@ -509,7 +510,8 @@ class ChatsViewModel {
                                 Log.info("🔑 Force-uploading \(OtpkReplenishmentService.replenishBatchSize) fresh OTPKs after heal exhaustion", category: "OTPK")
                                 try? await OtpkReplenishmentService.generateAndUpload(
                                     count: OtpkReplenishmentService.replenishBatchSize,
-                                    deviceId: deviceId
+                                    deviceId: deviceId,
+                                    replaceExisting: true
                                 )
                             }
                         }

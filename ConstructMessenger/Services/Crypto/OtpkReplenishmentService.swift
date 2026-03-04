@@ -24,7 +24,7 @@ enum OtpkReplenishmentService {
 
     /// Generate `count` OTPKs and upload them. Returns the number uploaded.
     @discardableResult
-    static func generateAndUpload(count: UInt32, deviceId: String) async throws -> Int {
+    static func generateAndUpload(count: UInt32, deviceId: String, replaceExisting: Bool = false) async throws -> Int {
         guard let core = CryptoManager.shared.core else {
             throw CryptoManagerError.coreNotInitialized
         }
@@ -38,10 +38,12 @@ enum OtpkReplenishmentService {
 
         _ = try await KeyServiceClient.shared.uploadPreKeys(
             deviceId: deviceId,
-            preKeys: preKeys
+            preKeys: preKeys,
+            replaceExisting: replaceExisting
         )
 
-        Log.info("✅ OTPK upload: \(pairs.count) keys for device \(deviceId.prefix(8))...", category: "OTPK")
+        let mode = replaceExisting ? "replacing all" : "appending"
+        Log.info("✅ OTPK upload (\(mode)): \(pairs.count) keys for device \(deviceId.prefix(8))...", category: "OTPK")
         return pairs.count
     }
 
