@@ -220,9 +220,11 @@ final class MessageStreamManager {
             ConnectionStatusManager.shared.markConnecting()
             do {
                 try await openStream()
-                // Stream ended cleanly — immediate reconnect, reset counter
-                Log.info("📡 MessageStream ended cleanly, reconnecting immediately", category: "MessageStream")
+                // Stream ended cleanly — brief pause before reconnecting to avoid tight loop
+                // (e.g. server closes stream when 0 topics are subscribed)
+                Log.info("📡 MessageStream ended cleanly, reconnecting in 3s", category: "MessageStream")
                 retryCount = 0
+                try await Task.sleep(for: .seconds(3))
             } catch is CancellationError {
                 Log.info("🛑 MessageStream cancelled — connectLoop exiting", category: "MessageStream")
                 break

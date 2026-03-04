@@ -128,6 +128,7 @@ class ChatsViewModel {
             PollingState(hasToken: token != nil, status: status, pushEnabled: pushEnabled)
         }
         .removeDuplicates()
+        .receive(on: RunLoop.main)  // defer to next run loop — prevents "Publishing during view update"
         .sink { [weak self] (state: PollingState) in
             Log.debug("📡 Stream state: token=\(state.hasToken ? "present" : "nil"), status=\(state.status.displayText), push=\(state.pushEnabled)", category: "ChatsViewModel")
 
