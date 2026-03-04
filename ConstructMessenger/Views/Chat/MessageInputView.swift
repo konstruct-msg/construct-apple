@@ -11,6 +11,7 @@ import UniformTypeIdentifiers
 
 struct MessageInputView: View {
     @Binding var text: String
+    @Binding var droppedImages: [UIImage]  // Images pushed from ChatView drop zone
     let isSending: Bool
     let replyingTo: Message?
     let onSend: ([UIImage]) -> Void  // Updated to pass images
@@ -24,7 +25,6 @@ struct MessageInputView: View {
     @State private var showAttachmentMenu = false
     @State private var showPhotoPicker = false  // Separate state for PhotosPicker
     @State private var showFilePicker = false   // macOS: file importer
-    @State private var isDropTargeted = false   // macOS: drag-and-drop highlight
     @State private var validationError: String?
     @State private var isOptimizing = false
 
@@ -83,7 +83,7 @@ struct MessageInputView: View {
 #endif
                 } label: {
 #if targetEnvironment(macCatalyst)
-                    Image(systemName: "paperclip")
+                    Image(systemName: "plus")
                         .font(.system(size: 16, weight: .medium))
                         .foregroundStyle(.secondary)
                         .frame(width: 28, height: 28)
@@ -138,7 +138,7 @@ struct MessageInputView: View {
                                 Circle()
                                     .fill(Color.accentColor)
                                     .frame(width: 26, height: 26)
-                                Image(systemName: "paperplane.fill")
+                                Image(systemName: "arrow.up.forward")
                                     .font(.system(size: 11, weight: .semibold))
                                     .foregroundStyle(.white)
                                     .offset(x: 1)
@@ -174,6 +174,11 @@ struct MessageInputView: View {
                 await loadSelectedPhotos()
             }
         }
+        .onChange(of: droppedImages) { _, newImages in
+            guard !newImages.isEmpty else { return }
+            selectedImages.append(contentsOf: newImages)
+            droppedImages.removeAll()
+        }
         // macOS / iOS: file importer (Finder open panel)
         .fileImporter(
             isPresented: $showFilePicker,
@@ -185,23 +190,6 @@ struct MessageInputView: View {
                 loadImagesFromURLs(urls)
             case .failure(let error):
                 Log.error("❌ File picker error: \(error)", category: "MessageInput")
-            }
-        }
-        // macOS: drag-and-drop images from Finder onto the input bar
-        .onDrop(of: [.image, .fileURL], isTargeted: $isDropTargeted) { providers in
-            handleDrop(providers: providers)
-        }
-        .overlay(alignment: .center) {
-            if isDropTargeted {
-                RoundedRectangle(cornerRadius: 8)
-                    .strokeBorder(Color.accentColor, lineWidth: 2)
-                    .background(Color.accentColor.opacity(0.08).clipShape(RoundedRectangle(cornerRadius: 8)))
-                    .overlay(
-                        Label("Drop images here", systemImage: "photo.badge.plus")
-                            .foregroundColor(.accentColor)
-                            .font(.headline)
-                    )
-                    .allowsHitTesting(false)
             }
         }
     }
@@ -283,27 +271,6 @@ struct MessageInputView: View {
             }
             selectedImages.append(image)
         }
-    }
-
-    private func handleDrop(providers: [NSItemProvider]) -> Bool {
-        var handled = false
-        for provider in providers {
-            if provider.hasItemConformingToTypeIdentifier(UTType.image.identifier) {
-                provider.loadDataRepresentation(forTypeIdentifier: UTType.image.identifier) { data, _ in
-                    guard let data, let image = UIImage(data: data) else { return }
-                    DispatchQueue.main.async { selectedImages.append(image) }
-                }
-                handled = true
-            } else if provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {
-                provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier) { item, _ in
-                    guard let data = item as? Data,
-                          let url = URL(dataRepresentation: data, relativeTo: nil) else { return }
-                    DispatchQueue.main.async { loadImagesFromURLs([url]) }
-                }
-                handled = true
-            }
-        }
-        return handled
     }
 
     private func sendMessage() {

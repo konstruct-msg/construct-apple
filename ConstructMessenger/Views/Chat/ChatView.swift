@@ -7,6 +7,7 @@
 
 import SwiftUI
 import CoreData
+import UniformTypeIdentifiers
 
 struct ChatView: View {
     @Environment(\.managedObjectContext) private var viewContext
@@ -23,6 +24,10 @@ struct ChatView: View {
     @State private var isEditMode = false
     @State private var selectedMessages: Set<String> = []
     @State private var galleryStartItem: GalleryStartItem?  // media gallery presenter
+
+    // Drop target for drag-and-drop from Finder (macOS) over the whole chat area
+    @State private var chatDropImages: [UIImage] = []
+    @State private var isChatDropTargeted = false
     
     // ✅ Swipe-to-dismiss gesture state (not scroll-related)
     @GestureState private var dragState: CGFloat = 0
@@ -228,6 +233,25 @@ struct ChatView: View {
                 }
         )
         .offset(x: dragState)
+        .onDrop(of: [.image, .fileURL], isTargeted: $isChatDropTargeted) { providers in
+            handleChatDrop(providers: providers)
+        }
+        .overlay {
+            if isChatDropTargeted {
+                RoundedRectangle(cornerRadius: 12)
+                    .strokeBorder(Color.accentColor, lineWidth: 3)
+                    .background(Color.accentColor.opacity(0.06).clipShape(RoundedRectangle(cornerRadius: 12)))
+                    .overlay(
+                        Label("Drop to attach", systemImage: "photo.badge.plus")
+                            .font(.title3.weight(.semibold))
+                            .foregroundColor(.accentColor)
+                            .padding(16)
+                            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+                    )
+                    .allowsHitTesting(false)
+                    .padding(8)
+            }
+        }
         .overlay(alignment: .top, content: searchOverlay)
         .overlay(alignment: .top) {
             // ✅ Status banner as overlay (doesn't block messages)
@@ -349,6 +373,7 @@ struct ChatView: View {
     private var messageInputView: some View {
         MessageInputView(
             text: $messageText,
+            droppedImages: $chatDropImages,
             isSending: viewModel.isSending,
             replyingTo: replyingTo,
             onSend: { images in
@@ -431,12 +456,50 @@ struct ChatView: View {
                 .animation(.easeInOut(duration: 0.25), value: navigationStatusSubtitle)
             }
         }
-        
-        ToolbarItem(placement: .navigationBarTrailing) {
-            toolbarTrailingButtons
+
+        // Split into separate ToolbarItems to avoid NSToolbarItemGroup selectionMode warnings on macOS
+        if !isEditMode {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Menu {
+                    Button {
+                        isSearchActive.toggle()
+                    } label: {
+                        Label("Search", systemImage: "magnifyingglass")
+                    }
+                    Button(role: .destructive) {
+                        showResetSessionConfirm = true
+                    } label: {
+                        Label("Reset Session", systemImage: "arrow.triangle.2.circlepath")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .foregroundColor(Color.blue)
+                }
+            }
+        } else {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button {
+                    withAnimation {
+                        isSearchActive.toggle()
+                        if !isSearchActive { searchText = "" }
+                    }
+                } label: {
+                    Image(systemName: isSearchActive ? "xmark.circle.fill" : "magnifyingglass")
+                }
+            }
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button {
+                    withAnimation {
+                        isEditMode = false
+                        selectedMessages.removeAll()
+                    }
+                } label: {
+                    Text("done")
+                }
+            }
         }
-    }
-    
+    }  // end toolbarContent()
+
     /// Returns a subtle subtitle for the navigation bar when connection or session state requires attention.
     /// Returns nil when everything is healthy (no subtitle shown).
     private var navigationStatusSubtitle: String? {
@@ -448,53 +511,6 @@ struct ChatView: View {
             return NSLocalizedString("status_no_connection", comment: "")
         }
         return nil
-    }
-    
-    @ViewBuilder
-    private var toolbarTrailingButtons: some View {
-        HStack(spacing: 12) {
-            if !isEditMode {
-                // Menu with additional actions
-                Menu {
-                    Button {
-                        isSearchActive.toggle()
-                    } label: {
-                        Label("Search", systemImage: "magnifyingglass")
-                    }
-                    
-                    Button(role: .destructive) {
-                        showResetSessionConfirm = true
-                    } label: {
-                        Label("Reset Session", systemImage: "arrow.triangle.2.circlepath")
-                    }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
-                        .foregroundColor(Color.blue)
-                }
-            } else {
-                Button {
-                    withAnimation {
-                        isSearchActive.toggle()
-                        if !isSearchActive {
-                            searchText = ""
-                        }
-                    }
-                } label: {
-                    Image(systemName: isSearchActive ? "xmark.circle.fill" : "magnifyingglass")
-                }
-            }
-            
-            if isEditMode {
-                Button {
-                    withAnimation {
-                        isEditMode = false
-                        selectedMessages.removeAll()
-                    }
-                } label: {
-                    Text("done")
-                }
-            }
-        }
     }
     
     @ViewBuilder
@@ -566,6 +582,33 @@ struct ChatView: View {
     /// Hide keyboard
     private func hideKeyboard() {
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+    }
+
+    // MARK: - Drag & Drop (macOS)
+
+    private func handleChatDrop(providers: [NSItemProvider]) -> Bool {
+        var handled = false
+        for provider in providers {
+            if provider.hasItemConformingToTypeIdentifier(UTType.image.identifier) {
+                provider.loadDataRepresentation(forTypeIdentifier: UTType.image.identifier) { data, _ in
+                    guard let data, let image = UIImage(data: data) else { return }
+                    DispatchQueue.main.async { chatDropImages.append(image) }
+                }
+                handled = true
+            } else if provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {
+                provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier) { item, _ in
+                    guard let data = item as? Data,
+                          let url = URL(dataRepresentation: data, relativeTo: nil),
+                          url.startAccessingSecurityScopedResource() else { return }
+                    defer { url.stopAccessingSecurityScopedResource() }
+                    guard let imgData = try? Data(contentsOf: url),
+                          let image = UIImage(data: imgData) else { return }
+                    DispatchQueue.main.async { chatDropImages.append(image) }
+                }
+                handled = true
+            }
+        }
+        return handled
     }
 }
 
