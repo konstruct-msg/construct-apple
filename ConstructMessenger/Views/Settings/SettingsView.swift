@@ -153,8 +153,7 @@ struct SettingsView: View {
                             .padding(.vertical, 12)
                         }
 
-                        // MARK: - Developer Section (DEBUG only)
-                        #if DEBUG
+                        // MARK: - Developer Section
                         settingsSection(header: "Developer") {
                             NavigationLink(destination: DiagnosticsView()) {
                                 HStack {
@@ -170,7 +169,6 @@ struct SettingsView: View {
                             }
                             .buttonStyle(.plain)
                         }
-                        #endif
                     }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 12)
@@ -186,7 +184,7 @@ struct SettingsView: View {
                         userId: viewModel.userId,
                         username: viewModel.username
                     )
-                    .presentationDetents([.medium, .large])
+                    .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
                 }
             }

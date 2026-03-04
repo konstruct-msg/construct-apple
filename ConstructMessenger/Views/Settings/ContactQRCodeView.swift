@@ -34,10 +34,12 @@ struct ContactQRCodeView: View {
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
-            VStack(spacing: 32) {
-                Spacer()
-
+            ScrollView {
                 VStack(spacing: 24) {
+                    // Space for the close button row
+                    Color.clear.frame(height: 44)
+
+                    VStack(spacing: 24) {
 
                     // QR Code
                     if let payload = qrPayload, let qrImage = generateQRCode(from: payload) {
@@ -103,24 +105,23 @@ struct ContactQRCodeView: View {
                             .multilineTextAlignment(.center)
                             .padding(.horizontal)
                     }
-                }
-
-                Spacer()
-
-                // Regenerate button if expired
-                if timeRemaining <= 0 {
-                    Button {
-                        regenerateQRCode()
-                    } label: {
-                        Label("Generate New Code", systemImage: "arrow.clockwise")
-                            .padding()
-                            .frame(maxWidth: .infinity)
-                            .background(Color.accentColor)
-                            .foregroundColor(.white)
-                            .cornerRadius(12)
                     }
-                    .padding(.horizontal, 32)
-                }
+                    .frame(maxWidth: .infinity)
+
+                    // Regenerate button if expired
+                    if timeRemaining <= 0 {
+                        Button {
+                            regenerateQRCode()
+                        } label: {
+                            Label("Generate New Code", systemImage: "arrow.clockwise")
+                                .padding()
+                                .frame(maxWidth: .infinity)
+                                .background(Color.accentColor)
+                                .foregroundColor(.white)
+                                .cornerRadius(12)
+                        }
+                        .padding(.horizontal, 32)
+                    }
                 
                 // Hint text
                 Text("scan_with_camera_or_screenshot")
@@ -130,8 +131,10 @@ struct ContactQRCodeView: View {
                     .padding(.horizontal, 32)
                     .padding(.bottom, 32)
             }
+            .padding(.horizontal)
+            } // ScrollView
 
-            // Close button — rendered as overlay so it always sits inside the sheet
+            // Close button — overlay, always visible at top right
             Button {
                 dismiss()
             } label: {
