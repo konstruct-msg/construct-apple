@@ -42,6 +42,9 @@
 "sending" = "Sending...";
 "initializing_secure_connection" = "Initializing secure connection...";
 "not_connected_to_server" = "Not connected to server";
+"status_connecting" = "Connecting...";
+"status_no_connection" = "No connection";
+"status_encrypting" = "Encrypting...";
 "chat" = "Chat";
 "encrypted" = "Encrypted";
 "reply" = "Reply";

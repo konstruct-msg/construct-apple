@@ -272,16 +272,9 @@ struct ChatView: View {
     
     @ViewBuilder
     private var statusBanner: some View {
+        // Only show banner for actual error messages — network/session status moved to navigation subtitle
         if let errorMessage = viewModel.errorMessage, !errorMessage.isEmpty {
             statusBannerRow(text: errorMessage, color: .red, isLocalized: false)
-        } else if viewModel.isSending {
-            statusBannerRow(text: NSLocalizedString("sending", comment: ""), color: .secondary)
-        } else if viewModel.isInitializingSession {
-            statusBannerRow(text: NSLocalizedString("initializing_secure_connection", comment: ""), color: .orange, showProgress: true)
-        } else if !viewModel.isSessionReady {
-            statusBannerRow(text: NSLocalizedString("initializing_secure_connection", comment: ""), color: .orange, showProgress: true)
-        } else if !connectionManager.isConnected {
-            statusBannerRow(text: NSLocalizedString("not_connected_to_server", comment: ""), color: .red)
         }
     }
     
@@ -411,17 +404,37 @@ struct ChatView: View {
             Button {
                 showingUserProfile = true
             } label: {
-                VStack(spacing: 2) {
+                VStack(spacing: 1) {
                     Text(viewModel.chat.otherUser?.displayName ?? NSLocalizedString("chat", comment: "Default chat title"))
                         .font(.headline)
                         .foregroundColor(.primary)
+                    if let subtitle = navigationStatusSubtitle {
+                        Text(subtitle)
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                            .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
                 }
+                .animation(.easeInOut(duration: 0.25), value: navigationStatusSubtitle)
             }
         }
         
         ToolbarItem(placement: .navigationBarTrailing) {
             toolbarTrailingButtons
         }
+    }
+    
+    /// Returns a subtle subtitle for the navigation bar when connection or session state requires attention.
+    /// Returns nil when everything is healthy (no subtitle shown).
+    private var navigationStatusSubtitle: String? {
+        if viewModel.isInitializingSession || !viewModel.isSessionReady {
+            return NSLocalizedString("status_encrypting", comment: "")
+        } else if connectionManager.connectionStatus == .connecting {
+            return NSLocalizedString("status_connecting", comment: "")
+        } else if !connectionManager.isConnected {
+            return NSLocalizedString("status_no_connection", comment: "")
+        }
+        return nil
     }
     
     @ViewBuilder

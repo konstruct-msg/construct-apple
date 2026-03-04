@@ -42,6 +42,9 @@
 "sending" = "Отправка...";
 "initializing_secure_connection" = "Установка безопасного соединения...";
 "not_connected_to_server" = "Нет подключения к серверу";
+"status_connecting" = "Подключение...";
+"status_no_connection" = "Нет соединения";
+"status_encrypting" = "Шифрование...";
 "chat" = "Чат";
 "encrypted" = "Зашифровано";
 "reply" = "Ответить";
