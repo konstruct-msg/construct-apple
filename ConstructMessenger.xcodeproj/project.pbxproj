@@ -323,6 +323,67 @@
 			};
 			name = Debug;
 		};
+		F1164BA82EED889800324CEA /* Beta */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReferenceAnchor = BF103A712EED889800324CEA /* ConstructMessenger */;
+			baseConfigurationReferenceRelativePath = Config/Beta.xcconfig;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = PK2473XF3P;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.1;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Beta;
+		};
 		BF103A7B2EED889800324CEA /* Release */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReferenceAnchor = BF103A712EED889800324CEA /* ConstructMessenger */;
@@ -393,7 +454,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = ConstructMessenger/ConstructMessenger.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 147;
+				CURRENT_PROJECT_VERSION = 148;
 				DEVELOPMENT_TEAM = PK2473XF3P;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -429,7 +490,7 @@
 					"$(PROJECT_DIR)/target/aarch64-apple-ios-macabi/release",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
-				MARKETING_VERSION = 0.8.31;
+				MARKETING_VERSION = 0.8.32;
 				PRODUCT_BUNDLE_IDENTIFIER = maximeliseyev.constructmessenger;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -445,16 +506,16 @@
 			};
 			name = Debug;
 		};
-		BF103A7E2EED889800324CEA /* Release */ = {
+		B0AB8C452EED889800324CEA /* Beta */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReferenceAnchor = BF103A712EED889800324CEA /* ConstructMessenger */;
-			baseConfigurationReferenceRelativePath = Config/Release.xcconfig;
+			baseConfigurationReferenceRelativePath = Config/Beta.xcconfig;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = ConstructMessenger/ConstructMessenger.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 147;
+				CURRENT_PROJECT_VERSION = 148;
 				DEVELOPMENT_TEAM = PK2473XF3P;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -490,7 +551,68 @@
 					"$(PROJECT_DIR)/target/aarch64-apple-ios-macabi/release",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
-				MARKETING_VERSION = 0.8.31;
+				MARKETING_VERSION = 0.8.32;
+				PRODUCT_BUNDLE_IDENTIFIER = maximeliseyev.constructmessenger;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator maccatalyst";
+				SUPPORTS_MACCATALYST = YES;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_INCLUDE_PATHS = "$(PROJECT_DIR)";
+				SWIFT_OBJC_BRIDGING_HEADER = "/Users/maximeliseyev/Code/construct-messenger/ConstructMessenger/ConstructMessenger-Bridging-Header.h";
+				SWIFT_VERSION = 5.7;
+				TARGETED_DEVICE_FAMILY = "1,2,6";
+			};
+			name = Beta;
+		};
+		BF103A7E2EED889800324CEA /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReferenceAnchor = BF103A712EED889800324CEA /* ConstructMessenger */;
+			baseConfigurationReferenceRelativePath = Config/Release.xcconfig;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = ConstructMessenger/ConstructMessenger.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 148;
+				DEVELOPMENT_TEAM = PK2473XF3P;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = "$(PROJECT_DIR)/ConstructMessenger";
+				INFOPLIST_FILE = ConstructMessenger/Info.plist;
+				INFOPLIST_KEY_BGTaskSchedulerPermittedIdentifiers = "com.construct.message-refresh com.construct.maintenance";
+				INFOPLIST_KEY_CFBundleDisplayName = Konstruct;
+				INFOPLIST_KEY_DEFAULT_SERVER_URL = "https://ams.kostruct.cc";
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Construct Messenger needs access to your camera to send photos and videos.";
+				INFOPLIST_KEY_NSFaceIDUsageDescription = "Use Face ID to unlock Construct Messenger.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Construct Messenger needs access to your local network to check network connectivity and ensure reliable message delivery.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Construct Messenger needs access to your microphone to record and send voice messages.";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Construct Messenger needs permission to save photos and videos to your library.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Construct Messenger needs access to your photo library to send photos and videos.";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UIBackgroundModes = "fetch remote-notification";
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_UIUserInterfaceStyle = Automatic;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(PROJECT_DIR)",
+					"$(PROJECT_DIR)/target/aarch64-apple-ios/release",
+					"$(PROJECT_DIR)/target/aarch64-apple-ios-sim/release",
+					"$(PROJECT_DIR)/target/aarch64-apple-ios-macabi/release",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MARKETING_VERSION = 0.8.32;
 				PRODUCT_BUNDLE_IDENTIFIER = maximeliseyev.constructmessenger;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -538,6 +660,38 @@
 			};
 			name = Debug;
 		};
+		A6C39B042EED889800324CEA /* Beta */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReferenceAnchor = BF103A712EED889800324CEA /* ConstructMessenger */;
+			baseConfigurationReferenceRelativePath = Config/Beta.xcconfig;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = PK2473XF3P;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = maximeliseyev.ConstructMessengerTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ConstructMessenger.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/ConstructMessenger";
+			};
+			name = Beta;
+		};
 		BF8A97022EFF0FAF009C5EF7 /* Release */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReferenceAnchor = BF103A712EED889800324CEA /* ConstructMessenger */;
@@ -577,6 +731,7 @@
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				BF103A7A2EED889800324CEA /* Debug */,
+				F1164BA82EED889800324CEA /* Beta */,
 				BF103A7B2EED889800324CEA /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
@@ -586,6 +741,7 @@
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				BF103A7D2EED889800324CEA /* Debug */,
+				B0AB8C452EED889800324CEA /* Beta */,
 				BF103A7E2EED889800324CEA /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
@@ -595,6 +751,7 @@
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				BF8A97012EFF0FAF009C5EF7 /* Debug */,
+				A6C39B042EED889800324CEA /* Beta */,
 				BF8A97022EFF0FAF009C5EF7 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;

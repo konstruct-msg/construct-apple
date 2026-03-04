@@ -1,0 +1,5 @@
+// Beta configuration — same server settings as Release, but with DEBUG flag
+// so #if DEBUG sections remain visible in TestFlight builds.
+#include "Release.xcconfig"
+
+SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG $(inherited)
