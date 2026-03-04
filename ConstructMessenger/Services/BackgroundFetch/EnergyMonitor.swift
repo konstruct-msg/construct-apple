@@ -38,7 +38,7 @@ class EnergyMonitor {
     private func setupNetworkMonitoring() {
         pathMonitor.pathUpdateHandler = { [weak self] path in
             self?.currentPath = path
-            Log.error("Network status changed: \(path.status)")
+            Log.info("Network status changed: \(path.status)", category: "EnergyMonitor")
         }
         pathMonitor.start(queue: monitorQueue)
     }
