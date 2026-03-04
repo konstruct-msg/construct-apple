@@ -252,6 +252,16 @@ class ChatViewModel: NSObject {
                 return
             }
 
+            // Re-check: ChatsViewModel may have already created a RECEIVER session while we were
+            // waiting for the bundle fetch (both run async on @MainActor but interleave at await points).
+            // Overwriting a valid RECEIVER session with an INITIATOR session would break decryption
+            // of already-queued incoming messages.
+            if CryptoManager.shared.hasSession(for: data.userId) {
+                Log.info("✅ SESSION_STATE[proactive_init_skipped]: RECEIVER session already created for \(data.userId.prefix(8))… — skipping INITIATOR init", category: "ChatViewModel")
+                isSessionReady = true
+                return
+            }
+
             do {
                 // ✅ REFACTOR: Use SessionInitializationService
                 try sessionInitService.initializeSession(userId: data.userId, bundle: data, deleteExisting: true)
