@@ -387,6 +387,10 @@ class ChatsViewModel {
                         // exhausted and cannot be reused. Clear the pending queue and ask the
                         // sender to start a fresh X3DH session with new prekeys.
                         Log.info("🔄 initReceivingSession failed — clearing queue, sending END_SESSION to \(userId.prefix(8))...", category: "SessionInit")
+                        // ACK the undecryptable message so the server advances the cursor
+                        // past it. Without this, fetchMissedMessages re-delivers it on
+                        // every reconnect, causing an infinite init-fail loop.
+                        self.streamManager.sendReceipt([message.id], status: .delivered)
                         self.pendingFirstMessages.removeValue(forKey: userId)
                         Task {
                             try? await self.sendEndSession(to: userId, reason: "session_init_failed")
@@ -501,6 +505,8 @@ class ChatsViewModel {
                         if !canContinue {
                             // Exhausted all heal attempts — escalate to END_SESSION
                             Log.info("⛔ Heal exhausted — sending END_SESSION to \(userId.prefix(8))…", category: "SessionInit")
+                            // ACK undecryptable message so server cursor advances past it.
+                            self.streamManager.sendReceipt([failedMessage.id], status: .delivered)
                             self.pendingFirstMessages.removeValue(forKey: userId)
                             SessionHealingService.shared.clearQueue(for: userId, in: context)
                             try? await self.sendEndSession(to: userId, reason: "heal_exhausted")

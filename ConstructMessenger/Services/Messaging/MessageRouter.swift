@@ -269,6 +269,9 @@ class MessageRouter {
         // Deduplicate: skip if same message ID is already in the queue
         if pendingMessages[userId]?.contains(where: { $0.id == message.id }) == true {
             Log.debug("⏭️ Skipping duplicate queued message \(message.id.prefix(8))...", category: "MessageRouter")
+            // ACK so server removes it from the pending queue — session init is already
+            // in flight for this user and will handle the message from the queue.
+            onReceiptNeeded?([message.id], .delivered)
             return
         }
 
