@@ -9,7 +9,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(\.managedObjectContext) private var viewContext
-    @EnvironmentObject var authViewModel: AuthViewModel
+    @Environment(AuthViewModel.self) private var authViewModel
     @State private var viewModel = SettingsViewModel()
     @ObservedObject private var connectionStatus = ConnectionStatusManager.shared
     @State private var showingQRCode = false
@@ -27,7 +27,7 @@ struct SettingsView: View {
 
                         // MARK: - Profile Section
                         settingsSection {
-                            NavigationLink(destination: AccountSettingsView().environmentObject(authViewModel)) {
+                            NavigationLink(destination: AccountSettingsView().environment(authViewModel)) {
                                 HStack(spacing: 12) {
                                     Group {
                                         if let image = viewModel.profileImage {
@@ -342,7 +342,7 @@ struct SettingsView: View {
 
     return SettingsView()
         .environment(\.managedObjectContext, context)
-        .environmentObject(authViewModel)
+        .environment(authViewModel)
         .environment(SecurityViewModel())
 }
 #endif

@@ -11,19 +11,20 @@ import CoreData
 import CryptoKit
 
 @MainActor
-class AuthViewModel: ObservableObject {
-    @Published var isAuthenticated = false
-    @Published var currentUserId: String?
+@Observable
+class AuthViewModel {
+    var isAuthenticated = false
+    var currentUserId: String?
 
     /// Tracks whether device keys are registered in Keychain (drives ContentView routing)
-    @Published var hasRegisteredDeviceKeys: Bool? = nil
+    var hasRegisteredDeviceKeys: Bool? = nil
 
     func refreshDeviceKeyState() {
         hasRegisteredDeviceKeys = KeychainManager.shared.isDeviceRegistered()
     }
     
     // ✅ REFACTOR Phase 1.2: Single source of truth - Core Data User entity
-    @Published var currentUser: User?
+    var currentUser: User?
     
     // ✅ Computed properties for convenience (backwards compatibility)
     var currentUsername: String {
@@ -34,12 +35,12 @@ class AuthViewModel: ObservableObject {
         currentUser?.displayName ?? currentUser?.username ?? ""
     }
     
-    @Published var isLoading = false
-    @Published var errorMessage: String?
+    var isLoading = false
+    var errorMessage: String?
 
     private var cancellables = Set<AnyCancellable>()
-    private var sessionRestoreTimer: Timer?
-    private var authOperationTimer: Timer?
+    nonisolated(unsafe) private var sessionRestoreTimer: Timer?
+    nonisolated(unsafe) private var authOperationTimer: Timer?
     private let viewContext: NSManagedObjectContext
 
     // Timer for monitoring token expiration

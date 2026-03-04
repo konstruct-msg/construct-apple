@@ -186,7 +186,7 @@ struct RegistrationStageView: View {
 
 struct RegistrationFlowView: View {
     @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject var authViewModel: AuthViewModel
+    @Environment(AuthViewModel.self) private var authViewModel
 
     let username: String?
 

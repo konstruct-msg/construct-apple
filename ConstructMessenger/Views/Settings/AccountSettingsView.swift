@@ -11,7 +11,7 @@ import PhotosUI
 
 struct AccountSettingsView: View {
     @Environment(\.managedObjectContext) private var viewContext
-    @EnvironmentObject var authViewModel: AuthViewModel
+    @Environment(AuthViewModel.self) private var authViewModel
     @State private var viewModel = SettingsViewModel()
 
     @State private var showingImagePicker = false
@@ -164,7 +164,7 @@ struct AccountSettingsView: View {
                     showingDeleteConfirmation = false
                 }
             )
-            .environmentObject(authViewModel)
+            .environment(authViewModel)
         }
         .sheet(isPresented: $showingAvatarViewer) {
             AvatarViewerSheet(
@@ -215,7 +215,7 @@ struct AccountSettingsView: View {
 // MARK: - Delete Account Confirmation View
 struct DeleteAccountConfirmationView: View {
     @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject var authViewModel: AuthViewModel
+    @Environment(AuthViewModel.self) private var authViewModel
 
     let onDelete: () -> Void
     let onCancel: () -> Void
@@ -393,7 +393,7 @@ struct AvatarViewerSheet: View {
     return NavigationStack {
         AccountSettingsView()
             .environment(\.managedObjectContext, context)
-            .environmentObject(authViewModel)
+            .environment(authViewModel)
     }
 }
 #endif

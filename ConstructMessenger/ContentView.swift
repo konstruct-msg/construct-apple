@@ -9,7 +9,7 @@ import SwiftUI
 import CoreData
 
 struct ContentView: View {
-    @EnvironmentObject var authViewModel: AuthViewModel
+    @Environment(AuthViewModel.self) var authViewModel
     @EnvironmentObject var deepLinkHandler: DeepLinkHandler // Inject DeepLinkHandler
     @Environment(\.managedObjectContext) private var viewContext
     @Environment(\.scenePhase) private var scenePhase
@@ -25,7 +25,7 @@ struct ContentView: View {
             } else if authViewModel.hasRegisteredDeviceKeys == true {
                 // Device is registered - show main app
                 MainTabView()
-                    .environmentObject(authViewModel)
+                    .environment(authViewModel)
                     .environment(chatsViewModel)
             } else {
                 // No device keys = new user -> show onboarding
@@ -95,7 +95,7 @@ struct ContentView: View {
 
     return ContentView()
         .environment(\.managedObjectContext, container.viewContext)
-        .environmentObject(authViewModel)
+        .environment(authViewModel)
         .environmentObject(deepLinkHandler)
 }
 #endif
@@ -124,7 +124,7 @@ struct ContentView: View {
 
     return ContentView()
         .environment(\.managedObjectContext, context)
-        .environmentObject(authViewModel)
+        .environment(authViewModel)
         .environmentObject(deepLinkHandler)
         .environment(chatsViewModel)
 }

@@ -145,7 +145,6 @@ class SettingsViewModel {
                 }
             }
             username = trimmed
-            authViewModel.objectWillChange.send()
             usernameSaved = true
         } catch {
             usernameSaveError = error.localizedDescription
@@ -175,11 +174,9 @@ class SettingsViewModel {
                 user.displayName = trimmed
                 try context.save()
                 
-                // ✅ REFACTOR Phase 1.2: Update local state and trigger AuthViewModel update
+                // ✅ REFACTOR Phase 1.2: Update local state
                 displayName = trimmed
-                // currentUser is @Published, so updating Core Data User will auto-notify
-                // AuthViewModel.currentUser is the same object, computed properties will return new value
-                authViewModel.objectWillChange.send()  // Force UI refresh
+                // @Observable AuthViewModel tracks property access automatically
                 
                 print("✅ Display name saved: \(trimmed)")
             }

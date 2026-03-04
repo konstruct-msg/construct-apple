@@ -9,7 +9,7 @@ import SwiftUI
 import CoreData
 
 struct MainTabView: View {
-    @EnvironmentObject var authViewModel: AuthViewModel
+    @Environment(AuthViewModel.self) private var authViewModel
     @Environment(ChatsViewModel.self) private var chatsViewModel
 
     /// Compact = iPhone (or iPad in narrow split-screen multitasking)
@@ -63,7 +63,7 @@ struct MainTabView: View {
 
     return MainTabView()
         .environment(\.managedObjectContext, context)
-        .environmentObject(authViewModel)
+        .environment(authViewModel)
         .environment(chatsViewModel)
         .environment(SecurityViewModel())
 }
