@@ -294,6 +294,13 @@ public struct Shared_Proto_Services_V1_UploadPreKeysRequest: Sendable {
   /// Clears the value of `signedPreKey`. Subsequent reads from it will return its default value.
   public mutating func clearSignedPreKey() {self._signedPreKey = nil}
 
+  /// If true, atomically delete all existing one-time pre-keys for this device
+  /// before inserting the new batch. Use after key corruption, re-registration,
+  /// or forced key refresh when the stale pool must be purged entirely.
+  /// Default: false (additive upload — normal Signal replenishment behaviour).
+  /// NOTE: field 4 is reserved (was used in a prior version); this field is 11.
+  public var replaceExisting: Bool = false
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -872,7 +879,7 @@ extension Shared_Proto_Services_V1_DevicePreKeyBundle: SwiftProtobuf.Message, Sw
 
 extension Shared_Proto_Services_V1_UploadPreKeysRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".UploadPreKeysRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0\u{3}pre_keys\0\u{3}signed_pre_key\0\u{c}\u{4}\u{7}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0\u{3}pre_keys\0\u{3}signed_pre_key\0\u{4}\u{8}replace_existing\0\u{c}\u{4}\u{7}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -883,6 +890,7 @@ extension Shared_Proto_Services_V1_UploadPreKeysRequest: SwiftProtobuf.Message, 
       case 1: try { try decoder.decodeSingularStringField(value: &self.deviceID) }()
       case 2: try { try decoder.decodeRepeatedMessageField(value: &self.preKeys) }()
       case 3: try { try decoder.decodeSingularMessageField(value: &self._signedPreKey) }()
+      case 11: try { try decoder.decodeSingularBoolField(value: &self.replaceExisting) }()
       default: break
       }
     }
@@ -902,6 +910,9 @@ extension Shared_Proto_Services_V1_UploadPreKeysRequest: SwiftProtobuf.Message, 
     try { if let v = self._signedPreKey {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
     } }()
+    if self.replaceExisting != false {
+      try visitor.visitSingularBoolField(value: self.replaceExisting, fieldNumber: 11)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -909,6 +920,7 @@ extension Shared_Proto_Services_V1_UploadPreKeysRequest: SwiftProtobuf.Message, 
     if lhs.deviceID != rhs.deviceID {return false}
     if lhs.preKeys != rhs.preKeys {return false}
     if lhs._signedPreKey != rhs._signedPreKey {return false}
+    if lhs.replaceExisting != rhs.replaceExisting {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
