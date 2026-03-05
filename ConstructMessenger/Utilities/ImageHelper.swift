@@ -16,8 +16,10 @@ struct ImageHelper {
     /// JPEG compression quality for avatars (0.0 - 1.0)
     static let avatarCompressionQuality: CGFloat = 0.7
 
-    /// Maximum file size for avatar in bytes (256 KB)
-    static let maxAvatarFileSize: Int = 256 * 1024
+    /// Maximum file size for avatar in bytes (40 KB)
+    /// NOTE: Reduced from 256 KB to ensure profile sharing messages fit within
+    /// server's MAX_WEBSOCKET_MESSAGE_SIZE (64 KB) after Base64 encoding + JSON + E2E encryption overhead
+    static let maxAvatarFileSize: Int = 40 * 1024
 
     /// Prepares an image for use as an avatar
     /// - Parameter image: Original UIImage

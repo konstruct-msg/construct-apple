@@ -9,35 +9,31 @@ import Foundation
 
 /// Configuration for background fetch settings
 struct BackgroundFetchConfig {
-    // MARK: - UserDefaults Keys
-    private static let enabledKey = "backgroundFetchEnabled"
-    private static let intervalMinutesKey = "backgroundFetchIntervalMinutes"
-    
     // MARK: - Default Values
     static let defaultIntervalMinutes: Int = 15
     static let minIntervalMinutes: Int = 5
     static let maxIntervalMinutes: Int = 60
-    
+
     // MARK: - Properties
-    
+
     /// Whether background fetch is enabled
     static var isEnabled: Bool {
         get {
-            UserDefaults.standard.bool(forKey: enabledKey)
+            UserDefaults.standard.bool(forKey: UserDefaultsKey.backgroundFetchEnabled.key)
         }
         set {
-            UserDefaults.standard.set(newValue, forKey: enabledKey)
+            UserDefaults.standard.set(newValue, forKey: UserDefaultsKey.backgroundFetchEnabled.key)
             // Auto-disable if Low Power Mode is enabled
             if newValue && ProcessInfo.processInfo.isLowPowerModeEnabled {
-                UserDefaults.standard.set(false, forKey: enabledKey)
+                UserDefaults.standard.set(false, forKey: UserDefaultsKey.backgroundFetchEnabled.key)
             }
         }
     }
-    
+
     /// Background fetch interval in minutes
     static var intervalMinutes: Int {
         get {
-            let value = UserDefaults.standard.integer(forKey: intervalMinutesKey)
+            let value = UserDefaults.standard.integer(forKey: UserDefaultsKey.backgroundFetchIntervalMinutes.key)
             // Return default if not set or invalid
             if value < minIntervalMinutes || value > maxIntervalMinutes {
                 return defaultIntervalMinutes
@@ -47,7 +43,7 @@ struct BackgroundFetchConfig {
         set {
             // Clamp value to valid range
             let clampedValue = max(minIntervalMinutes, min(maxIntervalMinutes, newValue))
-            UserDefaults.standard.set(clampedValue, forKey: intervalMinutesKey)
+            UserDefaults.standard.set(clampedValue, forKey: UserDefaultsKey.backgroundFetchIntervalMinutes.key)
         }
     }
     
@@ -64,19 +60,19 @@ struct BackgroundFetchConfig {
         if ProcessInfo.processInfo.isLowPowerModeEnabled {
             if isEnabled {
                 // Auto-disable and save
-                UserDefaults.standard.set(false, forKey: enabledKey)
+                UserDefaults.standard.set(false, forKey: UserDefaultsKey.backgroundFetchEnabled.key)
             }
             return false
         }
-        
+
         return true
     }
-    
+
     // MARK: - Initialization
-    
+
     /// Initialize with default values if not set
     static func initializeDefaults() {
-        if UserDefaults.standard.object(forKey: intervalMinutesKey) == nil {
+        if UserDefaults.standard.object(forKey: UserDefaultsKey.backgroundFetchIntervalMinutes.key) == nil {
             intervalMinutes = defaultIntervalMinutes
         }
     }

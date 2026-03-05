@@ -39,3 +39,44 @@ extension Chat {
 extension Chat: Identifiable {
 
 }
+
+// MARK: - Message Preview Helpers
+extension Chat {
+    /// Format message content for chat list preview
+    /// Handles media messages, profile shares, and system messages
+    static func formatPreviewText(_ content: String?) -> String {
+        guard let content = content else { return "" }
+        
+        // Check if it's JSON (media or profile message)
+        if let data = content.data(using: .utf8),
+           let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let type = json["type"] as? String {
+            
+            switch type {
+            case "media":
+                // Media message
+                let caption = json["caption"] as? String ?? ""
+                if caption.isEmpty {
+                    return "📷 Photo"
+                } else {
+                    return "📷 \(caption)"
+                }
+                
+            case "profile":
+                // Profile share message
+                if let displayName = json["displayName"] as? String {
+                    return "👤 Shared profile: \(displayName)"
+                } else {
+                    return "👤 Shared profile"
+                }
+                
+            default:
+                // Unknown JSON type - show first 50 chars
+                return String(content.prefix(50))
+            }
+        }
+        
+        // Regular text message
+        return content
+    }
+}

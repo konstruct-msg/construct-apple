@@ -7,80 +7,66 @@
 
 import SwiftUI
 import AVFoundation
+import Observation
 
 struct QRScannerView: View {
     @Environment(\.dismiss) private var dismiss
     let onCodeScanned: (String) -> Void
 
-    @StateObject private var scanner = QRCodeScanner()
+    @State private var scanner = QRCodeScanner()
     @State private var showingError = false
     @State private var errorMessage = ""
     @State private var showingPermissionAlert = false
-    @State private var showDebugInfo = false  // ✅ Debug panel
+    @State private var showDebugInfo = false
 
-    // ✅ Test mode - автоматически включается на симуляторе
     private var testMode: Bool {
         #if targetEnvironment(simulator)
         return true
         #else
-        return false  // Измени на true для ручного тестирования на реальном устройстве
+        return false
         #endif
     }
 
     var body: some View {
         NavigationStack {
             ZStack {
-                // Camera preview
+                // Camera preview (full screen including safe areas)
                 QRCodeScannerViewRepresentable(scanner: scanner)
                     .ignoresSafeArea()
 
-                // Overlay with scanning frame
+                // Dim overlay + corner brackets, computed from safe-area content size
+                GeometryReader { geo in
+                    let scanSize = min(geo.size.width * 0.72, 260.0)
+                    let scanRect = CGRect(
+                        x: (geo.size.width - scanSize) / 2,
+                        y: (geo.size.height - scanSize) / 2 - 30,
+                        width: scanSize,
+                        height: scanSize
+                    )
+
+                    ScannerDimOverlay(scanRect: scanRect)
+                        .fill(Color.black.opacity(0.6), style: FillStyle(eoFill: true))
+
+                    ScannerCornerBrackets(scanRect: scanRect)
+                        .stroke(Color.AppBrand.button, lineWidth: 3)
+                }
+                .ignoresSafeArea()
+
+                // UI panels
                 VStack {
-                    // ✅ Debug info at top
                     if showDebugInfo {
-                        debugPanel
-                            .padding(.top, 60)
+                        debugPanel.padding(.top, 60)
                     }
-
                     Spacer()
-
-                    VStack(spacing: 16) {
-                        Text("scan_qr_code")
-                            .font(.headline)
-                            .foregroundColor(.white)
-
-                        Text("position_qr_code_within_frame")
-                            .font(.subheadline)
-                            .foregroundColor(.white.opacity(0.8))
-
-                        // ✅ Test mode button
-                        if testMode {
-                            Button {
-                                simulateQRCodeScan()
-                            } label: {
-                                Label("Simulate QR Scan", systemImage: "camera.viewfinder")
-                                    .padding()
-                                    .background(Color.blue)
-                                    .foregroundColor(.white)
-                                    .cornerRadius(8)
-                            }
-                        }
-                    }
-                    .padding()
-                    .background(Color.black.opacity(0.7))
-                    .cornerRadius(12)
-                    .padding(.bottom, 60)
+                    bottomPanel.padding(.bottom, 60)
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("cancel") {
-                        dismiss()
-                    }
-                    .foregroundColor(.white)
+                    Button("cancel") { dismiss() }
+                        .foregroundColor(.white)
                 }
-
                 ToolbarItem(placement: .primaryAction) {
                     Button {
                         showDebugInfo.toggle()
@@ -90,79 +76,88 @@ struct QRScannerView: View {
                     }
                 }
             }
-            .onAppear {
-                checkCameraPermission()
-            }
-            .onDisappear {
-                scanner.stopScanning()
-            }
+            .onAppear { checkCameraPermission() }
+            .onDisappear { scanner.stopScanning() }
             .alert("camera_access_required", isPresented: $showingPermissionAlert) {
                 Button("open_settings") {
-                    if let settingsURL = URL(string: UIApplication.openSettingsURLString) {
-                        UIApplication.shared.open(settingsURL)
+                    if let url = URL(string: UIApplication.openSettingsURLString) {
+                        UIApplication.shared.open(url)
                     }
                 }
-                Button("cancel", role: .cancel) {
-                    dismiss()
-                }
+                Button("cancel", role: .cancel) { dismiss() }
             } message: {
                 Text("allow_camera_access_for_qr")
             }
-            .onChange(of: scanner.scannedCode) { newValue in
-                if let code = newValue {
-                    handleScannedCode(code)
-                }
+            .onChange(of: scanner.scannedCode) { _, newValue in
+                if let code = newValue { handleScannedCode(code) }
             }
             .alert("error", isPresented: $showingError) {
-                Button("ok") {
-                    dismiss()
-                }
+                Button("ok") { dismiss() }
             } message: {
                 Text(errorMessage)
             }
         }
     }
 
-    // ✅ Debug panel
+    // MARK: - Bottom Panel
+
+    private var bottomPanel: some View {
+        VStack(spacing: 14) {
+            Text("scan_qr_code")
+                .font(.headline)
+                .foregroundColor(.white)
+
+            Text("position_qr_code_within_frame")
+                .font(.subheadline)
+                .foregroundColor(.white.opacity(0.8))
+
+            Button { handleClipboardPaste() } label: {
+                Label("paste_invite_link", systemImage: "doc.on.clipboard")
+                    .font(.subheadline)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(Color.white.opacity(0.15))
+                    .foregroundColor(.white)
+                    .clipShape(Capsule())
+            }
+
+            if testMode {
+                Button { simulateQRCodeScan() } label: {
+                    Label("Simulate QR Scan", systemImage: "camera.viewfinder")
+                        .padding()
+                        .background(Color.blue)
+                        .foregroundColor(.white)
+                        .cornerRadius(8)
+                }
+            }
+        }
+        .padding()
+        .background(Color.black.opacity(0.7))
+        .cornerRadius(12)
+        .padding(.horizontal)
+    }
+
+    // MARK: - Debug Panel
+
     private var debugPanel: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Camera Debug Info")
                 .font(.headline)
                 .foregroundColor(.white)
 
-            Divider()
-                .background(Color.white)
+            Divider().background(Color.white)
 
-            debugInfoRow(
-                label: "Session Ready",
-                value: scanner.isSessionReady ? "✅ Yes" : "❌ No",
-                color: scanner.isSessionReady ? .green : .red
-            )
-
-            debugInfoRow(
-                label: "Permission",
-                value: permissionStatusString,
-                color: permissionStatusColor
-            )
-
-            debugInfoRow(
-                label: "Device",
-                value: deviceInfo,
-                color: .white
-            )
+            debugInfoRow("Session Ready",
+                         value: scanner.isSessionReady ? "✅ Yes" : "❌ No",
+                         color: scanner.isSessionReady ? Color.green : .red)
+            debugInfoRow("Permission", value: permissionStatusString, color: permissionStatusColor)
+            debugInfoRow("Device", value: deviceInfo, color: .white)
 
             if let deviceName = AVCaptureDevice.default(for: .video)?.localizedName {
-                debugInfoRow(
-                    label: "Camera",
-                    value: deviceName,
-                    color: .white
-                )
+                debugInfoRow("Camera", value: deviceName, color: .white)
             }
 
-            // Test button
-            Button {
-                simulateQRCodeScan()
-            } label: {
+            Button { simulateQRCodeScan() } label: {
                 HStack {
                     Image(systemName: "qrcode")
                     Text("Test Scan")
@@ -182,104 +177,184 @@ struct QRScannerView: View {
         .padding(.horizontal)
     }
 
-    private func debugInfoRow(label: String, value: String, color: Color) -> some View {
+    private func debugInfoRow(_ label: String, value: String, color: Color) -> some View {
         HStack {
-            Text(label + ":")
-                .font(.caption)
-                .foregroundColor(.gray)
-            Text(value)
-                .font(.caption)
-                .foregroundColor(color)
+            Text(label + ":").font(.caption).foregroundColor(.gray)
+            Text(value).font(.caption).foregroundColor(color)
         }
     }
 
+    // MARK: - Helpers
+
     private var permissionStatusString: String {
         switch AVCaptureDevice.authorizationStatus(for: .video) {
-        case .authorized: return "✅ Authorized"
-        case .notDetermined: return "⏳ Not Determined"
-        case .denied: return "❌ Denied"
-        case .restricted: return "⚠️ Restricted"
-        @unknown default: return "❓ Unknown"
+        case .authorized: "✅ Authorized"
+        case .notDetermined: "⏳ Not Determined"
+        case .denied: "❌ Denied"
+        case .restricted: "⚠️ Restricted"
+        @unknown default: "❓ Unknown"
         }
     }
 
     private var permissionStatusColor: Color {
         switch AVCaptureDevice.authorizationStatus(for: .video) {
-        case .authorized: return .green
-        case .notDetermined: return .orange
-        case .denied, .restricted: return .red
-        @unknown default: return .gray
+        case .authorized: Color.AppStatus.success
+        case .notDetermined: .orange
+        case .denied, .restricted: .red
+        @unknown default: .gray
         }
     }
 
     private var deviceInfo: String {
         #if targetEnvironment(simulator)
-        return "📱 Simulator (no camera)"
+        "📱 Simulator (no camera)"
         #else
-        return "📱 Real Device"
+        "📱 Real Device"
         #endif
     }
 
-    // ✅ Simulate QR code scan for testing
     private func simulateQRCodeScan() {
-        // Генерируем тестовый QR код
-        let testUserId = UUID().uuidString
-        let testUsername = "test_user_\(Int.random(in: 100...999))"
-        let testCode = "https://konstruct.cc/c/\(testUserId)?username=\(testUsername)"
+        let generator = InviteGenerator()
+        guard let userId = SessionManager.shared.currentUserId,
+              let deviceId = KeychainManager.shared.loadDeviceID() else {
+            print("⚠️ No authenticated user — cannot simulate invite")
+            return
+        }
+        do {
+            let testCode = try generator.generateDeepLink(userId: userId, deviceId: deviceId, useHTTPS: false)
+            print("🧪 QRScannerView: Simulating Dynamic Invite scan")
+            handleScannedCode(testCode)
+        } catch {
+            print("❌ Failed to generate test invite: \(error)")
+        }
+    }
 
-        print("🧪 QRScannerView: Simulating QR scan")
-        print("   Generated URL: \(testCode)")
-        print("   UserId: \(testUserId)")
-        print("   Username: \(testUsername)")
-        handleScannedCode(testCode)
+    private func handleClipboardPaste() {
+        guard let text = PlatformClipboard.paste()?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !text.isEmpty else {
+            errorMessage = NSLocalizedString("clipboard_no_valid_invite", comment: "")
+            showingError = true
+            return
+        }
+        Log.debug("📋 QRScannerView: pasting from clipboard: \(text.prefix(80))", category: "QRScannerView")
+        handleScannedCode(text)
     }
 
     private func checkCameraPermission() {
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
-            print("✅ Camera permission granted")
             scanner.startScanning()
-
         case .notDetermined:
-            print("⏳ Requesting camera permission")
             AVCaptureDevice.requestAccess(for: .video) { granted in
                 DispatchQueue.main.async {
-                    if granted {
-                        print("✅ Camera permission granted")
-                        scanner.startScanning()
-                    } else {
-                        print("❌ Camera permission denied")
-                        showingPermissionAlert = true
-                    }
+                    if granted { scanner.startScanning() }
+                    else { showingPermissionAlert = true }
                 }
             }
-
         case .denied, .restricted:
-            print("❌ Camera permission denied or restricted")
             showingPermissionAlert = true
-
         @unknown default:
-            print("⚠️ Unknown camera permission status")
             showingPermissionAlert = true
         }
     }
 
     private func handleScannedCode(_ code: String) {
         scanner.stopScanning()
+        let normalized = normalizeScannedCode(code)
+        Log.debug("📷 QRScannerView: scanned=\(code.prefix(120)), normalized=\(normalized.prefix(120))", category: "QRScannerView")
 
-        if code.hasPrefix("https://konstruct.cc/c/") {
-            onCodeScanned(code)
+        if normalized.lowercased().hasPrefix("https://konstruct.cc/c/") ||
+           normalized.lowercased().hasPrefix("https://konstruct.cc/add") ||
+           normalized.lowercased().hasPrefix("https://web.konstruct.cc/add") ||
+           normalized.lowercased().hasPrefix(InviteConfig.qrCodePrefixScheme) {
+            onCodeScanned(normalized)
+        } else if isBase64Like(normalized) {
+            onCodeScanned("konstruct://add?invite=\(normalized)")
         } else {
-            errorMessage = NSLocalizedString("invalid_qr_code_construct", comment: "Error message for invalid QR code")
+            errorMessage = NSLocalizedString("invalid_qr_code_construct", comment: "")
             showingError = true
         }
     }
+
+    private func isBase64Like(_ value: String) -> Bool {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count >= QRScannerConfig.minBase64Length else { return false }
+        let allowed = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=_-")
+        return trimmed.rangeOfCharacter(from: allowed.inverted) == nil
+    }
+
+    private func normalizeScannedCode(_ code: String) -> String {
+        var value = code.trimmingCharacters(in: .whitespacesAndNewlines)
+        if value.hasPrefix("https://https://") {
+            value = value.replacingOccurrences(of: "https://https://", with: "https://")
+        } else if value.hasPrefix("http://https://") {
+            value = value.replacingOccurrences(of: "http://https://", with: "https://")
+        }
+        if value.hasPrefix("konstruct.cc/") { value = "https://\(value)" }
+        return value
+    }
+}
+
+// MARK: - Scanner Overlay Shapes
+
+/// Full-screen dark mask with a rounded-rect hole cut out at scanRect (even-odd fill rule)
+private struct ScannerDimOverlay: Shape {
+    let scanRect: CGRect
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path(rect)
+        path.addRoundedRect(in: scanRect, cornerSize: CGSize(width: 12, height: 12))
+        return path
+    }
+}
+
+/// Four L-shaped corner brackets drawn around scanRect
+private struct ScannerCornerBrackets: Shape {
+    let scanRect: CGRect
+    var length: CGFloat = 24
+    var radius: CGFloat = 4
+
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        let r = scanRect
+
+        // Top-left
+        p.move(to: CGPoint(x: r.minX, y: r.minY + length))
+        p.addLine(to: CGPoint(x: r.minX, y: r.minY + radius))
+        p.addQuadCurve(to: CGPoint(x: r.minX + radius, y: r.minY), control: CGPoint(x: r.minX, y: r.minY))
+        p.addLine(to: CGPoint(x: r.minX + length, y: r.minY))
+
+        // Top-right
+        p.move(to: CGPoint(x: r.maxX - length, y: r.minY))
+        p.addLine(to: CGPoint(x: r.maxX - radius, y: r.minY))
+        p.addQuadCurve(to: CGPoint(x: r.maxX, y: r.minY + radius), control: CGPoint(x: r.maxX, y: r.minY))
+        p.addLine(to: CGPoint(x: r.maxX, y: r.minY + length))
+
+        // Bottom-left
+        p.move(to: CGPoint(x: r.minX, y: r.maxY - length))
+        p.addLine(to: CGPoint(x: r.minX, y: r.maxY - radius))
+        p.addQuadCurve(to: CGPoint(x: r.minX + radius, y: r.maxY), control: CGPoint(x: r.minX, y: r.maxY))
+        p.addLine(to: CGPoint(x: r.minX + length, y: r.maxY))
+
+        // Bottom-right
+        p.move(to: CGPoint(x: r.maxX - length, y: r.maxY))
+        p.addLine(to: CGPoint(x: r.maxX - radius, y: r.maxY))
+        p.addQuadCurve(to: CGPoint(x: r.maxX, y: r.maxY - radius), control: CGPoint(x: r.maxX, y: r.maxY))
+        p.addLine(to: CGPoint(x: r.maxX, y: r.maxY - length))
+
+        return p
+    }
+}
+
+private enum QRScannerConfig {
+    static let minBase64Length = 40
 }
 
 // MARK: - QR Code Scanner Logic
-class QRCodeScanner: NSObject, ObservableObject, AVCaptureMetadataOutputObjectsDelegate {
-    @Published var scannedCode: String?
-    @Published var isSessionReady = false  // ✅ NEW: Track when session is ready
+@Observable
+class QRCodeScanner: NSObject, AVCaptureMetadataOutputObjectsDelegate {
+    var scannedCode: String?
+    var isSessionReady = false  // ✅ NEW: Track when session is ready
 
     private var captureSession: AVCaptureSession?
     private var previewLayer: AVCaptureVideoPreviewLayer?
@@ -358,8 +433,10 @@ class QRCodeScanner: NSObject, ObservableObject, AVCaptureMetadataOutputObjectsD
         previewLayer.videoGravity = .resizeAspectFill
 
         // Set orientation to portrait since app is portrait-only
-        if let connection = previewLayer.connection, connection.isVideoOrientationSupported {
-            connection.videoOrientation = .portrait
+        if let connection = previewLayer.connection {
+            if connection.isVideoRotationAngleSupported(0) {
+                connection.videoRotationAngle = 90 // portrait
+            }
         }
 
         return previewLayer
@@ -368,7 +445,7 @@ class QRCodeScanner: NSObject, ObservableObject, AVCaptureMetadataOutputObjectsD
 
 // MARK: - UIViewRepresentable for Camera Preview
 struct QRCodeScannerViewRepresentable: UIViewRepresentable {
-    @ObservedObject var scanner: QRCodeScanner
+    var scanner: QRCodeScanner
 
     func makeUIView(context: Context) -> UIView {
         let view = UIView(frame: .zero)

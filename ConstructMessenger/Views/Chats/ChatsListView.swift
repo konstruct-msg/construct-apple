@@ -14,11 +14,16 @@ struct ChatsListView: View {
     @FetchRequest
     private var chats: FetchedResults<Chat>
 
-    @EnvironmentObject var chatsViewModel: ChatsViewModel
+    @Environment(ChatsViewModel.self) private var chatsViewModel
     @State private var showingQRScanner = false
     @State private var navigationPath = NavigationPath()
+    @State private var showingError = false
+    @State private var errorMessage = ""
+    @State private var showingDrafts = false
 
     init() {
+        // ✅ FIX: Create fetch request safely - fetchRequest() just creates the request object
+        // It doesn't access the coordinator until the fetch is actually executed
         let fetchRequest: NSFetchRequest<Chat> = Chat.fetchRequest()
         fetchRequest.sortDescriptors = [NSSortDescriptor(keyPath: \Chat.lastMessageTime, ascending: false)]
 
@@ -58,10 +63,20 @@ struct ChatsListView: View {
                     handleScannedContact(contactURL)
                 }
             }
+            .sheet(isPresented: $showingDrafts) {
+                DraftsView()
+            }
+            .alert("error", isPresented: $showingError) {
+                Button("ok") {}
+            } message: {
+                Text(errorMessage)
+            }
             .onAppear {
                 chatsViewModel.setContext(viewContext)
+                // ✅ Clear badge when user opens chats list
+                LocalNotificationManager.shared.clearBadge()
             }
-            .onChange(of: chatsViewModel.chatToOpen) { chatId in
+            .onChange(of: chatsViewModel.chatToOpen) { _, chatId in
                 if let chatId = chatId {
                     // Clear the flag first to prevent re-triggering
                     chatsViewModel.chatToOpen = nil
@@ -79,52 +94,71 @@ struct ChatsListView: View {
 
     private func deleteItems(offsets: IndexSet) {
         withAnimation {
-            offsets.map { chats[$0] }.forEach(chatsViewModel.deleteChat)
+            offsets.map { chats[$0] }.forEach { chat in
+                Task { await chatsViewModel.deleteChatWithEndSession(chat: chat) }
+            }
         }
     }
 
     // MARK: - QR Code Handling
     private func handleScannedContact(_ urlString: String) {
-        print("🔍 ChatsListView: Handling scanned URL: \(urlString)")
+        Log.info("🔍 ChatsListView: Handling scanned URL: \(urlString)", category: "ChatsListView")
 
         guard let url = URL(string: urlString) else {
-            print("❌ Invalid URL string: \(urlString)")
-            // TODO: Show alert to user
+            Log.error("❌ Invalid URL string: \(urlString)", category: "ChatsListView")
+            showErrorAfterDismiss(NSLocalizedString("invalid_qr_code_construct", comment: "Error message for invalid QR code"))
             return
         }
 
-        do {
-            let contactInfo = try LinkParser.parseContactLink(url)
-            print("✅ Parsed contact: userId=\(contactInfo.userId), username=\(contactInfo.username)")
-            
-            addContact(userId: contactInfo.userId, username: contactInfo.username)
-        } catch {
-            print("❌ Failed to parse contact link: \(error.localizedDescription)")
-            // TODO: Show alert to user with specific error message
+        Task {
+            do {
+                let contactInfo = try await LinkParser.parseContactLink(url)
+                Log.info("✅ Parsed contact: userId=\(contactInfo.userId), username=\(contactInfo.username)", category: "ChatsListView")
+                
+                await MainActor.run {
+                    addContact(contactInfo: contactInfo)
+                    showingQRScanner = false
+                }
+            } catch {
+                Log.error("❌ Failed to parse contact link: \(error.localizedDescription)", category: "ChatsListView")
+                await MainActor.run {
+                    showErrorAfterDismiss(error.localizedDescription)
+                    showingQRScanner = false
+                }
+            }
         }
-
-        // Close scanner
-        showingQRScanner = false
     }
 
-    private func addContact(userId: String, username: String) {
-        print("📱 ChatsListView: Adding contact userId=\(userId), username=\(username)")
+    private func addContact(contactInfo: ContactInfo) {
+        let userId = contactInfo.userId
+        let username = contactInfo.username
+        Log.info("📱 ChatsListView: Adding contact userId=\(userId), username=\(username)", category: "ChatsListView")
 
-        // Start chat with user - ChatsViewModel handles User creation
+        if userId == SessionManager.shared.currentUserId {
+            Log.info("📝 Self-chat detected — opening Drafts", category: "ChatsListView")
+            showingDrafts = true
+            return
+        }
+
         let publicUserInfo = PublicUserInfo(
             id: userId,
             username: username,
             avatarUrl: nil,
-            bio: nil
+            bio: nil,
+            deviceId: contactInfo.deviceId
         )
         if let chat = chatsViewModel.startChat(with: publicUserInfo) {
-            print("✅ ChatsListView: Chat created with @\(username)")
-            print("   chat.id = \(chat.id)")
-            print("   chat.otherUser?.id = \(chat.otherUser?.id ?? "nil")")
-            print("   chat.otherUser?.username = \(chat.otherUser?.username ?? "nil")")
-            print("   chat.otherUser?.displayName = \(chat.otherUser?.displayName ?? "nil")")
+            Log.info("✅ ChatsListView: Chat created with @\(username), chat.id=\(chat.id)", category: "ChatsListView")
         } else {
-            print("❌ ChatsListView: Failed to create chat with @\(username)")
+            Log.error("❌ ChatsListView: Failed to create chat with @\(username)", category: "ChatsListView")
+        }
+    }
+
+    private func showErrorAfterDismiss(_ message: String) {
+        errorMessage = message
+        showingQRScanner = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            showingError = true
         }
     }
 }
@@ -132,6 +166,11 @@ struct ChatsListView: View {
 #Preview {
     let container = PreviewHelpers.createPreviewContainer()
     let context = container.viewContext
+    
+    // ✅ Ensure context is ready before using it
+    guard context.persistentStoreCoordinator != nil else {
+        fatalError("Preview Core Data context not ready")
+    }
 
     // Create sample data
     let user1 = PreviewHelpers.createSampleUser(context: context, id: "user1", username: "alice", displayName: "Alice")
@@ -141,8 +180,11 @@ struct ChatsListView: View {
     _ = PreviewHelpers.createSampleChat(context: context, with: user2)
 
     try? context.save()
+    
+    let chatsViewModel = ChatsViewModel()
+    chatsViewModel.setContext(context)
 
     return ChatsListView()
         .environment(\.managedObjectContext, context)
+        .environment(chatsViewModel)
 }
-

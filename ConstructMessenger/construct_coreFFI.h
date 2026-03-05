@@ -50,9 +50,9 @@ typedef void (*UniffiRustFutureContinuationCallback)(uint64_t, int8_t
     );
 
 #endif
-#ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_FREE
-#define UNIFFI_FFIDEF_FOREIGN_FUTURE_FREE
-typedef void (*UniffiForeignFutureFree)(uint64_t
+#ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_DROPPED_CALLBACK
+#define UNIFFI_FFIDEF_FOREIGN_FUTURE_DROPPED_CALLBACK
+typedef void (*UniffiForeignFutureDroppedCallback)(uint64_t
     );
 
 #endif
@@ -62,264 +62,468 @@ typedef void (*UniffiCallbackInterfaceFree)(uint64_t
     );
 
 #endif
-#ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE
-#define UNIFFI_FFIDEF_FOREIGN_FUTURE
-typedef struct UniffiForeignFuture {
-    uint64_t handle;
-    UniffiForeignFutureFree _Nonnull free;
-} UniffiForeignFuture;
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_CLONE
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_CLONE
+typedef uint64_t (*UniffiCallbackInterfaceClone)(uint64_t
+    );
 
 #endif
-#ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_STRUCT_U8
-#define UNIFFI_FFIDEF_FOREIGN_FUTURE_STRUCT_U8
-typedef struct UniffiForeignFutureStructU8 {
+#ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_DROPPED_CALLBACK_STRUCT
+#define UNIFFI_FFIDEF_FOREIGN_FUTURE_DROPPED_CALLBACK_STRUCT
+typedef struct UniffiForeignFutureDroppedCallbackStruct {
+    uint64_t handle;
+    UniffiForeignFutureDroppedCallback _Nonnull free;
+} UniffiForeignFutureDroppedCallbackStruct;
+
+#endif
+#ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_RESULT_U8
+#define UNIFFI_FFIDEF_FOREIGN_FUTURE_RESULT_U8
+typedef struct UniffiForeignFutureResultU8 {
     uint8_t returnValue;
     RustCallStatus callStatus;
-} UniffiForeignFutureStructU8;
+} UniffiForeignFutureResultU8;
 
 #endif
 #ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_COMPLETE_U8
 #define UNIFFI_FFIDEF_FOREIGN_FUTURE_COMPLETE_U8
-typedef void (*UniffiForeignFutureCompleteU8)(uint64_t, UniffiForeignFutureStructU8
+typedef void (*UniffiForeignFutureCompleteU8)(uint64_t, UniffiForeignFutureResultU8
     );
 
 #endif
-#ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_STRUCT_I8
-#define UNIFFI_FFIDEF_FOREIGN_FUTURE_STRUCT_I8
-typedef struct UniffiForeignFutureStructI8 {
+#ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_RESULT_I8
+#define UNIFFI_FFIDEF_FOREIGN_FUTURE_RESULT_I8
+typedef struct UniffiForeignFutureResultI8 {
     int8_t returnValue;
     RustCallStatus callStatus;
-} UniffiForeignFutureStructI8;
+} UniffiForeignFutureResultI8;
 
 #endif
 #ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_COMPLETE_I8
 #define UNIFFI_FFIDEF_FOREIGN_FUTURE_COMPLETE_I8
-typedef void (*UniffiForeignFutureCompleteI8)(uint64_t, UniffiForeignFutureStructI8
+typedef void (*UniffiForeignFutureCompleteI8)(uint64_t, UniffiForeignFutureResultI8
     );
 
 #endif
-#ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_STRUCT_U16
-#define UNIFFI_FFIDEF_FOREIGN_FUTURE_STRUCT_U16
-typedef struct UniffiForeignFutureStructU16 {
+#ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_RESULT_U16
+#define UNIFFI_FFIDEF_FOREIGN_FUTURE_RESULT_U16
+typedef struct UniffiForeignFutureResultU16 {
     uint16_t returnValue;
     RustCallStatus callStatus;
-} UniffiForeignFutureStructU16;
+} UniffiForeignFutureResultU16;
 
 #endif
 #ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_COMPLETE_U16
 #define UNIFFI_FFIDEF_FOREIGN_FUTURE_COMPLETE_U16
-typedef void (*UniffiForeignFutureCompleteU16)(uint64_t, UniffiForeignFutureStructU16
+typedef void (*UniffiForeignFutureCompleteU16)(uint64_t, UniffiForeignFutureResultU16
     );
 
 #endif
-#ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_STRUCT_I16
-#define UNIFFI_FFIDEF_FOREIGN_FUTURE_STRUCT_I16
-typedef struct UniffiForeignFutureStructI16 {
+#ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_RESULT_I16
+#define UNIFFI_FFIDEF_FOREIGN_FUTURE_RESULT_I16
+typedef struct UniffiForeignFutureResultI16 {
     int16_t returnValue;
     RustCallStatus callStatus;
-} UniffiForeignFutureStructI16;
+} UniffiForeignFutureResultI16;
 
 #endif
 #ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_COMPLETE_I16
 #define UNIFFI_FFIDEF_FOREIGN_FUTURE_COMPLETE_I16
-typedef void (*UniffiForeignFutureCompleteI16)(uint64_t, UniffiForeignFutureStructI16
+typedef void (*UniffiForeignFutureCompleteI16)(uint64_t, UniffiForeignFutureResultI16
     );
 
 #endif
-#ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_STRUCT_U32
-#define UNIFFI_FFIDEF_FOREIGN_FUTURE_STRUCT_U32
-typedef struct UniffiForeignFutureStructU32 {
+#ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_RESULT_U32
+#define UNIFFI_FFIDEF_FOREIGN_FUTURE_RESULT_U32
+typedef struct UniffiForeignFutureResultU32 {
     uint32_t returnValue;
     RustCallStatus callStatus;
-} UniffiForeignFutureStructU32;
+} UniffiForeignFutureResultU32;
 
 #endif
 #ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_COMPLETE_U32
 #define UNIFFI_FFIDEF_FOREIGN_FUTURE_COMPLETE_U32
-typedef void (*UniffiForeignFutureCompleteU32)(uint64_t, UniffiForeignFutureStructU32
+typedef void (*UniffiForeignFutureCompleteU32)(uint64_t, UniffiForeignFutureResultU32
     );
 
 #endif
-#ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_STRUCT_I32
-#define UNIFFI_FFIDEF_FOREIGN_FUTURE_STRUCT_I32
-typedef struct UniffiForeignFutureStructI32 {
+#ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_RESULT_I32
+#define UNIFFI_FFIDEF_FOREIGN_FUTURE_RESULT_I32
+typedef struct UniffiForeignFutureResultI32 {
     int32_t returnValue;
     RustCallStatus callStatus;
-} UniffiForeignFutureStructI32;
+} UniffiForeignFutureResultI32;
 
 #endif
 #ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_COMPLETE_I32
 #define UNIFFI_FFIDEF_FOREIGN_FUTURE_COMPLETE_I32
-typedef void (*UniffiForeignFutureCompleteI32)(uint64_t, UniffiForeignFutureStructI32
+typedef void (*UniffiForeignFutureCompleteI32)(uint64_t, UniffiForeignFutureResultI32
     );
 
 #endif
-#ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_STRUCT_U64
-#define UNIFFI_FFIDEF_FOREIGN_FUTURE_STRUCT_U64
-typedef struct UniffiForeignFutureStructU64 {
+#ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_RESULT_U64
+#define UNIFFI_FFIDEF_FOREIGN_FUTURE_RESULT_U64
+typedef struct UniffiForeignFutureResultU64 {
     uint64_t returnValue;
     RustCallStatus callStatus;
-} UniffiForeignFutureStructU64;
+} UniffiForeignFutureResultU64;
 
 #endif
 #ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_COMPLETE_U64
 #define UNIFFI_FFIDEF_FOREIGN_FUTURE_COMPLETE_U64
-typedef void (*UniffiForeignFutureCompleteU64)(uint64_t, UniffiForeignFutureStructU64
+typedef void (*UniffiForeignFutureCompleteU64)(uint64_t, UniffiForeignFutureResultU64
     );
 
 #endif
-#ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_STRUCT_I64
-#define UNIFFI_FFIDEF_FOREIGN_FUTURE_STRUCT_I64
-typedef struct UniffiForeignFutureStructI64 {
+#ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_RESULT_I64
+#define UNIFFI_FFIDEF_FOREIGN_FUTURE_RESULT_I64
+typedef struct UniffiForeignFutureResultI64 {
     int64_t returnValue;
     RustCallStatus callStatus;
-} UniffiForeignFutureStructI64;
+} UniffiForeignFutureResultI64;
 
 #endif
 #ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_COMPLETE_I64
 #define UNIFFI_FFIDEF_FOREIGN_FUTURE_COMPLETE_I64
-typedef void (*UniffiForeignFutureCompleteI64)(uint64_t, UniffiForeignFutureStructI64
+typedef void (*UniffiForeignFutureCompleteI64)(uint64_t, UniffiForeignFutureResultI64
     );
 
 #endif
-#ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_STRUCT_F32
-#define UNIFFI_FFIDEF_FOREIGN_FUTURE_STRUCT_F32
-typedef struct UniffiForeignFutureStructF32 {
+#ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_RESULT_F32
+#define UNIFFI_FFIDEF_FOREIGN_FUTURE_RESULT_F32
+typedef struct UniffiForeignFutureResultF32 {
     float returnValue;
     RustCallStatus callStatus;
-} UniffiForeignFutureStructF32;
+} UniffiForeignFutureResultF32;
 
 #endif
 #ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_COMPLETE_F32
 #define UNIFFI_FFIDEF_FOREIGN_FUTURE_COMPLETE_F32
-typedef void (*UniffiForeignFutureCompleteF32)(uint64_t, UniffiForeignFutureStructF32
+typedef void (*UniffiForeignFutureCompleteF32)(uint64_t, UniffiForeignFutureResultF32
     );
 
 #endif
-#ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_STRUCT_F64
-#define UNIFFI_FFIDEF_FOREIGN_FUTURE_STRUCT_F64
-typedef struct UniffiForeignFutureStructF64 {
+#ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_RESULT_F64
+#define UNIFFI_FFIDEF_FOREIGN_FUTURE_RESULT_F64
+typedef struct UniffiForeignFutureResultF64 {
     double returnValue;
     RustCallStatus callStatus;
-} UniffiForeignFutureStructF64;
+} UniffiForeignFutureResultF64;
 
 #endif
 #ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_COMPLETE_F64
 #define UNIFFI_FFIDEF_FOREIGN_FUTURE_COMPLETE_F64
-typedef void (*UniffiForeignFutureCompleteF64)(uint64_t, UniffiForeignFutureStructF64
+typedef void (*UniffiForeignFutureCompleteF64)(uint64_t, UniffiForeignFutureResultF64
     );
 
 #endif
-#ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_STRUCT_POINTER
-#define UNIFFI_FFIDEF_FOREIGN_FUTURE_STRUCT_POINTER
-typedef struct UniffiForeignFutureStructPointer {
-    void*_Nonnull returnValue;
-    RustCallStatus callStatus;
-} UniffiForeignFutureStructPointer;
-
-#endif
-#ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_COMPLETE_POINTER
-#define UNIFFI_FFIDEF_FOREIGN_FUTURE_COMPLETE_POINTER
-typedef void (*UniffiForeignFutureCompletePointer)(uint64_t, UniffiForeignFutureStructPointer
-    );
-
-#endif
-#ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_STRUCT_RUST_BUFFER
-#define UNIFFI_FFIDEF_FOREIGN_FUTURE_STRUCT_RUST_BUFFER
-typedef struct UniffiForeignFutureStructRustBuffer {
+#ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_RESULT_RUST_BUFFER
+#define UNIFFI_FFIDEF_FOREIGN_FUTURE_RESULT_RUST_BUFFER
+typedef struct UniffiForeignFutureResultRustBuffer {
     RustBuffer returnValue;
     RustCallStatus callStatus;
-} UniffiForeignFutureStructRustBuffer;
+} UniffiForeignFutureResultRustBuffer;
 
 #endif
 #ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_COMPLETE_RUST_BUFFER
 #define UNIFFI_FFIDEF_FOREIGN_FUTURE_COMPLETE_RUST_BUFFER
-typedef void (*UniffiForeignFutureCompleteRustBuffer)(uint64_t, UniffiForeignFutureStructRustBuffer
+typedef void (*UniffiForeignFutureCompleteRustBuffer)(uint64_t, UniffiForeignFutureResultRustBuffer
     );
 
 #endif
-#ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_STRUCT_VOID
-#define UNIFFI_FFIDEF_FOREIGN_FUTURE_STRUCT_VOID
-typedef struct UniffiForeignFutureStructVoid {
+#ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_RESULT_VOID
+#define UNIFFI_FFIDEF_FOREIGN_FUTURE_RESULT_VOID
+typedef struct UniffiForeignFutureResultVoid {
     RustCallStatus callStatus;
-} UniffiForeignFutureStructVoid;
+} UniffiForeignFutureResultVoid;
 
 #endif
 #ifndef UNIFFI_FFIDEF_FOREIGN_FUTURE_COMPLETE_VOID
 #define UNIFFI_FFIDEF_FOREIGN_FUTURE_COMPLETE_VOID
-typedef void (*UniffiForeignFutureCompleteVoid)(uint64_t, UniffiForeignFutureStructVoid
+typedef void (*UniffiForeignFutureCompleteVoid)(uint64_t, UniffiForeignFutureResultVoid
     );
+
+#endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_POW_PROGRESS_CALLBACK_METHOD0
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_POW_PROGRESS_CALLBACK_METHOD0
+typedef void (*UniffiCallbackInterfacePowProgressCallbackMethod0)(uint64_t, uint64_t, uint64_t, float, void* _Nonnull, 
+        RustCallStatus *_Nonnull uniffiCallStatus
+    );
+
+#endif
+#ifndef UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_POW_PROGRESS_CALLBACK
+#define UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_POW_PROGRESS_CALLBACK
+typedef struct UniffiVTableCallbackInterfacePowProgressCallback {
+    UniffiCallbackInterfaceFree _Nonnull uniffiFree;
+    UniffiCallbackInterfaceClone _Nonnull uniffiClone;
+    UniffiCallbackInterfacePowProgressCallbackMethod0 _Nonnull onProgress;
+} UniffiVTableCallbackInterfacePowProgressCallback;
 
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_CLONE_CLASSICCRYPTOCORE
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_CLONE_CLASSICCRYPTOCORE
-void*_Nonnull uniffi_construct_core_fn_clone_classiccryptocore(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
+uint64_t uniffi_construct_core_fn_clone_classiccryptocore(uint64_t handle, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FREE_CLASSICCRYPTOCORE
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FREE_CLASSICCRYPTOCORE
-void uniffi_construct_core_fn_free_classiccryptocore(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
+void uniffi_construct_core_fn_free_classiccryptocore(uint64_t handle, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_CLASSICCRYPTOCORE_DECRYPT_MESSAGE
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_CLASSICCRYPTOCORE_DECRYPT_MESSAGE
-RustBuffer uniffi_construct_core_fn_method_classiccryptocore_decrypt_message(void*_Nonnull ptr, RustBuffer session_id, RustBuffer ephemeral_public_key, uint32_t message_number, RustBuffer content, RustCallStatus *_Nonnull out_status
+RustBuffer uniffi_construct_core_fn_method_classiccryptocore_decrypt_message(uint64_t ptr, RustBuffer session_id, RustBuffer ephemeral_public_key, uint32_t message_number, RustBuffer content, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_CLASSICCRYPTOCORE_ENCRYPT_MESSAGE
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_CLASSICCRYPTOCORE_ENCRYPT_MESSAGE
-RustBuffer uniffi_construct_core_fn_method_classiccryptocore_encrypt_message(void*_Nonnull ptr, RustBuffer session_id, RustBuffer plaintext, RustCallStatus *_Nonnull out_status
+RustBuffer uniffi_construct_core_fn_method_classiccryptocore_encrypt_message(uint64_t ptr, RustBuffer session_id, RustBuffer plaintext, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_CLASSICCRYPTOCORE_EXPORT_PRIVATE_KEYS_JSON
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_CLASSICCRYPTOCORE_EXPORT_PRIVATE_KEYS_JSON
-RustBuffer uniffi_construct_core_fn_method_classiccryptocore_export_private_keys_json(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
+RustBuffer uniffi_construct_core_fn_method_classiccryptocore_export_private_keys_json(uint64_t ptr, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_CLASSICCRYPTOCORE_EXPORT_REGISTRATION_BUNDLE_JSON
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_CLASSICCRYPTOCORE_EXPORT_REGISTRATION_BUNDLE_JSON
-RustBuffer uniffi_construct_core_fn_method_classiccryptocore_export_registration_bundle_json(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
+RustBuffer uniffi_construct_core_fn_method_classiccryptocore_export_registration_bundle_json(uint64_t ptr, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_CLASSICCRYPTOCORE_EXPORT_SESSION_JSON
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_CLASSICCRYPTOCORE_EXPORT_SESSION_JSON
-RustBuffer uniffi_construct_core_fn_method_classiccryptocore_export_session_json(void*_Nonnull ptr, RustBuffer contact_id, RustCallStatus *_Nonnull out_status
+RustBuffer uniffi_construct_core_fn_method_classiccryptocore_export_session_json(uint64_t ptr, RustBuffer contact_id, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_CLASSICCRYPTOCORE_GENERATE_ONE_TIME_PREKEYS
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_CLASSICCRYPTOCORE_GENERATE_ONE_TIME_PREKEYS
+RustBuffer uniffi_construct_core_fn_method_classiccryptocore_generate_one_time_prekeys(uint64_t ptr, uint32_t count, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_CLASSICCRYPTOCORE_GET_ALL_SESSION_CONTACT_IDS
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_CLASSICCRYPTOCORE_GET_ALL_SESSION_CONTACT_IDS
-RustBuffer uniffi_construct_core_fn_method_classiccryptocore_get_all_session_contact_ids(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
+RustBuffer uniffi_construct_core_fn_method_classiccryptocore_get_all_session_contact_ids(uint64_t ptr, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_CLASSICCRYPTOCORE_IMPORT_SESSION_JSON
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_CLASSICCRYPTOCORE_IMPORT_SESSION_JSON
-RustBuffer uniffi_construct_core_fn_method_classiccryptocore_import_session_json(void*_Nonnull ptr, RustBuffer contact_id, RustBuffer session_json, RustCallStatus *_Nonnull out_status
+RustBuffer uniffi_construct_core_fn_method_classiccryptocore_import_session_json(uint64_t ptr, RustBuffer contact_id, RustBuffer session_json, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_CLASSICCRYPTOCORE_INIT_RECEIVING_SESSION
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_CLASSICCRYPTOCORE_INIT_RECEIVING_SESSION
-RustBuffer uniffi_construct_core_fn_method_classiccryptocore_init_receiving_session(void*_Nonnull ptr, RustBuffer contact_id, RustBuffer recipient_bundle, RustBuffer first_message, RustCallStatus *_Nonnull out_status
+RustBuffer uniffi_construct_core_fn_method_classiccryptocore_init_receiving_session(uint64_t ptr, RustBuffer contact_id, RustBuffer recipient_bundle, RustBuffer first_message, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_CLASSICCRYPTOCORE_INIT_SESSION
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_CLASSICCRYPTOCORE_INIT_SESSION
-RustBuffer uniffi_construct_core_fn_method_classiccryptocore_init_session(void*_Nonnull ptr, RustBuffer contact_id, RustBuffer recipient_bundle, RustCallStatus *_Nonnull out_status
+RustBuffer uniffi_construct_core_fn_method_classiccryptocore_init_session(uint64_t ptr, RustBuffer contact_id, RustBuffer recipient_bundle, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_CLASSICCRYPTOCORE_ONE_TIME_PREKEY_COUNT
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_CLASSICCRYPTOCORE_ONE_TIME_PREKEY_COUNT
+uint32_t uniffi_construct_core_fn_method_classiccryptocore_one_time_prekey_count(uint64_t ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_CLASSICCRYPTOCORE_PREKEYS_AVAILABLE_COUNT
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_CLASSICCRYPTOCORE_PREKEYS_AVAILABLE_COUNT
+uint32_t uniffi_construct_core_fn_method_classiccryptocore_prekeys_available_count(uint64_t ptr, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_CLASSICCRYPTOCORE_REMOVE_SESSION
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_CLASSICCRYPTOCORE_REMOVE_SESSION
-int8_t uniffi_construct_core_fn_method_classiccryptocore_remove_session(void*_Nonnull ptr, RustBuffer contact_id, RustCallStatus *_Nonnull out_status
+int8_t uniffi_construct_core_fn_method_classiccryptocore_remove_session(uint64_t ptr, RustBuffer contact_id, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_CLASSICCRYPTOCORE_SET_LOCAL_USER_ID
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_CLASSICCRYPTOCORE_SET_LOCAL_USER_ID
+void uniffi_construct_core_fn_method_classiccryptocore_set_local_user_id(uint64_t ptr, RustBuffer user_id, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_CLASSICCRYPTOCORE_SIGN_BUNDLE_DATA
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_CLASSICCRYPTOCORE_SIGN_BUNDLE_DATA
+RustBuffer uniffi_construct_core_fn_method_classiccryptocore_sign_bundle_data(uint64_t ptr, RustBuffer bundle_data_json, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_CLONE_TRAFFICPROTECTIONMANAGER
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_CLONE_TRAFFICPROTECTIONMANAGER
+uint64_t uniffi_construct_core_fn_clone_trafficprotectionmanager(uint64_t handle, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FREE_TRAFFICPROTECTIONMANAGER
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FREE_TRAFFICPROTECTIONMANAGER
+void uniffi_construct_core_fn_free_trafficprotectionmanager(uint64_t handle, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_CONSTRUCTOR_TRAFFICPROTECTIONMANAGER_NEW
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_CONSTRUCTOR_TRAFFICPROTECTIONMANAGER_NEW
+uint64_t uniffi_construct_core_fn_constructor_trafficprotectionmanager_new(RustBuffer config, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_TRAFFICPROTECTIONMANAGER_CURRENT_INTERVAL_MS
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_TRAFFICPROTECTIONMANAGER_CURRENT_INTERVAL_MS
+uint64_t uniffi_construct_core_fn_method_trafficprotectionmanager_current_interval_ms(uint64_t ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_TRAFFICPROTECTIONMANAGER_GENERATE_DUMMY
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_TRAFFICPROTECTIONMANAGER_GENERATE_DUMMY
+RustBuffer uniffi_construct_core_fn_method_trafficprotectionmanager_generate_dummy(uint64_t ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_TRAFFICPROTECTIONMANAGER_GET_METRICS
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_TRAFFICPROTECTIONMANAGER_GET_METRICS
+RustBuffer uniffi_construct_core_fn_method_trafficprotectionmanager_get_metrics(uint64_t ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_TRAFFICPROTECTIONMANAGER_IS_CURRENTLY_ACTIVE
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_TRAFFICPROTECTIONMANAGER_IS_CURRENTLY_ACTIVE
+int8_t uniffi_construct_core_fn_method_trafficprotectionmanager_is_currently_active(uint64_t ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_TRAFFICPROTECTIONMANAGER_RECORD_REAL_MESSAGE_SENT
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_TRAFFICPROTECTIONMANAGER_RECORD_REAL_MESSAGE_SENT
+void uniffi_construct_core_fn_method_trafficprotectionmanager_record_real_message_sent(uint64_t ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_TRAFFICPROTECTIONMANAGER_RESET_METRICS
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_TRAFFICPROTECTIONMANAGER_RESET_METRICS
+void uniffi_construct_core_fn_method_trafficprotectionmanager_reset_metrics(uint64_t ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_TRAFFICPROTECTIONMANAGER_SHOULD_SEND_DUMMY
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_TRAFFICPROTECTIONMANAGER_SHOULD_SEND_DUMMY
+int8_t uniffi_construct_core_fn_method_trafficprotectionmanager_should_send_dummy(uint64_t ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_TRAFFICPROTECTIONMANAGER_UPDATE_BATTERY_LEVEL
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_TRAFFICPROTECTIONMANAGER_UPDATE_BATTERY_LEVEL
+void uniffi_construct_core_fn_method_trafficprotectionmanager_update_battery_level(uint64_t ptr, float level, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_INIT_CALLBACK_VTABLE_POWPROGRESSCALLBACK
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_INIT_CALLBACK_VTABLE_POWPROGRESSCALLBACK
+void uniffi_construct_core_fn_init_callback_vtable_powprogresscallback(const UniffiVTableCallbackInterfacePowProgressCallback* _Nonnull vtable
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_BATTERY_AWARE_JITTER_MS
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_BATTERY_AWARE_JITTER_MS
+uint64_t uniffi_construct_core_fn_func_battery_aware_jitter_ms(uint64_t base_ms, uint64_t max_jitter_ms, float battery_level, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_COMPUTE_POW
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_COMPUTE_POW
+RustBuffer uniffi_construct_core_fn_func_compute_pow(RustBuffer challenge, uint32_t difficulty, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_COMPUTE_POW_WITH_PROGRESS
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_COMPUTE_POW_WITH_PROGRESS
+RustBuffer uniffi_construct_core_fn_func_compute_pow_with_progress(RustBuffer challenge, uint32_t difficulty, RustBuffer progress_callback, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_CREATE_CRYPTO_CORE
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_CREATE_CRYPTO_CORE
-void*_Nonnull uniffi_construct_core_fn_func_create_crypto_core(RustCallStatus *_Nonnull out_status
+uint64_t uniffi_construct_core_fn_func_create_crypto_core(RustCallStatus *_Nonnull out_status
     
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_CREATE_CRYPTO_CORE_FROM_KEYS_JSON
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_CREATE_CRYPTO_CORE_FROM_KEYS_JSON
-void*_Nonnull uniffi_construct_core_fn_func_create_crypto_core_from_keys_json(RustBuffer keys_json, RustCallStatus *_Nonnull out_status
+uint64_t uniffi_construct_core_fn_func_create_crypto_core_from_keys_json(RustBuffer keys_json, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_DERIVE_DEVICE_ID
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_DERIVE_DEVICE_ID
+RustBuffer uniffi_construct_core_fn_func_derive_device_id(RustBuffer identity_public_key, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_DERIVE_RECOVERY_KEYPAIR
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_DERIVE_RECOVERY_KEYPAIR
+RustBuffer uniffi_construct_core_fn_func_derive_recovery_keypair(RustBuffer seed, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_DERIVE_VERIFYING_KEY_FROM_SECRET
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_DERIVE_VERIFYING_KEY_FROM_SECRET
+RustBuffer uniffi_construct_core_fn_func_derive_verifying_key_from_secret(RustBuffer identity_secret_key, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_FORMAT_FEDERATED_ID
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_FORMAT_FEDERATED_ID
+RustBuffer uniffi_construct_core_fn_func_format_federated_id(RustBuffer device_id, RustBuffer server_hostname, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_GENERATE_DUMMY_MESSAGE
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_GENERATE_DUMMY_MESSAGE
+RustBuffer uniffi_construct_core_fn_func_generate_dummy_message(uint64_t size, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_GENERATE_EPHEMERAL_KEYPAIR
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_GENERATE_EPHEMERAL_KEYPAIR
+RustBuffer uniffi_construct_core_fn_func_generate_ephemeral_keypair(RustCallStatus *_Nonnull out_status
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_GENERATE_MNEMONIC
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_GENERATE_MNEMONIC
+RustBuffer uniffi_construct_core_fn_func_generate_mnemonic(uint8_t word_count, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_HEARTBEAT_INTERVAL_MS
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_HEARTBEAT_INTERVAL_MS
+uint64_t uniffi_construct_core_fn_func_heartbeat_interval_ms(uint64_t base_interval_sec, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_IS_DUMMY_MESSAGE
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_IS_DUMMY_MESSAGE
+int8_t uniffi_construct_core_fn_func_is_dummy_message(RustBuffer data, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_JITTERED_INTERVAL_MS
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_JITTERED_INTERVAL_MS
+uint64_t uniffi_construct_core_fn_func_jittered_interval_ms(uint64_t base_ms, uint64_t jitter_ms, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_MNEMONIC_TO_SEED
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_MNEMONIC_TO_SEED
+RustBuffer uniffi_construct_core_fn_func_mnemonic_to_seed(RustBuffer mnemonic, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_RANDOM_SEND_DELAY_MS
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_RANDOM_SEND_DELAY_MS
+uint64_t uniffi_construct_core_fn_func_random_send_delay_ms(uint64_t max_delay_ms, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_RECOMMENDED_SEND_DELAY_MS
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_RECOMMENDED_SEND_DELAY_MS
+uint64_t uniffi_construct_core_fn_func_recommended_send_delay_ms(int8_t is_high_priority, float battery_level, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_SIGN_INVITE_DATA
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_SIGN_INVITE_DATA
+RustBuffer uniffi_construct_core_fn_func_sign_invite_data(RustBuffer data, RustBuffer identity_secret_key, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_SIGN_RECOVERY_CHALLENGE
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_SIGN_RECOVERY_CHALLENGE
+RustBuffer uniffi_construct_core_fn_func_sign_recovery_challenge(RustBuffer private_key, RustBuffer message, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_VALIDATE_MNEMONIC
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_VALIDATE_MNEMONIC
+int8_t uniffi_construct_core_fn_func_validate_mnemonic(RustBuffer mnemonic, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_VERIFY_INVITE_SIGNATURE
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_VERIFY_INVITE_SIGNATURE
+int8_t uniffi_construct_core_fn_func_verify_invite_signature(RustBuffer data, RustBuffer signature, RustBuffer verifying_key, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_VERIFY_POW
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_VERIFY_POW
+int8_t uniffi_construct_core_fn_func_verify_pow(RustBuffer challenge, RustBuffer solution, uint32_t required_difficulty, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_VERIFY_RECOVERY_SIGNATURE
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_VERIFY_RECOVERY_SIGNATURE
+int8_t uniffi_construct_core_fn_func_verify_recovery_signature(RustBuffer public_key, RustBuffer message, RustBuffer signature, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_FFI_CONSTRUCT_CORE_RUSTBUFFER_ALLOC
@@ -542,26 +746,6 @@ void ffi_construct_core_rust_future_free_f64(uint64_t handle
 double ffi_construct_core_rust_future_complete_f64(uint64_t handle, RustCallStatus *_Nonnull out_status
 );
 #endif
-#ifndef UNIFFI_FFIDEF_FFI_CONSTRUCT_CORE_RUST_FUTURE_POLL_POINTER
-#define UNIFFI_FFIDEF_FFI_CONSTRUCT_CORE_RUST_FUTURE_POLL_POINTER
-void ffi_construct_core_rust_future_poll_pointer(uint64_t handle, UniffiRustFutureContinuationCallback _Nonnull callback, uint64_t callback_data
-);
-#endif
-#ifndef UNIFFI_FFIDEF_FFI_CONSTRUCT_CORE_RUST_FUTURE_CANCEL_POINTER
-#define UNIFFI_FFIDEF_FFI_CONSTRUCT_CORE_RUST_FUTURE_CANCEL_POINTER
-void ffi_construct_core_rust_future_cancel_pointer(uint64_t handle
-);
-#endif
-#ifndef UNIFFI_FFIDEF_FFI_CONSTRUCT_CORE_RUST_FUTURE_FREE_POINTER
-#define UNIFFI_FFIDEF_FFI_CONSTRUCT_CORE_RUST_FUTURE_FREE_POINTER
-void ffi_construct_core_rust_future_free_pointer(uint64_t handle
-);
-#endif
-#ifndef UNIFFI_FFIDEF_FFI_CONSTRUCT_CORE_RUST_FUTURE_COMPLETE_POINTER
-#define UNIFFI_FFIDEF_FFI_CONSTRUCT_CORE_RUST_FUTURE_COMPLETE_POINTER
-void*_Nonnull ffi_construct_core_rust_future_complete_pointer(uint64_t handle, RustCallStatus *_Nonnull out_status
-);
-#endif
 #ifndef UNIFFI_FFIDEF_FFI_CONSTRUCT_CORE_RUST_FUTURE_POLL_RUST_BUFFER
 #define UNIFFI_FFIDEF_FFI_CONSTRUCT_CORE_RUST_FUTURE_POLL_RUST_BUFFER
 void ffi_construct_core_rust_future_poll_rust_buffer(uint64_t handle, UniffiRustFutureContinuationCallback _Nonnull callback, uint64_t callback_data
@@ -602,6 +786,24 @@ void ffi_construct_core_rust_future_free_void(uint64_t handle
 void ffi_construct_core_rust_future_complete_void(uint64_t handle, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_BATTERY_AWARE_JITTER_MS
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_BATTERY_AWARE_JITTER_MS
+uint16_t uniffi_construct_core_checksum_func_battery_aware_jitter_ms(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_COMPUTE_POW
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_COMPUTE_POW
+uint16_t uniffi_construct_core_checksum_func_compute_pow(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_COMPUTE_POW_WITH_PROGRESS
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_COMPUTE_POW_WITH_PROGRESS
+uint16_t uniffi_construct_core_checksum_func_compute_pow_with_progress(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_CREATE_CRYPTO_CORE
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_CREATE_CRYPTO_CORE
 uint16_t uniffi_construct_core_checksum_func_create_crypto_core(void
@@ -611,6 +813,120 @@ uint16_t uniffi_construct_core_checksum_func_create_crypto_core(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_CREATE_CRYPTO_CORE_FROM_KEYS_JSON
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_CREATE_CRYPTO_CORE_FROM_KEYS_JSON
 uint16_t uniffi_construct_core_checksum_func_create_crypto_core_from_keys_json(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_DERIVE_DEVICE_ID
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_DERIVE_DEVICE_ID
+uint16_t uniffi_construct_core_checksum_func_derive_device_id(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_DERIVE_RECOVERY_KEYPAIR
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_DERIVE_RECOVERY_KEYPAIR
+uint16_t uniffi_construct_core_checksum_func_derive_recovery_keypair(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_DERIVE_VERIFYING_KEY_FROM_SECRET
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_DERIVE_VERIFYING_KEY_FROM_SECRET
+uint16_t uniffi_construct_core_checksum_func_derive_verifying_key_from_secret(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_FORMAT_FEDERATED_ID
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_FORMAT_FEDERATED_ID
+uint16_t uniffi_construct_core_checksum_func_format_federated_id(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_GENERATE_DUMMY_MESSAGE
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_GENERATE_DUMMY_MESSAGE
+uint16_t uniffi_construct_core_checksum_func_generate_dummy_message(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_GENERATE_EPHEMERAL_KEYPAIR
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_GENERATE_EPHEMERAL_KEYPAIR
+uint16_t uniffi_construct_core_checksum_func_generate_ephemeral_keypair(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_GENERATE_MNEMONIC
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_GENERATE_MNEMONIC
+uint16_t uniffi_construct_core_checksum_func_generate_mnemonic(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_HEARTBEAT_INTERVAL_MS
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_HEARTBEAT_INTERVAL_MS
+uint16_t uniffi_construct_core_checksum_func_heartbeat_interval_ms(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_IS_DUMMY_MESSAGE
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_IS_DUMMY_MESSAGE
+uint16_t uniffi_construct_core_checksum_func_is_dummy_message(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_JITTERED_INTERVAL_MS
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_JITTERED_INTERVAL_MS
+uint16_t uniffi_construct_core_checksum_func_jittered_interval_ms(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_MNEMONIC_TO_SEED
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_MNEMONIC_TO_SEED
+uint16_t uniffi_construct_core_checksum_func_mnemonic_to_seed(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_RANDOM_SEND_DELAY_MS
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_RANDOM_SEND_DELAY_MS
+uint16_t uniffi_construct_core_checksum_func_random_send_delay_ms(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_RECOMMENDED_SEND_DELAY_MS
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_RECOMMENDED_SEND_DELAY_MS
+uint16_t uniffi_construct_core_checksum_func_recommended_send_delay_ms(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_SIGN_INVITE_DATA
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_SIGN_INVITE_DATA
+uint16_t uniffi_construct_core_checksum_func_sign_invite_data(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_SIGN_RECOVERY_CHALLENGE
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_SIGN_RECOVERY_CHALLENGE
+uint16_t uniffi_construct_core_checksum_func_sign_recovery_challenge(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_VALIDATE_MNEMONIC
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_VALIDATE_MNEMONIC
+uint16_t uniffi_construct_core_checksum_func_validate_mnemonic(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_VERIFY_INVITE_SIGNATURE
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_VERIFY_INVITE_SIGNATURE
+uint16_t uniffi_construct_core_checksum_func_verify_invite_signature(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_VERIFY_POW
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_VERIFY_POW
+uint16_t uniffi_construct_core_checksum_func_verify_pow(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_VERIFY_RECOVERY_SIGNATURE
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_VERIFY_RECOVERY_SIGNATURE
+uint16_t uniffi_construct_core_checksum_func_verify_recovery_signature(void
     
 );
 #endif
@@ -644,6 +960,12 @@ uint16_t uniffi_construct_core_checksum_method_classiccryptocore_export_session_
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_CLASSICCRYPTOCORE_GENERATE_ONE_TIME_PREKEYS
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_CLASSICCRYPTOCORE_GENERATE_ONE_TIME_PREKEYS
+uint16_t uniffi_construct_core_checksum_method_classiccryptocore_generate_one_time_prekeys(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_CLASSICCRYPTOCORE_GET_ALL_SESSION_CONTACT_IDS
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_CLASSICCRYPTOCORE_GET_ALL_SESSION_CONTACT_IDS
 uint16_t uniffi_construct_core_checksum_method_classiccryptocore_get_all_session_contact_ids(void
@@ -668,9 +990,93 @@ uint16_t uniffi_construct_core_checksum_method_classiccryptocore_init_session(vo
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_CLASSICCRYPTOCORE_ONE_TIME_PREKEY_COUNT
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_CLASSICCRYPTOCORE_ONE_TIME_PREKEY_COUNT
+uint16_t uniffi_construct_core_checksum_method_classiccryptocore_one_time_prekey_count(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_CLASSICCRYPTOCORE_PREKEYS_AVAILABLE_COUNT
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_CLASSICCRYPTOCORE_PREKEYS_AVAILABLE_COUNT
+uint16_t uniffi_construct_core_checksum_method_classiccryptocore_prekeys_available_count(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_CLASSICCRYPTOCORE_REMOVE_SESSION
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_CLASSICCRYPTOCORE_REMOVE_SESSION
 uint16_t uniffi_construct_core_checksum_method_classiccryptocore_remove_session(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_CLASSICCRYPTOCORE_SET_LOCAL_USER_ID
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_CLASSICCRYPTOCORE_SET_LOCAL_USER_ID
+uint16_t uniffi_construct_core_checksum_method_classiccryptocore_set_local_user_id(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_CLASSICCRYPTOCORE_SIGN_BUNDLE_DATA
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_CLASSICCRYPTOCORE_SIGN_BUNDLE_DATA
+uint16_t uniffi_construct_core_checksum_method_classiccryptocore_sign_bundle_data(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_TRAFFICPROTECTIONMANAGER_CURRENT_INTERVAL_MS
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_TRAFFICPROTECTIONMANAGER_CURRENT_INTERVAL_MS
+uint16_t uniffi_construct_core_checksum_method_trafficprotectionmanager_current_interval_ms(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_TRAFFICPROTECTIONMANAGER_GENERATE_DUMMY
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_TRAFFICPROTECTIONMANAGER_GENERATE_DUMMY
+uint16_t uniffi_construct_core_checksum_method_trafficprotectionmanager_generate_dummy(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_TRAFFICPROTECTIONMANAGER_GET_METRICS
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_TRAFFICPROTECTIONMANAGER_GET_METRICS
+uint16_t uniffi_construct_core_checksum_method_trafficprotectionmanager_get_metrics(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_TRAFFICPROTECTIONMANAGER_IS_CURRENTLY_ACTIVE
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_TRAFFICPROTECTIONMANAGER_IS_CURRENTLY_ACTIVE
+uint16_t uniffi_construct_core_checksum_method_trafficprotectionmanager_is_currently_active(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_TRAFFICPROTECTIONMANAGER_RECORD_REAL_MESSAGE_SENT
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_TRAFFICPROTECTIONMANAGER_RECORD_REAL_MESSAGE_SENT
+uint16_t uniffi_construct_core_checksum_method_trafficprotectionmanager_record_real_message_sent(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_TRAFFICPROTECTIONMANAGER_RESET_METRICS
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_TRAFFICPROTECTIONMANAGER_RESET_METRICS
+uint16_t uniffi_construct_core_checksum_method_trafficprotectionmanager_reset_metrics(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_TRAFFICPROTECTIONMANAGER_SHOULD_SEND_DUMMY
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_TRAFFICPROTECTIONMANAGER_SHOULD_SEND_DUMMY
+uint16_t uniffi_construct_core_checksum_method_trafficprotectionmanager_should_send_dummy(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_TRAFFICPROTECTIONMANAGER_UPDATE_BATTERY_LEVEL
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_TRAFFICPROTECTIONMANAGER_UPDATE_BATTERY_LEVEL
+uint16_t uniffi_construct_core_checksum_method_trafficprotectionmanager_update_battery_level(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_CONSTRUCTOR_TRAFFICPROTECTIONMANAGER_NEW
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_CONSTRUCTOR_TRAFFICPROTECTIONMANAGER_NEW
+uint16_t uniffi_construct_core_checksum_constructor_trafficprotectionmanager_new(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_POWPROGRESSCALLBACK_ON_PROGRESS
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_POWPROGRESSCALLBACK_ON_PROGRESS
+uint16_t uniffi_construct_core_checksum_method_powprogresscallback_on_progress(void
     
 );
 #endif

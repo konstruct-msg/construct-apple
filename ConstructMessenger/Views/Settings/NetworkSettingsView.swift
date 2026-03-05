@@ -2,159 +2,235 @@
 //  NetworkSettingsView.swift
 //  Construct Messenger
 //
-//  Created by Maxim Eliseyev on 30.12.2025.
-//
 
 import SwiftUI
 
 struct NetworkSettingsView: View {
-    @AppStorage(APIConstants.customServerURLKey) private var storedServerURL: String?
-    @State private var useCustomServer = false
-    @State private var customServerURL = ""
-    @State private var showingReconnectAlert = false
+    private var reachabilityManager = NetworkReachabilityManager.shared
+    private var connectionManager = ConnectionStatusManager.shared
+    private var streamManager = MessageStreamManager.shared
+
+    // Custom server (Debug only)
+    @State private var customHost = GRPCChannelManager.shared.currentHost
+    @State private var customPort = "\(GRPCChannelManager.shared.currentPort)"
+    @State private var showingAppliedAlert = false
 
     var body: some View {
         List {
-            // MARK: - Connection Status Section
+            // MARK: - gRPC Stream
             Section {
+                statusRow(
+                    label: NSLocalizedString("status", comment: ""),
+                    value: connectionManager.connectionStatus.displayText,
+                    color: statusColor
+                )
+
                 HStack {
-                    Text("status")
+                    Text("subscriptions")
                         .foregroundColor(.secondary)
                     Spacer()
-                    HStack(spacing: 4) {
-                        Circle()
-                            .fill(WebSocketManager.shared.isConnected ? Color.green : Color.red)
-                            .frame(width: 8, height: 8)
-                        Text(WebSocketManager.shared.isConnected ? "connected" : "disconnected")
+                    Text("\(streamManager.subscriptionUserIds.count)")
+                        .fontWeight(.medium)
+                        .monospacedDigit()
+                }
+
+                if let heartbeat = streamManager.lastHeartbeatDate {
+                    HStack {
+                        Text("last_heartbeat")
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Text(heartbeat, style: .relative)
+                            .fontWeight(.medium)
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                if let lastSuccess = connectionManager.lastSuccessfulRequest {
+                    HStack {
+                        Text("last_contact")
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Text(lastSuccess, style: .relative)
+                            .fontWeight(.medium)
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                if let error = connectionManager.lastError {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("last_error")
+                            .foregroundColor(.secondary)
+                            .font(.caption)
+                        Text(error)
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundColor(.red)
+                            .textSelection(.enabled)
+                    }
+                }
+            } header: {
+                Text("grpc_stream")
+            }
+
+            // MARK: - Network
+            Section {
+                statusRow(
+                    label: NSLocalizedString("network_reachability", comment: ""),
+                    value: reachabilityManager.isReachable
+                        ? NSLocalizedString("reachable", comment: "")
+                        : NSLocalizedString("unreachable", comment: ""),
+                    color: reachabilityManager.isReachable ? Color.AppStatus.success : .red
+                )
+
+                if reachabilityManager.isReachable {
+                    HStack {
+                        Text("connection_type")
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Text(connectionTypeDisplayName)
                             .fontWeight(.medium)
                     }
                 }
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("active_server")
-                        .foregroundColor(.secondary)
-                    Text(APIConstants.activeServerURL)
-                        .font(.system(size: 12, design: .monospaced))
-                        .foregroundColor(.blue)
-                }
             } header: {
-                Text("connection")
+                Text("network")
             }
 
-            // MARK: - Server Configuration Section
-            Section {
-                Toggle("use_custom_server", isOn: $useCustomServer)
-                    .onChange(of: useCustomServer) { newValue in
-                        if !newValue {
-                            // Switching back to default
-                            customServerURL = ""
-                        } else {
-                            // Load existing custom URL if available
-                            customServerURL = storedServerURL ?? ""
-                        }
-                    }
-
-                if useCustomServer {
-                    VStack(alignment: .leading, spacing: 8) {
-                        TextField("custom_server_placeholder", text: $customServerURL)
-                            .autocapitalization(.none)
-                            .keyboardType(.URL)
-                            .textContentType(.URL)
-                            .textFieldStyle(.roundedBorder)
-
-                        Button {
-                            saveCustomServer()
-                        } label: {
-                            HStack {
-                                Spacer()
-                                Text("apply_changes")
-                                    .fontWeight(.semibold)
-                                Spacer()
-                            }
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(customServerURL.trimmingCharacters(in: .whitespaces).isEmpty)
-                    }
-                }
-            } header: {
-                Text("server_configuration")
-            } footer: {
-                VStack(alignment: .leading, spacing: 8) {
-
-                    if useCustomServer {
-                        Text("custom_server_prefix_warning")
-                            .font(.caption)
-                            .foregroundColor(.orange)
-                    }
-                }
-            }
-
-            // MARK: - Server Info Section
+            // MARK: - Server
             Section {
                 HStack {
-                    Text("environment")
+                    Text("server")
                         .foregroundColor(.secondary)
                     Spacer()
-//                    Text(ServerEnvironment.current.displayName)
-//                        .fontWeight(.medium)
+                    HStack(spacing: 6) {
+                        Text(GRPCChannelManager.shared.currentHost)
+                            .font(.system(size: 13, design: .monospaced))
+                            .foregroundColor(.primary)
+                        Text("TLS")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundColor(Color.AppStatus.success)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(Color.AppStatus.success.opacity(0.12))
+                            .clipShape(Capsule())
+                    }
+                    .textSelection(.enabled)
+                }
+
+                HStack {
+                    Text("port")
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    Text("\(GRPCChannelManager.shared.currentPort)")
+                        .font(.system(size: 13, design: .monospaced))
+                        .fontWeight(.medium)
                 }
 
                 HStack {
                     Text("build_configuration")
                         .foregroundColor(.secondary)
                     Spacer()
-                    Text(BuildConfiguration.current == .debug ? "debug" : "release")
+                    Text(BuildConfiguration.current == .debug ? "Debug" : "Release")
                         .fontWeight(.medium)
+                        .foregroundColor(BuildConfiguration.current == .debug ? .orange : Color.AppStatus.success)
                 }
             } header: {
-                Text("server_information")
+                Text("server_configuration")
+            }
+
+            // MARK: - Custom Server (Debug only)
+            #if DEBUG
+            Section {
+                VStack(alignment: .leading, spacing: 8) {
+                    TextField("Host (e.g. dev.konstruct.cc)", text: $customHost)
+                        .autocapitalization(.none)
+                        .keyboardType(.URL)
+                        .textFieldStyle(.roundedBorder)
+
+                    TextField("Port (e.g. 443)", text: $customPort)
+                        .keyboardType(.numberPad)
+                        .textFieldStyle(.roundedBorder)
+
+                    HStack {
+                        Button(role: .destructive) {
+                            GRPCChannelManager.shared.resetToDefaultServer()
+                            customHost = GRPCChannelManager.shared.currentHost
+                            customPort = "\(GRPCChannelManager.shared.currentPort)"
+                        } label: {
+                            Text("Reset to default")
+                        }
+                        .buttonStyle(.bordered)
+
+                        Spacer()
+
+                        Button {
+                            applyCustomServer()
+                        } label: {
+                            Text("apply_changes")
+                                .fontWeight(.semibold)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(customHost.trimmingCharacters(in: .whitespaces).isEmpty)
+                    }
+                }
+            } header: {
+                Text("custom_server_debug")
             } footer: {
                 Text("server_settings_footer")
                     .font(.caption)
             }
+            #endif
         }
         .navigationTitle("network")
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear {
-            // Initialize state based on stored value
-            useCustomServer = storedServerURL != nil
-            customServerURL = storedServerURL ?? ""
-        }
-        .alert("reconnect_required", isPresented: $showingReconnectAlert) {
+        .alert("server_applied_title", isPresented: $showingAppliedAlert) {
             Button("ok") { }
         } message: {
-            Text("reconnect_alert_message")
+            Text("server_applied_message")
         }
     }
 
     // MARK: - Actions
-    private func saveCustomServer() {
-        if useCustomServer {
-            var url = customServerURL.trimmingCharacters(in: .whitespaces)
 
-            // Ensure URL has wss:// or ws:// prefix
-            if !url.hasPrefix("wss://") && !url.hasPrefix("ws://") {
-                url = "wss://" + url
-            }
-
-            storedServerURL = url
-            print("⚠️ Using custom server: \(url)")
-        } else {
-            storedServerURL = nil
-//            print("✅ Reset to default server: \(ServerEnvironment.current.serverURL)")
-        }
-
-        // Notify and reconnect
-        NotificationCenter.default.post(name: .serverURLChanged, object: nil)
-        reconnectToServer()
-
-        showingReconnectAlert = true
+    private func applyCustomServer() {
+        let host = customHost.trimmingCharacters(in: .whitespaces)
+        let port = Int(customPort.trimmingCharacters(in: .whitespaces)) ?? 443
+        GRPCChannelManager.shared.setCustomServer(host: host, port: port)
+        showingAppliedAlert = true
     }
 
-    private func reconnectToServer() {
-        WebSocketManager.shared.disconnect()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            WebSocketManager.shared.connect()
+    // MARK: - Helpers
+
+    private func statusRow(label: String, value: String, color: Color) -> some View {
+        HStack {
+            Text(label)
+                .foregroundColor(.secondary)
+            Spacer()
+            HStack(spacing: 5) {
+                Circle()
+                    .fill(color)
+                    .frame(width: 8, height: 8)
+                Text(value)
+                    .fontWeight(.medium)
+            }
+        }
+    }
+
+    private var statusColor: Color {
+        switch connectionManager.connectionStatus {
+        case .connected:    return Color.AppStatus.success
+        case .disconnected: return .red
+        case .connecting:   return .orange
+        case .unknown:      return .gray
+        }
+    }
+
+    private var connectionTypeDisplayName: String {
+        switch reachabilityManager.connectionType {
+        case .wifi:        return "Wi-Fi"
+        case .cellular:    return "Cellular"
+        case .ethernet:    return "Ethernet"
+        case .other:       return "Other"
+        case .unavailable: return "Unavailable"
+        case .unknown:     return "Unknown"
         }
     }
 }

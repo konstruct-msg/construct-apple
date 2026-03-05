@@ -6,6 +6,10 @@
         <attribute name="id" attributeType="String"/>
         <attribute name="publicKey" optional="YES" attributeType="String"/>
         <attribute name="username" attributeType="String"/>
+        <attribute name="isSharingWithMe" optional="YES" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="isBlocked" optional="YES" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="sharedWithMeAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="amISharingWith" optional="YES" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
         <relationship name="chats" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="Chat" inverseName="otherUser" inverseEntity="Chat"/>
         <uniquenessConstraints>
             <uniquenessConstraint>
@@ -36,12 +40,36 @@
         <attribute name="replyToContent" optional="YES" attributeType="String"/>
         <attribute name="replyToMessageId" optional="YES" attributeType="String"/>
         <attribute name="retryCount" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="suiteId" optional="YES" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="timestamp" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="toUserId" attributeType="String"/>
         <relationship name="chat" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Chat" inverseName="messages" inverseEntity="Chat"/>
         <uniquenessConstraints>
             <uniquenessConstraint>
                 <constraint value="id"/>
+            </uniquenessConstraint>
+        </uniquenessConstraints>
+    </entity>
+    <entity name="ProcessedMessage" representedClassName="ProcessedMessage" syncable="YES">
+        <attribute name="messageId" attributeType="String"/>
+        <attribute name="senderId" attributeType="String"/>
+        <attribute name="processedAt" attributeType="Date" usesScalarValueType="NO"/>
+        <uniquenessConstraints>
+            <uniquenessConstraint>
+                <constraint value="messageId"/>
+            </uniquenessConstraint>
+        </uniquenessConstraints>
+    </entity>
+    <entity name="HealingMessage" representedClassName="HealingMessage" syncable="YES">
+        <attribute name="messageId" attributeType="String"/>
+        <attribute name="senderId" attributeType="String"/>
+        <attribute name="receivedAt" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="messageData" attributeType="Binary"/>
+        <attribute name="healAttempts" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="lastAttemptAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <uniquenessConstraints>
+            <uniquenessConstraint>
+                <constraint value="messageId"/>
             </uniquenessConstraint>
         </uniquenessConstraints>
     </entity>

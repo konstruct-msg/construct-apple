@@ -9,31 +9,50 @@ import SwiftUI
 import CoreData
 
 struct MainTabView: View {
-    @EnvironmentObject var authViewModel: AuthViewModel
+    @Environment(AuthViewModel.self) private var authViewModel
+    @Environment(ChatsViewModel.self) private var chatsViewModel
+
+    /// Compact = iPhone (or iPad in narrow split-screen multitasking)
+    /// Regular = iPad full-screen or landscape
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     var body: some View {
-        TabView {
-            ChatsListView()
-                .tabItem {
-                    Label("chats", systemImage: "message")
-                }
+        if horizontalSizeClass == .regular {
+            // iPad: sidebar + detail split layout
+            ChatsSplitView()
+                .environment(chatsViewModel)
+        } else {
+            // iPhone: classic tab bar navigation
+            TabView {
+                ChatsListView()
+                    .environment(chatsViewModel)
+                    .tabItem {
+                        Label("chats", systemImage: "message")
+                    }
 
-            SettingsView()
-                .tabItem {
-                    Label("settings", systemImage: "gear")
-                }
+                SettingsView()
+                    .tabItem {
+                        Label("settings", systemImage: "gear")
+                    }
+            }
         }
     }
 }
 
+#if DEBUG
 #Preview {
     let container = PreviewHelpers.createPreviewContainer()
     let context = container.viewContext
+    
+    guard context.persistentStoreCoordinator != nil else {
+        fatalError("Preview Core Data context not ready")
+    }
+    
     let authViewModel = AuthViewModel(context: context)
-    authViewModel.isAuthenticated = true
-    authViewModel.currentUserId = "me"
-    authViewModel.currentUsername = "john_doe"
-    authViewModel.currentDisplayName = "John Doe"
+    authViewModel.configureMockAuth()
+    
+    let chatsViewModel = ChatsViewModel()
+    chatsViewModel.setContext(context)
 
     // Create sample chats
     let user1 = PreviewHelpers.createSampleUser(context: context, id: "user1", username: "alice", displayName: "Alice")
@@ -44,5 +63,8 @@ struct MainTabView: View {
 
     return MainTabView()
         .environment(\.managedObjectContext, context)
-        .environmentObject(authViewModel)
+        .environment(authViewModel)
+        .environment(chatsViewModel)
+        .environment(SecurityViewModel())
 }
+#endif

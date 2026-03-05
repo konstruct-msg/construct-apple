@@ -22,6 +22,7 @@ final class CryptoIntegrationTests: XCTestCase {
         init(userId: String) throws {
             self.userId = userId
             self.core = try createCryptoCore()
+            self.core.setLocalUserId(userId: userId)
         }
 
         func exportRegistrationBundle() throws -> (identityPublic: String, signedPrekeyPublic: String, signature: String, verifyingKey: String, suiteId: String) {

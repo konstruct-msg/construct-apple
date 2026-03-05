@@ -22,37 +22,32 @@ struct Construct_MessengerApp: App {
             description.shouldMigrateStoreAutomatically = true
         }
 
-        container.loadPersistentStores { description, error in
+        // Load persistent stores asynchronously to avoid blocking app launch.
+        container.loadPersistentStores { _, error in
             if let error = error {
-                fatalError("Unable to load persistent stores: \(error)")
+                print("❌ Failed to load persistent stores: \(error)")
+            } else {
+                print("✅ Persistent stores loaded successfully")
             }
         }
+
         return container
     }()
 
-    @StateObject private var authViewModel = AuthViewModel(context: Construct_MessengerApp.persistentContainer.viewContext)
-    // TODO: Add PIN code security state management
-    // @StateObject private var securityViewModel = SecurityViewModel()
-    // See: TODO.md for detailed requirements
+    @State private var authViewModel = AuthViewModel(context: Construct_MessengerApp.persistentContainer.viewContext)
+    @State private var securityViewModel = SecurityViewModel()
+    @State private var recoveryViewModel = AccountRecoveryViewModel()
 
     var body: some Scene {
         WindowGroup {
-            // TODO: Wrap ContentView with PIN lock screen when security is enabled
-            // Example:
-            // if securityViewModel.isPinEnabled && !securityViewModel.isUnlocked {
-            //     PinCodeView()
-            //         .environmentObject(securityViewModel)
-            // } else {
-            //     ContentView()
-            //         .environment(\.managedObjectContext, ...)
-            //         .environmentObject(authViewModel)
-            // }
-            ContentView()
-                .environment(\.managedObjectContext, Construct_MessengerApp.persistentContainer.viewContext)
-                .environmentObject(authViewModel)
-                .environmentObject(appDelegate.deepLinkHandler)
-                // TODO: Add environment object for security
-                // .environmentObject(securityViewModel)
+            SecurityGateView {
+                ContentView()
+                    .environment(\.managedObjectContext, Construct_MessengerApp.persistentContainer.viewContext)
+                    .environment(authViewModel)
+                    .environment(appDelegate.deepLinkHandler)
+            }
+            .environment(securityViewModel)
+            .environment(recoveryViewModel)
         }
     }
 }

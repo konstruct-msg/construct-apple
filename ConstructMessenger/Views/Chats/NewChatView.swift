@@ -17,9 +17,11 @@ import CoreData
 struct NewChatView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.managedObjectContext) private var viewContext
-    @ObservedObject var chatsViewModel: ChatsViewModel
+    var chatsViewModel: ChatsViewModel
 
     @State private var showingQRScanner = false
+    @State private var showingError = false
+    @State private var errorMessage = ""
     @State private var initialContactInfo: ContactInfo?
 
     init(chatsViewModel: ChatsViewModel, initialContactInfo: ContactInfo? = nil) {
@@ -46,9 +48,14 @@ struct NewChatView: View {
                     handleScannedContact(contactURL)
                 }
             }
+            .alert("error", isPresented: $showingError) {
+                Button("ok") {}
+            } message: {
+                Text(errorMessage)
+            }
             .onAppear {
                 if let contactInfo = initialContactInfo {
-                    addContact(userId: contactInfo.userId, username: contactInfo.username)
+                    addContact(contactInfo: contactInfo)
                     initialContactInfo = nil // Consume the deep link
                 }
             }
@@ -56,42 +63,58 @@ struct NewChatView: View {
     }
 
     private func handleScannedContact(_ urlString: String) {
-        print("🔍 NewChatView: Handling scanned URL: \(urlString)")
+        Log.info("🔍 NewChatView: Handling scanned URL: \(urlString)", category: "NewChatView")
 
         guard let url = URL(string: urlString) else {
-            print("❌ Invalid URL string: \(urlString)")
-            // TODO: Show alert to user
+            Log.error("❌ Invalid URL string: \(urlString)", category: "NewChatView")
+            showErrorAfterDismiss(NSLocalizedString("invalid_qr_code_construct", comment: "Error message for invalid QR code"))
             return
         }
 
-        do {
-            let contactInfo = try LinkParser.parseContactLink(url)
-            print("✅ Parsed contact: userId=\(contactInfo.userId), username=\(contactInfo.username)")
-            
-            addContact(userId: contactInfo.userId, username: contactInfo.username)
-        } catch {
-            print("❌ Failed to parse contact link: \(error.localizedDescription)")
-            // TODO: Show alert to user with specific error message
+        Task {
+            do {
+                let contactInfo = try await LinkParser.parseContactLink(url)
+                Log.info("✅ Parsed contact: userId=\(contactInfo.userId), username=\(contactInfo.username), isDynamic=\(contactInfo.isDynamic)", category: "NewChatView")
+                
+                await MainActor.run {
+                    addContact(contactInfo: contactInfo)
+                    showingQRScanner = false
+                    dismiss()
+                }
+            } catch {
+                Log.error("❌ Failed to parse contact link: \(error.localizedDescription)", category: "NewChatView")
+                await MainActor.run {
+                    showErrorAfterDismiss(error.localizedDescription)
+                    showingQRScanner = false
+                }
+            }
         }
-
-        showingQRScanner = false
-        dismiss()
     }
 
-    private func addContact(userId: String, username: String) {
-        print("📱 NewChatView: Adding contact userId=\(userId), username=\(username)")
+    private func addContact(contactInfo: ContactInfo) {
+        let userId = contactInfo.userId
+        let username = contactInfo.username
+        Log.info("📱 NewChatView: Adding contact userId=\(userId), username=\(username)", category: "NewChatView")
 
-        // Start chat with user - let ChatsViewModel handle User creation
         let publicUserInfo = PublicUserInfo(
             id: userId,
             username: username,
             avatarUrl: nil,
-            bio: nil
+            bio: nil,
+            deviceId: contactInfo.deviceId
         )
         if let chat = chatsViewModel.startChat(with: publicUserInfo) {
-            print("✅ NewChatView: Chat created with @\(username), chat.id=\(chat.id), chat.otherUser?.id=\(chat.otherUser?.id ?? "nil")")
+            Log.info("✅ NewChatView: Chat created with @\(username), chat.id=\(chat.id)", category: "NewChatView")
         } else {
-            print("❌ NewChatView: Failed to create chat with @\(username)")
+            Log.error("❌ NewChatView: Failed to create chat with @\(username)", category: "NewChatView")
+        }
+    }
+
+    private func showErrorAfterDismiss(_ message: String) {
+        errorMessage = message
+        showingQRScanner = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            showingError = true
         }
     }
 }

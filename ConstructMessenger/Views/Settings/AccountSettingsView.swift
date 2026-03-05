@@ -6,231 +6,375 @@
 //
 
 import SwiftUI
+import CoreData
+import PhotosUI
 
 struct AccountSettingsView: View {
     @Environment(\.managedObjectContext) private var viewContext
-    @EnvironmentObject var authViewModel: AuthViewModel
-    @StateObject private var viewModel = SettingsViewModel()
+    @Environment(AuthViewModel.self) private var authViewModel
+    @State private var viewModel = SettingsViewModel()
 
-    // Profile Picture
     @State private var showingImagePicker = false
+    @State private var selectedPhotoItem: PhotosPickerItem?
+    @State private var showingAvatarViewer = false
+    @State private var showingDeleteConfirmation = false
+    @State private var showingExportAlert = false
+    @State private var imageToCrop: UIImage?
+    @State private var showingCropView = false
 
-    // Change Password
-    @State private var showingChangePassword = false
-    @State private var currentPassword = ""
-    @State private var newPassword = ""
-    @State private var confirmPassword = ""
-    @State private var passwordError: String?
-    
-    @State private var showingLogoutConfirmation = false
-
-    private var passwordFooterText: Text {
-        Text(String(format: NSLocalizedString("password_min_length_message", comment: ""), ValidationRules.minPasswordLength))
-    }
+    // Username editing
+    @State private var originalUsername: String = ""
 
     var body: some View {
         List {
-            // MARK: - Profile Picture Section
+            // MARK: - Avatar + Identity
             Section {
                 HStack {
                     Spacer()
-                    VStack(spacing: 12) {
-                        if let image = viewModel.profileImage {
-                            Image(uiImage: image)
-                                .resizable()
-                                .scaledToFill()
-                                .frame(width: 100, height: 100)
-                                .clipShape(Circle())
-                        } else {
-                            Circle()
-                                .fill(Color.blue.opacity(0.2))
-                                .frame(width: 100, height: 100)
-                                .overlay {
-                                    Text(viewModel.displayName.prefix(1).uppercased())
-                                        .font(.system(size: 40, weight: .semibold))
-                                        .foregroundColor(.blue)
-                                }
+                    VStack(spacing: 10) {
+                        Group {
+                            if let image = viewModel.profileImage {
+                                Image(uiImage: image)
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: AvatarStyle.accountSize, height: AvatarStyle.accountSize)
+                                    .clipShape(AvatarStyle.squircle(AvatarStyle.accountSize))
+                            } else {
+                                AvatarStyle.squircle(AvatarStyle.accountSize)
+                                    .fill(Color.blue.opacity(0.2))
+                                    .frame(width: AvatarStyle.accountSize, height: AvatarStyle.accountSize)
+                                    .overlay {
+                                        Text(viewModel.displayName.prefix(1).uppercased())
+                                            .font(.system(size: 40, weight: .semibold))
+                                            .foregroundColor(Color.blue)
+                                    }
+                            }
                         }
-                    }
-                    .onTapGesture {
-                        showingImagePicker = true
+                        .onTapGesture {
+                            if viewModel.profileImage != nil {
+                                showingAvatarViewer = true
+                            } else {
+                                showingImagePicker = true
+                            }
+                        }
+
+                        Text(viewModel.username.isEmpty
+                             ? DisplayNameGenerator.generate(from: viewModel.userId)
+                             : "@\(viewModel.username)")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
                     }
                     Spacer()
                 }
                 .listRowBackground(Color.clear)
             }
-            
-            Text("@\(viewModel.username)")
-                .fontWeight(.medium)
-                .foregroundColor(.gray)
 
-            // MARK: - Account Information Section
+            // MARK: - Account Information
             Section {
+                HStack {
+                    TextField("username", text: $viewModel.username)
+                        .font(.body.monospaced())
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.never)
+                        .onSubmit {
+                            Task { await viewModel.saveUsername(viewModel.username, authViewModel: authViewModel) }
+                        }
+
+                    if viewModel.isSavingUsername {
+                        ProgressView().scaleEffect(0.8)
+                    } else if viewModel.username != originalUsername {
+                        Button {
+                            Task { await viewModel.saveUsername(viewModel.username, authViewModel: authViewModel) }
+                        } label: {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundColor(.accentColor)
+                        }
+                        .buttonStyle(.plain)
+                    } else if viewModel.usernameSaved {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundColor(.green)
+                            .transition(.opacity)
+                    }
+                }
+
+                if let error = viewModel.usernameSaveError {
+                    Text(error)
+                        .font(.caption)
+                        .foregroundColor(.red)
+                }
+
                 TextField("display_name", text: $viewModel.displayName)
-                    .onChange(of: viewModel.displayName) { newValue in
+                    .onChange(of: viewModel.displayName) { _, newValue in
                         viewModel.saveDisplayName(newValue, authViewModel: authViewModel)
                     }
-
             } header: {
                 Text("account_information")
             }
+            
+            Spacer()
+            Spacer()
 
-            // MARK: - Password Section
+            // MARK: - Data & Privacy
             Section {
-                if showingChangePassword {
-                    SecureField("current_password", text: $currentPassword)
-                        .textContentType(.password)
-
-                    SecureField("new_password", text: $newPassword)
-                        .textContentType(.newPassword)
-
-                    SecureField("confirm_new_password", text: $confirmPassword)
-                        .textContentType(.newPassword)
-
-                    if let error = passwordError {
-                        Text(error)
-                            .font(.caption)
-                            .foregroundColor(.red)
-                    }
-
-                    HStack {
-                        Button("cancel") {
-                            cancelPasswordChange()
-                        }
-
-                        Spacer()
-
-                        Button("change_password") {
-                            changePassword()
-                        }
-                        .disabled(!isPasswordValid)
-                    }
-                } else {
-                    Button {
-                        showingChangePassword = true
-                    } label: {
-                        Text("change_password")
-                    }
+                Button {
+                    showingExportAlert = true
+                } label: {
+                    Label("export_my_data", systemImage: "square.and.arrow.up")
                 }
             } header: {
-                Text("security")
-            } footer: {
-                if showingChangePassword {
-                    passwordFooterText
-                        .font(.caption)
-                }
+                Text("data_and_privacy")
             }
             
-            // MARK: - Logout Section
+            Spacer()
+            Spacer()
+            
+            // MARK: - Danger Zone
             Section {
                 Button(role: .destructive) {
-                    showingLogoutConfirmation = true
+                    showingDeleteConfirmation = true
                 } label: {
-                    HStack {
-                        Spacer()
-                        Label {
-                            Text("logout")
-                                .fontWeight(.semibold)
-                        } icon: {
-                            Image(systemName: "rectangle.portrait.and.arrow.right")
-                        }
-                        Spacer()
-                    }
+                    Text("delete_my_account")
                 }
             }
+            header: {
+                Text("danger_zone")
+            }
+        }
+        .alert("export_my_data", isPresented: $showingExportAlert) {
+            Button("ok", role: .cancel) { }
+        } message: {
+            Text("export_coming_soon_message")
         }
         .navigationTitle("account")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             viewModel.setContext(viewContext)
             viewModel.loadUserInfo(from: authViewModel)
+            originalUsername = viewModel.username
         }
-        .alert("logout", isPresented: $showingLogoutConfirmation) {
-            Button("cancel", role: .cancel) { }
-            Button("logout", role: .destructive) {
-                authViewModel.logout()
+        .onChange(of: viewModel.usernameSaved) { _, saved in
+            if saved { originalUsername = viewModel.username }
+        }
+        .sheet(isPresented: $showingDeleteConfirmation) {
+            DeleteAccountConfirmationView(
+                onDelete: {
+                    authViewModel.deleteAccount()
+                },
+                onCancel: {
+                    showingDeleteConfirmation = false
+                }
+            )
+            .environment(authViewModel)
+        }
+        .sheet(isPresented: $showingAvatarViewer) {
+            AvatarViewerSheet(
+                image: viewModel.profileImage,
+                onChangeAvatar: {
+                    showingAvatarViewer = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                        showingImagePicker = true
+                    }
+                }
+            )
+        }
+        .photosPicker(isPresented: $showingImagePicker, selection: $selectedPhotoItem, matching: .images)
+        .onChange(of: selectedPhotoItem) { _, newItem in
+            guard let newItem else { return }
+            Task {
+                if let data = try? await newItem.loadTransferable(type: Data.self),
+                   let image = UIImage(data: data) {
+                    await MainActor.run {
+                        imageToCrop = image
+                        showingCropView = true
+                    }
+                }
+                selectedPhotoItem = nil
             }
-        } message: {
-            Text("logout_confirmation")
         }
-        .sheet(isPresented: $showingImagePicker) {
-            ImagePicker(onImagePicked: { image in
-                viewModel.saveAvatar(image, authViewModel: authViewModel)
-            })
-        }
-    }
-
-    // MARK: - Validation
-    private var isPasswordValid: Bool {
-        !currentPassword.isEmpty &&
-        !newPassword.isEmpty &&
-        newPassword == confirmPassword &&
-        newPassword.count >= ValidationRules.minPasswordLength
-    }
-
-    // MARK: - Actions
-    private func changePassword() {
-        guard isPasswordValid else {
-            passwordError = NSLocalizedString("please_check_all_fields", comment: "")
-            return
-        }
-
-        // TODO: Implement password change API call
-        // For now, just clear the form
-        print("Changing password for user: \(viewModel.username)")
-        cancelPasswordChange()
-    }
-
-    private func cancelPasswordChange() {
-        showingChangePassword = false
-        currentPassword = ""
-        newPassword = ""
-        confirmPassword = ""
-        passwordError = nil
-    }
-}
-
-// MARK: - Image Picker
-struct ImagePicker: UIViewControllerRepresentable {
-    let onImagePicked: (UIImage) -> Void
-    @Environment(\.dismiss) var dismiss
-
-    func makeUIViewController(context: Context) -> UIImagePickerController {
-        let picker = UIImagePickerController()
-        picker.delegate = context.coordinator
-        picker.allowsEditing = true
-        return picker
-    }
-
-    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(self)
-    }
-
-    class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
-        let parent: ImagePicker
-
-        init(_ parent: ImagePicker) {
-            self.parent = parent
-        }
-
-        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
-            if let editedImage = info[.editedImage] as? UIImage {
-                parent.onImagePicked(editedImage)
-            } else if let originalImage = info[.originalImage] as? UIImage {
-                parent.onImagePicked(originalImage)
+        // Use .sheet instead of .fullScreenCover — fullScreenCover is not supported on macOS Catalyst
+        // and conflicts with other sheet presentations on the same view.
+        .sheet(isPresented: $showingCropView) {
+            if let img = imageToCrop {
+                ImageCropView(
+                    image: img,
+                    onConfirm: { cropped in
+                        showingCropView = false
+                        imageToCrop = nil
+                        viewModel.saveAvatar(cropped, authViewModel: authViewModel)
+                    },
+                    onCancel: {
+                        showingCropView = false
+                        imageToCrop = nil
+                    }
+                )
             }
-
-            parent.dismiss()
-        }
-
-        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
-            parent.dismiss()
         }
     }
 }
 
+// MARK: - Delete Account Confirmation View
+struct DeleteAccountConfirmationView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(AuthViewModel.self) private var authViewModel
+
+    let onDelete: () -> Void
+    let onCancel: () -> Void
+
+    @State private var countdown = 7
+    @State private var errorMessage: String?
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Drag indicator
+            Capsule()
+                .fill(Color.secondary.opacity(0.4))
+                .frame(width: 36, height: 4)
+                .padding(.top, 12)
+                .padding(.bottom, 24)
+
+            Spacer()
+
+            // Icon
+            Image(systemName: "person.crop.circle.badge.minus")
+                .font(.system(size: 52, weight: .light))
+                .foregroundColor(.red.opacity(0.85))
+                .padding(.bottom, 20)
+
+            Text("delete_my_account")
+                .font(.title2).fontWeight(.semibold)
+                .padding(.bottom, 8)
+
+            Text("delete_account_confirmation_message")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 32)
+                .padding(.bottom, 32)
+
+            // Countdown ring
+            if countdown > 0 && !authViewModel.isLoading {
+                ZStack {
+                    Circle()
+                        .stroke(Color.red.opacity(0.15), lineWidth: 4)
+                    Circle()
+                        .trim(from: 0, to: CGFloat(7 - countdown) / 7.0)
+                        .stroke(Color.red.opacity(0.7), style: StrokeStyle(lineWidth: 4, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                        .animation(.linear(duration: 1), value: countdown)
+                    Text("\(countdown)")
+                        .font(.system(size: 22, weight: .semibold, design: .monospaced))
+                        .foregroundColor(.red.opacity(0.8))
+                }
+                .frame(width: 64, height: 64)
+                .padding(.bottom, 28)
+            }
+
+            // Error message
+            if let err = errorMessage {
+                Text(err)
+                    .font(.footnote)
+                    .foregroundColor(.red)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 32)
+                    .padding(.bottom, 16)
+            }
+
+            Spacer()
+
+            // Delete button (full-width, appears after countdown)
+            VStack(spacing: 12) {
+                if authViewModel.isLoading {
+                    ProgressView()
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 50)
+                } else {
+                    Button(role: .destructive) {
+                        onDelete()
+                    } label: {
+                        Text("delete_account")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 50)
+                            .background(countdown > 0 ? Color.red.opacity(0.3) : Color.red)
+                            .foregroundColor(.white)
+                            .cornerRadius(14)
+                    }
+                    .disabled(countdown > 0)
+                    .animation(.easeInOut(duration: 0.25), value: countdown)
+                }
+
+                Button("cancel") {
+                    onCancel()
+                    dismiss()
+                }
+                .foregroundColor(.secondary)
+                .disabled(authViewModel.isLoading)
+            }
+            .padding(.horizontal, 24)
+            .padding(.bottom, 36)
+        }
+        .presentationDetents([.medium])
+        .presentationDragIndicator(.hidden)
+        .task {
+            // Count down from 7 to 0 using structured concurrency — avoids RunLoop blocking on macOS.
+            while countdown > 0 {
+                try? await Task.sleep(for: .seconds(1))
+                guard countdown > 0 else { break }
+                countdown -= 1
+            }
+        }
+        .onChange(of: authViewModel.errorMessage) { _, msg in
+            if let msg { errorMessage = msg }
+        }
+        .onChange(of: authViewModel.isLoading) { _, loading in
+            // Clear error when new attempt starts
+            if loading { errorMessage = nil }
+        }
+        // On macOS Catalyst, sheets are child windows and don't auto-close
+        // when parent view changes — explicitly dismiss when account is deleted.
+        .onChange(of: authViewModel.isAuthenticated) { _, isAuthenticated in
+            if !isAuthenticated { dismiss() }
+        }
+    }
+}
+
+// MARK: - Avatar Viewer Sheet
+struct AvatarViewerSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let image: UIImage?
+    let onChangeAvatar: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Color.black.ignoresSafeArea()
+                if let image {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFit()
+                        .ignoresSafeArea(edges: .bottom)
+                }
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("close") { dismiss() }
+                        .foregroundColor(.white)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("change_avatar") { onChangeAvatar() }
+                        .foregroundColor(.white)
+                }
+            }
+            .toolbarBackground(.black, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+        }
+    }
+}
+
+
+#if DEBUG
 #Preview {
     let container = PreviewHelpers.createPreviewContainer()
     let context = container.viewContext
@@ -244,14 +388,12 @@ struct ImagePicker: UIViewControllerRepresentable {
     try? context.save()
 
     let authViewModel = AuthViewModel(context: context)
-    authViewModel.isAuthenticated = true
-    authViewModel.currentUserId = "user123"
-    authViewModel.currentUsername = "john_doe"
-    authViewModel.currentDisplayName = "John Doe"
+    authViewModel.configureMockAuth()
 
     return NavigationStack {
         AccountSettingsView()
             .environment(\.managedObjectContext, context)
-            .environmentObject(authViewModel)
+            .environment(authViewModel)
     }
 }
+#endif

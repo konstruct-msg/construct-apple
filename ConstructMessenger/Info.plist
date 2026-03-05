@@ -2,7 +2,44 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>APIBaseURL</key>
-	<string>wss://api.konstruct.cc</string>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.construct.message-refresh</string>
+		<string>com.construct.maintenance</string>
+	</array>
+	<key>CFBundleGetInfoString</key>
+	<string></string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>cc.konstruct.app</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>konstruct</string>
+			</array>
+		</dict>
+	</array>
+	<key>GRPC_HOST</key>
+	<string>$(GRPC_HOST)</string>
+	<key>GRPC_PORT</key>
+	<string>$(GRPC_PORT)</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+	<key>NSUserNotificationsUsageDescription</key>
+	<string>Construct Messenger sends you notifications for new messages.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Construct Messenger needs access to save received photos to your library.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+		<string>processing</string>
+		<string>remote-notification</string>
+	</array>
 </dict>
 </plist>

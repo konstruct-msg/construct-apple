@@ -2,38 +2,56 @@
 //  SessionManager.swift
 //  Construct Messenger
 //
-//  Created by Maxim Eliseyev on 13.12.2025.
+//  Device-based session management (single device, no multi-account)
 //
 
 import Foundation
 
+@Observable
 class SessionManager {
     static let shared = SessionManager()
     private init() {}
 
-    private let sessionTokenKey = "com.construct.sessionToken"
-    private let userIdKey = "com.construct.userId"
-    private let expiresKey = "com.construct.sessionExpires"  // ✅ FIXED: Track expiration
+    // ✅ Session token for API authentication
+    private(set) var sessionToken: String?
+    
+    // ✅ Refresh token for automatic token renewal
+    private(set) var refreshToken: String?
+    
+    // ✅ User ID from server (UUID)
+    private(set) var userId: String?
 
+    // Signals that the session was invalidated due to an unsupported token algorithm
+    private(set) var isSessionInvalidated: Bool = false
+
+    func resetSessionInvalidated() {
+        isSessionInvalidated = false
+    }
+    
+    // ✅ Get userId (prefer stored userId, fallback to deviceId for compatibility)
     var currentUserId: String? {
-        KeychainManager.shared.loadUserId()
+        if let userId = userId, !userId.isEmpty {
+            return userId
+        }
+        // Fallback to userId from Keychain
+        if let savedUserId = KeychainManager.shared.loadUserID(), !savedUserId.isEmpty {
+            return savedUserId
+        }
+        // Legacy fallback: deviceId
+        return KeychainManager.shared.loadDeviceID()
     }
 
-    var sessionToken: String? {
-        KeychainManager.shared.loadSessionToken()
-    }
-
-    // ✅ FIXED: Get session expiration timestamp
+    // ✅ Get session expiration timestamp
     var sessionExpires: Date? {
-        guard let timestamp = UserDefaults.standard.object(forKey: expiresKey) as? TimeInterval else {
+        guard let timestamp = UserDefaults.standard.object(forKey: UserDefaultsKey.sessionExpires.key) as? TimeInterval else {
             return nil
         }
         return Date(timeIntervalSince1970: timestamp)
     }
 
-    // ✅ FIXED: Check if session is valid (not expired)
+    // ✅ Check if session is valid (not expired)
     var isSessionValid: Bool {
-        guard sessionToken != nil, currentUserId != nil else { return false }
+        guard sessionToken != nil else { return false }
 
         // Check expiration (with 5-minute buffer)
         guard let expires = sessionExpires else { return false }
@@ -41,18 +59,54 @@ class SessionManager {
         return Date().addingTimeInterval(bufferTime) < expires
     }
 
-    // ✅ FIXED: Save session with expiration timestamp
-    func saveSession(userId: String, token: String, expires: Int64) {
-        KeychainManager.shared.saveUserId(userId)
-        KeychainManager.shared.saveSessionToken(token)
-        // Save expiration timestamp
-        UserDefaults.standard.set(TimeInterval(expires), forKey: expiresKey)
-        print("✅ Session saved - expires at: \(Date(timeIntervalSince1970: TimeInterval(expires)))")
+    // ✅ Load token from keychain on init or when needed
+    func loadSessionToken() {
+        sessionToken = KeychainManager.shared.loadSessionToken()
+        refreshToken = KeychainManager.shared.loadRefreshToken()
+        userId = KeychainManager.shared.loadUserID()
+
+        if let token = sessionToken,
+           let alg = JWTUtils.headerAlgorithm(from: token),
+           alg != "RS256" {
+            Log.error("❌ Unsupported JWT alg in cached token: \(alg). Clearing session.", category: "SessionManager")
+            clearSession()
+            isSessionInvalidated = true
+        }
+    }
+    
+    // ✅ Save both access and refresh tokens with expiration and userId
+    func saveTokens(accessToken: String, refreshToken: String, expiresIn: Int, userId: String? = nil) {
+        // Save tokens to keychain
+        KeychainManager.shared.saveSessionToken(accessToken)
+        KeychainManager.shared.saveRefreshToken(refreshToken)
+        
+        // Save userId if provided
+        if let userId = userId {
+            KeychainManager.shared.saveUserID(userId)
+            self.userId = userId
+            Log.info("✅ User ID saved: \(userId.prefix(8))...", category: "SessionManager")
+        }
+        
+        // Calculate expiration (expiresIn is in seconds)
+        let expiresAt = Date().addingTimeInterval(TimeInterval(expiresIn))
+        UserDefaults.standard.set(expiresAt.timeIntervalSince1970, forKey: UserDefaultsKey.sessionExpires.key)
+        
+        // Update published properties
+        self.sessionToken = accessToken
+        self.refreshToken = refreshToken
+        
+        Log.info("✅ Tokens saved - expires in: \(expiresIn / 60) minutes", category: "SessionManager")
     }
 
     func clearSession() {
         KeychainManager.shared.deleteSessionToken()
-        // Clear expiration timestamp
-        UserDefaults.standard.removeObject(forKey: expiresKey)
+        KeychainManager.shared.deleteRefreshToken()
+        KeychainManager.shared.deleteUserID()
+        UserDefaults.standard.removeObject(forKey: UserDefaultsKey.sessionExpires.key)
+        
+        // Clear published properties
+        self.sessionToken = nil
+        self.refreshToken = nil
+        self.userId = nil
     }
 }

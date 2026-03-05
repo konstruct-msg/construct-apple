@@ -10,29 +10,39 @@ import CoreData
 
 // MARK: - Delivery Status Enum
 enum DeliveryStatus: Int16 {
-    case sending = 0      // Отправляется (локально)
-    case sent = 1         // Отправлено на сервер
-    case delivered = 2    // Доставлено получателю (online)
-    case queued = 3       // В очереди (получатель offline)
-    case failed = 4       // Ошибка отправки
+    case sending = 0           // Отправляется (локально)
+    case sent = 1              // Отправлено на сервер, подтверждение получено
+    case delivered = 2         // Доставлено получателю (HMAC-SHA256 ACK received)
+    case queued = 3            // В очереди (получатель offline)
+    case failed = 4            // Ошибка отправки
 
     var displayName: String {
         switch self {
         case .sending: return "Sending"
-        case .sent: return "Sent"
-        case .delivered: return "Delivered"
-        case .queued: return "Queued"
+        case .sent: return "Sent to server"           // Сервер подтвердил получение
+        case .delivered: return "Delivered"           // Получатель подтвердил доставку (через HMAC-SHA256)
+        case .queued: return "Queued locally"         // В локальной очереди
         case .failed: return "Failed"
         }
     }
 
     var icon: String {
         switch self {
-        case .sending: return "clock"
-        case .sent: return "checkmark"
-        case .delivered: return "checkmark.circle.fill"
+        case .sending: return "checkmark.circle"           // Серый пустой круг с галочкой
+        case .sent: return "checkmark.circle.fill"         // Серый заполненный круг с галочкой
+        case .delivered: return "checkmark.circle.fill"    // Зелёный заполненный (в UI)
         case .queued: return "tray"
         case .failed: return "exclamationmark.circle.fill"
+        }
+    }
+    
+    var iconColor: String {
+        switch self {
+        case .sending: return "gray"
+        case .sent: return "gray"
+        case .delivered: return "green"
+        case .queued: return "orange"
+        case .failed: return "red"
         }
     }
 }
@@ -47,6 +57,7 @@ extension Message {
     @NSManaged public var toUserId: String
     @NSManaged public var encryptedContent: String
     @NSManaged public var decryptedContent: String?
+    @NSManaged public var suiteId: UInt16
     @NSManaged public var timestamp: Date
     @NSManaged public var isSentByMe: Bool
     @NSManaged public var deliveryStatusRaw: Int16

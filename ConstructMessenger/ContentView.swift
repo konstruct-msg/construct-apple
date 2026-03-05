@@ -9,42 +9,49 @@ import SwiftUI
 import CoreData
 
 struct ContentView: View {
-    @EnvironmentObject var authViewModel: AuthViewModel
-    @EnvironmentObject var deepLinkHandler: DeepLinkHandler // Inject DeepLinkHandler
+    @Environment(AuthViewModel.self) var authViewModel
+    @Environment(DeepLinkHandler.self) var deepLinkHandler
     @Environment(\.managedObjectContext) private var viewContext
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("appTheme") private var appTheme: AppTheme = .automatic
 
-    @StateObject private var chatsViewModel = ChatsViewModel()
+    @State private var chatsViewModel = ChatsViewModel()
 
     var body: some View {
         Group {
-            if authViewModel.isAuthenticated {
+            if authViewModel.hasRegisteredDeviceKeys == nil {
+                // Loading screen while checking Keychain
+                ProgressView("Loading...")
+            } else if authViewModel.hasRegisteredDeviceKeys == true {
+                // Device is registered - show main app
                 MainTabView()
-                    .environmentObject(chatsViewModel)
+                    .environment(authViewModel)
+                    .environment(chatsViewModel)
             } else {
-                AuthView()
+                // No device keys = new user -> show onboarding
+                OnboardingView()
+                    .onDisappear {
+                        authViewModel.refreshDeviceKeyState()
+                    }
             }
         }
         .preferredColorScheme(appTheme.colorScheme)
         .onAppear {
-            // This will run once when ContentView first appears
-            authViewModel.restoreSession()
+            authViewModel.refreshDeviceKeyState()
             chatsViewModel.setContext(viewContext)
         }
-        .onChange(of: scenePhase) { newPhase in
+        .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
                 // Always restore connection when coming from background to foreground
                 print("📱 App became active, attempting to restore connection...")
                 authViewModel.restoreSession()
             } else if newPhase == .background {
-                print("⏹️ App went to background. Disconnecting WebSocket.")
-                // Disconnect when going to background to save resources
-                // The connection will be restored when app becomes active again
-                WebSocketManager.shared.disconnect()
+                print("⏹️ App went to background.")
+                // gRPC architecture - stream disconnected gracefully
+                // Long polling will resume when app becomes active
             }
         }
-        .onChange(of: deepLinkHandler.deepLink) { newDeepLink in
+        .onChange(of: deepLinkHandler.deepLink) { _, newDeepLink in
             Log.debug("ContentView: Deep link changed: \(String(describing: newDeepLink))", category: "DeepLink")
             if case .contact(let contactInfo) = newDeepLink {
                 Log.info("ContentView: Creating chat directly for userId: \(contactInfo.userId), username: \(contactInfo.username)", category: "DeepLink")
@@ -54,7 +61,8 @@ struct ContentView: View {
                     id: contactInfo.userId,
                     username: contactInfo.username,
                     avatarUrl: nil,
-                    bio: nil
+                    bio: nil,
+                    deviceId: contactInfo.deviceId
                 )
                 
                 if let chat = chatsViewModel.startChat(with: publicUserInfo) {
@@ -64,7 +72,10 @@ struct ContentView: View {
                     Log.error("ContentView: Failed to create chat for userId: \(contactInfo.userId)", category: "DeepLink")
                 }
                 
-                // Clear the deep link
+                deepLinkHandler.deepLink = nil
+            } else if case .openChat(let chatId) = newDeepLink {
+                Log.info("ContentView: Opening chat from push notification: \(chatId)", category: "DeepLink")
+                chatsViewModel.chatToOpen = chatId
                 deepLinkHandler.deepLink = nil
             }
         }
@@ -75,8 +86,10 @@ struct ContentView: View {
             Log.info("ContentView: Deep link handling result: \(result)", category: "DeepLink")
         }
     }
+    
 }
 
+#if DEBUG
 #Preview("Not Authenticated") {
     let container = PreviewHelpers.createPreviewContainer()
     let authViewModel = AuthViewModel(context: container.viewContext)
@@ -85,19 +98,25 @@ struct ContentView: View {
 
     return ContentView()
         .environment(\.managedObjectContext, container.viewContext)
-        .environmentObject(authViewModel)
-        .environmentObject(deepLinkHandler)
+        .environment(authViewModel)
+        .environment(deepLinkHandler)
 }
+#endif
 
+#if DEBUG
 #Preview("Authenticated") {
     let container = PreviewHelpers.createPreviewContainer()
     let context = container.viewContext
+    
+    guard context.persistentStoreCoordinator != nil else {
+        fatalError("Preview Core Data context not ready")
+    }
+    
     let authViewModel = AuthViewModel(context: context)
-    authViewModel.isAuthenticated = true
-    authViewModel.currentUserId = "me"
-    authViewModel.currentUsername = "john_doe"
-    authViewModel.currentDisplayName = "John Doe"
+    authViewModel.configureMockAuth(username: "john_doe", displayName: "John Doe")
     let deepLinkHandler = DeepLinkHandler()
+    let chatsViewModel = ChatsViewModel()
+    chatsViewModel.setContext(context)
 
     // Create sample chats
     let user1 = PreviewHelpers.createSampleUser(context: context, id: "user1", username: "alice", displayName: "Alice")
@@ -108,6 +127,8 @@ struct ContentView: View {
 
     return ContentView()
         .environment(\.managedObjectContext, context)
-        .environmentObject(authViewModel)
-        .environmentObject(deepLinkHandler)
+        .environment(authViewModel)
+        .environment(deepLinkHandler)
+        .environment(chatsViewModel)
 }
+#endif

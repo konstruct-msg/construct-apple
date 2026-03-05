@@ -13,7 +13,7 @@ struct BackgroundFetchSettingsView: View {
     @State private var intervalMinutes: Int = BackgroundFetchConfig.defaultIntervalMinutes
     @State private var isLowPowerModeEnabled: Bool = false
     @State private var showingLowPowerModeAlert = false
-    @ObservedObject private var fetchManager = BackgroundFetchManager.shared
+    private var fetchManager = BackgroundFetchManager.shared
     
     // MARK: - Body
     var body: some View {
@@ -52,7 +52,7 @@ struct BackgroundFetchSettingsView: View {
                 }
             }
             .disabled(isLowPowerModeEnabled)
-            .onChange(of: isEnabled) { newValue in
+            .onChange(of: isEnabled) { _, newValue in
                 handleToggleChange(newValue)
             }
         } footer: {
@@ -77,7 +77,7 @@ struct BackgroundFetchSettingsView: View {
     }
     
     private var toggleIconColor: Color {
-        isEnabled ? .blue : .gray
+        isEnabled ? Color.blue : .gray
     }
     
     @ViewBuilder
@@ -130,7 +130,7 @@ struct BackgroundFetchSettingsView: View {
                 .font(.caption)
                 .foregroundColor(.secondary)
         }
-        .onChange(of: intervalMinutes) { newValue in
+        .onChange(of: intervalMinutes) { _, newValue in
             handleIntervalChange(newValue)
         }
     }
@@ -226,7 +226,7 @@ struct BackgroundFetchSettingsView: View {
         if isLowPowerModeEnabled {
             return .orange
         } else if isEnabled {
-            return .green
+            return Color.AppStatus.success
         } else {
             return .gray
         }

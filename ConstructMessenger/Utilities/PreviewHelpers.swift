@@ -8,6 +8,28 @@
 import Foundation
 import CoreData
 import SwiftUI
+import os.log
+
+/// Helper to detect if running in SwiftUI Preview mode
+struct PreviewDetector {
+    static var isRunningInPreview: Bool {
+        // Method 1: Check environment variable (most reliable for Xcode Previews)
+        if ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1" {
+            return true
+        }
+
+        // Method 2: Check process name - only in simulator
+        #if targetEnvironment(simulator)
+        let processName = ProcessInfo.processInfo.processName
+        // Check for "Previews" with capital P to avoid false positives
+        if processName.contains("Previews") {
+            return true
+        }
+        #endif
+
+        return false
+    }
+}
 
 struct PreviewHelpers {
     /// Creates an in-memory CoreData stack for SwiftUI previews
@@ -58,39 +80,28 @@ struct PreviewHelpers {
         user.id = id
         user.username = username
         user.displayName = displayName
-        user.publicKey = "sample_public_key"
         return user
     }
 
     /// Creates sample Chat for preview
-    static func createSampleChat(context: NSManagedObjectContext, with user: User? = nil) -> Chat {
+    static func createSampleChat(context: NSManagedObjectContext, with user: User) -> Chat {
         let chat = Chat(context: context)
         chat.id = UUID().uuidString
-        chat.lastMessageText = "Hello! How are you?"
+        chat.otherUser = user
         chat.lastMessageTime = Date()
-
-        if let user = user {
-            chat.otherUser = user
-        } else {
-            chat.otherUser = createSampleUser(context: context)
-        }
-
         return chat
     }
 
     /// Creates sample Message for preview
-    static func createSampleMessage(context: NSManagedObjectContext, chat: Chat, isSentByMe: Bool = false, text: String = "Sample message") -> Message {
+    static func createSampleMessage(context: NSManagedObjectContext, chat: Chat, isSentByMe: Bool, text: String, timestamp: Date? = nil) -> Message {
         let message = Message(context: context)
         message.id = UUID().uuidString
-        message.fromUserId = isSentByMe ? "me" : "other"
-        message.toUserId = isSentByMe ? "other" : "me"
-        message.encryptedContent = "encrypted_\(text)"
-        message.decryptedContent = text
-        message.timestamp = Date()
-        message.isSentByMe = isSentByMe
-        message.deliveryStatus = .delivered
-        message.retryCount = 0
         message.chat = chat
+        message.decryptedContent = text
+        message.isSentByMe = isSentByMe
+        message.timestamp = timestamp ?? Date()
+        message.deliveryStatus = isSentByMe ? .delivered : .sent
+        message.retryCount = 0
         return message
     }
 }

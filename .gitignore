@@ -1,8 +1,9 @@
-# Rust
+# Rust (if used in future)
 target/
 **/*.rs.bk
 *.pdb
 Cargo.lock
+.cargo/
 
 # Node.js
 node_modules/
@@ -28,6 +29,10 @@ build/
 out/
 .vercel/
 .turbo/
+
+# Static library symbol files (macOS)
+__.SYMDEF
+*.SYMDEF
 
 # Environment
 .env

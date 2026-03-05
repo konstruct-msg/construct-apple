@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct ChatRowView: View {
-    let chat: Chat
+    @ObservedObject var chat: Chat
 
     var body: some View {
         HStack(spacing: 12) {
@@ -19,12 +19,12 @@ struct ChatRowView: View {
                     Image(uiImage: avatarImage)
                         .resizable()
                         .scaledToFill()
-                        .frame(width: 50, height: 50)
-                        .clipShape(Circle())
+                        .frame(width: AvatarStyle.chatSize, height: AvatarStyle.chatSize)
+                        .clipShape(AvatarStyle.squircle(AvatarStyle.chatSize))
                 } else {
-                    Circle()
+                    AvatarStyle.squircle(AvatarStyle.chatSize)
                         .fill(Color.blue)
-                        .frame(width: 50, height: 50)
+                        .frame(width: AvatarStyle.chatSize, height: AvatarStyle.chatSize)
                         .overlay {
                             Text(initials)
                                 .foregroundColor(.white)
@@ -34,11 +34,11 @@ struct ChatRowView: View {
             }
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(chat.otherUser?.username ?? NSLocalizedString("unknown", comment: "Unknown user"))
+                Text(chat.otherUser?.displayName ?? chat.otherUser?.username ?? NSLocalizedString("unknown", comment: "Unknown user"))
                     .fontWeight(.semibold)
 
                 if let lastMessage = chat.lastMessageText {
-                    Text(lastMessage)
+                    Text(Chat.formatPreviewText(lastMessage))
                         .foregroundColor(.secondary)
                         .lineLimit(1)
                 }
@@ -49,7 +49,7 @@ struct ChatRowView: View {
     }
 
     private var initials: String {
-        guard let displayName = chat.otherUser?.username else { return "?" }
+        guard let displayName = chat.otherUser?.displayName ?? chat.otherUser?.username else { return "?" }
         let components = displayName.split(separator: " ")
         if components.count >= 2 {
             return String(components[0].prefix(1) + components[1].prefix(1)).uppercased()

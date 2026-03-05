@@ -2,76 +2,68 @@
 //  ConnectionStatusIndicator.swift
 //  Construct Messenger
 //
-//  Created by Maxim Eliseyev on 30.12.2025.
-//
 
 import SwiftUI
 
-/// Compact connection status indicator (colored dot in navigation bar)
+/// Compact connection status dot shown in the chats list navigation bar.
 struct ConnectionStatusIndicator: View {
-    @ObservedObject var webSocketManager = WebSocketManager.shared
+    var connectionManager = ConnectionStatusManager.shared
+    @State private var isPulsing = false
 
     var body: some View {
         ZStack {
-            // Outer ring for reconnecting animation
-            if case .reconnecting = webSocketManager.connectionStatus {
+            // Pulsing ring — only shown while connecting
+            if connectionManager.connectionStatus == .connecting {
                 Circle()
-                    .stroke(indicatorColor.opacity(0.3), lineWidth: 2)
-                    .frame(width: 16, height: 16)
-                    .scaleEffect(animationScale)
+                    .stroke(Color.orange.opacity(0.35), lineWidth: 2)
+                    .frame(width: 18, height: 18)
+                    .scaleEffect(isPulsing ? 1.45 : 1.0)
                     .animation(
-                        Animation.easeInOut(duration: 1.0)
-                            .repeatForever(autoreverses: true),
-                        value: animationScale
+                        isPulsing
+                            ? .easeInOut(duration: 0.9).repeatForever(autoreverses: true)
+                            : .easeOut(duration: 0.2),
+                        value: isPulsing
                     )
             }
 
-            // Main status dot
+            // Status dot — color transitions smoothly
             Circle()
                 .fill(indicatorColor)
                 .frame(width: 10, height: 10)
         }
         .frame(width: 20, height: 20)
+        .onAppear { updatePulse() }
+        .onChange(of: connectionManager.connectionStatus) { updatePulse() }
     }
 
     private var indicatorColor: Color {
-        switch webSocketManager.connectionStatus {
-        case .connected:
-            return .green
-        case .disconnected:
-            return .red
-        case .reconnecting:
-            return .orange
+        switch connectionManager.connectionStatus {
+        case .connected:    return Color.AppStatus.success
+        case .disconnected: return .red
+        case .connecting:   return .orange
+        case .unknown:      return .gray
         }
     }
 
-    @State private var animationScale: CGFloat = 1.0
-
-    init() {
-        _animationScale = State(initialValue: 1.3)
+    private func updatePulse() {
+        let shouldPulse = connectionManager.connectionStatus == .connecting
+        guard isPulsing != shouldPulse else { return }
+        if shouldPulse {
+            // Short delay so the ring renders first, then starts expanding
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                isPulsing = true
+            }
+        } else {
+            isPulsing = false
+        }
     }
 }
 
 #Preview {
     VStack(spacing: 20) {
-        HStack {
-            Text("Connected:")
-            ConnectionStatusIndicator()
-        }
-
-        HStack {
-            Text("Disconnected:")
-            Circle()
-                .fill(Color.red)
-                .frame(width: 10, height: 10)
-        }
-
-        HStack {
-            Text("Reconnecting:")
-            Circle()
-                .fill(Color.orange)
-                .frame(width: 10, height: 10)
-        }
+        HStack { Text("Connected:");    ConnectionStatusIndicator() }
+        HStack { Text("Disconnected:"); Circle().fill(.red).frame(width: 10, height: 10) }
+        HStack { Text("Connecting:");   Circle().fill(.orange).frame(width: 10, height: 10) }
     }
     .padding()
 }

@@ -10,61 +10,142 @@ import SwiftUI
 struct MessageBubble: View {
     let message: Message
     let isLastInGroup: Bool
+    let isSelected: Bool
+    let isEditMode: Bool
     let onRetry: ((Message) -> Void)?
     let onReply: ((Message) -> Void)?
     let onDelete: ((Message) -> Void)?
+    let onSelect: ((Message) -> Void)?
+    let onEnterSelectMode: ((Message) -> Void)?
+    let onTapMedia: ((Message) -> Void)?
 
-    @State private var showMessageInfo = false
+    @Environment(\.containerWidth) private var containerWidth
 
     init(
         message: Message,
         isLastInGroup: Bool = true,
+        isSelected: Bool = false,
+        isEditMode: Bool = false,
         onRetry: ((Message) -> Void)? = nil,
         onReply: ((Message) -> Void)? = nil,
-        onDelete: ((Message) -> Void)? = nil
+        onDelete: ((Message) -> Void)? = nil,
+        onSelect: ((Message) -> Void)? = nil,
+        onEnterSelectMode: ((Message) -> Void)? = nil,
+        onTapMedia: ((Message) -> Void)? = nil
     ) {
         self.message = message
         self.isLastInGroup = isLastInGroup
+        self.isSelected = isSelected
+        self.isEditMode = isEditMode
         self.onRetry = onRetry
         self.onReply = onReply
         self.onDelete = onDelete
+        self.onSelect = onSelect
+        self.onEnterSelectMode = onEnterSelectMode
+        self.onTapMedia = onTapMedia
     }
 
     var body: some View {
+        // ✅ Check if this is a system message by fromUserId
+        if message.fromUserId == "SYSTEM" {
+            systemMessageView(message.decryptedContent ?? "System message")
+        } else if let content = message.decryptedContent, content.hasPrefix("[SYSTEM]") {
+            // ✅ Legacy support for [SYSTEM] prefix
+            systemMessageView(content.replacingOccurrences(of: "[SYSTEM]", with: "").trimmingCharacters(in: .whitespaces))
+        } else {
+            regularMessageView
+        }
+    }
+    
+    // MARK: - System Message View
+    private func systemMessageView(_ content: String) -> some View {
         HStack {
+            Spacer()
+            Text(content)
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(Color(.systemGray6))
+                .cornerRadius(12)
+            Spacer()
+        }
+        .padding(.vertical, 4)
+    }
+    
+    // MARK: - Regular Message View
+    private var regularMessageView: some View {
+        HStack(spacing: 8) {
+            // Selection checkbox in edit mode - positioned based on message direction
+            if isEditMode && !message.isSentByMe {
+                // Checkbox on LEFT for incoming messages
+                Button {
+                    onSelect?(message)
+                } label: {
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                        .foregroundColor(isSelected ? Color.blue : .gray)
+                        .font(.title3)
+                }
+                .buttonStyle(.plain)
+            }
+            
             if message.isSentByMe {
                 Spacer(minLength: 60)
             }
 
             VStack(alignment: message.isSentByMe ? .trailing : .leading, spacing: 4) {
-                VStack(alignment: .leading, spacing: 0) {
-                    // Reply/Quote preview
-                    if let replyContent = message.replyToContent {
-                        HStack(spacing: 4) {
-                            Rectangle()
-                                .fill(message.isSentByMe ? Color.white.opacity(0.5) : Color.blue.opacity(0.5))
-                                .frame(width: 3)
+                // ✅ Check if this is a profile share message
+                if let content = message.decryptedContent,
+                   let profileData = parseProfileMessage(content) {
+                    // Display profile card
+                    ProfileShareBubbleView(profileData: profileData)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16)
+                                .stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2)
+                        )
+                }
+                // ✅ Check if this is a media message
+                else if let mediaContent = parseMediaMessage(message.decryptedContent) {
+                    // Display media message without bubble - just rounded corners
+                    MediaMessageView(mediaContent: mediaContent, message: message, isSelected: isSelected, onTapFullScreen: { onTapMedia?(message) })
+                } else {
+                    // Regular text message with bubble
+                    VStack(alignment: .leading, spacing: 0) {
+                        // Reply/Quote preview
+                        if let replyContent = message.replyToContent {
+                            HStack(spacing: 4) {
+                                Rectangle()
+                                    .fill(message.isSentByMe ? Color.white.opacity(0.5) : Color.blue.opacity(0.5))
+                                    .frame(width: 3)
 
-                            Text(replyContent)
-                                .font(.caption)
-                                .foregroundColor(message.isSentByMe ? .white.opacity(0.8) : .secondary)
-                                .lineLimit(2)
-                                .padding(.vertical, 4)
-                                .padding(.trailing, 8)
+                                Text(replyContent)
+                                    .font(.caption)
+                                    .foregroundColor(message.isSentByMe ? .white.opacity(0.8) : .secondary)
+                                    .lineLimit(2)
+                                    .padding(.vertical, 4)
+                                    .padding(.trailing, 8)
+                            }
+                            .padding(.leading, 8)
+                            .padding(.top, 8)
                         }
-                        .padding(.leading, 8)
-                        .padding(.top, 8)
-                    }
 
-                    // Main message content
-                    Text(message.decryptedContent ?? NSLocalizedString("encrypted", comment: "Fallback for encrypted content"))
+                        // Main message content with link detection
+                        LinkDetectingText(
+                            message.decryptedContent ?? NSLocalizedString("encrypted", comment: "Fallback for encrypted content"),
+                            color: message.isSentByMe ? .white : .primary
+                        )
                         .padding(.horizontal, 12)
                         .padding(.vertical, message.replyToContent != nil ? 4 : 8)
                         .padding(.bottom, message.replyToContent != nil ? 8 : 0)
+                    }
+                    .background(message.isSentByMe ? Color.blue : Color.gray.opacity(0.2))
+                    .foregroundColor(message.isSentByMe ? .white : .primary)
+                    .cornerRadius(16)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2)
+                    )
                 }
-                .background(message.isSentByMe ? Color.blue : Color.gray.opacity(0.2))
-                .foregroundColor(message.isSentByMe ? .white : .primary)
-                .cornerRadius(16)
 
                 if isLastInGroup {
                     HStack(spacing: 4) {
@@ -79,59 +160,74 @@ struct MessageBubble: View {
                     .padding(.horizontal, 4)
                 }
             }
-            .frame(maxWidth: UIScreen.main.bounds.width * 0.7, alignment: message.isSentByMe ? .trailing : .leading)
+            .frame(maxWidth: containerWidth * 0.7, alignment: message.isSentByMe ? .trailing : .leading)
+            .contentShape(.interaction, Rectangle())
+            .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 16))
+            .onTapGesture {
+                if isEditMode {
+                    onSelect?(message)
+                }
+            }
+            .contextMenu {
+                if !isEditMode {
+                    if let onReply = onReply {
+                        Button {
+                            onReply(message)
+                        } label: {
+                            Label("reply", systemImage: "arrowshape.turn.up.left")
+                        }
+                    }
+
+                    Button {
+                        PlatformClipboard.copy(message.decryptedContent ?? "")
+                    } label: {
+                        Label("copy", systemImage: "doc.on.doc")
+                    }
+
+                    if let onEnterSelectMode = onEnterSelectMode {
+                        Button {
+                            onEnterSelectMode(message)
+                        } label: {
+                            Label("select_messages", systemImage: "checkmark.circle")
+                        }
+                    }
+
+                    Divider()
+
+                    if let onDelete = onDelete {
+                        Button(role: .destructive) {
+                            onDelete(message)
+                        } label: {
+                            Label("delete", systemImage: "trash")
+                        }
+                    }
+
+                    if (message.deliveryStatus == .failed || message.deliveryStatus == .queued),
+                       let onRetry = onRetry {
+                        Button {
+                            onRetry(message)
+                        } label: {
+                            Label("retry", systemImage: "arrow.clockwise")
+                        }
+                    }
+                }
+            }
 
             if !message.isSentByMe {
                 Spacer(minLength: 60)
             }
-        }
-        .contextMenu {
-            // Reply - только для чужих сообщений или если есть callback
-            if let onReply = onReply {
+            
+            // Selection checkbox in edit mode - positioned based on message direction
+            if isEditMode && message.isSentByMe {
                 Button {
-                    onReply(message)
+                    onSelect?(message)
                 } label: {
-                    Label("reply", systemImage: "arrowshape.turn.up.left")
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                        .foregroundColor(isSelected ? Color.blue : .gray)
+                        .font(.title3)
                 }
+                .buttonStyle(.plain)
             }
-
-            // Copy text
-            Button {
-                UIPasteboard.general.string = message.decryptedContent
-            } label: {
-                Label("copy", systemImage: "doc.on.doc")
-            }
-
-            // Message info
-            Button {
-                showMessageInfo = true
-            } label: {
-                Label("info", systemImage: "info.circle")
-            }
-
-            Divider()
-
-            // Delete - только для своих сообщений
-            if message.isSentByMe, let onDelete = onDelete {
-                Button(role: .destructive) {
-                    onDelete(message)
-                } label: {
-                    Label("delete", systemImage: "trash")
-                }
-            }
-
-            // Retry - только для failed/queued сообщений
-            if (message.deliveryStatus == .failed || message.deliveryStatus == .queued),
-               let onRetry = onRetry {
-                Button {
-                    onRetry(message)
-                } label: {
-                    Label("retry", systemImage: "arrow.clockwise")
-                }
-            }
-        }
-        .sheet(isPresented: $showMessageInfo) {
-            MessageInfoSheet(message: message)
         }
     }
 
@@ -141,19 +237,22 @@ struct MessageBubble: View {
 
         switch status {
         case .sending:
-            ProgressView()
-                .scaleEffect(0.6)
-                .frame(width: 12, height: 12)
+            // Uploading — outline circle, message in transit
+            Circle()
+                .stroke(Color.secondary.opacity(0.5), lineWidth: 1.5)
+                .frame(width: 10, height: 10)
 
         case .sent:
-            Image(systemName: "checkmark")
-                .font(.system(size: 10))
-                .foregroundColor(.secondary)
+            // Server acknowledged — filled gray circle
+            Circle()
+                .fill(Color.secondary.opacity(0.6))
+                .frame(width: 10, height: 10)
 
         case .delivered:
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 10))
-                .foregroundColor(.green)
+            // Delivered to recipient — filled StillGreen circle
+            Circle()
+                .fill(Color.green)
+                .frame(width: 10, height: 10)
 
         case .queued:
             Button {
@@ -184,6 +283,277 @@ struct MessageBubble: View {
                     Text("retry")
                         .font(.caption2)
                         .foregroundColor(.red)
+                }
+            }
+        }
+    }
+    
+    // MARK: - Media Message Parsing
+    
+    private func parseProfileMessage(_ content: String) -> ProfileShareData? {
+        guard let data = content.data(using: .utf8) else { return nil }
+        
+        // Check if it looks like a profile message
+        if let jsonDict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let type = jsonDict["type"] as? String,
+           type == "profile" {
+            // Try to decode it properly
+            return try? JSONDecoder().decode(ProfileShareData.self, from: data)
+        }
+        return nil
+    }
+    
+    private func parseMediaMessage(_ content: String?) -> MediaMessageContent? {
+        parseMediaContent(from: content)
+    }
+}
+
+// MARK: - Profile Share Bubble View
+struct ProfileShareBubbleView: View {
+    let profileData: ProfileShareData
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
+                // Avatar placeholder or image
+                if let avatarData = profileData.avatarData,
+                   let imageData = Data(base64Encoded: avatarData),
+                   let uiImage = UIImage(data: imageData) {
+                    Image(uiImage: uiImage)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 60, height: 60)
+                        .clipShape(AvatarStyle.squircle(AvatarStyle.bubbleSize))
+                } else {
+                    AvatarStyle.squircle(AvatarStyle.bubbleSize)
+                        .fill(Color.blue.opacity(0.2))
+                        .frame(width: 60, height: 60)
+                        .overlay(
+                            Text(String(profileData.displayName.prefix(1)).uppercased())
+                                .font(.title2)
+                                .foregroundColor(Color.blue)
+                        )
+                }
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(profileData.displayName)
+                        .font(.headline)
+                        .foregroundColor(.primary)
+                    
+                    Text("Shared profile")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                
+                Spacer()
+            }
+        }
+        .padding(12)
+        .background(Color.gray.opacity(0.1))
+        .cornerRadius(16)
+    }
+}
+
+// MARK: - Media Message Content
+struct MediaMessageContent {
+    let caption: String
+    let media: [String: Any]
+}
+
+// MARK: - Media Message View
+struct MediaMessageView: View {
+    let mediaContent: MediaMessageContent
+    let message: Message
+    let isSelected: Bool
+    let onTapFullScreen: (() -> Void)?
+
+    @State private var thumbnailImage: UIImage?
+    @State private var isLoading = false
+    @State private var loadError: String?
+    @State private var downloadProgress: Double = 0
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Thumbnail — preserves natural aspect ratio, max 250×250
+            if let thumbnail = thumbnailImage {
+                Image(uiImage: thumbnail)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: 250, maxHeight: 250)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2)
+                    )
+                    .onTapGesture {
+                        onTapFullScreen?()
+                    }
+            } else if isLoading {
+                // ✅ Loading state with progress indicator
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.gray.opacity(0.2))
+                    .frame(width: 200, height: 200)
+                    .overlay {
+                        VStack(spacing: 12) {
+                            ProgressView()
+                                .scaleEffect(1.5)
+                                .tint(Color.blue)
+                            
+                            if downloadProgress > 0 && downloadProgress < 1 {
+                                Text("\(Int(downloadProgress * 100))%")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            } else {
+                                Text("Loading...")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+            } else if loadError != nil {
+                // ✅ Error state with retry button
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.gray.opacity(0.2))
+                    .frame(width: 200, height: 200)
+                    .overlay {
+                        VStack(spacing: 12) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.system(size: 40))
+                                .foregroundColor(.orange)
+                            
+                            Text("Failed to load")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            
+                            Button {
+                                loadThumbnail()
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "arrow.clockwise")
+                                    Text("Retry")
+                                }
+                                .font(.caption)
+                                .foregroundColor(Color.blue)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(Color.blue.opacity(0.1))
+                                .cornerRadius(8)
+                            }
+                        }
+                    }
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2)
+                    )
+            } else {
+                // Placeholder - initial state
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.gray.opacity(0.2))
+                    .frame(width: 200, height: 200)
+                    .overlay {
+                        Image(systemName: "photo")
+                            .font(.system(size: 40))
+                            .foregroundColor(.gray)
+                    }
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2)
+                    )
+            }
+            
+            // Caption if present - displayed below image without bubble
+            if !mediaContent.caption.isEmpty {
+                Text(mediaContent.caption)
+                    .font(.body)
+                    .foregroundColor(.primary)
+                    .padding(.top, 4)
+            }
+        }
+        .onAppear {
+            loadThumbnail()
+        }
+    }
+    
+    private func loadThumbnail() {
+        // Reset error state
+        loadError = nil
+        
+        // For sender: try to load from local storage via MediaManager
+        if message.isSentByMe {
+            Log.debug("📱 Loading local media for sent message", category: "MediaMessage")
+            if let thumbnailData = MediaManager.shared.retrieveThumbnail(for: message.id),
+               let image = UIImage(data: thumbnailData) {
+                thumbnailImage = image
+                MediaImageCache.shared.store(image, for: message.id)
+                Log.debug("✅ Loaded local thumbnail", category: "MediaMessage")
+                return
+            }
+            Log.debug("⚠️ No local thumbnail found", category: "MediaMessage")
+        }
+        
+        // For receiver: download and decrypt media (using camelCase format)
+        Log.debug("📋 Media dict keys: \(Array(mediaContent.media.keys).sorted())", category: "MediaMessage")
+        
+        guard let mediaId = mediaContent.media["mediaId"] as? String,
+              let mediaUrl = mediaContent.media["mediaUrl"] as? String,
+              let mediaKeyBase64 = mediaContent.media["mediaKey"] as? String else {
+            Log.error("❌ Missing media info in message. Available keys: \(mediaContent.media.keys)", category: "MediaMessage")
+            loadError = "Missing media info"
+            isLoading = false
+            return
+        }
+        
+        Log.debug("📥 Media info - ID: \(mediaId.prefix(8))..., URL: \(mediaUrl), Key length: \(mediaKeyBase64.count)", category: "MediaMessage")
+        
+        isLoading = true
+        downloadProgress = 0.1
+        
+        Task {
+            do {
+                Log.info("📥 Downloading media: \(mediaId)", category: "MediaMessage")
+                
+                // Download and decrypt via MediaManager
+                let imageData = try await MediaManager.shared.downloadAndDecryptMedia(
+                    mediaId: mediaId,
+                    mediaUrl: mediaUrl,
+                    mediaKeyBase64: mediaKeyBase64
+                )
+                
+                await MainActor.run {
+                    downloadProgress = 0.9
+                }
+                
+                guard let image = UIImage(data: imageData) else {
+                    Log.error("❌ Failed to decode image data", category: "MediaMessage")
+                    await MainActor.run {
+                        isLoading = false
+                        loadError = "Invalid image data"
+                        downloadProgress = 0
+                    }
+                    return
+                }
+                
+                // Generate thumbnail via MediaManager
+                let thumbnail = MediaManager.shared.generateThumbnailImage(from: image, maxSize: 250)
+                
+                await MainActor.run {
+                    MediaImageCache.shared.store(image, for: message.id)
+                    thumbnailImage = thumbnail
+                    isLoading = false
+                    downloadProgress = 1.0
+                    Log.info("✅ Media loaded successfully", category: "MediaMessage")
+                }
+                
+            } catch {
+                Log.error("❌ Failed to load media: \(error)", category: "MediaMessage")
+                Log.error("   Error type: \(type(of: error))", category: "MediaMessage")
+                if let mediaError = error as? MediaManagerError {
+                    Log.error("   MediaManagerError: \(mediaError)", category: "MediaMessage")
+                }
+                await MainActor.run {
+                    isLoading = false
+                    loadError = error.localizedDescription
+                    downloadProgress = 0
                 }
             }
         }

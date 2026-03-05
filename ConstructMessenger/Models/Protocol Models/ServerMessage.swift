@@ -19,6 +19,7 @@ enum ServerMessage: Codable {
     case keyRotationSuccess
     case error(ErrorData)
     case logoutSuccess
+    case deleteAccountSuccess
     case offlineMessages(OfflineMessagesData)
 
     // MARK: - Codable Implementation
@@ -29,7 +30,7 @@ enum ServerMessage: Codable {
     }
     
     private enum MessageType: String, Codable {
-        case registerSuccess, loginSuccess, connectSuccess, sessionExpired, publicKeyBundle, message, ack, keyRotationSuccess, error, logoutSuccess, offlineMessages
+        case registerSuccess, loginSuccess, connectSuccess, sessionExpired, publicKeyBundle, message, ack, keyRotationSuccess, error, logoutSuccess, deleteAccountSuccess, offlineMessages
     }
 
     init(from decoder: Decoder) throws {
@@ -64,6 +65,8 @@ enum ServerMessage: Codable {
             self = .error(payload)
         case .logoutSuccess:
             self = .logoutSuccess
+        case .deleteAccountSuccess:
+            self = .deleteAccountSuccess
         case .offlineMessages:
             let payload = try container.decode(OfflineMessagesData.self, forKey: .payload)
             self = .offlineMessages(payload)
@@ -100,6 +103,8 @@ enum ServerMessage: Codable {
             try container.encode(data, forKey: .payload)
         case .logoutSuccess:
             try container.encode(MessageType.logoutSuccess, forKey: .type)
+        case .deleteAccountSuccess:
+            try container.encode(MessageType.deleteAccountSuccess, forKey: .type)
         case .offlineMessages(let data):
             try container.encode(MessageType.offlineMessages, forKey: .type)
             try container.encode(data, forKey: .payload)
@@ -112,6 +117,7 @@ struct RegisterSuccessData: Codable {
     let userId: String
     let username: String
     let sessionToken: String
+    let refreshToken: String  // ✅ NEW
     let expires: Int64
 }
 
@@ -119,6 +125,7 @@ struct LoginSuccessData: Codable {
     let userId: String
     let username: String
     let sessionToken: String
+    let refreshToken: String  // ✅ NEW
     let expires: Int64
 }
 
@@ -127,14 +134,6 @@ struct ConnectSuccessData: Codable {
     let username: String
 }
 
-struct PublicKeyBundleData: Codable {
-    let userId: String
-    let username: String
-    let identityPublic: String
-    let signedPrekeyPublic: String
-    let signature: String
-    let verifyingKey: String
-}
 
 struct AckData: Codable {
     let messageId: String

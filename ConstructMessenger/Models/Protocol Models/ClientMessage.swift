@@ -17,6 +17,8 @@ enum ClientMessage: Codable {
     case rotatePrekey(RotatePrekeyData)
     case logout(LogoutData)
     case getOfflineMessages
+    case acknowledgeMessage(AcknowledgeMessageData)
+    case dummy(DummyMessageData)  // Traffic protection: dummy message
 
     // MARK: - Codable Implementation
     
@@ -26,7 +28,7 @@ enum ClientMessage: Codable {
     }
 
     private enum MessageType: String, Codable {
-        case register, login, connect, getPublicKey, sendMessage, rotatePrekey, logout, getOfflineMessages
+        case register, login, connect, getPublicKey, sendMessage, rotatePrekey, logout, getOfflineMessages, acknowledgeMessage, dummy
     }
 
     init(from decoder: Decoder) throws {
@@ -56,6 +58,12 @@ enum ClientMessage: Codable {
             self = .logout(payload)
         case .getOfflineMessages:
             self = .getOfflineMessages
+        case .acknowledgeMessage:
+            let payload = try container.decode(AcknowledgeMessageData.self, forKey: .payload)
+            self = .acknowledgeMessage(payload)
+        case .dummy:
+            let payload = try container.decode(DummyMessageData.self, forKey: .payload)
+            self = .dummy(payload)
         }
     }
 
@@ -85,6 +93,12 @@ enum ClientMessage: Codable {
             try container.encode(data, forKey: .payload)
         case .getOfflineMessages:
             try container.encode(MessageType.getOfflineMessages, forKey: .type)
+        case .acknowledgeMessage(let data):
+            try container.encode(MessageType.acknowledgeMessage, forKey: .type)
+            try container.encode(data, forKey: .payload)
+        case .dummy(let data):
+            try container.encode(MessageType.dummy, forKey: .type)
+            try container.encode(data, forKey: .payload)
         }
     }
 }
@@ -110,6 +124,7 @@ struct SuiteKeyMaterial: Codable {
     let suiteId: UInt16
     let identityKey: String
     let signedPrekey: String
+    let signedPrekeySignature: String  // ✅ Signature for signedPrekey (with prologue)
     let oneTimePrekeys: [String]
 }
 
@@ -139,4 +154,15 @@ struct RotatePrekeyData: Codable {
 
 struct LogoutData: Codable {
     let sessionToken: String
+}
+
+struct AcknowledgeMessageData: Codable {
+    let messageId: String
+    let status: String  // "delivered" when recipient receives the message
+}
+
+/// Dummy message for traffic analysis protection
+/// Server will ignore these messages but they help mask real traffic patterns
+struct DummyMessageData: Codable {
+    let payload: String  // Base64-encoded random bytes
 }

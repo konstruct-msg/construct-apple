@@ -1,55 +1,105 @@
 import Foundation
-import Combine
 import CoreData
+import UIKit
 import os.log
+import GRPCCore
+
+// MARK: - Message Queue Models
+
+/// Represents a message queued for sending when session is not ready
+struct QueuedMessage {
+    let text: String
+    let images: [UIImage]
+    let replyTo: Message?
+    let timestamp: Date
+    
+    init(text: String, images: [UIImage] = [], replyTo: Message? = nil) {
+        self.text = text
+        self.images = images
+        self.replyTo = replyTo
+        self.timestamp = Date()
+    }
+}
 
 @MainActor
-class ChatViewModel: ObservableObject {
-    @Published var messages: [Message] = []
-    @Published var isSending = false
-    @Published var errorMessage: String?
+@Observable
+class ChatViewModel: NSObject {
+    var messages: [Message] = []
+    var isSending = false
+    var errorMessage: String?
+    var isLoadingMore = false
+    var hasMoreMessages = true
 
     // ✅ FIXED: Track session initialization state
-    @Published var isSessionReady = false
+    var isSessionReady = false
+    var isInitializingSession = false  // NEW: Show UI indicator
 
-    // ✅ FIXED: Queue for pending messages before session is ready
-    private var pendingMessages: [(text: String, timestamp: Date)] = []
+    // ✅ REFACTORED: Enhanced message queue with full support
+    private var queuedMessages: [QueuedMessage] = []
+    
+    // ✅ NEW: Track public key fetch timeout
+    nonisolated(unsafe) private var publicKeyFetchTimer: Timer?
+    private let publicKeyFetchTimeout: TimeInterval = 10.0 // 10 seconds timeout
+    
+    // ✅ Pagination support - optimized for performance
+    private let initialMessageLimit = 30  // Load 30 most recent messages initially
+    private let loadMoreBatchSize = 20     // Load 20 older messages per "load more" request
+    private var oldestLoadedTimestamp: Date?
+    private var allLoadedMessageIds: Set<String> = []
 
     let chat: Chat
     private var recipientBundle: (identityPublic: String, signedPrekeyPublic: String, signature: String, verifyingKey: String)?
 
-    private let wsManager = WebSocketManager.shared
-    private var cancellables = Set<AnyCancellable>()
+    private let connectionStatusManager = ConnectionStatusManager.shared
+    private let messageQueueManager = MessageQueueManager.shared
+    private var observationTasks: [Task<Void, Never>] = []
     private var viewContext: NSManagedObjectContext
 
     // ✅ FIX: Use NSFetchedResultsController for automatic Core Data updates
     private var fetchedResultsController: NSFetchedResultsController<Message>?
+    
+    // ✅ REFACTOR: Extracted services
+    private let sessionInitService = SessionInitializationService()
+    private let persistenceService = MessagePersistenceService()
+    private let mediaUploadManager = MediaUploadManager()
+    private let retryManager = MessageRetryManager()
 
     init(chat: Chat, context: NSManagedObjectContext) {
         self.chat = chat
         self.viewContext = context
+        
+        super.init()  // ✅ REFACTOR: NSObject requires super.init()
+        
         Log.debug("🔧 ChatViewModel init: chat.id=\(chat.id), chat.otherUser?.id=\(chat.otherUser?.id ?? "nil"), chat.otherUser?.username=\(chat.otherUser?.username ?? "nil")", category: "ChatViewModel")
 
-        setupFetchedResultsController()  // ✅ Setup FRC first
+        setupFetchedResultsController()  // ✅ Setup FRC - loads initial messages automatically
         setupSubscribers()
         checkExistingSession()  // ✅ FIXED: Check if session already exists
         fetchRecipientPublicKey()
 
-        // Load messages immediately since we have context
+        // ❌ REMOVED: loadMessages() - FRC already loaded messages in setupFetchedResultsController()
         Log.debug("🔧 ChatViewModel initialized with viewContext", category: "ChatViewModel")
-        loadMessages()
+        
+        // Listen for queued messages processing
+        setupMessageQueueListener()
     }
 
     deinit {
-        // ✅ FIX: Clean up subscriptions when ViewModel is destroyed
-        cancellables.removeAll()
+        publicKeyFetchTimer?.invalidate()
         Log.debug("🔧 ChatViewModel deinitialized", category: "ChatViewModel")
     }
 
     private func setupFetchedResultsController() {
-        let fetchRequest: NSFetchRequest<Message> = Message.fetchRequest()
-        fetchRequest.predicate = NSPredicate(format: "chat == %@", chat)
-        fetchRequest.sortDescriptors = [NSSortDescriptor(key: "timestamp", ascending: true)]
+        let fetchRequest = Message.fetchRequest()
+        // Combine with additional predicate
+        let chatPredicate = NSPredicate(format: "chat == %@", chat)
+        fetchRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [chatPredicate])
+        
+        // ✅ OPTIMIZATION: Fetch newest 30 messages, then reverse to oldest-first
+        // This ensures we get RECENT messages, not ancient history
+        // Reversal happens ONCE on fetch, not on every SwiftUI render
+        fetchRequest.sortDescriptors = [NSSortDescriptor(key: "timestamp", ascending: false)]
+        fetchRequest.fetchLimit = initialMessageLimit  // Only load recent 30 messages
 
         fetchedResultsController = NSFetchedResultsController(
             fetchRequest: fetchRequest,
@@ -58,41 +108,64 @@ class ChatViewModel: ObservableObject {
             cacheName: nil
         )
 
-        // Observe changes using Combine
-        NotificationCenter.default.publisher(for: .NSManagedObjectContextObjectsDidChange, object: viewContext)
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                self?.loadMessages()
-            }
-            .store(in: &cancellables)
+        // ✅ REFACTOR: Use proper FRC delegate instead of NotificationCenter
+        fetchedResultsController?.delegate = self
+        
+        do {
+            try fetchedResultsController?.performFetch()
+            // ✅ Reverse ONCE: FRC gives newest-first, we store oldest-first for UI
+            let fetchedMessages = fetchedResultsController?.fetchedObjects ?? []
+            messages = Array(fetchedMessages.reversed())
+            oldestLoadedTimestamp = messages.first?.timestamp  // First = oldest after reversal
+            allLoadedMessageIds = Set(messages.map { $0.id })
+            
+            Log.debug("✅ FRC initial fetch: \(messages.count) messages (reversed to oldest-first)", category: "ChatViewModel")
+        } catch {
+            Log.error("❌ FRC fetch failed: \(error)", category: "ChatViewModel")
+        }
     }
 
     private func setupSubscribers() {
-        wsManager.messagePublisher
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] message in
-                self?.handleServerMessage(message)
-            }
-            .store(in: &cancellables)
-
-        // ✅ FIX: Listen for connection status changes
-        wsManager.$isConnected
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] isConnected in
-                if isConnected {
-                    Log.info("✅ WebSocket reconnected - processing queued messages", category: "ChatViewModel")
-                    self?.sendQueuedMessages()
+        // Listen for connection status changes using @Observable tracking
+        let connTask = Task { [weak self] in
+            guard let self else { return }
+            while !Task.isCancelled {
+                await withCheckedContinuation { continuation in
+                    withObservationTracking {
+                        _ = self.connectionStatusManager.connectionStatus
+                    } onChange: {
+                        continuation.resume()
+                    }
+                }
+                guard !Task.isCancelled else { break }
+                if self.connectionStatusManager.connectionStatus == .connected {
+                    Log.info("✅ Network connected - processing queued messages", category: "ChatViewModel")
+                    self.sendQueuedMessages()
                 }
             }
-            .store(in: &cancellables)
+        }
+        observationTasks.append(connTask)
+    }
+    
+    private func setupMessageQueueListener() {
+        // Listen for queued messages processing requests
+        let queueTask = Task { [weak self] in
+            for await _ in NotificationCenter.default.notifications(named: .processQueuedMessages) {
+                self?.sendQueuedMessages()
+            }
+        }
+        observationTasks.append(queueTask)
     }
 
     // ✅ FIXED: Check if we already have a session for this user
     private func checkExistingSession() {
         guard let userId = chat.otherUser?.id else { return }
+        
         isSessionReady = CryptoManager.shared.hasSession(for: userId)
         if isSessionReady {
-            Log.info("Session already exists for user: \(userId)", category: "ChatViewModel")
+            Log.info("✅ Session already exists for user: \(userId)", category: "ChatViewModel")
+        } else {
+            Log.debug("No session yet for user: \(userId)", category: "ChatViewModel")
         }
     }
 
@@ -119,108 +192,300 @@ class ChatViewModel: ObservableObject {
             return
         }
 
-        wsManager.send(.getPublicKey(GetPublicKeyData(userId: userId)))
+        // ✅ NEW: Cancel any existing timer
+        publicKeyFetchTimer?.invalidate()
+        
+        // ✅ NEW: Set timeout timer
+        publicKeyFetchTimer = Timer.scheduledTimer(withTimeInterval: publicKeyFetchTimeout, repeats: false) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self = self else { return }
+                if !self.isSessionReady {
+                    Log.error("⏱️ Timeout waiting for public key bundle from server", category: "ChatViewModel")
+                    self.errorMessage = "Failed to establish secure connection: server did not respond"
+                    self.isSessionReady = false
+                }
+            }
+        }
+
+        // ✅ REFACTOR: Use SessionInitializationService with retry
+        Task {
+            do {
+                let publicKeyBundle = try await sessionInitService.fetchPublicKeyWithRetry(userId: userId)
+                
+                await MainActor.run {
+                    self.handlePublicKeyBundle(publicKeyBundle)
+                }
+            } catch {
+                await MainActor.run {
+                    Log.error("❌ Failed to fetch public key via gRPC after retries: \(error.localizedDescription)", category: "ChatViewModel")
+                    self.errorMessage = "Failed to fetch public key after retries: \(error.localizedDescription)"
+                    self.isSessionReady = false
+                }
+            }
+        }
+    }
+    
+    private func handlePublicKeyBundle(_ data: PublicKeyBundleData) {
+        Log.debug("📦 Received publicKeyBundle for userId: \(data.userId), chat.otherUser?.id: \(chat.otherUser?.id ?? "nil"), match: \(data.userId == chat.otherUser?.id)", category: "ChatViewModel")
+        guard data.userId == chat.otherUser?.id else { return }
+
+        // Update username if we have the user in Core Data
+        if let user = chat.otherUser {
+            let normalized = data.username.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !normalized.isEmpty, normalized.lowercased() != "anonymous", UUID(uuidString: normalized) == nil {
+                user.username = normalized
+                user.displayName = normalized
+            } else {
+                user.username = ""
+                user.displayName = DisplayNameGenerator.generate(from: data.userId)
+            }
+            try? viewContext.save()
+            Log.info("Updated username for user: \(data.username)", category: "ChatViewModel")
+        }
+
+        // Cache the bundle for use when the user actually sends a message.
+        // Do NOT create an INITIATOR session here — proactively initialising a session
+        // while the remote side may already be mid-ratchet (messageNumber > 0) causes
+        // AEAD failures → heal_impossible → END_SESSION notification loop.
+        // Session creation as INITIATOR happens on-demand inside sendMessage/initializeSessionProactively.
+        self.recipientBundle = (data.identityPublic, data.signedPrekeyPublic, data.signature, data.verifyingKey)
+
+        // If a RECEIVER session was already created by ChatsViewModel (incoming message arrived
+        // while we were fetching the bundle), mark as ready so the UI reflects that.
+        if CryptoManager.shared.hasSession(for: data.userId) {
+            Log.info("✅ SESSION_STATE[bundle_fetched_session_exists]: session already established for \(data.userId.prefix(8))…", category: "ChatViewModel")
+            isSessionReady = true
+        } else {
+            Log.info("📦 SESSION_STATE[bundle_cached]: bundle ready for \(data.userId.prefix(8))…, session will be created on first send", category: "ChatViewModel")
+        }
     }
 
-    private func loadMessages() {
-        Log.debug("📥 Loading messages for chat \(chat.id)", category: "ChatViewModel")
-
-        let fetchRequest: NSFetchRequest<Message> = Message.fetchRequest()
-        fetchRequest.predicate = NSPredicate(format: "chat == %@", chat)
-        fetchRequest.sortDescriptors = [NSSortDescriptor(key: "timestamp", ascending: true)]
-
-        if let fetchedMessages = try? viewContext.fetch(fetchRequest) {
-            messages = fetchedMessages
-            Log.debug("📬 Loaded \(fetchedMessages.count) messages", category: "ChatViewModel")
-            for (index, msg) in fetchedMessages.enumerated() {
-                Log.debug("  Message \(index): id=\(msg.id), isSentByMe=\(msg.isSentByMe), text=\(msg.decryptedContent?.prefix(20) ?? "nil")", category: "ChatViewModel")
-            }
-        } else {
-            Log.error("❌ Failed to fetch messages", category: "ChatViewModel")
+    // ✅ NEW: Load initial messages (last N messages)
+    
+    // ✅ NEW: Load more messages (older messages)
+    func loadMoreMessages() {
+        guard !isLoadingMore, hasMoreMessages, let oldestTimestamp = oldestLoadedTimestamp else {
+            return
         }
+        
+        isLoadingMore = true
+        Log.debug("📥 Loading more messages before \(oldestTimestamp)", category: "ChatViewModel")
+        
+        let fetchRequest = Message.fetchRequest()
+        // Combine with additional predicate
+        let chatPredicate = NSPredicate(format: "chat == %@ AND timestamp < %@", chat, oldestTimestamp as NSDate)
+        fetchRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [chatPredicate])
+        // ✅ Sort ascending (oldest first) to match main array order
+        fetchRequest.sortDescriptors = [NSSortDescriptor(key: "timestamp", ascending: true)]
+        fetchRequest.fetchLimit = loadMoreBatchSize  // ✅ Use batch size for pagination
+        
+        if let fetchedMessages = try? viewContext.fetch(fetchRequest) {
+            let newMessages = fetchedMessages.filter { !allLoadedMessageIds.contains($0.id) }
+            
+            if newMessages.isEmpty {
+                hasMoreMessages = false
+                isLoadingMore = false
+                Log.debug("📭 No more older messages to load", category: "ChatViewModel")
+                return
+            }
+            
+            // Already in chronological order (oldest first), prepend to beginning
+            messages = newMessages + messages
+            oldestLoadedTimestamp = messages.first?.timestamp  // First = oldest
+            allLoadedMessageIds.formUnion(Set(newMessages.map { $0.id }))
+            
+            // Check if there are more messages
+            checkIfHasMoreMessages()
+            
+            Log.debug("📬 Loaded \(newMessages.count) more messages (total: \(messages.count))", category: "ChatViewModel")
+        } else {
+            Log.error("❌ Failed to fetch more messages", category: "ChatViewModel")
+        }
+        
+        isLoadingMore = false
+    }
+    
+    // ✅ NEW: Check if there are more messages to load
+    private func checkIfHasMoreMessages() {
+        guard let oldestTimestamp = oldestLoadedTimestamp else {
+            hasMoreMessages = false
+            return
+        }
+        
+        let fetchRequest = Message.fetchRequest()
+        // Combine with additional predicate
+        let chatPredicate = NSPredicate(format: "chat == %@ AND timestamp < %@", chat, oldestTimestamp as NSDate)
+        fetchRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [chatPredicate])
+        fetchRequest.fetchLimit = 1
+        
+        hasMoreMessages = (try? viewContext.fetch(fetchRequest).first) != nil
+    }
+    
+    // ✅ NEW: Reload messages when new ones are added (called from Core Data notifications)
+    // MARK: - Delete Messages
+    
+    func deleteMessage(_ message: Message) {
+        // ✅ REFACTOR: Use MessagePersistenceService
+        do {
+            try persistenceService.deleteMessage(message, chat: chat, in: viewContext)
+        } catch {
+            Log.error("❌ Failed to delete message: \(error)", category: "ChatViewModel")
+        }
+    }
+    
+    func deleteMessages(withIds messageIds: Set<String>) {
+        // ✅ REFACTOR: Use MessagePersistenceService
+        do {
+            try persistenceService.deleteMessages(withIds: messageIds, chat: chat, in: viewContext)
+        } catch {
+            Log.error("❌ Failed to delete messages: \(error)", category: "ChatViewModel")
+        }
+    }
+    
+    // ✅ REFACTOR: Simplified - FRC now handles all updates automatically
+    
+    // MARK: - Session Initialization Utilities
+    // ✅ REFACTOR: Session initialization logic moved to SessionInitializationService
+    
+    /// Proactively initialize session for a user
+    /// Called when message is queued but session doesn't exist yet
+    private func initializeSessionProactively(userId: String) async {
+        await MainActor.run {
+            isInitializingSession = true
+        }
+        
+        // ✅ REFACTOR: Use SessionInitializationService
+        await sessionInitService.initializeSessionProactively(
+            userId: userId,
+            onSuccess: { [weak self] in
+                guard let self = self else { return }
+                self.isSessionReady = true
+                self.isInitializingSession = false
+                self.errorMessage = nil
+                
+                // Send queued messages
+                Task {
+                    await self.sendQueuedMessages(userId: userId)
+                }
+            },
+            onFailure: { [weak self] error in
+                guard let self = self else { return }
+                self.isInitializingSession = false
+                self.errorMessage = "Failed to initialize secure connection: \(error.localizedDescription)"
+                
+                // Mark queued messages as failed
+                self.failQueuedMessages(reason: error.localizedDescription)
+            }
+        )
+    }
+    
+    /// Send all queued messages after session is ready
+    private func sendQueuedMessages(userId: String) async {
+        await MainActor.run {
+            Log.info("📤 SESSION_STATE[send_queued]: userId=\(userId.prefix(8))..., queueSize=\(queuedMessages.count)", category: "SessionInit")
+            
+            let messagesToSend = queuedMessages
+            queuedMessages.removeAll()
+            
+            for queued in messagesToSend {
+                Log.info("📤 Sending queued message: \"\(queued.text.prefix(30))...\"", category: "ChatViewModel")
+                sendMessage(text: queued.text, images: queued.images, replyTo: queued.replyTo)
+            }
+        }
+    }
+    
+    /// Mark all queued messages as failed
+    private func failQueuedMessages(reason: String) {
+        Log.error("❌ Failing \(queuedMessages.count) queued messages: \(reason)", category: "ChatViewModel")
+        queuedMessages.removeAll()
+        // Messages are lost - user needs to retry manually
+        // TODO: Could save to Core Data with .failed status for UI display
     }
 
     // MARK: - Send Message
-    func sendMessage(text: String, replyTo: Message? = nil) {
-        Log.info("📤 sendMessage called", category: "ChatViewModel")
-
-        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            Log.debug("❌ Empty message, ignoring", category: "ChatViewModel")
-            return
-        }
+    func sendMessage(text: String, images: [UIImage] = [], replyTo: Message? = nil) {
+        Log.info("📤 sendMessage called with \(images.count) images", category: "ChatViewModel")
 
         guard let recipientId = chat.otherUser?.id else {
             Log.error("❌ No recipient ID", category: "ChatViewModel")
             return
         }
-
         guard let currentUserId = SessionManager.shared.currentUserId else {
             Log.error("❌ No current user ID", category: "ChatViewModel")
             return
         }
-
-        Log.info("📤 Sending to: \(recipientId), from: \(currentUserId)", category: "ChatViewModel")
-
         // 🚫 BLOCK: Cannot send encrypted messages to yourself
-        if recipientId == currentUserId {
+        guard recipientId != currentUserId else {
             errorMessage = "Cannot send encrypted messages to yourself. Use notes app instead."
             Log.debug("❌ Blocked attempt to send message to self", category: "ChatViewModel")
             return
         }
 
-        // ✅ FIXED: Check if session is ready before sending
-        if !isSessionReady {
-            // Queue the message to be sent after session initialization
-            pendingMessages.append((text: text, timestamp: Date()))
+        // Session check applies to ALL send paths (text AND media).
+        // If no session yet, queue the message and init INITIATOR on-demand.
+        // Previously the session was created proactively on chat open which caused
+        // INITIATOR/RECEIVER conflicts and "session out of sync" notification loops.
+        let hasSession = CryptoManager.shared.hasSession(for: recipientId)
+        if !hasSession {
+            let queued = QueuedMessage(text: text, images: images, replyTo: replyTo)
+            queuedMessages.append(queued)
             errorMessage = "Initializing secure connection..."
-            Log.info("⏳ Message queued - waiting for session initialization (session ready: \(isSessionReady))", category: "ChatViewModel")
+            isInitializingSession = true
+            Log.info("📝 SESSION_STATE[queue_message]: userId=\(recipientId.prefix(8))..., queueSize=\(queuedMessages.count)", category: "SessionInit")
+            Task {
+                await initializeSessionProactively(userId: recipientId)
+            }
             return
         }
 
-        Log.info("✅ Session is ready, checking WebSocket connection...", category: "ChatViewModel")
+        Log.info("📤 Sending to: \(recipientId), from: \(currentUserId)", category: "ChatViewModel")
+
+        // Handle images if provided
+        if !images.isEmpty {
+            sendMediaMessage(images: images, caption: text, replyTo: replyTo)
+            return
+        }
+
+        // Validate message size
+        do {
+            try MessageValidator.validateText(text)
+        } catch let error as MessageValidationError {
+            errorMessage = error.localizedDescription
+            Log.error("❌ Message validation failed: \(error.localizedDescription)", category: "ChatViewModel")
+            return
+        } catch {
+            errorMessage = "Failed to validate message: \(error.localizedDescription)"
+            Log.error("❌ Unexpected validation error: \(error)", category: "ChatViewModel")
+            return
+        }
+
+        Log.info("✅ Session is ready, sending via gRPC...", category: "ChatViewModel")
 
         isSending = true
         errorMessage = nil
 
         do {
-            // Encrypt message and get components
-            let components = try CryptoManager.shared.encryptMessage(text, for: recipientId)
-
             // Create ChatMessage with proper format per server spec
             let messageId = UUID().uuidString
+            let plan = ChunkedMessageSender.shared.buildPlan(plaintext: text, messageId: UUID(uuidString: messageId) ?? UUID())
+            let firstPayload = plan.payloads.first ?? text
+            let firstComponents = try CryptoManager.shared.encryptMessage(firstPayload, for: recipientId)
             let message = ChatMessage(
                 id: messageId,
                 from: currentUserId,
                 to: recipientId,
-                ephemeralPublicKey: components.ephemeralPublicKey,  // Binary 32 bytes
-                messageNumber: components.messageNumber,
-                content: components.content,  // Base64(nonce || ciphertext_with_tag)
+                messageType: nil,  // Will be set by server as "DIRECT_MESSAGE"
+                ephemeralPublicKey: firstComponents.ephemeralPublicKey,  // Binary 32 bytes
+                messageNumber: firstComponents.messageNumber,
+                content: firstComponents.content,  // Base64(nonce || ciphertext_with_tag)
+                suiteId: firstComponents.suiteId,
                 timestamp: UInt64(Date().timeIntervalSince1970)
+                
             )
 
             Log.debug("📤 Sending message with ID: \(messageId)", category: "ChatViewModel")
-            Log.debug("   Message number: \(components.messageNumber)", category: "ChatViewModel")
+            Log.debug("   Message number: \(firstComponents.messageNumber)", category: "ChatViewModel")
             Log.debug("   Content length: \(message.content.count) bytes", category: "ChatViewModel")
-
-            // ✅ FIX: Check WebSocket connection BEFORE saving as "sending"
-            let wsConnected = wsManager.isConnected
-            Log.info("🔌 WebSocket connected: \(wsConnected)", category: "ChatViewModel")
-
-            if !wsConnected {
-                Log.error("❌ WebSocket not connected - message will be queued", category: "ChatViewModel")
-                saveMessage(
-                    message,
-                    decryptedContent: text,
-                    isSentByMe: true,
-                    status: .queued,  // Save as QUEUED, not SENDING
-                    replyTo: replyTo
-                )
-                errorMessage = "Not connected. Message saved and will be sent when connection is restored."
-                isSending = false
-                return
-            }
-
-            Log.info("✅ WebSocket connected, saving message with .sending status", category: "ChatViewModel")
 
             // Save with .sending status
             saveMessage(
@@ -228,13 +493,71 @@ class ChatViewModel: ObservableObject {
                 decryptedContent: text,
                 isSentByMe: true,
                 status: .sending,
-                replyTo: replyTo
+                replyTo: replyTo,
+                suiteId: firstComponents.suiteId
             )
 
-            // Send through WebSocket
-            Log.info("📮 Calling wsManager.send() for message: \(messageId)", category: "ChatViewModel")
-            wsManager.send(.sendMessage(message))
-            Log.info("✅ wsManager.send() completed", category: "ChatViewModel")
+            // ✅ Send via gRPC
+        Log.info("📮 Sending message via gRPC: \(messageId)", category: "ChatViewModel")
+            Task {
+                // Apply timing jitter for traffic analysis resistance (0–50ms for user messages)
+                let jitterMs = TrafficProtectionService.shared.recommendedSendDelay(isHighPriority: true)
+                if jitterMs > 0 {
+                    try? await Task.sleep(for: .milliseconds(Int(jitterMs)))
+                }
+
+                do {
+                    let responses = try await ChunkedMessageSender.shared.sendChunks(
+                        plan: plan,
+                        senderId: currentUserId,
+                        recipientId: recipientId,
+                        conversationId: ConversationId.direct(myUserId: currentUserId, theirUserId: recipientId),
+                        timestamp: message.timestamp,
+                        preEncryptedFirst: firstComponents
+                    )
+                    let response = responses.first ?? SendMessageResponse(messageId: messageId, status: "sent")
+
+                    // Record real message sent for cover traffic coalescing
+                    TrafficProtectionService.shared.recordRealMessageSent()
+
+                    await MainActor.run {
+                        // ✅ IMPROVED: Use server-provided status if available
+                        let deliveryStatus: DeliveryStatus
+                        
+                        switch response.status.lowercased() {
+                        case "delivered":
+                            deliveryStatus = .delivered
+                        case "queued":
+                            deliveryStatus = .queued
+                        case "sent", "success":
+                            deliveryStatus = .sent
+                        case "failed":
+                            deliveryStatus = .failed
+                            Log.error("❌ Server rejected message \(messageId): status=failed", category: "ChatViewModel")
+                        default:
+                            deliveryStatus = .sent  // Fallback to sent
+                            Log.info("⚠️ Unknown server status: \(response.status), using .sent", category: "ChatViewModel")
+                        }
+                        
+                        Log.info("🔄 Updating message status from sending → \(deliveryStatus) for \(messageId)", category: "ChatViewModel")
+                        updateMessageStatus(messageId: messageId, status: deliveryStatus)
+                        Log.info("✅ Message sent via gRPC: \(response.messageId), server status: \(response.status)", category: "ChatViewModel")
+                    }
+                } catch {
+                    await MainActor.run {
+                        if let networkError = error as? NetworkError,
+                           case .serverError(let message, let responseBody) = networkError {
+                            Log.error("❌ Failed to send message via gRPC: \(message)\nResponse: \(responseBody ?? "empty")", category: "ChatViewModel")
+                        } else if let rpcError = error as? RPCError {
+                            Log.error("❌ SendMessage gRPC error: code=\(rpcError.code), message=\(rpcError.message)", category: "ChatViewModel")
+                        } else {
+                            Log.error("❌ Failed to send message: \(error)", category: "ChatViewModel")
+                        }
+                        updateMessageStatus(messageId: messageId, status: .failed)
+                        errorMessage = "Failed to send message: \(error.localizedDescription)"
+                    }
+                }
+            }
 
         } catch {
             // ✅ Session was corrupted and auto-deleted by CryptoManager
@@ -249,13 +572,17 @@ class ChatViewModel: ObservableObject {
                 // Mark session as not ready to trigger reinitialization flow
                 isSessionReady = false
 
-                // Queue this message to be sent after session is reinitialized
-                pendingMessages.append((text: text, timestamp: Date()))
+                // Queue this message using new system
+                let queued = QueuedMessage(text: text, images: [], replyTo: replyTo)
+                queuedMessages.append(queued)
                 errorMessage = "Session expired, reinitializing..."
+                isInitializingSession = true
                 Log.info("📝 Message queued for retry after session reinitialization", category: "ChatViewModel")
 
-                // Request fresh public key bundle
-                wsManager.send(.getPublicKey(GetPublicKeyData(userId: toUserId)))
+                // ✅ Request fresh public key bundle via gRPC with retry
+                Task {
+                    await initializeSessionProactively(userId: toUserId)
+                }
             } else {
                 errorMessage = "Failed to encrypt message: \(error.localizedDescription)"
                 Log.error("Failed to encrypt message: \(error.localizedDescription)", category: "ChatViewModel")
@@ -264,238 +591,201 @@ class ChatViewModel: ObservableObject {
         isSending = false
     }
 
-    // ✅ FIXED: Process pending messages after session is ready
+    // ✅ DEPRECATED: Old method - replaced by sendQueuedMessages()
+    // Kept for reference, can be removed
     private func processPendingMessages() {
-        guard isSessionReady else { return }
-
-        let messagesToSend = pendingMessages
-        pendingMessages.removeAll()
-
-        for pending in messagesToSend {
-            Log.info("Processing pending message from queue", category: "ChatViewModel")
-            sendMessage(text: pending.text)
-        }
+        // Now handled by sendQueuedMessages() in Session Initialization Utilities
+        Log.debug("processPendingMessages called - deprecated, use sendQueuedMessages()", category: "ChatViewModel")
     }
 
-    // ✅ FIX: Send all queued messages when connection is restored
+    // ✅ Send all queued messages when connection is restored
     private func sendQueuedMessages() {
-        let fetchRequest: NSFetchRequest<Message> = Message.fetchRequest()
-        fetchRequest.predicate = NSPredicate(format: "chat == %@ AND deliveryStatusRaw == %d", chat, DeliveryStatus.queued.rawValue)
-        fetchRequest.sortDescriptors = [NSSortDescriptor(key: "timestamp", ascending: true)]
-
-        guard let queuedMessages = try? viewContext.fetch(fetchRequest) else {
+        // ✅ REFACTOR: Use MessageRetryManager
+        guard let recipientId = chat.otherUser?.id,
+              let currentUserId = SessionManager.shared.currentUserId else {
             return
         }
-
-        Log.info("📤 Sending \(queuedMessages.count) queued messages", category: "ChatViewModel")
-
-        for message in queuedMessages {
-            // Re-encrypt and send
-            guard let decryptedText = message.decryptedContent,
-                  let recipientId = chat.otherUser?.id,
-                  let currentUserId = SessionManager.shared.currentUserId else {
-                continue
-            }
-
-            do {
-                let components = try CryptoManager.shared.encryptMessage(decryptedText, for: recipientId)
-
-                let chatMessage = ChatMessage(
-                    id: message.id,
-                    from: currentUserId,
-                    to: recipientId,
-                    ephemeralPublicKey: components.ephemeralPublicKey,
-                    messageNumber: components.messageNumber,
-                    content: components.content,
-                    timestamp: UInt64(message.timestamp.timeIntervalSince1970)
-                )
-
-                message.deliveryStatus = .sending
-                try? viewContext.save()
-
-                wsManager.send(.sendMessage(chatMessage))
-                Log.debug("📮 Re-sent queued message: \(message.id)", category: "ChatViewModel")
-
-            } catch {
-                Log.error("Failed to re-encrypt queued message: \(error)", category: "ChatViewModel")
-                message.deliveryStatus = .failed
-                try? viewContext.save()
-            }
-        }
-
-        loadMessages()
+        
+        retryManager.sendQueuedMessages(
+            for: chat,
+            recipientId: recipientId,
+            currentUserId: currentUserId,
+            context: viewContext
+        )
     }
 
     func retryMessage(_ message: Message) {
-        // Retry for failed or queued messages
-        guard message.canRetry || message.deliveryStatus == .queued else {
-            Log.info("Message cannot be retried", category: "ChatViewModel")
+        // ✅ REFACTOR: Use MessageRetryManager
+        guard let recipientId = chat.otherUser?.id else {
+            Log.error("❌ No recipient ID for retry", category: "ChatViewModel")
             return
         }
-
-        guard let decryptedText = message.decryptedContent else {
-            Log.error("Cannot retry - no decrypted content", category: "ChatViewModel")
-            return
-        }
-
-        // Increment retry count
-        message.retryCount += 1
-        try? viewContext.save()
-
-        // Re-send the message
-        sendMessage(text: decryptedText)
-        Log.info("Retrying message (attempt \(message.retryCount))", category: "ChatViewModel")
-    }
-
-    // MARK: - Handle Server Messages
-    private func handleServerMessage(_ message: ServerMessage) {
-        switch message {
-        case .publicKeyBundle(let data):
-            Log.debug("📦 Received publicKeyBundle for userId: \(data.userId), chat.otherUser?.id: \(chat.otherUser?.id ?? "nil"), match: \(data.userId == chat.otherUser?.id)", category: "ChatViewModel")
-            if data.userId == chat.otherUser?.id {
-                // ✅ Update username if we have the user in Core Data
-                if let user = chat.otherUser {
-                    user.username = data.username
-                    user.displayName = data.username
-                    try? viewContext.save()
-                    Log.info("Updated username for user: \(data.username)", category: "ChatViewModel")
-                }
-
-                self.recipientBundle = (data.identityPublic, data.signedPrekeyPublic, data.signature, data.verifyingKey)
-                guard SessionManager.shared.currentUserId != nil else { return }
-                
-                // ✅ FIX: Proactively delete any stale session before starting a new one.
-                // This handles cases where a session exists in the Rust core but not in the Swift
-                // session mapping, or any other conflict, preventing initialization failures.
-                CryptoManager.shared.deleteSession(for: data.userId)
-                Log.info("🗑️ Proactively deleted any existing session for \(data.userId) before initialization.", category: "ChatViewModel")
-
-                // ✅ FIX: If we requested the keys, WE are the initiator
-                // The fact that we're in ChatViewModel and requested getPublicKey
-                // means the user wants to start a conversation → we're the initiator
-                Log.info("🔑 Received public key bundle - we requested it, so we are INITIATOR", category: "ChatViewModel")
-
-                do {
-                    let bundleWithSuite = (
-                        identityPublic: data.identityPublic,
-                        signedPrekeyPublic: data.signedPrekeyPublic,
-                        signature: data.signature,
-                        verifyingKey: data.verifyingKey,
-                        suiteId: "1"
-                    )
-                    try CryptoManager.shared.initializeSession(for: data.userId, recipientBundle: bundleWithSuite)
-
-                    isSessionReady = true
-                    errorMessage = nil
-                    Log.info("✅ Session initialized as INITIATOR for \(data.userId)", category: "ChatViewModel")
-
-                    // Process any pending messages
-                    processPendingMessages()
-
-                } catch {
-                    errorMessage = "Failed to initialize secure session: \(error.localizedDescription)"
-                    Log.error("❌ Failed to initialize session: \(error.localizedDescription)", category: "ChatViewModel")
-                    isSessionReady = false
-                }
+        
+        retryManager.retryMessage(
+            message,
+            recipientId: recipientId,
+            context: viewContext,
+            onError: { [weak self] error in
+                self?.errorMessage = error
             }
-        // ✅ REMOVED: .message handling - ChatsViewModel handles ALL incoming messages
-        // ChatViewModel only handles ACKs for sent messages
-        case .ack(let data):
-            handleAck(messageId: data.messageId, status: data.status)
-        case .error(let data):
-            self.errorMessage = data.message
-        default:
-            break
-        }
-    }
-    
-    private func handleAck(messageId: String, status: String) {
-        Log.debug("📨 Received ACK for message: \(messageId), status: \(status)", category: "ChatViewModel")
-
-        // First, try to find the message by ID
-        let fetchRequest: NSFetchRequest<Message> = Message.fetchRequest()
-        fetchRequest.predicate = NSPredicate(format: "id == %@", messageId)
-
-        if (try? viewContext.fetch(fetchRequest).first) != nil {
-            Log.debug("✅ Found message by ID: \(messageId)", category: "ChatViewModel")
-            updateMessageStatus(messageId: messageId, status: status == "delivered" ? .delivered : .sent)
-        } else {
-            Log.debug("❌ Message not found by ID: \(messageId)", category: "ChatViewModel")
-
-            // List all pending messages to debug
-            let allMessagesRequest: NSFetchRequest<Message> = Message.fetchRequest()
-            allMessagesRequest.predicate = NSPredicate(format: "chat == %@ AND isSentByMe == YES", chat)
-            allMessagesRequest.sortDescriptors = [NSSortDescriptor(key: "timestamp", ascending: false)]
-
-            if let allMessages = try? viewContext.fetch(allMessagesRequest) {
-                Log.debug("📋 All sent messages in this chat:", category: "ChatViewModel")
-                for msg in allMessages.prefix(5) {
-                    Log.debug("  - ID: \(msg.id), status: \(msg.deliveryStatus), timestamp: \(msg.timestamp)", category: "ChatViewModel")
-                }
-
-                // Try to match by most recent sending message
-                if let mostRecentSending = allMessages.first(where: { $0.deliveryStatus == .sending }) {
-                    Log.debug("🔄 Assuming ACK is for most recent sending message: \(mostRecentSending.id)", category: "ChatViewModel")
-                    mostRecentSending.deliveryStatus = status == "delivered" ? .delivered : .sent
-                    try? viewContext.save()
-                    loadMessages()
-                }
-            }
-        }
+        )
     }
 
-    // ✅ REMOVED: handleIncomingMessage - ChatsViewModel handles ALL incoming messages
-    // ChatViewModel only displays messages already saved to Core Data
+    // ✅ NOTE: Using gRPC for all messaging
+    // Incoming messages are received via long polling in ChatsViewModel
+    // and saved to Core Data, then picked up via NSManagedObjectContextObjectsDidChange
+    // ACKs are received from gRPC SendMessage response
 
     // MARK: - Core Data Operations
-    private func saveMessage(_ message: ChatMessage, decryptedContent: String, isSentByMe: Bool, status: DeliveryStatus, replyTo: Message? = nil) {
-        Log.debug("💾 Saving message \(message.id), isSentByMe: \(isSentByMe), status: \(status)", category: "ChatViewModel")
+    // MARK: - Media Messages
 
-        let fetchRequest: NSFetchRequest<Message> = Message.fetchRequest()
-        fetchRequest.predicate = NSPredicate(format: "id == %@", message.id)
+    private func sendMediaMessage(images: [UIImage], caption: String, replyTo: Message?) {
+        guard let recipientId = chat.otherUser?.id else {
+            Log.error("❌ No recipient ID for media message", category: "ChatViewModel")
+            errorMessage = "Cannot send media: no recipient"
+            return
+        }
+        // Note: session existence is already guaranteed by sendMessage() before this is called.
 
-        if let existing = try? viewContext.fetch(fetchRequest).first {
-            Log.debug("📝 Updating existing message \(message.id)", category: "ChatViewModel")
-            existing.deliveryStatus = status
-        } else {
-            Log.debug("✨ Creating new message \(message.id)", category: "ChatViewModel")
-            let newMessage = Message(context: viewContext)
-            newMessage.id = message.id
-            newMessage.fromUserId = message.from
-            newMessage.toUserId = message.to
-            newMessage.encryptedContent = message.content
-            newMessage.decryptedContent = decryptedContent
-            newMessage.timestamp = Date(timeIntervalSince1970: TimeInterval(message.timestamp))
-            newMessage.isSentByMe = isSentByMe
-            newMessage.deliveryStatus = status
-            newMessage.retryCount = 0  // ✅ FIX: Initialize required field
-            newMessage.chat = chat
+        isSending = true
+        errorMessage = nil
 
-            // Set reply information
-            if let replyMessage = replyTo {
-                newMessage.replyToMessageId = replyMessage.id
-                newMessage.replyToContent = replyMessage.decryptedContent
+        Task {
+            do {
+                let result = try await mediaUploadManager.uploadMediaAndBuildContent(
+                    images: images,
+                    caption: caption,
+                    recipientId: recipientId
+                )
+                
+                await MainActor.run {
+                    sendTextMessage(text: result.messageContent, replyTo: replyTo, localThumbnails: result.thumbnails)
+                }
+            } catch {
+                await MainActor.run {
+                    Log.error("❌ Media upload failed: \(error.localizedDescription) | raw: \(error)", category: "ChatViewModel")
+                    errorMessage = error.localizedDescription
+                    isSending = false
+                }
             }
+        }
+    }
+
+    private func sendTextMessage(text: String, replyTo: Message?, localThumbnails: [Data] = []) {
+        // Reuse existing logic for sending text messages
+        guard let recipientId = chat.otherUser?.id,
+              let currentUserId = SessionManager.shared.currentUserId else {
+            isSending = false
+            return
         }
 
         do {
-            try viewContext.save()
-            Log.debug("✅ Message saved to Core Data", category: "ChatViewModel")
-            loadMessages()
-            Log.debug("📊 After loadMessages: \(messages.count) messages", category: "ChatViewModel")
+            let messageId = UUID().uuidString
+            let plan = ChunkedMessageSender.shared.buildPlan(plaintext: text, messageId: UUID(uuidString: messageId) ?? UUID())
+            let firstPayload = plan.payloads.first ?? text
+            let firstComponents = try CryptoManager.shared.encryptMessage(firstPayload, for: recipientId)
+            let message = ChatMessage(
+                id: messageId,
+                from: currentUserId,
+                to: recipientId,
+                messageType: nil,  // Will be set by server
+                ephemeralPublicKey: firstComponents.ephemeralPublicKey,
+                messageNumber: firstComponents.messageNumber,
+                content: firstComponents.content,
+                suiteId: firstComponents.suiteId,
+                timestamp: UInt64(Date().timeIntervalSince1970)
+                
+            )
+
+            saveMessage(message, decryptedContent: text, isSentByMe: true, status: .sending, replyTo: replyTo, localThumbnails: localThumbnails, suiteId: firstComponents.suiteId)
+
+            // ✅ Send via gRPC
+            Task {
+                do {
+                    let _ = try await ChunkedMessageSender.shared.sendChunks(
+                        plan: plan,
+                        senderId: currentUserId,
+                        recipientId: recipientId,
+                        conversationId: ConversationId.direct(myUserId: currentUserId, theirUserId: recipientId),
+                        timestamp: message.timestamp,
+                        preEncryptedFirst: firstComponents
+                    )
+                    
+                    await MainActor.run {
+                        updateMessageStatus(messageId: message.id, status: .sent)
+                        isSending = false
+                    }
+                } catch {
+                    await MainActor.run {
+                        if let networkError = error as? NetworkError,
+                           case .serverError(let message, let responseBody) = networkError {
+                            Log.error("❌ Failed to send message via gRPC: \(message)\nResponse: \(responseBody ?? "empty")", category: "ChatViewModel")
+                        } else {
+                            Log.error("❌ Failed to send message via gRPC: \(error.localizedDescription)", category: "ChatViewModel")
+                        }
+                        updateMessageStatus(messageId: message.id, status: .failed)
+                        errorMessage = "Failed to send message: \(error.localizedDescription)"
+                        isSending = false
+                    }
+                }
+            }
+
         } catch {
-            Log.error("Failed to save or update message: \(error.localizedDescription)", category: "ChatViewModel")
+            Log.error("❌ Failed to encrypt message: \(error)", category: "ChatViewModel")
+            errorMessage = "Failed to encrypt message"
+            isSending = false
+        }
+    }
+
+    private func saveMessage(_ message: ChatMessage, decryptedContent: String, isSentByMe: Bool, status: DeliveryStatus, replyTo: Message? = nil, localThumbnails: [Data] = [], suiteId: UInt16) {
+        // ✅ REFACTOR: Use MessagePersistenceService
+        do {
+            let isNewMessage = try persistenceService.saveMessage(
+                message,
+                decryptedContent: decryptedContent,
+                isSentByMe: isSentByMe,
+                status: status,
+                chat: chat,
+                replyTo: replyTo,
+                localThumbnails: localThumbnails,
+                suiteId: suiteId,
+                in: viewContext
+            )
+            
+            // ✅ REFACTOR: FRC will automatically update messages array via delegate
+            Log.debug("📊 Messages will be updated by FRC. Current count: \(messages.count), isNew: \(isNewMessage)", category: "ChatViewModel")
+        } catch {
+            Log.error("Failed to save message: \(error.localizedDescription)", category: "ChatViewModel")
         }
     }
 
     private func updateMessageStatus(messageId: String, status: DeliveryStatus) {
-        let fetchRequest: NSFetchRequest<Message> = Message.fetchRequest()
-        fetchRequest.predicate = NSPredicate(format: "id == %@", messageId)
+        do {
+            try persistenceService.updateMessageStatus(messageId: messageId, status: status, in: viewContext)
+        } catch {
+            Log.error("❌ Failed to save message status: \(error)", category: "ChatViewModel")
+        }
+    }
+}
 
-        if let message = try? viewContext.fetch(fetchRequest).first {
-            message.deliveryStatus = status
-            try? viewContext.save()
-            loadMessages()
+// MARK: - NSFetchedResultsControllerDelegate
+
+extension ChatViewModel: NSFetchedResultsControllerDelegate {
+    /// Called when FRC finishes processing changes to Core Data
+    nonisolated func controllerDidChangeContent(_ controller: NSFetchedResultsController<NSFetchRequestResult>) {
+        // ✅ FIX: Synchronous update to prevent UI rendering deleted objects
+        // MainActor.assumeIsolated is safe here because FRC calls this on main thread
+        MainActor.assumeIsolated {
+            // ✅ REFACTOR: Automatic sync from Core Data - reverse to oldest-first
+            let fetchedMessages = controller.fetchedObjects as? [Message] ?? []
+            self.messages = Array(fetchedMessages.reversed())
+            Log.debug("🔄 FRC updated messages: \(self.messages.count) total (reversed to oldest-first)", category: "ChatViewModel")
+            
+            // Update pagination tracking (first = oldest after reversal)
+            if let first = self.messages.first {
+                self.oldestLoadedTimestamp = first.timestamp
+            }
+            self.allLoadedMessageIds = Set(self.messages.map { $0.id })
         }
     }
 }

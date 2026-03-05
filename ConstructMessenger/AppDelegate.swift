@@ -2,7 +2,6 @@
 //  AppDelegate.swift
 //  Construct Messenger
 //
-//  Created by Claude on 03.01.2026.
 //
 
 import UIKit
@@ -36,8 +35,62 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         // Initialize local notification manager
         // This ensures it's ready when needed
         _ = LocalNotificationManager.shared
+        
+        // ✅ NEW: Initialize push notification manager
+        // This sets up the UNUserNotificationCenter delegate
+        _ = PushNotificationManager.shared
+
+        // NOTE: NetworkReachabilityManager and MessageQueueManager will be initialized
+        // lazily when first accessed. This avoids potential circular dependencies
+        // and initialization issues at app startup.
 
         return true
+    }
+    
+    // MARK: - Push Notifications
+    
+    /// Called when APNs successfully registers device token
+    func application(
+        _ application: UIApplication,
+        didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
+    ) {
+        Log.info("📱 Received device token from APNs", category: "Push")
+        
+        // Register token with backend server
+        Task {
+            await PushNotificationManager.shared.registerDeviceToken(deviceToken)
+        }
+    }
+    
+    /// Called when APNs fails to register device token
+    func application(
+        _ application: UIApplication,
+        didFailToRegisterForRemoteNotificationsWithError error: Error
+    ) {
+        Log.error("📱 Failed to register for remote notifications: \(error)", category: "Push")
+        PushNotificationManager.shared.handleRegistrationError(error)
+    }
+
+    // MARK: - Silent Push (background wakeup)
+
+    /// Called when a silent push arrives (content-available: 1).
+    /// Server sends this when a new message is waiting. We wake up, trigger
+    /// stream reconnect to fetch pending messages, then call the completion handler.
+    func application(
+        _ application: UIApplication,
+        didReceiveRemoteNotification userInfo: [AnyHashable: Any],
+        fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
+    ) {
+        Log.info("📱 Silent push received: \(userInfo["type"] ?? "unknown")", category: "Push")
+
+        // Signal ChatsViewModel to reconnect the stream and pick up pending messages
+        PushNotificationManager.shared.signalSilentPush()
+
+        // Give the stream up to 25s to connect and fetch (system limit is 30s)
+        Task {
+            try? await Task.sleep(nanoseconds: 25_000_000_000)
+            completionHandler(.newData)
+        }
     }
 
     // MARK: - Universal Links
@@ -55,6 +108,18 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         Log.info("AppDelegate: Received Universal Link: \(url.absoluteString)", category: "DeepLink")
         let result = deepLinkHandler.handleURL(url)
         Log.info("AppDelegate: Deep link handling result: \(result)", category: "DeepLink")
+        return result
+    }
+    
+    // MARK: - Custom URL Scheme (konstruct://)
+    func application(
+        _ app: UIApplication,
+        open url: URL,
+        options: [UIApplication.OpenURLOptionsKey : Any] = [:]
+    ) -> Bool {
+        Log.info("AppDelegate: Received URL Scheme: \(url.absoluteString)", category: "DeepLink")
+        let result = deepLinkHandler.handleURL(url)
+        Log.info("AppDelegate: URL Scheme handling result: \(result)", category: "DeepLink")
         return result
     }
 
@@ -93,6 +158,9 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 
         // Remove all delivered notifications
         LocalNotificationManager.shared.removeAllNotifications()
+
+        // Refresh push authorization state and re-register if needed
+        Task { await PushNotificationManager.shared.checkAuthorizationStatus() }
     }
 
     func applicationDidEnterBackground(_ application: UIApplication) {
@@ -106,3 +174,6 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         }
     }
 }
+
+// MARK: - Notification Names (system notifications only)
+// Custom app notifications replaced with @Published properties

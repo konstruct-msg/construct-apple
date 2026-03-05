@@ -9,7 +9,7 @@ import SwiftUI
 
 /// Debug баннер для показа информации о подключении (только в Debug режиме)
 struct ServerInfoBanner: View {
-    @ObservedObject var webSocketManager = WebSocketManager.shared
+    var connectionStatusManager = ConnectionStatusManager.shared
 
     var body: some View {
         if AppConstants.enableDebugLogging {
@@ -19,18 +19,14 @@ struct ServerInfoBanner: View {
                         .fill(statusColor)
                         .frame(width: 8, height: 8)
 
-                    Text(webSocketManager.connectionStatus.displayText)
+                    Text(connectionStatusManager.connectionStatus.displayText)
                         .font(.caption2)
                         .fontWeight(.semibold)
 
                     Spacer()
-
-//                    Text(ServerEnvironment.current.displayName)
-//                        .font(.caption2)
-//                        .foregroundColor(.secondary)
                 }
 
-                Text(APIConstants.activeServerURL)
+                Text(Bundle.main.object(forInfoDictionaryKey: "GRPC_HOST") as? String ?? "ams.konstruct.cc")
                     .font(.system(size: 10, design: .monospaced))
                     .foregroundColor(.secondary)
                     .lineLimit(1)
@@ -45,13 +41,15 @@ struct ServerInfoBanner: View {
     }
 
     private var statusColor: Color {
-        switch webSocketManager.connectionStatus {
+        switch connectionStatusManager.connectionStatus {
         case .connected:
-            return .green
+            return Color.AppStatus.success
         case .disconnected:
             return .red
-        case .reconnecting:
+        case .connecting:
             return .orange
+        case .unknown:
+            return .gray
         }
     }
 }

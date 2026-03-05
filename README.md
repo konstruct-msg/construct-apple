@@ -26,9 +26,6 @@ Construct Messenger is a modern **end-to-end encrypted** messenger built on:
 - ✅ **Crypto-Agility** - Support for multiple cryptographic suites
 - ✅ **Zero unsafe** - All Rust code is safe (0 `unsafe` blocks)
 - ✅ **Multi-Platform** - Single Rust core for iOS, Android, Web
-- ✅ **QR Code Sharing** - Add contacts by scanning QR codes
-- ✅ **Offline Message Queue** - Messages saved when offline, sent when reconnected
-- ✅ **Privacy-First Profile Sharing** - Display names and avatars shared P2P, not stored on server
 - 🚧 **Post-Quantum** - Hybrid schemes (in development)
 
 ---
@@ -74,52 +71,24 @@ Construct Messenger is a modern **end-to-end encrypted** messenger built on:
 
 ### Building the iOS App
 
+**Note:** Ядро `construct-core` теперь находится в отдельном репозитории `~/Code/construct-core/`.
+
 ```bash
-# 1. Build the Rust library
-cd packages/core
-cargo build --release --target aarch64-apple-ios
+# 1. Generate Swift bindings (автоматически находит ~/Code/construct-core)
+./generate_swift_bindings.sh
 
-# 2. Generate Swift bindings
-uniffi-bindgen generate \
-  --library ../../target/aarch64-apple-ios/release/libconstruct_core.a \
-  --language swift \
-  --out-dir bindings/swift
-
-# 3. Copy to the Xcode project
-cp ../../target/aarch64-apple-ios/release/libconstruct_core.a ../../
-cp bindings/swift/construct_core.swift ../../ConstructMessenger/
-cp bindings/swift/construct_coreFFI.h ../../ConstructMessenger/
-
-# 4. Open Xcode and run
-open ../../ConstructMessenger.xcodeproj
+# 2. Open Xcode and run
+open ConstructMessenger.xcodeproj
 ```
+
+Скрипт `generate_swift_bindings.sh` автоматически:
+- Находит ядро в `~/Code/construct-core/`
+- Собирает библиотеку для нужных архитектур
+- Генерирует Swift биндинги в `ConstructMessenger/`
 
 ### Running the Server
 
-```bash
-# 1. Set up PostgreSQL
-createdb construct_messenger
-
-# 2. Run migrations
-cd packages/server
-sqlx migrate run
-
-# 3. Start the server
-cargo run --release
-```
-
-### Using the App
-
-1. **Register** a new account (username + password)
-2. **Share your contact:**
-   - Go to Settings
-   - Tap "Show My QR Code" or "Copy Contact Link"
-3. **Add contacts:**
-   - From Chats screen, tap "+" → "Scan QR Code"
-   - Or paste contact link when adding manually
-4. **Start messaging** - all messages are end-to-end encrypted automatically!
-
-**Tip:** Use the camera debug panel (ℹ️ icon in QR scanner) to troubleshoot camera issues.
+**Note:** Сервер находится в отдельном репозитории. См. документацию сервера для инструкций по запуску.
 
 ---
 
@@ -144,55 +113,59 @@ cargo run --release
 
 **Philosophy:** Hybrid = protection against quantum computers + protection against vulnerabilities in new algorithms
 
+### X3DH Prologue Format
+
+Для защиты от **key substitution attacks** (атак подмены ключей между разными криптографическими наборами), подпись `signed_prekey` включает **prologue** по аналогии с Noise Protocol.
+
+**Формат prologue:**
+```
+Prologue = "X3DH" (4 bytes) || suite_id (2 bytes, little-endian)
+```
+
+**Примеры:**
+- Suite ID 1 (CLASSIC): `[0x58, 0x33, 0x44, 0x48, 0x01, 0x00]` = `"X3DH" || 0x0001`
+- Suite ID 2 (PQ_HYBRID): `[0x58, 0x33, 0x44, 0x48, 0x02, 0x00]` = `"X3DH" || 0x0002`
+
+**Процесс подписания:**
+1. Клиент генерирует `signed_prekey_public`
+2. Создаёт prologue: `"X3DH" || suite_id`
+3. Подписывает: `sign(prologue || signed_prekey_public)`
+4. Отправляет bundle на сервер
+
+**Процесс проверки:**
+1. Клиент получает bundle с `suite_id`
+2. Строит prologue из `suite_id` из bundle
+3. Проверяет подпись: `verify(prologue || signed_prekey_public, signature)`
+4. **Backward compatibility:** Если новый формат не проходит, пробует старый (без prologue)
+
+**Важно для сервера:**
+- Сервер **НЕ** должен знать о prologue
+- Сервер работает только с непрозрачными данными (opaque blobs)
+- Сервер **НЕ** проверяет подпись (это делает клиент)
+- Сервер должен хранить `suite_id` для логирования/статистики
+
 ---
 
 ## 🛠️ Project Structure
 
+**Note:** Ядро `construct-core` находится в отдельном репозитории `~/Code/construct-core/`.
+
 ```
 construct-messenger/
 │
-├── packages/
-│   ├── core/               # 🦀 Rust cryptographic core
-│   │   ├── src/
-│   │   │   ├── crypto/    # Cryptographic modules
-│   │   │   │   ├── classic_suite.rs
-│   │   │   │   ├── crypto_provider.rs
-│   │   │   │   ├── double_ratchet.rs
-│   │   │   │   └── x3dh.rs
-│   │   │   ├── uniffi_bindings.rs  # UniFFI wrapper
-│   │   │   └── construct_core.udl  # UniFFI interface
-│   │   ├── Cargo.toml
-│   │   └── build.rs
-│   │
-│   └── server/             # 🦀 Rust WebSocket server
-│       ├── src/
-│       │   ├── handlers/  # Message handlers
-│       │   ├── db.rs      # PostgreSQL
-│       │   └── message.rs # Protocol types
-│       └── Cargo.toml
-│
 ├── ConstructMessenger/     # 📱 iOS Swift application
 │   ├── ViewModels/        # MVVM view models
-│   │   ├── ChatViewModel.swift        # 🆕 Queued messages
-│   │   └── AuthViewModel.swift
 │   ├── Views/             # SwiftUI views
-│   │   ├── Chat/
-│   │   │   ├── ChatView.swift
-│   │   │   ├── MessageBubble.swift    # 🆕 Context menu
-│   │   │   └── MessageInfoSheet.swift # 🆕 Message details
-│   │   ├── Components/
-│   │   │   └── QRScannerView.swift    # 🆕 Camera QR scanner
-│   │   └── Settings/
-│   │       ├── SettingsView.swift     # 🆕 Quick share
-│   │       └── ContactQRCodeView.swift
 │   ├── Security/
-│   │   └── CryptoManager.swift  # Thin wrapper
+│   │   └── CryptoManager.swift  # UniFFI wrapper around construct-core
 │   ├── Networking/
-│   │   └── WebSocketManager.swift  # 🆕 Connection checks
-│   └── Models/            # Core Data models
+│   │   └── WebSocketManager.swift
+│   ├── Models/            # Core Data models
+│   ├── construct_core.swift      # Generated Swift bindings
+│   └── construct_coreFFI.h       # Generated C header
 │
-├── libconstruct_core.a    # Compiled Rust library
-└── README.md              # 📖 This file
+├── generate_swift_bindings.sh    # Script to generate Swift bindings
+└── README.md                     # 📖 This file
 ```
 
 ---
@@ -201,8 +174,10 @@ construct-messenger/
 
 ### Rust Core
 
+Ядро тестируется в репозитории `~/Code/construct-core/`:
+
 ```bash
-cd packages/core
+cd ~/Code/construct-core
 cargo test --all-features
 ```
 
@@ -210,13 +185,6 @@ cargo test --all-features
 
 ```bash
 # In Xcode: ⌘U (Run Tests)
-```
-
-### Server
-
-```bash
-cd packages/server
-cargo test
 ```
 
 ---
@@ -230,64 +198,55 @@ We welcome contributions! Please familiarize yourself with:
 
 ### Priority Areas
 
-- 🔴 **Critical:** Complete profile sharing implementation
-- 🟠 **Important:** Enhanced message delivery status (seen/read receipts)
-- 🟡 **Useful:** UI/UX polish (toast notifications, loading states)
-- 🟢 **Future:** Post-quantum crypto implementation, group messaging
+- 🔴 **Critical:** Fix message decryption
+- 🟠 **Important:** Unit/integration tests
+- 🟡 **Useful:** UI/UX improvements
+- 🟢 **Future:** Post-quantum crypto implementation
 
 ---
 
 ## 📊 Current Status
 
-**Version:** v0.2.8 (Alpha)
-**Date:** January 1, 2026
-
-### 🆕 Recent Updates (v0.3.0)
-
-**Messaging Improvements:**
-- Fixed session initialization for new contacts - no more "Initializing secure connection..." hang
-- Added offline message queue - messages saved when disconnected, auto-sent when reconnected
-- Message context menu with copy, reply, delete, and detailed info
-- Visual status indicators: Sending → Sent → Delivered
-
-**Contact Management:**
-- QR code scanner with camera permission handling
-- Debug panel for troubleshooting camera issues (tap ℹ️ icon)
-- Test mode for simulator (auto-generates mock QR scans)
-- Simplified contact sharing - moved to main Settings screen
-
-**Developer Experience:**
-- Comprehensive debug logging for session initialization
-- Camera testing guide with troubleshooting steps
-- Profile sharing design documentation
+**Version:** v0.2.8 (Early Alpha)
+**Date:** December 26, 2025
 
 ### ✅ Done
 - [x] Rust cryptographic core (Double Ratchet + X3DH)
 - [x] UniFFI integration with iOS
 - [x] WebSocket server with PostgreSQL
-- [x] SwiftUI interface with Core Data
-- [x] QR code scanning for contact addition
-- [x] Camera permission handling and debugging tools
-- [x] Offline message queue with auto-retry
-- [x] Message context menu (copy, reply, delete, info)
-- [x] Improved session initialization and error handling
-- [x] Settings redesign with quick contact sharing
+- [x] Basic UI (SwiftUI)
+- [x] Core Data persistence
+- [x] Reactive architecture with Combine (Phase 2)
 
-### 🔨 In Progress
-- [ ] Profile sharing implementation (display names & avatars)
-- [ ] Message delivery status indicators
-- [ ] Enhanced error feedback and toast notifications
 
 ### 📅 Planned
+**Q1 2026:**
+- [ ] **Offline Message Queue** - Retry failed messages with exponential backoff
+- [ ] **APNs Push Notifications** - 98% reduction in network requests, massive battery savings
+- [ ] **State Machine Architecture** (Phase 3) - See [docs/architecture/state-machine-migration.md](docs/architecture/state-machine-migration.md)
+  - Explicit state modeling for auth and polling
+  - Offline mode support
+  - Reconnection with exponential backoff
+  - Better error handling and debugging
+
 **Q2 2026:**
+- [ ] **Privacy & Traffic Obfuscation** - See [docs/architecture/improvement-roadmap.md](docs/architecture/improvement-roadmap.md)
+  - Message size padding
+  - Timing obfuscation
+  - Dummy traffic (opt-in)
 - [ ] Post-quantum hybrid cryptography (Kyber768 + Dilithium3)
 - [ ] Web PWA
 - [ ] Group messaging (Sender Keys)
 - [ ] Voice/Video calls (WebRTC)
+
+**Q3 2026:**
 - [ ] **Server Federation** (Email 2.0 with E2E encryption)
 - [ ] Decentralized architecture (alice@server1.com ↔ bob@server2.com)
 - [ ] DNS-based server discovery
 - [ ] Sealed sender for metadata privacy
+
+**Future Considerations:**
+- [ ] WebSocket support (opt-in, beta) - See roadmap for scaling strategy
 
 ---
 

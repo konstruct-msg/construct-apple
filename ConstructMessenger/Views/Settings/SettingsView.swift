@@ -9,182 +9,358 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(\.managedObjectContext) private var viewContext
-    @EnvironmentObject var authViewModel: AuthViewModel
-    @StateObject private var viewModel = SettingsViewModel()
+    @Environment(AuthViewModel.self) private var authViewModel
+    @Environment(AccountRecoveryViewModel.self) private var recoveryVM
+    @State private var viewModel = SettingsViewModel()
+    private var connectionStatus = ConnectionStatusManager.shared
     @State private var showingQRCode = false
     @State private var linkCopied = false
+    @State private var showingRecoverySetup = false
+   
+    
+    private let inviteGenerator = InviteGenerator()
+        
+    private let sectionCornerRadius: CGFloat = 16  // Change to adjust rounding
 
-    var body: some View {
-        NavigationStack {
-            List {
-                // MARK: - Account Section
-                Section {
-                    NavigationLink(destination: AccountSettingsView().environmentObject(authViewModel)) {
-                        Label {
-                            Text("account")
-                        } icon: {
-                            Image(systemName: "person.circle")
-                                .foregroundColor(.blue)
-                        }
-                    }
-                } header: {
-                    Text("user")
-                } footer: {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("@\(viewModel.username)")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                }
+        var body: some View {
+            NavigationStack {
+                ScrollView {
+                    VStack(spacing: 18) {
 
-                // TODO: Add Security Section here
-                // - PIN code protection (6-10 digits)
-                // - Biometric authentication (Face ID / Touch ID)
-                // - Auto-lock timeout settings
-                // See: TODO.md for detailed requirements
-
-                // MARK: - Share Contact Section
-                Section {
-                    Button {
-                        showingQRCode = true
-                    } label: {
-                        Label {
-                            Text("show_my_qr_code")
-                                .foregroundColor(.primary)
-                        } icon: {
-                            Image(systemName: "qrcode")
-                                .foregroundColor(.blue)
-                        }
-                    }
-
-                    Button {
-                        copyContactLink()
-                    } label: {
-                        Label {
-                            Text(linkCopied ? "link_copied" : "copy_contact_link")
-                                .foregroundColor(.primary)
-                        } icon: {
-                            Image(systemName: linkCopied ? "checkmark.circle.fill" : "link")
-                                .foregroundColor(linkCopied ? .green : .green)
-                        }
-                    }
-                    .disabled(linkCopied)
-                } header: {
-                    Text("share_contact")
-                }
-
-                // MARK: - Preferences Section
-                Section {
-                    NavigationLink(destination: NetworkSettingsView()) {
-                        Label {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("network")
-                                HStack(spacing: 4) {
-                                    Circle()
-                                        .fill(WebSocketManager.shared.isConnected ? Color.green : Color.red)
-                                        .frame(width: 6, height: 6)
-                                    Text(WebSocketManager.shared.isConnected ? "connected" : "disconnected")
-                                        .font(.caption)
+                        // MARK: - Recovery Banner
+                        if recoveryVM.statusLoaded && !recoveryVM.isSetup {
+                            Button {
+                                showingRecoverySetup = true
+                            } label: {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "exclamationmark.shield.fill")
+                                        .foregroundColor(.orange)
+                                        .font(.title3)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(NSLocalizedString("recovery_banner_title", comment: ""))
+                                            .font(.subheadline.bold())
+                                            .foregroundColor(.primary)
+                                        Text(NSLocalizedString("recovery_banner_subtitle", comment: ""))
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
                                         .foregroundColor(.secondary)
-                                }
-                            }
-                        } icon: {
-                            Image(systemName: "network")
-                                .foregroundColor(.green)
-                        }
-                    }
-                    NavigationLink(destination: AppearanceSettingsView()) {
-                        Label {
-                            Text("appearance")
-                        } icon: {
-                            Image(systemName: "paintbrush.fill")
-                                .foregroundColor(.purple)
-                        }
-                    }
-                    NavigationLink(destination: NotificationsSettingsView()) {
-                        Label {
-                            Text("notifications")
-                        } icon: {
-                            Image(systemName: "bell")
-                                .foregroundColor(.blue)
-                        }
-                    }
-                    NavigationLink(destination: BackgroundFetchSettingsView()) {
-                        Label {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("background_fetch")
-                                HStack(spacing: 4) {
-                                    Circle()
-                                        .fill(BackgroundFetchConfig.shouldBeEnabled ? Color.green : Color.gray)
-                                        .frame(width: 6, height: 6)
-                                    Text(BackgroundFetchConfig.shouldBeEnabled ? "background_fetch_enabled" : "background_fetch_disabled")
                                         .font(.caption)
-                                        .foregroundColor(.secondary)
                                 }
+                                .padding(12)
+                                .background(Color.orange.opacity(0.12))
+                                .cornerRadius(12)
+                                .padding(.horizontal)
                             }
-                        } icon: {
-                            Image(systemName: "arrow.clockwise.circle")
-                                .foregroundColor(.orange)
                         }
-                    }
-                } header: {
-                    Text("preferences")
-                }
 
-                // MARK: - About Section
-                Section {
-                    HStack {
-                        Label {
-                            Text("version")
-                        } icon: {
-                            Image(systemName: "info.circle")
-                                .foregroundColor(.orange)
+                        // MARK: - Profile Section
+                        settingsSection {
+                            NavigationLink(destination: AccountSettingsView().environment(authViewModel)) {
+                                HStack(spacing: 12) {
+                                    Group {
+                                        if let image = viewModel.profileImage {
+                                            Image(uiImage: image)
+                                                .resizable()
+                                                .scaledToFill()
+                                        } else {
+                                            AvatarStyle.squircle(AvatarStyle.settingsSize)
+                                                .fill(Color.blue)
+                                                .overlay {
+                                                    Text(profileInitials)
+                                                        .foregroundColor(.white)
+                                                        .fontWeight(.semibold)
+                                                }
+                                        }
+                                    }
+                                    .frame(width: AvatarStyle.settingsSize, height: AvatarStyle.settingsSize)
+                                    .clipShape(AvatarStyle.squircle(AvatarStyle.settingsSize))
+
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(profileDisplayName)
+                                            .font(.headline)
+                                    }
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundColor(Color(.tertiaryLabel))
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 14)
+                            }
+                            .buttonStyle(.plain)
                         }
-                        Spacer()
-                        Text("Construct v\(AppConstants.appVersion)")
-                            .foregroundColor(.secondary)
+
+                        // MARK: - Share Section
+                        settingsSection {
+                            Button { showingQRCode = true } label: {
+                                settingsRow(icon: "qrcode", text: "show_my_qr_code")
+                            }
+                            .buttonStyle(.plain)
+                            settingsDivider()
+                            Button { copyContactLink() } label: {
+                                settingsRow(
+                                    icon: linkCopied ? "checkmark.circle.fill" : "link",
+                                    text: linkCopied ? "link_copied" : "copy_contact_link",
+                                    iconColor: linkCopied ? Color.AppStatus.success : .gray
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(linkCopied)
+                        }
+
+                        // MARK: - App Settings Section
+                        settingsSection {
+                            settingsNavRow(icon: "lock", text: "Security", destination: SecurityView())
+                            settingsDivider()
+                            settingsNavRow(icon: "laptopcomputer", text: "Devices", destination: DevicesView())
+                            settingsDivider()
+                            settingsNavRow(icon: "paintbrush", text: "appearance", destination: AppearanceSettingsView())
+                            settingsDivider()
+                            settingsNavRow(icon: "bell", text: "notifications", destination: NotificationsSettingsView())
+                            settingsDivider()
+                            NavigationLink(destination: BackgroundFetchSettingsView()) {
+                                HStack {
+                                    Image(systemName: "arrow.clockwise.circle").foregroundColor(.gray).frame(width: 22)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(LocalizedStringKey("background_fetch"))
+                                        HStack(spacing: 4) {
+                                            Circle()
+                                                .fill(BackgroundFetchConfig.shouldBeEnabled ? Color.AppStatus.success : Color.gray)
+                                                .frame(width: 6, height: 6)
+                                            Text(LocalizedStringKey(BackgroundFetchConfig.shouldBeEnabled ? "enabled" : "disabled"))
+                                                .font(.caption).foregroundColor(.secondary)
+                                        }
+                                    }
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundColor(Color(.tertiaryLabel))
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 14)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            settingsDivider()
+                            NavigationLink(destination: NetworkSettingsView()) {
+                                HStack {
+                                    Image(systemName: "network").foregroundColor(.gray).frame(width: 22)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(LocalizedStringKey("network"))
+                                        HStack(spacing: 4) {
+                                            Circle()
+                                                .fill(connectionStatus.isConnected ? Color.AppStatus.success : Color.red)
+                                                .frame(width: 6, height: 6)
+                                            Text(LocalizedStringKey(connectionStatus.connectionStatus.localizedKey))
+                                                .font(.caption).foregroundColor(.secondary)
+                                        }
+                                    }
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundColor(Color(.tertiaryLabel))
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 14)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            settingsDivider()
+                            settingsNavRow(icon: "folder", text: "Drafts", destination: DraftsView())
+                        }
+
+                        // MARK: - About Section
+                        settingsSection {
+                            HStack {
+                                Image(systemName: "info.circle").foregroundColor(.gray).frame(width: 22)
+                                Text(LocalizedStringKey("version"))
+                                Spacer()
+                                Text("Construct v\(AppConstants.appVersion)").foregroundColor(.secondary)
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 14)
+                        }
+
+                        // MARK: - Developer Section
+//                        #if DEBUG
+                        settingsSection(header: "Developer") {
+                            NavigationLink(destination: DiagnosticsView()) {
+                                HStack {
+                                    Text("Diagnostics & Logs").foregroundStyle(.orange)
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundColor(Color(.tertiaryLabel))
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 14)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                        }
+//                        #endif
                     }
-                } header: {
-                    Text("about")
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 24)
                 }
-            }
-            .navigationTitle("settings")
-            .onAppear {
-                viewModel.setContext(viewContext)
-                viewModel.loadUserInfo(from: authViewModel)
-            }
-            .sheet(isPresented: $showingQRCode) {
-                ContactQRCodeView(
-                    userId: viewModel.userId,
-                    username: viewModel.username
-                )
+                .background(Color(uiColor: .systemGroupedBackground))
+                .navigationBarHidden(true)
+                .onAppear {
+                    viewModel.setContext(viewContext)
+                    viewModel.loadUserInfo(from: authViewModel)
+                }
+                .task { await recoveryVM.loadStatus() }
+                .sheet(isPresented: $showingRecoverySetup) {
+                    RecoverySetupView()
+                        .environment(recoveryVM)
+                        .environment(authViewModel)
+                        .onDisappear { Task { await recoveryVM.refreshStatus() } }
+                }
+                .sheet(isPresented: $showingQRCode) {
+                    ContactQRCodeView(
+                        userId: viewModel.userId,
+                        username: viewModel.username
+                    )
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+                }
             }
         }
+        
+    // MARK: - Section Helpers
+
+    @ViewBuilder
+    private func settingsSection<Content: View>(
+        header: String? = nil,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if let header {
+                Text(header)
+                    .font(.footnote)
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 6)
+            }
+            VStack(spacing: 0) {
+                content()
+            }
+            .background(Color(uiColor: .secondarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: sectionCornerRadius, style: .continuous))
+        }
+    }
+
+    private func settingsRow(
+        icon: String,
+        text: String,
+        iconColor: Color = .gray
+    ) -> some View {
+        HStack {
+            Image(systemName: icon).foregroundColor(iconColor).frame(width: 22)
+            Text(LocalizedStringKey(text))
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .contentShape(Rectangle())
+    }
+
+    private func settingsNavRow<Destination: View>(
+        icon: String,
+        text: String,
+        destination: Destination
+    ) -> some View {
+        NavigationLink(destination: destination) {
+            HStack {
+                Image(systemName: icon).foregroundColor(.gray).frame(width: 22)
+                Text(LocalizedStringKey(text))
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(Color(.tertiaryLabel))
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func settingsDivider() -> some View {
+        Divider().padding(.leading, 54)
     }
 
     // MARK: - Contact Link
     private var contactLink: String {
-        guard let userId = authViewModel.currentUserId,
-              let username = authViewModel.currentUsername else {
+        guard let userId = authViewModel.currentUserId else {
+            Log.error("Cannot generate contact link: userId is nil", category: "SettingsView")
             return ""
         }
         
-        let encodedUsername = username.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? username
+        Log.info("Generating contact link for userId: \(userId)", category: "SettingsView")
         
-        var components = URLComponents()
-        components.scheme = "https"
-        components.host = "konstruct.cc"
-        components.path = "/c/\(userId)"
-        components.queryItems = [
-            URLQueryItem(name: "username", value: encodedUsername)
-        ]
+        // ✅ Use public invite host (.well-known lives here)
+        let serverHostname = ServerConfig.inviteHost
+        
+        // ✅ Generate Dynamic Invite deep link (HTTPS format for sharing)
+        do {
+            // Get deviceId from Keychain
+            guard let deviceId = KeychainManager.shared.loadDeviceID() else {
+                Log.error("Cannot generate link: deviceId not found in Keychain", category: "SettingsView")
+                return ""
+            }
+            
+            let link = try inviteGenerator.generateDeepLink(
+                userId: userId,
+                deviceId: deviceId,
+                server: serverHostname,
+                useHTTPS: true
+            )
+            
+            Log.info("✅ Generated deep link: \(link.prefix(50))...", category: "SettingsView")
+            return link
+        } catch {
+            Log.error("Failed to generate invite link: \(error)", category: "SettingsView")
+            return ""
+        }
+    }
+        
+    private var profileDisplayName: String {
+        if !viewModel.displayName.isEmpty {
+            return viewModel.displayName
+        }
+        if !viewModel.userId.isEmpty {
+            return DisplayNameGenerator.generate(from: viewModel.userId)
+        }
+        return NSLocalizedString("account", comment: "")
+    }
 
-        return components.string ?? "https://konstruct.cc/c/\(userId)?username=\(encodedUsername)"
+    private var profileInitials: String {
+        let name = profileDisplayName
+        let parts = name.split(separator: " ")
+        if parts.count >= 2 {
+            return String(parts[0].prefix(1) + parts[1].prefix(1)).uppercased()
+        }
+        return String(name.prefix(2)).uppercased()
     }
 
     private func copyContactLink() {
-        UIPasteboard.general.string = contactLink
-        print("Contact link copied: \(contactLink)")
+        Task { await copyContactLinkAsync() }
+    }
+
+    @MainActor
+    private func copyContactLinkAsync() async {
+        guard authViewModel.currentUserId != nil else {
+            Log.error("Cannot copy contact link: userId is nil", category: "SettingsView")
+            return
+        }
+
+        let link = contactLink
+        PlatformClipboard.copy(link)
+        Log.info("Contact link copied: \(link.prefix(50))...", category: "SettingsView")
 
         // Show visual feedback
         withAnimation {
@@ -200,14 +376,16 @@ struct SettingsView: View {
     }
 }
 
+#if DEBUG
 #Preview {
     let container = PreviewHelpers.createPreviewContainer()
-    let authViewModel = AuthViewModel(context: container.viewContext)
-    authViewModel.isAuthenticated = true
-    authViewModel.currentUserId = "user123"
-    authViewModel.currentUsername = "john_doe"
-    authViewModel.currentDisplayName = "John Doe"
+    let context = container.viewContext
+    let authViewModel = AuthViewModel(context: context)
+    authViewModel.configureMockAuth()
 
     return SettingsView()
-        .environmentObject(authViewModel)
+        .environment(\.managedObjectContext, context)
+        .environment(authViewModel)
+        .environment(SecurityViewModel())
 }
+#endif
