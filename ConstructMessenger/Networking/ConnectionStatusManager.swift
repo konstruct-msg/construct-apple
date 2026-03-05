@@ -6,7 +6,6 @@
 //
 
 import Foundation
-import Combine
 
 /// Manages and publishes connection status for the app
 /// In gRPC architecture, connection status is based on:
@@ -14,11 +13,12 @@ import Combine
 /// 2. gRPC MessageStream connection state
 /// 3. Session validity
 @MainActor
-class ConnectionStatusManager: ObservableObject {
+@Observable
+class ConnectionStatusManager {
     static let shared = ConnectionStatusManager()
 
     /// Current connection status
-    @Published var connectionStatus: ConnectionStatus = .unknown
+    var connectionStatus: ConnectionStatus = .unknown
 
     /// Convenience property for checking if connected
     var isConnected: Bool {
@@ -26,12 +26,12 @@ class ConnectionStatusManager: ObservableObject {
     }
 
     /// Last successful API request timestamp
-    @Published private(set) var lastSuccessfulRequest: Date?
+    private(set) var lastSuccessfulRequest: Date?
 
     /// Last error message if any
-    @Published private(set) var lastError: String?
+    private(set) var lastError: String?
 
-    private var cancellables = Set<AnyCancellable>()
+    private var reachabilityTask: Task<Void, Never>?
     private let reachabilityManager = NetworkReachabilityManager.shared
 
     enum ConnectionStatus: Equatable {
@@ -77,12 +77,23 @@ class ConnectionStatusManager: ObservableObject {
     // MARK: - Setup
 
     private func setupReachabilityObserving() {
-        // Observe network reachability changes
-        reachabilityManager.$isReachable
-            .sink { [weak self] isReachable in
-                self?.handleReachabilityChange(isReachable: isReachable)
+        reachabilityTask = Task { [weak self] in
+            guard let self else { return }
+            while !Task.isCancelled {
+                // Wait for isReachable to change, then handle
+                await withCheckedContinuation { continuation in
+                    withObservationTracking {
+                        _ = self.reachabilityManager.isReachable
+                    } onChange: {
+                        continuation.resume()
+                    }
+                }
+                guard !Task.isCancelled else { break }
+                await MainActor.run {
+                    self.handleReachabilityChange(isReachable: self.reachabilityManager.isReachable)
+                }
             }
-            .store(in: &cancellables)
+        }
     }
 
     // MARK: - Status Updates

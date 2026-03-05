@@ -9,7 +9,6 @@
 import Foundation
 import UserNotifications
 import UIKit
-import Combine
 
 /// Manages Apple Push Notifications (APNs) integration
 /// 
@@ -19,23 +18,24 @@ import Combine
 /// - Track permission status
 /// - Provide observable state for UI
 @MainActor
-class PushNotificationManager: NSObject, ObservableObject {
+@Observable
+class PushNotificationManager: NSObject {
     
     static let shared = PushNotificationManager()
     
     // MARK: - Published State
     
     /// Current push notification permission status
-    @Published private(set) var authorizationStatus: UNAuthorizationStatus = .notDetermined
+    private(set) var authorizationStatus: UNAuthorizationStatus = .notDetermined
     
     /// Whether push notifications are enabled (authorized + device token registered)
-    @Published private(set) var isPushEnabled: Bool = false
+    private(set) var isPushEnabled: Bool = false
     
     /// Current device token (hex string)
-    @Published private(set) var deviceToken: String?
+    private(set) var deviceToken: String?
 
     /// Fires each time a silent push is received (for stream reconnection)
-    @Published private(set) var lastSilentPushDate: Date?
+    private(set) var lastSilentPushDate: Date?
 
     func signalSilentPush() {
         lastSilentPushDate = Date()
@@ -44,7 +44,6 @@ class PushNotificationManager: NSObject, ObservableObject {
     // MARK: - Private Properties
     
     private let notificationCenter = UNUserNotificationCenter.current()
-    private var cancellables = Set<AnyCancellable>()
     
     // MARK: - Initialization
     

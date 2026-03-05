@@ -10,7 +10,7 @@ import CoreData
 
 struct ContentView: View {
     @Environment(AuthViewModel.self) var authViewModel
-    @EnvironmentObject var deepLinkHandler: DeepLinkHandler // Inject DeepLinkHandler
+    @Environment(DeepLinkHandler.self) var deepLinkHandler
     @Environment(\.managedObjectContext) private var viewContext
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("appTheme") private var appTheme: AppTheme = .automatic
@@ -96,7 +96,7 @@ struct ContentView: View {
     return ContentView()
         .environment(\.managedObjectContext, container.viewContext)
         .environment(authViewModel)
-        .environmentObject(deepLinkHandler)
+        .environment(deepLinkHandler)
 }
 #endif
 
@@ -125,7 +125,7 @@ struct ContentView: View {
     return ContentView()
         .environment(\.managedObjectContext, context)
         .environment(authViewModel)
-        .environmentObject(deepLinkHandler)
+        .environment(deepLinkHandler)
         .environment(chatsViewModel)
 }
 #endif

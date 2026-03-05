@@ -7,15 +7,15 @@
 
 import Foundation
 import CoreData
-import Combine
 import os.log
 
 @MainActor
-class MessageQueueManager: ObservableObject {
+@Observable
+class MessageQueueManager {
     static let shared = MessageQueueManager()
     
     private let networkManager = NetworkReachabilityManager.shared
-    private var cancellables = Set<AnyCancellable>()
+    private var reachabilityTask: Task<Void, Never>?
     private var checkTimer: Timer?
     
     private var pendingSends: [String: Date] = [:]
@@ -29,23 +29,25 @@ class MessageQueueManager: ObservableObject {
         }
     }
     
-    deinit {
-        checkTimer?.invalidate()
-        checkTimer = nil
-    }
-    
     // MARK: - Setup
     
     private func setupSubscribers() {
-        // Monitor network reachability (gRPC reconnects automatically)
-        networkManager.reachabilityPublisher
-            .sink { [weak self] isReachable in
-                if isReachable {
-                    Log.info("📡 Network available - checking for queued messages", category: "MessageQueue")
-                    self?.processQueuedMessages()
+        // Monitor network reachability using @Observable tracking
+        reachabilityTask = Task { [weak self] in
+            guard let self else { return }
+            while !Task.isCancelled {
+                await withCheckedContinuation { continuation in
+                    withObservationTracking {
+                        _ = self.networkManager.isReachable
+                    } onChange: {
+                        continuation.resume()
+                    }
                 }
+                guard !Task.isCancelled, self.networkManager.isReachable else { continue }
+                Log.info("📡 Network available - checking for queued messages", category: "MessageQueue")
+                self.processQueuedMessages()
             }
-            .store(in: &cancellables)
+        }
     }
     
     // MARK: - Message Tracking

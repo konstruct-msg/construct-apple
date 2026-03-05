@@ -43,7 +43,7 @@ struct Construct_MessengerApp: App {
                 ContentView()
                     .environment(\.managedObjectContext, Construct_MessengerApp.persistentContainer.viewContext)
                     .environment(authViewModel)
-                    .environmentObject(appDelegate.deepLinkHandler)
+                    .environment(appDelegate.deepLinkHandler)
             }
             .environment(securityViewModel)
         }

@@ -11,10 +11,10 @@ import Foundation
 #if os(iOS)
 import UIKit
 #endif
-import Combine
 
 @MainActor
-class TrafficProtectionService: ObservableObject {
+@Observable
+class TrafficProtectionService {
     static let shared = TrafficProtectionService()
 
     // Rust TrafficProtectionManager (UniFFI-generated)
@@ -23,7 +23,7 @@ class TrafficProtectionService: ObservableObject {
     // Configuration
     #if DEBUG
     // Debug: Allow user to toggle traffic protection
-    @Published var isEnabled: Bool = false {
+    var isEnabled: Bool = false {
         didSet {
             if isEnabled {
                 startScheduler()
@@ -35,11 +35,11 @@ class TrafficProtectionService: ObservableObject {
     }
     #else
     // Release: Always enabled for maximum security
-    @Published private(set) var isEnabled: Bool = true
+    private(set) var isEnabled: Bool = true
     #endif
 
     // Energy metrics for UI display
-    @Published var metrics: EnergyMetrics?
+    var metrics: EnergyMetrics?
 
     // Battery monitoring
     private var batteryLevel: Float = TrafficProtectionConfig.defaultBatteryLevel
@@ -72,17 +72,6 @@ class TrafficProtectionService: ObservableObject {
         #else
         // Release: Always start scheduler (always enabled)
         startScheduler()
-        #endif
-    }
-
-    deinit {
-        schedulerTimer?.invalidate()
-        schedulerTimer = nil
-        if let observer = batteryObserver {
-            NotificationCenter.default.removeObserver(observer)
-        }
-        #if os(iOS)
-        UIDevice.current.isBatteryMonitoringEnabled = false
         #endif
     }
 

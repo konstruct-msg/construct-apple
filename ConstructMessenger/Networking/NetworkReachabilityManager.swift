@@ -7,15 +7,15 @@
 
 import Foundation
 import Network
-import Combine
 import os.log
 
 /// Manages network reachability monitoring
-class NetworkReachabilityManager: ObservableObject {
+@Observable
+class NetworkReachabilityManager {
     static let shared = NetworkReachabilityManager()
     
-    @Published var isReachable = true
-    @Published var connectionType: ConnectionType = .unknown
+    var isReachable = true
+    var connectionType: ConnectionType = .unknown
     
     enum ConnectionType {
         case wifi
@@ -28,11 +28,6 @@ class NetworkReachabilityManager: ObservableObject {
     
     private var monitor: NWPathMonitor?
     private var queue: DispatchQueue?
-    private var cancellables = Set<AnyCancellable>()
-    
-    // Publishers for other components
-    let reachabilityPublisher = PassthroughSubject<Bool, Never>()
-    let connectionTypePublisher = PassthroughSubject<ConnectionType, Never>()
     
     private init() {
         // Always set default values first
@@ -89,8 +84,6 @@ class NetworkReachabilityManager: ObservableObject {
                 // Notify subscribers if reachability changed
                 if wasReachable != self.isReachable {
                     Log.info("🌐 Network reachability changed: \(self.isReachable ? "ONLINE" : "OFFLINE")", category: "NetworkReachability")
-                    self.reachabilityPublisher.send(self.isReachable)
-                    self.connectionTypePublisher.send(self.connectionType)
                     
                     // Post notification for other components
                     let notification = Notification(

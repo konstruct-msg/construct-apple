@@ -6,14 +6,13 @@
 //
 
 import Foundation
-import Combine
 import CoreData
 import UIKit  // ✅ Required for UIApplication notifications
 
 @Observable
 @MainActor
 class ChatsViewModel {
-    private var cancellables = Set<AnyCancellable>()
+    private var observationTasks: [Task<Void, Never>] = []
     private var viewContext: NSManagedObjectContext?
 
     // ✅ Pending messages from users we don't have sessions with yet.
@@ -101,84 +100,101 @@ class ChatsViewModel {
     }
 
     private func setupSubscribers() {
-        // ✅ HYBRID POLLING STRATEGY: Combine auth, connection, and push notification state
-        // Automatically adjust polling behavior based on:
-        // 1. Session token is available (user is authenticated)
-        // 2. Connection status is .connected (network is available)
-        // 3. Push notifications enabled (reduces polling frequency)
-        //
-        // Polling Strategy:
-        // - Push ENABLED: Minimal polling (background only, ~5 min intervals)
-        // - Push DISABLED: Full polling (continuous with 30s timeout)
-        //
-        // TODO: Phase 3 - State Machine Migration
-        // This reactive approach works well but consider migrating to explicit
-        // State Machine for better control over edge cases like:
-        // - Offline mode (queue messages locally)
-        // - Reconnection with exponential backoff
-        // - Partial connectivity (WiFi without internet)
-        // - Token refresh during active polling
-        //
-        Publishers.CombineLatest3(
-            SessionManager.shared.$sessionToken,
-            connectionStatusManager.$connectionStatus,
-            PushNotificationManager.shared.$isPushEnabled
-        )
-        .map { token, status, pushEnabled in
-            PollingState(hasToken: token != nil, status: status, pushEnabled: pushEnabled)
-        }
-        .removeDuplicates()
-        .receive(on: RunLoop.main)  // defer to next run loop — prevents "Publishing during view update"
-        .sink { [weak self] (state: PollingState) in
-            Log.debug("📡 Stream state: token=\(state.hasToken ? "present" : "nil"), status=\(state.status.displayText), push=\(state.pushEnabled)", category: "ChatsViewModel")
-
-            if state.hasToken && state.status != ConnectionStatusManager.ConnectionStatus.disconnected {
-                if state.pushEnabled {
-                    Log.info("📱 Push active — stream connected", category: "ChatsViewModel")
-                } else {
-                    Log.info("📡 Connecting message stream", category: "ChatsViewModel")
+        // ✅ HYBRID POLLING STRATEGY: Observe auth, connection, and push state via @Observable
+        // Uses AsyncStream + withObservationTracking to react to any of the three changing.
+        let streamTask = Task { [weak self] in
+            guard let self else { return }
+            var lastState: PollingState? = nil
+            while !Task.isCancelled {
+                // Capture current state and register tracking for next iteration
+                var nextState: PollingState!
+                withObservationTracking {
+                    nextState = PollingState(
+                        hasToken: SessionManager.shared.sessionToken != nil,
+                        status: connectionStatusManager.connectionStatus,
+                        pushEnabled: PushNotificationManager.shared.isPushEnabled
+                    )
+                } onChange: { /* handled by the loop */ }
+                
+                if nextState != lastState {
+                    lastState = nextState
+                    Log.debug("📡 Stream state: token=\(nextState.hasToken ? "present" : "nil"), status=\(nextState.status.displayText), push=\(nextState.pushEnabled)", category: "ChatsViewModel")
+                    self.handlePollingState(nextState)
                 }
-                self?.startMessageStream()
-            } else {
-                if !state.hasToken {
-                    Log.info("📡 No session — stream stopped", category: "ChatsViewModel")
-                } else {
-                    Log.info("📡 Disconnected (\(state.status.displayText)) — stream stopped", category: "ChatsViewModel")
+                
+                // Wait for any of the three values to change
+                await withCheckedContinuation { continuation in
+                    withObservationTracking {
+                        _ = SessionManager.shared.sessionToken
+                        _ = self.connectionStatusManager.connectionStatus
+                        _ = PushNotificationManager.shared.isPushEnabled
+                    } onChange: {
+                        continuation.resume()
+                    }
                 }
-                self?.stopMessageStream()
             }
         }
-        .store(in: &cancellables)
+        observationTasks.append(streamTask)
+    }
+    
+    private func handlePollingState(_ state: PollingState) {
+        if state.hasToken && state.status != ConnectionStatusManager.ConnectionStatus.disconnected {
+            if state.pushEnabled {
+                Log.info("📱 Push active — stream connected", category: "ChatsViewModel")
+            } else {
+                Log.info("📡 Connecting message stream", category: "ChatsViewModel")
+            }
+            startMessageStream()
+        } else {
+            if !state.hasToken {
+                Log.info("📡 No session — stream stopped", category: "ChatsViewModel")
+            } else {
+                Log.info("📡 Disconnected (\(state.status.displayText)) — stream stopped", category: "ChatsViewModel")
+            }
+            stopMessageStream()
+        }
     }
     
     // MARK: - App Lifecycle
     
     private func setupAppLifecycleObservers() {
         // Pause stream when app goes to background
-        NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)
-            .sink { [weak self] _ in
+        let resignTask = Task { [weak self] in
+            for await _ in NotificationCenter.default.notifications(named: UIApplication.willResignActiveNotification) {
                 Log.info("📱 App going to background - pausing messaging", category: "ChatsViewModel")
                 self?.streamManager.pause()
             }
-            .store(in: &cancellables)
+        }
+        observationTasks.append(resignTask)
         
-        // Force reconnect when app becomes active — always kick the stream,
-        // even if PollingState didn't change (Combine wouldn't fire in that case).
-        NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)
-            .sink { [weak self] _ in
+        // Force reconnect when app becomes active
+        let activeTask = Task { [weak self] in
+            for await _ in NotificationCenter.default.notifications(named: UIApplication.didBecomeActiveNotification) {
                 Log.info("📱 App became active — force reconnecting stream", category: "ChatsViewModel")
                 self?.forceReconnectStream()
             }
-            .store(in: &cancellables)
+        }
+        observationTasks.append(activeTask)
 
         // Wake up when silent push arrives (app is in background)
-        PushNotificationManager.shared.$lastSilentPushDate
-            .compactMap { $0 }
-            .sink { [weak self] _ in
-                Log.info("📱 Silent push — reconnecting stream to fetch pending messages", category: "ChatsViewModel")
-                self?.forceReconnectStream()
+        let silentPushTask = Task { [weak self] in
+            guard let self else { return }
+            while !Task.isCancelled {
+                await withCheckedContinuation { continuation in
+                    withObservationTracking {
+                        _ = PushNotificationManager.shared.lastSilentPushDate
+                    } onChange: {
+                        continuation.resume()
+                    }
+                }
+                guard !Task.isCancelled else { break }
+                if PushNotificationManager.shared.lastSilentPushDate != nil {
+                    Log.info("📱 Silent push — reconnecting stream to fetch pending messages", category: "ChatsViewModel")
+                    self.forceReconnectStream()
+                }
             }
-            .store(in: &cancellables)
+        }
+        observationTasks.append(silentPushTask)
     }
 
     // MARK: - Message Receiving

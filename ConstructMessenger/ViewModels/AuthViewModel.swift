@@ -6,7 +6,6 @@
 //
 
 import Foundation
-import Combine
 import CoreData
 import CryptoKit
 
@@ -38,7 +37,6 @@ class AuthViewModel {
     var isLoading = false
     var errorMessage: String?
 
-    private var cancellables = Set<AnyCancellable>()
     nonisolated(unsafe) private var sessionRestoreTimer: Timer?
     nonisolated(unsafe) private var authOperationTimer: Timer?
     private let viewContext: NSManagedObjectContext
@@ -59,19 +57,25 @@ class AuthViewModel {
         }
     }
     
-    // Subscribe to session invalidation from SessionManager (@Published replaces NotificationCenter)
+    // Subscribe to session invalidation from SessionManager
     private func setupSessionExpiredListener() {
-        // "SessionExpired" was never posted — removed
-        // "SessionInvalidated" -> SessionManager.$isSessionInvalidated
-        SessionManager.shared.$isSessionInvalidated
-            .filter { $0 }
-            .sink { [weak self] _ in
-                SessionManager.shared.resetSessionInvalidated()
-                Task {
-                    await self?.restoreOrAuthenticateDevice()
+        Task { [weak self] in
+            guard let self else { return }
+            while !Task.isCancelled {
+                await withCheckedContinuation { continuation in
+                    withObservationTracking {
+                        _ = SessionManager.shared.isSessionInvalidated
+                    } onChange: {
+                        continuation.resume()
+                    }
+                }
+                guard !Task.isCancelled else { break }
+                if SessionManager.shared.isSessionInvalidated {
+                    SessionManager.shared.resetSessionInvalidated()
+                    await self.restoreOrAuthenticateDevice()
                 }
             }
-            .store(in: &cancellables)
+        }
     }
 
     deinit {

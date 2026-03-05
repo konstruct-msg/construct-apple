@@ -7,7 +7,7 @@ import SwiftUI
 
 /// Compact connection status dot shown in the chats list navigation bar.
 struct ConnectionStatusIndicator: View {
-    @ObservedObject var connectionManager = ConnectionStatusManager.shared
+    var connectionManager = ConnectionStatusManager.shared
     @State private var isPulsing = false
 
     var body: some View {

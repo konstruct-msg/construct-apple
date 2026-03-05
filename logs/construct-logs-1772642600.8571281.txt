@@ -1,0 +1,700 @@
+========================================
+Construct Messenger Debug Logs
+========================================
+Exported: 2026-03-04 16:43:20 +0000
+App Version: 0.8.34
+Build: 150
+Device: iPhone
+iOS Version: 18.6.2
+Identifier: 4D5928CB-A0A0-4204-9111-3EDEF2ED2590
+========================================
+
+=== Log File 1/1: current.log ===
+========================================
+Construct Messenger - Log Session
+========================================
+App Version: 0.8.34
+Build: 150
+Device: iPhone
+iOS Version: 18.6.2
+Started: 2026-03-04 16:37:52 +0000
+========================================
+[2026-03-04T16:37:52Z] [DEBUG] [Keychain] ✅ Device keys found in Keychain
+[2026-03-04T16:37:52Z] [DEBUG] [Keychain]    deviceId: 6f9d92d68202fbb1...
+[2026-03-04T16:37:52Z] [DEBUG] [Keychain]    signingKey: 32 bytes
+[2026-03-04T16:37:52Z] [DEBUG] [Keychain]    identityKey: 32 bytes
+[2026-03-04T16:37:53Z] [INFO] [Default] Application did finish launching
+[2026-03-04T16:37:53Z] [INFO] [BackgroundFetch] BackgroundFetchManager initialized
+[2026-03-04T16:37:53Z] [INFO] [EnergyMonitor] Network status changed: satisfied
+[2026-03-04T16:37:53Z] [INFO] [Default] Background tasks registered successfully
+[2026-03-04T16:37:53Z] [INFO] [Default] Background fetch is disabled by user or Low Power Mode
+[2026-03-04T16:37:53Z] [INFO] [Push] 📱 PushNotificationManager initialized
+[2026-03-04T16:37:53Z] [INFO] [NetworkReachability] 🌐 Network reachability monitoring started
+[2026-03-04T16:37:53Z] [INFO] [ConnectionStatus] 🔄 ConnectionStatusManager initialized: Connecting (network reachable)
+[2026-03-04T16:37:53Z] [DEBUG] [Keychain] ✅ Device keys found in Keychain
+[2026-03-04T16:37:53Z] [DEBUG] [Keychain]    deviceId: 6f9d92d68202fbb1...
+[2026-03-04T16:37:53Z] [DEBUG] [Keychain]    signingKey: 32 bytes
+[2026-03-04T16:37:53Z] [DEBUG] [Keychain]    identityKey: 32 bytes
+[2026-03-04T16:37:53Z] [INFO] [ChatsViewModel] 📱 No session — skipping reconnect
+[2026-03-04T16:37:53Z] [INFO] [ChatsViewModel] 📱 No session — skipping reconnect
+[2026-03-04T16:37:53Z] [DEBUG] [ChatsViewModel] 📡 Stream state: token=nil, status=Connecting..., push=false
+[2026-03-04T16:37:53Z] [INFO] [ChatsViewModel] 📡 No session — stream stopped
+[2026-03-04T16:37:53Z] [INFO] [MessageStream] 📡 MessageStream disconnected
+[2026-03-04T16:37:53Z] [DEBUG] [Keychain] ✅ Session token loaded from Keychain (length: 927, prefix: eyJ0eXAiOiJKV1QiLCJhbGciOiJSUz...)
+[2026-03-04T16:37:53Z] [DEBUG] [Keychain] ✅ Refresh token loaded from Keychain (length: 927)
+[2026-03-04T16:37:53Z] [DEBUG] [Keychain] ✅ User ID loaded from Keychain: bfe057f6...
+[2026-03-04T16:37:53Z] [DEBUG] [Default] Notification authorization status: 0
+[2026-03-04T16:37:53Z] [DEBUG] [ChatsViewModel] 📡 Stream state: token=present, status=Connecting..., push=false
+[2026-03-04T16:37:53Z] [INFO] [ChatsViewModel] 📡 Connecting message stream
+[2026-03-04T16:37:53Z] [INFO] [MessageStream] 📡 Starting MessageStream connection (subscribed to 2 contacts)
+[2026-03-04T16:37:53Z] [INFO] [CryptoManager] 🔑 Found existing keys in Keychain, restoring CryptoCore...
+[2026-03-04T16:37:53Z] [INFO] [CryptoManager] ✅ CryptoCore restored from saved keys!
+[2026-03-04T16:37:53Z] [DEBUG] [CryptoManager] 🔑 CryptoManager: local user ID set to bfe057f6-1e07-42c8-b2f9-4b3a1ed5c8df
+[2026-03-04T16:37:53Z] [DEBUG] [Push] 📱 Push authorization status: notDetermined
+[2026-03-04T16:37:53Z] [INFO] [MessageStream] 🔄 MessageStream connectLoop started → ams.konstruct.cc:443
+[2026-03-04T16:37:53Z] [DEBUG] [MessageStream] 🔍 fetchMissedMessages cursor=1772627334
+[2026-03-04T16:37:53Z] [INFO] [gRPC] 🔌 gRPC creating channel → ams.konstruct.cc:443 TLS=true
+[2026-03-04T16:37:53Z] [INFO] [gRPC] 🔌 gRPC creating channel → ams.konstruct.cc:443 TLS=true
+[2026-03-04T16:37:53Z] [DEBUG] [CryptoManager] ✅ Restored session: 4b6fc374-83d1-4de5-b623-d02ee7cd0ca8
+[2026-03-04T16:37:53Z] [DEBUG] [CryptoManager] ✅ Restored session: 02d2596f-c67e-4af4-a608-9d6393094155
+[2026-03-04T16:37:53Z] [INFO] [CryptoManager] 📦 Session restore: 2 restored, 0 failed
+[2026-03-04T16:37:53Z] [DEBUG] [CryptoManager] ✅ Garbage collection: no expired archives found
+[2026-03-04T16:37:53Z] [DEBUG] [CryptoManager] ⏰ Started archive GC timer (interval: 24h)
+[2026-03-04T16:37:53Z] [DEBUG] [LocalNotifications] 📛 Badge cleared
+[2026-03-04T16:37:53Z] [INFO] [ChatsViewModel] 📱 App became active — force reconnecting stream
+[2026-03-04T16:37:53Z] [INFO] [MessageStream] 🔁 Force reconnecting stream
+[2026-03-04T16:37:53Z] [INFO] [MessageStream] 📡 Starting MessageStream connection (subscribed to 2 contacts)
+[2026-03-04T16:37:53Z] [INFO] [MessageStream] 🔄 MessageStream connectLoop started → ams.konstruct.cc:443
+[2026-03-04T16:37:53Z] [DEBUG] [MessageStream] 🔍 fetchMissedMessages cursor=1772627334
+[2026-03-04T16:37:53Z] [INFO] [gRPC] 🔌 gRPC creating channel → ams.konstruct.cc:443 TLS=true
+[2026-03-04T16:37:53Z] [DEBUG] [Keychain] ✅ Session token loaded from Keychain (length: 927, prefix: eyJ0eXAiOiJKV1QiLCJhbGciOiJSUz...)
+[2026-03-04T16:37:53Z] [DEBUG] [Keychain] ✅ Refresh token loaded from Keychain (length: 927)
+[2026-03-04T16:37:53Z] [DEBUG] [Keychain] ✅ User ID loaded from Keychain: bfe057f6...
+[2026-03-04T16:37:53Z] [INFO] [MessageStream] 🏁 MessageStream connectLoop finished
+[2026-03-04T16:37:53Z] [DEBUG] [CryptoManager] 🔑 CryptoManager: local user ID set to bfe057f6-1e07-42c8-b2f9-4b3a1ed5c8df
+[2026-03-04T16:37:53Z] [DEBUG] [OTPK] 🔑 OTPK server count: 94
+[2026-03-04T16:37:53Z] [DEBUG] [MessageStream] 📭 fetchMissedMessages: no pending messages
+[2026-03-04T16:37:53Z] [INFO] [MessageStream] 📡 openStream → ams.konstruct.cc:443 subscriptions=[direct:02d2596f-c67e-4af4-a608-9d6393094155:bfe057f6-1e07-42c8-b2f9-4b3a1ed5c8df, direct:4b6fc374-83d1-4de5-b623-d02ee7cd0ca8:bfe057f6-1e07-42c8-b2f9-4b3a1ed5c8df]
+[2026-03-04T16:37:53Z] [INFO] [gRPC] 🔌 gRPC creating channel → ams.konstruct.cc:443 TLS=true
+[2026-03-04T16:37:53Z] [INFO] [MessageStream] ⏳ MessageStream opening to ams.konstruct.cc:443
+[2026-03-04T16:37:53Z] [DEBUG] [MessageStream] 📤 MessageStream subscribe sent: 2 conversation(s)
+[2026-03-04T16:37:54Z] [INFO] [ConnectionStatus] 🟢 Stream connected → status: Connected
+[2026-03-04T16:37:54Z] [INFO] [MessageStream] ✅ MessageStream RPC accepted — stream connected
+[2026-03-04T16:37:54Z] [DEBUG] [ChatsViewModel] 📡 Stream state: token=present, status=Connected, push=false
+[2026-03-04T16:37:54Z] [INFO] [ChatsViewModel] 📡 Connecting message stream
+[2026-03-04T16:37:54Z] [INFO] [MessageStream] 📡 MessageStream already connected
+[2026-03-04T16:38:04Z] [INFO] [MessageQueue] ⏰ Started periodic message queue check
+[2026-03-04T16:38:04Z] [INFO] [MessageQueue] 📦 MessageQueueManager initialized
+[2026-03-04T16:38:04Z] [DEBUG] [ChatViewModel] 🔧 ChatViewModel init: chat.id=ADDC07AE-F1BD-4AB9-8DEA-70C7C10B8EB6, chat.otherUser?.id=4b6fc374-83d1-4de5-b623-d02ee7cd0ca8, chat.otherUser?.username=
+[2026-03-04T16:38:04Z] [DEBUG] [ChatViewModel] ✅ FRC initial fetch: 4 messages (reversed to oldest-first)
+[2026-03-04T16:38:04Z] [INFO] [ChatViewModel] ✅ Network connected - processing queued messages
+[2026-03-04T16:38:04Z] [INFO] [MessageRetryManager] 📤 Sending 0 queued messages
+[2026-03-04T16:38:04Z] [DEBUG] [CryptoManager] 🔑 Session check for 4b6fc374-83d1-4de5-b623-d02ee7cd0ca8: EXISTS
+[2026-03-04T16:38:04Z] [DEBUG] [CryptoManager]    Session ID: 7ae07448-550b-4d...
+[2026-03-04T16:38:04Z] [INFO] [ChatViewModel] ✅ Session already exists for user: 4b6fc374-83d1-4de5-b623-d02ee7cd0ca8
+[2026-03-04T16:38:04Z] [DEBUG] [ChatViewModel] 🔑 Fetching public key for userId: 4b6fc374-83d1-4de5-b623-d02ee7cd0ca8, currentUserId: bfe057f6-1e07-42c8-b2f9-4b3a1ed5c8df
+[2026-03-04T16:38:04Z] [DEBUG] [ChatViewModel] 🔧 ChatViewModel initialized with viewContext
+[2026-03-04T16:38:04Z] [DEBUG] [ChatViewModel] 📥 Loading more messages before 2026-03-04 13:27:09 +0000
+[2026-03-04T16:38:04Z] [DEBUG] [ChatViewModel] 📭 No more older messages to load
+[2026-03-04T16:38:04Z] [DEBUG] [LocalNotifications] 📛 Badge cleared
+[2026-03-04T16:38:06Z] [DEBUG] [LocalNotifications] 📛 Badge cleared
+[2026-03-04T16:38:07Z] [DEBUG] [ChatViewModel] 🔧 ChatViewModel deinitialized
+[2026-03-04T16:38:19Z] [DEBUG] [MessageStream] 💓 Heartbeat ack: server=1772642299035
+[2026-03-04T16:38:42Z] [INFO] [EnergyMonitor] Network status changed: satisfied
+[2026-03-04T16:38:45Z] [DEBUG] [MessageStream] 💓 Heartbeat ack: server=1772642325375
+[2026-03-04T16:38:46Z] [INFO] [EnergyMonitor] Network status changed: satisfied
+[2026-03-04T16:38:46Z] [INFO] [EnergyMonitor] Network status changed: satisfied
+[2026-03-04T16:39:11Z] [DEBUG] [MessageStream] 💓 Heartbeat ack: server=1772642351037
+[2026-03-04T16:39:37Z] [DEBUG] [MessageStream] 💓 Heartbeat ack: server=1772642377043
+[2026-03-04T16:39:49Z] [INFO] [EnergyMonitor] Network status changed: satisfied
+[2026-03-04T16:39:50Z] [INFO] [EnergyMonitor] Network status changed: satisfied
+[2026-03-04T16:40:02Z] [DEBUG] [MessageStream] 💓 Heartbeat ack: server=1772642402668
+[2026-03-04T16:40:28Z] [DEBUG] [MessageStream] 💓 Heartbeat ack: server=1772642428035
+[2026-03-04T16:40:42Z] [INFO] [EnergyMonitor] Network status changed: satisfied
+[2026-03-04T16:40:54Z] [DEBUG] [MessageStream] 💓 Heartbeat ack: server=1772642454034
+[2026-03-04T16:41:03Z] [INFO] [EnergyMonitor] Network status changed: satisfied
+[2026-03-04T16:41:04Z] [INFO] [EnergyMonitor] Network status changed: satisfied
+[2026-03-04T16:41:05Z] [DEBUG] [QRScannerView] 📷 QRScannerView: scanned=konstruct://add?invite=eyJzaWciOiJsNExoekh1MkF5K01Ia2lBRzNzUkFPWkFpbzBTVjZSWHZyaWRpTVhJTnNYR09BVENaOUtTVjFyUDF6TWc0WFwvV, normalized=konstruct://add?invite=eyJzaWciOiJsNExoekh1MkF5K01Ia2lBRzNzUkFPWkFpbzBTVjZSWHZyaWRpTVhJTnNYR09BVENaOUtTVjFyUDF6TWc0WFwvV
+[2026-03-04T16:41:05Z] [INFO] [ChatsListView] 🔍 ChatsListView: Handling scanned URL: konstruct://add?invite=eyJzaWciOiJsNExoekh1MkF5K01Ia2lBRzNzUkFPWkFpbzBTVjZSWHZyaWRpTVhJTnNYR09BVENaOUtTVjFyUDF6TWc0WFwvVGJIbUVIUWZIRFhYSjhWVXdYU2MyQ1E9PSIsInV1aWQiOiIzMjIzMDgyMC1jZWNkLTQ3MzYtYWViZi1mNDZhM2ViMTMwMjIiLCJ2IjoyLCJqdGkiOiJmZTYxY2RkNS0wMjAwLTQ4ZmMtYTBhZS03YjFkOTEzMDA4ZDgiLCJzZXJ2ZXIiOiJrb25zdHJ1Y3QuY2MiLCJ0cyI6MTc3MjY0MjQ1OCwiZGV2aWNlSWQiOiJmNjNmZTJmOGZmM2U4NWJmM2JmMGE3NzE0ZjliOGIzMiIsImVwaEtleSI6IlwvaHRmMm91MDFhbEZHVHVza1A2Q3JNcnFCcTdTc2NsYW9GRkdtRFEyOURRPSJ9
+[2026-03-04T16:41:05Z] [INFO] [LinkParser] 📥 Parsing Dynamic Invite URL
+[2026-03-04T16:41:05Z] [DEBUG] [InviteVerifier] 📥 Decoded invite: jti=fe61cdd5..., from=32230820...
+[2026-03-04T16:41:05Z] [INFO] [gRPC] 🔌 gRPC creating channel → ams.konstruct.cc:443 TLS=true
+[2026-03-04T16:41:06Z] [INFO] [LinkParser] ✅ Invite accepted: userId=32230820..., deviceId=f63fe2f8ff3e85bf3bf0a7714f9b8b32
+[2026-03-04T16:41:06Z] [INFO] [ChatsListView] ✅ Parsed contact: userId=32230820-cecd-4736-aebf-f46a3eb13022, username=32230820-cecd-4736-aebf-f46a3eb13022
+[2026-03-04T16:41:06Z] [INFO] [ChatsListView] 📱 ChatsListView: Adding contact userId=32230820-cecd-4736-aebf-f46a3eb13022, username=32230820-cecd-4736-aebf-f46a3eb13022
+[2026-03-04T16:41:06Z] [DEBUG] [ChatManagementService] Created new user: id=32230820-cecd-4736-aebf-f46a3eb13022, username=32230820-cecd-4736-aebf-f46a3eb13022, displayName=32230820-cecd-4736-aebf-f46a3eb13022
+[2026-03-04T16:41:06Z] [DEBUG] [ChatManagementService] ✅ Chat saved successfully
+[2026-03-04T16:41:06Z] [DEBUG] [ChatManagementService]    chat.id = CE4CA3E0-378D-49A2-8D92-3A5784361442
+[2026-03-04T16:41:06Z] [DEBUG] [ChatManagementService]    chat.otherUser?.id = 32230820-cecd-4736-aebf-f46a3eb13022
+[2026-03-04T16:41:06Z] [DEBUG] [ChatManagementService]    chat.otherUser?.username = 
+[2026-03-04T16:41:06Z] [DEBUG] [ChatManagementService]    chat.otherUser?.displayName = Verdant Manticore
+[2026-03-04T16:41:06Z] [INFO] [MessageStream] 🔁 Force reconnecting stream
+[2026-03-04T16:41:06Z] [INFO] [MessageStream] 📡 Starting MessageStream connection (subscribed to 3 contacts)
+[2026-03-04T16:41:06Z] [INFO] [ChatsListView] ✅ ChatsListView: Chat created with @32230820-cecd-4736-aebf-f46a3eb13022, chat.id=CE4CA3E0-378D-49A2-8D92-3A5784361442
+[2026-03-04T16:41:06Z] [INFO] [MessageStream] 🔄 MessageStream connectLoop started → ams.konstruct.cc:443
+[2026-03-04T16:41:06Z] [DEBUG] [MessageStream] 🔍 fetchMissedMessages cursor=1772627334
+[2026-03-04T16:41:06Z] [INFO] [gRPC] 🔌 gRPC creating channel → ams.konstruct.cc:443 TLS=true
+[2026-03-04T16:41:06Z] [INFO] [MessageStream] 🔌 MessageStream disconnected from ams.konstruct.cc:443
+[2026-03-04T16:41:06Z] [INFO] [MessageStream] 🛑 MessageStream cancelled — connectLoop exiting
+[2026-03-04T16:41:06Z] [INFO] [MessageStream] 🏁 MessageStream connectLoop finished
+[2026-03-04T16:41:06Z] [DEBUG] [MessageStream] 📭 fetchMissedMessages: no pending messages
+[2026-03-04T16:41:06Z] [INFO] [MessageStream] 📡 openStream → ams.konstruct.cc:443 subscriptions=[direct:02d2596f-c67e-4af4-a608-9d6393094155:bfe057f6-1e07-42c8-b2f9-4b3a1ed5c8df, direct:4b6fc374-83d1-4de5-b623-d02ee7cd0ca8:bfe057f6-1e07-42c8-b2f9-4b3a1ed5c8df, direct:32230820-cecd-4736-aebf-f46a3eb13022:bfe057f6-1e07-42c8-b2f9-4b3a1ed5c8df]
+[2026-03-04T16:41:06Z] [INFO] [gRPC] 🔌 gRPC creating channel → ams.konstruct.cc:443 TLS=true
+[2026-03-04T16:41:06Z] [INFO] [MessageStream] ⏳ MessageStream opening to ams.konstruct.cc:443
+[2026-03-04T16:41:06Z] [DEBUG] [MessageStream] 📤 MessageStream subscribe sent: 3 conversation(s)
+[2026-03-04T16:41:07Z] [INFO] [MessageStream] ✅ MessageStream RPC accepted — stream connected
+[2026-03-04T16:41:08Z] [DEBUG] [ChatViewModel] 🔧 ChatViewModel init: chat.id=CE4CA3E0-378D-49A2-8D92-3A5784361442, chat.otherUser?.id=32230820-cecd-4736-aebf-f46a3eb13022, chat.otherUser?.username=
+[2026-03-04T16:41:08Z] [DEBUG] [ChatViewModel] ✅ FRC initial fetch: 0 messages (reversed to oldest-first)
+[2026-03-04T16:41:08Z] [INFO] [ChatViewModel] ✅ Network connected - processing queued messages
+[2026-03-04T16:41:08Z] [INFO] [MessageRetryManager] 📤 Sending 0 queued messages
+[2026-03-04T16:41:08Z] [DEBUG] [CryptoManager] 🔑 Session check for 32230820-cecd-4736-aebf-f46a3eb13022: MISSING
+[2026-03-04T16:41:08Z] [DEBUG] [ChatViewModel] No session yet for user: 32230820-cecd-4736-aebf-f46a3eb13022
+[2026-03-04T16:41:08Z] [DEBUG] [ChatViewModel] 🔑 Fetching public key for userId: 32230820-cecd-4736-aebf-f46a3eb13022, currentUserId: bfe057f6-1e07-42c8-b2f9-4b3a1ed5c8df
+[2026-03-04T16:41:08Z] [DEBUG] [ChatViewModel] 🔧 ChatViewModel initialized with viewContext
+[2026-03-04T16:41:08Z] [INFO] [SessionInit] 🔑 SESSION_STATE[fetch_bundle_attempt_1]: userId=32230820..., deviceId=nil...
+[2026-03-04T16:41:08Z] [INFO] [gRPC] 🔌 gRPC creating channel → ams.konstruct.cc:443 TLS=true
+[2026-03-04T16:41:08Z] [DEBUG] [LocalNotifications] 📛 Badge cleared
+[2026-03-04T16:41:08Z] [INFO] [SessionInit] ✅ SESSION_STATE[fetch_bundle_success]: userId=32230820..., hasVerifyingKey=true
+[2026-03-04T16:41:08Z] [DEBUG] [ChatViewModel] 📦 Received publicKeyBundle for userId: 32230820-cecd-4736-aebf-f46a3eb13022, chat.otherUser?.id: 32230820-cecd-4736-aebf-f46a3eb13022, match: true
+[2026-03-04T16:41:08Z] [INFO] [ChatViewModel] Updated username for user: 
+[2026-03-04T16:41:08Z] [DEBUG] [ChatViewModel] 🔍 Session init check - currentUserId: bfe057f6-1e07-42c8-b2f9-4b3a1ed5c8df, recipientId: 32230820-cecd-4736-aebf-f46a3eb13022
+[2026-03-04T16:41:08Z] [DEBUG] [CryptoManager] 🔑 Session check for 32230820-cecd-4736-aebf-f46a3eb13022: MISSING
+[2026-03-04T16:41:08Z] [DEBUG] [CryptoManager] 🔐 Session init bundle lengths: identity=44, signedPrekey=44, signature=88, verifyingKey=44, suiteId=1
+[2026-03-04T16:41:08Z] [DEBUG] [CryptoManager] 🔐 INITIATOR RAW bundle from server:
+[2026-03-04T16:41:08Z] [DEBUG] [CryptoManager]    identityPublic (base64): E1sjTkJR2Qa9BWQDfazptmLY8X5c27cS...
+[2026-03-04T16:41:08Z] [DEBUG] [CryptoManager]    signedPrekeyPublic (base64): u6DbKZvUppf79nPbc7eeVdv0gu1Evg0K...
+[2026-03-04T16:41:08Z] [DEBUG] [CryptoManager]    signature (base64): PaM40Y4315dzkQfSXtgK02UoJTt4bTSc...
+[2026-03-04T16:41:08Z] [DEBUG] [CryptoManager]    verifyingKey (base64): RPXbl7/3v72+/BdDdb/NXKuvY2IoPW+k...
+[2026-03-04T16:41:08Z] [DEBUG] [CryptoManager]    suiteId: 1
+[2026-03-04T16:41:08Z] [DEBUG] [CryptoManager] 🔐 Calling Rust initSession (INITIATOR):
+[2026-03-04T16:41:08Z] [DEBUG] [CryptoManager]    contactId: 32230820-cecd-4736-aebf-f46a3eb13022
+[2026-03-04T16:41:08Z] [DEBUG] [CryptoManager]    recipientBundle: 832 bytes JSON
+[2026-03-04T16:41:08Z] [DEBUG] [CryptoManager]    Bundle JSON keys: ["identity_public", "one_time_prekey_id", "one_time_prekey_public", "signature", "signed_prekey_public", "suite_id", "verifying_key"]
+[2026-03-04T16:41:08Z] [DEBUG] [CryptoManager]    identity_public preview: 135b234e4251d906bd0564037dace9b6...
+[2026-03-04T16:41:08Z] [DEBUG] [CryptoManager]    signed_prekey_public preview: bba0db299bd4a697fbf673db73b79e55...
+[2026-03-04T16:41:08Z] [DEBUG] [CryptoManager] 💾 Session saved to Keychain: 32230820-cecd-4736-aebf-f46a3eb13022
+[2026-03-04T16:41:08Z] [INFO] [CryptoManager] ✅ INITIATOR session created: 32230820-cecd-47...
+[2026-03-04T16:41:08Z] [INFO] [CryptoManager] ✅ Session initialized for user: 32230820-cecd-4736-aebf-f46a3eb13022
+[2026-03-04T16:41:08Z] [INFO] [SessionInit] ✅ Session initialized as INITIATOR for 32230820-cecd-4736-aebf-f46a3eb13022
+[2026-03-04T16:41:08Z] [DEBUG] [ChatViewModel] processPendingMessages called - deprecated, use sendQueuedMessages()
+[2026-03-04T16:41:08Z] [DEBUG] [ChatViewModel] 🔧 ChatViewModel init: chat.id=CE4CA3E0-378D-49A2-8D92-3A5784361442, chat.otherUser?.id=32230820-cecd-4736-aebf-f46a3eb13022, chat.otherUser?.username=
+[2026-03-04T16:41:08Z] [DEBUG] [ChatViewModel] ✅ FRC initial fetch: 0 messages (reversed to oldest-first)
+[2026-03-04T16:41:08Z] [INFO] [ChatViewModel] ✅ Network connected - processing queued messages
+[2026-03-04T16:41:08Z] [INFO] [MessageRetryManager] 📤 Sending 0 queued messages
+[2026-03-04T16:41:08Z] [DEBUG] [CryptoManager] 🔑 Session check for 32230820-cecd-4736-aebf-f46a3eb13022: EXISTS
+[2026-03-04T16:41:08Z] [DEBUG] [CryptoManager]    Session ID: 32230820-cecd-47...
+[2026-03-04T16:41:08Z] [INFO] [ChatViewModel] ✅ Session already exists for user: 32230820-cecd-4736-aebf-f46a3eb13022
+[2026-03-04T16:41:08Z] [DEBUG] [ChatViewModel] 🔑 Fetching public key for userId: 32230820-cecd-4736-aebf-f46a3eb13022, currentUserId: bfe057f6-1e07-42c8-b2f9-4b3a1ed5c8df
+[2026-03-04T16:41:08Z] [DEBUG] [ChatViewModel] 🔧 ChatViewModel initialized with viewContext
+[2026-03-04T16:41:26Z] [DEBUG] [ChatScrollManager] 📜 Scrolled to bottom (messageId: bottom)
+[2026-03-04T16:41:28Z] [INFO] [ChatViewModel] 📤 sendMessage called with 0 images
+[2026-03-04T16:41:28Z] [INFO] [ChatViewModel] 📤 Sending to: 32230820-cecd-4736-aebf-f46a3eb13022, from: bfe057f6-1e07-42c8-b2f9-4b3a1ed5c8df
+[2026-03-04T16:41:28Z] [DEBUG] [CryptoManager] 🔑 Session check for 32230820-cecd-4736-aebf-f46a3eb13022: EXISTS
+[2026-03-04T16:41:28Z] [DEBUG] [CryptoManager]    Session ID: 32230820-cecd-47...
+[2026-03-04T16:41:28Z] [INFO] [ChatViewModel] ✅ Session is ready, sending via gRPC...
+[2026-03-04T16:41:28Z] [DEBUG] [CryptoManager] 🔐 ENCRYPT: Preparing to encrypt message
+[2026-03-04T16:41:28Z] [DEBUG] [CryptoManager]    userId: 32230820-cecd-4736-aebf-f46a3eb13022
+[2026-03-04T16:41:28Z] [DEBUG] [CryptoManager]    sessionId: 32230820-cecd-47...
+[2026-03-04T16:41:28Z] [DEBUG] [CryptoManager]    suiteId: 1
+[2026-03-04T16:41:28Z] [DEBUG] [CryptoManager]    plaintext length: 66 chars
+[2026-03-04T16:41:28Z] [DEBUG] [CryptoManager]    plaintext preview: KNST1:S05TVAEANftjfuzjQFuJGkM6wdjM5QAAAAEAAAAN0J/R...
+[2026-03-04T16:41:28Z] [DEBUG] [CryptoManager] 🔐 ENCRYPT: Rust core returned components
+[2026-03-04T16:41:28Z] [DEBUG] [CryptoManager]    ephemeralPublicKey: 32 bytes
+[2026-03-04T16:41:28Z] [DEBUG] [CryptoManager]    ephemeralPublicKey preview: aebcf5829b5b3e58f021515c60aafccc...
+[2026-03-04T16:41:28Z] [DEBUG] [CryptoManager]    messageNumber: 0
+[2026-03-04T16:41:28Z] [DEBUG] [CryptoManager]    content (before padding): 380 chars
+[2026-03-04T16:41:28Z] [DEBUG] [CryptoManager]    content preview: RzXLnQP+wAtxkN5tpiVrO/6IWFnKAyRz...
+[2026-03-04T16:41:28Z] [DEBUG] [CryptoManager] 🔐 ENCRYPT: After padding
+[2026-03-04T16:41:28Z] [DEBUG] [CryptoManager]    content (after padding): 1368 chars
+[2026-03-04T16:41:28Z] [DEBUG] [CryptoManager] 💾 Session saved to Keychain: 32230820-cecd-4736-aebf-f46a3eb13022
+[2026-03-04T16:41:28Z] [DEBUG] [CryptoManager] ✅ ENCRYPT: msgNum=0, ephemKey=aebcf5829b5b3e58, content=S1BBRAAAARtHNcudA/7A...
+[2026-03-04T16:41:28Z] [DEBUG] [ChatViewModel] 📤 Sending message with ID: 35FB637E-ECE3-405B-891A-433AC1D8CCE5
+[2026-03-04T16:41:28Z] [DEBUG] [ChatViewModel]    Message number: 0
+[2026-03-04T16:41:28Z] [DEBUG] [ChatViewModel]    Content length: 1368 bytes
+[2026-03-04T16:41:28Z] [DEBUG] [MessagePersistence] 💾 Saving message 35FB637E-ECE3-405B-891A-433AC1D8CCE5, isSentByMe: true, status: sending
+[2026-03-04T16:41:28Z] [DEBUG] [MessagePersistence] ✨ Creating new message 35FB637E-ECE3-405B-891A-433AC1D8CCE5
+[2026-03-04T16:41:28Z] [DEBUG] [ChatViewModel] 🔄 FRC updated messages: 1 total (reversed to oldest-first)
+[2026-03-04T16:41:28Z] [DEBUG] [ChatViewModel] 🔄 FRC updated messages: 1 total (reversed to oldest-first)
+[2026-03-04T16:41:28Z] [DEBUG] [MessagePersistence] ✅ Updated chat.lastMessageText and lastMessageTime
+[2026-03-04T16:41:28Z] [DEBUG] [MessagePersistence] ✅ Message saved to Core Data
+[2026-03-04T16:41:28Z] [DEBUG] [ChatViewModel] 📊 Messages will be updated by FRC. Current count: 1, isNew: true
+[2026-03-04T16:41:28Z] [INFO] [ChatViewModel] 📮 Sending message via gRPC: 35FB637E-ECE3-405B-891A-433AC1D8CCE5
+[2026-03-04T16:41:28Z] [DEBUG] [ChatViewModel] 🔧 ChatViewModel init: chat.id=CE4CA3E0-378D-49A2-8D92-3A5784361442, chat.otherUser?.id=32230820-cecd-4736-aebf-f46a3eb13022, chat.otherUser?.username=
+[2026-03-04T16:41:28Z] [DEBUG] [ChatViewModel] ✅ FRC initial fetch: 1 messages (reversed to oldest-first)
+[2026-03-04T16:41:28Z] [INFO] [ChatViewModel] ✅ Network connected - processing queued messages
+[2026-03-04T16:41:28Z] [INFO] [MessageRetryManager] 📤 Sending 0 queued messages
+[2026-03-04T16:41:28Z] [DEBUG] [CryptoManager] 🔑 Session check for 32230820-cecd-4736-aebf-f46a3eb13022: EXISTS
+[2026-03-04T16:41:28Z] [DEBUG] [CryptoManager]    Session ID: 32230820-cecd-47...
+[2026-03-04T16:41:28Z] [INFO] [ChatViewModel] ✅ Session already exists for user: 32230820-cecd-4736-aebf-f46a3eb13022
+[2026-03-04T16:41:28Z] [DEBUG] [ChatViewModel] 🔑 Fetching public key for userId: 32230820-cecd-4736-aebf-f46a3eb13022, currentUserId: bfe057f6-1e07-42c8-b2f9-4b3a1ed5c8df
+[2026-03-04T16:41:28Z] [DEBUG] [ChatViewModel] 🔧 ChatViewModel initialized with viewContext
+[2026-03-04T16:41:28Z] [DEBUG] [ChatViewModel] 🔧 ChatViewModel deinitialized
+[2026-03-04T16:41:28Z] [DEBUG] [ChatViewModel] 📥 Loading more messages before 2026-03-04 16:41:28 +0000
+[2026-03-04T16:41:28Z] [DEBUG] [ChatViewModel] 📭 No more older messages to load
+[2026-03-04T16:41:28Z] [DEBUG] [ChatViewModel] 🔧 ChatViewModel init: chat.id=CE4CA3E0-378D-49A2-8D92-3A5784361442, chat.otherUser?.id=32230820-cecd-4736-aebf-f46a3eb13022, chat.otherUser?.username=
+[2026-03-04T16:41:28Z] [DEBUG] [ChatViewModel] ✅ FRC initial fetch: 1 messages (reversed to oldest-first)
+[2026-03-04T16:41:28Z] [INFO] [ChatViewModel] ✅ Network connected - processing queued messages
+[2026-03-04T16:41:28Z] [INFO] [MessageRetryManager] 📤 Sending 0 queued messages
+[2026-03-04T16:41:28Z] [DEBUG] [CryptoManager] 🔑 Session check for 32230820-cecd-4736-aebf-f46a3eb13022: EXISTS
+[2026-03-04T16:41:28Z] [DEBUG] [CryptoManager]    Session ID: 32230820-cecd-47...
+[2026-03-04T16:41:28Z] [INFO] [ChatViewModel] ✅ Session already exists for user: 32230820-cecd-4736-aebf-f46a3eb13022
+[2026-03-04T16:41:28Z] [DEBUG] [ChatViewModel] 🔑 Fetching public key for userId: 32230820-cecd-4736-aebf-f46a3eb13022, currentUserId: bfe057f6-1e07-42c8-b2f9-4b3a1ed5c8df
+[2026-03-04T16:41:28Z] [DEBUG] [ChatViewModel] 🔧 ChatViewModel initialized with viewContext
+[2026-03-04T16:41:28Z] [DEBUG] [ChatViewModel] 🔧 ChatViewModel deinitialized
+[2026-03-04T16:41:28Z] [INFO] [TrafficProtection] ⏹️ Traffic protection scheduler stopped
+[2026-03-04T16:41:28Z] [DEBUG] [TrafficProtection] 🔋 Battery updated: 50%
+[2026-03-04T16:41:28Z] [INFO] [gRPC] 🔌 gRPC creating channel → ams.konstruct.cc:443 TLS=true
+[2026-03-04T16:41:28Z] [DEBUG] [MessagingServiceClient] 📤 sendMessage RPC →
+   messageId      = 35fb637e-ece3-405b-891a-433ac1d8cce5
+   senderId       = bfe057f6-1e07-42c8-b2f9-4b3a1ed5c8df
+   recipientId    = 32230820-cecd-4736-aebf-f46a3eb13022
+   conversationId = direct:32230820-cecd-4736-aebf-f46a3eb13022:bfe057f6-1e07-42c8-b2f9-4b3a1ed5c8df
+   payloadBytes   = 1064
+[2026-03-04T16:41:29Z] [DEBUG] [ChatScrollManager] 📜 Scrolled to bottom (messageId: 35FB637E-ECE3-405B-891A-433AC1D8CCE5)
+[2026-03-04T16:41:29Z] [DEBUG] [ChatScrollManager] 📜 Scrolled to bottom (messageId: 35FB637E-ECE3-405B-891A-433AC1D8CCE5)
+[2026-03-04T16:41:29Z] [INFO] [MessagingServiceClient] ✅ sendMessage response: success=true messageId=6f917609-c589-4f04-838d-babd6779bb25
+[2026-03-04T16:41:29Z] [INFO] [ChatViewModel] 🔄 Updating message status from sending → sent for 35FB637E-ECE3-405B-891A-433AC1D8CCE5
+[2026-03-04T16:41:29Z] [DEBUG] [ChatViewModel] 🔄 FRC updated messages: 1 total (reversed to oldest-first)
+[2026-03-04T16:41:29Z] [DEBUG] [ChatViewModel] 🔄 FRC updated messages: 1 total (reversed to oldest-first)
+[2026-03-04T16:41:29Z] [DEBUG] [MessagePersistence] ✅ Updated message status to sent for 35FB637E-ECE3-405B-891A-433AC1D8CCE5
+[2026-03-04T16:41:29Z] [INFO] [ChatViewModel] ✅ Message sent via gRPC: 6f917609-c589-4f04-838d-babd6779bb25, server status: sent
+[2026-03-04T16:41:31Z] [DEBUG] [LocalNotifications] 📛 Badge cleared
+[2026-03-04T16:41:32Z] [DEBUG] [ChatViewModel] 🔧 ChatViewModel deinitialized
+[2026-03-04T16:41:32Z] [DEBUG] [ChatViewModel] 🔧 ChatViewModel deinitialized
+[2026-03-04T16:41:32Z] [DEBUG] [MessageStream] 💓 Heartbeat ack: server=1772642492203
+[2026-03-04T16:41:37Z] [INFO] [MessageStream] ⚠️ Failed to decode encrypted_payload for message 491f742e-dee9-4afd-a153-dfae89d36b23
+[2026-03-04T16:41:41Z] [DEBUG] [LocalNotifications] 📛 Badge cleared
+[2026-03-04T16:41:42Z] [INFO] [MessageStream] ⚠️ Failed to decode encrypted_payload for message 22fe6835-570b-4227-8cf6-d134db34849c
+[2026-03-04T16:41:42Z] [DEBUG] [ChatViewModel] 🔧 ChatViewModel init: chat.id=ADDC07AE-F1BD-4AB9-8DEA-70C7C10B8EB6, chat.otherUser?.id=4b6fc374-83d1-4de5-b623-d02ee7cd0ca8, chat.otherUser?.username=
+[2026-03-04T16:41:42Z] [DEBUG] [ChatViewModel] ✅ FRC initial fetch: 4 messages (reversed to oldest-first)
+[2026-03-04T16:41:42Z] [INFO] [ChatViewModel] ✅ Network connected - processing queued messages
+[2026-03-04T16:41:42Z] [INFO] [MessageRetryManager] 📤 Sending 0 queued messages
+[2026-03-04T16:41:42Z] [DEBUG] [CryptoManager] 🔑 Session check for 4b6fc374-83d1-4de5-b623-d02ee7cd0ca8: EXISTS
+[2026-03-04T16:41:42Z] [DEBUG] [CryptoManager]    Session ID: 7ae07448-550b-4d...
+[2026-03-04T16:41:42Z] [INFO] [ChatViewModel] ✅ Session already exists for user: 4b6fc374-83d1-4de5-b623-d02ee7cd0ca8
+[2026-03-04T16:41:42Z] [DEBUG] [ChatViewModel] 🔑 Fetching public key for userId: 4b6fc374-83d1-4de5-b623-d02ee7cd0ca8, currentUserId: bfe057f6-1e07-42c8-b2f9-4b3a1ed5c8df
+[2026-03-04T16:41:42Z] [DEBUG] [ChatViewModel] 🔧 ChatViewModel initialized with viewContext
+[2026-03-04T16:41:42Z] [DEBUG] [ChatViewModel] 📥 Loading more messages before 2026-03-04 13:27:09 +0000
+[2026-03-04T16:41:42Z] [DEBUG] [ChatViewModel] 📭 No more older messages to load
+[2026-03-04T16:41:42Z] [DEBUG] [LocalNotifications] 📛 Badge cleared
+[2026-03-04T16:41:44Z] [DEBUG] [LocalNotifications] 📛 Badge cleared
+[2026-03-04T16:41:44Z] [DEBUG] [ChatViewModel] 🔧 ChatViewModel deinitialized
+[2026-03-04T16:41:44Z] [DEBUG] [ChatViewModel] 🔧 ChatViewModel init: chat.id=CE4CA3E0-378D-49A2-8D92-3A5784361442, chat.otherUser?.id=32230820-cecd-4736-aebf-f46a3eb13022, chat.otherUser?.username=
+[2026-03-04T16:41:44Z] [DEBUG] [ChatViewModel] ✅ FRC initial fetch: 1 messages (reversed to oldest-first)
+[2026-03-04T16:41:44Z] [INFO] [ChatViewModel] ✅ Network connected - processing queued messages
+[2026-03-04T16:41:44Z] [INFO] [MessageRetryManager] 📤 Sending 0 queued messages
+[2026-03-04T16:41:44Z] [DEBUG] [CryptoManager] 🔑 Session check for 32230820-cecd-4736-aebf-f46a3eb13022: EXISTS
+[2026-03-04T16:41:44Z] [DEBUG] [CryptoManager]    Session ID: 32230820-cecd-47...
+[2026-03-04T16:41:44Z] [INFO] [ChatViewModel] ✅ Session already exists for user: 32230820-cecd-4736-aebf-f46a3eb13022
+[2026-03-04T16:41:44Z] [DEBUG] [ChatViewModel] 🔑 Fetching public key for userId: 32230820-cecd-4736-aebf-f46a3eb13022, currentUserId: bfe057f6-1e07-42c8-b2f9-4b3a1ed5c8df
+[2026-03-04T16:41:44Z] [DEBUG] [ChatViewModel] 🔧 ChatViewModel initialized with viewContext
+[2026-03-04T16:41:44Z] [DEBUG] [ChatViewModel] 📥 Loading more messages before 2026-03-04 16:41:28 +0000
+[2026-03-04T16:41:44Z] [DEBUG] [ChatViewModel] 📭 No more older messages to load
+[2026-03-04T16:41:44Z] [DEBUG] [LocalNotifications] 📛 Badge cleared
+[2026-03-04T16:41:48Z] [DEBUG] [ChatScrollManager] 📜 Scrolled to bottom (messageId: bottom)
+[2026-03-04T16:41:50Z] [INFO] [ChatViewModel] 📤 sendMessage called with 0 images
+[2026-03-04T16:41:50Z] [INFO] [ChatViewModel] 📤 Sending to: 32230820-cecd-4736-aebf-f46a3eb13022, from: bfe057f6-1e07-42c8-b2f9-4b3a1ed5c8df
+[2026-03-04T16:41:50Z] [DEBUG] [CryptoManager] 🔑 Session check for 32230820-cecd-4736-aebf-f46a3eb13022: EXISTS
+[2026-03-04T16:41:50Z] [DEBUG] [CryptoManager]    Session ID: 32230820-cecd-47...
+[2026-03-04T16:41:50Z] [INFO] [ChatViewModel] ✅ Session is ready, sending via gRPC...
+[2026-03-04T16:41:50Z] [DEBUG] [CryptoManager] 🔐 ENCRYPT: Preparing to encrypt message
+[2026-03-04T16:41:50Z] [DEBUG] [CryptoManager]    userId: 32230820-cecd-4736-aebf-f46a3eb13022
+[2026-03-04T16:41:50Z] [DEBUG] [CryptoManager]    sessionId: 32230820-cecd-47...
+[2026-03-04T16:41:50Z] [DEBUG] [CryptoManager]    suiteId: 1
+[2026-03-04T16:41:50Z] [DEBUG] [CryptoManager]    plaintext length: 54 chars
+[2026-03-04T16:41:50Z] [DEBUG] [CryptoManager]    plaintext preview: KNST1:S05TVAEA94f6ku2pTJG0HUpfKarajQAAAAEAAAAG0KXQ...
+[2026-03-04T16:41:50Z] [DEBUG] [CryptoManager] 🔐 ENCRYPT: Rust core returned components
+[2026-03-04T16:41:50Z] [DEBUG] [CryptoManager]    ephemeralPublicKey: 32 bytes
+[2026-03-04T16:41:50Z] [DEBUG] [CryptoManager]    ephemeralPublicKey preview: aebcf5829b5b3e58f021515c60aafccc...
+[2026-03-04T16:41:50Z] [DEBUG] [CryptoManager]    messageNumber: 1
+[2026-03-04T16:41:50Z] [DEBUG] [CryptoManager]    content (before padding): 380 chars
+[2026-03-04T16:41:50Z] [DEBUG] [CryptoManager]    content preview: SYYTal1nTvzTHYHYYRILK1PfD3MW8d3S...
+[2026-03-04T16:41:50Z] [DEBUG] [CryptoManager] 🔐 ENCRYPT: After padding
+[2026-03-04T16:41:50Z] [DEBUG] [CryptoManager]    content (after padding): 1368 chars
+[2026-03-04T16:41:50Z] [DEBUG] [CryptoManager] 💾 Session saved to Keychain: 32230820-cecd-4736-aebf-f46a3eb13022
+[2026-03-04T16:41:50Z] [DEBUG] [CryptoManager] ✅ ENCRYPT: msgNum=1, ephemKey=aebcf5829b5b3e58, content=S1BBRAAAARtJhhNqXWdO...
+[2026-03-04T16:41:50Z] [DEBUG] [ChatViewModel] 📤 Sending message with ID: F787FA92-EDA9-4C91-B41D-4A5F29AADA8D
+[2026-03-04T16:41:50Z] [DEBUG] [ChatViewModel]    Message number: 1
+[2026-03-04T16:41:50Z] [DEBUG] [ChatViewModel]    Content length: 1368 bytes
+[2026-03-04T16:41:50Z] [DEBUG] [MessagePersistence] 💾 Saving message F787FA92-EDA9-4C91-B41D-4A5F29AADA8D, isSentByMe: true, status: sending
+[2026-03-04T16:41:50Z] [DEBUG] [MessagePersistence] ✨ Creating new message F787FA92-EDA9-4C91-B41D-4A5F29AADA8D
+[2026-03-04T16:41:50Z] [DEBUG] [ChatViewModel] 🔄 FRC updated messages: 2 total (reversed to oldest-first)
+[2026-03-04T16:41:50Z] [DEBUG] [MessagePersistence] ✅ Updated chat.lastMessageText and lastMessageTime
+[2026-03-04T16:41:50Z] [DEBUG] [MessagePersistence] ✅ Message saved to Core Data
+[2026-03-04T16:41:50Z] [DEBUG] [ChatViewModel] 📊 Messages will be updated by FRC. Current count: 2, isNew: true
+[2026-03-04T16:41:50Z] [INFO] [ChatViewModel] 📮 Sending message via gRPC: F787FA92-EDA9-4C91-B41D-4A5F29AADA8D
+[2026-03-04T16:41:50Z] [DEBUG] [ChatViewModel] 🔧 ChatViewModel init: chat.id=CE4CA3E0-378D-49A2-8D92-3A5784361442, chat.otherUser?.id=32230820-cecd-4736-aebf-f46a3eb13022, chat.otherUser?.username=
+[2026-03-04T16:41:50Z] [DEBUG] [ChatViewModel] ✅ FRC initial fetch: 2 messages (reversed to oldest-first)
+[2026-03-04T16:41:50Z] [INFO] [ChatViewModel] ✅ Network connected - processing queued messages
+[2026-03-04T16:41:50Z] [INFO] [MessageRetryManager] 📤 Sending 0 queued messages
+[2026-03-04T16:41:50Z] [DEBUG] [CryptoManager] 🔑 Session check for 32230820-cecd-4736-aebf-f46a3eb13022: EXISTS
+[2026-03-04T16:41:50Z] [DEBUG] [CryptoManager]    Session ID: 32230820-cecd-47...
+[2026-03-04T16:41:50Z] [INFO] [ChatViewModel] ✅ Session already exists for user: 32230820-cecd-4736-aebf-f46a3eb13022
+[2026-03-04T16:41:50Z] [DEBUG] [ChatViewModel] 🔑 Fetching public key for userId: 32230820-cecd-4736-aebf-f46a3eb13022, currentUserId: bfe057f6-1e07-42c8-b2f9-4b3a1ed5c8df
+[2026-03-04T16:41:50Z] [DEBUG] [ChatViewModel] 🔧 ChatViewModel initialized with viewContext
+[2026-03-04T16:41:50Z] [DEBUG] [ChatViewModel] 🔧 ChatViewModel init: chat.id=CE4CA3E0-378D-49A2-8D92-3A5784361442, chat.otherUser?.id=32230820-cecd-4736-aebf-f46a3eb13022, chat.otherUser?.username=
+[2026-03-04T16:41:50Z] [DEBUG] [ChatViewModel] ✅ FRC initial fetch: 2 messages (reversed to oldest-first)
+[2026-03-04T16:41:50Z] [INFO] [ChatViewModel] ✅ Network connected - processing queued messages
+[2026-03-04T16:41:50Z] [INFO] [MessageRetryManager] 📤 Sending 0 queued messages
+[2026-03-04T16:41:50Z] [DEBUG] [CryptoManager] 🔑 Session check for 32230820-cecd-4736-aebf-f46a3eb13022: EXISTS
+[2026-03-04T16:41:50Z] [DEBUG] [CryptoManager]    Session ID: 32230820-cecd-47...
+[2026-03-04T16:41:50Z] [INFO] [ChatViewModel] ✅ Session already exists for user: 32230820-cecd-4736-aebf-f46a3eb13022
+[2026-03-04T16:41:50Z] [DEBUG] [ChatViewModel] 🔑 Fetching public key for userId: 32230820-cecd-4736-aebf-f46a3eb13022, currentUserId: bfe057f6-1e07-42c8-b2f9-4b3a1ed5c8df
+[2026-03-04T16:41:50Z] [DEBUG] [ChatViewModel] 🔧 ChatViewModel initialized with viewContext
+[2026-03-04T16:41:50Z] [DEBUG] [ChatViewModel] 🔧 ChatViewModel deinitialized
+[2026-03-04T16:41:50Z] [INFO] [gRPC] 🔌 gRPC creating channel → ams.konstruct.cc:443 TLS=true
+[2026-03-04T16:41:50Z] [DEBUG] [MessagingServiceClient] 📤 sendMessage RPC →
+   messageId      = f787fa92-eda9-4c91-b41d-4a5f29aada8d
+   senderId       = bfe057f6-1e07-42c8-b2f9-4b3a1ed5c8df
+   recipientId    = 32230820-cecd-4736-aebf-f46a3eb13022
+   conversationId = direct:32230820-cecd-4736-aebf-f46a3eb13022:bfe057f6-1e07-42c8-b2f9-4b3a1ed5c8df
+   payloadBytes   = 1064
+[2026-03-04T16:41:50Z] [DEBUG] [ChatScrollManager] 📜 Scrolled to bottom (messageId: F787FA92-EDA9-4C91-B41D-4A5F29AADA8D)
+[2026-03-04T16:41:51Z] [DEBUG] [ChatScrollManager] 📜 Scrolled to bottom (messageId: F787FA92-EDA9-4C91-B41D-4A5F29AADA8D)
+[2026-03-04T16:41:52Z] [DEBUG] [MessageStream] 📩 MessageStream received message from=32230820-cecd-4736-aebf-f46a3eb13022 id=de2132a7-3346-444b-a1c1-c50668d30ee8
+[2026-03-04T16:41:52Z] [DEBUG] [MessageRouter] 📥 INCOMING message RAW from server:
+[2026-03-04T16:41:52Z] [DEBUG] [MessageRouter]    messageId: de2132a7-3346-444b-a1c1-c50668d30ee8
+[2026-03-04T16:41:52Z] [DEBUG] [MessageRouter]    from: 32230820-cecd-4736-aebf-f46a3eb13022
+[2026-03-04T16:41:52Z] [DEBUG] [MessageRouter]    to: bfe057f6-1e07-42c8-b2f9-4b3a1ed5c8df
+[2026-03-04T16:41:52Z] [DEBUG] [MessageRouter]    messageNumber: 0
+[2026-03-04T16:41:52Z] [DEBUG] [MessageRouter]    ephemeralPublicKey: 32 bytes
+[2026-03-04T16:41:52Z] [DEBUG] [MessageRouter]    ephemeralPublicKey preview: 5a62c2175446d211ed1a46106f10ce8a...
+[2026-03-04T16:41:52Z] [DEBUG] [MessageRouter]    content (padded): 1368 chars
+[2026-03-04T16:41:52Z] [DEBUG] [MessageRouter]    content preview: S1BBRAAAARsBI4DswechQ8HmJBViSnwJ...
+[2026-03-04T16:41:52Z] [DEBUG] [MessageRouter]    isEndSession: false
+[2026-03-04T16:41:52Z] [DEBUG] [CryptoManager] 🔑 Session check for 32230820-cecd-4736-aebf-f46a3eb13022: EXISTS
+[2026-03-04T16:41:52Z] [DEBUG] [CryptoManager]    Session ID: 32230820-cecd-47...
+[2026-03-04T16:41:52Z] [INFO] [SessionInit] 🔐 SESSION_STATE[incoming_message]: userId=32230820..., hasSession=true, messageId=de2132a7...
+[2026-03-04T16:41:52Z] [INFO] [SessionInit] 🔐 SESSION_STATE[decrypt_attempt]: userId=32230820..., hasSession=true
+[2026-03-04T16:41:52Z] [DEBUG] [CryptoManager] 🔓 Decrypting message de2132a7... from 32230820...
+[2026-03-04T16:41:52Z] [DEBUG] [CryptoManager]    messageNumber: 0
+[2026-03-04T16:41:52Z] [DEBUG] [CryptoManager]    ephemeralPublicKey: 32 bytes
+[2026-03-04T16:41:52Z] [DEBUG] [CryptoManager]    content length: 1368 chars
+[2026-03-04T16:41:52Z] [DEBUG] [CryptoManager] 📦 No archived sessions available for 32230820-cecd-4736-aebf-f46a3eb13022
+[2026-03-04T16:41:52Z] [DEBUG] [CryptoManager] 🔄 Archiving corrupted session for 32230820-cecd-4736-aebf-f46a3eb13022 to allow reinitialization
+[2026-03-04T16:41:52Z] [INFO] [CryptoManager] 📦 Archiving session for 32230820-cecd-4736-aebf-f46a3eb13022, reason: decryption_failed
+[2026-03-04T16:41:52Z] [INFO] [CryptoManager] ✅ Session archived (1 total for user)
+[2026-03-04T16:41:52Z] [INFO] [CryptoManager] ✅ Removed session from memory: 32230820-cecd-4736-aebf-f46a3eb13022
+[2026-03-04T16:41:52Z] [INFO] [CryptoManager] ✅ Removed session from Rust core: 32230820-cecd-4736-aebf-f46a3eb13022
+[2026-03-04T16:41:52Z] [INFO] [CryptoManager] ✅ Removed session from Keychain: 32230820-cecd-4736-aebf-f46a3eb13022
+[2026-03-04T16:41:52Z] [ERROR] [MessageRouter] ❌ Failed to decrypt incoming message de2132a7-3346-444b-a1c1-c50668d30ee8
+[2026-03-04T16:41:52Z] [ERROR] [SessionInit] 🔐 SESSION_STATE[decrypt_failed]: userId=32230820..., messageId=de2132a7..., messageNumber=0
+[2026-03-04T16:41:52Z] [INFO] [SessionInit] 🩹 SESSION_STATE[heal_triggered]: messageNumber=0 from 32230820… — sender re-keyed, healing
+[2026-03-04T16:41:52Z] [INFO] [SessionHealing] 🩹 SessionHealingService: enqueued message de2132a7… for healing
+[2026-03-04T16:41:52Z] [INFO] [SessionInit] 🩹 SESSION_STATE[heal_start]: fetching fresh bundle for 32230820…
+[2026-03-04T16:41:52Z] [INFO] [SessionInit] 🔑 SESSION_STATE[fetch_bundle_attempt_1]: userId=32230820..., maxAttempts=3
+[2026-03-04T16:41:52Z] [INFO] [gRPC] 🔌 gRPC creating channel → ams.konstruct.cc:443 TLS=true
+[2026-03-04T16:41:53Z] [INFO] [SessionInit] ✅ SESSION_STATE[fetch_bundle_success]: userId=32230820..., attempt=1
+[2026-03-04T16:41:53Z] [INFO] [PublicKeyBundleHandler] 📦 Received publicKeyBundle for incoming message from userId: 32230820-cecd-4736-aebf-f46a3eb13022
+[2026-03-04T16:41:53Z] [INFO] [PublicKeyBundleHandler] Updated username for user: 
+[2026-03-04T16:41:53Z] [DEBUG] [CryptoManager] 📝 Tracking prekey for 32230820-cecd-4736-aebf-f46a3eb13022: u6DbKZvU...
+[2026-03-04T16:41:53Z] [INFO] [SessionInit] 🔐 SESSION_STATE[init_receiving_start]: userId=32230820..., prekeyChanged=false
+[2026-03-04T16:41:53Z] [DEBUG] [CryptoManager] 🔐 Receiving init bundle lengths: identity=44, signedPrekey=44, signature=88, verifyingKey=44, suiteId=1
+[2026-03-04T16:41:53Z] [DEBUG] [CryptoManager] 🔐 RAW bundle from server:
+[2026-03-04T16:41:53Z] [DEBUG] [CryptoManager]    identityPublic (base64): E1sjTkJR2Qa9BWQDfazptmLY8X5c27cS...
+[2026-03-04T16:41:53Z] [DEBUG] [CryptoManager]    signedPrekeyPublic (base64): u6DbKZvUppf79nPbc7eeVdv0gu1Evg0K...
+[2026-03-04T16:41:53Z] [DEBUG] [CryptoManager]    signature (base64): PaM40Y4315dzkQfSXtgK02UoJTt4bTSc...
+[2026-03-04T16:41:53Z] [DEBUG] [CryptoManager]    verifyingKey (base64): RPXbl7/3v72+/BdDdb/NXKuvY2IoPW+k...
+[2026-03-04T16:41:53Z] [DEBUG] [CryptoManager]    suiteId: 1
+[2026-03-04T16:41:53Z] [DEBUG] [CryptoManager] 🔐 RAW first message from server:
+[2026-03-04T16:41:53Z] [DEBUG] [CryptoManager]    ephemeralPublicKey count: 32
+[2026-03-04T16:41:53Z] [DEBUG] [CryptoManager]    content (padded): S1BBRAAAARsBI4DswechQ8HmJBViSnwJ...
+[2026-03-04T16:41:53Z] [DEBUG] [CryptoManager]    messageNumber: 0
+[2026-03-04T16:41:53Z] [DEBUG] [CryptoManager] 🔐 Decoded bundle data:
+[2026-03-04T16:41:53Z] [DEBUG] [CryptoManager]    identityPublic: 32 bytes
+[2026-03-04T16:41:53Z] [DEBUG] [CryptoManager]    signedPrekeyPublic: 32 bytes
+[2026-03-04T16:41:53Z] [DEBUG] [CryptoManager]    signature: 64 bytes
+[2026-03-04T16:41:53Z] [DEBUG] [CryptoManager]    verifyingKey: 32 bytes
+[2026-03-04T16:41:53Z] [DEBUG] [CryptoManager]    suiteId: 1
+[2026-03-04T16:41:53Z] [DEBUG] [CryptoManager] 🔐 First message details:
+[2026-03-04T16:41:53Z] [DEBUG] [CryptoManager]    ephemeralPublicKey: 32 bytes
+[2026-03-04T16:41:53Z] [DEBUG] [CryptoManager]    messageNumber: 0
+[2026-03-04T16:41:53Z] [DEBUG] [CryptoManager]    content: 380 chars (base64, unpadded)
+[2026-03-04T16:41:53Z] [DEBUG] [CryptoManager]    suiteId: 1
+[2026-03-04T16:41:53Z] [DEBUG] [CryptoManager] 🔐 Calling Rust initReceivingSession:
+[2026-03-04T16:41:53Z] [DEBUG] [CryptoManager]    contactId: 32230820-cecd-4736-aebf-f46a3eb13022
+[2026-03-04T16:41:53Z] [DEBUG] [CryptoManager]    recipientBundle: 661 bytes JSON
+[2026-03-04T16:41:53Z] [DEBUG] [CryptoManager]    firstMessage: 581 bytes JSON
+[2026-03-04T16:41:53Z] [DEBUG] [CryptoManager]    Bundle JSON keys: ["identity_public", "signature", "signed_prekey_public", "suite_id", "verifying_key"]
+[2026-03-04T16:41:53Z] [DEBUG] [CryptoManager]    identity_public preview: 135b234e4251d906bd0564037dace9b6...
+[2026-03-04T16:41:53Z] [DEBUG] [CryptoManager]    signed_prekey_public preview: bba0db299bd4a697fbf673db73b79e55...
+[2026-03-04T16:41:53Z] [DEBUG] [CryptoManager]    signature preview: 3da338d18e37d797739107d25ed80ad3...
+[2026-03-04T16:41:53Z] [DEBUG] [CryptoManager]    Message JSON keys: ["content", "ephemeral_public_key", "message_number", "one_time_prekey_id"]
+[2026-03-04T16:41:53Z] [DEBUG] [CryptoManager]    ephemeral_public_key preview: 5a62c2175446d211ed1a46106f10ce8a...
+[2026-03-04T16:41:53Z] [DEBUG] [CryptoManager]    message_number: 0
+[2026-03-04T16:41:53Z] [ERROR] [CryptoManager] ❌ Rust core initReceivingSession failed: SessionInitializationFailed(message: "Session initialization failed: All 1 prekey(s) failed. Last error: Decryption failed: AEAD decryption failed: aead::Error")
+[2026-03-04T16:41:53Z] [ERROR] [CryptoManager]    Error type: CryptoError
+[2026-03-04T16:41:53Z] [ERROR] [CryptoManager]    userId: 32230820-cecd-4736-aebf-f46a3eb13022
+[2026-03-04T16:41:53Z] [ERROR] [CryptoManager] ❌ Failed to initialize receiving session
+[2026-03-04T16:41:53Z] [ERROR] [PublicKeyBundleHandler] ❌ Failed to initialize receiving session: Failed to initialize session
+[2026-03-04T16:41:53Z] [ERROR] [SessionInit] 🔐 SESSION_STATE[init_receiving_failed]: userId=32230820..., duration=0.01s, error=Failed to initialize session
+[2026-03-04T16:41:53Z] [ERROR] [SessionInit] ❌ SESSION_STATE[heal_failed]: initReceivingSession still failing for 32230820…
+[2026-03-04T16:41:53Z] [DEBUG] [SessionInit] 🔓 Heal lock released for 32230820…
+[2026-03-04T16:41:53Z] [INFO] [MessagingServiceClient] ✅ sendMessage response: success=true messageId=c7e92e8e-cfb0-4717-ab8e-a0fc99f499ae
+[2026-03-04T16:41:53Z] [INFO] [ChatViewModel] 🔄 Updating message status from sending → sent for F787FA92-EDA9-4C91-B41D-4A5F29AADA8D
+[2026-03-04T16:41:53Z] [DEBUG] [ChatViewModel] 🔄 FRC updated messages: 2 total (reversed to oldest-first)
+[2026-03-04T16:41:53Z] [DEBUG] [ChatViewModel] 🔄 FRC updated messages: 2 total (reversed to oldest-first)
+[2026-03-04T16:41:53Z] [DEBUG] [MessagePersistence] ✅ Updated message status to sent for F787FA92-EDA9-4C91-B41D-4A5F29AADA8D
+[2026-03-04T16:41:53Z] [INFO] [ChatViewModel] ✅ Message sent via gRPC: c7e92e8e-cfb0-4717-ab8e-a0fc99f499ae, server status: sent
+[2026-03-04T16:41:57Z] [DEBUG] [MessageStream] 📩 MessageStream received message from=32230820-cecd-4736-aebf-f46a3eb13022 id=11a1ca6c-f26c-4dfc-9368-bb63008e27ea
+[2026-03-04T16:41:57Z] [DEBUG] [MessageRouter] 📥 INCOMING message RAW from server:
+[2026-03-04T16:41:57Z] [DEBUG] [MessageRouter]    messageId: 11a1ca6c-f26c-4dfc-9368-bb63008e27ea
+[2026-03-04T16:41:57Z] [DEBUG] [MessageRouter]    from: 32230820-cecd-4736-aebf-f46a3eb13022
+[2026-03-04T16:41:57Z] [DEBUG] [MessageRouter]    to: bfe057f6-1e07-42c8-b2f9-4b3a1ed5c8df
+[2026-03-04T16:41:57Z] [DEBUG] [MessageRouter]    messageNumber: 1
+[2026-03-04T16:41:57Z] [DEBUG] [MessageRouter]    ephemeralPublicKey: 32 bytes
+[2026-03-04T16:41:57Z] [DEBUG] [MessageRouter]    ephemeralPublicKey preview: 5a62c2175446d211ed1a46106f10ce8a...
+[2026-03-04T16:41:57Z] [DEBUG] [MessageRouter]    content (padded): 1368 chars
+[2026-03-04T16:41:57Z] [DEBUG] [MessageRouter]    content preview: S1BBRAAAARtXJ6HclW7R0BeLNaUIBgaH...
+[2026-03-04T16:41:57Z] [DEBUG] [MessageRouter]    isEndSession: false
+[2026-03-04T16:41:57Z] [DEBUG] [CryptoManager] 🔑 Session check for 32230820-cecd-4736-aebf-f46a3eb13022: MISSING
+[2026-03-04T16:41:57Z] [INFO] [SessionInit] 🔐 SESSION_STATE[incoming_message]: userId=32230820..., hasSession=false, messageId=11a1ca6c...
+[2026-03-04T16:41:57Z] [INFO] [MessageRouter] 📩 Message queued for session init from 32230820-cecd-4736-aebf-f46a3eb13022 — queue size: 2
+[2026-03-04T16:41:57Z] [INFO] [SessionInit] 🔐 SESSION_STATE[first_message]: userId=32230820..., messageNumber=1, action=queued
+[2026-03-04T16:41:57Z] [DEBUG] [MessageStream] 📩 MessageStream received message from=32230820-cecd-4736-aebf-f46a3eb13022 id=a26bbff1-a978-4d69-a6b1-d553f329df40
+[2026-03-04T16:41:57Z] [DEBUG] [MessageRouter] 📥 INCOMING message RAW from server:
+[2026-03-04T16:41:57Z] [DEBUG] [MessageRouter]    messageId: a26bbff1-a978-4d69-a6b1-d553f329df40
+[2026-03-04T16:41:57Z] [DEBUG] [MessageRouter]    from: 32230820-cecd-4736-aebf-f46a3eb13022
+[2026-03-04T16:41:57Z] [DEBUG] [MessageRouter]    to: bfe057f6-1e07-42c8-b2f9-4b3a1ed5c8df
+[2026-03-04T16:41:57Z] [DEBUG] [MessageRouter]    messageNumber: 2
+[2026-03-04T16:41:57Z] [DEBUG] [MessageRouter]    ephemeralPublicKey: 32 bytes
+[2026-03-04T16:41:57Z] [DEBUG] [MessageRouter]    ephemeralPublicKey preview: 5a62c2175446d211ed1a46106f10ce8a...
+[2026-03-04T16:41:57Z] [DEBUG] [MessageRouter]    content (padded): 1368 chars
+[2026-03-04T16:41:57Z] [DEBUG] [MessageRouter]    content preview: S1BBRAAAARuYP9RbOws93zS2sn4SZNv7...
+[2026-03-04T16:41:57Z] [DEBUG] [MessageRouter]    isEndSession: false
+[2026-03-04T16:41:57Z] [DEBUG] [CryptoManager] 🔑 Session check for 32230820-cecd-4736-aebf-f46a3eb13022: MISSING
+[2026-03-04T16:41:57Z] [INFO] [SessionInit] 🔐 SESSION_STATE[incoming_message]: userId=32230820..., hasSession=false, messageId=a26bbff1...
+[2026-03-04T16:41:57Z] [INFO] [MessageRouter] 📩 Message queued for session init from 32230820-cecd-4736-aebf-f46a3eb13022 — queue size: 3
+[2026-03-04T16:41:57Z] [INFO] [SessionInit] 🔐 SESSION_STATE[first_message]: userId=32230820..., messageNumber=2, action=queued
+[2026-03-04T16:41:58Z] [DEBUG] [MessageStream] 💓 Heartbeat ack: server=1772642518031
+[2026-03-04T16:41:58Z] [INFO] [ChatViewModel] ✅ Network connected - processing queued messages
+[2026-03-04T16:41:58Z] [INFO] [MessageRetryManager] 📤 Sending 0 queued messages
+[2026-03-04T16:41:58Z] [INFO] [ChatViewModel] ✅ Network connected - processing queued messages
+[2026-03-04T16:41:58Z] [INFO] [MessageRetryManager] 📤 Sending 0 queued messages
+[2026-03-04T16:42:00Z] [DEBUG] [LocalNotifications] 📛 Badge cleared
+[2026-03-04T16:42:00Z] [DEBUG] [ChatViewModel] 🔧 ChatViewModel deinitialized
+[2026-03-04T16:42:00Z] [DEBUG] [ChatViewModel] 🔧 ChatViewModel deinitialized
+[2026-03-04T16:42:01Z] [DEBUG] [ChatViewModel] 🔧 ChatViewModel init: chat.id=CE4CA3E0-378D-49A2-8D92-3A5784361442, chat.otherUser?.id=32230820-cecd-4736-aebf-f46a3eb13022, chat.otherUser?.username=
+[2026-03-04T16:42:01Z] [DEBUG] [ChatViewModel] ✅ FRC initial fetch: 2 messages (reversed to oldest-first)
+[2026-03-04T16:42:01Z] [INFO] [ChatViewModel] ✅ Network connected - processing queued messages
+[2026-03-04T16:42:01Z] [INFO] [MessageRetryManager] 📤 Sending 0 queued messages
+[2026-03-04T16:42:01Z] [DEBUG] [CryptoManager] 🔑 Session check for 32230820-cecd-4736-aebf-f46a3eb13022: MISSING
+[2026-03-04T16:42:01Z] [DEBUG] [ChatViewModel] No session yet for user: 32230820-cecd-4736-aebf-f46a3eb13022
+[2026-03-04T16:42:01Z] [DEBUG] [ChatViewModel] 🔑 Fetching public key for userId: 32230820-cecd-4736-aebf-f46a3eb13022, currentUserId: bfe057f6-1e07-42c8-b2f9-4b3a1ed5c8df
+[2026-03-04T16:42:01Z] [DEBUG] [ChatViewModel] 🔧 ChatViewModel initialized with viewContext
+[2026-03-04T16:42:01Z] [DEBUG] [ChatViewModel] 📥 Loading more messages before 2026-03-04 16:41:28 +0000
+[2026-03-04T16:42:01Z] [DEBUG] [ChatViewModel] 📭 No more older messages to load
+[2026-03-04T16:42:01Z] [INFO] [SessionInit] 🔑 SESSION_STATE[fetch_bundle_attempt_1]: userId=32230820..., deviceId=nil...
+[2026-03-04T16:42:01Z] [INFO] [gRPC] 🔌 gRPC creating channel → ams.konstruct.cc:443 TLS=true
+[2026-03-04T16:42:01Z] [DEBUG] [LocalNotifications] 📛 Badge cleared
+[2026-03-04T16:42:02Z] [INFO] [SessionInit] ✅ SESSION_STATE[fetch_bundle_success]: userId=32230820..., hasVerifyingKey=true
+[2026-03-04T16:42:02Z] [DEBUG] [ChatViewModel] 📦 Received publicKeyBundle for userId: 32230820-cecd-4736-aebf-f46a3eb13022, chat.otherUser?.id: 32230820-cecd-4736-aebf-f46a3eb13022, match: true
+[2026-03-04T16:42:02Z] [INFO] [ChatViewModel] Updated username for user: 
+[2026-03-04T16:42:02Z] [DEBUG] [ChatViewModel] 🔍 Session init check - currentUserId: bfe057f6-1e07-42c8-b2f9-4b3a1ed5c8df, recipientId: 32230820-cecd-4736-aebf-f46a3eb13022
+[2026-03-04T16:42:02Z] [DEBUG] [CryptoManager] 🔑 Session check for 32230820-cecd-4736-aebf-f46a3eb13022: MISSING
+[2026-03-04T16:42:02Z] [DEBUG] [CryptoManager] 🔐 Session init bundle lengths: identity=44, signedPrekey=44, signature=88, verifyingKey=44, suiteId=1
+[2026-03-04T16:42:02Z] [DEBUG] [CryptoManager] 🔐 INITIATOR RAW bundle from server:
+[2026-03-04T16:42:02Z] [DEBUG] [CryptoManager]    identityPublic (base64): E1sjTkJR2Qa9BWQDfazptmLY8X5c27cS...
+[2026-03-04T16:42:02Z] [DEBUG] [CryptoManager]    signedPrekeyPublic (base64): u6DbKZvUppf79nPbc7eeVdv0gu1Evg0K...
+[2026-03-04T16:42:02Z] [DEBUG] [CryptoManager]    signature (base64): PaM40Y4315dzkQfSXtgK02UoJTt4bTSc...
+[2026-03-04T16:42:02Z] [DEBUG] [CryptoManager]    verifyingKey (base64): RPXbl7/3v72+/BdDdb/NXKuvY2IoPW+k...
+[2026-03-04T16:42:02Z] [DEBUG] [CryptoManager]    suiteId: 1
+[2026-03-04T16:42:02Z] [DEBUG] [CryptoManager] 🔐 Calling Rust initSession (INITIATOR):
+[2026-03-04T16:42:02Z] [DEBUG] [CryptoManager]    contactId: 32230820-cecd-4736-aebf-f46a3eb13022
+[2026-03-04T16:42:02Z] [DEBUG] [CryptoManager]    recipientBundle: 828 bytes JSON
+[2026-03-04T16:42:02Z] [DEBUG] [CryptoManager]    Bundle JSON keys: ["identity_public", "one_time_prekey_id", "one_time_prekey_public", "signature", "signed_prekey_public", "suite_id", "verifying_key"]
+[2026-03-04T16:42:02Z] [DEBUG] [CryptoManager]    identity_public preview: 135b234e4251d906bd0564037dace9b6...
+[2026-03-04T16:42:02Z] [DEBUG] [CryptoManager]    signed_prekey_public preview: bba0db299bd4a697fbf673db73b79e55...
+[2026-03-04T16:42:02Z] [DEBUG] [CryptoManager] 💾 Session saved to Keychain: 32230820-cecd-4736-aebf-f46a3eb13022
+[2026-03-04T16:42:02Z] [INFO] [CryptoManager] ✅ INITIATOR session created: 32230820-cecd-47...
+[2026-03-04T16:42:02Z] [INFO] [CryptoManager] ✅ Session initialized for user: 32230820-cecd-4736-aebf-f46a3eb13022
+[2026-03-04T16:42:02Z] [INFO] [SessionInit] ✅ Session initialized as INITIATOR for 32230820-cecd-4736-aebf-f46a3eb13022
+[2026-03-04T16:42:02Z] [DEBUG] [ChatViewModel] processPendingMessages called - deprecated, use sendQueuedMessages()
+[2026-03-04T16:42:02Z] [DEBUG] [ChatViewModel] 🔧 ChatViewModel init: chat.id=CE4CA3E0-378D-49A2-8D92-3A5784361442, chat.otherUser?.id=32230820-cecd-4736-aebf-f46a3eb13022, chat.otherUser?.username=
+[2026-03-04T16:42:02Z] [DEBUG] [ChatViewModel] ✅ FRC initial fetch: 2 messages (reversed to oldest-first)
+[2026-03-04T16:42:02Z] [INFO] [ChatViewModel] ✅ Network connected - processing queued messages
+[2026-03-04T16:42:02Z] [INFO] [MessageRetryManager] 📤 Sending 0 queued messages
+[2026-03-04T16:42:02Z] [DEBUG] [CryptoManager] 🔑 Session check for 32230820-cecd-4736-aebf-f46a3eb13022: EXISTS
+[2026-03-04T16:42:02Z] [DEBUG] [CryptoManager]    Session ID: 32230820-cecd-47...
+[2026-03-04T16:42:02Z] [INFO] [ChatViewModel] ✅ Session already exists for user: 32230820-cecd-4736-aebf-f46a3eb13022
+[2026-03-04T16:42:02Z] [DEBUG] [ChatViewModel] 🔑 Fetching public key for userId: 32230820-cecd-4736-aebf-f46a3eb13022, currentUserId: bfe057f6-1e07-42c8-b2f9-4b3a1ed5c8df
+[2026-03-04T16:42:02Z] [DEBUG] [ChatViewModel] 🔧 ChatViewModel initialized with viewContext
+[2026-03-04T16:42:02Z] [INFO] [MessageStream] ⚠️ Failed to decode encrypted_payload for message 060e1604-c7b7-451a-a764-002b7e28adae
+[2026-03-04T16:42:02Z] [DEBUG] [MessageStream] 📩 MessageStream received message from=32230820-cecd-4736-aebf-f46a3eb13022 id=441cbbcb-3483-41dc-8425-503ed68dde3f
+[2026-03-04T16:42:02Z] [DEBUG] [MessageRouter] 📥 INCOMING message RAW from server:
+[2026-03-04T16:42:02Z] [DEBUG] [MessageRouter]    messageId: 441cbbcb-3483-41dc-8425-503ed68dde3f
+[2026-03-04T16:42:02Z] [DEBUG] [MessageRouter]    from: 32230820-cecd-4736-aebf-f46a3eb13022
+[2026-03-04T16:42:02Z] [DEBUG] [MessageRouter]    to: bfe057f6-1e07-42c8-b2f9-4b3a1ed5c8df
+[2026-03-04T16:42:02Z] [DEBUG] [MessageRouter]    messageNumber: 0
+[2026-03-04T16:42:02Z] [DEBUG] [MessageRouter]    ephemeralPublicKey: 32 bytes
+[2026-03-04T16:42:02Z] [DEBUG] [MessageRouter]    ephemeralPublicKey preview: 6ac1ac4cbbab3a2dfe3faca110baf807...
+[2026-03-04T16:42:02Z] [DEBUG] [MessageRouter]    content (padded): 1368 chars
+[2026-03-04T16:42:02Z] [DEBUG] [MessageRouter]    content preview: S1BBRAAAARt7Lq96WR6cn0iqyqwhFHOZ...
+[2026-03-04T16:42:02Z] [DEBUG] [MessageRouter]    isEndSession: false
+[2026-03-04T16:42:02Z] [DEBUG] [CryptoManager] 🔑 Session check for 32230820-cecd-4736-aebf-f46a3eb13022: EXISTS
+[2026-03-04T16:42:02Z] [DEBUG] [CryptoManager]    Session ID: 32230820-cecd-47...
+[2026-03-04T16:42:02Z] [INFO] [SessionInit] 🔐 SESSION_STATE[incoming_message]: userId=32230820..., hasSession=true, messageId=441cbbcb...
+[2026-03-04T16:42:02Z] [INFO] [SessionInit] 🔐 SESSION_STATE[decrypt_attempt]: userId=32230820..., hasSession=true
+[2026-03-04T16:42:02Z] [DEBUG] [CryptoManager] 🔓 Decrypting message 441cbbcb... from 32230820...
+[2026-03-04T16:42:02Z] [DEBUG] [CryptoManager]    messageNumber: 0
+[2026-03-04T16:42:02Z] [DEBUG] [CryptoManager]    ephemeralPublicKey: 32 bytes
+[2026-03-04T16:42:02Z] [DEBUG] [CryptoManager]    content length: 1368 chars
+[2026-03-04T16:42:02Z] [INFO] [CryptoManager] 📦 Trying 1 archived sessions for 32230820-cecd-4736-aebf-f46a3eb13022
+[2026-03-04T16:42:02Z] [DEBUG] [CryptoManager] ❌ Archive #0 failed: DecryptionFailed(message: "Decryption failed: Decryption failed: AEAD decryption failed: aead::Error")
+[2026-03-04T16:42:02Z] [INFO] [CryptoManager] ⚠️ All 1 archived sessions failed to decrypt
+[2026-03-04T16:42:02Z] [DEBUG] [CryptoManager] 🔄 Archiving corrupted session for 32230820-cecd-4736-aebf-f46a3eb13022 to allow reinitialization
+[2026-03-04T16:42:02Z] [INFO] [CryptoManager] 📦 Archiving session for 32230820-cecd-4736-aebf-f46a3eb13022, reason: decryption_failed
+[2026-03-04T16:42:02Z] [INFO] [CryptoManager] ✅ Session archived (2 total for user)
+[2026-03-04T16:42:02Z] [INFO] [CryptoManager] ✅ Removed session from memory: 32230820-cecd-4736-aebf-f46a3eb13022
+[2026-03-04T16:42:02Z] [INFO] [CryptoManager] ✅ Removed session from Rust core: 32230820-cecd-4736-aebf-f46a3eb13022
+[2026-03-04T16:42:02Z] [INFO] [CryptoManager] ✅ Removed session from Keychain: 32230820-cecd-4736-aebf-f46a3eb13022
+[2026-03-04T16:42:02Z] [ERROR] [MessageRouter] ❌ Failed to decrypt incoming message 441cbbcb-3483-41dc-8425-503ed68dde3f
+[2026-03-04T16:42:02Z] [ERROR] [SessionInit] 🔐 SESSION_STATE[decrypt_failed]: userId=32230820..., messageId=441cbbcb..., messageNumber=0
+[2026-03-04T16:42:02Z] [INFO] [SessionInit] 🩹 SESSION_STATE[heal_triggered]: messageNumber=0 from 32230820… — sender re-keyed, healing
+[2026-03-04T16:42:02Z] [INFO] [SessionHealing] 🩹 SessionHealingService: enqueued message 441cbbcb… for healing
+[2026-03-04T16:42:02Z] [INFO] [SessionInit] 🩹 SESSION_STATE[heal_start]: fetching fresh bundle for 32230820…
+[2026-03-04T16:42:02Z] [INFO] [SessionInit] 🔑 SESSION_STATE[fetch_bundle_attempt_1]: userId=32230820..., maxAttempts=3
+[2026-03-04T16:42:02Z] [INFO] [gRPC] 🔌 gRPC creating channel → ams.konstruct.cc:443 TLS=true
+[2026-03-04T16:42:02Z] [INFO] [SessionInit] ✅ SESSION_STATE[fetch_bundle_success]: userId=32230820..., attempt=1
+[2026-03-04T16:42:02Z] [INFO] [PublicKeyBundleHandler] 📦 Received publicKeyBundle for incoming message from userId: 32230820-cecd-4736-aebf-f46a3eb13022
+[2026-03-04T16:42:02Z] [INFO] [PublicKeyBundleHandler] Updated username for user: 
+[2026-03-04T16:42:02Z] [INFO] [SessionInit] 🔐 SESSION_STATE[init_receiving_start]: userId=32230820..., prekeyChanged=false
+[2026-03-04T16:42:02Z] [DEBUG] [CryptoManager] 🔐 Receiving init bundle lengths: identity=44, signedPrekey=44, signature=88, verifyingKey=44, suiteId=1
+[2026-03-04T16:42:02Z] [DEBUG] [CryptoManager] 🔐 RAW bundle from server:
+[2026-03-04T16:42:02Z] [DEBUG] [CryptoManager]    identityPublic (base64): E1sjTkJR2Qa9BWQDfazptmLY8X5c27cS...
+[2026-03-04T16:42:02Z] [DEBUG] [CryptoManager]    signedPrekeyPublic (base64): u6DbKZvUppf79nPbc7eeVdv0gu1Evg0K...
+[2026-03-04T16:42:02Z] [DEBUG] [CryptoManager]    signature (base64): PaM40Y4315dzkQfSXtgK02UoJTt4bTSc...
+[2026-03-04T16:42:02Z] [DEBUG] [CryptoManager]    verifyingKey (base64): RPXbl7/3v72+/BdDdb/NXKuvY2IoPW+k...
+[2026-03-04T16:42:02Z] [DEBUG] [CryptoManager]    suiteId: 1
+[2026-03-04T16:42:02Z] [DEBUG] [CryptoManager] 🔐 RAW first message from server:
+[2026-03-04T16:42:02Z] [DEBUG] [CryptoManager]    ephemeralPublicKey count: 32
+[2026-03-04T16:42:02Z] [DEBUG] [CryptoManager]    content (padded): S1BBRAAAARt7Lq96WR6cn0iqyqwhFHOZ...
+[2026-03-04T16:42:02Z] [DEBUG] [CryptoManager]    messageNumber: 0
+[2026-03-04T16:42:02Z] [DEBUG] [CryptoManager] 🔐 Decoded bundle data:
+[2026-03-04T16:42:02Z] [DEBUG] [CryptoManager]    identityPublic: 32 bytes
+[2026-03-04T16:42:02Z] [DEBUG] [CryptoManager]    signedPrekeyPublic: 32 bytes
+[2026-03-04T16:42:02Z] [DEBUG] [CryptoManager]    signature: 64 bytes
+[2026-03-04T16:42:02Z] [DEBUG] [CryptoManager]    verifyingKey: 32 bytes
+[2026-03-04T16:42:02Z] [DEBUG] [CryptoManager]    suiteId: 1
+[2026-03-04T16:42:02Z] [DEBUG] [CryptoManager] 🔐 First message details:
+[2026-03-04T16:42:02Z] [DEBUG] [CryptoManager]    ephemeralPublicKey: 32 bytes
+[2026-03-04T16:42:02Z] [DEBUG] [CryptoManager]    messageNumber: 0
+[2026-03-04T16:42:02Z] [DEBUG] [CryptoManager]    content: 380 chars (base64, unpadded)
+[2026-03-04T16:42:02Z] [DEBUG] [CryptoManager]    suiteId: 1
+[2026-03-04T16:42:02Z] [DEBUG] [CryptoManager] 🔐 Calling Rust initReceivingSession:
+[2026-03-04T16:42:02Z] [DEBUG] [CryptoManager]    contactId: 32230820-cecd-4736-aebf-f46a3eb13022
+[2026-03-04T16:42:02Z] [DEBUG] [CryptoManager]    recipientBundle: 661 bytes JSON
+[2026-03-04T16:42:02Z] [DEBUG] [CryptoManager]    firstMessage: 586 bytes JSON
+[2026-03-04T16:42:02Z] [DEBUG] [CryptoManager]    Bundle JSON keys: ["identity_public", "signature", "signed_prekey_public", "suite_id", "verifying_key"]
+[2026-03-04T16:42:02Z] [DEBUG] [CryptoManager]    identity_public preview: 135b234e4251d906bd0564037dace9b6...
+[2026-03-04T16:42:02Z] [DEBUG] [CryptoManager]    signed_prekey_public preview: bba0db299bd4a697fbf673db73b79e55...
+[2026-03-04T16:42:02Z] [DEBUG] [CryptoManager]    signature preview: 3da338d18e37d797739107d25ed80ad3...
+[2026-03-04T16:42:02Z] [DEBUG] [CryptoManager]    Message JSON keys: ["content", "ephemeral_public_key", "message_number", "one_time_prekey_id"]
+[2026-03-04T16:42:02Z] [DEBUG] [CryptoManager]    ephemeral_public_key preview: 6ac1ac4cbbab3a2dfe3faca110baf807...
+[2026-03-04T16:42:02Z] [DEBUG] [CryptoManager]    message_number: 0
+[2026-03-04T16:42:02Z] [ERROR] [CryptoManager] ❌ Rust core initReceivingSession failed: SessionInitializationFailed(message: "Session initialization failed: All 1 prekey(s) failed. Last error: Decryption failed: AEAD decryption failed: aead::Error")
+[2026-03-04T16:42:02Z] [ERROR] [CryptoManager]    Error type: CryptoError
+[2026-03-04T16:42:02Z] [ERROR] [CryptoManager]    userId: 32230820-cecd-4736-aebf-f46a3eb13022
+[2026-03-04T16:42:02Z] [ERROR] [CryptoManager] ❌ Failed to initialize receiving session
+[2026-03-04T16:42:02Z] [ERROR] [PublicKeyBundleHandler] ❌ Failed to initialize receiving session: Failed to initialize session
+[2026-03-04T16:42:02Z] [ERROR] [SessionInit] 🔐 SESSION_STATE[init_receiving_failed]: userId=32230820..., duration=0.01s, error=Failed to initialize session
+[2026-03-04T16:42:02Z] [ERROR] [SessionInit] ❌ SESSION_STATE[heal_failed]: initReceivingSession still failing for 32230820…
+[2026-03-04T16:42:02Z] [DEBUG] [SessionInit] 🔓 Heal lock released for 32230820…
+[2026-03-04T16:42:08Z] [INFO] [EnergyMonitor] Network status changed: satisfied
+[2026-03-04T16:42:09Z] [INFO] [EnergyMonitor] Network status changed: satisfied
+[2026-03-04T16:42:13Z] [DEBUG] [LocalNotifications] 📛 Badge cleared
+[2026-03-04T16:42:13Z] [DEBUG] [ChatViewModel] 🔧 ChatViewModel deinitialized
+[2026-03-04T16:42:13Z] [DEBUG] [ChatViewModel] 🔧 ChatViewModel deinitialized
+[2026-03-04T16:42:22Z] [DEBUG] [MessageStream] 📩 MessageStream received message from=32230820-cecd-4736-aebf-f46a3eb13022 id=13e110c4-7bad-452e-8092-54ddeafc253d
+[2026-03-04T16:42:22Z] [DEBUG] [MessageRouter] 📥 INCOMING message RAW from server:
+[2026-03-04T16:42:22Z] [DEBUG] [MessageRouter]    messageId: 13e110c4-7bad-452e-8092-54ddeafc253d
+[2026-03-04T16:42:22Z] [DEBUG] [MessageRouter]    from: 32230820-cecd-4736-aebf-f46a3eb13022
+[2026-03-04T16:42:22Z] [DEBUG] [MessageRouter]    to: bfe057f6-1e07-42c8-b2f9-4b3a1ed5c8df
+[2026-03-04T16:42:22Z] [DEBUG] [MessageRouter]    messageNumber: 1
+[2026-03-04T16:42:22Z] [DEBUG] [MessageRouter]    ephemeralPublicKey: 32 bytes
+[2026-03-04T16:42:22Z] [DEBUG] [MessageRouter]    ephemeralPublicKey preview: 6ac1ac4cbbab3a2dfe3faca110baf807...
+[2026-03-04T16:42:22Z] [DEBUG] [MessageRouter]    content (padded): 1368 chars
+[2026-03-04T16:42:22Z] [DEBUG] [MessageRouter]    content preview: S1BBRAAAARvxGTZqsk1uwtEIR7dIEjMi...
+[2026-03-04T16:42:22Z] [DEBUG] [MessageRouter]    isEndSession: false
+[2026-03-04T16:42:22Z] [DEBUG] [CryptoManager] 🔑 Session check for 32230820-cecd-4736-aebf-f46a3eb13022: MISSING
+[2026-03-04T16:42:22Z] [INFO] [SessionInit] 🔐 SESSION_STATE[incoming_message]: userId=32230820..., hasSession=false, messageId=13e110c4...
+[2026-03-04T16:42:22Z] [INFO] [MessageRouter] 📩 Message queued for session init from 32230820-cecd-4736-aebf-f46a3eb13022 — queue size: 5
+[2026-03-04T16:42:22Z] [INFO] [SessionInit] 🔐 SESSION_STATE[first_message]: userId=32230820..., messageNumber=1, action=queued
+[2026-03-04T16:42:24Z] [DEBUG] [MessageStream] 💓 Heartbeat ack: server=1772642544034
+[2026-03-04T16:42:42Z] [INFO] [EnergyMonitor] Network status changed: satisfied
+[2026-03-04T16:42:50Z] [DEBUG] [MessageStream] 💓 Heartbeat ack: server=1772642570037
+[2026-03-04T16:42:56Z] [INFO] [EnergyMonitor] Network status changed: satisfied
+[2026-03-04T16:42:57Z] [INFO] [EnergyMonitor] Network status changed: satisfied
+[2026-03-04T16:42:57Z] [INFO] [ChatsViewModel] 📱 App going to background - pausing messaging
+[2026-03-04T16:42:57Z] [INFO] [ConnectionStatus] 🟡 Stream disconnected → status: Connecting
+[2026-03-04T16:42:57Z] [INFO] [MessageStream] 📡 MessageStream disconnected
+[2026-03-04T16:42:57Z] [INFO] [MessageStream] 📱 MessageStream paused
+[2026-03-04T16:42:57Z] [DEBUG] [ChatsViewModel] 📡 Stream state: token=present, status=Connecting..., push=false
+[2026-03-04T16:42:57Z] [INFO] [ChatsViewModel] 📡 Connecting message stream
+[2026-03-04T16:42:57Z] [DEBUG] [ChatsViewModel] 📡 Stream paused — skipping startMessageStream
+[2026-03-04T16:42:57Z] [INFO] [MessageStream] 🔌 MessageStream disconnected from ams.konstruct.cc:443
+[2026-03-04T16:42:57Z] [INFO] [MessageStream] 🛑 MessageStream cancelled — connectLoop exiting
+[2026-03-04T16:42:57Z] [INFO] [MessageStream] 🏁 MessageStream connectLoop finished
+[2026-03-04T16:42:58Z] [INFO] [ChatsViewModel] 📱 App became active — force reconnecting stream
+[2026-03-04T16:42:58Z] [INFO] [MessageStream] 🔁 Force reconnecting stream
+[2026-03-04T16:42:58Z] [INFO] [MessageStream] 📡 Starting MessageStream connection (subscribed to 3 contacts)
+[2026-03-04T16:42:58Z] [INFO] [MessageStream] 🔄 MessageStream connectLoop started → ams.konstruct.cc:443
+[2026-03-04T16:42:58Z] [DEBUG] [MessageStream] 🔍 fetchMissedMessages cursor=1772627334
+[2026-03-04T16:42:58Z] [INFO] [gRPC] 🔌 gRPC creating channel → ams.konstruct.cc:443 TLS=true
+[2026-03-04T16:42:58Z] [INFO] [ChatsViewModel] 📱 App going to background - pausing messaging
+[2026-03-04T16:42:58Z] [INFO] [MessageStream] 📡 MessageStream disconnected
+[2026-03-04T16:42:58Z] [INFO] [MessageStream] 📱 MessageStream paused
+[2026-03-04T16:42:58Z] [DEBUG] [Keychain] ✅ Session token loaded from Keychain (length: 927, prefix: eyJ0eXAiOiJKV1QiLCJhbGciOiJSUz...)
+[2026-03-04T16:42:58Z] [DEBUG] [Keychain] ✅ Refresh token loaded from Keychain (length: 927)
+[2026-03-04T16:42:58Z] [DEBUG] [Keychain] ✅ User ID loaded from Keychain: bfe057f6...
+[2026-03-04T16:42:58Z] [INFO] [MessageStream] 🏁 MessageStream connectLoop finished
+[2026-03-04T16:42:58Z] [DEBUG] [CryptoManager] 🔑 CryptoManager: local user ID set to bfe057f6-1e07-42c8-b2f9-4b3a1ed5c8df
+[2026-03-04T16:43:14Z] [INFO] [ChatsViewModel] 📱 App became active — force reconnecting stream
+[2026-03-04T16:43:14Z] [INFO] [MessageStream] 🔁 Force reconnecting stream
+[2026-03-04T16:43:14Z] [INFO] [MessageStream] 📡 Starting MessageStream connection (subscribed to 3 contacts)
+[2026-03-04T16:43:14Z] [INFO] [MessageStream] 🔄 MessageStream connectLoop started → ams.konstruct.cc:443
+[2026-03-04T16:43:14Z] [DEBUG] [MessageStream] 🔍 fetchMissedMessages cursor=1772627334
+[2026-03-04T16:43:14Z] [INFO] [gRPC] 🔌 gRPC creating channel → ams.konstruct.cc:443 TLS=true
+[2026-03-04T16:43:14Z] [DEBUG] [Keychain] ✅ Session token loaded from Keychain (length: 927, prefix: eyJ0eXAiOiJKV1QiLCJhbGciOiJSUz...)
+[2026-03-04T16:43:14Z] [DEBUG] [Keychain] ✅ Refresh token loaded from Keychain (length: 927)
+[2026-03-04T16:43:14Z] [DEBUG] [Keychain] ✅ User ID loaded from Keychain: bfe057f6...
+[2026-03-04T16:43:14Z] [DEBUG] [CryptoManager] 🔑 CryptoManager: local user ID set to bfe057f6-1e07-42c8-b2f9-4b3a1ed5c8df
+[2026-03-04T16:43:14Z] [INFO] [MessageStream] 📨 Fetched 1 missed message(s) after reconnect
+[2026-03-04T16:43:14Z] [DEBUG] [MessageRouter] 📥 INCOMING message RAW from server:
+[2026-03-04T16:43:14Z] [DEBUG] [MessageRouter]    messageId: 13e110c4-7bad-452e-8092-54ddeafc253d
+[2026-03-04T16:43:14Z] [DEBUG] [MessageRouter]    from: 32230820-cecd-4736-aebf-f46a3eb13022
+[2026-03-04T16:43:14Z] [DEBUG] [MessageRouter]    to: 
+[2026-03-04T16:43:14Z] [DEBUG] [MessageRouter]    messageNumber: 1
+[2026-03-04T16:43:14Z] [DEBUG] [MessageRouter]    ephemeralPublicKey: 32 bytes
+[2026-03-04T16:43:14Z] [DEBUG] [MessageRouter]    ephemeralPublicKey preview: 6ac1ac4cbbab3a2dfe3faca110baf807...
+[2026-03-04T16:43:14Z] [DEBUG] [MessageRouter]    content (padded): 1368 chars
+[2026-03-04T16:43:14Z] [DEBUG] [MessageRouter]    content preview: S1BBRAAAARvxGTZqsk1uwtEIR7dIEjMi...
+[2026-03-04T16:43:14Z] [DEBUG] [MessageRouter]    isEndSession: false
+[2026-03-04T16:43:14Z] [DEBUG] [CryptoManager] 🔑 Session check for 32230820-cecd-4736-aebf-f46a3eb13022: MISSING
+[2026-03-04T16:43:14Z] [INFO] [SessionInit] 🔐 SESSION_STATE[incoming_message]: userId=32230820..., hasSession=false, messageId=13e110c4...
+[2026-03-04T16:43:14Z] [DEBUG] [MessageRouter] ⏭️ Skipping duplicate queued message 13e110c4...
+[2026-03-04T16:43:14Z] [INFO] [MessageStream] 📡 openStream → ams.konstruct.cc:443 subscriptions=[direct:02d2596f-c67e-4af4-a608-9d6393094155:bfe057f6-1e07-42c8-b2f9-4b3a1ed5c8df, direct:4b6fc374-83d1-4de5-b623-d02ee7cd0ca8:bfe057f6-1e07-42c8-b2f9-4b3a1ed5c8df, direct:32230820-cecd-4736-aebf-f46a3eb13022:bfe057f6-1e07-42c8-b2f9-4b3a1ed5c8df]
+[2026-03-04T16:43:14Z] [INFO] [gRPC] 🔌 gRPC creating channel → ams.konstruct.cc:443 TLS=true
+[2026-03-04T16:43:14Z] [INFO] [MessageStream] ⏳ MessageStream opening to ams.konstruct.cc:443
+[2026-03-04T16:43:14Z] [DEBUG] [MessageStream] 📤 MessageStream subscribe sent: 3 conversation(s)
+[2026-03-04T16:43:15Z] [INFO] [ConnectionStatus] 🟢 Stream connected → status: Connected
+[2026-03-04T16:43:15Z] [INFO] [MessageStream] ✅ MessageStream RPC accepted — stream connected
+[2026-03-04T16:43:15Z] [DEBUG] [ChatsViewModel] 📡 Stream state: token=present, status=Connected, push=false
+[2026-03-04T16:43:15Z] [INFO] [ChatsViewModel] 📡 Connecting message stream
+[2026-03-04T16:43:15Z] [INFO] [MessageStream] 📡 MessageStream already connected
+[2026-03-04T16:43:15Z] [DEBUG] [MessageStream] 📩 MessageStream received message from=32230820-cecd-4736-aebf-f46a3eb13022 id=13e110c4-7bad-452e-8092-54ddeafc253d
+[2026-03-04T16:43:15Z] [DEBUG] [MessageRouter] 📥 INCOMING message RAW from server:
+[2026-03-04T16:43:15Z] [DEBUG] [MessageRouter]    messageId: 13e110c4-7bad-452e-8092-54ddeafc253d
+[2026-03-04T16:43:15Z] [DEBUG] [MessageRouter]    from: 32230820-cecd-4736-aebf-f46a3eb13022
+[2026-03-04T16:43:15Z] [DEBUG] [MessageRouter]    to: bfe057f6-1e07-42c8-b2f9-4b3a1ed5c8df
+[2026-03-04T16:43:15Z] [DEBUG] [MessageRouter]    messageNumber: 1
+[2026-03-04T16:43:15Z] [DEBUG] [MessageRouter]    ephemeralPublicKey: 32 bytes
+[2026-03-04T16:43:15Z] [DEBUG] [MessageRouter]    ephemeralPublicKey preview: 6ac1ac4cbbab3a2dfe3faca110baf807...
+[2026-03-04T16:43:15Z] [DEBUG] [MessageRouter]    content (padded): 1368 chars
+[2026-03-04T16:43:15Z] [DEBUG] [MessageRouter]    content preview: S1BBRAAAARvxGTZqsk1uwtEIR7dIEjMi...
+[2026-03-04T16:43:15Z] [DEBUG] [MessageRouter]    isEndSession: false
+[2026-03-04T16:43:15Z] [DEBUG] [CryptoManager] 🔑 Session check for 32230820-cecd-4736-aebf-f46a3eb13022: MISSING
+[2026-03-04T16:43:15Z] [INFO] [SessionInit] 🔐 SESSION_STATE[incoming_message]: userId=32230820..., hasSession=false, messageId=13e110c4...
+[2026-03-04T16:43:15Z] [DEBUG] [MessageRouter] ⏭️ Skipping duplicate queued message 13e110c4...
+
+

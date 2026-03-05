@@ -6,23 +6,23 @@
 //
 
 import Foundation
-import Combine
 
-class SessionManager: ObservableObject {
+@Observable
+class SessionManager {
     static let shared = SessionManager()
     private init() {}
 
     // ✅ Session token for API authentication
-    @Published private(set) var sessionToken: String?
+    private(set) var sessionToken: String?
     
     // ✅ Refresh token for automatic token renewal
-    @Published private(set) var refreshToken: String?
+    private(set) var refreshToken: String?
     
     // ✅ User ID from server (UUID)
-    @Published private(set) var userId: String?
+    private(set) var userId: String?
 
     // Signals that the session was invalidated due to an unsupported token algorithm
-    @Published private(set) var isSessionInvalidated: Bool = false
+    private(set) var isSessionInvalidated: Bool = false
 
     func resetSessionInvalidated() {
         isSessionInvalidated = false

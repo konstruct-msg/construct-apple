@@ -6,15 +6,15 @@
 //
 
 import Foundation
-import Combine
 
 enum DeepLinkType: Equatable {
     case contact(ContactInfo)
     // Add other deep link types here if needed
 }
 
-class DeepLinkHandler: ObservableObject {
-    @Published var deepLink: DeepLinkType?
+@Observable
+class DeepLinkHandler {
+    var deepLink: DeepLinkType?
 
     // Function to handle URL manually, e.g., from AppDelegate or onOpenURL
     func handleURL(_ url: URL) -> Bool {

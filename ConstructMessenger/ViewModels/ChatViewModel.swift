@@ -1,5 +1,4 @@
 import Foundation
-import Combine
 import CoreData
 import UIKit
 import os.log
@@ -53,7 +52,7 @@ class ChatViewModel: NSObject {
 
     private let connectionStatusManager = ConnectionStatusManager.shared
     private let messageQueueManager = MessageQueueManager.shared
-    private var cancellables = Set<AnyCancellable>()
+    private var observationTasks: [Task<Void, Never>] = []
     private var viewContext: NSManagedObjectContext
 
     // ✅ FIX: Use NSFetchedResultsController for automatic Core Data updates
@@ -127,26 +126,35 @@ class ChatViewModel: NSObject {
     }
 
     private func setupSubscribers() {
-        // ✅ Listen for connection status changes (gRPC stream based)
-        // Incoming messages are received via long polling in ChatsViewModel
-        // and saved to Core Data, then picked up via NSManagedObjectContextObjectsDidChange
-        connectionStatusManager.$connectionStatus
-            .sink { [weak self] status in
-                if status == .connected {
+        // Listen for connection status changes using @Observable tracking
+        let connTask = Task { [weak self] in
+            guard let self else { return }
+            while !Task.isCancelled {
+                await withCheckedContinuation { continuation in
+                    withObservationTracking {
+                        _ = self.connectionStatusManager.connectionStatus
+                    } onChange: {
+                        continuation.resume()
+                    }
+                }
+                guard !Task.isCancelled else { break }
+                if self.connectionStatusManager.connectionStatus == .connected {
                     Log.info("✅ Network connected - processing queued messages", category: "ChatViewModel")
-                    self?.sendQueuedMessages()
+                    self.sendQueuedMessages()
                 }
             }
-            .store(in: &cancellables)
+        }
+        observationTasks.append(connTask)
     }
     
     private func setupMessageQueueListener() {
         // Listen for queued messages processing requests
-        NotificationCenter.default.publisher(for: .processQueuedMessages)
-            .sink { [weak self] notification in
+        let queueTask = Task { [weak self] in
+            for await _ in NotificationCenter.default.notifications(named: .processQueuedMessages) {
                 self?.sendQueuedMessages()
             }
-            .store(in: &cancellables)
+        }
+        observationTasks.append(queueTask)
     }
 
     // ✅ FIXED: Check if we already have a session for this user

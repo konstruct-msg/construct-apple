@@ -9,7 +9,7 @@ import SwiftUI
 
 /// Debug баннер для показа информации о подключении (только в Debug режиме)
 struct ServerInfoBanner: View {
-    @ObservedObject var connectionStatusManager = ConnectionStatusManager.shared
+    var connectionStatusManager = ConnectionStatusManager.shared
 
     var body: some View {
         if AppConstants.enableDebugLogging {

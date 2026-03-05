@@ -11,7 +11,7 @@ struct SettingsView: View {
     @Environment(\.managedObjectContext) private var viewContext
     @Environment(AuthViewModel.self) private var authViewModel
     @State private var viewModel = SettingsViewModel()
-    @ObservedObject private var connectionStatus = ConnectionStatusManager.shared
+    private var connectionStatus = ConnectionStatusManager.shared
     @State private var showingQRCode = false
     @State private var linkCopied = false
    
@@ -57,7 +57,7 @@ struct SettingsView: View {
                                         .foregroundColor(Color(.tertiaryLabel))
                                 }
                                 .padding(.horizontal, 16)
-                                .padding(.vertical, 12)
+                                .padding(.vertical, 16)
                             }
                             .buttonStyle(.plain)
                         }
@@ -109,7 +109,7 @@ struct SettingsView: View {
                                         .foregroundColor(Color(.tertiaryLabel))
                                 }
                                 .padding(.horizontal, 16)
-                                .padding(.vertical, 12)
+                                .padding(.vertical, 16)
                                 .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
@@ -133,7 +133,7 @@ struct SettingsView: View {
                                         .foregroundColor(Color(.tertiaryLabel))
                                 }
                                 .padding(.horizontal, 16)
-                                .padding(.vertical, 12)
+                                .padding(.vertical, 16)
                                 .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
@@ -150,10 +150,11 @@ struct SettingsView: View {
                                 Text("Construct v\(AppConstants.appVersion)").foregroundColor(.secondary)
                             }
                             .padding(.horizontal, 16)
-                            .padding(.vertical, 12)
+                            .padding(.vertical, 16)
                         }
 
                         // MARK: - Developer Section
+//                        #if DEBUG
                         settingsSection(header: "Developer") {
                             NavigationLink(destination: DiagnosticsView()) {
                                 HStack {
@@ -164,14 +165,15 @@ struct SettingsView: View {
                                         .foregroundColor(Color(.tertiaryLabel))
                                 }
                                 .padding(.horizontal, 16)
-                                .padding(.vertical, 12)
+                                .padding(.vertical, 16)
                                 .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
                         }
+//                        #endif
                     }
                     .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
+                    .padding(.vertical, 24)
                 }
                 .background(Color(uiColor: .systemGroupedBackground))
                 .navigationBarHidden(true)
@@ -224,7 +226,7 @@ struct SettingsView: View {
             Spacer()
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.vertical, 16)
         .contentShape(Rectangle())
     }
 
@@ -243,7 +245,7 @@ struct SettingsView: View {
                     .foregroundColor(Color(.tertiaryLabel))
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(.vertical, 16)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

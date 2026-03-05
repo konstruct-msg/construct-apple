@@ -14,7 +14,7 @@ struct ChatView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var viewModel: ChatViewModel  // ✅ FIX: State persists across view updates
     @State private var scrollManager = ChatScrollManager()  // ✅ NEW: Isolated scroll management
-    @ObservedObject private var connectionManager = ConnectionStatusManager.shared
+    private var connectionManager = ConnectionStatusManager.shared
     @State private var messageText = ""
     @State private var replyingTo: Message?
     @State private var showingUserProfile = false

@@ -9,12 +9,13 @@
 import Foundation
 import UIKit
 
-class DeveloperMode: ObservableObject {
+@Observable
+class DeveloperMode {
     static let shared = DeveloperMode()
     
     // MARK: - Developer Mode State
     
-    @Published private(set) var isEnabled: Bool {
+    private(set) var isEnabled: Bool {
         didSet {
             UserDefaults.standard.set(isEnabled, forKey: "developerModeEnabled")
             Log.info("🔧 Developer Mode: \(isEnabled ? "ENABLED" : "DISABLED")")
@@ -23,8 +24,8 @@ class DeveloperMode: ObservableObject {
     
     // MARK: - Activation Mechanism
     
-    @Published private(set) var currentTapCount: Int = 0
-    @Published var showTapCount: Bool = false
+    private(set) var currentTapCount: Int = 0
+    var showTapCount: Bool = false
     private var lastTapTime: Date = Date()
     private let requiredTaps: Int = 10
     private let tapTimeout: TimeInterval = 5.0 // Increased to 5 seconds
