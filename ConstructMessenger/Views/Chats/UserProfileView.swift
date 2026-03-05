@@ -33,9 +33,9 @@ struct UserProfileView: View {
                                     .resizable()
                                     .scaledToFill()
                                     .frame(width: 100, height: 100)
-                                    .clipShape(Circle())
+                                    .clipShape(AvatarStyle.squircle(AvatarStyle.accountSize))
                             } else {
-                                Circle()
+                                AvatarStyle.squircle(AvatarStyle.accountSize)
                                     .fill(Color.blue.opacity(0.2))
                                     .frame(width: 100, height: 100)
                                     .overlay {

@@ -20,9 +20,9 @@ struct ChatRowView: View {
                         .resizable()
                         .scaledToFill()
                         .frame(width: AvatarStyle.chatSize, height: AvatarStyle.chatSize)
-                        .clipShape(RoundedRectangle(cornerRadius: AvatarStyle.chatCornerRadius, style: .continuous))
+                        .clipShape(AvatarStyle.squircle(AvatarStyle.chatSize))
                 } else {
-                    RoundedRectangle(cornerRadius: AvatarStyle.chatCornerRadius, style: .continuous)
+                    AvatarStyle.squircle(AvatarStyle.chatSize)
                         .fill(Color.blue)
                         .frame(width: AvatarStyle.chatSize, height: AvatarStyle.chatSize)
                         .overlay {

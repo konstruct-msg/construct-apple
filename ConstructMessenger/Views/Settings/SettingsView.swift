@@ -35,7 +35,7 @@ struct SettingsView: View {
                                                 .resizable()
                                                 .scaledToFill()
                                         } else {
-                                            RoundedRectangle(cornerRadius: AvatarStyle.settingsCornerRadius, style: .continuous)
+                                            AvatarStyle.squircle(AvatarStyle.settingsSize)
                                                 .fill(Color.blue)
                                                 .overlay {
                                                     Text(profileInitials)
@@ -45,7 +45,7 @@ struct SettingsView: View {
                                         }
                                     }
                                     .frame(width: AvatarStyle.settingsSize, height: AvatarStyle.settingsSize)
-                                    .clipShape(RoundedRectangle(cornerRadius: AvatarStyle.settingsCornerRadius, style: .continuous))
+                                    .clipShape(AvatarStyle.squircle(AvatarStyle.settingsSize))
 
                                     VStack(alignment: .leading, spacing: 4) {
                                         Text(profileDisplayName)

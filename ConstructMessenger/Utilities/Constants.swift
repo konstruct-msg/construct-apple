@@ -29,11 +29,14 @@ struct AccountDeletionConfig {
 // MARK: - Avatar Styling
 struct AvatarStyle {
     static let chatSize: CGFloat = 50
-    static let chatCornerRadius: CGFloat = 12
     static let settingsSize: CGFloat = 54
-    static let settingsCornerRadius: CGFloat = 12
+    static let bubbleSize: CGFloat = 60
     static let accountSize: CGFloat = 100
-    static let accountCornerRadius: CGFloat = 22
+
+    /// iOS superellipse (squircle) shape — same proportions as iOS App Icons.
+    static func squircle(_ size: CGFloat) -> RoundedRectangle {
+        RoundedRectangle(cornerRadius: size * 0.225, style: .continuous)
+    }
 }
 
 // MARK: - Server Configuration

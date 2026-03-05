@@ -323,9 +323,9 @@ struct ProfileShareBubbleView: View {
                         .resizable()
                         .scaledToFill()
                         .frame(width: 60, height: 60)
-                        .clipShape(Circle())
+                        .clipShape(AvatarStyle.squircle(AvatarStyle.bubbleSize))
                 } else {
-                    Circle()
+                    AvatarStyle.squircle(AvatarStyle.bubbleSize)
                         .fill(Color.blue.opacity(0.2))
                         .frame(width: 60, height: 60)
                         .overlay(

@@ -38,9 +38,9 @@ struct AccountSettingsView: View {
                                     .resizable()
                                     .scaledToFill()
                                     .frame(width: AvatarStyle.accountSize, height: AvatarStyle.accountSize)
-                                    .clipShape(RoundedRectangle(cornerRadius: AvatarStyle.accountCornerRadius, style: .continuous))
+                                    .clipShape(AvatarStyle.squircle(AvatarStyle.accountSize))
                             } else {
-                                RoundedRectangle(cornerRadius: AvatarStyle.accountCornerRadius, style: .continuous)
+                                AvatarStyle.squircle(AvatarStyle.accountSize)
                                     .fill(Color.blue.opacity(0.2))
                                     .frame(width: AvatarStyle.accountSize, height: AvatarStyle.accountSize)
                                     .overlay {
