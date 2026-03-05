@@ -116,30 +116,27 @@ class ProfileShareViewModel {
                 )
 
                 // ✅ Send via gRPC
-                Task {
-                    do {
-                        let responses = try await ChunkedMessageSender.shared.sendChunks(
-                            plan: plan,
-                            senderId: currentUserId,
-                            recipientId: userId,
-                            conversationId: message.id, // profile share: use message ID as conversation context
-                            timestamp: message.timestamp,
-                            preEncryptedFirst: firstComponents
-                        )
-                        let response = responses.first ?? SendMessageResponse(messageId: message.id, status: "sent")
-                        Log.info("✅ Profile shared with user \(userId) via gRPC: \(response.messageId)", category: "ProfileShare")
-                    } catch {
-                        Log.error("❌ Failed to send profile message via gRPC: \(error.localizedDescription)", category: "ProfileShare")
-                        await MainActor.run {
-                            completion(false, error.localizedDescription)
-                        }
-                        return
+                do {
+                    let conversationId = ConversationId.direct(myUserId: currentUserId, theirUserId: userId)
+                    let responses = try await ChunkedMessageSender.shared.sendChunks(
+                        plan: plan,
+                        senderId: currentUserId,
+                        recipientId: userId,
+                        conversationId: conversationId,
+                        timestamp: message.timestamp,
+                        preEncryptedFirst: firstComponents
+                    )
+                    let response = responses.first ?? SendMessageResponse(messageId: message.id, status: "sent")
+                    Log.info("✅ Profile shared with user \(userId) via gRPC: \(response.messageId)", category: "ProfileShare")
+                    await MainActor.run {
+                        completion(true, nil)
                     }
-                }
-                
-                Log.info("✅ Profile shared with user \(userId)", category: "ProfileShare")
-                await MainActor.run {
-                    completion(true, nil)
+                } catch {
+                    Log.error("❌ Failed to send profile message via gRPC: \(error.localizedDescription)", category: "ProfileShare")
+                    await MainActor.run {
+                        completion(false, error.localizedDescription)
+                    }
+                    return
                 }
             } catch let error as CryptoManagerError {
                 Log.error("❌ Failed to share profile (CryptoManagerError): \(error)", category: "ProfileShare")
