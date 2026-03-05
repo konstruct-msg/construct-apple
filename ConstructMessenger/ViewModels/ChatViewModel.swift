@@ -219,65 +219,36 @@ class ChatViewModel: NSObject {
     
     private func handlePublicKeyBundle(_ data: PublicKeyBundleData) {
         Log.debug("📦 Received publicKeyBundle for userId: \(data.userId), chat.otherUser?.id: \(chat.otherUser?.id ?? "nil"), match: \(data.userId == chat.otherUser?.id)", category: "ChatViewModel")
-        if data.userId == chat.otherUser?.id {
-            // ✅ Update username if we have the user in Core Data
-            if let user = chat.otherUser {
-                let normalized = data.username.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !normalized.isEmpty, normalized.lowercased() != "anonymous", UUID(uuidString: normalized) == nil {
-                    user.username = normalized
-                    user.displayName = normalized
-                } else {
-                    user.username = ""
-                    user.displayName = DisplayNameGenerator.generate(from: data.userId)
-                }
-                try? viewContext.save()
-                Log.info("Updated username for user: \(data.username)", category: "ChatViewModel")
+        guard data.userId == chat.otherUser?.id else { return }
+
+        // Update username if we have the user in Core Data
+        if let user = chat.otherUser {
+            let normalized = data.username.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !normalized.isEmpty, normalized.lowercased() != "anonymous", UUID(uuidString: normalized) == nil {
+                user.username = normalized
+                user.displayName = normalized
+            } else {
+                user.username = ""
+                user.displayName = DisplayNameGenerator.generate(from: data.userId)
             }
+            try? viewContext.save()
+            Log.info("Updated username for user: \(data.username)", category: "ChatViewModel")
+        }
 
-            self.recipientBundle = (data.identityPublic, data.signedPrekeyPublic, data.signature, data.verifyingKey)
-            guard SessionManager.shared.currentUserId != nil else { return }
-            
-            // ✅ FIX: Prevent self-session initialization
-            guard let currentUserId = SessionManager.shared.currentUserId else {
-                Log.error("❌ Cannot initialize session: currentUserId is nil", category: "ChatViewModel")
-                errorMessage = "Cannot initialize session: user not authenticated"
-                return
-            }
-            
-            Log.debug("🔍 Session init check - currentUserId: \(currentUserId), recipientId: \(data.userId)", category: "ChatViewModel")
-            
-            if data.userId == currentUserId {
-                Log.error("❌ Cannot initialize session with yourself: \(data.userId) == \(currentUserId)", category: "ChatViewModel")
-                errorMessage = "Cannot create a dialog with yourself"
-                return
-            }
+        // Cache the bundle for use when the user actually sends a message.
+        // Do NOT create an INITIATOR session here — proactively initialising a session
+        // while the remote side may already be mid-ratchet (messageNumber > 0) causes
+        // AEAD failures → heal_impossible → END_SESSION notification loop.
+        // Session creation as INITIATOR happens on-demand inside sendMessage/initializeSessionProactively.
+        self.recipientBundle = (data.identityPublic, data.signedPrekeyPublic, data.signature, data.verifyingKey)
 
-            // Re-check: ChatsViewModel may have already created a RECEIVER session while we were
-            // waiting for the bundle fetch (both run async on @MainActor but interleave at await points).
-            // Overwriting a valid RECEIVER session with an INITIATOR session would break decryption
-            // of already-queued incoming messages.
-            if CryptoManager.shared.hasSession(for: data.userId) {
-                Log.info("✅ SESSION_STATE[proactive_init_skipped]: RECEIVER session already created for \(data.userId.prefix(8))… — skipping INITIATOR init", category: "ChatViewModel")
-                isSessionReady = true
-                return
-            }
-
-            do {
-                // ✅ REFACTOR: Use SessionInitializationService
-                try sessionInitService.initializeSession(userId: data.userId, bundle: data, deleteExisting: true)
-
-                isSessionReady = true
-                errorMessage = nil
-
-                // Process any pending messages
-                processPendingMessages()
-
-            } catch {
-                let errorMsg = "Failed to initialize secure session: \(error.localizedDescription)"
-                errorMessage = errorMsg
-                isSessionReady = false
-                Log.error("❌ Failed to initialize session: \(error.localizedDescription)", category: "ChatViewModel")
-            }
+        // If a RECEIVER session was already created by ChatsViewModel (incoming message arrived
+        // while we were fetching the bundle), mark as ready so the UI reflects that.
+        if CryptoManager.shared.hasSession(for: data.userId) {
+            Log.info("✅ SESSION_STATE[bundle_fetched_session_exists]: session already established for \(data.userId.prefix(8))…", category: "ChatViewModel")
+            isSessionReady = true
+        } else {
+            Log.info("📦 SESSION_STATE[bundle_cached]: bundle ready for \(data.userId.prefix(8))…, session will be created on first send", category: "ChatViewModel")
         }
     }
 
@@ -427,6 +398,40 @@ class ChatViewModel: NSObject {
     func sendMessage(text: String, images: [UIImage] = [], replyTo: Message? = nil) {
         Log.info("📤 sendMessage called with \(images.count) images", category: "ChatViewModel")
 
+        guard let recipientId = chat.otherUser?.id else {
+            Log.error("❌ No recipient ID", category: "ChatViewModel")
+            return
+        }
+        guard let currentUserId = SessionManager.shared.currentUserId else {
+            Log.error("❌ No current user ID", category: "ChatViewModel")
+            return
+        }
+        // 🚫 BLOCK: Cannot send encrypted messages to yourself
+        guard recipientId != currentUserId else {
+            errorMessage = "Cannot send encrypted messages to yourself. Use notes app instead."
+            Log.debug("❌ Blocked attempt to send message to self", category: "ChatViewModel")
+            return
+        }
+
+        // Session check applies to ALL send paths (text AND media).
+        // If no session yet, queue the message and init INITIATOR on-demand.
+        // Previously the session was created proactively on chat open which caused
+        // INITIATOR/RECEIVER conflicts and "session out of sync" notification loops.
+        let hasSession = CryptoManager.shared.hasSession(for: recipientId)
+        if !hasSession {
+            let queued = QueuedMessage(text: text, images: images, replyTo: replyTo)
+            queuedMessages.append(queued)
+            errorMessage = "Initializing secure connection..."
+            isInitializingSession = true
+            Log.info("📝 SESSION_STATE[queue_message]: userId=\(recipientId.prefix(8))..., queueSize=\(queuedMessages.count)", category: "SessionInit")
+            Task {
+                await initializeSessionProactively(userId: recipientId)
+            }
+            return
+        }
+
+        Log.info("📤 Sending to: \(recipientId), from: \(currentUserId)", category: "ChatViewModel")
+
         // Handle images if provided
         if !images.isEmpty {
             sendMediaMessage(images: images, caption: text, replyTo: replyTo)
@@ -443,48 +448,6 @@ class ChatViewModel: NSObject {
         } catch {
             errorMessage = "Failed to validate message: \(error.localizedDescription)"
             Log.error("❌ Unexpected validation error: \(error)", category: "ChatViewModel")
-            return
-        }
-
-        guard let recipientId = chat.otherUser?.id else {
-            Log.error("❌ No recipient ID", category: "ChatViewModel")
-            return
-        }
-
-        guard let currentUserId = SessionManager.shared.currentUserId else {
-            Log.error("❌ No current user ID", category: "ChatViewModel")
-            return
-        }
-
-        Log.info("📤 Sending to: \(recipientId), from: \(currentUserId)", category: "ChatViewModel")
-
-        // 🚫 BLOCK: Cannot send encrypted messages to yourself
-        if recipientId == currentUserId {
-            errorMessage = "Cannot send encrypted messages to yourself. Use notes app instead."
-            Log.debug("❌ Blocked attempt to send message to self", category: "ChatViewModel")
-            return
-        }
-
-        // ✅ IMPROVED: Check if session is ready before sending
-        guard let otherUserId = chat.otherUser?.id else {
-            Log.error("❌ No recipient ID", category: "ChatViewModel")
-            return
-        }
-        
-        let hasSession = CryptoManager.shared.hasSession(for: otherUserId)
-        
-        if !hasSession {
-            // Queue message - session not ready
-            let queued = QueuedMessage(text: text, images: images, replyTo: replyTo)
-            queuedMessages.append(queued)
-            errorMessage = "Initializing secure connection..."
-            isInitializingSession = true
-            Log.info("📝 SESSION_STATE[queue_message]: userId=\(otherUserId.prefix(8))..., queueSize=\(queuedMessages.count)", category: "SessionInit")
-            
-            // Start session initialization proactively
-            Task {
-                await initializeSessionProactively(userId: otherUserId)
-            }
             return
         }
 
@@ -669,18 +632,12 @@ class ChatViewModel: NSObject {
     // MARK: - Media Messages
 
     private func sendMediaMessage(images: [UIImage], caption: String, replyTo: Message?) {
-        // ✅ REFACTOR: Use MediaUploadManager
         guard let recipientId = chat.otherUser?.id else {
             Log.error("❌ No recipient ID for media message", category: "ChatViewModel")
             errorMessage = "Cannot send media: no recipient"
             return
         }
-
-        guard isSessionReady else {
-            errorMessage = "Waiting for secure connection..."
-            Log.info("⏳ Media message blocked - session not ready", category: "ChatViewModel")
-            return
-        }
+        // Note: session existence is already guaranteed by sendMessage() before this is called.
 
         isSending = true
         errorMessage = nil
