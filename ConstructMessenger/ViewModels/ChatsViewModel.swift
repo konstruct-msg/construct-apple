@@ -300,10 +300,16 @@ class ChatsViewModel {
                 let fetchRequest = Message.fetchRequest()
                 fetchRequest.predicate = NSPredicate(format: "id == %@", messageId)
                 guard let message = try? context.fetch(fetchRequest).first,
-                      message.isSentByMe,
-                      message.deliveryStatus == .sent else { continue }
+                      message.isSentByMe else { continue }
+
+                // Receipt is authoritative — mark delivered regardless of current state.
+                // Strict .sent-only check caused a race: receipt arrived before the gRPC
+                // ACK returned, leaving messages permanently stuck at .sent (grey).
+                guard message.deliveryStatus != .delivered else { continue }
+
+                let prev = message.deliveryStatus
                 message.deliveryStatus = .delivered
-                Log.info("📬 Receipt: message \(messageId) marked delivered", category: "MessageStream")
+                Log.info("📬 Receipt: message \(messageId) marked delivered (was \(prev))", category: "MessageStream")
             }
             try? context.save()
         }
