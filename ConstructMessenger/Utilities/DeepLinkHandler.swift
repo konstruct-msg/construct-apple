@@ -9,7 +9,7 @@ import Foundation
 
 enum DeepLinkType: Equatable {
     case contact(ContactInfo)
-    // Add other deep link types here if needed
+    case openChat(chatId: String)
 }
 
 @Observable

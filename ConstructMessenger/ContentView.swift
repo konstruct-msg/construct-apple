@@ -72,7 +72,10 @@ struct ContentView: View {
                     Log.error("ContentView: Failed to create chat for userId: \(contactInfo.userId)", category: "DeepLink")
                 }
                 
-                // Clear the deep link
+                deepLinkHandler.deepLink = nil
+            } else if case .openChat(let chatId) = newDeepLink {
+                Log.info("ContentView: Opening chat from push notification: \(chatId)", category: "DeepLink")
+                chatsViewModel.chatToOpen = chatId
                 deepLinkHandler.deepLink = nil
             }
         }

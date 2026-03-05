@@ -226,15 +226,13 @@ extension PushNotificationManager: UNUserNotificationCenterDelegate {
         
         let userInfo = response.notification.request.content.userInfo
         
-        // Extract conversation_id if present
         if let conversationId = userInfo["conversation_id"] as? String {
             Log.info("📱 Opening conversation: \(conversationId)", category: "Push")
-            // TODO: Navigate to conversation
-            // NotificationCenter.default.post(
-            //     name: .openConversation,
-            //     object: nil,
-            //     userInfo: ["conversationId": conversationId]
-            // )
+            Task { @MainActor in
+                if let appDelegate = UIApplication.shared.delegate as? AppDelegate {
+                    appDelegate.deepLinkHandler.deepLink = .openChat(chatId: conversationId)
+                }
+            }
         }
         
         completionHandler()
