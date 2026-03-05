@@ -10,10 +10,12 @@ import SwiftUI
 struct SettingsView: View {
     @Environment(\.managedObjectContext) private var viewContext
     @Environment(AuthViewModel.self) private var authViewModel
+    @Environment(AccountRecoveryViewModel.self) private var recoveryVM
     @State private var viewModel = SettingsViewModel()
     private var connectionStatus = ConnectionStatusManager.shared
     @State private var showingQRCode = false
     @State private var linkCopied = false
+    @State private var showingRecoverySetup = false
    
     
     private let inviteGenerator = InviteGenerator()
@@ -24,6 +26,35 @@ struct SettingsView: View {
             NavigationStack {
                 ScrollView {
                     VStack(spacing: 18) {
+
+                        // MARK: - Recovery Banner
+                        if recoveryVM.statusLoaded && !recoveryVM.isSetup {
+                            Button {
+                                showingRecoverySetup = true
+                            } label: {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "exclamationmark.shield.fill")
+                                        .foregroundColor(.orange)
+                                        .font(.title3)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(NSLocalizedString("recovery_banner_title", comment: ""))
+                                            .font(.subheadline.bold())
+                                            .foregroundColor(.primary)
+                                        Text(NSLocalizedString("recovery_banner_subtitle", comment: ""))
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .foregroundColor(.secondary)
+                                        .font(.caption)
+                                }
+                                .padding(12)
+                                .background(Color.orange.opacity(0.12))
+                                .cornerRadius(12)
+                                .padding(.horizontal)
+                            }
+                        }
 
                         // MARK: - Profile Section
                         settingsSection {
@@ -57,7 +88,7 @@ struct SettingsView: View {
                                         .foregroundColor(Color(.tertiaryLabel))
                                 }
                                 .padding(.horizontal, 16)
-                                .padding(.vertical, 16)
+                                .padding(.vertical, 14)
                             }
                             .buttonStyle(.plain)
                         }
@@ -109,7 +140,7 @@ struct SettingsView: View {
                                         .foregroundColor(Color(.tertiaryLabel))
                                 }
                                 .padding(.horizontal, 16)
-                                .padding(.vertical, 16)
+                                .padding(.vertical, 14)
                                 .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
@@ -133,7 +164,7 @@ struct SettingsView: View {
                                         .foregroundColor(Color(.tertiaryLabel))
                                 }
                                 .padding(.horizontal, 16)
-                                .padding(.vertical, 16)
+                                .padding(.vertical, 14)
                                 .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
@@ -150,7 +181,7 @@ struct SettingsView: View {
                                 Text("Construct v\(AppConstants.appVersion)").foregroundColor(.secondary)
                             }
                             .padding(.horizontal, 16)
-                            .padding(.vertical, 16)
+                            .padding(.vertical, 14)
                         }
 
                         // MARK: - Developer Section
@@ -165,7 +196,7 @@ struct SettingsView: View {
                                         .foregroundColor(Color(.tertiaryLabel))
                                 }
                                 .padding(.horizontal, 16)
-                                .padding(.vertical, 16)
+                                .padding(.vertical, 14)
                                 .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
@@ -180,6 +211,13 @@ struct SettingsView: View {
                 .onAppear {
                     viewModel.setContext(viewContext)
                     viewModel.loadUserInfo(from: authViewModel)
+                }
+                .task { await recoveryVM.loadStatus() }
+                .sheet(isPresented: $showingRecoverySetup) {
+                    RecoverySetupView()
+                        .environment(recoveryVM)
+                        .environment(authViewModel)
+                        .onDisappear { Task { await recoveryVM.refreshStatus() } }
                 }
                 .sheet(isPresented: $showingQRCode) {
                     ContactQRCodeView(
@@ -226,7 +264,7 @@ struct SettingsView: View {
             Spacer()
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 16)
+        .padding(.vertical, 14)
         .contentShape(Rectangle())
     }
 
@@ -245,7 +283,7 @@ struct SettingsView: View {
                     .foregroundColor(Color(.tertiaryLabel))
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 16)
+            .padding(.vertical, 14)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

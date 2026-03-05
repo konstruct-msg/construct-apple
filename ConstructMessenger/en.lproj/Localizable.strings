@@ -387,3 +387,39 @@
 "reset_session_title" = "Reset Session?";
 "reset_session_message" = "This will re-establish a new encrypted session. Messages in transit may be lost.";
 
+
+// Account Recovery
+"try_again" = "Try Again";
+"recovery_not_configured" = "Not set up";
+"recovery_intro_title" = "Set Up Account Recovery";
+"recovery_intro_body" = "Generate a 12-word recovery phrase. If you lose this device, use the phrase to recover your account.";
+"recovery_generate" = "Generate Recovery Phrase";
+"recovery_write_down" = "Write down these 12 words in order. Store them somewhere safe — never share them.";
+"recovery_never_share" = "⚠️ Never share your recovery phrase with anyone.";
+"recovery_wrote_it_down" = "I've Written It Down";
+"recovery_quiz_title" = "Verify Your Recovery Phrase";
+"recovery_quiz_word_n" = "Word #%d";
+"recovery_quiz_placeholder" = "Enter word";
+"recovery_confirm" = "Confirm & Activate";
+"recovery_quiz_failed" = "Some words are incorrect. Please check your recovery phrase.";
+"recovery_uploading" = "Activating recovery key…";
+"recovery_done_title" = "Recovery Phrase Activated";
+"recovery_done_body" = "Your account is now protected. Keep your recovery phrase safe.";
+"recovery_fingerprint" = "Key Fingerprint";
+"recovery_error_title" = "Something went wrong";
+"recovery_error_not_found" = "Account not found or recovery not enabled.";
+"recovery_error_not_configured" = "Recovery phrase was never set up for this account.";
+"recovery_error_wrong_phrase" = "Incorrect recovery phrase.";
+"recovery_error_cooldown" = "Recovery was recently used. Please try again later.";
+"recovery_error_already_set" = "Recovery key is already set (immutable).";
+"recovery_entry_instructions" = "Enter your 12-word recovery phrase to restore your account on this device.";
+"recovery_identifier_label" = "Account ID or Username";
+"recovery_identifier_placeholder" = "username or UUID";
+"recovery_enter_phrase" = "Recovery phrase (12 words)";
+"recovery_invalid_phrase" = "Invalid recovery phrase. Check the words and try again.";
+"recovery_restore_account" = "Restore Account";
+"recovery_in_progress" = "Recovering account…";
+"recovery_restored_title" = "Account Restored";
+"recovery_restored_body" = "Your account has been recovered on this device. Previous sessions have been revoked.";
+"recovery_banner_title" = "Protect Your Account";
+"recovery_banner_subtitle" = "Set up your recovery phrase to avoid losing access.";

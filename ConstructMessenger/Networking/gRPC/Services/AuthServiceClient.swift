@@ -159,4 +159,87 @@ final class AuthServiceClient: Sendable {
             )
         }
     }
+
+    // MARK: - Set Recovery Key
+
+    struct RecoveryKeyResult {
+        let fingerprint: String
+    }
+
+    func setRecoveryKey(publicKey: Data, signature: Data, timestamp: Int64) async throws -> RecoveryKeyResult {
+        try await GRPCChannelManager.shared.performRPC { grpcClient in
+            let authClient = Shared_Proto_Services_V1_AuthService.Client(wrapping: grpcClient)
+
+            var request = Shared_Proto_Services_V1_SetRecoveryKeyRequest()
+            request.recoveryPublicKey = publicKey
+            request.setupSignature = signature
+            request.timestamp = timestamp
+
+            let response = try await authClient.setRecoveryKey(
+                request: .init(message: request)
+            )
+            return RecoveryKeyResult(fingerprint: response.fingerprint)
+        }
+    }
+
+    // MARK: - Get Recovery Status
+
+    struct RecoveryStatus {
+        let isSetup: Bool
+        let fingerprint: String?
+        let lastUsedAt: Int64?
+    }
+
+    func getRecoveryStatus() async throws -> RecoveryStatus {
+        try await GRPCChannelManager.shared.performRPC { grpcClient in
+            let authClient = Shared_Proto_Services_V1_AuthService.Client(wrapping: grpcClient)
+
+            let response = try await authClient.getRecoveryStatus(
+                request: .init(message: Shared_Proto_Services_V1_GetRecoveryStatusRequest())
+            )
+            return RecoveryStatus(
+                isSetup: response.isSetup,
+                fingerprint: response.hasFingerprint ? response.fingerprint : nil,
+                lastUsedAt: response.hasLastUsedAt ? response.lastUsedAt : nil
+            )
+        }
+    }
+
+    // MARK: - Recover Account
+
+    func recoverAccount(
+        identifier: String,
+        challenge: String,
+        recoverySignature: Data,
+        deviceId: String,
+        deviceName: String,
+        publicKeys: Shared_Proto_Services_V1_DevicePublicKeys
+    ) async throws -> AuthResponse {
+        try await GRPCChannelManager.shared.performRPC { grpcClient in
+            let authClient = Shared_Proto_Services_V1_AuthService.Client(wrapping: grpcClient)
+
+            var newDevice = Shared_Proto_Services_V1_NewDeviceForRecovery()
+            newDevice.deviceID = deviceId
+            newDevice.deviceName = deviceName
+            newDevice.platform = .ios
+            newDevice.publicKeys = publicKeys
+
+            var request = Shared_Proto_Services_V1_RecoverAccountRequest()
+            request.identifier = identifier
+            request.challenge = challenge
+            request.recoverySignature = recoverySignature
+            request.newDevice = newDevice
+
+            let response = try await authClient.recoverAccount(
+                request: .init(message: request)
+            )
+            return AuthResponse(
+                userId: response.userID,
+                accessToken: response.tokens.accessToken,
+                refreshToken: response.tokens.refreshToken,
+                expiresAt: response.tokens.expiresAt,
+                expiresIn: nil
+            )
+        }
+    }
 }

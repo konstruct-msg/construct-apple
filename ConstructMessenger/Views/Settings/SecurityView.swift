@@ -9,10 +9,12 @@ import SwiftUI
 
 struct SecurityView: View {
     @Environment(SecurityViewModel.self) private var securityViewModel
-    
+    @Environment(AccountRecoveryViewModel.self) private var recoveryVM
+    @Environment(AuthViewModel.self) private var authVM
+
     @State private var showingPinSetup = false
     @State private var showingDisablePinSheet = false
-    @State private var showingSeedRecovery = false
+    @State private var showingRecoverySetup = false
     @State private var showingDuressPin = false
     
     var body: some View {
@@ -58,14 +60,27 @@ struct SecurityView: View {
 
             Section {
                 Button {
-                    showingSeedRecovery = true
+                    showingRecoverySetup = true
                 } label: {
                     Label {
-                        Text("account_recovery_seed")
-                            .foregroundColor(.primary)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("account_recovery_seed")
+                                .foregroundColor(.primary)
+                            if recoveryVM.isSetup, let fp = recoveryVM.fingerprint {
+                                Text(fp)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                            } else if recoveryVM.statusLoaded && !recoveryVM.isSetup {
+                                Text(NSLocalizedString("recovery_not_configured", comment: ""))
+                                    .font(.caption)
+                                    .foregroundColor(.orange)
+                            }
+                        }
                     } icon: {
-                        Image(systemName: "key.fill")
-                            .foregroundColor(.gray)
+                        Image(systemName: recoveryVM.isSetup ? "checkmark.shield.fill" : "key.fill")
+                            .foregroundColor(recoveryVM.isSetup ? .green : .gray)
                     }
                 }
             } footer: {
@@ -100,15 +115,19 @@ struct SecurityView: View {
             PinDisableView()
                 .environment(securityViewModel)
         }
-        .alert("account_recovery_seed", isPresented: $showingSeedRecovery) {
-            Button("ok", role: .cancel) { }
-        } message: {
-            Text("account_recovery_seed_coming_soon")
+        .sheet(isPresented: $showingRecoverySetup) {
+            RecoverySetupView()
+                .environment(recoveryVM)
+                .environment(authVM)
+                .onDisappear {
+                    Task { await recoveryVM.refreshStatus() }
+                }
         }
         .alert("duress_pin", isPresented: $showingDuressPin) {
             Button("ok", role: .cancel) { }
         } message: {
             Text("duress_pin_coming_soon")
         }
+        .task { await recoveryVM.loadStatus() }
     }
 }

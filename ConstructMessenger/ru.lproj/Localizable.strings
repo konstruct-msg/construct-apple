@@ -389,3 +389,39 @@
 "reset_session_title" = "Сбросить сессию?";
 "reset_session_message" = "Будет установлена новая зашифрованная сессия. Сообщения в пути могут быть потеряны.";
 
+
+// Account Recovery
+"try_again" = "Попробовать снова";
+"recovery_not_configured" = "Не настроено";
+"recovery_intro_title" = "Настройка восстановления аккаунта";
+"recovery_intro_body" = "Сгенерируйте фразу из 12 слов. Если вы потеряете устройство, используйте фразу для восстановления доступа.";
+"recovery_generate" = "Сгенерировать фразу";
+"recovery_write_down" = "Запишите эти 12 слов по порядку. Храните их в надёжном месте — никому не передавайте.";
+"recovery_never_share" = "⚠️ Никогда не передавайте свою фразу восстановления.";
+"recovery_wrote_it_down" = "Я записал(а)";
+"recovery_quiz_title" = "Подтвердите фразу восстановления";
+"recovery_quiz_word_n" = "Слово №%d";
+"recovery_quiz_placeholder" = "Введите слово";
+"recovery_confirm" = "Подтвердить и активировать";
+"recovery_quiz_failed" = "Некоторые слова введены неверно. Проверьте фразу.";
+"recovery_uploading" = "Активация ключа восстановления…";
+"recovery_done_title" = "Фраза восстановления активирована";
+"recovery_done_body" = "Ваш аккаунт теперь защищён. Храните фразу в надёжном месте.";
+"recovery_fingerprint" = "Отпечаток ключа";
+"recovery_error_title" = "Произошла ошибка";
+"recovery_error_not_found" = "Аккаунт не найден или восстановление не включено.";
+"recovery_error_not_configured" = "Фраза восстановления для этого аккаунта не была настроена.";
+"recovery_error_wrong_phrase" = "Неверная фраза восстановления.";
+"recovery_error_cooldown" = "Восстановление недавно использовалось. Повторите попытку позже.";
+"recovery_error_already_set" = "Ключ восстановления уже установлен (неизменяем).";
+"recovery_entry_instructions" = "Введите фразу из 12 слов для восстановления аккаунта на этом устройстве.";
+"recovery_identifier_label" = "ID аккаунта или имя пользователя";
+"recovery_identifier_placeholder" = "имя_пользователя или UUID";
+"recovery_enter_phrase" = "Фраза восстановления (12 слов)";
+"recovery_invalid_phrase" = "Неверная фраза восстановления. Проверьте слова.";
+"recovery_restore_account" = "Восстановить аккаунт";
+"recovery_in_progress" = "Восстановление аккаунта…";
+"recovery_restored_title" = "Аккаунт восстановлен";
+"recovery_restored_body" = "Ваш аккаунт восстановлен на этом устройстве. Предыдущие сессии отозваны.";
+"recovery_banner_title" = "Защитите свой аккаунт";
+"recovery_banner_subtitle" = "Настройте фразу восстановления, чтобы не потерять доступ.";

@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct OnboardingView: View {
+    @Environment(AccountRecoveryViewModel.self) private var recoveryVM
     @State private var username: String = ""
     @State private var usernameErrorKey: String? = nil
     @State private var isCheckingUsername = false
@@ -121,8 +122,8 @@ struct OnboardingView: View {
                 RegistrationFlowView(username: username.isEmpty ? nil : username)
             }
             .sheet(isPresented: $showingRecovery) {
-                // TODO: Recovery flow (Week 5)
-                Text("onboarding_recovery_coming_soon")
+                RecoveryEntryView()
+                    .environment(recoveryVM)
             }
             .sheet(isPresented: $showingNetworkSettings) {
                 NavigationStack {
