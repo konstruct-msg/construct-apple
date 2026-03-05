@@ -37,6 +37,10 @@ class PushNotificationManager: NSObject {
     /// Fires each time a silent push is received (for stream reconnection)
     private(set) var lastSilentPushDate: Date?
 
+    /// Whether the current token has been successfully registered with the server.
+    /// Resets when a new token arrives or when the user logs out.
+    private var isRegisteredWithServer: Bool = false
+
     func signalSilentPush() {
         lastSilentPushDate = Date()
     }
@@ -44,6 +48,7 @@ class PushNotificationManager: NSObject {
     // MARK: - Private Properties
     
     private let notificationCenter = UNUserNotificationCenter.current()
+    private var sessionObserverTask: Task<Void, Never>?
     
     // MARK: - Initialization
     
@@ -56,6 +61,25 @@ class PushNotificationManager: NSObject {
         // Check initial authorization status
         Task {
             await checkAuthorizationStatus()
+        }
+
+        // Retry device token registration once a session becomes available.
+        // APNs often delivers the token before the user is authenticated, so the
+        // first registerWithServer attempt fails silently. This observer re-fires
+        // whenever sessionToken becomes non-nil and the token isn't yet registered.
+        sessionObserverTask = Task { [weak self] in
+            guard let self else { return }
+            while !Task.isCancelled {
+                await withCheckedContinuation { continuation in
+                    withObservationTracking {
+                        _ = SessionManager.shared.sessionToken
+                    } onChange: {
+                        continuation.resume()
+                    }
+                }
+                guard !Task.isCancelled else { break }
+                await self.retryServerRegistrationIfNeeded()
+            }
         }
         
         Log.info("📱 PushNotificationManager initialized", category: "Push")
@@ -122,18 +146,18 @@ class PushNotificationManager: NSObject {
     /// Register device token with backend server
     /// Called from AppDelegate after APNs provides device token
     func registerDeviceToken(_ tokenData: Data) async {
-        // Convert token to hex string
         let tokenString = tokenData.map { String(format: "%02.2hhx", $0) }.joined()
-        
         Log.info("📱 Registering device token (length: \(tokenString.count))", category: "Push")
-        
-        // Save token locally
+
+        // New token from APNs — mark as not yet registered with server
+        if deviceToken != tokenString {
+            isRegisteredWithServer = false
+        }
         self.deviceToken = tokenString
-        
-        // Register with backend server
+
+        // Register with backend server (may fail if user not authenticated yet)
         await registerWithServer(tokenString)
-        
-        // Update enabled status
+
         await checkAuthorizationStatus()
     }
     
@@ -152,6 +176,7 @@ class PushNotificationManager: NSObject {
         // Clear local token
         self.deviceToken = nil
         self.isPushEnabled = false
+        self.isRegisteredWithServer = false
     }
     
     /// Handle failed registration
@@ -161,19 +186,29 @@ class PushNotificationManager: NSObject {
     }
     
     // MARK: - Server Communication
+
+    /// Retry registering with the server if we have a token but haven't succeeded yet.
+    /// Called whenever SessionManager.sessionToken changes to non-nil.
+    private func retryServerRegistrationIfNeeded() async {
+        guard SessionManager.shared.sessionToken != nil else { return }
+        guard let token = deviceToken, !isRegisteredWithServer else { return }
+        Log.info("🔄 Retrying device token registration (session now available)", category: "Push")
+        await registerWithServer(token)
+    }
     
     /// Register device token with backend server
     private func registerWithServer(_ token: String) async {
+        guard SessionManager.shared.sessionToken != nil else {
+            Log.info("⏸️ Device token registration deferred — no session yet", category: "Push")
+            return
+        }
         do {
             Log.info("📡 Registering device token with server", category: "Push")
-            
             let response = try await NotificationServiceClient.shared.registerDeviceToken(token: token)
-            
+            isRegisteredWithServer = true
             Log.info("✅ Device token registered with server: success=\(response.success)", category: "Push")
-            
         } catch {
             Log.error("❌ Failed to register device token with server: \(error)", category: "Push")
-            // Don't clear local token - we'll retry later
         }
     }
     
