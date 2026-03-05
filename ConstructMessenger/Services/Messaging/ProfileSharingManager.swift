@@ -93,6 +93,7 @@ class ProfileSharingManager {
                     
                     // Use MediaManager for avatar download and decryption
                     let decryptedData = try await MediaManager.shared.downloadAndDecryptAvatar(
+                        mediaId: avatarMediaId,
                         mediaUrl: avatarMediaUrl,
                         mediaKeyBase64: avatarMediaKey
                     )

@@ -514,6 +514,7 @@ struct MediaMessageView: View {
                 
                 // Download and decrypt via MediaManager
                 let imageData = try await MediaManager.shared.downloadAndDecryptMedia(
+                    mediaId: mediaId,
                     mediaUrl: mediaUrl,
                     mediaKeyBase64: mediaKeyBase64
                 )

@@ -284,6 +284,7 @@ struct MediaGalleryPage: View {
 
         // Received — parse metadata and download
         guard let mediaContent = parseMediaContent(from: message.decryptedContent),
+              let mediaId = mediaContent.media["mediaId"] as? String,
               let mediaUrl = mediaContent.media["mediaUrl"] as? String,
               let mediaKeyBase64 = mediaContent.media["mediaKey"] as? String else {
             isLoading = false
@@ -293,6 +294,7 @@ struct MediaGalleryPage: View {
         Task {
             do {
                 let data = try await MediaManager.shared.downloadAndDecryptMedia(
+                    mediaId: mediaId,
                     mediaUrl: mediaUrl,
                     mediaKeyBase64: mediaKeyBase64
                 )

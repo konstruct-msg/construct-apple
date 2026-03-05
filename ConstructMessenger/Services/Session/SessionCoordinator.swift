@@ -32,6 +32,10 @@ final class SessionCoordinator {
     /// Keyed by sender userId; ordered by arrival (first element = lowest messageNumber).
     private var pendingFirstMessages: [String: [ChatMessage]] = [:]
 
+    /// Tracks when we last sent END_SESSION to each peer to prevent loop storms.
+    private var endSessionSentAt: [String: Date] = [:]
+    private let endSessionCooldown: TimeInterval = 30.0
+
     /// Prevents parallel session-init attempts for the same peer.
     private var usersInitializingSession: Set<String> = []
 
@@ -146,6 +150,13 @@ final class SessionCoordinator {
         messageRouter.onEndSessionNeeded = { [weak self] userId in
             guard let self else { return }
             Task {
+                let now = Date()
+                if let lastSent = self.endSessionSentAt[userId],
+                   now.timeIntervalSince(lastSent) < self.endSessionCooldown {
+                    Log.info("⏸️ END_SESSION cooldown active for \(userId.prefix(8))..., skipping", category: "ChatsViewModel")
+                    return
+                }
+                self.endSessionSentAt[userId] = now
                 Log.info("🔄 Sending END_SESSION to \(userId.prefix(8))... (session out of sync)", category: "ChatsViewModel")
                 try? await self.sendEndSession(to: userId, reason: "session_out_of_sync")
             }
@@ -182,6 +193,8 @@ final class SessionCoordinator {
             }
 
             if success {
+                // New session established — reset END_SESSION cooldown so future failures are handled.
+                endSessionSentAt.removeValue(forKey: userId)
                 // Replenish OTPKs — Bob consumed one OTPK for this X3DH session init.
                 Task {
                     let deviceId = KeychainManager.shared.loadDeviceID() ?? ""

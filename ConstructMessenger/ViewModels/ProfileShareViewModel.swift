@@ -14,6 +14,7 @@ import Observation
 @Observable
 class ProfileShareViewModel {
     private var viewContext: NSManagedObjectContext?
+    private var isSharingProfile = false
 
     func setContext(_ context: NSManagedObjectContext) {
         self.viewContext = context
@@ -44,8 +45,16 @@ class ProfileShareViewModel {
             return
         }
         
+        // Prevent concurrent share attempts
+        guard !isSharingProfile else {
+            Log.info("⏸️ Profile share already in progress, ignoring duplicate", category: "ProfileShare")
+            return
+        }
+        isSharingProfile = true
+        
         // Upload avatar via Media Upload API if available
         Task {
+            defer { isSharingProfile = false }
             var avatarMediaId: String? = nil
             var avatarMediaUrl: String? = nil
             var avatarMediaKey: String? = nil
@@ -207,6 +216,7 @@ class ProfileShareViewModel {
                     
                     // The mediaKey is base64-encoded raw key (JSON is already E2E encrypted)
                     let avatarData = try await MediaManager.shared.downloadAndDecryptMedia(
+                        mediaId: avatarMediaId,
                         mediaUrl: avatarMediaUrl,
                         mediaKeyBase64: avatarMediaKey
                     )

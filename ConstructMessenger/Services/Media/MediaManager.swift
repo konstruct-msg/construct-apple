@@ -107,11 +107,11 @@ class MediaManager {
     ///   - mediaUrl: URL to download encrypted media from
     ///   - mediaKeyBase64: Raw AES key in base64 (already decrypted as part of message)
     /// - Returns: Decrypted media data
-    func downloadAndDecryptMedia(mediaUrl: String, mediaKeyBase64: String) async throws -> Data {
+    func downloadAndDecryptMedia(mediaId: String, mediaUrl: String, mediaKeyBase64: String) async throws -> Data {
         // Check cache first
-        let cacheKey = mediaUrl
+        let cacheKey = mediaId
         if let cachedData = mediaCache[cacheKey] {
-            Log.debug("✅ Media cache hit for: \(mediaUrl.suffix(20))", category: "MediaManager")
+            Log.debug("✅ Media cache hit for: \(mediaId.prefix(8))...", category: "MediaManager")
             return cachedData
         }
         
@@ -131,7 +131,6 @@ class MediaManager {
         
         Log.debug("   Decoded media key: \(keyData.count) bytes", category: "MediaManager")
         
-        let mediaId = URL(string: mediaUrl)?.lastPathComponent ?? mediaUrl
         let encryptedData = try await MediaServiceClient.shared.downloadEncryptedFile(mediaId: mediaId)
         Log.debug("   Downloaded encrypted data: \(encryptedData.count) bytes", category: "MediaManager")
         
@@ -162,17 +161,17 @@ class MediaManager {
     
     /// Download and decrypt avatar (profile sharing)
     /// - Parameters:
-    ///   - mediaUrl: URL to download encrypted avatar from
+    ///   - mediaId: UUID of the media file
+    ///   - mediaUrl: Download URL (used for logging only)
     ///   - mediaKeyBase64: Base64-encoded encryption key (raw AES key)
     /// - Returns: Decrypted avatar image data
-    func downloadAndDecryptAvatar(mediaUrl: String, mediaKeyBase64: String) async throws -> Data {
+    func downloadAndDecryptAvatar(mediaId: String, mediaUrl: String, mediaKeyBase64: String) async throws -> Data {
         Log.info("📥 Downloading avatar from: \(mediaUrl)", category: "MediaManager")
         
         guard let keyData = Data(base64Encoded: mediaKeyBase64) else {
             throw MediaManagerError.invalidMediaKey
         }
         
-        let mediaId = URL(string: mediaUrl)?.lastPathComponent ?? mediaUrl
         let encryptedData = try await MediaServiceClient.shared.downloadEncryptedFile(mediaId: mediaId)
         
         let decryptedData = try CryptoManager.shared.decryptMediaData(encryptedData, with: keyData)
