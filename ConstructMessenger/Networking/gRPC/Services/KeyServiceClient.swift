@@ -98,7 +98,7 @@ final class KeyServiceClient: Sendable {
                 signed.signature = spk.signature
                 request.signedPreKey = signed
             }
-            request.replaceExisting = replaceExisting
+            // Note: replaceExisting field was removed from proto by server
 
             let response = try await keyClient.uploadPreKeys(
                 request: .init(message: request)

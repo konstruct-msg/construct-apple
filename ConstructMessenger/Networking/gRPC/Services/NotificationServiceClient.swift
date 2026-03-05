@@ -51,20 +51,17 @@ final class NotificationServiceClient: Sendable {
 
     // MARK: - Unregister Device Token
 
-    /// Clears the push token on logout by sending an empty token.
+    /// Removes the push token on logout / notifications disabled.
     func unregisterDeviceToken(token: String) async throws {
         let deviceId = KeychainManager.shared.loadDeviceID() ?? ""
 
         try await GRPCChannelManager.shared.performRPC { grpcClient in
             let client = Shared_Proto_Services_V1_DeviceService.Client(wrapping: grpcClient)
 
-            var request = Shared_Proto_Services_V1_UpdatePushTokenRequest()
+            var request = Shared_Proto_Services_V1_UnregisterPushTokenRequest()
             request.deviceID = deviceId
-            request.pushToken = ""   // empty token signals server to remove it
-            request.provider = .apns
-            request.environment = .pushEnvUnspecified
 
-            _ = try await client.updatePushToken(
+            _ = try await client.unregisterPushToken(
                 request: .init(message: request)
             )
         }

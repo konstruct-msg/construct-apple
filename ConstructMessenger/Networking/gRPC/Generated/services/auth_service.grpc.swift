@@ -1473,6 +1473,18 @@ public enum Shared_Proto_Services_V1_DeviceService: Sendable {
                 method: "UpdatePushToken"
             )
         }
+        /// Namespace for "UnregisterPushToken" metadata.
+        public enum UnregisterPushToken: Sendable {
+            /// Request type for "UnregisterPushToken".
+            public typealias Input = Shared_Proto_Services_V1_UnregisterPushTokenRequest
+            /// Response type for "UnregisterPushToken".
+            public typealias Output = Shared_Proto_Services_V1_UnregisterPushTokenResponse
+            /// Descriptor for "UnregisterPushToken".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.DeviceService"),
+                method: "UnregisterPushToken"
+            )
+        }
         /// Namespace for "VerifyDevice" metadata.
         public enum VerifyDevice: Sendable {
             /// Request type for "VerifyDevice".
@@ -1502,6 +1514,7 @@ public enum Shared_Proto_Services_V1_DeviceService: Sendable {
             ListDevices.descriptor,
             RevokeDevice.descriptor,
             UpdatePushToken.descriptor,
+            UnregisterPushToken.descriptor,
             VerifyDevice.descriptor,
             GetDeviceInfo.descriptor
         ]
@@ -1594,6 +1607,29 @@ extension Shared_Proto_Services_V1_DeviceService {
             deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_UpdatePushTokenResponse>,
             options: GRPCCore.CallOptions,
             onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_UpdatePushTokenResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "UnregisterPushToken" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > UnregisterPushToken - Remove push token when notifications are disabled or on logout
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_UnregisterPushTokenRequest` message.
+        ///   - serializer: A serializer for `Shared_Proto_Services_V1_UnregisterPushTokenRequest` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_UnregisterPushTokenResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response, the result of which is
+        ///       returned to the caller. Returning from the closure will cancel the RPC if it
+        ///       hasn't already finished.
+        /// - Returns: The result of `handleResponse`.
+        func unregisterPushToken<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_UnregisterPushTokenRequest>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_UnregisterPushTokenRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_UnregisterPushTokenResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_UnregisterPushTokenResponse>) async throws -> Result
         ) async throws -> Result where Result: Sendable
 
         /// Call the "VerifyDevice" method.
@@ -1763,6 +1799,40 @@ extension Shared_Proto_Services_V1_DeviceService {
             )
         }
 
+        /// Call the "UnregisterPushToken" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > UnregisterPushToken - Remove push token when notifications are disabled or on logout
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_UnregisterPushTokenRequest` message.
+        ///   - serializer: A serializer for `Shared_Proto_Services_V1_UnregisterPushTokenRequest` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_UnregisterPushTokenResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response, the result of which is
+        ///       returned to the caller. Returning from the closure will cancel the RPC if it
+        ///       hasn't already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func unregisterPushToken<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_UnregisterPushTokenRequest>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_UnregisterPushTokenRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_UnregisterPushTokenResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_UnregisterPushTokenResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Shared_Proto_Services_V1_DeviceService.Method.UnregisterPushToken.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
         /// Call the "VerifyDevice" method.
         ///
         /// > Source IDL Documentation:
@@ -1921,6 +1991,35 @@ extension Shared_Proto_Services_V1_DeviceService.ClientProtocol {
         )
     }
 
+    /// Call the "UnregisterPushToken" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > UnregisterPushToken - Remove push token when notifications are disabled or on logout
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Shared_Proto_Services_V1_UnregisterPushTokenRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response, the result of which is
+    ///       returned to the caller. Returning from the closure will cancel the RPC if it
+    ///       hasn't already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func unregisterPushToken<Result>(
+        request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_UnregisterPushTokenRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_UnregisterPushTokenResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.unregisterPushToken(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_UnregisterPushTokenRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_UnregisterPushTokenResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
     /// Call the "VerifyDevice" method.
     ///
     /// > Source IDL Documentation:
@@ -2074,6 +2173,39 @@ extension Shared_Proto_Services_V1_DeviceService.ClientProtocol {
             metadata: metadata
         )
         return try await self.updatePushToken(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "UnregisterPushToken" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > UnregisterPushToken - Remove push token when notifications are disabled or on logout
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response, the result of which is
+    ///       returned to the caller. Returning from the closure will cancel the RPC if it
+    ///       hasn't already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func unregisterPushToken<Result>(
+        _ message: Shared_Proto_Services_V1_UnregisterPushTokenRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_UnregisterPushTokenResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Shared_Proto_Services_V1_UnregisterPushTokenRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.unregisterPushToken(
             request: request,
             options: options,
             onResponse: handleResponse
