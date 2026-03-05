@@ -62,7 +62,7 @@ class MediaManager {
             mediaUrl: uploadResult.mediaUrl,
             mediaKey: mediaKeyBase64,
             mediaType: uploadResult.mimeType,
-            size: uploadResult.encryptedData.count,
+            size: uploadResult.encryptedSize,
             width: width,
             height: height,
             duration: nil,

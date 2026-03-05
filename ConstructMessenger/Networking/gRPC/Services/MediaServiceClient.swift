@@ -23,85 +23,16 @@ final class MediaServiceClient: Sendable {
         let mediaId: String
         let mediaUrl: String
         let encryptionKey: Data
-        let encryptedData: Data
+        /// Size of the encrypted payload in bytes (the data itself is not retained after upload).
+        let encryptedSize: Int
         let hash: String
         let mimeType: String
     }
 }
 
-// MARK: - Media Token Data
-struct MediaTokenData {
-    let requestId: String
-    let uploadToken: String
-    let uploadUrl: String
-    let maxFileSize: Int
-    let expiresAt: String
-}
-
 extension MediaServiceClient {
 
-    // MARK: - Generate Upload Token
 
-    func generateUploadToken(expectedSize: Int64 = 0, contentType: String = "application/octet-stream") async throws -> MediaTokenData {
-        try await GRPCChannelManager.shared.performRPC { grpcClient in
-            let client = Shared_Proto_Services_V1_MediaService.Client(wrapping: grpcClient)
-
-            var request = Shared_Proto_Services_V1_GenerateUploadTokenRequest()
-            request.expectedSize = expectedSize
-            request.contentType = contentType
-
-            let response = try await client.generateUploadToken(
-                request: .init(message: request)
-            )
-
-            return MediaTokenData(
-                requestId: UUID().uuidString,
-                uploadToken: response.uploadToken,
-                uploadUrl: response.uploadURL,
-                maxFileSize: Int(response.maxFileSize),
-                expiresAt: response.expiresAt
-            )
-        }
-    }
-
-    // MARK: - Upload Media (client streaming)
-
-    func uploadEncryptedFile(encryptedData: Data, token: String) async throws -> (mediaId: String, downloadUrl: String) {
-        try await GRPCChannelManager.shared.performRPC { grpcClient in
-            let client = Shared_Proto_Services_V1_MediaService.Client(wrapping: grpcClient)
-
-            let chunkSize = 64 * 1024 // 64 KB chunks
-            let totalChunks = (encryptedData.count + chunkSize - 1) / chunkSize
-            let hash = SHA256.hash(data: encryptedData)
-            let hashHex = hash.map { String(format: "%02x", $0) }.joined()
-
-            let capturedData = encryptedData
-            let request = StreamingClientRequest<Shared_Proto_Services_V1_UploadMediaRequest>(
-                metadata: [],
-                producer: { writer in
-                    for i in 0..<totalChunks {
-                        let start = i * chunkSize
-                        let end = min(start + chunkSize, capturedData.count)
-                        let chunkData = capturedData.subdata(in: start..<end)
-
-                        var req = Shared_Proto_Services_V1_UploadMediaRequest()
-                        req.uploadToken = token
-                        req.chunk = chunkData
-                        req.chunkNumber = Int32(i)
-                        req.isLast = (i == totalChunks - 1)
-                        req.totalSize = Int64(capturedData.count)
-                        req.fileHash = hashHex
-
-                        try await writer.write(req)
-                    }
-                }
-            )
-
-            let response: Shared_Proto_Services_V1_UploadMediaResponse = try await client.uploadMedia(request: request)
-
-            return (mediaId: response.mediaID, downloadUrl: response.downloadURL)
-        }
-    }
 
     // MARK: - Download Media (server streaming)
 
@@ -140,15 +71,6 @@ extension MediaServiceClient {
         }
     }
 
-    // MARK: - High-Level: Upload Image
-
-    func uploadImage(_ image: UIImage, quality: CGFloat = 0.8) async throws -> UploadedMedia {
-        guard let imageData = image.jpegData(compressionQuality: quality) else {
-            throw NetworkError.serverError(message: "Failed to compress image", responseBody: nil)
-        }
-        Log.info("📸 Image compressed: \(imageData.count) bytes (quality: \(quality))", category: "MediaService")
-        return try await uploadData(imageData, mimeType: "image/jpeg")
-    }
 
     // MARK: - High-Level: Upload Data
 
@@ -167,6 +89,7 @@ extension MediaServiceClient {
         encryptedData.append(sealedBox.nonce.withUnsafeBytes { Data($0) })
         encryptedData.append(sealedBox.ciphertext)
         encryptedData.append(sealedBox.tag)
+        let encryptedSize = encryptedData.count
 
         let hash = SHA256.hash(data: encryptedData)
         let hashHex = hash.map { String(format: "%02x", $0) }.joined()
@@ -220,7 +143,7 @@ extension MediaServiceClient {
             mediaId: mediaId,
             mediaUrl: downloadUrl,
             encryptionKey: encryptionKey,
-            encryptedData: encryptedData,
+            encryptedSize: encryptedSize,
             hash: hashHex,
             mimeType: mimeType
         )
