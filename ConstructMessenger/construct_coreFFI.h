@@ -435,6 +435,11 @@ uint64_t uniffi_construct_core_fn_func_create_crypto_core_from_keys_json(RustBuf
 RustBuffer uniffi_construct_core_fn_func_derive_device_id(RustBuffer identity_public_key, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_DERIVE_RECOVERY_KEYPAIR
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_DERIVE_RECOVERY_KEYPAIR
+RustBuffer uniffi_construct_core_fn_func_derive_recovery_keypair(RustBuffer seed, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_DERIVE_VERIFYING_KEY_FROM_SECRET
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_DERIVE_VERIFYING_KEY_FROM_SECRET
 RustBuffer uniffi_construct_core_fn_func_derive_verifying_key_from_secret(RustBuffer identity_secret_key, RustCallStatus *_Nonnull out_status
@@ -456,6 +461,11 @@ RustBuffer uniffi_construct_core_fn_func_generate_ephemeral_keypair(RustCallStat
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_GENERATE_MNEMONIC
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_GENERATE_MNEMONIC
+RustBuffer uniffi_construct_core_fn_func_generate_mnemonic(uint8_t word_count, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_HEARTBEAT_INTERVAL_MS
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_HEARTBEAT_INTERVAL_MS
 uint64_t uniffi_construct_core_fn_func_heartbeat_interval_ms(uint64_t base_interval_sec, RustCallStatus *_Nonnull out_status
@@ -469,6 +479,11 @@ int8_t uniffi_construct_core_fn_func_is_dummy_message(RustBuffer data, RustCallS
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_JITTERED_INTERVAL_MS
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_JITTERED_INTERVAL_MS
 uint64_t uniffi_construct_core_fn_func_jittered_interval_ms(uint64_t base_ms, uint64_t jitter_ms, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_MNEMONIC_TO_SEED
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_MNEMONIC_TO_SEED
+RustBuffer uniffi_construct_core_fn_func_mnemonic_to_seed(RustBuffer mnemonic, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_RANDOM_SEND_DELAY_MS
@@ -486,6 +501,16 @@ uint64_t uniffi_construct_core_fn_func_recommended_send_delay_ms(int8_t is_high_
 RustBuffer uniffi_construct_core_fn_func_sign_invite_data(RustBuffer data, RustBuffer identity_secret_key, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_SIGN_RECOVERY_CHALLENGE
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_SIGN_RECOVERY_CHALLENGE
+RustBuffer uniffi_construct_core_fn_func_sign_recovery_challenge(RustBuffer private_key, RustBuffer message, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_VALIDATE_MNEMONIC
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_VALIDATE_MNEMONIC
+int8_t uniffi_construct_core_fn_func_validate_mnemonic(RustBuffer mnemonic, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_VERIFY_INVITE_SIGNATURE
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_VERIFY_INVITE_SIGNATURE
 int8_t uniffi_construct_core_fn_func_verify_invite_signature(RustBuffer data, RustBuffer signature, RustBuffer verifying_key, RustCallStatus *_Nonnull out_status
@@ -494,6 +519,11 @@ int8_t uniffi_construct_core_fn_func_verify_invite_signature(RustBuffer data, Ru
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_VERIFY_POW
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_VERIFY_POW
 int8_t uniffi_construct_core_fn_func_verify_pow(RustBuffer challenge, RustBuffer solution, uint32_t required_difficulty, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_VERIFY_RECOVERY_SIGNATURE
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_VERIFY_RECOVERY_SIGNATURE
+int8_t uniffi_construct_core_fn_func_verify_recovery_signature(RustBuffer public_key, RustBuffer message, RustBuffer signature, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_FFI_CONSTRUCT_CORE_RUSTBUFFER_ALLOC
@@ -792,6 +822,12 @@ uint16_t uniffi_construct_core_checksum_func_derive_device_id(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_DERIVE_RECOVERY_KEYPAIR
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_DERIVE_RECOVERY_KEYPAIR
+uint16_t uniffi_construct_core_checksum_func_derive_recovery_keypair(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_DERIVE_VERIFYING_KEY_FROM_SECRET
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_DERIVE_VERIFYING_KEY_FROM_SECRET
 uint16_t uniffi_construct_core_checksum_func_derive_verifying_key_from_secret(void
@@ -816,6 +852,12 @@ uint16_t uniffi_construct_core_checksum_func_generate_ephemeral_keypair(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_GENERATE_MNEMONIC
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_GENERATE_MNEMONIC
+uint16_t uniffi_construct_core_checksum_func_generate_mnemonic(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_HEARTBEAT_INTERVAL_MS
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_HEARTBEAT_INTERVAL_MS
 uint16_t uniffi_construct_core_checksum_func_heartbeat_interval_ms(void
@@ -831,6 +873,12 @@ uint16_t uniffi_construct_core_checksum_func_is_dummy_message(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_JITTERED_INTERVAL_MS
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_JITTERED_INTERVAL_MS
 uint16_t uniffi_construct_core_checksum_func_jittered_interval_ms(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_MNEMONIC_TO_SEED
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_MNEMONIC_TO_SEED
+uint16_t uniffi_construct_core_checksum_func_mnemonic_to_seed(void
     
 );
 #endif
@@ -852,6 +900,18 @@ uint16_t uniffi_construct_core_checksum_func_sign_invite_data(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_SIGN_RECOVERY_CHALLENGE
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_SIGN_RECOVERY_CHALLENGE
+uint16_t uniffi_construct_core_checksum_func_sign_recovery_challenge(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_VALIDATE_MNEMONIC
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_VALIDATE_MNEMONIC
+uint16_t uniffi_construct_core_checksum_func_validate_mnemonic(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_VERIFY_INVITE_SIGNATURE
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_VERIFY_INVITE_SIGNATURE
 uint16_t uniffi_construct_core_checksum_func_verify_invite_signature(void
@@ -861,6 +921,12 @@ uint16_t uniffi_construct_core_checksum_func_verify_invite_signature(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_VERIFY_POW
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_VERIFY_POW
 uint16_t uniffi_construct_core_checksum_func_verify_pow(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_VERIFY_RECOVERY_SIGNATURE
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_VERIFY_RECOVERY_SIGNATURE
+uint16_t uniffi_construct_core_checksum_func_verify_recovery_signature(void
     
 );
 #endif
