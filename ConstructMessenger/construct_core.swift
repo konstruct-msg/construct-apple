@@ -1023,6 +1023,93 @@ public func FfiConverterTypeTrafficProtectionManager_lower(_ value: TrafficProte
 
 
 
+/**
+ * Токены аутентификации (JWT)
+ */
+public struct AuthTokens: Equatable, Hashable {
+    /**
+     * Access token (JWT, живёт 1 час)
+     */
+    public var accessToken: String
+    /**
+     * Refresh token (JWT, живёт 30 дней)
+     */
+    public var refreshToken: String
+    /**
+     * Unix timestamp когда истекает access token
+     */
+    public var expiresAt: Int64
+    /**
+     * User ID (UUID)
+     */
+    public var userId: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Access token (JWT, живёт 1 час)
+         */accessToken: String, 
+        /**
+         * Refresh token (JWT, живёт 30 дней)
+         */refreshToken: String, 
+        /**
+         * Unix timestamp когда истекает access token
+         */expiresAt: Int64, 
+        /**
+         * User ID (UUID)
+         */userId: String) {
+        self.accessToken = accessToken
+        self.refreshToken = refreshToken
+        self.expiresAt = expiresAt
+        self.userId = userId
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension AuthTokens: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeAuthTokens: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> AuthTokens {
+        return
+            try AuthTokens(
+                accessToken: FfiConverterString.read(from: &buf), 
+                refreshToken: FfiConverterString.read(from: &buf), 
+                expiresAt: FfiConverterInt64.read(from: &buf), 
+                userId: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: AuthTokens, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.accessToken, into: &buf)
+        FfiConverterString.write(value.refreshToken, into: &buf)
+        FfiConverterInt64.write(value.expiresAt, into: &buf)
+        FfiConverterString.write(value.userId, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAuthTokens_lift(_ buf: RustBuffer) throws -> AuthTokens {
+    return try FfiConverterTypeAuthTokens.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAuthTokens_lower(_ value: AuthTokens) -> RustBuffer {
+    return FfiConverterTypeAuthTokens.lower(value)
+}
+
+
 public struct CoverTrafficConfig: Equatable, Hashable {
     public var enabled: Bool
     public var batteryLevelThreshold: Float
@@ -1532,6 +1619,58 @@ public func FfiConverterTypePrivateKeysJson_lift(_ buf: RustBuffer) throws -> Pr
 #endif
 public func FfiConverterTypePrivateKeysJson_lower(_ value: PrivateKeysJson) -> RustBuffer {
     return FfiConverterTypePrivateKeysJson.lower(value)
+}
+
+
+public struct RecoveryKeypair: Equatable, Hashable {
+    public var privateKey: [UInt8]
+    public var publicKey: [UInt8]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(privateKey: [UInt8], publicKey: [UInt8]) {
+        self.privateKey = privateKey
+        self.publicKey = publicKey
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension RecoveryKeypair: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeRecoveryKeypair: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RecoveryKeypair {
+        return
+            try RecoveryKeypair(
+                privateKey: FfiConverterSequenceUInt8.read(from: &buf), 
+                publicKey: FfiConverterSequenceUInt8.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: RecoveryKeypair, into buf: inout [UInt8]) {
+        FfiConverterSequenceUInt8.write(value.privateKey, into: &buf)
+        FfiConverterSequenceUInt8.write(value.publicKey, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRecoveryKeypair_lift(_ buf: RustBuffer) throws -> RecoveryKeypair {
+    return try FfiConverterTypeRecoveryKeypair.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRecoveryKeypair_lower(_ value: RecoveryKeypair) -> RustBuffer {
+    return FfiConverterTypeRecoveryKeypair.lower(value)
 }
 
 
@@ -2122,6 +2261,13 @@ public func deriveDeviceId(identityPublicKey: [UInt8]) -> String  {
     )
 })
 }
+public func deriveRecoveryKeypair(seed: [UInt8])throws  -> RecoveryKeypair  {
+    return try  FfiConverterTypeRecoveryKeypair_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_func_derive_recovery_keypair(
+        FfiConverterSequenceUInt8.lower(seed),$0
+    )
+})
+}
 public func deriveVerifyingKeyFromSecret(identitySecretKey: [UInt8])throws  -> [UInt8]  {
     return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_func_derive_verifying_key_from_secret(
@@ -2150,6 +2296,13 @@ public func generateEphemeralKeypair()throws  -> EphemeralKeyPair  {
     )
 })
 }
+public func generateMnemonic(wordCount: UInt8)throws  -> String  {
+    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_func_generate_mnemonic(
+        FfiConverterUInt8.lower(wordCount),$0
+    )
+})
+}
 public func heartbeatIntervalMs(baseIntervalSec: UInt64) -> UInt64  {
     return try!  FfiConverterUInt64.lift(try! rustCall() {
     uniffi_construct_core_fn_func_heartbeat_interval_ms(
@@ -2169,6 +2322,13 @@ public func jitteredIntervalMs(baseMs: UInt64, jitterMs: UInt64) -> UInt64  {
     uniffi_construct_core_fn_func_jittered_interval_ms(
         FfiConverterUInt64.lower(baseMs),
         FfiConverterUInt64.lower(jitterMs),$0
+    )
+})
+}
+public func mnemonicToSeed(mnemonic: String)throws  -> [UInt8]  {
+    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_func_mnemonic_to_seed(
+        FfiConverterString.lower(mnemonic),$0
     )
 })
 }
@@ -2195,6 +2355,21 @@ public func signInviteData(data: String, identitySecretKey: [UInt8])throws  -> I
     )
 })
 }
+public func signRecoveryChallenge(privateKey: [UInt8], message: String)throws  -> [UInt8]  {
+    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_func_sign_recovery_challenge(
+        FfiConverterSequenceUInt8.lower(privateKey),
+        FfiConverterString.lower(message),$0
+    )
+})
+}
+public func validateMnemonic(mnemonic: String) -> Bool  {
+    return try!  FfiConverterBool.lift(try! rustCall() {
+    uniffi_construct_core_fn_func_validate_mnemonic(
+        FfiConverterString.lower(mnemonic),$0
+    )
+})
+}
 public func verifyInviteSignature(data: String, signature: [UInt8], verifyingKey: [UInt8])throws  -> Bool  {
     return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_func_verify_invite_signature(
@@ -2210,6 +2385,15 @@ public func verifyPow(challenge: String, solution: PowSolution, requiredDifficul
         FfiConverterString.lower(challenge),
         FfiConverterTypePowSolution_lower(solution),
         FfiConverterUInt32.lower(requiredDifficulty),$0
+    )
+})
+}
+public func verifyRecoverySignature(publicKey: [UInt8], message: String, signature: [UInt8]) -> Bool  {
+    return try!  FfiConverterBool.lift(try! rustCall() {
+    uniffi_construct_core_fn_func_verify_recovery_signature(
+        FfiConverterSequenceUInt8.lower(publicKey),
+        FfiConverterString.lower(message),
+        FfiConverterSequenceUInt8.lower(signature),$0
     )
 })
 }
@@ -2247,6 +2431,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_func_derive_device_id() != 1055) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_func_derive_recovery_keypair() != 19396) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_func_derive_verifying_key_from_secret() != 31516) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -2259,6 +2446,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_func_generate_ephemeral_keypair() != 59553) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_func_generate_mnemonic() != 45721) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_func_heartbeat_interval_ms() != 51594) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -2266,6 +2456,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_jittered_interval_ms() != 6840) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_mnemonic_to_seed() != 53142) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_random_send_delay_ms() != 9943) {
@@ -2277,10 +2470,19 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_func_sign_invite_data() != 47259) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_func_sign_recovery_challenge() != 2630) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_validate_mnemonic() != 51524) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_func_verify_invite_signature() != 39140) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_verify_pow() != 44600) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_verify_recovery_signature() != 1269) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_classiccryptocore_decrypt_message() != 15129) {
