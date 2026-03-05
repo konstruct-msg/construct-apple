@@ -131,6 +131,13 @@ class PushNotificationManager: NSObject {
 
         // If already authorized (e.g., after reinstall or app update), ensure APNs registration happens.
         await registerForRemoteNotificationsIfAuthorized()
+
+        // If never asked and user is already authenticated (e.g., restored from keychain),
+        // request permission now — the auth flow only asks during fresh login/registration.
+        if authorizationStatus == .notDetermined && SessionManager.shared.sessionToken != nil {
+            Log.info("📱 Permission not yet requested but user is authenticated — requesting now", category: "Push")
+            await requestPermission()
+        }
     }
 
     private func registerForRemoteNotificationsIfAuthorized() async {

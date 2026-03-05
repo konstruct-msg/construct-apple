@@ -20,6 +20,9 @@ struct ImageCropView: View {
     @State private var lastScale: CGFloat = 1.0
     @State private var lastOffset: CGSize = .zero
 
+    // Minimum scale — set in fitImageInitially() to the fill scale
+    @State private var minScale: CGFloat = 1.0
+
     private let cropSize: CGFloat = min(UIScreen.main.bounds.width, UIScreen.main.bounds.height) * 0.82
 
     var body: some View {
@@ -41,10 +44,10 @@ struct ImageCropView: View {
                         SimultaneousGesture(
                             MagnificationGesture()
                                 .onChanged { value in
-                                    scale = max(1.0, lastScale * value)
+                                    scale = max(minScale, lastScale * value)
                                 }
                                 .onEnded { value in
-                                    scale = max(1.0, lastScale * value)
+                                    scale = max(minScale, lastScale * value)
                                     lastScale = scale
                                     lastOffset = clampedOffset(imageSize: imageSize)
                                     offset = lastOffset
@@ -110,8 +113,10 @@ struct ImageCropView: View {
 
     /// Initial scale so the image fills the crop square
     private func fitImageInitially() {
-        let imgSize = image.size
-        let fillScale = max(cropSize / imgSize.width, cropSize / imgSize.height)
+        let fittedSize = fittedImageSize(in: CGSize(width: cropSize, height: cropSize))
+        // Scale relative to fittedSize so the image fills (not just fits) the crop square
+        let fillScale = max(cropSize / fittedSize.width, cropSize / fittedSize.height)
+        minScale = fillScale
         scale = fillScale
         lastScale = fillScale
         offset = .zero
