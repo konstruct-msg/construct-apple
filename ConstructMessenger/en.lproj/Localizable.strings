@@ -381,3 +381,9 @@
 
 // Account Settings
 "DANGER_ZONE" = "Danger Zone";
+
+// Reset Session
+"reset_session" = "Reset Session";
+"reset_session_title" = "Reset Session?";
+"reset_session_message" = "This will re-establish a new encrypted session. Messages in transit may be lost.";
+

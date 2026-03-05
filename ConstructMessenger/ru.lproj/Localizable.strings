@@ -383,3 +383,9 @@
 
 // Account deletion
 "delete_account_countdown" = "Удалить через %dс";
+
+// Reset Session
+"reset_session" = "Сбросить сессию";
+"reset_session_title" = "Сбросить сессию?";
+"reset_session_message" = "Будет установлена новая зашифрованная сессия. Сообщения в пути могут быть потеряны.";
+

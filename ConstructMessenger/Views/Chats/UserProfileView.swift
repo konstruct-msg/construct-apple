@@ -15,6 +15,7 @@ struct UserProfileView: View {
     
     @State private var viewModel = ProfileShareViewModel()
     @State private var showingBlockConfirmation = false
+    @State private var showResetSessionConfirm = false
     @State private var showingShareAlert = false
     @State private var shareAlertMessage = ""
     
@@ -135,6 +136,17 @@ struct UserProfileView: View {
                             Text(user.isBlocked ? "unblock_user" : "block_user").padding(.horizontal, 8)
                         }
                     }
+                    
+                    // Reset encrypted session
+                    Button(role: .destructive) {
+                        showResetSessionConfirm = true
+                    } label: {
+                        HStack {
+                            Image(systemName: "arrow.triangle.2.circlepath")
+                            Text("reset_session")
+                                .padding(.horizontal, 8)
+                        }
+                    }
                 } header: {
                     Text("actions")
                 } footer: {
@@ -173,6 +185,26 @@ struct UserProfileView: View {
                 Button("ok") { }
             } message: {
                 Text(shareAlertMessage)
+            }
+            .confirmationDialog(
+                "reset_session_title",
+                isPresented: $showResetSessionConfirm,
+                titleVisibility: .visible
+            ) {
+                Button("reset_session", role: .destructive) {
+                    Task {
+                        do {
+                            let chatsVM = ChatsViewModel()
+                            try await chatsVM.sendEndSession(to: user.id, reason: "user_requested")
+                            Log.info("✅ Session reset from profile for \(user.id.prefix(8))…", category: "UserProfileView")
+                        } catch {
+                            Log.error("❌ Failed to reset session: \(error)", category: "UserProfileView")
+                        }
+                    }
+                }
+                Button("cancel", role: .cancel) {}
+            } message: {
+                Text("reset_session_message")
             }
         }
     }
