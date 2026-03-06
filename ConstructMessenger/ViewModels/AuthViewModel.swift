@@ -40,6 +40,7 @@ class AuthViewModel {
     nonisolated(unsafe) private var sessionRestoreTimer: Timer?
     nonisolated(unsafe) private var authOperationTimer: Timer?
     private let viewContext: NSManagedObjectContext
+    private var sessionExpiredTask: Task<Void, Never>?
 
     // Timer for monitoring token expiration
     nonisolated(unsafe) private var tokenRefreshTimer: Timer?
@@ -59,9 +60,9 @@ class AuthViewModel {
     
     // Subscribe to session invalidation from SessionManager
     private func setupSessionExpiredListener() {
-        Task { [weak self] in
-            guard let self else { return }
+        sessionExpiredTask = Task { [weak self] in
             while !Task.isCancelled {
+                guard let self else { return }
                 await withCheckedContinuation { continuation in
                     withObservationTracking {
                         _ = SessionManager.shared.isSessionInvalidated
@@ -82,6 +83,7 @@ class AuthViewModel {
         tokenRefreshTimer?.invalidate()
         authOperationTimer?.invalidate()
         sessionRestoreTimer?.invalidate()
+        sessionExpiredTask?.cancel()
     }
 
     private func setupSubscribers() {
@@ -259,9 +261,8 @@ class AuthViewModel {
 
     func logout() {
         Task {
-            // 0. Send END_SESSION to all contacts (NEW!)
-            let chatsVM = ChatsViewModel()
-            await chatsVM.sendEndSessionToAllContacts(reason: "logout")
+            // 0. Send END_SESSION to all contacts
+            await SessionCoordinator().sendEndSessionToAllContacts(reason: "logout")
             Log.info("✅ END_SESSION sent to all contacts on logout", category: "Auth")
             
             // 1. Logout via gRPC

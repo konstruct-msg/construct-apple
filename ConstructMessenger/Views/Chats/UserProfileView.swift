@@ -60,8 +60,7 @@ struct UserProfileView: View {
                 Button(LocalizedStringKey("reset_session"), role: .destructive) {
                     Task {
                         do {
-                            let chatsVM = ChatsViewModel()
-                            try await chatsVM.sendEndSession(to: user.id, reason: "user_requested")
+                            try await SessionCoordinator().sendEndSession(to: user.id, reason: "user_requested")
                         } catch {
                             Log.error("❌ Failed to reset session: \(error)", category: "UserProfileView")
                         }

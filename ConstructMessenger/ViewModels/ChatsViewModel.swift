@@ -67,6 +67,7 @@ class ChatsViewModel {
 
     isolated deinit {
         streamManager.disconnect()
+        observationTasks.forEach { $0.cancel() }
     }
 
     func setContext(_ context: NSManagedObjectContext) {
@@ -87,9 +88,9 @@ class ChatsViewModel {
         // ✅ HYBRID POLLING STRATEGY: Observe auth, connection, and push state via @Observable
         // Uses AsyncStream + withObservationTracking to react to any of the three changing.
         let streamTask = Task { [weak self] in
-            guard let self else { return }
             var lastState: PollingState? = nil
             while !Task.isCancelled {
+                guard let self else { return }
                 // Capture current state and register tracking for next iteration
                 var nextState: PollingState!
                 withObservationTracking {
@@ -162,8 +163,8 @@ class ChatsViewModel {
 
         // Wake up when silent push arrives (app is in background)
         let silentPushTask = Task { [weak self] in
-            guard let self else { return }
             while !Task.isCancelled {
+                guard let self else { return }
                 await withCheckedContinuation { continuation in
                     withObservationTracking {
                         _ = PushNotificationManager.shared.lastSilentPushDate
