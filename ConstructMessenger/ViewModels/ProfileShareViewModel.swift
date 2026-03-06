@@ -38,13 +38,6 @@ class ProfileShareViewModel {
             return
         }
         
-        // Check if session is ready (required for encryption)
-        guard CryptoManager.shared.hasSession(for: userId) else {
-            Log.info("⚠️ Cannot share profile: no session for user \(userId)", category: "ProfileShare")
-            completion(false, "Secure session not established. Please send a message first.")
-            return
-        }
-        
         // Prevent concurrent share attempts
         guard !isSharingProfile else {
             Log.info("⏸️ Profile share already in progress, ignoring duplicate", category: "ProfileShare")
@@ -55,6 +48,24 @@ class ProfileShareViewModel {
         // Upload avatar via Media Upload API if available
         Task {
             defer { isSharingProfile = false }
+
+            // Check if session is ready; if not, initialize it on-demand
+            if !CryptoManager.shared.hasSession(for: userId) {
+                Log.info("🔐 No session for \(userId) — initializing before profile share", category: "ProfileShare")
+                let service = SessionInitializationService()
+                do {
+                    let bundle = try await service.fetchPublicKeyWithRetry(userId: userId)
+                    try service.initializeSession(userId: userId, bundle: bundle, deleteExisting: false)
+                    Log.info("✅ Session initialized for profile share with \(userId)", category: "ProfileShare")
+                } catch {
+                    Log.error("❌ Failed to initialize session for profile share: \(error)", category: "ProfileShare")
+                    await MainActor.run {
+                        completion(false, NSLocalizedString("failed_to_establish_session", comment: ""))
+                    }
+                    return
+                }
+            }
+
             var avatarMediaId: String? = nil
             var avatarMediaUrl: String? = nil
             var avatarMediaKey: String? = nil

@@ -427,3 +427,6 @@
 // macOS Catalyst — push notifications
 "push_not_available_mac" = "Push Notifications Unavailable on Desktop";
 "push_not_available_mac_hint" = "The desktop app uses a persistent connection for real-time delivery. Push notifications are available on the iOS app.";
+
+// Profile sharing
+"failed_to_establish_session" = "Failed to establish a secure connection. Please try again.";
