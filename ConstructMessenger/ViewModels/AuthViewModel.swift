@@ -277,6 +277,8 @@ class AuthViewModel {
             await MainActor.run {
                 cancelTimeouts()
                 SessionManager.shared.clearSession()
+                UserDefaults.standard.removeObject(forKey: "recovery_is_setup")
+                UserDefaults.standard.removeObject(forKey: "recovery_banner_dismissed")
                 
                 // Note: We keep the username in Keychain for convenience on next login
                 // If you want to clear it, uncomment the line below:

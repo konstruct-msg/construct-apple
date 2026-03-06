@@ -16,6 +16,7 @@ struct SettingsView: View {
     @State private var showingQRCode = false
     @State private var linkCopied = false
     @State private var showingRecoverySetup = false
+    @State private var recoveryBannerDismissed = UserDefaults.standard.bool(forKey: "recovery_banner_dismissed")
    
     
     private let inviteGenerator = InviteGenerator()
@@ -28,32 +29,43 @@ struct SettingsView: View {
                     VStack(spacing: 18) {
 
                         // MARK: - Recovery Banner
-                        if recoveryVM.statusLoaded && !recoveryVM.isSetup {
-                            Button {
-                                showingRecoverySetup = true
-                            } label: {
-                                HStack(spacing: 12) {
-                                    Image(systemName: "exclamationmark.shield.fill")
-                                        .foregroundColor(.orange)
-                                        .font(.title3)
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(NSLocalizedString("recovery_banner_title", comment: ""))
-                                            .font(.subheadline.bold())
-                                            .foregroundColor(.primary)
-                                        Text(NSLocalizedString("recovery_banner_subtitle", comment: ""))
-                                            .font(.caption)
+                        if recoveryVM.statusLoaded && !recoveryVM.isSetup && !recoveryBannerDismissed {
+                            HStack(spacing: 12) {
+                                Button {
+                                    showingRecoverySetup = true
+                                } label: {
+                                    HStack(spacing: 12) {
+                                        Image(systemName: "exclamationmark.shield.fill")
+                                            .foregroundColor(.orange)
+                                            .font(.title3)
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(NSLocalizedString("recovery_banner_title", comment: ""))
+                                                .font(.subheadline.bold())
+                                                .foregroundColor(.primary)
+                                            Text(NSLocalizedString("recovery_banner_subtitle", comment: ""))
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                        }
+                                        Spacer()
+                                        Image(systemName: "chevron.right")
                                             .foregroundColor(.secondary)
+                                            .font(.caption)
                                     }
-                                    Spacer()
-                                    Image(systemName: "chevron.right")
-                                        .foregroundColor(.secondary)
-                                        .font(.caption)
                                 }
-                                .padding(12)
-                                .background(Color.orange.opacity(0.12))
-                                .cornerRadius(12)
-                                .padding(.horizontal)
+                                Button {
+                                    recoveryBannerDismissed = true
+                                    UserDefaults.standard.set(true, forKey: "recovery_banner_dismissed")
+                                } label: {
+                                    Image(systemName: "xmark")
+                                        .foregroundColor(.secondary)
+                                        .font(.caption.weight(.semibold))
+                                        .padding(6)
+                                }
                             }
+                            .padding(12)
+                            .background(Color.orange.opacity(0.12))
+                            .cornerRadius(12)
+                            .padding(.horizontal)
                         }
 
                         // MARK: - Profile Section

@@ -39,6 +39,8 @@ final class AccountRecoveryViewModel {
     var lastUsedAt: Int64? = nil
     var statusLoaded: Bool = false
 
+    private static let udKeyIsSetup = "recovery_is_setup"
+
     // MARK: - Recover flow state
 
     enum RecoverStep {
@@ -103,6 +105,7 @@ final class AccountRecoveryViewModel {
 
             isSetup = true
             fingerprint = result.fingerprint
+            UserDefaults.standard.set(true, forKey: Self.udKeyIsSetup)
             mnemonic = []   // clear sensitive data
             setupStep = .done(fingerprint: result.fingerprint)
         } catch {
@@ -121,11 +124,18 @@ final class AccountRecoveryViewModel {
 
     func loadStatus() async {
         guard !statusLoaded else { return }
+        // Apply cached value immediately so the banner doesn't flash on app update
+        if UserDefaults.standard.bool(forKey: Self.udKeyIsSetup) {
+            isSetup = true
+        }
         do {
             let status = try await AuthServiceClient.shared.getRecoveryStatus()
             isSetup = status.isSetup
             fingerprint = status.fingerprint
             lastUsedAt = status.lastUsedAt
+            if status.isSetup {
+                UserDefaults.standard.set(true, forKey: Self.udKeyIsSetup)
+            }
             statusLoaded = true
         } catch {
             // Non-fatal — silently skip banner on network error
@@ -137,6 +147,16 @@ final class AccountRecoveryViewModel {
     func refreshStatus() async {
         statusLoaded = false
         await loadStatus()
+    }
+
+    /// Call on logout to clear cached state
+    func clearLocalCache() {
+        UserDefaults.standard.removeObject(forKey: Self.udKeyIsSetup)
+        UserDefaults.standard.removeObject(forKey: "recovery_banner_dismissed")
+        isSetup = false
+        fingerprint = nil
+        lastUsedAt = nil
+        statusLoaded = false
     }
 
     // MARK: - Recover Flow

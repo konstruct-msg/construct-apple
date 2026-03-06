@@ -121,13 +121,25 @@ struct MessageInputView: View {
 #endif
 
                 HStack(spacing: 0) {
+#if targetEnvironment(macCatalyst)
+                    CatalystGrowingTextView(
+                        text: $text,
+                        placeholder: NSLocalizedString("message_placeholder", comment: ""),
+                        canSend: canSend,
+                        onSend: sendMessage
+                    )
+                    .frame(minHeight: 36, maxHeight: 120)
+                    .padding(.leading, 12)
+                    .padding(.trailing, canSend ? 8 : 12)
+                    .padding(.vertical, 8)
+#else
                     TextField("message_placeholder", text: $text, axis: .vertical)
                         .lineLimit(1...5)
                         .padding(.leading, 12)
                         .padding(.trailing, canSend ? 8 : 12)
                         .padding(.vertical, 8)
                         .focused($isTextFieldFocused)
-                        .modifier(MacReturnToSendModifier(text: $text, canSend: canSend, onSend: sendMessage))
+#endif
 
                     if canSend {
                         Button {
@@ -281,34 +293,3 @@ struct MessageInputView: View {
     }
 }
 
-// MARK: - Mac Catalyst: Return = send, Shift+Return = newline
-
-/// On Mac Catalyst, intercepts the Return key so pressing Return sends the message
-/// and Shift+Return inserts a newline. Has no effect on iOS/iPadOS.
-private struct MacReturnToSendModifier: ViewModifier {
-    @Binding var text: String
-    let canSend: Bool
-    let onSend: () -> Void
-
-    func body(content: Content) -> some View {
-#if targetEnvironment(macCatalyst)
-        content
-            .onKeyPress(.return, phases: .down) { press in
-                if press.modifiers.contains(.shift) {
-                    // Shift+Return → insert newline at end of text
-                    text += "\n"
-                    return .handled
-                }
-                // Return → send (if there is content to send)
-                if canSend {
-                    // Strip any trailing newline UIKit may have already inserted
-                    text = text.trimmingCharacters(in: .newlines)
-                    onSend()
-                }
-                return .handled
-            }
-#else
-        content
-#endif
-    }
-}
