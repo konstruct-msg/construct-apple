@@ -34,6 +34,11 @@ class CryptoManager {
     
     // MARK: - Prekey ID Tracking
     private let preKeyTracker = PreKeyTrackingStore()
+
+    /// True when core was loaded from saved Keychain keys (not freshly generated).
+    /// On startup the server's OTPK set may not match the restored core's state,
+    /// so the startup OTPK check must replace all server keys instead of just replenishing.
+    private(set) var wasRestoredFromKeychain: Bool = false
     
     // MARK: - Garbage Collection
     
@@ -44,7 +49,9 @@ class CryptoManager {
     private let gcIntervalSeconds: TimeInterval = 24 * 60 * 60
 
     private init() {
-        self.core = coreProvider.loadCore()
+        let (loadedCore, restoredFromKeychain) = coreProvider.loadCore()
+        self.core = loadedCore
+        self.wasRestoredFromKeychain = restoredFromKeychain
 
         // ✅ Restore recent sessions (pagination - first 10 chats)
         // ⚠️ Defer to avoid accessing Core Data before stores are loaded

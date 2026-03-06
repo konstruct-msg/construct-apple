@@ -247,8 +247,26 @@ class KeychainManager {
     func deletePrivateKeysJson() {
         delete(forKey: "crypto_private_keys_json")
     }
-    
-    // MARK: - Custom Server URL (persistent across app reinstalls)
+
+    // MARK: - One-Time Prekeys (OTPK) persistence
+
+    /// Persist the OTPK set (JSON from Rust exportOneTimePrekeysJson) so it survives app restarts.
+    @discardableResult
+    func saveOtpksJson(_ jsonString: String) -> Bool {
+        guard let data = jsonString.data(using: .utf8) else { return false }
+        return save(data, forKey: "crypto_otpks_json", accessible: kSecAttrAccessibleWhenUnlockedThisDeviceOnly)
+    }
+
+    /// Load the persisted OTPK set JSON (nil if not yet saved).
+    func loadOtpksJson() -> String? {
+        guard let data = load(forKey: "crypto_otpks_json") else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    /// Delete the OTPK set (call when replacing all keys on server).
+    func deleteOtpksJson() {
+        delete(forKey: "crypto_otpks_json")
+    }
     func saveCustomServerURL(_ url: String) {
         guard let data = url.data(using: .utf8) else { return }
         // Use kSecAttrAccessibleAfterFirstUnlock to allow access after device unlock

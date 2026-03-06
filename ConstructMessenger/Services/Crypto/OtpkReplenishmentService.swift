@@ -23,6 +23,8 @@ enum OtpkReplenishmentService {
     // MARK: - Initial upload (called once at registration)
 
     /// Generate `count` OTPKs and upload them. Returns the number uploaded.
+    /// After a successful upload, the current OTPK set is persisted to Keychain so it
+    /// survives app restarts (the Rust core's OTPK store is in-memory only otherwise).
     @discardableResult
     static func generateAndUpload(count: UInt32, deviceId: String, replaceExisting: Bool = false) async throws -> Int {
         guard let core = CryptoManager.shared.core else {
@@ -36,15 +38,34 @@ enum OtpkReplenishmentService {
             (keyId: pair.keyId, publicKey: Data(pair.publicKey))
         }
 
+        if replaceExisting {
+            // Clear stale persisted OTPKs before uploading the new set
+            KeychainManager.shared.deleteOtpksJson()
+        }
+
         _ = try await KeyServiceClient.shared.uploadPreKeys(
             deviceId: deviceId,
             preKeys: preKeys,
             replaceExisting: replaceExisting
         )
 
+        // Persist the full OTPK set (including private keys) so core can restore them after restart.
+        persistOtpks(core: core)
+
         let mode = replaceExisting ? "replacing all" : "appending"
         Log.info("✅ OTPK upload (\(mode)): \(pairs.count) keys for device \(deviceId.prefix(8))...", category: "OTPK")
         return pairs.count
+    }
+
+    /// Export all OTPKs from the Rust core and save to Keychain.
+    static func persistOtpks(core: ClassicCryptoCore) {
+        do {
+            let json = try core.exportOneTimePrekeysJson()
+            KeychainManager.shared.saveOtpksJson(json)
+            Log.debug("💾 Persisted \(core.oneTimePrekeyCount()) OTPKs to Keychain", category: "OTPK")
+        } catch {
+            Log.error("⚠️ Failed to persist OTPKs to Keychain: \(error)", category: "OTPK")
+        }
     }
 
     // MARK: - Replenishment (called after Bob receives a session-init message)

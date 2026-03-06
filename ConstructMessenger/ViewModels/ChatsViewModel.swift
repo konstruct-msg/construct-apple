@@ -206,7 +206,24 @@ class ChatsViewModel {
                 guard self != nil else { return }
                 let deviceId = KeychainManager.shared.loadDeviceID() ?? ""
                 guard !deviceId.isEmpty else { return }
-                await OtpkReplenishmentService.replenishIfNeeded(deviceId: deviceId)
+
+                let crypto = CryptoManager.shared
+                // Fallback: core was restored from Keychain but no OTPKs were imported
+                // (either first run after migration, or Keychain OTPK data was lost).
+                // Replace all server OTPKs with freshly generated ones to guarantee sync.
+                if crypto.wasRestoredFromKeychain,
+                   let core = crypto.core,
+                   core.oneTimePrekeyCount() == 0 {
+                    Log.info("🔑 Core restored but no local OTPKs — replacing all server OTPKs (fallback sync)", category: "OTPK")
+                    do {
+                        try await OtpkReplenishmentService.generateAndUpload(count: 50, deviceId: deviceId, replaceExisting: true)
+                    } catch {
+                        Log.error("❌ Fallback OTPK replace failed: \(error)", category: "OTPK")
+                        await OtpkReplenishmentService.replenishIfNeeded(deviceId: deviceId)
+                    }
+                } else {
+                    await OtpkReplenishmentService.replenishIfNeeded(deviceId: deviceId)
+                }
             }
         }
     }

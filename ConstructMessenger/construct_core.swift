@@ -576,6 +576,8 @@ public protocol ClassicCryptoCoreProtocol: AnyObject, Sendable {
     
     func encryptMessage(sessionId: String, plaintext: String) throws  -> EncryptedMessageComponents
     
+    func exportOneTimePrekeysJson() throws  -> String
+    
     func exportPrivateKeysJson() throws  -> String
     
     func exportRegistrationBundleJson() throws  -> String
@@ -585,6 +587,8 @@ public protocol ClassicCryptoCoreProtocol: AnyObject, Sendable {
     func generateOneTimePrekeys(count: UInt32) throws  -> [OtpkPair]
     
     func getAllSessionContactIds()  -> [String]
+    
+    func importOneTimePrekeysJson(json: String) throws 
     
     func importSessionJson(contactId: String, sessionJson: String) throws  -> String
     
@@ -673,6 +677,14 @@ open func encryptMessage(sessionId: String, plaintext: String)throws  -> Encrypt
 })
 }
     
+open func exportOneTimePrekeysJson()throws  -> String  {
+    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_classiccryptocore_export_one_time_prekeys_json(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
 open func exportPrivateKeysJson()throws  -> String  {
     return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_method_classiccryptocore_export_private_keys_json(
@@ -713,6 +725,14 @@ open func getAllSessionContactIds() -> [String]  {
             self.uniffiCloneHandle(),$0
     )
 })
+}
+    
+open func importOneTimePrekeysJson(json: String)throws   {try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_classiccryptocore_import_one_time_prekeys_json(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(json),$0
+    )
+}
 }
     
 open func importSessionJson(contactId: String, sessionJson: String)throws  -> String  {
@@ -1021,93 +1041,6 @@ public func FfiConverterTypeTrafficProtectionManager_lower(_ value: TrafficProte
 }
 
 
-
-
-/**
- * Токены аутентификации (JWT)
- */
-public struct AuthTokens: Equatable, Hashable {
-    /**
-     * Access token (JWT, живёт 1 час)
-     */
-    public var accessToken: String
-    /**
-     * Refresh token (JWT, живёт 30 дней)
-     */
-    public var refreshToken: String
-    /**
-     * Unix timestamp когда истекает access token
-     */
-    public var expiresAt: Int64
-    /**
-     * User ID (UUID)
-     */
-    public var userId: String
-
-    // Default memberwise initializers are never public by default, so we
-    // declare one manually.
-    public init(
-        /**
-         * Access token (JWT, живёт 1 час)
-         */accessToken: String, 
-        /**
-         * Refresh token (JWT, живёт 30 дней)
-         */refreshToken: String, 
-        /**
-         * Unix timestamp когда истекает access token
-         */expiresAt: Int64, 
-        /**
-         * User ID (UUID)
-         */userId: String) {
-        self.accessToken = accessToken
-        self.refreshToken = refreshToken
-        self.expiresAt = expiresAt
-        self.userId = userId
-    }
-
-    
-}
-
-#if compiler(>=6)
-extension AuthTokens: Sendable {}
-#endif
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypeAuthTokens: FfiConverterRustBuffer {
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> AuthTokens {
-        return
-            try AuthTokens(
-                accessToken: FfiConverterString.read(from: &buf), 
-                refreshToken: FfiConverterString.read(from: &buf), 
-                expiresAt: FfiConverterInt64.read(from: &buf), 
-                userId: FfiConverterString.read(from: &buf)
-        )
-    }
-
-    public static func write(_ value: AuthTokens, into buf: inout [UInt8]) {
-        FfiConverterString.write(value.accessToken, into: &buf)
-        FfiConverterString.write(value.refreshToken, into: &buf)
-        FfiConverterInt64.write(value.expiresAt, into: &buf)
-        FfiConverterString.write(value.userId, into: &buf)
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeAuthTokens_lift(_ buf: RustBuffer) throws -> AuthTokens {
-    return try FfiConverterTypeAuthTokens.lift(buf)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeAuthTokens_lower(_ value: AuthTokens) -> RustBuffer {
-    return FfiConverterTypeAuthTokens.lower(value)
-}
 
 
 public struct CoverTrafficConfig: Equatable, Hashable {
@@ -1447,6 +1380,62 @@ public func FfiConverterTypeOtpkPair_lift(_ buf: RustBuffer) throws -> OtpkPair 
 #endif
 public func FfiConverterTypeOtpkPair_lower(_ value: OtpkPair) -> RustBuffer {
     return FfiConverterTypeOtpkPair.lower(value)
+}
+
+
+public struct OtpkRecord: Equatable, Hashable {
+    public var keyId: UInt32
+    public var privateKey: [UInt8]
+    public var publicKey: [UInt8]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(keyId: UInt32, privateKey: [UInt8], publicKey: [UInt8]) {
+        self.keyId = keyId
+        self.privateKey = privateKey
+        self.publicKey = publicKey
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension OtpkRecord: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeOtpkRecord: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> OtpkRecord {
+        return
+            try OtpkRecord(
+                keyId: FfiConverterUInt32.read(from: &buf), 
+                privateKey: FfiConverterSequenceUInt8.read(from: &buf), 
+                publicKey: FfiConverterSequenceUInt8.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: OtpkRecord, into buf: inout [UInt8]) {
+        FfiConverterUInt32.write(value.keyId, into: &buf)
+        FfiConverterSequenceUInt8.write(value.privateKey, into: &buf)
+        FfiConverterSequenceUInt8.write(value.publicKey, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOtpkRecord_lift(_ buf: RustBuffer) throws -> OtpkRecord {
+    return try FfiConverterTypeOtpkRecord.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOtpkRecord_lower(_ value: OtpkRecord) -> RustBuffer {
+    return FfiConverterTypeOtpkRecord.lower(value)
 }
 
 
@@ -2491,6 +2480,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_classiccryptocore_encrypt_message() != 45977) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_method_classiccryptocore_export_one_time_prekeys_json() != 33094) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_method_classiccryptocore_export_private_keys_json() != 62808) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -2504,6 +2496,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_classiccryptocore_get_all_session_contact_ids() != 3313) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_classiccryptocore_import_one_time_prekeys_json() != 4481) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_classiccryptocore_import_session_json() != 8946) {
