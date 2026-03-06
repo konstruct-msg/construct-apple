@@ -26,6 +26,30 @@ class MediaManager {
     private var mediaCache: [String: Data] = [:]
     private let maxCacheSize = 50 * 1024 * 1024  // 50 MB
     private var currentCacheSize = 0
+
+    // MARK: - Persistent Disk Cache
+
+    /// Library/Caches/media/ — survives app updates, can be evicted by OS under disk pressure
+    private let diskCacheDirectory: URL = {
+        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+        let dir = caches.appendingPathComponent("media", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }()
+
+    private func diskCacheURL(for mediaId: String) -> URL {
+        diskCacheDirectory.appendingPathComponent(mediaId)
+    }
+
+    private func saveToDiskcache(_ data: Data, mediaId: String) {
+        let url = diskCacheURL(for: mediaId)
+        try? data.write(to: url, options: .atomic)
+    }
+
+    private func loadFromDiskCache(mediaId: String) -> Data? {
+        let url = diskCacheURL(for: mediaId)
+        return try? Data(contentsOf: url)
+    }
     
     private init() {}
     
@@ -192,11 +216,21 @@ class MediaManager {
     ///   - mediaKeyBase64: Raw AES key in base64 (already decrypted as part of message)
     /// - Returns: Decrypted media data
     func downloadAndDecryptMedia(mediaId: String, mediaUrl: String, mediaKeyBase64: String) async throws -> Data {
-        // Check cache first
+        // 1. In-memory cache
         let cacheKey = mediaId
         if let cachedData = mediaCache[cacheKey] {
-            Log.debug("✅ Media cache hit for: \(mediaId.prefix(8))...", category: "MediaManager")
+            Log.debug("✅ Media cache hit (memory) for: \(mediaId.prefix(8))...", category: "MediaManager")
             return cachedData
+        }
+
+        // 2. Persistent disk cache — survives app updates and restarts
+        if let diskData = loadFromDiskCache(mediaId: mediaId) {
+            Log.debug("✅ Media cache hit (disk) for: \(mediaId.prefix(8))...", category: "MediaManager")
+            if currentCacheSize + diskData.count < maxCacheSize {
+                mediaCache[cacheKey] = diskData
+                currentCacheSize += diskData.count
+            }
+            return diskData
         }
         
         Log.info("📥 Downloading media from: \(mediaUrl)", category: "MediaManager")
@@ -224,7 +258,10 @@ class MediaManager {
         
         Log.info("✅ Media decrypted: \(decryptedData.count) bytes", category: "MediaManager")
         
-        // Store in cache if space available
+        // Persist to disk cache so media survives app restarts and updates
+        saveToDiskcache(decryptedData, mediaId: mediaId)
+
+        // Store in memory cache if space available
         if currentCacheSize + decryptedData.count < maxCacheSize {
             mediaCache[cacheKey] = decryptedData
             currentCacheSize += decryptedData.count
@@ -262,10 +299,16 @@ class MediaManager {
         Log.info("✅ Decompressed: \(decryptedData.count) → \(decompressed.count) bytes", category: "MediaManager")
         return decompressed
     }
-    func clearCache() {
+    func clearCache(includingDisk: Bool = false) {
         mediaCache.removeAll()
         currentCacheSize = 0
-        Log.info("🗑️ Media cache cleared", category: "MediaManager")
+        if includingDisk {
+            try? FileManager.default.removeItem(at: diskCacheDirectory)
+            try? FileManager.default.createDirectory(at: diskCacheDirectory, withIntermediateDirectories: true)
+            Log.info("🗑️ Media cache cleared (memory + disk)", category: "MediaManager")
+        } else {
+            Log.info("🗑️ Media cache cleared (memory only)", category: "MediaManager")
+        }
     }
     
     /// Download and decrypt avatar (profile sharing)
