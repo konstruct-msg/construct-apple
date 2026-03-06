@@ -77,6 +77,9 @@ class MessagePersistenceService {
         
         // Update chat metadata if this is a new message
         if isNewMessage {
+            if !isSentByMe {
+                chat.unreadCount += 1
+            }
             try updateChatMetadata(
                 chat: chat,
                 lastMessageText: decryptedContent,

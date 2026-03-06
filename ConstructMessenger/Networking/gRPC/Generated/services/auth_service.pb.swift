@@ -85,11 +85,11 @@ public enum Shared_Proto_Services_V1_PushEnvironment: SwiftProtobuf.Enum, Swift.
   /// Unspecified environment (must be 0)
   case pushEnvUnspecified // = 0
 
-  /// Production
-  case pushEnvProduction // = 1
+  /// Sandbox (APNS development / debug builds)
+  case pushEnvSandbox // = 1
 
-  /// Sandbox (APNS development)
-  case pushEnvSandbox // = 2
+  /// Production (App Store / TestFlight production builds)
+  case pushEnvProduction // = 2
   case UNRECOGNIZED(Int)
 
   public init() {
@@ -99,8 +99,8 @@ public enum Shared_Proto_Services_V1_PushEnvironment: SwiftProtobuf.Enum, Swift.
   public init?(rawValue: Int) {
     switch rawValue {
     case 0: self = .pushEnvUnspecified
-    case 1: self = .pushEnvProduction
-    case 2: self = .pushEnvSandbox
+    case 1: self = .pushEnvSandbox
+    case 2: self = .pushEnvProduction
     default: self = .UNRECOGNIZED(rawValue)
     }
   }
@@ -108,8 +108,8 @@ public enum Shared_Proto_Services_V1_PushEnvironment: SwiftProtobuf.Enum, Swift.
   public var rawValue: Int {
     switch self {
     case .pushEnvUnspecified: return 0
-    case .pushEnvProduction: return 1
-    case .pushEnvSandbox: return 2
+    case .pushEnvSandbox: return 1
+    case .pushEnvProduction: return 2
     case .UNRECOGNIZED(let i): return i
     }
   }
@@ -117,8 +117,8 @@ public enum Shared_Proto_Services_V1_PushEnvironment: SwiftProtobuf.Enum, Swift.
   // The compiler won't synthesize support with the UNRECOGNIZED case.
   public static let allCases: [Shared_Proto_Services_V1_PushEnvironment] = [
     .pushEnvUnspecified,
-    .pushEnvProduction,
     .pushEnvSandbox,
+    .pushEnvProduction,
   ]
 
 }
@@ -1007,7 +1007,7 @@ extension Shared_Proto_Services_V1_PushProvider: SwiftProtobuf._ProtoNameProvidi
 }
 
 extension Shared_Proto_Services_V1_PushEnvironment: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0PUSH_ENV_UNSPECIFIED\0\u{1}PUSH_ENV_PRODUCTION\0\u{1}PUSH_ENV_SANDBOX\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0PUSH_ENV_UNSPECIFIED\0\u{1}PUSH_ENV_SANDBOX\0\u{1}PUSH_ENV_PRODUCTION\0")
 }
 
 extension Shared_Proto_Services_V1_RecoveryErrorCode: SwiftProtobuf._ProtoNameProviding {

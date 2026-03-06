@@ -44,6 +44,18 @@ struct ChatRowView: View {
                 }
             }
 
+            Spacer()
+
+            if chat.unreadCount > 0 {
+                Text(chat.unreadCount < 100 ? "\(chat.unreadCount)" : "99+")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color.accentColor, in: Capsule())
+                    .animation(.easeInOut(duration: 0.2), value: chat.unreadCount)
+            }
+
         }
         .padding(.vertical, 4)
     }

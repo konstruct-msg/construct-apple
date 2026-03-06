@@ -265,6 +265,9 @@ struct ChatView: View {
                     .presentationDragIndicator(.visible)
             }
         }
+        .onAppear {
+            markChatAsRead()
+        }
         .fullScreenCover(item: $galleryStartItem) { item in
             MediaGalleryViewer(
                 messages: mediaMessages,
@@ -523,7 +526,14 @@ struct ChatView: View {
     }
 
     // MARK: - Actions
-    
+
+    private func markChatAsRead() {
+        let chat = viewModel.chat
+        guard chat.unreadCount > 0 else { return }
+        chat.unreadCount = 0
+        try? viewContext.save()
+    }
+
     private func toggleMessageSelection(_ message: Message) {
         if selectedMessages.contains(message.id) {
             selectedMessages.remove(message.id)

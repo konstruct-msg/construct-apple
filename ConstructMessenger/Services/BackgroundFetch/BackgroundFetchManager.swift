@@ -356,7 +356,8 @@ class BackgroundFetchManager: NSObject {
                     message.chat = chat
                     
                     newMessagesCount += 1
-                    
+                    chat.unreadCount += 1
+
                     // Update chat's last message
                     if let lastMessage = chatMessages.last {
                         chat.lastMessageText = Chat.formatPreviewText(decryptedContent ?? "[Encrypted]")
