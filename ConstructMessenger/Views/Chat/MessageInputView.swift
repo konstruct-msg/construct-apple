@@ -14,7 +14,7 @@ struct MessageInputView: View {
     @Binding var droppedImages: [UIImage]  // Images pushed from ChatView drop zone
     let isSending: Bool
     let replyingTo: Message?
-    let onSend: ([UIImage]) -> Void  // Updated to pass images
+    let onSend: ([UIImage], [URL]) -> Void  // images + file URLs
     let onCancelReply: () -> Void
 
     // Photo attachment state
@@ -22,9 +22,10 @@ struct MessageInputView: View {
     @State private var selectedPhotos: [PhotosPickerItem] = []
     @State private var selectedImages: [UIImage] = []
     @State private var optimizedMedia: [OptimizedMedia] = []  // Optimized photos ready to send
+    @State private var selectedFileURLs: [URL] = []           // Document attachments
     @State private var showAttachmentMenu = false
     @State private var showPhotoPicker = false  // Separate state for PhotosPicker
-    @State private var showFilePicker = false   // macOS: file importer
+    @State private var showFilePicker = false   // document file importer
     @State private var validationError: String?
     @State private var isOptimizing = false
 
@@ -69,6 +70,12 @@ struct MessageInputView: View {
             // Photo preview (if photos selected)
             if !selectedImages.isEmpty {
                 photoPreviewView
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+
+            // File preview (if document files selected)
+            if !selectedFileURLs.isEmpty {
+                filePreviewView
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
@@ -191,15 +198,15 @@ struct MessageInputView: View {
             selectedImages.append(contentsOf: newImages)
             droppedImages.removeAll()
         }
-        // macOS / iOS: file importer (Finder open panel)
+        // macOS / iOS: file importer — accepts all file types
         .fileImporter(
             isPresented: $showFilePicker,
-            allowedContentTypes: [.image, .jpeg, .png, .heic, .gif, .webP, .bmp, .tiff],
+            allowedContentTypes: [.item],
             allowsMultipleSelection: true
         ) { result in
             switch result {
             case .success(let urls):
-                loadImagesFromURLs(urls)
+                handlePickedFiles(urls)
             case .failure(let error):
                 Log.error("❌ File picker error: \(error)", category: "MessageInput")
             }
@@ -207,7 +214,9 @@ struct MessageInputView: View {
     }
 
     private var canSend: Bool {
-        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !selectedImages.isEmpty
+        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !selectedImages.isEmpty
+            || !selectedFileURLs.isEmpty
     }
 
     // MARK: - Photo Preview
@@ -238,6 +247,63 @@ struct MessageInputView: View {
             .padding(.vertical, 8)
         }
         .background(Color(uiColor: .systemGray6))
+    }
+
+    // MARK: - File Preview
+
+    private var filePreviewView: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(Array(selectedFileURLs.enumerated()), id: \.offset) { index, url in
+                    HStack(spacing: 6) {
+                        Image(systemName: fileIcon(for: url.pathExtension))
+                            .foregroundColor(.accentColor)
+                            .font(.system(size: 18))
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(url.lastPathComponent)
+                                .font(.caption.weight(.medium))
+                                .lineLimit(1)
+                            if let size = fileSize(url) {
+                                Text(size)
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        Button {
+                            selectedFileURLs.remove(at: index)
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundColor(.secondary)
+                                .font(.caption)
+                        }
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
+                    .background(Color(uiColor: .systemGray5), in: RoundedRectangle(cornerRadius: 8))
+                }
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+        }
+        .background(Color(uiColor: .systemGray6))
+    }
+
+    private func fileIcon(for ext: String) -> String {
+        switch ext.lowercased() {
+        case "pdf": return "doc.richtext"
+        case "md", "markdown": return "doc.text"
+        case "txt": return "doc.text"
+        case "zip", "gz", "tar": return "archivebox"
+        case "mp3", "aac", "m4a", "wav": return "music.note"
+        case "mp4", "mov", "avi": return "video"
+        default: return "doc"
+        }
+    }
+
+    private func fileSize(_ url: URL) -> String? {
+        guard let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
+              let bytes = attrs[.size] as? Int64 else { return nil }
+        return ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
     }
 
     // MARK: - Photo Loading
@@ -285,11 +351,25 @@ struct MessageInputView: View {
         }
     }
 
+    /// Separates picked URLs into images (loaded into selectedImages) and
+    /// other files (kept as security-scoped URLs in selectedFileURLs).
+    private func handlePickedFiles(_ urls: [URL]) {
+        let imageExtensions: Set<String> = ["jpg", "jpeg", "png", "heic", "gif", "webp", "bmp", "tiff"]
+        for url in urls {
+            let ext = url.pathExtension.lowercased()
+            if imageExtensions.contains(ext) {
+                loadImagesFromURLs([url])
+            } else {
+                selectedFileURLs.append(url)
+            }
+        }
+    }
+
     private func sendMessage() {
-        onSend(selectedImages)
-        // Clear photos after sending
+        onSend(selectedImages, selectedFileURLs)
         selectedPhotos.removeAll()
         selectedImages.removeAll()
+        selectedFileURLs.removeAll()
     }
 }
 

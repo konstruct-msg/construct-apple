@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import QuickLook
 
 struct MessageBubble: View {
     let message: Message
@@ -108,6 +109,14 @@ struct MessageBubble: View {
                 else if let mediaContent = parseMediaMessage(message.decryptedContent) {
                     // Display media message without bubble - just rounded corners
                     MediaMessageView(mediaContent: mediaContent, message: message, isSelected: isSelected, onTapFullScreen: { onTapMedia?(message) })
+                }
+                // ✅ Check if this is a file attachment message
+                else if let fileContent = parseFileMessage(message.decryptedContent) {
+                    FileAttachmentBubbleView(fileContent: fileContent, isSentByMe: message.isSentByMe)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16)
+                                .stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2)
+                        )
                 } else {
                     // Regular text message with bubble
                     VStack(alignment: .leading, spacing: 0) {
@@ -305,6 +314,150 @@ struct MessageBubble: View {
     
     private func parseMediaMessage(_ content: String?) -> MediaMessageContent? {
         parseMediaContent(from: content)
+    }
+
+    private func parseFileMessage(_ content: String?) -> FileMessageContent? {
+        guard let content,
+              let data = content.data(using: .utf8),
+              let json = try? JSONDecoder().decode(FileMessageContent.self, from: data),
+              json.type == "file"
+        else { return nil }
+        return json
+    }
+}
+
+// MARK: - File Message Types
+
+struct FileMessageContent: Codable {
+    let type: String
+    let caption: String
+    let files: [FileEntry]
+
+    struct FileEntry: Codable {
+        let mediaId: String
+        let mediaUrl: String
+        let mediaKey: String
+        let mediaType: String
+        let size: Int
+        let hash: String
+        let filename: String
+        let compressed: Bool
+    }
+}
+
+// MARK: - File Attachment Bubble View
+
+struct FileAttachmentBubbleView: View {
+    let fileContent: FileMessageContent
+    let isSentByMe: Bool
+
+    @State private var downloadedURLs: [String: URL] = [:]   // mediaId → temp file URL
+    @State private var downloading: Set<String> = []
+    @State private var previewURL: URL?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach(fileContent.files, id: \.mediaId) { file in
+                fileRow(file)
+            }
+            if !fileContent.caption.isEmpty {
+                Text(fileContent.caption)
+                    .font(.subheadline)
+                    .foregroundColor(isSentByMe ? .white : .primary)
+                    .padding(.top, 2)
+            }
+        }
+        .padding(12)
+        .background(isSentByMe ? Color.accentColor : Color(uiColor: .systemGray5))
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .quickLookPreview($previewURL)
+    }
+
+    @ViewBuilder
+    private func fileRow(_ file: FileMessageContent.FileEntry) -> some View {
+        Button {
+            openOrDownload(file)
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: iconName(for: file.filename))
+                    .font(.system(size: 22))
+                    .foregroundColor(isSentByMe ? .white.opacity(0.9) : .accentColor)
+                    .frame(width: 32)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(file.filename)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundColor(isSentByMe ? .white : .primary)
+                        .lineLimit(1)
+                    Text(ByteCountFormatter.string(fromByteCount: Int64(file.size), countStyle: .file))
+                        .font(.caption)
+                        .foregroundColor(isSentByMe ? .white.opacity(0.7) : .secondary)
+                }
+
+                Spacer()
+
+                if downloading.contains(file.mediaId) {
+                    ProgressView()
+                        .tint(isSentByMe ? .white : .accentColor)
+                        .scaleEffect(0.8)
+                } else if downloadedURLs[file.mediaId] != nil {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(isSentByMe ? .white.opacity(0.8) : .green)
+                } else {
+                    Image(systemName: "arrow.down.circle")
+                        .foregroundColor(isSentByMe ? .white.opacity(0.8) : .accentColor)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func openOrDownload(_ file: FileMessageContent.FileEntry) {
+        if let url = downloadedURLs[file.mediaId] {
+            previewURL = url
+            return
+        }
+        guard !downloading.contains(file.mediaId) else { return }
+        downloading.insert(file.mediaId)
+
+        Task {
+            do {
+                let data = try await MediaManager.shared.downloadAndDecryptFile(
+                    mediaId: file.mediaId,
+                    mediaUrl: file.mediaUrl,
+                    mediaKeyBase64: file.mediaKey,
+                    compressed: file.compressed
+                )
+                let tmpURL = FileManager.default.temporaryDirectory
+                    .appendingPathComponent(file.filename)
+                try data.write(to: tmpURL)
+                await MainActor.run {
+                    downloadedURLs[file.mediaId] = tmpURL
+                    downloading.remove(file.mediaId)
+                    previewURL = tmpURL
+                }
+            } catch {
+                await MainActor.run {
+                    downloading.remove(file.mediaId)
+                    Log.error("❌ File download failed: \(error)", category: "FileAttachment")
+                }
+            }
+        }
+    }
+
+    private func iconName(for filename: String) -> String {
+        let ext = (filename as NSString).pathExtension.lowercased()
+        switch ext {
+        case "pdf": return "doc.richtext"
+        case "md", "markdown": return "doc.text"
+        case "txt": return "doc.plaintext"
+        case "zip", "gz", "tar", "7z": return "archivebox"
+        case "mp3", "aac", "m4a", "wav": return "music.note"
+        case "mp4", "mov": return "video"
+        case "xlsx", "xls": return "tablecells"
+        case "docx", "doc": return "doc.richtext"
+        default: return "doc"
+        }
     }
 }
 

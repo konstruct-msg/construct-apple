@@ -41,6 +41,8 @@ struct MediaMessageData: Codable {
     let duration: TimeInterval?
     let thumbnail: String?  // Base64 JPEG (optional, generated client-side)
     let hash: String        // SHA-256 of encrypted file
+    let filename: String?   // Original filename for document attachments
+    let compressed: Bool?   // true = ZLIB-compressed before AES encryption; decompress after decrypt
 }
 
 // MARK: - CryptoManager Media Extension

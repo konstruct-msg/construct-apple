@@ -54,6 +54,15 @@ extension Chat {
            let type = json["type"] as? String {
             
             switch type {
+            case "file":
+                let files = json["files"] as? [[String: Any]] ?? []
+                if files.count == 1, let name = files.first?["filename"] as? String {
+                    return "📎 \(name)"
+                } else if files.count > 1 {
+                    return "📎 \(files.count) " + NSLocalizedString("files", comment: "")
+                }
+                return "📎 File"
+
             case "media":
                 // Media message
                 let caption = json["caption"] as? String ?? ""

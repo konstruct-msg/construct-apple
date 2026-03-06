@@ -403,8 +403,8 @@ class ChatViewModel: NSObject {
     }
 
     // MARK: - Send Message
-    func sendMessage(text: String, images: [UIImage] = [], replyTo: Message? = nil) {
-        Log.info("📤 sendMessage called with \(images.count) images", category: "ChatViewModel")
+    func sendMessage(text: String, images: [UIImage] = [], fileURLs: [URL] = [], replyTo: Message? = nil) {
+        Log.info("📤 sendMessage called with \(images.count) images, \(fileURLs.count) files", category: "ChatViewModel")
 
         guard let recipientId = chat.otherUser?.id else {
             Log.error("❌ No recipient ID", category: "ChatViewModel")
@@ -421,10 +421,7 @@ class ChatViewModel: NSObject {
             return
         }
 
-        // Session check applies to ALL send paths (text AND media).
-        // If no session yet, queue the message and init INITIATOR on-demand.
-        // Previously the session was created proactively on chat open which caused
-        // INITIATOR/RECEIVER conflicts and "session out of sync" notification loops.
+        // Session check applies to ALL send paths (text, media, files).
         let hasSession = CryptoManager.shared.hasSession(for: recipientId)
         if !hasSession {
             let queued = QueuedMessage(text: text, images: images, replyTo: replyTo)
@@ -439,6 +436,12 @@ class ChatViewModel: NSObject {
         }
 
         Log.info("📤 Sending to: \(recipientId), from: \(currentUserId)", category: "ChatViewModel")
+
+        // Handle files if provided (document attachments)
+        if !fileURLs.isEmpty {
+            sendFileMessage(fileURLs: fileURLs, caption: text, replyTo: replyTo)
+            return
+        }
 
         // Handle images if provided
         if !images.isEmpty {
@@ -664,6 +667,29 @@ class ChatViewModel: NSObject {
             } catch {
                 await MainActor.run {
                     Log.error("❌ Media upload failed: \(error.localizedDescription) | raw: \(error)", category: "ChatViewModel")
+                    errorMessage = error.localizedDescription
+                    isSending = false
+                }
+            }
+        }
+    }
+
+    private func sendFileMessage(fileURLs: [URL], caption: String, replyTo: Message?) {
+        isSending = true
+        errorMessage = nil
+
+        Task {
+            do {
+                let result = try await mediaUploadManager.uploadFilesAndBuildContent(
+                    urls: fileURLs,
+                    caption: caption
+                )
+                await MainActor.run {
+                    sendTextMessage(text: result.messageContent, replyTo: replyTo)
+                }
+            } catch {
+                await MainActor.run {
+                    Log.error("❌ File upload failed: \(error.localizedDescription)", category: "ChatViewModel")
                     errorMessage = error.localizedDescription
                     isSending = false
                 }

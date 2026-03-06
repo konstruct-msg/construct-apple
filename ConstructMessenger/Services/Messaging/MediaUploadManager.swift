@@ -155,4 +155,56 @@ class MediaUploadManager {
         
         return jsonString
     }
+
+    // MARK: - File Upload
+
+    struct FileUploadResult {
+        let messageContent: String
+    }
+
+    /// Uploads file attachments and builds a `{"type":"file",...}` message JSON.
+    /// Text-based files are ZLIB-compressed before AES encryption if beneficial.
+    func uploadFilesAndBuildContent(urls: [URL], caption: String) async throws -> FileUploadResult {
+        var fileDataList: [FileMessageEntry] = []
+
+        for url in urls {
+            Log.info("📤 Uploading file: \(url.lastPathComponent)", category: "MediaUploadManager")
+            let mediaData = try await MediaManager.shared.uploadFile(url)
+            fileDataList.append(FileMessageEntry(
+                mediaId: mediaData.mediaId,
+                mediaUrl: mediaData.mediaUrl,
+                mediaKey: mediaData.mediaKey,
+                mediaType: mediaData.mediaType,
+                size: mediaData.size,
+                hash: mediaData.hash,
+                filename: mediaData.filename ?? url.lastPathComponent,
+                compressed: mediaData.compressed ?? false
+            ))
+        }
+
+        let content = FileMessageContent(type: "file", caption: caption, files: fileDataList)
+        let encoder = JSONEncoder()
+        guard let jsonData = try? encoder.encode(content),
+              let jsonString = String(data: jsonData, encoding: .utf8) else {
+            throw MediaUploadError.uploadFailed("Failed to encode file message JSON")
+        }
+        return FileUploadResult(messageContent: jsonString)
+    }
+
+    private struct FileMessageContent: Codable {
+        let type: String
+        let caption: String
+        let files: [FileMessageEntry]
+    }
+
+    private struct FileMessageEntry: Codable {
+        let mediaId: String
+        let mediaUrl: String
+        let mediaKey: String
+        let mediaType: String
+        let size: Int
+        let hash: String
+        let filename: String
+        let compressed: Bool
+    }
 }

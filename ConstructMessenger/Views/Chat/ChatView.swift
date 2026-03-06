@@ -351,8 +351,8 @@ struct ChatView: View {
             droppedImages: $chatDropImages,
             isSending: viewModel.isSending,
             replyingTo: replyingTo,
-            onSend: { images in
-                viewModel.sendMessage(text: messageText, images: images, replyTo: replyingTo)
+            onSend: { images, fileURLs in
+                viewModel.sendMessage(text: messageText, images: images, fileURLs: fileURLs, replyTo: replyingTo)
                 messageText = ""
                 replyingTo = nil
                 
