@@ -122,8 +122,8 @@ final class SessionCoordinator {
     // MARK: - MessageRouter callbacks
 
     private func setupMessageRouterCallbacks() {
-        messageRouter.onReceiptNeeded = { [weak self] messageIds, status in
-            self?.streamManager?.sendReceipt(messageIds, status: status)
+        messageRouter.onReceiptNeeded = { [weak self] messageIds, recipientUserId, status in
+            self?.streamManager?.sendReceipt(messageIds, to: recipientUserId, status: status)
         }
 
         messageRouter.onPublicKeyBundleNeeded = { [weak self] userId, message in
@@ -205,7 +205,7 @@ final class SessionCoordinator {
                 // initReceivingSession failed — prekey exhausted or invalid.
                 Log.info("🔄 initReceivingSession failed — clearing queue, sending END_SESSION to \(userId.prefix(8))...", category: "SessionInit")
                 // ACK so server cursor advances past the undecryptable message.
-                streamManager?.sendReceipt([message.id], status: .delivered)
+                streamManager?.sendReceipt([message.id], to: userId, status: .delivered)
                 pendingFirstMessages.removeValue(forKey: userId)
                 Task {
                     try? await sendEndSession(to: userId, reason: "session_init_failed")
@@ -259,7 +259,7 @@ final class SessionCoordinator {
                 Log.error("❌ SESSION_STATE[heal_failed]: initReceivingSession still failing for \(userId.prefix(8))…", category: "SessionInit")
                 if !canContinue {
                     Log.info("⛔ Heal exhausted — sending END_SESSION to \(userId.prefix(8))…", category: "SessionInit")
-                    streamManager?.sendReceipt([failedMessage.id], status: .delivered)
+                    streamManager?.sendReceipt([failedMessage.id], to: userId, status: .delivered)
                     pendingFirstMessages.removeValue(forKey: userId)
                     SessionHealingService.shared.clearQueue(for: userId, in: context)
                     try? await sendEndSession(to: userId, reason: "heal_exhausted")

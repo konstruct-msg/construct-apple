@@ -273,6 +273,7 @@ private func makePreviewVM(step: AccountRecoveryViewModel.SetupStep) -> AccountR
     return vm
 }
 
+#if DEBUG
 #Preview("Intro") {
     let container = PreviewHelpers.createPreviewContainer()
     let authVM = AuthViewModel(context: container.viewContext)
@@ -317,3 +318,5 @@ private func makePreviewVM(step: AccountRecoveryViewModel.SetupStep) -> AccountR
         .environment(makePreviewVM(step: .failed("Server unavailable. Please try again later.")))
         .environment(authVM)
 }
+
+#endif

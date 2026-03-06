@@ -1,0 +1,583 @@
+========================================
+Construct Messenger Debug Logs
+========================================
+Exported: 2026-03-06 19:07:38 +0000
+App Version: 0.8.42
+Build: 157
+Device: iPhone
+iOS Version: 26.3.1
+Identifier: 3F2E4182-4BB8-42B9-B109-11CF014EC383
+========================================
+
+=== Log File 1/1: current.log ===
+========================================
+Construct Messenger - Log Session
+========================================
+App Version: 0.8.42
+Build: 157
+Device: iPhone
+iOS Version: 26.3.1
+Started: 2026-03-06 18:57:10 +0000
+========================================
+[2026-03-06T18:57:10Z] [DEBUG] [Keychain] ✅ Device keys found in Keychain
+[2026-03-06T18:57:10Z] [DEBUG] [Keychain]    deviceId: 23f20d32edc52399...
+[2026-03-06T18:57:10Z] [DEBUG] [Keychain]    signingKey: 32 bytes
+[2026-03-06T18:57:10Z] [DEBUG] [Keychain]    identityKey: 32 bytes
+[2026-03-06T18:57:10Z] [INFO] [Default] Application did finish launching
+[2026-03-06T18:57:10Z] [INFO] [BackgroundFetch] BackgroundFetchManager initialized
+[2026-03-06T18:57:10Z] [INFO] [EnergyMonitor] Network status changed: satisfied
+[2026-03-06T18:57:10Z] [INFO] [Default] Background tasks registered successfully
+[2026-03-06T18:57:10Z] [INFO] [Default] Background fetch is disabled by user or Low Power Mode
+[2026-03-06T18:57:10Z] [INFO] [Push] 📱 PushNotificationManager initialized
+[2026-03-06T18:57:10Z] [INFO] [NetworkReachability] 🌐 Network reachability monitoring started
+[2026-03-06T18:57:10Z] [INFO] [ConnectionStatus] 🔄 ConnectionStatusManager initialized: Connecting (network reachable)
+[2026-03-06T18:57:10Z] [DEBUG] [Keychain] ✅ Device keys found in Keychain
+[2026-03-06T18:57:10Z] [DEBUG] [Keychain]    deviceId: 23f20d32edc52399...
+[2026-03-06T18:57:10Z] [DEBUG] [Keychain]    signingKey: 32 bytes
+[2026-03-06T18:57:10Z] [DEBUG] [Keychain]    identityKey: 32 bytes
+[2026-03-06T18:57:10Z] [INFO] [ChatsViewModel] 📱 No session — skipping reconnect
+[2026-03-06T18:57:10Z] [INFO] [ChatsViewModel] 📱 No session — skipping reconnect
+[2026-03-06T18:57:10Z] [DEBUG] [Keychain] ✅ Session token loaded from Keychain (length: 927, prefix: eyJ0eXAiOiJKV1QiLCJhbGciOiJSUz...)
+[2026-03-06T18:57:10Z] [DEBUG] [Keychain] ✅ Refresh token loaded from Keychain (length: 927)
+[2026-03-06T18:57:10Z] [DEBUG] [Keychain] ✅ User ID loaded from Keychain: 7ce762c4...
+[2026-03-06T18:57:10Z] [DEBUG] [Default] Notification authorization status: 2
+[2026-03-06T18:57:10Z] [DEBUG] [ChatsViewModel] 📡 Stream state: token=present, status=Connecting..., push=false
+[2026-03-06T18:57:10Z] [INFO] [ChatsViewModel] 📡 Connecting message stream
+[2026-03-06T18:57:10Z] [INFO] [MessageStream] 📡 Starting MessageStream connection (subscribed to 2 contacts)
+[2026-03-06T18:57:10Z] [INFO] [CryptoManager] 🔑 Found existing keys in Keychain, restoring CryptoCore...
+[2026-03-06T18:57:10Z] [INFO] [CryptoManager] ✅ Restored 50 OTPKs from Keychain
+[2026-03-06T18:57:10Z] [INFO] [CryptoManager] ✅ CryptoCore restored from saved keys!
+[2026-03-06T18:57:10Z] [DEBUG] [CryptoManager] 🔑 CryptoManager: local user ID set to 7ce762c4-6ea0-4368-92ff-2a31c7726a32
+[2026-03-06T18:57:10Z] [DEBUG] [Push] 📱 Push authorization status: authorized
+[2026-03-06T18:57:10Z] [INFO] [MessageStream] 🔄 MessageStream connectLoop started → ams.konstruct.cc:443
+[2026-03-06T18:57:10Z] [DEBUG] [MessageStream] 🔍 fetchMissedMessages cursor=1772823115
+[2026-03-06T18:57:10Z] [INFO] [gRPC] 🔌 gRPC creating channel → ams.konstruct.cc:443 TLS=true
+[2026-03-06T18:57:10Z] [INFO] [ChatsViewModel] 📱 App became active — force reconnecting stream
+[2026-03-06T18:57:10Z] [INFO] [gRPC] 🔌 gRPC creating channel → ams.konstruct.cc:443 TLS=true
+[2026-03-06T18:57:10Z] [INFO] [MessageStream] 🔁 Force reconnecting stream
+[2026-03-06T18:57:10Z] [INFO] [MessageStream] 📡 Starting MessageStream connection (subscribed to 2 contacts)
+[2026-03-06T18:57:10Z] [DEBUG] [CryptoManager] ✅ Restored session: ac97df69-38af-41c9-b6bb-c1cbc91347cb
+[2026-03-06T18:57:10Z] [INFO] [CryptoManager] 📦 Session restore: 1 restored, 1 failed
+[2026-03-06T18:57:10Z] [DEBUG] [CryptoManager] ✅ Garbage collection: no expired archives found
+[2026-03-06T18:57:10Z] [DEBUG] [CryptoManager] ⏰ Started archive GC timer (interval: 24h)
+[2026-03-06T18:57:10Z] [INFO] [Push] 📱 Registering for remote notifications (authorized, no token yet)
+[2026-03-06T18:57:10Z] [INFO] [MessageStream] 🔄 MessageStream connectLoop started → ams.konstruct.cc:443
+[2026-03-06T18:57:10Z] [DEBUG] [MessageStream] 🔍 fetchMissedMessages cursor=1772823115
+[2026-03-06T18:57:10Z] [DEBUG] [LocalNotifications] 📛 Badge cleared
+[2026-03-06T18:57:10Z] [INFO] [gRPC] 🔌 gRPC creating channel → ams.konstruct.cc:443 TLS=true
+[2026-03-06T18:57:10Z] [DEBUG] [Keychain] ✅ Session token loaded from Keychain (length: 927, prefix: eyJ0eXAiOiJKV1QiLCJhbGciOiJSUz...)
+[2026-03-06T18:57:10Z] [DEBUG] [Keychain] ✅ Refresh token loaded from Keychain (length: 927)
+[2026-03-06T18:57:10Z] [DEBUG] [Keychain] ✅ User ID loaded from Keychain: 7ce762c4...
+[2026-03-06T18:57:10Z] [INFO] [MessageStream] 🏁 MessageStream connectLoop finished
+[2026-03-06T18:57:10Z] [DEBUG] [CryptoManager] 🔑 CryptoManager: local user ID set to 7ce762c4-6ea0-4368-92ff-2a31c7726a32
+[2026-03-06T18:57:10Z] [INFO] [Push] 📱 Received device token from APNs
+[2026-03-06T18:57:10Z] [INFO] [Push] 📱 Registering device token (length: 64)
+[2026-03-06T18:57:10Z] [INFO] [Push] 📡 Registering device token with server
+[2026-03-06T18:57:10Z] [INFO] [gRPC] 🔌 gRPC creating channel → ams.konstruct.cc:443 TLS=true
+[2026-03-06T18:57:11Z] [INFO] [MessageStream] 📨 Fetched 1 missed message(s) after reconnect
+[2026-03-06T18:57:11Z] [DEBUG] [OTPK] 🔑 OTPK server count: 47
+[2026-03-06T18:57:11Z] [DEBUG] [MessageRouter] ⏭️ Skipping already-saved message 8182f89e…
+[2026-03-06T18:57:11Z] [INFO] [MessageStream] 📡 openStream → ams.konstruct.cc:443 subscriptions=[direct:7ce762c4-6ea0-4368-92ff-2a31c7726a32:bfe057f6-1e07-42c8-b2f9-4b3a1ed5c8df, direct:7ce762c4-6ea0-4368-92ff-2a31c7726a32:ac97df69-38af-41c9-b6bb-c1cbc91347cb]
+[2026-03-06T18:57:11Z] [INFO] [gRPC] 🔌 gRPC creating channel → ams.konstruct.cc:443 TLS=true
+[2026-03-06T18:57:11Z] [INFO] [MessageStream] ⏳ MessageStream opening to ams.konstruct.cc:443
+[2026-03-06T18:57:11Z] [DEBUG] [MessageStream] 📤 MessageStream subscribe sent: 2 conversation(s)
+[2026-03-06T18:57:11Z] [INFO] [Push] ✅ Device token registered with server: success=true
+[2026-03-06T18:57:11Z] [DEBUG] [Push] 📱 Push authorization status: authorized
+[2026-03-06T18:57:11Z] [DEBUG] [ChatsViewModel] 📡 Stream state: token=present, status=Connecting..., push=true
+[2026-03-06T18:57:11Z] [INFO] [ChatsViewModel] 📱 Push active — stream connected
+[2026-03-06T18:57:11Z] [INFO] [MessageStream] 📡 MessageStream already connected
+[2026-03-06T18:57:11Z] [INFO] [EnergyMonitor] Network status changed: satisfied
+[2026-03-06T18:57:11Z] [INFO] [ConnectionStatus] 🟢 Stream connected → status: Connected
+[2026-03-06T18:57:11Z] [INFO] [MessageStream] ✅ MessageStream RPC accepted — stream connected
+[2026-03-06T18:57:11Z] [DEBUG] [ChatsViewModel] 📡 Stream state: token=present, status=Connected, push=true
+[2026-03-06T18:57:11Z] [INFO] [ChatsViewModel] 📱 Push active — stream connected
+[2026-03-06T18:57:11Z] [INFO] [MessageStream] 📡 MessageStream already connected
+[2026-03-06T18:57:11Z] [DEBUG] [MessageStream] 📩 MessageStream received message from=ac97df69-38af-41c9-b6bb-c1cbc91347cb id=8182f89e-0778-480e-a7a3-7ef215b0b0ee
+[2026-03-06T18:57:11Z] [DEBUG] [MessageRouter] ⏭️ Skipping already-saved message 8182f89e…
+[2026-03-06T18:57:12Z] [INFO] [MessageQueue] ⏰ Started periodic message queue check
+[2026-03-06T18:57:12Z] [INFO] [MessageQueue] 📦 MessageQueueManager initialized
+[2026-03-06T18:57:12Z] [DEBUG] [ChatViewModel] 🔧 ChatViewModel init: chat.id=6183E927-880D-48D8-9D5B-7AC96B7A4C27, chat.otherUser?.id=ac97df69-38af-41c9-b6bb-c1cbc91347cb, chat.otherUser?.username=
+[2026-03-06T18:57:12Z] [DEBUG] [ChatViewModel] ✅ FRC initial fetch: 6 messages (reversed to oldest-first)
+[2026-03-06T18:57:12Z] [DEBUG] [CryptoManager] 🔑 Session check for ac97df69-38af-41c9-b6bb-c1cbc91347cb: EXISTS
+[2026-03-06T18:57:12Z] [DEBUG] [CryptoManager]    Session ID: 68b03819-9a34-46...
+[2026-03-06T18:57:12Z] [INFO] [ChatViewModel] ✅ Session already exists for user: ac97df69-38af-41c9-b6bb-c1cbc91347cb
+[2026-03-06T18:57:12Z] [DEBUG] [ChatViewModel] 🔑 Fetching public key for userId: ac97df69-38af-41c9-b6bb-c1cbc91347cb, currentUserId: 7ce762c4-6ea0-4368-92ff-2a31c7726a32
+[2026-03-06T18:57:12Z] [DEBUG] [ChatViewModel] 🔧 ChatViewModel initialized with viewContext
+[2026-03-06T18:57:12Z] [DEBUG] [ChatViewModel] 📥 Loading more messages before 2026-03-06 18:49:05 +0000
+[2026-03-06T18:57:12Z] [DEBUG] [ChatViewModel] 📭 No more older messages to load
+[2026-03-06T18:57:12Z] [DEBUG] [LocalNotifications] 📛 Badge cleared
+[2026-03-06T18:57:14Z] [DEBUG] [ChatScrollManager] 📜 Scrolled to bottom (messageId: bottom)
+[2026-03-06T18:57:14Z] [INFO] [EnergyMonitor] Network status changed: satisfied
+[2026-03-06T18:57:17Z] [INFO] [ChatViewModel] 📤 sendMessage called with 0 images, 0 files
+[2026-03-06T18:57:17Z] [DEBUG] [CryptoManager] 🔑 Session check for ac97df69-38af-41c9-b6bb-c1cbc91347cb: EXISTS
+[2026-03-06T18:57:17Z] [DEBUG] [CryptoManager]    Session ID: 68b03819-9a34-46...
+[2026-03-06T18:57:17Z] [INFO] [ChatViewModel] 📤 Sending to: ac97df69-38af-41c9-b6bb-c1cbc91347cb, from: 7ce762c4-6ea0-4368-92ff-2a31c7726a32
+[2026-03-06T18:57:17Z] [INFO] [ChatViewModel] ✅ Session is ready, sending via gRPC...
+[2026-03-06T18:57:17Z] [DEBUG] [ChatViewModel] 🔄 Encryption failed, session was deleted. Reinitializing...
+[2026-03-06T18:57:17Z] [INFO] [ChatViewModel] 🔑 Requesting fresh public key bundle for reinitialization
+[2026-03-06T18:57:17Z] [INFO] [ChatViewModel] 📝 Message queued for retry after session reinitialization
+[2026-03-06T18:57:17Z] [DEBUG] [ChatViewModel] 🔧 ChatViewModel init: chat.id=6183E927-880D-48D8-9D5B-7AC96B7A4C27, chat.otherUser?.id=ac97df69-38af-41c9-b6bb-c1cbc91347cb, chat.otherUser?.username=
+[2026-03-06T18:57:17Z] [DEBUG] [ChatViewModel] ✅ FRC initial fetch: 6 messages (reversed to oldest-first)
+[2026-03-06T18:57:17Z] [DEBUG] [CryptoManager] 🔑 Session check for ac97df69-38af-41c9-b6bb-c1cbc91347cb: EXISTS
+[2026-03-06T18:57:17Z] [DEBUG] [CryptoManager]    Session ID: 68b03819-9a34-46...
+[2026-03-06T18:57:17Z] [INFO] [ChatViewModel] ✅ Session already exists for user: ac97df69-38af-41c9-b6bb-c1cbc91347cb
+[2026-03-06T18:57:17Z] [DEBUG] [ChatViewModel] 🔑 Fetching public key for userId: ac97df69-38af-41c9-b6bb-c1cbc91347cb, currentUserId: 7ce762c4-6ea0-4368-92ff-2a31c7726a32
+[2026-03-06T18:57:17Z] [DEBUG] [ChatViewModel] 🔧 ChatViewModel initialized with viewContext
+[2026-03-06T18:57:17Z] [INFO] [SessionInit] 🔐 SESSION_STATE[proactive_init_start]: userId=ac97df69...
+[2026-03-06T18:57:17Z] [INFO] [SessionInit] 🔑 SESSION_STATE[fetch_bundle_attempt_1]: userId=ac97df69..., deviceId=nil...
+[2026-03-06T18:57:17Z] [INFO] [gRPC] 🔌 gRPC creating channel → ams.konstruct.cc:443 TLS=true
+[2026-03-06T18:57:18Z] [DEBUG] [ChatScrollManager] 📜 Scrolled to bottom (messageId: 8182f89e-0778-480e-a7a3-7ef215b0b0ee)
+[2026-03-06T18:57:18Z] [INFO] [SessionInit] ✅ SESSION_STATE[fetch_bundle_success]: userId=ac97df69..., hasVerifyingKey=true
+[2026-03-06T18:57:18Z] [DEBUG] [CryptoManager] 🔑 Session check for ac97df69-38af-41c9-b6bb-c1cbc91347cb: EXISTS
+[2026-03-06T18:57:18Z] [DEBUG] [CryptoManager]    Session ID: 68b03819-9a34-46...
+[2026-03-06T18:57:18Z] [INFO] [CryptoManager] 📦 Archiving session for ac97df69-38af-41c9-b6bb-c1cbc91347cb, reason: manual_reset
+[2026-03-06T18:57:18Z] [INFO] [CryptoManager] ✅ Session archived (1 total for user)
+[2026-03-06T18:57:18Z] [INFO] [CryptoManager] ✅ Removed session from memory: ac97df69-38af-41c9-b6bb-c1cbc91347cb
+[2026-03-06T18:57:18Z] [INFO] [CryptoManager] ✅ Removed session from Rust core: ac97df69-38af-41c9-b6bb-c1cbc91347cb
+[2026-03-06T18:57:18Z] [INFO] [CryptoManager] ✅ Removed session from Keychain: ac97df69-38af-41c9-b6bb-c1cbc91347cb
+[2026-03-06T18:57:18Z] [INFO] [SessionInit] 🗑️ Proactively deleted any existing session for ac97df69-38af-41c9-b6bb-c1cbc91347cb before initialization.
+[2026-03-06T18:57:18Z] [DEBUG] [CryptoManager] 🔐 Session init bundle lengths: identity=44, signedPrekey=44, signature=88, verifyingKey=44, suiteId=1
+[2026-03-06T18:57:18Z] [DEBUG] [CryptoManager] 💾 Session saved to Keychain: ac97df69-38af-41c9-b6bb-c1cbc91347cb
+[2026-03-06T18:57:18Z] [INFO] [CryptoManager] ✅ INITIATOR session created: ac97df69-38af-41...
+[2026-03-06T18:57:18Z] [INFO] [CryptoManager] ✅ Session initialized for user: ac97df69-38af-41c9-b6bb-c1cbc91347cb
+[2026-03-06T18:57:18Z] [INFO] [SessionInit] ✅ Session initialized as INITIATOR for ac97df69-38af-41c9-b6bb-c1cbc91347cb
+[2026-03-06T18:57:18Z] [INFO] [SessionInit] ✅ SESSION_STATE[proactive_init_success]: userId=ac97df69...
+[2026-03-06T18:57:18Z] [INFO] [SessionInit] 📤 SESSION_STATE[send_queued]: userId=ac97df69..., queueSize=1
+[2026-03-06T18:57:18Z] [INFO] [ChatViewModel] 📤 Sending queued message: "Обновил..."
+[2026-03-06T18:57:18Z] [INFO] [ChatViewModel] 📤 sendMessage called with 0 images, 0 files
+[2026-03-06T18:57:18Z] [DEBUG] [CryptoManager] 🔑 Session check for ac97df69-38af-41c9-b6bb-c1cbc91347cb: EXISTS
+[2026-03-06T18:57:18Z] [DEBUG] [CryptoManager]    Session ID: ac97df69-38af-41...
+[2026-03-06T18:57:18Z] [INFO] [ChatViewModel] 📤 Sending to: ac97df69-38af-41c9-b6bb-c1cbc91347cb, from: 7ce762c4-6ea0-4368-92ff-2a31c7726a32
+[2026-03-06T18:57:18Z] [INFO] [ChatViewModel] ✅ Session is ready, sending via gRPC...
+[2026-03-06T18:57:18Z] [DEBUG] [CryptoManager] 💾 Session saved to Keychain: ac97df69-38af-41c9-b6bb-c1cbc91347cb
+[2026-03-06T18:57:18Z] [DEBUG] [CryptoManager] ✅ ENCRYPT: msgNum=0, ephemKey=bf7d623963cf454f, content=S1BBRAAAARufsRSanyrl...
+[2026-03-06T18:57:18Z] [DEBUG] [ChatViewModel] 📤 Sending message with ID: BE6270E9-566E-4ADB-BD02-5CD43C7BC20A
+[2026-03-06T18:57:18Z] [DEBUG] [ChatViewModel]    Message number: 0
+[2026-03-06T18:57:18Z] [DEBUG] [ChatViewModel]    Content length: 1368 bytes
+[2026-03-06T18:57:18Z] [DEBUG] [MessagePersistence] 💾 Saving message BE6270E9-566E-4ADB-BD02-5CD43C7BC20A, isSentByMe: true, status: sending
+[2026-03-06T18:57:18Z] [DEBUG] [MessagePersistence] ✨ Creating new message BE6270E9-566E-4ADB-BD02-5CD43C7BC20A
+[2026-03-06T18:57:18Z] [DEBUG] [ChatViewModel] 🔄 FRC updated messages: 7 total (reversed to oldest-first)
+[2026-03-06T18:57:18Z] [DEBUG] [ChatViewModel] 🔄 FRC updated messages: 7 total (reversed to oldest-first)
+[2026-03-06T18:57:18Z] [DEBUG] [MessagePersistence] ✅ Updated chat.lastMessageText and lastMessageTime
+[2026-03-06T18:57:18Z] [DEBUG] [MessagePersistence] ✅ Message saved to Core Data
+[2026-03-06T18:57:18Z] [DEBUG] [ChatViewModel] 📊 Messages will be updated by FRC. Current count: 7, isNew: true
+[2026-03-06T18:57:18Z] [INFO] [ChatViewModel] 📮 Sending message via gRPC: BE6270E9-566E-4ADB-BD02-5CD43C7BC20A
+[2026-03-06T18:57:18Z] [DEBUG] [ChatViewModel] 🔧 ChatViewModel init: chat.id=6183E927-880D-48D8-9D5B-7AC96B7A4C27, chat.otherUser?.id=ac97df69-38af-41c9-b6bb-c1cbc91347cb, chat.otherUser?.username=
+[2026-03-06T18:57:18Z] [DEBUG] [ChatViewModel] ✅ FRC initial fetch: 7 messages (reversed to oldest-first)
+[2026-03-06T18:57:18Z] [DEBUG] [CryptoManager] 🔑 Session check for ac97df69-38af-41c9-b6bb-c1cbc91347cb: EXISTS
+[2026-03-06T18:57:18Z] [DEBUG] [CryptoManager]    Session ID: ac97df69-38af-41...
+[2026-03-06T18:57:18Z] [INFO] [ChatViewModel] ✅ Session already exists for user: ac97df69-38af-41c9-b6bb-c1cbc91347cb
+[2026-03-06T18:57:18Z] [DEBUG] [ChatViewModel] 🔑 Fetching public key for userId: ac97df69-38af-41c9-b6bb-c1cbc91347cb, currentUserId: 7ce762c4-6ea0-4368-92ff-2a31c7726a32
+[2026-03-06T18:57:18Z] [DEBUG] [ChatViewModel] 🔧 ChatViewModel initialized with viewContext
+[2026-03-06T18:57:18Z] [DEBUG] [ChatViewModel] 🔧 ChatViewModel init: chat.id=6183E927-880D-48D8-9D5B-7AC96B7A4C27, chat.otherUser?.id=ac97df69-38af-41c9-b6bb-c1cbc91347cb, chat.otherUser?.username=
+[2026-03-06T18:57:18Z] [DEBUG] [ChatViewModel] ✅ FRC initial fetch: 7 messages (reversed to oldest-first)
+[2026-03-06T18:57:18Z] [DEBUG] [CryptoManager] 🔑 Session check for ac97df69-38af-41c9-b6bb-c1cbc91347cb: EXISTS
+[2026-03-06T18:57:18Z] [DEBUG] [CryptoManager]    Session ID: ac97df69-38af-41...
+[2026-03-06T18:57:18Z] [INFO] [ChatViewModel] ✅ Session already exists for user: ac97df69-38af-41c9-b6bb-c1cbc91347cb
+[2026-03-06T18:57:18Z] [DEBUG] [ChatViewModel] 🔑 Fetching public key for userId: ac97df69-38af-41c9-b6bb-c1cbc91347cb, currentUserId: 7ce762c4-6ea0-4368-92ff-2a31c7726a32
+[2026-03-06T18:57:18Z] [DEBUG] [ChatViewModel] 🔧 ChatViewModel initialized with viewContext
+[2026-03-06T18:57:18Z] [DEBUG] [ChatViewModel] 🔧 ChatViewModel deinitialized
+[2026-03-06T18:57:18Z] [DEBUG] [TrafficProtection] 🔋 Battery updated: 95%
+[2026-03-06T18:57:18Z] [INFO] [TrafficProtection] ⏹️ Traffic protection scheduler stopped
+[2026-03-06T18:57:18Z] [INFO] [TrafficProtection] ⏰ Traffic protection scheduler started
+[2026-03-06T18:57:18Z] [INFO] [gRPC] 🔌 gRPC creating channel → ams.konstruct.cc:443 TLS=true
+[2026-03-06T18:57:18Z] [DEBUG] [MessagingServiceClient] 📤 sendMessage RPC →
+   messageId      = be6270e9-566e-4adb-bd02-5cd43c7bc20a
+   senderId       = 7ce762c4-6ea0-4368-92ff-2a31c7726a32
+   recipientId    = ac97df69-38af-41c9-b6bb-c1cbc91347cb
+   conversationId = direct:7ce762c4-6ea0-4368-92ff-2a31c7726a32:ac97df69-38af-41c9-b6bb-c1cbc91347cb
+   payloadBytes   = 1064
+[2026-03-06T18:57:18Z] [DEBUG] [ChatScrollManager] 📜 Scrolled to bottom (messageId: BE6270E9-566E-4ADB-BD02-5CD43C7BC20A)
+[2026-03-06T18:57:19Z] [INFO] [MessagingServiceClient] ✅ sendMessage response: success=true messageId=134ada36-fad6-4529-a790-59a0c2cc126f
+[2026-03-06T18:57:19Z] [INFO] [ChatViewModel] 🔄 Updating message status from sending → sent for BE6270E9-566E-4ADB-BD02-5CD43C7BC20A
+[2026-03-06T18:57:19Z] [DEBUG] [ChatViewModel] 🔄 FRC updated messages: 7 total (reversed to oldest-first)
+[2026-03-06T18:57:19Z] [DEBUG] [ChatViewModel] 🔄 FRC updated messages: 7 total (reversed to oldest-first)
+[2026-03-06T18:57:19Z] [DEBUG] [ChatViewModel] 🔄 FRC updated messages: 7 total (reversed to oldest-first)
+[2026-03-06T18:57:19Z] [DEBUG] [MessagePersistence] ✅ Updated message status to sent for BE6270E9-566E-4ADB-BD02-5CD43C7BC20A
+[2026-03-06T18:57:19Z] [INFO] [ChatViewModel] ✅ Message sent via gRPC: 134ada36-fad6-4529-a790-59a0c2cc126f, server status: sent
+[2026-03-06T18:57:21Z] [INFO] [ChatsViewModel] 📱 App going to background - pausing messaging
+[2026-03-06T18:57:21Z] [INFO] [ConnectionStatus] 🟡 Stream disconnected → status: Connecting
+[2026-03-06T18:57:21Z] [INFO] [MessageStream] 📡 MessageStream disconnected
+[2026-03-06T18:57:21Z] [INFO] [MessageStream] 📱 MessageStream paused
+[2026-03-06T18:57:21Z] [DEBUG] [ChatsViewModel] 📡 Stream state: token=present, status=Connecting..., push=true
+[2026-03-06T18:57:21Z] [INFO] [ChatsViewModel] 📱 Push active — stream connected
+[2026-03-06T18:57:21Z] [DEBUG] [ChatsViewModel] 📡 Stream paused — skipping startMessageStream
+[2026-03-06T18:57:21Z] [INFO] [MessageStream] 🔌 MessageStream disconnected from ams.konstruct.cc:443
+[2026-03-06T18:57:21Z] [INFO] [MessageStream] 🛑 MessageStream cancelled — connectLoop exiting
+[2026-03-06T18:57:21Z] [INFO] [MessageStream] 🏁 MessageStream connectLoop finished
+[2026-03-06T18:57:22Z] [DEBUG] [ChatScrollManager] 📜 Scrolled to bottom (messageId: bottom)
+[2026-03-06T18:57:22Z] [DEBUG] [ChatScrollManager] 📜 Scrolled to bottom (messageId: bottom)
+[2026-03-06T18:57:22Z] [DEBUG] [ChatScrollManager] 📜 Scrolled to bottom (messageId: bottom)
+[2026-03-06T18:57:22Z] [DEBUG] [ChatScrollManager] 📜 Scrolled to bottom (messageId: bottom)
+[2026-03-06T18:57:27Z] [DEBUG] [ChatScrollManager] 📜 Scrolled to bottom (messageId: bottom)
+[2026-03-06T18:57:27Z] [INFO] [ChatsViewModel] 📱 App became active — force reconnecting stream
+[2026-03-06T18:57:27Z] [INFO] [MessageStream] 🔁 Force reconnecting stream
+[2026-03-06T18:57:27Z] [INFO] [MessageStream] 📡 Starting MessageStream connection (subscribed to 2 contacts)
+[2026-03-06T18:57:27Z] [INFO] [MessageStream] 🔄 MessageStream connectLoop started → ams.konstruct.cc:443
+[2026-03-06T18:57:27Z] [DEBUG] [MessageStream] 🔍 fetchMissedMessages cursor=1772823164
+[2026-03-06T18:57:27Z] [INFO] [gRPC] 🔌 gRPC creating channel → ams.konstruct.cc:443 TLS=true
+[2026-03-06T18:57:27Z] [DEBUG] [Keychain] ✅ Session token loaded from Keychain (length: 927, prefix: eyJ0eXAiOiJKV1QiLCJhbGciOiJSUz...)
+[2026-03-06T18:57:27Z] [DEBUG] [Keychain] ✅ Refresh token loaded from Keychain (length: 927)
+[2026-03-06T18:57:27Z] [DEBUG] [Keychain] ✅ User ID loaded from Keychain: 7ce762c4...
+[2026-03-06T18:57:27Z] [DEBUG] [CryptoManager] 🔑 CryptoManager: local user ID set to 7ce762c4-6ea0-4368-92ff-2a31c7726a32
+[2026-03-06T18:57:27Z] [INFO] [MessageStream] 📨 Fetched 1 missed message(s) after reconnect
+[2026-03-06T18:57:27Z] [DEBUG] [MessageRouter] ⏭️ Skipping already-saved message 8182f89e…
+[2026-03-06T18:57:27Z] [INFO] [MessageStream] 📡 openStream → ams.konstruct.cc:443 subscriptions=[direct:7ce762c4-6ea0-4368-92ff-2a31c7726a32:bfe057f6-1e07-42c8-b2f9-4b3a1ed5c8df, direct:7ce762c4-6ea0-4368-92ff-2a31c7726a32:ac97df69-38af-41c9-b6bb-c1cbc91347cb]
+[2026-03-06T18:57:27Z] [INFO] [gRPC] 🔌 gRPC creating channel → ams.konstruct.cc:443 TLS=true
+[2026-03-06T18:57:27Z] [INFO] [MessageStream] ⏳ MessageStream opening to ams.konstruct.cc:443
+[2026-03-06T18:57:27Z] [DEBUG] [MessageStream] 📤 MessageStream subscribe sent: 2 conversation(s)
+[2026-03-06T18:57:28Z] [INFO] [ConnectionStatus] 🟢 Stream connected → status: Connected
+[2026-03-06T18:57:28Z] [INFO] [MessageStream] ✅ MessageStream RPC accepted — stream connected
+[2026-03-06T18:57:28Z] [DEBUG] [MessageStream] 📩 MessageStream received message from=ac97df69-38af-41c9-b6bb-c1cbc91347cb id=8182f89e-0778-480e-a7a3-7ef215b0b0ee
+[2026-03-06T18:57:28Z] [DEBUG] [MessageRouter] ⏭️ Skipping already-saved message 8182f89e…
+[2026-03-06T18:57:28Z] [DEBUG] [ChatsViewModel] 📡 Stream state: token=present, status=Connected, push=true
+[2026-03-06T18:57:28Z] [INFO] [ChatsViewModel] 📱 Push active — stream connected
+[2026-03-06T18:57:28Z] [INFO] [MessageStream] 📡 MessageStream already connected
+[2026-03-06T18:57:28Z] [INFO] [ChatViewModel] ✅ Network connected - processing queued messages
+[2026-03-06T18:57:28Z] [INFO] [MessageRetryManager] 📤 Sending 0 queued messages
+[2026-03-06T18:57:28Z] [INFO] [ChatViewModel] ✅ Network connected - processing queued messages
+[2026-03-06T18:57:28Z] [INFO] [MessageRetryManager] 📤 Sending 0 queued messages
+[2026-03-06T18:57:28Z] [INFO] [ChatViewModel] ✅ Network connected - processing queued messages
+[2026-03-06T18:57:28Z] [INFO] [MessageRetryManager] 📤 Sending 0 queued messages
+[2026-03-06T18:57:48Z] [INFO] [ChatsViewModel] 📱 App going to background - pausing messaging
+[2026-03-06T18:57:48Z] [INFO] [ConnectionStatus] 🟡 Stream disconnected → status: Connecting
+[2026-03-06T18:57:48Z] [INFO] [MessageStream] 📡 MessageStream disconnected
+[2026-03-06T18:57:48Z] [INFO] [MessageStream] 📱 MessageStream paused
+[2026-03-06T18:57:48Z] [DEBUG] [ChatsViewModel] 📡 Stream state: token=present, status=Connecting..., push=true
+[2026-03-06T18:57:48Z] [INFO] [ChatsViewModel] 📱 Push active — stream connected
+[2026-03-06T18:57:48Z] [DEBUG] [ChatsViewModel] 📡 Stream paused — skipping startMessageStream
+[2026-03-06T18:57:48Z] [INFO] [MessageStream] 🔌 MessageStream disconnected from ams.konstruct.cc:443
+[2026-03-06T18:57:48Z] [INFO] [MessageStream] 🛑 MessageStream cancelled — connectLoop exiting
+[2026-03-06T18:57:48Z] [INFO] [MessageStream] 🏁 MessageStream connectLoop finished
+[2026-03-06T18:57:50Z] [DEBUG] [ChatScrollManager] 📜 Scrolled to bottom (messageId: bottom)
+[2026-03-06T18:57:50Z] [DEBUG] [ChatScrollManager] 📜 Scrolled to bottom (messageId: bottom)
+[2026-03-06T18:57:50Z] [DEBUG] [ChatScrollManager] 📜 Scrolled to bottom (messageId: bottom)
+[2026-03-06T18:57:50Z] [DEBUG] [ChatScrollManager] 📜 Scrolled to bottom (messageId: bottom)
+[2026-03-06T18:57:57Z] [DEBUG] [ChatScrollManager] 📜 Scrolled to bottom (messageId: bottom)
+[2026-03-06T18:57:57Z] [INFO] [ChatsViewModel] 📱 App became active — force reconnecting stream
+[2026-03-06T18:57:57Z] [INFO] [MessageStream] 🔁 Force reconnecting stream
+[2026-03-06T18:57:57Z] [INFO] [MessageStream] 📡 Starting MessageStream connection (subscribed to 2 contacts)
+[2026-03-06T18:57:57Z] [INFO] [MessageStream] 🔄 MessageStream connectLoop started → ams.konstruct.cc:443
+[2026-03-06T18:57:57Z] [DEBUG] [MessageStream] 🔍 fetchMissedMessages cursor=1772823164
+[2026-03-06T18:57:57Z] [INFO] [gRPC] 🔌 gRPC creating channel → ams.konstruct.cc:443 TLS=true
+[2026-03-06T18:57:57Z] [DEBUG] [Keychain] ✅ Session token loaded from Keychain (length: 927, prefix: eyJ0eXAiOiJKV1QiLCJhbGciOiJSUz...)
+[2026-03-06T18:57:57Z] [DEBUG] [Keychain] ✅ Refresh token loaded from Keychain (length: 927)
+[2026-03-06T18:57:57Z] [DEBUG] [Keychain] ✅ User ID loaded from Keychain: 7ce762c4...
+[2026-03-06T18:57:57Z] [DEBUG] [CryptoManager] 🔑 CryptoManager: local user ID set to 7ce762c4-6ea0-4368-92ff-2a31c7726a32
+[2026-03-06T18:57:57Z] [INFO] [ChatsViewModel] 📱 App going to background - pausing messaging
+[2026-03-06T18:57:57Z] [INFO] [MessageStream] 📡 MessageStream disconnected
+[2026-03-06T18:57:57Z] [INFO] [MessageStream] 📱 MessageStream paused
+[2026-03-06T18:57:57Z] [INFO] [MessageStream] 🏁 MessageStream connectLoop finished
+[2026-03-06T18:57:57Z] [INFO] [ChatsViewModel] 📱 App became active — force reconnecting stream
+[2026-03-06T18:57:57Z] [INFO] [MessageStream] 🔁 Force reconnecting stream
+[2026-03-06T18:57:57Z] [INFO] [MessageStream] 📡 Starting MessageStream connection (subscribed to 2 contacts)
+[2026-03-06T18:57:57Z] [INFO] [MessageStream] 🔄 MessageStream connectLoop started → ams.konstruct.cc:443
+[2026-03-06T18:57:57Z] [DEBUG] [MessageStream] 🔍 fetchMissedMessages cursor=1772823164
+[2026-03-06T18:57:57Z] [INFO] [gRPC] 🔌 gRPC creating channel → ams.konstruct.cc:443 TLS=true
+[2026-03-06T18:57:57Z] [DEBUG] [Keychain] ✅ Session token loaded from Keychain (length: 927, prefix: eyJ0eXAiOiJKV1QiLCJhbGciOiJSUz...)
+[2026-03-06T18:57:57Z] [DEBUG] [Keychain] ✅ Refresh token loaded from Keychain (length: 927)
+[2026-03-06T18:57:57Z] [DEBUG] [Keychain] ✅ User ID loaded from Keychain: 7ce762c4...
+[2026-03-06T18:57:57Z] [DEBUG] [CryptoManager] 🔑 CryptoManager: local user ID set to 7ce762c4-6ea0-4368-92ff-2a31c7726a32
+[2026-03-06T18:57:58Z] [INFO] [MessageStream] 📨 Fetched 1 missed message(s) after reconnect
+[2026-03-06T18:57:58Z] [DEBUG] [MessageRouter] ⏭️ Skipping already-saved message 8182f89e…
+[2026-03-06T18:57:58Z] [INFO] [MessageStream] 📡 openStream → ams.konstruct.cc:443 subscriptions=[direct:7ce762c4-6ea0-4368-92ff-2a31c7726a32:bfe057f6-1e07-42c8-b2f9-4b3a1ed5c8df, direct:7ce762c4-6ea0-4368-92ff-2a31c7726a32:ac97df69-38af-41c9-b6bb-c1cbc91347cb]
+[2026-03-06T18:57:58Z] [INFO] [gRPC] 🔌 gRPC creating channel → ams.konstruct.cc:443 TLS=true
+[2026-03-06T18:57:58Z] [INFO] [MessageStream] ⏳ MessageStream opening to ams.konstruct.cc:443
+[2026-03-06T18:57:58Z] [DEBUG] [MessageStream] 📤 MessageStream subscribe sent: 2 conversation(s)
+[2026-03-06T18:57:58Z] [INFO] [ChatsViewModel] 📱 App going to background - pausing messaging
+[2026-03-06T18:57:58Z] [INFO] [MessageStream] 📡 MessageStream disconnected
+[2026-03-06T18:57:58Z] [INFO] [MessageStream] 📱 MessageStream paused
+[2026-03-06T18:57:58Z] [INFO] [MessageStream] 🔌 MessageStream disconnected from ams.konstruct.cc:443
+[2026-03-06T18:57:58Z] [INFO] [MessageStream] 🛑 MessageStream cancelled — connectLoop exiting
+[2026-03-06T18:57:58Z] [INFO] [MessageStream] 🏁 MessageStream connectLoop finished
+[2026-03-06T18:58:00Z] [INFO] [ChatsViewModel] 📱 App became active — force reconnecting stream
+[2026-03-06T18:58:00Z] [INFO] [MessageStream] 🔁 Force reconnecting stream
+[2026-03-06T18:58:00Z] [INFO] [MessageStream] 📡 Starting MessageStream connection (subscribed to 2 contacts)
+[2026-03-06T18:58:00Z] [INFO] [MessageStream] 🔄 MessageStream connectLoop started → ams.konstruct.cc:443
+[2026-03-06T18:58:00Z] [DEBUG] [MessageStream] 🔍 fetchMissedMessages cursor=1772823164
+[2026-03-06T18:58:00Z] [INFO] [gRPC] 🔌 gRPC creating channel → ams.konstruct.cc:443 TLS=true
+[2026-03-06T18:58:00Z] [DEBUG] [Keychain] ✅ Session token loaded from Keychain (length: 927, prefix: eyJ0eXAiOiJKV1QiLCJhbGciOiJSUz...)
+[2026-03-06T18:58:00Z] [DEBUG] [Keychain] ✅ Refresh token loaded from Keychain (length: 927)
+[2026-03-06T18:58:00Z] [DEBUG] [Keychain] ✅ User ID loaded from Keychain: 7ce762c4...
+[2026-03-06T18:58:00Z] [DEBUG] [CryptoManager] 🔑 CryptoManager: local user ID set to 7ce762c4-6ea0-4368-92ff-2a31c7726a32
+[2026-03-06T18:58:01Z] [DEBUG] [LocalNotifications] 📛 Badge cleared
+[2026-03-06T18:58:01Z] [INFO] [MessageStream] 📨 Fetched 1 missed message(s) after reconnect
+[2026-03-06T18:58:01Z] [DEBUG] [MessageRouter] ⏭️ Skipping already-saved message 8182f89e…
+[2026-03-06T18:58:01Z] [INFO] [MessageStream] 📡 openStream → ams.konstruct.cc:443 subscriptions=[direct:7ce762c4-6ea0-4368-92ff-2a31c7726a32:bfe057f6-1e07-42c8-b2f9-4b3a1ed5c8df, direct:7ce762c4-6ea0-4368-92ff-2a31c7726a32:ac97df69-38af-41c9-b6bb-c1cbc91347cb]
+[2026-03-06T18:58:01Z] [INFO] [gRPC] 🔌 gRPC creating channel → ams.konstruct.cc:443 TLS=true
+[2026-03-06T18:58:01Z] [INFO] [MessageStream] ⏳ MessageStream opening to ams.konstruct.cc:443
+[2026-03-06T18:58:01Z] [DEBUG] [MessageStream] 📤 MessageStream subscribe sent: 2 conversation(s)
+[2026-03-06T18:58:01Z] [INFO] [ConnectionStatus] 🟢 Stream connected → status: Connected
+[2026-03-06T18:58:01Z] [INFO] [MessageStream] ✅ MessageStream RPC accepted — stream connected
+[2026-03-06T18:58:01Z] [DEBUG] [ChatsViewModel] 📡 Stream state: token=present, status=Connected, push=true
+[2026-03-06T18:58:01Z] [INFO] [ChatsViewModel] 📱 Push active — stream connected
+[2026-03-06T18:58:01Z] [INFO] [MessageStream] 📡 MessageStream already connected
+[2026-03-06T18:58:01Z] [DEBUG] [MessageStream] 📩 MessageStream received message from=ac97df69-38af-41c9-b6bb-c1cbc91347cb id=8182f89e-0778-480e-a7a3-7ef215b0b0ee
+[2026-03-06T18:58:01Z] [DEBUG] [MessageRouter] ⏭️ Skipping already-saved message 8182f89e…
+[2026-03-06T18:58:01Z] [INFO] [ChatViewModel] ✅ Network connected - processing queued messages
+[2026-03-06T18:58:01Z] [INFO] [MessageRetryManager] 📤 Sending 0 queued messages
+[2026-03-06T18:58:01Z] [INFO] [ChatViewModel] ✅ Network connected - processing queued messages
+[2026-03-06T18:58:01Z] [INFO] [MessageRetryManager] 📤 Sending 0 queued messages
+[2026-03-06T18:58:01Z] [INFO] [ChatViewModel] ✅ Network connected - processing queued messages
+[2026-03-06T18:58:01Z] [INFO] [MessageRetryManager] 📤 Sending 0 queued messages
+[2026-03-06T18:58:02Z] [INFO] [gRPC] 🔌 gRPC creating channel → ams.konstruct.cc:443 TLS=true
+[2026-03-06T18:58:04Z] [INFO] [SettingsView] Generating contact link for userId: 7ce762c4-6ea0-4368-92ff-2a31c7726a32
+[2026-03-06T18:58:04Z] [DEBUG] [InviteGenerator] 🔐 Generated ephemeral keypair for invite
+[2026-03-06T18:58:04Z] [DEBUG] [InviteGenerator] 🔐 Using signing secret key for invite signing (32 bytes)
+[2026-03-06T18:58:04Z] [DEBUG] [InviteGenerator] 🔐 Canonical string for signing: 2|03a7fecb-94ba-479b-b09d-820d37bb6a94|7ce762c4-6ea0-4368-92ff-2a31c7726a32|23f20d32edc5239915feecc19a0b9423|konstruct.cc|NZOvdxfJ9nq4CmWXQx1+3B2imTEEFHF02XsGkzP+i3w=|1772823484
+[2026-03-06T18:58:04Z] [DEBUG] [InviteGenerator] 🔐 SIGN: Calling Rust signInviteData
+[2026-03-06T18:58:04Z] [DEBUG] [InviteGenerator]    Data bytes: 177
+[2026-03-06T18:58:04Z] [DEBUG] [InviteGenerator]    Signing secret key bytes: 32
+[2026-03-06T18:58:04Z] [DEBUG] [InviteGenerator] 🔐 SIGN: Expected verifying key from our secret: 2fzHh05Nt94nos/B2ZAaQvvsyqSG91deLkTBpA/gc+M=
+[2026-03-06T18:58:04Z] [DEBUG] [InviteGenerator] 🔐 SIGN: Rust returned signature bytes: 64
+[2026-03-06T18:58:04Z] [DEBUG] [InviteGenerator] 🔐 SIGN: Self-verify result: true
+[2026-03-06T18:58:04Z] [DEBUG] [InviteGenerator] 🔐 Generated signature: aU1mI7zJI7jL61ep0fyOHmicM1QApGOiYagqBUvLw9uj9tqiQwaPBPDCx/15MeSRTlTDA789uFzpcCgWtd1eAw==
+[2026-03-06T18:58:04Z] [INFO] [InviteGenerator] ✅ Generated invite: jti=03a7fecb..., expires in 5 minutes
+[2026-03-06T18:58:04Z] [INFO] [SettingsView] ✅ Generated deep link: https://konstruct.cc/add?invite=eyJzaWciOiJhVTFtST...
+[2026-03-06T18:58:04Z] [INFO] [SettingsView] Contact link copied: https://konstruct.cc/add?invite=eyJzaWciOiJhVTFtST...
+[2026-03-06T18:58:05Z] [INFO] [ChatsViewModel] 📱 App going to background - pausing messaging
+[2026-03-06T18:58:05Z] [INFO] [ConnectionStatus] 🟡 Stream disconnected → status: Connecting
+[2026-03-06T18:58:05Z] [INFO] [MessageStream] 📡 MessageStream disconnected
+[2026-03-06T18:58:05Z] [INFO] [MessageStream] 📱 MessageStream paused
+[2026-03-06T18:58:05Z] [DEBUG] [ChatsViewModel] 📡 Stream state: token=present, status=Connecting..., push=true
+[2026-03-06T18:58:05Z] [INFO] [ChatsViewModel] 📱 Push active — stream connected
+[2026-03-06T18:58:05Z] [DEBUG] [ChatsViewModel] 📡 Stream paused — skipping startMessageStream
+[2026-03-06T18:58:05Z] [INFO] [MessageStream] 🔌 MessageStream disconnected from ams.konstruct.cc:443
+[2026-03-06T18:58:05Z] [INFO] [MessageStream] 🛑 MessageStream cancelled — connectLoop exiting
+[2026-03-06T18:58:05Z] [INFO] [MessageStream] 🏁 MessageStream connectLoop finished
+[2026-03-06T18:59:26Z] [DEBUG] [TrafficProtection] ⚠️ Cover traffic disabled, skipping dummy (227 bytes)
+[2026-03-06T18:59:26Z] [INFO] [ChatsViewModel] 📱 App became active — force reconnecting stream
+[2026-03-06T18:59:26Z] [INFO] [MessageStream] 🔁 Force reconnecting stream
+[2026-03-06T18:59:26Z] [INFO] [MessageStream] 📡 Starting MessageStream connection (subscribed to 2 contacts)
+[2026-03-06T18:59:26Z] [INFO] [MessageStream] 🔄 MessageStream connectLoop started → ams.konstruct.cc:443
+[2026-03-06T18:59:26Z] [DEBUG] [MessageStream] 🔍 fetchMissedMessages cursor=1772823164
+[2026-03-06T18:59:26Z] [INFO] [gRPC] 🔌 gRPC creating channel → ams.konstruct.cc:443 TLS=true
+[2026-03-06T18:59:26Z] [DEBUG] [Keychain] ✅ Session token loaded from Keychain (length: 927, prefix: eyJ0eXAiOiJKV1QiLCJhbGciOiJSUz...)
+[2026-03-06T18:59:26Z] [DEBUG] [Keychain] ✅ Refresh token loaded from Keychain (length: 927)
+[2026-03-06T18:59:26Z] [DEBUG] [Keychain] ✅ User ID loaded from Keychain: 7ce762c4...
+[2026-03-06T18:59:26Z] [DEBUG] [CryptoManager] 🔑 CryptoManager: local user ID set to 7ce762c4-6ea0-4368-92ff-2a31c7726a32
+[2026-03-06T18:59:26Z] [DEBUG] [MessageStream] 📭 fetchMissedMessages: no pending messages
+[2026-03-06T18:59:26Z] [INFO] [MessageStream] 📡 openStream → ams.konstruct.cc:443 subscriptions=[direct:7ce762c4-6ea0-4368-92ff-2a31c7726a32:bfe057f6-1e07-42c8-b2f9-4b3a1ed5c8df, direct:7ce762c4-6ea0-4368-92ff-2a31c7726a32:ac97df69-38af-41c9-b6bb-c1cbc91347cb]
+[2026-03-06T18:59:26Z] [INFO] [gRPC] 🔌 gRPC creating channel → ams.konstruct.cc:443 TLS=true
+[2026-03-06T18:59:26Z] [INFO] [MessageStream] ⏳ MessageStream opening to ams.konstruct.cc:443
+[2026-03-06T18:59:26Z] [DEBUG] [MessageStream] 📤 MessageStream subscribe sent: 2 conversation(s)
+[2026-03-06T18:59:27Z] [INFO] [ConnectionStatus] 🟢 Stream connected → status: Connected
+[2026-03-06T18:59:27Z] [INFO] [MessageStream] ✅ MessageStream RPC accepted — stream connected
+[2026-03-06T18:59:27Z] [INFO] [ChatViewModel] ✅ Network connected - processing queued messages
+[2026-03-06T18:59:27Z] [INFO] [MessageRetryManager] 📤 Sending 0 queued messages
+[2026-03-06T18:59:27Z] [INFO] [ChatViewModel] ✅ Network connected - processing queued messages
+[2026-03-06T18:59:27Z] [INFO] [MessageRetryManager] 📤 Sending 0 queued messages
+[2026-03-06T18:59:27Z] [DEBUG] [ChatsViewModel] 📡 Stream state: token=present, status=Connected, push=true
+[2026-03-06T18:59:27Z] [INFO] [ChatsViewModel] 📱 Push active — stream connected
+[2026-03-06T18:59:27Z] [INFO] [MessageStream] 📡 MessageStream already connected
+[2026-03-06T18:59:27Z] [INFO] [ChatViewModel] ✅ Network connected - processing queued messages
+[2026-03-06T18:59:27Z] [INFO] [MessageRetryManager] 📤 Sending 0 queued messages
+[2026-03-06T18:59:27Z] [INFO] [EnergyMonitor] Network status changed: satisfied
+[2026-03-06T18:59:27Z] [INFO] [EnergyMonitor] Network status changed: satisfied
+[2026-03-06T18:59:27Z] [INFO] [EnergyMonitor] Network status changed: satisfied
+[2026-03-06T18:59:27Z] [DEBUG] [LocalNotifications] 📛 Badge cleared
+[2026-03-06T18:59:29Z] [INFO] [BackgroundFetch] 🚀 Starting quick message fetch
+[2026-03-06T18:59:29Z] [INFO] [gRPC] 🔌 gRPC creating channel → ams.konstruct.cc:443 TLS=true
+[2026-03-06T18:59:32Z] [INFO] [EnergyMonitor] Network status changed: satisfied
+[2026-03-06T18:59:32Z] [INFO] [EnergyMonitor] Network status changed: satisfied
+[2026-03-06T18:59:33Z] [INFO] [EnergyMonitor] Network status changed: satisfied
+[2026-03-06T18:59:33Z] [INFO] [EnergyMonitor] Network status changed: satisfied
+[2026-03-06T18:59:34Z] [INFO] [ChatsViewModel] 📱 App going to background - pausing messaging
+[2026-03-06T18:59:34Z] [INFO] [ConnectionStatus] 🟡 Stream disconnected → status: Connecting
+[2026-03-06T18:59:34Z] [INFO] [MessageStream] 📡 MessageStream disconnected
+[2026-03-06T18:59:34Z] [INFO] [MessageStream] 📱 MessageStream paused
+[2026-03-06T18:59:34Z] [DEBUG] [ChatsViewModel] 📡 Stream state: token=present, status=Connecting..., push=true
+[2026-03-06T18:59:34Z] [INFO] [ChatsViewModel] 📱 Push active — stream connected
+[2026-03-06T18:59:34Z] [DEBUG] [ChatsViewModel] 📡 Stream paused — skipping startMessageStream
+[2026-03-06T18:59:34Z] [INFO] [MessageStream] 🔌 MessageStream disconnected from ams.konstruct.cc:443
+[2026-03-06T18:59:34Z] [INFO] [MessageStream] 🛑 MessageStream cancelled — connectLoop exiting
+[2026-03-06T18:59:34Z] [INFO] [MessageStream] 🏁 MessageStream connectLoop finished
+[2026-03-06T18:59:35Z] [INFO] [ChatsViewModel] 📱 App became active — force reconnecting stream
+[2026-03-06T18:59:35Z] [INFO] [MessageStream] 🔁 Force reconnecting stream
+[2026-03-06T18:59:35Z] [INFO] [MessageStream] 📡 Starting MessageStream connection (subscribed to 2 contacts)
+[2026-03-06T18:59:35Z] [INFO] [MessageStream] 🔄 MessageStream connectLoop started → ams.konstruct.cc:443
+[2026-03-06T18:59:35Z] [DEBUG] [MessageStream] 🔍 fetchMissedMessages cursor=1772823164
+[2026-03-06T18:59:35Z] [INFO] [gRPC] 🔌 gRPC creating channel → ams.konstruct.cc:443 TLS=true
+[2026-03-06T18:59:35Z] [DEBUG] [Keychain] ✅ Session token loaded from Keychain (length: 927, prefix: eyJ0eXAiOiJKV1QiLCJhbGciOiJSUz...)
+[2026-03-06T18:59:35Z] [DEBUG] [Keychain] ✅ Refresh token loaded from Keychain (length: 927)
+[2026-03-06T18:59:35Z] [DEBUG] [Keychain] ✅ User ID loaded from Keychain: 7ce762c4...
+[2026-03-06T18:59:35Z] [DEBUG] [CryptoManager] 🔑 CryptoManager: local user ID set to 7ce762c4-6ea0-4368-92ff-2a31c7726a32
+[2026-03-06T18:59:35Z] [INFO] [ChatsViewModel] 📱 App going to background - pausing messaging
+[2026-03-06T18:59:35Z] [INFO] [MessageStream] 📡 MessageStream disconnected
+[2026-03-06T18:59:35Z] [INFO] [MessageStream] 📱 MessageStream paused
+[2026-03-06T18:59:36Z] [INFO] [MessageStream] 🏁 MessageStream connectLoop finished
+[2026-03-06T19:02:10Z] [DEBUG] [TrafficProtection] ⏭️ Skipping dummy (not ready or battery low)
+[2026-03-06T19:02:10Z] [INFO] [EnergyMonitor] Network status changed: satisfied
+[2026-03-06T19:02:10Z] [INFO] [ChatsViewModel] 📱 App became active — force reconnecting stream
+[2026-03-06T19:02:10Z] [INFO] [MessageStream] 🔁 Force reconnecting stream
+[2026-03-06T19:02:10Z] [INFO] [MessageStream] 📡 Starting MessageStream connection (subscribed to 2 contacts)
+[2026-03-06T19:02:10Z] [INFO] [MessageStream] 🔄 MessageStream connectLoop started → ams.konstruct.cc:443
+[2026-03-06T19:02:10Z] [DEBUG] [MessageStream] 🔍 fetchMissedMessages cursor=1772823164
+[2026-03-06T19:02:10Z] [INFO] [gRPC] 🔌 gRPC creating channel → ams.konstruct.cc:443 TLS=true
+[2026-03-06T19:02:10Z] [DEBUG] [Keychain] ✅ Session token loaded from Keychain (length: 927, prefix: eyJ0eXAiOiJKV1QiLCJhbGciOiJSUz...)
+[2026-03-06T19:02:10Z] [DEBUG] [Keychain] ✅ Refresh token loaded from Keychain (length: 927)
+[2026-03-06T19:02:10Z] [DEBUG] [Keychain] ✅ User ID loaded from Keychain: 7ce762c4...
+[2026-03-06T19:02:10Z] [DEBUG] [CryptoManager] 🔑 CryptoManager: local user ID set to 7ce762c4-6ea0-4368-92ff-2a31c7726a32
+[2026-03-06T19:02:10Z] [DEBUG] [MessageStream] 📭 fetchMissedMessages: no pending messages
+[2026-03-06T19:02:10Z] [INFO] [MessageStream] 📡 openStream → ams.konstruct.cc:443 subscriptions=[direct:7ce762c4-6ea0-4368-92ff-2a31c7726a32:bfe057f6-1e07-42c8-b2f9-4b3a1ed5c8df, direct:7ce762c4-6ea0-4368-92ff-2a31c7726a32:ac97df69-38af-41c9-b6bb-c1cbc91347cb]
+[2026-03-06T19:02:10Z] [INFO] [gRPC] 🔌 gRPC creating channel → ams.konstruct.cc:443 TLS=true
+[2026-03-06T19:02:10Z] [INFO] [MessageStream] ⏳ MessageStream opening to ams.konstruct.cc:443
+[2026-03-06T19:02:10Z] [DEBUG] [MessageStream] 📤 MessageStream subscribe sent: 2 conversation(s)
+[2026-03-06T19:02:11Z] [INFO] [ConnectionStatus] 🟢 Stream connected → status: Connected
+[2026-03-06T19:02:11Z] [INFO] [MessageStream] ✅ MessageStream RPC accepted — stream connected
+[2026-03-06T19:02:11Z] [INFO] [ChatViewModel] ✅ Network connected - processing queued messages
+[2026-03-06T19:02:11Z] [INFO] [MessageRetryManager] 📤 Sending 0 queued messages
+[2026-03-06T19:02:11Z] [DEBUG] [ChatsViewModel] 📡 Stream state: token=present, status=Connected, push=true
+[2026-03-06T19:02:11Z] [INFO] [ChatsViewModel] 📱 Push active — stream connected
+[2026-03-06T19:02:11Z] [INFO] [MessageStream] 📡 MessageStream already connected
+[2026-03-06T19:02:11Z] [INFO] [ChatViewModel] ✅ Network connected - processing queued messages
+[2026-03-06T19:02:11Z] [INFO] [MessageRetryManager] 📤 Sending 0 queued messages
+[2026-03-06T19:02:11Z] [INFO] [ChatViewModel] ✅ Network connected - processing queued messages
+[2026-03-06T19:02:11Z] [INFO] [MessageRetryManager] 📤 Sending 0 queued messages
+[2026-03-06T19:02:11Z] [INFO] [EnergyMonitor] Network status changed: satisfied
+[2026-03-06T19:02:12Z] [INFO] [BackgroundFetch] 🚀 Starting quick message fetch
+[2026-03-06T19:02:12Z] [INFO] [gRPC] 🔌 gRPC creating channel → ams.konstruct.cc:443 TLS=true
+[2026-03-06T19:02:24Z] [INFO] [ChatsViewModel] 📱 App going to background - pausing messaging
+[2026-03-06T19:02:24Z] [INFO] [ConnectionStatus] 🟡 Stream disconnected → status: Connecting
+[2026-03-06T19:02:24Z] [INFO] [MessageStream] 📡 MessageStream disconnected
+[2026-03-06T19:02:24Z] [INFO] [MessageStream] 📱 MessageStream paused
+[2026-03-06T19:02:24Z] [DEBUG] [ChatsViewModel] 📡 Stream state: token=present, status=Connecting..., push=true
+[2026-03-06T19:02:24Z] [INFO] [ChatsViewModel] 📱 Push active — stream connected
+[2026-03-06T19:02:24Z] [DEBUG] [ChatsViewModel] 📡 Stream paused — skipping startMessageStream
+[2026-03-06T19:02:24Z] [INFO] [MessageStream] 🔌 MessageStream disconnected from ams.konstruct.cc:443
+[2026-03-06T19:02:24Z] [INFO] [MessageStream] 🛑 MessageStream cancelled — connectLoop exiting
+[2026-03-06T19:02:24Z] [INFO] [MessageStream] 🏁 MessageStream connectLoop finished
+[2026-03-06T19:03:22Z] [INFO] [EnergyMonitor] Network status changed: satisfied
+[2026-03-06T19:03:22Z] [INFO] [DeepLink] ContentView: Received URL via onOpenURL: https://konstruct.cc/add?invite=eyJlcGhLZXkiOiJ6cEN5RUhJK3JwVEx1d2gzamoxZjJrRVhWbndxK1R0cTZieHc4Q29ydmc0PSIsImp0aSI6ImY5MmYzZGExLTQzMTYtNDAyYy04NmNiLWRmZmFjN2E4MWE0ZSIsInV1aWQiOiJhYzk3ZGY2OS0zOGFmLTQxYzktYjZiYi1jMWNiYzkxMzQ3Y2IiLCJ0cyI6MTc3MjgyMzc2Nywic2lnIjoiN2dLdzBQcmVnb3Y5XC84TGt1c3hRODVuXC9tVk8yVDhuUG1QQkNJeHBtOEJycFNyeG9PRms4XC9kR2tqbVIzOStoZWVQMEdVZ084bkN1NDJ4aWRCRXc5RHc9PSIsImRldmljZUlkIjoiOTAyMWNmYjViYjkzMjVhMTRkMTdmNWJmZjk1ZjdhMWIiLCJ2IjoyLCJzZXJ2ZXIiOiJrb25zdHJ1Y3QuY2MifQ==
+[2026-03-06T19:03:22Z] [DEBUG] [DeepLink] DeepLinkHandler: Attempting to handle URL: https://konstruct.cc/add?invite=eyJlcGhLZXkiOiJ6cEN5RUhJK3JwVEx1d2gzamoxZjJrRVhWbndxK1R0cTZieHc4Q29ydmc0PSIsImp0aSI6ImY5MmYzZGExLTQzMTYtNDAyYy04NmNiLWRmZmFjN2E4MWE0ZSIsInV1aWQiOiJhYzk3ZGY2OS0zOGFmLTQxYzktYjZiYi1jMWNiYzkxMzQ3Y2IiLCJ0cyI6MTc3MjgyMzc2Nywic2lnIjoiN2dLdzBQcmVnb3Y5XC84TGt1c3hRODVuXC9tVk8yVDhuUG1QQkNJeHBtOEJycFNyeG9PRms4XC9kR2tqbVIzOStoZWVQMEdVZ084bkN1NDJ4aWRCRXc5RHc9PSIsImRldmljZUlkIjoiOTAyMWNmYjViYjkzMjVhMTRkMTdmNWJmZjk1ZjdhMWIiLCJ2IjoyLCJzZXJ2ZXIiOiJrb25zdHJ1Y3QuY2MifQ==
+[2026-03-06T19:03:22Z] [INFO] [DeepLink] ContentView: Deep link handling result: true
+[2026-03-06T19:03:22Z] [INFO] [LinkParser] 📥 Parsing Dynamic Invite URL
+[2026-03-06T19:03:22Z] [DEBUG] [InviteVerifier] 📥 Decoded invite: jti=f92f3da1..., from=ac97df69...
+[2026-03-06T19:03:22Z] [INFO] [gRPC] 🔌 gRPC creating channel → ams.konstruct.cc:443 TLS=true
+[2026-03-06T19:03:22Z] [INFO] [ChatsViewModel] 📱 App became active — force reconnecting stream
+[2026-03-06T19:03:22Z] [INFO] [MessageStream] 🔁 Force reconnecting stream
+[2026-03-06T19:03:22Z] [INFO] [MessageStream] 📡 Starting MessageStream connection (subscribed to 2 contacts)
+[2026-03-06T19:03:22Z] [INFO] [MessageStream] 🔄 MessageStream connectLoop started → ams.konstruct.cc:443
+[2026-03-06T19:03:22Z] [DEBUG] [MessageStream] 🔍 fetchMissedMessages cursor=1772823164
+[2026-03-06T19:03:22Z] [INFO] [gRPC] 🔌 gRPC creating channel → ams.konstruct.cc:443 TLS=true
+[2026-03-06T19:03:22Z] [DEBUG] [Keychain] ✅ Session token loaded from Keychain (length: 927, prefix: eyJ0eXAiOiJKV1QiLCJhbGciOiJSUz...)
+[2026-03-06T19:03:22Z] [DEBUG] [Keychain] ✅ Refresh token loaded from Keychain (length: 927)
+[2026-03-06T19:03:22Z] [DEBUG] [Keychain] ✅ User ID loaded from Keychain: 7ce762c4...
+[2026-03-06T19:03:22Z] [DEBUG] [CryptoManager] 🔑 CryptoManager: local user ID set to 7ce762c4-6ea0-4368-92ff-2a31c7726a32
+[2026-03-06T19:03:27Z] [INFO] [EnergyMonitor] Network status changed: satisfied
+[2026-03-06T19:03:32Z] [ERROR] [LinkParser] ❌ AcceptInvite failed: unavailable: "Could not establish a connection to [ipv4]152.42.130.140:443." (cause: "Connect timeout (10 s)")
+[2026-03-06T19:03:32Z] [INFO] [LinkParser] ⚠️ Dynamic invite parse failed, trying legacy parser: Verification failed: Не удалось завершить операцию. (GRPCCore.RPCError, ошибка 1)
+[2026-03-06T19:03:32Z] [ERROR] [DeepLink] DeepLinkHandler: Failed to parse deep link https://konstruct.cc/add?invite=eyJlcGhLZXkiOiJ6cEN5RUhJK3JwVEx1d2gzamoxZjJrRVhWbndxK1R0cTZieHc4Q29ydmc0PSIsImp0aSI6ImY5MmYzZGExLTQzMTYtNDAyYy04NmNiLWRmZmFjN2E4MWE0ZSIsInV1aWQiOiJhYzk3ZGY2OS0zOGFmLTQxYzktYjZiYi1jMWNiYzkxMzQ3Y2IiLCJ0cyI6MTc3MjgyMzc2Nywic2lnIjoiN2dLdzBQcmVnb3Y5XC84TGt1c3hRODVuXC9tVk8yVDhuUG1QQkNJeHBtOEJycFNyeG9PRms4XC9kR2tqbVIzOStoZWVQMEdVZ084bkN1NDJ4aWRCRXc5RHc9PSIsImRldmljZUlkIjoiOTAyMWNmYjViYjkzMjVhMTRkMTdmNWJmZjk1ZjdhMWIiLCJ2IjoyLCJzZXJ2ZXIiOiJrb25zdHJ1Y3QuY2MifQ==: Verification failed: Не удалось завершить операцию. (GRPCCore.RPCError, ошибка 1)
+[2026-03-06T19:03:32Z] [ERROR] [MessageStream] ⚠️ fetchMissedMessages RPC error: code=unavailable message="Could not establish a connection to [ipv4]152.42.130.140:443."
+[2026-03-06T19:03:32Z] [INFO] [MessageStream] 📡 openStream → ams.konstruct.cc:443 subscriptions=[direct:7ce762c4-6ea0-4368-92ff-2a31c7726a32:bfe057f6-1e07-42c8-b2f9-4b3a1ed5c8df, direct:7ce762c4-6ea0-4368-92ff-2a31c7726a32:ac97df69-38af-41c9-b6bb-c1cbc91347cb]
+[2026-03-06T19:03:32Z] [INFO] [gRPC] 🔌 gRPC creating channel → ams.konstruct.cc:443 TLS=true
+[2026-03-06T19:03:32Z] [INFO] [MessageStream] ⏳ MessageStream opening to ams.konstruct.cc:443
+[2026-03-06T19:03:32Z] [DEBUG] [MessageStream] 📤 MessageStream subscribe sent: 2 conversation(s)
+[2026-03-06T19:03:41Z] [INFO] [ConnectionStatus] 🟢 Stream connected → status: Connected
+[2026-03-06T19:03:41Z] [INFO] [MessageStream] ✅ MessageStream RPC accepted — stream connected
+[2026-03-06T19:03:41Z] [INFO] [MessageStream] ⚠️ Failed to decode encrypted_payload for message 57468a23-0942-4d42-842d-1231dc47165a
+[2026-03-06T19:03:41Z] [DEBUG] [ChatsViewModel] 📡 Stream state: token=present, status=Connected, push=true
+[2026-03-06T19:03:41Z] [INFO] [ChatsViewModel] 📱 Push active — stream connected
+[2026-03-06T19:03:41Z] [INFO] [MessageStream] 📡 MessageStream already connected
+[2026-03-06T19:03:41Z] [INFO] [ChatViewModel] ✅ Network connected - processing queued messages
+[2026-03-06T19:03:41Z] [INFO] [MessageRetryManager] 📤 Sending 0 queued messages
+[2026-03-06T19:03:41Z] [INFO] [ChatViewModel] ✅ Network connected - processing queued messages
+[2026-03-06T19:03:41Z] [INFO] [MessageRetryManager] 📤 Sending 0 queued messages
+[2026-03-06T19:03:41Z] [INFO] [ChatViewModel] ✅ Network connected - processing queued messages
+[2026-03-06T19:03:41Z] [INFO] [MessageRetryManager] 📤 Sending 0 queued messages
+[2026-03-06T19:03:41Z] [INFO] [EnergyMonitor] Network status changed: satisfied
+[2026-03-06T19:03:44Z] [INFO] [ChatsViewModel] 📱 App going to background - pausing messaging
+[2026-03-06T19:03:44Z] [INFO] [ConnectionStatus] 🟡 Stream disconnected → status: Connecting
+[2026-03-06T19:03:44Z] [INFO] [MessageStream] 📡 MessageStream disconnected
+[2026-03-06T19:03:44Z] [INFO] [MessageStream] 📱 MessageStream paused
+[2026-03-06T19:03:44Z] [DEBUG] [ChatsViewModel] 📡 Stream state: token=present, status=Connecting..., push=true
+[2026-03-06T19:03:44Z] [INFO] [ChatsViewModel] 📱 Push active — stream connected
+[2026-03-06T19:03:44Z] [DEBUG] [ChatsViewModel] 📡 Stream paused — skipping startMessageStream
+[2026-03-06T19:03:44Z] [INFO] [MessageStream] 🔌 MessageStream disconnected from ams.konstruct.cc:443
+[2026-03-06T19:03:44Z] [INFO] [MessageStream] 🛑 MessageStream cancelled — connectLoop exiting
+[2026-03-06T19:03:44Z] [INFO] [MessageStream] 🏁 MessageStream connectLoop finished
+[2026-03-06T19:03:45Z] [INFO] [DeepLink] ContentView: Received URL via onOpenURL: https://konstruct.cc/add?invite=eyJlcGhLZXkiOiJ6cEN5RUhJK3JwVEx1d2gzamoxZjJrRVhWbndxK1R0cTZieHc4Q29ydmc0PSIsImp0aSI6ImY5MmYzZGExLTQzMTYtNDAyYy04NmNiLWRmZmFjN2E4MWE0ZSIsInV1aWQiOiJhYzk3ZGY2OS0zOGFmLTQxYzktYjZiYi1jMWNiYzkxMzQ3Y2IiLCJ0cyI6MTc3MjgyMzc2Nywic2lnIjoiN2dLdzBQcmVnb3Y5XC84TGt1c3hRODVuXC9tVk8yVDhuUG1QQkNJeHBtOEJycFNyeG9PRms4XC9kR2tqbVIzOStoZWVQMEdVZ084bkN1NDJ4aWRCRXc5RHc9PSIsImRldmljZUlkIjoiOTAyMWNmYjViYjkzMjVhMTRkMTdmNWJmZjk1ZjdhMWIiLCJ2IjoyLCJzZXJ2ZXIiOiJrb25zdHJ1Y3QuY2MifQ==
+[2026-03-06T19:03:45Z] [DEBUG] [DeepLink] DeepLinkHandler: Attempting to handle URL: https://konstruct.cc/add?invite=eyJlcGhLZXkiOiJ6cEN5RUhJK3JwVEx1d2gzamoxZjJrRVhWbndxK1R0cTZieHc4Q29ydmc0PSIsImp0aSI6ImY5MmYzZGExLTQzMTYtNDAyYy04NmNiLWRmZmFjN2E4MWE0ZSIsInV1aWQiOiJhYzk3ZGY2OS0zOGFmLTQxYzktYjZiYi1jMWNiYzkxMzQ3Y2IiLCJ0cyI6MTc3MjgyMzc2Nywic2lnIjoiN2dLdzBQcmVnb3Y5XC84TGt1c3hRODVuXC9tVk8yVDhuUG1QQkNJeHBtOEJycFNyeG9PRms4XC9kR2tqbVIzOStoZWVQMEdVZ084bkN1NDJ4aWRCRXc5RHc9PSIsImRldmljZUlkIjoiOTAyMWNmYjViYjkzMjVhMTRkMTdmNWJmZjk1ZjdhMWIiLCJ2IjoyLCJzZXJ2ZXIiOiJrb25zdHJ1Y3QuY2MifQ==
+[2026-03-06T19:03:45Z] [INFO] [DeepLink] ContentView: Deep link handling result: true
+[2026-03-06T19:03:45Z] [INFO] [LinkParser] 📥 Parsing Dynamic Invite URL
+[2026-03-06T19:03:45Z] [DEBUG] [InviteVerifier] 📥 Decoded invite: jti=f92f3da1..., from=ac97df69...
+[2026-03-06T19:03:45Z] [INFO] [gRPC] 🔌 gRPC creating channel → ams.konstruct.cc:443 TLS=true
+[2026-03-06T19:03:46Z] [INFO] [ChatsViewModel] 📱 App became active — force reconnecting stream
+[2026-03-06T19:03:46Z] [INFO] [MessageStream] 🔁 Force reconnecting stream
+[2026-03-06T19:03:46Z] [INFO] [MessageStream] 📡 Starting MessageStream connection (subscribed to 2 contacts)
+[2026-03-06T19:03:46Z] [INFO] [MessageStream] 🔄 MessageStream connectLoop started → ams.konstruct.cc:443
+[2026-03-06T19:03:46Z] [DEBUG] [MessageStream] 🔍 fetchMissedMessages cursor=1772823164
+[2026-03-06T19:03:46Z] [INFO] [gRPC] 🔌 gRPC creating channel → ams.konstruct.cc:443 TLS=true
+[2026-03-06T19:03:46Z] [DEBUG] [Keychain] ✅ Session token loaded from Keychain (length: 927, prefix: eyJ0eXAiOiJKV1QiLCJhbGciOiJSUz...)
+[2026-03-06T19:03:46Z] [DEBUG] [Keychain] ✅ Refresh token loaded from Keychain (length: 927)
+[2026-03-06T19:03:46Z] [DEBUG] [Keychain] ✅ User ID loaded from Keychain: 7ce762c4...
+[2026-03-06T19:03:46Z] [DEBUG] [CryptoManager] 🔑 CryptoManager: local user ID set to 7ce762c4-6ea0-4368-92ff-2a31c7726a32
+[2026-03-06T19:03:51Z] [INFO] [ChatsViewModel] 📱 App going to background - pausing messaging
+[2026-03-06T19:03:51Z] [INFO] [MessageStream] 📡 MessageStream disconnected
+[2026-03-06T19:03:51Z] [INFO] [MessageStream] 📱 MessageStream paused
+[2026-03-06T19:03:51Z] [ERROR] [MessageStream] ⚠️ fetchMissedMessages RPC error: code=unknown message="The transport threw an unexpected error."
+[2026-03-06T19:03:51Z] [INFO] [MessageStream] 🏁 MessageStream connectLoop finished
+[2026-03-06T19:05:40Z] [DEBUG] [TrafficProtection] ⚠️ Cover traffic disabled, skipping dummy (227 bytes)
+[2026-03-06T19:05:40Z] [INFO] [EnergyMonitor] Network status changed: satisfied
+[2026-03-06T19:05:40Z] [INFO] [ChatsViewModel] 📱 App became active — force reconnecting stream
+[2026-03-06T19:05:40Z] [INFO] [MessageStream] 🔁 Force reconnecting stream
+[2026-03-06T19:05:40Z] [INFO] [MessageStream] 📡 Starting MessageStream connection (subscribed to 2 contacts)
+[2026-03-06T19:05:40Z] [INFO] [MessageStream] 🔄 MessageStream connectLoop started → ams.konstruct.cc:443
+[2026-03-06T19:05:40Z] [DEBUG] [MessageStream] 🔍 fetchMissedMessages cursor=1772823164
+[2026-03-06T19:05:40Z] [INFO] [gRPC] 🔌 gRPC creating channel → ams.konstruct.cc:443 TLS=true
+[2026-03-06T19:05:40Z] [DEBUG] [Keychain] ✅ Session token loaded from Keychain (length: 927, prefix: eyJ0eXAiOiJKV1QiLCJhbGciOiJSUz...)
+[2026-03-06T19:05:40Z] [DEBUG] [Keychain] ✅ Refresh token loaded from Keychain (length: 927)
+[2026-03-06T19:05:40Z] [DEBUG] [Keychain] ✅ User ID loaded from Keychain: 7ce762c4...
+[2026-03-06T19:05:40Z] [DEBUG] [CryptoManager] 🔑 CryptoManager: local user ID set to 7ce762c4-6ea0-4368-92ff-2a31c7726a32
+[2026-03-06T19:05:40Z] [ERROR] [LinkParser] ❌ AcceptInvite failed: unavailable: "Stream unexpectedly closed."
+[2026-03-06T19:05:40Z] [INFO] [LinkParser] ⚠️ Dynamic invite parse failed, trying legacy parser: Verification failed: Не удалось завершить операцию. (GRPCCore.RPCError, ошибка 1)
+[2026-03-06T19:05:40Z] [ERROR] [DeepLink] DeepLinkHandler: Failed to parse deep link https://konstruct.cc/add?invite=eyJlcGhLZXkiOiJ6cEN5RUhJK3JwVEx1d2gzamoxZjJrRVhWbndxK1R0cTZieHc4Q29ydmc0PSIsImp0aSI6ImY5MmYzZGExLTQzMTYtNDAyYy04NmNiLWRmZmFjN2E4MWE0ZSIsInV1aWQiOiJhYzk3ZGY2OS0zOGFmLTQxYzktYjZiYi1jMWNiYzkxMzQ3Y2IiLCJ0cyI6MTc3MjgyMzc2Nywic2lnIjoiN2dLdzBQcmVnb3Y5XC84TGt1c3hRODVuXC9tVk8yVDhuUG1QQkNJeHBtOEJycFNyeG9PRms4XC9kR2tqbVIzOStoZWVQMEdVZ084bkN1NDJ4aWRCRXc5RHc9PSIsImRldmljZUlkIjoiOTAyMWNmYjViYjkzMjVhMTRkMTdmNWJmZjk1ZjdhMWIiLCJ2IjoyLCJzZXJ2ZXIiOiJrb25zdHJ1Y3QuY2MifQ==: Verification failed: Не удалось завершить операцию. (GRPCCore.RPCError, ошибка 1)
+[2026-03-06T19:05:42Z] [INFO] [BackgroundFetch] 🚀 Starting quick message fetch
+[2026-03-06T19:05:42Z] [INFO] [gRPC] 🔌 gRPC creating channel → ams.konstruct.cc:443 TLS=true
+[2026-03-06T19:05:42Z] [INFO] [MessagingServiceClient] ⚠️ Failed to decode encrypted_payload for message f40a88af-a4d1-4046-a701-cdf063df97e0
+[2026-03-06T19:05:42Z] [DEBUG] [MessageStream] 📭 fetchMissedMessages: no pending messages
+[2026-03-06T19:05:42Z] [INFO] [MessageStream] 📡 openStream → ams.konstruct.cc:443 subscriptions=[direct:7ce762c4-6ea0-4368-92ff-2a31c7726a32:bfe057f6-1e07-42c8-b2f9-4b3a1ed5c8df, direct:7ce762c4-6ea0-4368-92ff-2a31c7726a32:ac97df69-38af-41c9-b6bb-c1cbc91347cb]
+[2026-03-06T19:05:42Z] [INFO] [gRPC] 🔌 gRPC creating channel → ams.konstruct.cc:443 TLS=true
+[2026-03-06T19:05:42Z] [INFO] [MessageStream] ⏳ MessageStream opening to ams.konstruct.cc:443
+[2026-03-06T19:05:42Z] [DEBUG] [MessageStream] 📤 MessageStream subscribe sent: 2 conversation(s)
+[2026-03-06T19:05:43Z] [INFO] [ChatsViewModel] 📱 App going to background - pausing messaging
+[2026-03-06T19:05:43Z] [INFO] [MessageStream] 📡 MessageStream disconnected
+[2026-03-06T19:05:43Z] [INFO] [MessageStream] 📱 MessageStream paused
+[2026-03-06T19:05:43Z] [INFO] [MessageStream] 🔌 MessageStream disconnected from ams.konstruct.cc:443
+[2026-03-06T19:05:43Z] [INFO] [MessageStream] 🛑 MessageStream cancelled — connectLoop exiting
+[2026-03-06T19:05:43Z] [INFO] [MessageStream] 🏁 MessageStream connectLoop finished
+[2026-03-06T19:05:45Z] [INFO] [EnergyMonitor] Network status changed: satisfied
+[2026-03-06T19:07:24Z] [DEBUG] [TrafficProtection] ⏭️ Skipping dummy (not ready or battery low)
+[2026-03-06T19:07:24Z] [ERROR] [BackgroundFetch] ❌ Failed to fetch offline messages: Не удалось завершить операцию. (GRPCCore.RPCError, ошибка 1)
+[2026-03-06T19:07:24Z] [INFO] [EnergyMonitor] Network status changed: satisfied
+[2026-03-06T19:07:24Z] [INFO] [ChatsViewModel] 📱 App became active — force reconnecting stream
+[2026-03-06T19:07:24Z] [INFO] [MessageStream] 🔁 Force reconnecting stream
+[2026-03-06T19:07:24Z] [INFO] [MessageStream] 📡 Starting MessageStream connection (subscribed to 2 contacts)
+[2026-03-06T19:07:24Z] [INFO] [MessageStream] 🔄 MessageStream connectLoop started → ams.konstruct.cc:443
+[2026-03-06T19:07:24Z] [DEBUG] [MessageStream] 🔍 fetchMissedMessages cursor=1772823913
+[2026-03-06T19:07:24Z] [INFO] [gRPC] 🔌 gRPC creating channel → ams.konstruct.cc:443 TLS=true
+[2026-03-06T19:07:24Z] [DEBUG] [Keychain] ✅ Session token loaded from Keychain (length: 927, prefix: eyJ0eXAiOiJKV1QiLCJhbGciOiJSUz...)
+[2026-03-06T19:07:24Z] [DEBUG] [Keychain] ✅ Refresh token loaded from Keychain (length: 927)
+[2026-03-06T19:07:24Z] [DEBUG] [Keychain] ✅ User ID loaded from Keychain: 7ce762c4...
+[2026-03-06T19:07:24Z] [DEBUG] [CryptoManager] 🔑 CryptoManager: local user ID set to 7ce762c4-6ea0-4368-92ff-2a31c7726a32
+[2026-03-06T19:07:25Z] [INFO] [MessagingServiceClient] ⚠️ Failed to decode encrypted_payload for message f40a88af-a4d1-4046-a701-cdf063df97e0
+[2026-03-06T19:07:25Z] [DEBUG] [MessageStream] 📭 fetchMissedMessages: no pending messages
+[2026-03-06T19:07:25Z] [INFO] [MessageStream] 📡 openStream → ams.konstruct.cc:443 subscriptions=[direct:7ce762c4-6ea0-4368-92ff-2a31c7726a32:bfe057f6-1e07-42c8-b2f9-4b3a1ed5c8df, direct:7ce762c4-6ea0-4368-92ff-2a31c7726a32:ac97df69-38af-41c9-b6bb-c1cbc91347cb]
+[2026-03-06T19:07:25Z] [INFO] [gRPC] 🔌 gRPC creating channel → ams.konstruct.cc:443 TLS=true
+[2026-03-06T19:07:25Z] [INFO] [MessageStream] ⏳ MessageStream opening to ams.konstruct.cc:443
+[2026-03-06T19:07:25Z] [DEBUG] [MessageStream] 📤 MessageStream subscribe sent: 2 conversation(s)
+[2026-03-06T19:07:25Z] [INFO] [ConnectionStatus] 🟢 Stream connected → status: Connected
+[2026-03-06T19:07:25Z] [INFO] [MessageStream] ✅ MessageStream RPC accepted — stream connected
+[2026-03-06T19:07:25Z] [INFO] [MessageStream] ⚠️ Failed to decode encrypted_payload for message f40a88af-a4d1-4046-a701-cdf063df97e0
+[2026-03-06T19:07:25Z] [DEBUG] [ChatsViewModel] 📡 Stream state: token=present, status=Connected, push=true
+[2026-03-06T19:07:25Z] [INFO] [ChatsViewModel] 📱 Push active — stream connected
+[2026-03-06T19:07:25Z] [INFO] [MessageStream] 📡 MessageStream already connected
+[2026-03-06T19:07:25Z] [INFO] [ChatViewModel] ✅ Network connected - processing queued messages
+[2026-03-06T19:07:25Z] [INFO] [MessageRetryManager] 📤 Sending 0 queued messages
+[2026-03-06T19:07:25Z] [INFO] [ChatViewModel] ✅ Network connected - processing queued messages
+[2026-03-06T19:07:25Z] [INFO] [MessageRetryManager] 📤 Sending 0 queued messages
+[2026-03-06T19:07:25Z] [INFO] [ChatViewModel] ✅ Network connected - processing queued messages
+[2026-03-06T19:07:25Z] [INFO] [MessageRetryManager] 📤 Sending 0 queued messages
+[2026-03-06T19:07:28Z] [INFO] [EnergyMonitor] Network status changed: satisfied
+
+

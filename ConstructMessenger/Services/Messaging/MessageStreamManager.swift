@@ -184,14 +184,16 @@ final class MessageStreamManager {
     /// Send a delivery receipt for one or more messages via the live stream.
     /// - Parameters:
     ///   - messageIds: IDs of messages being acknowledged.
+    ///   - recipientUserId: The original message sender — server uses this to route the receipt back without a DB lookup.
     ///   - status: `.delivered` after successful decrypt, `.failed` on unrecoverable decrypt error.
-    func sendReceipt(_ messageIds: [String], status: Shared_Proto_Signaling_V1_ReceiptStatus) {
+    func sendReceipt(_ messageIds: [String], to recipientUserId: String = "", status: Shared_Proto_Signaling_V1_ReceiptStatus) {
         guard !messageIds.isEmpty else { return }
         var direct = Shared_Proto_Signaling_V1_DirectReceipt()
         direct.messageIds = messageIds
         direct.status = status
         direct.timestamp = Int64(Date().timeIntervalSince1970)
         direct.senderDeviceID = KeychainManager.shared.loadDeviceID() ?? ""
+        direct.recipientUserID = recipientUserId
 
         var delivery = Shared_Proto_Signaling_V1_DeliveryReceipt()
         delivery.direct = direct
@@ -199,7 +201,7 @@ final class MessageStreamManager {
         var req = Shared_Proto_Services_V1_MessageStreamRequest()
         req.receipt = delivery
         outboundContinuation?.yield(req)
-        Log.debug("📨 Receipt sent: \(status) for \(messageIds.count) message(s)", category: "MessageStream")
+        Log.info("📨 Receipt sent: \(status) for \(messageIds.count) msg(s) → recipient=\(recipientUserId.prefix(8))…", category: "MessageStream")
     }
 
     // MARK: - Private: Connection Loop

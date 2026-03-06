@@ -43,8 +43,8 @@ class MessageRouter {
     var onSessionHealNeeded: ((String, ChatMessage) -> Void)?
 
     /// Called when a receipt should be sent via the stream.
-    /// Provides message IDs and receipt status (.delivered or .failed).
-    var onReceiptNeeded: (([String], Shared_Proto_Signaling_V1_ReceiptStatus) -> Void)?
+    /// Provides message IDs, the original sender's user ID (for server routing), and receipt status.
+    var onReceiptNeeded: (([String], String, Shared_Proto_Signaling_V1_ReceiptStatus) -> Void)?
 
     private let chunkReassembler = ChunkedMessageReassembler()
     
@@ -90,7 +90,7 @@ class MessageRouter {
             Log.debug("⏭️ Skipping already-processed message \(message.id.prefix(8))… (ACK store)", category: "MessageRouter")
             // Re-send receipt so the server advances past this message in the pending queue.
             // Without this the cursor stays stuck and the same message is fetched on every reconnect.
-            onReceiptNeeded?([message.id], .delivered)
+            onReceiptNeeded?([message.id], otherUserId, .delivered)
             return
         }
 
@@ -180,7 +180,7 @@ class MessageRouter {
         saveMessage(for: chat, with: message, decryptedContent: decryptedContent, in: context)
 
         // 6. Acknowledge delivery to sender via stream
-        onReceiptNeeded?([message.id], .delivered)
+        onReceiptNeeded?([message.id], otherUserId, .delivered)
 
         // 7. Update chat metadata
         chat.lastMessageText = Chat.formatPreviewText(decryptedContent)
@@ -271,7 +271,7 @@ class MessageRouter {
             Log.debug("⏭️ Skipping duplicate queued message \(message.id.prefix(8))...", category: "MessageRouter")
             // ACK so server removes it from the pending queue — session init is already
             // in flight for this user and will handle the message from the queue.
-            onReceiptNeeded?([message.id], .delivered)
+            onReceiptNeeded?([message.id], userId, .delivered)
             return
         }
 
@@ -284,7 +284,7 @@ class MessageRouter {
             // Without this the same message is re-fetched on every reconnect, inserting a
             // duplicate system message each time.
             PersistentACKStore.shared.markProcessed(message.id, senderId: userId, in: context)
-            onReceiptNeeded?([message.id], .failed)
+            onReceiptNeeded?([message.id], userId, .failed)
             addSystemMessage(
                 "Encrypted session out of sync. Asking contact to restart...",
                 toUserId: userId,
@@ -347,7 +347,7 @@ class MessageRouter {
                 // Send FAILED receipt: server automatically relays SESSION_RESET to sender (server-side item 12).
                 // Also send explicit END_SESSION message for defense-in-depth (sender handles both idempotently).
                 Log.info("🔄 SESSION_STATE[heal_impossible]: messageNumber=\(message.messageNumber) — ratchet diverged, requesting END_SESSION", category: "SessionInit")
-                onReceiptNeeded?([message.id], .failed)
+                onReceiptNeeded?([message.id], userId, .failed)
                 pendingMessages.removeValue(forKey: userId)
                 SessionHealingService.shared.clearQueue(for: userId, in: context)
                 onEndSessionNeeded?(userId)

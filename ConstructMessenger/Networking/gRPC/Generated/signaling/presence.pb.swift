@@ -374,6 +374,10 @@ public struct Shared_Proto_Signaling_V1_DirectReceipt: Sendable {
   /// Sender device ID (who sent this receipt)
   public var senderDeviceID: String = String()
 
+  /// Recipient user ID — the original message sender who should receive this receipt.
+  /// Populated by the client to allow server-side routing without a DB lookup.
+  public var recipientUserID: String = String()
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -714,7 +718,7 @@ extension Shared_Proto_Signaling_V1_DeliveryReceipt: SwiftProtobuf.Message, Swif
 
 extension Shared_Proto_Signaling_V1_DirectReceipt: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".DirectReceipt"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}message_ids\0\u{1}status\0\u{1}timestamp\0\u{3}sender_device_id\0\u{c}\u{5}\u{6}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}message_ids\0\u{1}status\0\u{1}timestamp\0\u{3}sender_device_id\0\u{4}\u{7}recipient_user_id\0\u{c}\u{5}\u{6}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -726,6 +730,7 @@ extension Shared_Proto_Signaling_V1_DirectReceipt: SwiftProtobuf.Message, SwiftP
       case 2: try { try decoder.decodeSingularEnumField(value: &self.status) }()
       case 3: try { try decoder.decodeSingularInt64Field(value: &self.timestamp) }()
       case 4: try { try decoder.decodeSingularStringField(value: &self.senderDeviceID) }()
+      case 11: try { try decoder.decodeSingularStringField(value: &self.recipientUserID) }()
       default: break
       }
     }
@@ -744,6 +749,9 @@ extension Shared_Proto_Signaling_V1_DirectReceipt: SwiftProtobuf.Message, SwiftP
     if !self.senderDeviceID.isEmpty {
       try visitor.visitSingularStringField(value: self.senderDeviceID, fieldNumber: 4)
     }
+    if !self.recipientUserID.isEmpty {
+      try visitor.visitSingularStringField(value: self.recipientUserID, fieldNumber: 11)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -752,6 +760,7 @@ extension Shared_Proto_Signaling_V1_DirectReceipt: SwiftProtobuf.Message, SwiftP
     if lhs.status != rhs.status {return false}
     if lhs.timestamp != rhs.timestamp {return false}
     if lhs.senderDeviceID != rhs.senderDeviceID {return false}
+    if lhs.recipientUserID != rhs.recipientUserID {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
