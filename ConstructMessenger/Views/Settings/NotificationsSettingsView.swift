@@ -128,6 +128,20 @@ struct NotificationsSettingsView: View {
 
                 // MARK: - Push Notifications
                 Section {
+                    #if targetEnvironment(macCatalyst)
+                    HStack(spacing: 12) {
+                        Image(systemName: "desktopcomputer")
+                            .foregroundColor(.secondary)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(NSLocalizedString("push_not_available_mac", comment: ""))
+                                .font(.subheadline)
+                            Text(NSLocalizedString("push_not_available_mac_hint", comment: ""))
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                    #else
                     Toggle(isOn: $pushNotificationsEnabled) {
                         Label {
                             VStack(alignment: .leading, spacing: 4) {
@@ -160,6 +174,7 @@ struct NotificationsSettingsView: View {
                         }
                     }
                     .padding(.vertical, 4)
+                    #endif
                 } header: {
                     Text("push_notifications")
                 }

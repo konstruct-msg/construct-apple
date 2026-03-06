@@ -91,6 +91,13 @@ class PushNotificationManager: NSObject {
     /// - Returns: Whether permission was granted
     @discardableResult
     func requestPermission() async -> Bool {
+        #if targetEnvironment(macCatalyst)
+        // Remote push notifications are not supported for Mac Catalyst builds
+        // signed without a macOS push provisioning profile. The gRPC stream
+        // provides real-time delivery on desktop — APNs wake-up is unnecessary.
+        Log.info("📱 Push notifications not available on macOS Catalyst (stream-based delivery)", category: "Push")
+        return false
+        #else
         Log.info("📱 Requesting push notification permission", category: "Push")
         
         do {
@@ -102,7 +109,6 @@ class PushNotificationManager: NSObject {
             
             if granted {
                 Log.info("✅ Push notification permission granted", category: "Push")
-                // Register for remote notifications on main thread
                 await MainActor.run {
                     UIApplication.shared.registerForRemoteNotifications()
                 }
@@ -116,28 +122,31 @@ class PushNotificationManager: NSObject {
             Log.error("❌ Failed to request push notification permission: \(error)", category: "Push")
             return false
         }
+        #endif
     }
     
     /// Check current authorization status
     func checkAuthorizationStatus() async {
+        #if targetEnvironment(macCatalyst)
+        // macOS Catalyst: push not available, keep status as .notDetermined
+        isPushEnabled = false
+        return
+        #else
         let settings = await notificationCenter.notificationSettings()
         authorizationStatus = settings.authorizationStatus
         
-        // Update isPushEnabled based on authorization and device token
         isPushEnabled = (authorizationStatus == .authorized || authorizationStatus == .provisional)
                         && deviceToken != nil
         
         Log.debug("📱 Push authorization status: \(authorizationStatus.description)", category: "Push")
 
-        // If already authorized (e.g., after reinstall or app update), ensure APNs registration happens.
         await registerForRemoteNotificationsIfAuthorized()
 
-        // If never asked and user is already authenticated (e.g., restored from keychain),
-        // request permission now — the auth flow only asks during fresh login/registration.
         if authorizationStatus == .notDetermined && SessionManager.shared.sessionToken != nil {
             Log.info("📱 Permission not yet requested but user is authenticated — requesting now", category: "Push")
             await requestPermission()
         }
+        #endif
     }
 
     private func registerForRemoteNotificationsIfAuthorized() async {
