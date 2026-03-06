@@ -64,41 +64,54 @@ struct LinkDetectingText: View {
     }
     
     // MARK: - AttributedString Generation
-    
+
     private func makeAttributedString() -> AttributedString {
-        var result = AttributedString(text)
-        
-        // Regex patterns for different link types
+        // Try to parse as Markdown (inline only: **bold**, _italic_, `code`, [link](url))
+        // Falls back to plain text if parsing fails.
+        var result: AttributedString
+        let options = AttributedString.MarkdownParsingOptions(
+            interpretedSyntax: .inlineOnlyPreservingWhitespace
+        )
+        result = (try? AttributedString(markdown: text, options: options))
+            ?? AttributedString(text)
+
+        // Regex patterns for different link types (detect raw URLs not wrapped in Markdown syntax)
         let patterns = [
             ("konstruct://[a-zA-Z0-9\\-._~:/?#\\[\\]@!$&'()*+,;=%]+", true),  // konstruct:// links
             ("https://(?:www\\.)?konstruct\\.cc/[a-zA-Z0-9\\-._~:/?#\\[\\]@!$&'()*+,;=%]+", true),  // konstruct.cc links
             ("https?://[a-zA-Z0-9\\-._~:/?#\\[\\]@!$&'()*+,;=%]+", false)  // Generic URLs
         ]
-        
+
         for (pattern, _) in patterns {
             guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else {
                 continue
             }
-            
+
             let nsString = text as NSString
             let matches = regex.matches(in: text, options: [], range: NSRange(location: 0, length: nsString.length))
-            
+
             for match in matches.reversed() {  // Process in reverse to maintain indices
                 guard let range = Range(match.range, in: text) else { continue }
                 let urlString = String(text[range])
-                
+
                 if let url = URL(string: urlString),
                    let attributedRange = Range(match.range, in: result) {
-                    result[attributedRange].foregroundColor = .blue
-                    result[attributedRange].underlineStyle = .single
-                    result[attributedRange].link = url
+                    // Only apply if no link is already set (markdown may have set one)
+                    if result[attributedRange].link == nil {
+                        result[attributedRange].foregroundColor = .blue
+                        result[attributedRange].underlineStyle = .single
+                        result[attributedRange].link = url
+                    }
                 }
             }
         }
-        
-        // Set base color for non-link text
-        result.foregroundColor = color
-        
+
+        // Set base color for non-link text (preserve markdown-parsed link colors)
+        for run in result.runs where run.link == nil {
+            let rangeInResult = run.range
+            result[rangeInResult].foregroundColor = color
+        }
+
         return result
     }
 }

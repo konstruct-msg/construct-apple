@@ -86,7 +86,7 @@ extension Chat {
             }
         }
         
-        // Regular text message
-        return content
+        // Regular text message — strip markdown markers for plain-text preview
+        return String.strippingMarkdown(content)
     }
 }

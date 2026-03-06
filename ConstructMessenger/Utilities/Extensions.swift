@@ -36,3 +36,24 @@ extension Array {
         return self[index]
     }
 }
+
+// MARK: - String + Markdown stripping
+
+extension String {
+    /// Returns a plain-text version of the string with inline Markdown markers removed.
+    /// Used for chat list preview text where rendered formatting is not needed.
+    static func strippingMarkdown(_ text: String) -> String {
+        var s = text
+        // Bold: **text** or __text__
+        s = s.replacingOccurrences(of: #"\*\*(.+?)\*\*"#, with: "$1", options: .regularExpression)
+        s = s.replacingOccurrences(of: #"__(.+?)__"#, with: "$1", options: .regularExpression)
+        // Italic: *text* or _text_  (single marker)
+        s = s.replacingOccurrences(of: #"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)"#, with: "$1", options: .regularExpression)
+        s = s.replacingOccurrences(of: #"(?<!_)_(?!_)(.+?)(?<!_)_(?!_)"#, with: "$1", options: .regularExpression)
+        // Inline code: `text`
+        s = s.replacingOccurrences(of: #"`(.+?)`"#, with: "$1", options: .regularExpression)
+        // Markdown links: [label](url) → label
+        s = s.replacingOccurrences(of: #"\[(.+?)\]\(.+?\)"#, with: "$1", options: .regularExpression)
+        return s
+    }
+}
