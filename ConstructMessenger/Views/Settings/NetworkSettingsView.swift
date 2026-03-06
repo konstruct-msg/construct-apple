@@ -15,6 +15,8 @@ struct NetworkSettingsView: View {
     @State private var customPort = "\(GRPCChannelManager.shared.currentPort)"
     @State private var showingAppliedAlert = false
 
+    @AppStorage(UserDefaultsKey.iceEnabled.key) private var iceEnabled = false
+
     var body: some View {
         List {
             // MARK: - gRPC Stream
@@ -92,6 +94,25 @@ struct NetworkSettingsView: View {
                 }
             } header: {
                 Text("network")
+            }
+
+            // MARK: - ICE
+            Section {
+                Toggle(isOn: $iceEnabled) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("ice_title")
+                            .fontWeight(.medium)
+                        Text("ice_subtitle")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .disabled(true) // Not yet implemented — requires server coordination
+            } header: {
+                Text("ice_section_header")
+            } footer: {
+                Text("ice_footer")
+                    .font(.caption)
             }
 
             // MARK: - Server

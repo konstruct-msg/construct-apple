@@ -327,6 +327,9 @@ enum UserDefaultsKey: String {
     // Traffic Protection
     case trafficProtectionEnabled = "trafficProtection_enabled"
 
+    // ICE — traffic obfuscation (Intrusion Countermeasures Electronics)
+    case iceEnabled = "ice_enabled"
+
     // Background Fetch
     case backgroundFetchEnabled = "backgroundFetch_enabled"
     case backgroundFetchIntervalMinutes = "backgroundFetch_intervalMinutes"

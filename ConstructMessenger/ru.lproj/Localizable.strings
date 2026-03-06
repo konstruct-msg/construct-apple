@@ -440,3 +440,9 @@
 "unpin" = "Открепить";
 "mark_unread" = "Отметить как непрочитанное";
 "mark_read" = "Отметить как прочитанное";
+
+// ICE — маскировка трафика
+"ice_section_header" = "Лёд";
+"ice_title" = "Лёд (ICE)";
+"ice_subtitle" = "Intrusion Countermeasures Electronics";
+"ice_footer" = "Лёд маскирует трафик мессенджера, делая его неотличимым от обычного HTTPS. Требует поддержки на сервере. Скоро.";

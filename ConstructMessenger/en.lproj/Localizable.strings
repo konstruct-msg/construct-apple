@@ -438,3 +438,9 @@
 "unpin" = "Unpin";
 "mark_unread" = "Mark Unread";
 "mark_read" = "Mark Read";
+
+// ICE — traffic obfuscation
+"ice_section_header" = "ICE";
+"ice_title" = "ICE";
+"ice_subtitle" = "Intrusion Countermeasures Electronics";
+"ice_footer" = "ICE masks and obfuscates traffic patterns to make your connection indistinguishable from regular HTTPS. Requires server support. Coming soon.";
