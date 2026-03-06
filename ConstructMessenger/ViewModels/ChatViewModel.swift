@@ -86,6 +86,7 @@ class ChatViewModel: NSObject {
 
     deinit {
         publicKeyFetchTimer?.invalidate()
+        observationTasks.forEach { $0.cancel() }
         Log.debug("🔧 ChatViewModel deinitialized", category: "ChatViewModel")
     }
 
@@ -126,10 +127,13 @@ class ChatViewModel: NSObject {
     }
 
     private func setupSubscribers() {
-        // Listen for connection status changes using @Observable tracking
+        // Listen for connection status changes using @Observable tracking.
+        // IMPORTANT: guard let self is inside the loop so the strong binding is
+        // released on every suspension point (await). This breaks the retain cycle
+        // that the original guard-before-loop created, allowing deinit to fire.
         let connTask = Task { [weak self] in
-            guard let self else { return }
             while !Task.isCancelled {
+                guard let self else { return }
                 await withCheckedContinuation { continuation in
                     withObservationTracking {
                         _ = self.connectionStatusManager.connectionStatus
