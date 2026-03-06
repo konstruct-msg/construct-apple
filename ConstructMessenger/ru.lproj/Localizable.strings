@@ -221,7 +221,7 @@
 "construct_sync_completed" = "Сообщения синхронизированы";
 "construct_sync_completed_count" = "Синхронизировано %d новых сообщений";
 "background_fetch" = "Фоновая загрузка";
-"background_fetch_footer" = "Проверка новых сообщений в фоновом режиме. Экономит заряд батареи.";
+"background_fetch_footer" = "Периодически получает пропущенные сообщения через зашифрованное gRPC-соединение, когда активный стрим не работает (например, приложение свёрнуто или было прервано соединение). Позволяет держать входящие в актуальном состоянии без полной зависимости от push-уведомлений.";
 "enable_background_fetch" = "Включить фоновую загрузку";
 "background_fetch_status" = "Статус фоновой загрузки";
 "background_fetch_disabled" = "Отключено";
@@ -230,7 +230,7 @@
 "background_fetch_waiting" = "Включено, ожидание первой проверки";
 "background_fetch_interval" = "Интервал проверки";
 "background_fetch_interval_settings" = "Интервал проверки";
-"background_fetch_interval_footer" = "Как часто проверять наличие новых сообщений. iOS может корректировать это в зависимости от ваших шаблонов использования.";
+"background_fetch_interval_footer" = "Как часто получать пропущенные сообщения, когда активный стрим не работает. iOS может корректировать это в зависимости от ваших шаблонов использования.";
 "background_fetch_interval_minutes" = "%d мин.";
 "background_fetch_interval_hours" = "%d час(ов)";
 "background_fetch_low_power_mode_warning" = "Отключено в режиме энергосбережения";

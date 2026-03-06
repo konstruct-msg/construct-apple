@@ -223,7 +223,7 @@
 "construct_sync_completed" = "Messages Synced";
 "construct_sync_completed_count" = "Synced %d new messages";
 "background_fetch" = "Background Refresh";
-"background_fetch_footer" = "Check for new messages in the background. Uses minimal battery.";
+"background_fetch_footer" = "Periodically fetches missed messages via an encrypted gRPC connection when the live stream is not active (e.g. app is backgrounded or network was interrupted). Keeps your inbox up to date without relying on push notifications alone.";
 "enable_background_fetch" = "Enable Background Refresh";
 "background_fetch_status" = "Background Refresh Status";
 "background_fetch_disabled" = "Disabled";
@@ -232,7 +232,7 @@
 "background_fetch_waiting" = "Enabled, waiting for first check";
 "background_fetch_interval" = "Check Interval";
 "background_fetch_interval_settings" = "Check Interval";
-"background_fetch_interval_footer" = "How often to check for new messages. iOS may adjust this based on your usage patterns.";
+"background_fetch_interval_footer" = "How often to fetch missed messages when the live stream is inactive. iOS may adjust this based on your usage patterns.";
 "background_fetch_interval_minutes" = "%d min";
 "background_fetch_interval_hours" = "%d hour";
 "background_fetch_low_power_mode_warning" = "Disabled in Low Power Mode";
