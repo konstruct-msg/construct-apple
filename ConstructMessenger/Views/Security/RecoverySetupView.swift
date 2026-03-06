@@ -259,3 +259,61 @@ struct RecoverySetupView: View {
         }
     }
 }
+
+// MARK: - Previews
+
+@MainActor
+private func makePreviewVM(step: AccountRecoveryViewModel.SetupStep) -> AccountRecoveryViewModel {
+    let vm = AccountRecoveryViewModel()
+    let words = ["abandon", "ability", "able", "about", "above", "absent",
+                 "absorb", "abstract", "absurd", "abuse", "access", "accident"]
+    vm.mnemonic = words
+    vm.quizIndices = [0, 5, 11]
+    vm.setupStep = step
+    return vm
+}
+
+#Preview("Intro") {
+    let container = PreviewHelpers.createPreviewContainer()
+    let authVM = AuthViewModel(context: container.viewContext)
+    authVM.configureMockAuth()
+    return RecoverySetupView()
+        .environment(makePreviewVM(step: .idle))
+        .environment(authVM)
+}
+
+#Preview("Word display") {
+    let container = PreviewHelpers.createPreviewContainer()
+    let authVM = AuthViewModel(context: container.viewContext)
+    authVM.configureMockAuth()
+    return RecoverySetupView()
+        .environment(makePreviewVM(step: .displayWords))
+        .environment(authVM)
+}
+
+#Preview("Quiz") {
+    let container = PreviewHelpers.createPreviewContainer()
+    let authVM = AuthViewModel(context: container.viewContext)
+    authVM.configureMockAuth()
+    return RecoverySetupView()
+        .environment(makePreviewVM(step: .quiz))
+        .environment(authVM)
+}
+
+#Preview("Done") {
+    let container = PreviewHelpers.createPreviewContainer()
+    let authVM = AuthViewModel(context: container.viewContext)
+    authVM.configureMockAuth()
+    return RecoverySetupView()
+        .environment(makePreviewVM(step: .done(fingerprint: "A1B2:C3D4:E5F6:7890")))
+        .environment(authVM)
+}
+
+#Preview("Failed") {
+    let container = PreviewHelpers.createPreviewContainer()
+    let authVM = AuthViewModel(context: container.viewContext)
+    authVM.configureMockAuth()
+    return RecoverySetupView()
+        .environment(makePreviewVM(step: .failed("Server unavailable. Please try again later.")))
+        .environment(authVM)
+}
