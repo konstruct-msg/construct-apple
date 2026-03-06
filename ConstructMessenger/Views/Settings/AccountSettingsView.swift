@@ -22,130 +22,22 @@ struct AccountSettingsView: View {
     @State private var imageToCrop: UIImage?
     @State private var showingCropView = false
 
-    // Username editing
     @State private var originalUsername: String = ""
 
     var body: some View {
-        List {
-            // MARK: - Avatar + Identity
-            Section {
-                HStack {
-                    Spacer()
-                    VStack(spacing: 10) {
-                        Group {
-                            if let image = viewModel.profileImage {
-                                Image(uiImage: image)
-                                    .resizable()
-                                    .scaledToFill()
-                                    .frame(width: AvatarStyle.accountSize, height: AvatarStyle.accountSize)
-                                    .clipShape(AvatarStyle.squircle(AvatarStyle.accountSize))
-                            } else {
-                                AvatarStyle.squircle(AvatarStyle.accountSize)
-                                    .fill(Color.blue.opacity(0.2))
-                                    .frame(width: AvatarStyle.accountSize, height: AvatarStyle.accountSize)
-                                    .overlay {
-                                        Text(viewModel.displayName.prefix(1).uppercased())
-                                            .font(.system(size: 40, weight: .semibold))
-                                            .foregroundColor(Color.blue)
-                                    }
-                            }
-                        }
-                        .onTapGesture {
-                            if viewModel.profileImage != nil {
-                                showingAvatarViewer = true
-                            } else {
-                                showingImagePicker = true
-                            }
-                        }
-
-                        Text(viewModel.username.isEmpty
-                             ? DisplayNameGenerator.generate(from: viewModel.userId)
-                             : "@\(viewModel.username)")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                    }
-                    Spacer()
-                }
-                .listRowBackground(Color.clear)
-            }
-
-            // MARK: - Account Information
-            Section {
-                HStack {
-                    TextField("username", text: $viewModel.username)
-                        .font(.body.monospaced())
-                        .autocorrectionDisabled()
-                        .textInputAutocapitalization(.never)
-                        .onSubmit {
-                            Task { await viewModel.saveUsername(viewModel.username, authViewModel: authViewModel) }
-                        }
-
-                    if viewModel.isSavingUsername {
-                        ProgressView().scaleEffect(0.8)
-                    } else if viewModel.username != originalUsername {
-                        Button {
-                            Task { await viewModel.saveUsername(viewModel.username, authViewModel: authViewModel) }
-                        } label: {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundColor(.accentColor)
-                        }
-                        .buttonStyle(.plain)
-                    } else if viewModel.usernameSaved {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(.green)
-                            .transition(.opacity)
-                    }
-                }
-
-                if let error = viewModel.usernameSaveError {
-                    Text(error)
-                        .font(.caption)
-                        .foregroundColor(.red)
-                }
-
-                TextField("display_name", text: $viewModel.displayName)
-                    .onChange(of: viewModel.displayName) { _, newValue in
-                        viewModel.saveDisplayName(newValue, authViewModel: authViewModel)
-                    }
-            } header: {
-                Text("account_information")
-            }
-            
-            Spacer()
-            Spacer()
-
-            // MARK: - Data & Privacy
-            Section {
-                Button {
-                    showingExportAlert = true
-                } label: {
-                    Label("export_my_data", systemImage: "square.and.arrow.up")
-                }
-            } header: {
-                Text("data_and_privacy")
-            }
-            
-            Spacer()
-            Spacer()
-            
-            // MARK: - Danger Zone
-            Section {
-                Button(role: .destructive) {
-                    showingDeleteConfirmation = true
-                } label: {
-                    Text("delete_my_account")
-                }
-            }
-            header: {
-                Text("danger_zone")
+        ScrollView {
+            VStack(spacing: 0) {
+                avatarHeader
+                Divider()
+                identitySection
+                Divider()
+                privacySection
+                Divider()
+                dangerSection
             }
         }
-        .alert("export_my_data", isPresented: $showingExportAlert) {
-            Button("ok", role: .cancel) { }
-        } message: {
-            Text("export_coming_soon_message")
-        }
-        .navigationTitle("account")
+        .background(Color(uiColor: .systemGroupedBackground))
+        .navigationTitle(LocalizedStringKey("account"))
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             viewModel.setContext(viewContext)
@@ -155,27 +47,21 @@ struct AccountSettingsView: View {
         .onChange(of: viewModel.usernameSaved) { _, saved in
             if saved { originalUsername = viewModel.username }
         }
+        .alert(LocalizedStringKey("export_my_data"), isPresented: $showingExportAlert) {
+            Button(LocalizedStringKey("ok"), role: .cancel) { }
+        } message: {
+            Text(LocalizedStringKey("export_coming_soon_message"))
+        }
         .sheet(isPresented: $showingDeleteConfirmation) {
-            DeleteAccountConfirmationView(
-                onDelete: {
-                    authViewModel.deleteAccount()
-                },
-                onCancel: {
-                    showingDeleteConfirmation = false
-                }
-            )
+            DeleteAccountConfirmationView(onDelete: { authViewModel.deleteAccount() },
+                                         onCancel: { showingDeleteConfirmation = false })
             .environment(authViewModel)
         }
         .sheet(isPresented: $showingAvatarViewer) {
-            AvatarViewerSheet(
-                image: viewModel.profileImage,
-                onChangeAvatar: {
-                    showingAvatarViewer = false
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                        showingImagePicker = true
-                    }
-                }
-            )
+            AvatarViewerSheet(image: viewModel.profileImage, onChangeAvatar: {
+                showingAvatarViewer = false
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { showingImagePicker = true }
+            })
         }
         .photosPicker(isPresented: $showingImagePicker, selection: $selectedPhotoItem, matching: .images)
         .onChange(of: selectedPhotoItem) { _, newItem in
@@ -183,32 +69,206 @@ struct AccountSettingsView: View {
             Task {
                 if let data = try? await newItem.loadTransferable(type: Data.self),
                    let image = UIImage(data: data) {
-                    await MainActor.run {
-                        imageToCrop = image
-                        showingCropView = true
-                    }
+                    await MainActor.run { imageToCrop = image; showingCropView = true }
                 }
                 selectedPhotoItem = nil
             }
         }
-        // Use .sheet instead of .fullScreenCover — fullScreenCover is not supported on macOS Catalyst
-        // and conflicts with other sheet presentations on the same view.
         .sheet(isPresented: $showingCropView) {
             if let img = imageToCrop {
                 ImageCropView(
                     image: img,
                     onConfirm: { cropped in
-                        showingCropView = false
-                        imageToCrop = nil
+                        showingCropView = false; imageToCrop = nil
                         viewModel.saveAvatar(cropped, authViewModel: authViewModel)
                     },
-                    onCancel: {
-                        showingCropView = false
-                        imageToCrop = nil
-                    }
+                    onCancel: { showingCropView = false; imageToCrop = nil }
                 )
             }
         }
+    }
+
+    // MARK: - Avatar Header
+
+    private var avatarHeader: some View {
+        VStack(spacing: 10) {
+            ZStack(alignment: .bottomTrailing) {
+                Group {
+                    if let image = viewModel.profileImage {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: AvatarStyle.accountSize, height: AvatarStyle.accountSize)
+                            .clipShape(AvatarStyle.squircle(AvatarStyle.accountSize))
+                    } else {
+                        AvatarStyle.squircle(AvatarStyle.accountSize)
+                            .fill(Color.blue.opacity(0.15))
+                            .frame(width: AvatarStyle.accountSize, height: AvatarStyle.accountSize)
+                            .overlay {
+                                Text(viewModel.displayName.prefix(1).uppercased())
+                                    .font(.system(size: 40, weight: .semibold))
+                                    .foregroundColor(.blue)
+                            }
+                    }
+                }
+                .onTapGesture {
+                    if viewModel.profileImage != nil { showingAvatarViewer = true }
+                    else { showingImagePicker = true }
+                }
+            }
+
+            if !viewModel.displayName.isEmpty {
+                Text(viewModel.displayName)
+                    .font(.title3.weight(.semibold))
+            }
+
+            Text(viewModel.username.isEmpty
+                 ? DisplayNameGenerator.generate(from: viewModel.userId)
+                 : "@\(viewModel.username)")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+
+            Button(LocalizedStringKey("change_avatar")) {
+                if viewModel.profileImage != nil { showingAvatarViewer = true }
+                else { showingImagePicker = true }
+            }
+            .font(.subheadline)
+            .padding(.top, 2)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 24)
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+    }
+
+    // MARK: - Identity Section
+
+    private var identitySection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            sectionHeader(LocalizedStringKey("account_information"))
+            VStack(spacing: 0) {
+                // Display Name
+                fieldRow(label: LocalizedStringKey("display_name")) {
+                    TextField(LocalizedStringKey("display_name"), text: $viewModel.displayName)
+                        .onChange(of: viewModel.displayName) { _, newValue in
+                            viewModel.saveDisplayName(newValue, authViewModel: authViewModel)
+                        }
+                }
+
+                Divider().padding(.leading, 16)
+
+                // Username
+                fieldRow(label: LocalizedStringKey("username")) {
+                    HStack {
+                        TextField(LocalizedStringKey("username"), text: $viewModel.username)
+                            .font(.body.monospaced())
+                            .autocorrectionDisabled()
+                            .textInputAutocapitalization(.never)
+                            .onSubmit {
+                                Task { await viewModel.saveUsername(viewModel.username, authViewModel: authViewModel) }
+                            }
+                        if viewModel.isSavingUsername {
+                            ProgressView().scaleEffect(0.8)
+                        } else if viewModel.username != originalUsername {
+                            Button(LocalizedStringKey("save")) {
+                                Task { await viewModel.saveUsername(viewModel.username, authViewModel: authViewModel) }
+                            }
+                            .font(.subheadline)
+                        } else if viewModel.usernameSaved {
+                            Text(LocalizedStringKey("saved"))
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                                .transition(.opacity)
+                        }
+                    }
+                }
+
+                if let error = viewModel.usernameSaveError {
+                    Text(error)
+                        .font(.caption)
+                        .foregroundColor(.red)
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 8)
+                }
+            }
+            .background(Color(uiColor: .secondarySystemGroupedBackground))
+        }
+    }
+
+    // MARK: - Data & Privacy
+
+    private var privacySection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            sectionHeader(LocalizedStringKey("data_and_privacy"))
+            Button {
+                showingExportAlert = true
+            } label: {
+                HStack {
+                    Text(LocalizedStringKey("export_my_data"))
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 13)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .background(Color(uiColor: .secondarySystemGroupedBackground))
+            sectionFooter(LocalizedStringKey("export_my_data_footer"))
+        }
+    }
+
+    // MARK: - Danger Zone
+
+    private var dangerSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            sectionHeader(LocalizedStringKey("danger_zone"))
+            Button(role: .destructive) {
+                showingDeleteConfirmation = true
+            } label: {
+                HStack {
+                    Text(LocalizedStringKey("delete_my_account"))
+                        .foregroundColor(.red)
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 13)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .background(Color(uiColor: .secondarySystemGroupedBackground))
+        }
+        .padding(.bottom, 32)
+    }
+
+    // MARK: - Layout Helpers
+
+    private func fieldRow<Content: View>(label: LocalizedStringKey, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(.caption)
+                .foregroundColor(.secondary)
+            content()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+    }
+
+    private func sectionHeader(_ title: LocalizedStringKey) -> some View {
+        Text(title)
+            .font(.footnote)
+            .foregroundColor(.secondary)
+            .textCase(.uppercase)
+            .padding(.horizontal, 16)
+            .padding(.top, 20)
+            .padding(.bottom, 6)
+    }
+
+    private func sectionFooter(_ text: LocalizedStringKey) -> some View {
+        Text(text)
+            .font(.footnote)
+            .foregroundColor(.secondary)
+            .padding(.horizontal, 16)
+            .padding(.top, 6)
+            .padding(.bottom, 8)
     }
 }
 

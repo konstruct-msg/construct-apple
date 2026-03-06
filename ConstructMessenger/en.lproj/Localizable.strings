@@ -430,3 +430,5 @@
 
 // Profile sharing
 "failed_to_establish_session" = "Failed to establish a secure connection. Please try again.";
+"save" = "Save";
+"saved" = "Saved";
