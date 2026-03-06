@@ -38,19 +38,20 @@ enum OtpkReplenishmentService {
             (keyId: pair.keyId, publicKey: Data(pair.publicKey))
         }
 
+        // Persist private keys to Keychain BEFORE uploading so they survive even if the
+        // network call fails or the app is killed mid-flight.  Without this, deleteOtpksJson()
+        // followed by a throw leaves the Keychain empty on the next restart, triggering the
+        // full-replace fallback again and permanently destroying messages encrypted to the old set.
         if replaceExisting {
-            // Clear stale persisted OTPKs before uploading the new set
             KeychainManager.shared.deleteOtpksJson()
         }
+        persistOtpks(core: core)
 
         _ = try await KeyServiceClient.shared.uploadPreKeys(
             deviceId: deviceId,
             preKeys: preKeys,
             replaceExisting: replaceExisting
         )
-
-        // Persist the full OTPK set (including private keys) so core can restore them after restart.
-        persistOtpks(core: core)
 
         let mode = replaceExisting ? "replacing all" : "appending"
         Log.info("✅ OTPK upload (\(mode)): \(pairs.count) keys for device \(deviceId.prefix(8))...", category: "OTPK")
