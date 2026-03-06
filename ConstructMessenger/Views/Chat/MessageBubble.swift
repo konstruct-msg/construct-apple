@@ -21,6 +21,7 @@ struct MessageBubble: View {
     let onTapMedia: ((Message) -> Void)?
 
     @Environment(\.containerWidth) private var containerWidth
+    @State private var swipeOffset: CGFloat = 0
 
     init(
         message: Message,
@@ -219,6 +220,36 @@ struct MessageBubble: View {
                             Label("retry", systemImage: "arrow.clockwise")
                         }
                     }
+                }
+            }
+            // Swipe-to-reply: right swipe triggers onReply when not in edit mode
+            .offset(x: swipeOffset)
+            .gesture(
+                isEditMode ? nil : DragGesture(minimumDistance: 20, coordinateSpace: .local)
+                    .onChanged { value in
+                        let h = value.translation.width
+                        let v = abs(value.translation.height)
+                        guard h > 0, h > v else { return }
+                        swipeOffset = min(h * 0.5, 60)
+                    }
+                    .onEnded { _ in
+                        if swipeOffset >= 40 {
+                            onReply?(message)
+                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                        }
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            swipeOffset = 0
+                        }
+                    }
+            )
+            .overlay(alignment: message.isSentByMe ? .leading : .trailing) {
+                if swipeOffset > 10 {
+                    Image(systemName: "arrowshape.turn.up.left.fill")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.accentColor)
+                        .opacity(min(max(Double(swipeOffset / 40), 0), 1))
+                        .offset(x: message.isSentByMe ? -swipeOffset - 8 : swipeOffset + 8)
+                        .animation(.interactiveSpring(), value: swipeOffset)
                 }
             }
 

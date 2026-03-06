@@ -22,6 +22,7 @@
         <attribute name="lastMessageText" optional="YES" attributeType="String"/>
         <attribute name="lastMessageTime" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="sessionId" optional="YES" attributeType="String"/>
+        <attribute name="isPinned" optional="YES" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
         <attribute name="unreadCount" optional="YES" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
         <relationship name="messages" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="Message" inverseName="chat" inverseEntity="Message"/>
         <relationship name="otherUser" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="User" inverseName="chats" inverseEntity="User"/>

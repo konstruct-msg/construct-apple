@@ -508,6 +508,13 @@ class BackgroundFetchManager: NSObject {
     
     /// Enable background fetch
     /// Call this when user enables background refresh in settings
+    /// Manual pull-to-refresh: fetches pending messages immediately via gRPC.
+    func fetchPendingMessages() async {
+        await withCheckedContinuation { continuation in
+            performQuickMessageFetch { _ in continuation.resume() }
+        }
+    }
+
     func enableBackgroundFetch() {
         // Check Low Power Mode
         guard !ProcessInfo.processInfo.isLowPowerModeEnabled else {

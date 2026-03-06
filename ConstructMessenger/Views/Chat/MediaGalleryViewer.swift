@@ -66,6 +66,8 @@ struct MediaGalleryViewer: View {
 
     enum SaveStatus { case idle, saving, saved, failed }
 
+    @State private var dismissOffset: CGFloat = 0
+
     init(messages: [Message], initialMessageId: String, isPresented: Binding<Bool>) {
         self.messages = messages
         self.initialMessageId = initialMessageId
@@ -117,7 +119,7 @@ struct MediaGalleryViewer: View {
                 .disabled(saveStatus == .saving)
             }
             .padding(.horizontal, 16)
-            .padding(.top, 56)  // below status bar / Dynamic Island
+            .padding(.top, 56)
             .padding(.bottom, 24)
             .background(
                 LinearGradient(
@@ -128,6 +130,30 @@ struct MediaGalleryViewer: View {
                 .ignoresSafeArea()
             )
         }
+        .offset(y: dismissOffset)
+        .opacity(Double(1.0 - dismissOffset / 350))
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 15)
+                .onChanged { value in
+                    guard value.translation.height > 0,
+                          abs(value.translation.height) > abs(value.translation.width) else { return }
+                    dismissOffset = value.translation.height
+                }
+                .onEnded { value in
+                    if dismissOffset > 100 {
+                        withAnimation(.easeOut(duration: 0.22)) {
+                            dismissOffset = UIScreen.main.bounds.height
+                        }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
+                            isPresented = false
+                        }
+                    } else {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                            dismissOffset = 0
+                        }
+                    }
+                }
+        )
     }
 
     private var saveStatusIcon: String {

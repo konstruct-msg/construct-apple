@@ -18,7 +18,10 @@ struct ChatsSplitView: View {
     @Environment(\.managedObjectContext) private var viewContext
 
     @FetchRequest(
-        sortDescriptors: [NSSortDescriptor(keyPath: \Chat.lastMessageTime, ascending: false)],
+        sortDescriptors: [
+            NSSortDescriptor(keyPath: \Chat.isPinned, ascending: false),
+            NSSortDescriptor(keyPath: \Chat.lastMessageTime, ascending: false)
+        ],
         animation: .default
     )
     private var chats: FetchedResults<Chat>
@@ -137,15 +140,33 @@ struct ChatsSplitView: View {
             ForEach(chats) { chat in
                 ChatRowView(chat: chat)
                     .tag(chat.id)
+                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                        Button(role: .destructive) { deleteChat(chat) } label: {
+                            Label(LocalizedStringKey("delete"), systemImage: "trash")
+                        }
+                        Button { toggleMarkUnread(chat) } label: {
+                            Label(LocalizedStringKey(chat.unreadCount > 0 ? "mark_read" : "mark_unread"),
+                                  systemImage: chat.unreadCount > 0 ? "envelope.open" : "envelope.badge")
+                        }
+                        .tint(.blue)
+                    }
+                    .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                        Button { togglePin(chat) } label: {
+                            Label(LocalizedStringKey(chat.isPinned ? "unpin" : "pin"),
+                                  systemImage: chat.isPinned ? "pin.slash" : "pin")
+                        }
+                        .tint(.yellow)
+                    }
                     .contextMenu {
-                        Button(role: .destructive) {
-                            deleteChat(chat)
-                        } label: {
+                        Button(role: .destructive) { deleteChat(chat) } label: {
                             Label("delete_chat", systemImage: "trash")
                         }
                     }
             }
             .onDelete(perform: deleteChatsAtOffsets)
+        }
+        .refreshable {
+            await BackgroundFetchManager.shared.fetchPendingMessages()
         }
     }
 
@@ -178,6 +199,16 @@ struct ChatsSplitView: View {
 
     private func deleteChatsAtOffsets(at offsets: IndexSet) {
         offsets.map { chats[$0] }.forEach { deleteChat($0) }
+    }
+
+    private func togglePin(_ chat: Chat) {
+        chat.isPinned.toggle()
+        try? viewContext.save()
+    }
+
+    private func toggleMarkUnread(_ chat: Chat) {
+        chat.unreadCount = chat.unreadCount > 0 ? 0 : 1
+        try? viewContext.save()
     }
 
     private func handleScannedContact(_ urlString: String) {

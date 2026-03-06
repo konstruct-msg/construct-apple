@@ -46,14 +46,21 @@ struct ChatRowView: View {
 
             Spacer()
 
-            if chat.unreadCount > 0 {
-                Text(chat.unreadCount < 100 ? "\(chat.unreadCount)" : "99+")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Color.accentColor, in: Capsule())
-                    .animation(.easeInOut(duration: 0.2), value: chat.unreadCount)
+            VStack(alignment: .trailing, spacing: 4) {
+                if chat.isPinned && chat.unreadCount == 0 {
+                    Image(systemName: "pin.fill")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+                if chat.unreadCount > 0 {
+                    Text(chat.unreadCount < 100 ? "\(chat.unreadCount)" : "99+")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.accentColor, in: Capsule())
+                        .animation(.easeInOut(duration: 0.2), value: chat.unreadCount)
+                }
             }
 
         }

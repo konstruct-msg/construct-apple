@@ -22,11 +22,11 @@ struct ChatsListView: View {
     @State private var showingDrafts = false
 
     init() {
-        // ✅ FIX: Create fetch request safely - fetchRequest() just creates the request object
-        // It doesn't access the coordinator until the fetch is actually executed
         let fetchRequest: NSFetchRequest<Chat> = Chat.fetchRequest()
-        fetchRequest.sortDescriptors = [NSSortDescriptor(keyPath: \Chat.lastMessageTime, ascending: false)]
-
+        fetchRequest.sortDescriptors = [
+            NSSortDescriptor(keyPath: \Chat.isPinned, ascending: false),
+            NSSortDescriptor(keyPath: \Chat.lastMessageTime, ascending: false)
+        ]
         _chats = FetchRequest<Chat>(fetchRequest: fetchRequest, animation: .default)
     }
 
@@ -37,8 +37,33 @@ struct ChatsListView: View {
                     NavigationLink(value: chat.id) {
                         ChatRowView(chat: chat)
                     }
+                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                        Button(role: .destructive) {
+                            Task { await chatsViewModel.deleteChatWithEndSession(chat: chat) }
+                        } label: {
+                            Label(LocalizedStringKey("delete"), systemImage: "trash")
+                        }
+                        Button {
+                            toggleMarkUnread(chat)
+                        } label: {
+                            Label(LocalizedStringKey(chat.unreadCount > 0 ? "mark_read" : "mark_unread"),
+                                  systemImage: chat.unreadCount > 0 ? "envelope.open" : "envelope.badge")
+                        }
+                        .tint(.blue)
+                    }
+                    .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                        Button {
+                            togglePin(chat)
+                        } label: {
+                            Label(LocalizedStringKey(chat.isPinned ? "unpin" : "pin"),
+                                  systemImage: chat.isPinned ? "pin.slash" : "pin")
+                        }
+                        .tint(.yellow)
+                    }
                 }
-                .onDelete(perform: deleteItems)
+            }
+            .refreshable {
+                await BackgroundFetchManager.shared.fetchPendingMessages()
             }
             .navigationDestination(for: String.self) { chatId in
                 if let chat = chats.first(where: { $0.id == chatId }) {
@@ -92,12 +117,18 @@ struct ChatsListView: View {
         }
     }
 
-    private func deleteItems(offsets: IndexSet) {
-        withAnimation {
-            offsets.map { chats[$0] }.forEach { chat in
-                Task { await chatsViewModel.deleteChatWithEndSession(chat: chat) }
-            }
+    private func togglePin(_ chat: Chat) {
+        chat.isPinned.toggle()
+        try? viewContext.save()
+    }
+
+    private func toggleMarkUnread(_ chat: Chat) {
+        if chat.unreadCount > 0 {
+            chat.unreadCount = 0
+        } else {
+            chat.unreadCount = 1
         }
+        try? viewContext.save()
     }
 
     // MARK: - QR Code Handling
