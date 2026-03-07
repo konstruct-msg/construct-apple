@@ -99,6 +99,26 @@ class MessagePersistenceService {
     ///   - messageId: Message ID
     ///   - status: New delivery status
     ///   - context: Managed object context
+    func updateMessageContent(
+        messageId: String,
+        newContent: String,
+        isEdited: Bool,
+        editedAt: Date,
+        in context: NSManagedObjectContext
+    ) {
+        let fetchRequest = Message.fetchRequest()
+        fetchRequest.predicate = NSPredicate(format: "id == %@", messageId)
+        fetchRequest.fetchLimit = 1
+        guard let message = try? context.fetch(fetchRequest).first else {
+            Log.error("❌ Cannot find message to update content: \(messageId)", category: "MessagePersistence")
+            return
+        }
+        message.decryptedContent = newContent
+        message.isEdited = isEdited
+        message.editedAt = editedAt
+        try? context.save()
+    }
+
     func updateMessageStatus(
         messageId: String,
         status: DeliveryStatus,

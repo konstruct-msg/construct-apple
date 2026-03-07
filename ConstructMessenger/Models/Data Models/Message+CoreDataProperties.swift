@@ -64,6 +64,8 @@ extension Message {
     @NSManaged public var retryCount: Int16
     @NSManaged public var replyToMessageId: String?
     @NSManaged public var replyToContent: String?
+    @NSManaged public var isEdited: Bool
+    @NSManaged public var editedAt: Date?
     @NSManaged public var chat: Chat?
 
     // Computed property для удобства

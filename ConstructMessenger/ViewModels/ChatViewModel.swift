@@ -29,6 +29,7 @@ class ChatViewModel: NSObject {
     var errorMessage: String?
     var isLoadingMore = false
     var hasMoreMessages = true
+    var editingMessage: Message?
 
     // ✅ FIXED: Track session initialization state
     var isSessionReady = false
@@ -764,6 +765,43 @@ class ChatViewModel: NSObject {
             Log.error("❌ Failed to encrypt message: \(error)", category: "ChatViewModel")
             errorMessage = "Failed to encrypt message"
             isSending = false
+        }
+    }
+
+    // MARK: - Edit Message
+
+    func editMessage(_ message: Message, newText: String) {
+        guard let recipientId = chat.otherUser?.id,
+              let currentUserId = SessionManager.shared.currentUserId else { return }
+        let conversationId = ConversationId.direct(myUserId: currentUserId, theirUserId: recipientId)
+
+        Task {
+            do {
+                let components = try CryptoManager.shared.encryptMessage(newText, for: recipientId)
+                let wirePayload = try WirePayloadCoder.encode(components)
+                let response = try await MessagingServiceClient.shared.editMessage(
+                    messageId: message.id,
+                    conversationId: conversationId,
+                    newEncryptedContent: wirePayload,
+                    recipientUserId: recipientId
+                )
+                guard response.success else { return }
+                await MainActor.run {
+                    let editedDate = Date(timeIntervalSince1970: TimeInterval(response.editedAt))
+                    persistenceService.updateMessageContent(
+                        messageId: message.id,
+                        newContent: newText,
+                        isEdited: true,
+                        editedAt: editedDate,
+                        in: viewContext
+                    )
+                    editingMessage = nil
+                }
+            } catch {
+                await MainActor.run {
+                    errorMessage = String(format: NSLocalizedString("edit_message_failed", comment: ""), error.localizedDescription)
+                }
+            }
         }
     }
 

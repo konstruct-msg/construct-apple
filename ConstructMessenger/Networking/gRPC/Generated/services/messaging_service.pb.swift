@@ -523,6 +523,10 @@ public struct Shared_Proto_Services_V1_EditMessageRequest: Sendable {
   /// New content (encrypted)
   public var newEncryptedContent: Data = Data()
 
+  /// Recipient user ID — required for server-side routing.
+  /// The server cannot infer this from the original message (no message DB).
+  public var recipientUserID: String = String()
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -1426,7 +1430,7 @@ extension Shared_Proto_Services_V1_SendMessageResponse: SwiftProtobuf.Message, S
 
 extension Shared_Proto_Services_V1_EditMessageRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".EditMessageRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}message_id\0\u{3}conversation_id\0\u{3}new_encrypted_content\0\u{c}\u{4}\u{7}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}message_id\0\u{3}conversation_id\0\u{3}new_encrypted_content\0\u{4}\u{8}recipient_user_id\0\u{c}\u{4}\u{7}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1437,6 +1441,7 @@ extension Shared_Proto_Services_V1_EditMessageRequest: SwiftProtobuf.Message, Sw
       case 1: try { try decoder.decodeSingularStringField(value: &self.messageID) }()
       case 2: try { try decoder.decodeSingularStringField(value: &self.conversationID) }()
       case 3: try { try decoder.decodeSingularBytesField(value: &self.newEncryptedContent) }()
+      case 11: try { try decoder.decodeSingularStringField(value: &self.recipientUserID) }()
       default: break
       }
     }
@@ -1452,6 +1457,9 @@ extension Shared_Proto_Services_V1_EditMessageRequest: SwiftProtobuf.Message, Sw
     if !self.newEncryptedContent.isEmpty {
       try visitor.visitSingularBytesField(value: self.newEncryptedContent, fieldNumber: 3)
     }
+    if !self.recipientUserID.isEmpty {
+      try visitor.visitSingularStringField(value: self.recipientUserID, fieldNumber: 11)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1459,6 +1467,7 @@ extension Shared_Proto_Services_V1_EditMessageRequest: SwiftProtobuf.Message, Sw
     if lhs.messageID != rhs.messageID {return false}
     if lhs.conversationID != rhs.conversationID {return false}
     if lhs.newEncryptedContent != rhs.newEncryptedContent {return false}
+    if lhs.recipientUserID != rhs.recipientUserID {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

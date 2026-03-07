@@ -29,6 +29,9 @@ struct ChatMessage: Codable, Identifiable {
     /// Only meaningful when messageNumber == 0 (X3DH handshake message).
     var oneTimePreKeyId: UInt32 = 0
     
+    /// If non-empty, this message is an edit to an existing message with this ID.
+    var editsMessageId: String = ""
+    
     /// Check if this is an END_SESSION control message
     var isEndSession: Bool {
         messageType == "CONTROL_MESSAGE" && content == "END_SESSION"

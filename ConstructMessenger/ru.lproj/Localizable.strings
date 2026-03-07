@@ -478,3 +478,10 @@
 "storage_keep_7_days" = "7 дней";
 "storage_keep_30_days" = "30 дней";
 "storage_keep_90_days" = "90 дней";
+
+// Message editing
+"edit_message" = "Изменить";
+"edited" = "изменено";
+"editing_message" = "Редактирование сообщения";
+"edit_message_failed" = "Не удалось изменить сообщение: %@";
+"edit_message_limit_reached" = "Достигнут лимит правок (максимум 20)";

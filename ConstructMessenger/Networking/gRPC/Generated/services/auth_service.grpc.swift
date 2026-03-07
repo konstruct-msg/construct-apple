@@ -1509,6 +1509,18 @@ public enum Shared_Proto_Services_V1_DeviceService: Sendable {
                 method: "GetDeviceInfo"
             )
         }
+        /// Namespace for "InitiateDeviceLink" metadata.
+        public enum InitiateDeviceLink: Sendable {
+            /// Request type for "InitiateDeviceLink".
+            public typealias Input = Shared_Proto_Services_V1_InitiateDeviceLinkRequest
+            /// Response type for "InitiateDeviceLink".
+            public typealias Output = Shared_Proto_Services_V1_InitiateDeviceLinkResponse
+            /// Descriptor for "InitiateDeviceLink".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.DeviceService"),
+                method: "InitiateDeviceLink"
+            )
+        }
         /// Descriptors for all methods in the "shared.proto.services.v1.DeviceService" service.
         public static let descriptors: [GRPCCore.MethodDescriptor] = [
             ListDevices.descriptor,
@@ -1516,7 +1528,8 @@ public enum Shared_Proto_Services_V1_DeviceService: Sendable {
             UpdatePushToken.descriptor,
             UnregisterPushToken.descriptor,
             VerifyDevice.descriptor,
-            GetDeviceInfo.descriptor
+            GetDeviceInfo.descriptor,
+            InitiateDeviceLink.descriptor
         ]
     }
 }
@@ -1676,6 +1689,30 @@ extension Shared_Proto_Services_V1_DeviceService {
             deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_DeviceInfo>,
             options: GRPCCore.CallOptions,
             onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_DeviceInfo>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "InitiateDeviceLink" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > InitiateDeviceLink - Primary device generates a short-lived QR link token
+        /// > Authenticated: requires valid JWT from the primary/existing device
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_InitiateDeviceLinkRequest` message.
+        ///   - serializer: A serializer for `Shared_Proto_Services_V1_InitiateDeviceLinkRequest` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_InitiateDeviceLinkResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response, the result of which is
+        ///       returned to the caller. Returning from the closure will cancel the RPC if it
+        ///       hasn't already finished.
+        /// - Returns: The result of `handleResponse`.
+        func initiateDeviceLink<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_InitiateDeviceLinkRequest>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_InitiateDeviceLinkRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_InitiateDeviceLinkResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_InitiateDeviceLinkResponse>) async throws -> Result
         ) async throws -> Result where Result: Sendable
     }
 
@@ -1900,6 +1937,41 @@ extension Shared_Proto_Services_V1_DeviceService {
                 onResponse: handleResponse
             )
         }
+
+        /// Call the "InitiateDeviceLink" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > InitiateDeviceLink - Primary device generates a short-lived QR link token
+        /// > Authenticated: requires valid JWT from the primary/existing device
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_InitiateDeviceLinkRequest` message.
+        ///   - serializer: A serializer for `Shared_Proto_Services_V1_InitiateDeviceLinkRequest` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_InitiateDeviceLinkResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response, the result of which is
+        ///       returned to the caller. Returning from the closure will cancel the RPC if it
+        ///       hasn't already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func initiateDeviceLink<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_InitiateDeviceLinkRequest>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_InitiateDeviceLinkRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_InitiateDeviceLinkResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_InitiateDeviceLinkResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Shared_Proto_Services_V1_DeviceService.Method.InitiateDeviceLink.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
     }
 }
 
@@ -2073,6 +2145,36 @@ extension Shared_Proto_Services_V1_DeviceService.ClientProtocol {
             request: request,
             serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_GetDeviceInfoRequest>(),
             deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_DeviceInfo>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "InitiateDeviceLink" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > InitiateDeviceLink - Primary device generates a short-lived QR link token
+    /// > Authenticated: requires valid JWT from the primary/existing device
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Shared_Proto_Services_V1_InitiateDeviceLinkRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response, the result of which is
+    ///       returned to the caller. Returning from the closure will cancel the RPC if it
+    ///       hasn't already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func initiateDeviceLink<Result>(
+        request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_InitiateDeviceLinkRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_InitiateDeviceLinkResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.initiateDeviceLink(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_InitiateDeviceLinkRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_InitiateDeviceLinkResponse>(),
             options: options,
             onResponse: handleResponse
         )
@@ -2272,6 +2374,241 @@ extension Shared_Proto_Services_V1_DeviceService.ClientProtocol {
             metadata: metadata
         )
         return try await self.getDeviceInfo(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "InitiateDeviceLink" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > InitiateDeviceLink - Primary device generates a short-lived QR link token
+    /// > Authenticated: requires valid JWT from the primary/existing device
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response, the result of which is
+    ///       returned to the caller. Returning from the closure will cancel the RPC if it
+    ///       hasn't already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func initiateDeviceLink<Result>(
+        _ message: Shared_Proto_Services_V1_InitiateDeviceLinkRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_InitiateDeviceLinkResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Shared_Proto_Services_V1_InitiateDeviceLinkRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.initiateDeviceLink(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+}
+
+// MARK: - shared.proto.services.v1.DeviceLinkService
+
+/// Namespace containing generated types for the "shared.proto.services.v1.DeviceLinkService" service.
+@available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
+public enum Shared_Proto_Services_V1_DeviceLinkService: Sendable {
+    /// Service descriptor for the "shared.proto.services.v1.DeviceLinkService" service.
+    public static let descriptor = GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.DeviceLinkService")
+    /// Namespace for method metadata.
+    public enum Method: Sendable {
+        /// Namespace for "ConfirmDeviceLink" metadata.
+        public enum ConfirmDeviceLink: Sendable {
+            /// Request type for "ConfirmDeviceLink".
+            public typealias Input = Shared_Proto_Services_V1_ConfirmDeviceLinkRequest
+            /// Response type for "ConfirmDeviceLink".
+            public typealias Output = Shared_Proto_Services_V1_AuthTokensResponse
+            /// Descriptor for "ConfirmDeviceLink".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.DeviceLinkService"),
+                method: "ConfirmDeviceLink"
+            )
+        }
+        /// Descriptors for all methods in the "shared.proto.services.v1.DeviceLinkService" service.
+        public static let descriptors: [GRPCCore.MethodDescriptor] = [
+            ConfirmDeviceLink.descriptor
+        ]
+    }
+}
+
+@available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
+extension GRPCCore.ServiceDescriptor {
+    /// Service descriptor for the "shared.proto.services.v1.DeviceLinkService" service.
+    public static let shared_proto_services_v1_DeviceLinkService = GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.DeviceLinkService")
+}
+
+// MARK: shared.proto.services.v1.DeviceLinkService (client)
+
+@available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
+extension Shared_Proto_Services_V1_DeviceLinkService {
+    /// Generated client protocol for the "shared.proto.services.v1.DeviceLinkService" service.
+    ///
+    /// You don't need to implement this protocol directly, use the generated
+    /// implementation, ``Client``.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > DeviceLinkService - Device linking flow (separate service to avoid auth middleware)
+    public protocol ClientProtocol: Sendable {
+        /// Call the "ConfirmDeviceLink" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > ConfirmDeviceLink - New device completes the link using the QR token
+        /// > NOT authenticated: new device has no JWT yet, uses link_token instead
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_ConfirmDeviceLinkRequest` message.
+        ///   - serializer: A serializer for `Shared_Proto_Services_V1_ConfirmDeviceLinkRequest` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_AuthTokensResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response, the result of which is
+        ///       returned to the caller. Returning from the closure will cancel the RPC if it
+        ///       hasn't already finished.
+        /// - Returns: The result of `handleResponse`.
+        func confirmDeviceLink<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_ConfirmDeviceLinkRequest>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_ConfirmDeviceLinkRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_AuthTokensResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_AuthTokensResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+    }
+
+    /// Generated client for the "shared.proto.services.v1.DeviceLinkService" service.
+    ///
+    /// The ``Client`` provides an implementation of ``ClientProtocol`` which wraps
+    /// a `GRPCCore.GRPCCClient`. The underlying `GRPCClient` provides the long-lived
+    /// means of communication with the remote peer.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > DeviceLinkService - Device linking flow (separate service to avoid auth middleware)
+    public struct Client<Transport>: ClientProtocol where Transport: GRPCCore.ClientTransport {
+        private let client: GRPCCore.GRPCClient<Transport>
+
+        /// Creates a new client wrapping the provided `GRPCCore.GRPCClient`.
+        ///
+        /// - Parameters:
+        ///   - client: A `GRPCCore.GRPCClient` providing a communication channel to the service.
+        public init(wrapping client: GRPCCore.GRPCClient<Transport>) {
+            self.client = client
+        }
+
+        /// Call the "ConfirmDeviceLink" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > ConfirmDeviceLink - New device completes the link using the QR token
+        /// > NOT authenticated: new device has no JWT yet, uses link_token instead
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_ConfirmDeviceLinkRequest` message.
+        ///   - serializer: A serializer for `Shared_Proto_Services_V1_ConfirmDeviceLinkRequest` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_AuthTokensResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response, the result of which is
+        ///       returned to the caller. Returning from the closure will cancel the RPC if it
+        ///       hasn't already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func confirmDeviceLink<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_ConfirmDeviceLinkRequest>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_ConfirmDeviceLinkRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_AuthTokensResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_AuthTokensResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Shared_Proto_Services_V1_DeviceLinkService.Method.ConfirmDeviceLink.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+    }
+}
+
+// Helpers providing default arguments to 'ClientProtocol' methods.
+@available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
+extension Shared_Proto_Services_V1_DeviceLinkService.ClientProtocol {
+    /// Call the "ConfirmDeviceLink" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > ConfirmDeviceLink - New device completes the link using the QR token
+    /// > NOT authenticated: new device has no JWT yet, uses link_token instead
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Shared_Proto_Services_V1_ConfirmDeviceLinkRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response, the result of which is
+    ///       returned to the caller. Returning from the closure will cancel the RPC if it
+    ///       hasn't already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func confirmDeviceLink<Result>(
+        request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_ConfirmDeviceLinkRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_AuthTokensResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.confirmDeviceLink(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_ConfirmDeviceLinkRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_AuthTokensResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+}
+
+// Helpers providing sugared APIs for 'ClientProtocol' methods.
+@available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
+extension Shared_Proto_Services_V1_DeviceLinkService.ClientProtocol {
+    /// Call the "ConfirmDeviceLink" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > ConfirmDeviceLink - New device completes the link using the QR token
+    /// > NOT authenticated: new device has no JWT yet, uses link_token instead
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response, the result of which is
+    ///       returned to the caller. Returning from the closure will cancel the RPC if it
+    ///       hasn't already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func confirmDeviceLink<Result>(
+        _ message: Shared_Proto_Services_V1_ConfirmDeviceLinkRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_AuthTokensResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Shared_Proto_Services_V1_ConfirmDeviceLinkRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.confirmDeviceLink(
             request: request,
             options: options,
             onResponse: handleResponse

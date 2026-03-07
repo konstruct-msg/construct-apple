@@ -14,8 +14,10 @@ struct MessageInputView: View {
     @Binding var droppedImages: [UIImage]  // Images pushed from ChatView drop zone
     let isSending: Bool
     let replyingTo: Message?
+    let editingMessage: Message?
     let onSend: ([UIImage], [URL]) -> Void  // images + file URLs
     let onCancelReply: () -> Void
+    let onCancelEdit: () -> Void
 
     // Photo attachment state
     @FocusState private var isTextFieldFocused: Bool
@@ -67,7 +69,41 @@ struct MessageInputView: View {
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
-            // Photo preview (if photos selected)
+            // Edit mode banner
+            if let editMessage = editingMessage {
+                HStack(spacing: 12) {
+                    Rectangle()
+                        .fill(Color.orange)
+                        .frame(width: 3)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(NSLocalizedString("editing_message", comment: ""))
+                            .font(.caption)
+                            .foregroundColor(.orange)
+
+                        Text(editMessage.decryptedContent ?? "")
+                            .font(.subheadline)
+                            .lineLimit(1)
+                            .foregroundColor(.primary)
+                    }
+                    .fixedSize(horizontal: false, vertical: true)
+
+                    Spacer()
+
+                    Button {
+                        onCancelEdit()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.secondary)
+                            .font(.title3)
+                    }
+                }
+                .padding(.horizontal)
+                .padding(.vertical, 8)
+                .frame(maxHeight: 50)
+                .background(Color(uiColor: .systemGray6))
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
             if !selectedImages.isEmpty {
                 photoPreviewView
                     .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -187,6 +223,7 @@ struct MessageInputView: View {
         .background(Color.AppBackground.primary)
         .animation(.easeInOut(duration: 0.2), value: canSend)
         .animation(.easeInOut(duration: 0.2), value: replyingTo != nil)
+        .animation(.easeInOut(duration: 0.2), value: editingMessage != nil)
         .animation(.easeInOut(duration: 0.2), value: !selectedImages.isEmpty)
         .onChange(of: selectedPhotos) {
             Task {

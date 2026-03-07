@@ -108,6 +108,9 @@ struct ChatView: View {
                                     },
                                     onTapMedia: { msg in
                                         galleryStartItem = GalleryStartItem(id: msg.id)
+                                    },
+                                    onEdit: { msg in
+                                        viewModel.editingMessage = msg
                                     }
                                 )
                                 .id(message.id)
@@ -195,6 +198,11 @@ struct ChatView: View {
                             isSearchActive = false
                             searchText = ""
                         }
+                    }
+                }
+                .onChange(of: viewModel.editingMessage) { _, editMsg in
+                    if let editMsg {
+                        messageText = editMsg.decryptedContent ?? ""
                     }
                 }
             }
@@ -351,23 +359,33 @@ struct ChatView: View {
             droppedImages: $chatDropImages,
             isSending: viewModel.isSending,
             replyingTo: replyingTo,
+            editingMessage: viewModel.editingMessage,
             onSend: { images, fileURLs in
-                viewModel.sendMessage(text: messageText, images: images, fileURLs: fileURLs, replyTo: replyingTo)
-                messageText = ""
-                replyingTo = nil
-                
-                // ✅ Enable auto-scroll for new message
-                scrollManager.shouldScrollToBottom = true
-                
-                // ✅ FIX: Scroll to bottom after sending (longer delay for media)
-                DispatchQueue.main.asyncAfter(deadline: .now() + ChatViewConstants.MessageDelay.scrollAfterSend) {
-                    if let lastMessage = filteredMessages.last {
-                        scrollManager.scrollToBottom(messageId: lastMessage.id)
+                if let editMsg = viewModel.editingMessage {
+                    viewModel.editMessage(editMsg, newText: messageText)
+                    messageText = ""
+                } else {
+                    viewModel.sendMessage(text: messageText, images: images, fileURLs: fileURLs, replyTo: replyingTo)
+                    messageText = ""
+                    replyingTo = nil
+
+                    // ✅ Enable auto-scroll for new message
+                    scrollManager.shouldScrollToBottom = true
+
+                    // ✅ FIX: Scroll to bottom after sending (longer delay for media)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + ChatViewConstants.MessageDelay.scrollAfterSend) {
+                        if let lastMessage = filteredMessages.last {
+                            scrollManager.scrollToBottom(messageId: lastMessage.id)
+                        }
                     }
                 }
             },
             onCancelReply: {
                 replyingTo = nil
+            },
+            onCancelEdit: {
+                viewModel.editingMessage = nil
+                messageText = ""
             }
         )
         .disabled(isEditMode)

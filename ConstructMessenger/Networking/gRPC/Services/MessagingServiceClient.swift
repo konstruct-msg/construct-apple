@@ -156,4 +156,31 @@ final class MessagingServiceClient: Sendable {
             )
         }
     }
+
+    // MARK: - Edit Message
+
+    func editMessage(
+        messageId: String,
+        conversationId: String,
+        newEncryptedContent: Data,
+        recipientUserId: String
+    ) async throws -> Shared_Proto_Services_V1_EditMessageResponse {
+        try await GRPCChannelManager.shared.performRPC { grpcClient in
+            let msgClient = Shared_Proto_Services_V1_MessagingService.Client(wrapping: grpcClient)
+
+            var request = Shared_Proto_Services_V1_EditMessageRequest()
+            request.messageID = messageId
+            request.conversationID = conversationId
+            request.newEncryptedContent = newEncryptedContent
+            request.recipientUserID = recipientUserId
+
+            Log.debug("✏️ editMessage RPC → messageId=\(messageId.prefix(8))…", category: "MessagingServiceClient")
+
+            let response = try await msgClient.editMessage(
+                request: .init(message: request)
+            )
+            Log.info("✅ editMessage response: success=\(response.success) editCount=\(response.editCount)", category: "MessagingServiceClient")
+            return response
+        }
+    }
 }

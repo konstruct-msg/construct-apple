@@ -176,6 +176,24 @@ class MessageRouter {
         }
 
         PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
+
+        // 5a. If this is an edit to an existing message — update it instead of saving a new one
+        if !message.editsMessageId.isEmpty {
+            let fetchRequest = Message.fetchRequest()
+            fetchRequest.predicate = NSPredicate(format: "id == %@", message.editsMessageId)
+            fetchRequest.fetchLimit = 1
+            if let original = try? context.fetch(fetchRequest).first {
+                original.decryptedContent = decryptedContent
+                original.isEdited = true
+                original.editedAt = Date(timeIntervalSince1970: TimeInterval(message.timestamp))
+                Log.info("✏️ Edited message \(message.editsMessageId.prefix(8))…", category: "MessageRouter")
+            } else {
+                Log.error("❌ Cannot find original message to edit: \(message.editsMessageId)", category: "MessageRouter")
+            }
+            onReceiptNeeded?([message.id], otherUserId, .delivered)
+            return
+        }
+
         // 5. Save regular message
         saveMessage(for: chat, with: message, decryptedContent: decryptedContent, in: context)
 

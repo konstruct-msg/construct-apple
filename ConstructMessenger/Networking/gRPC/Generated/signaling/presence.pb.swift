@@ -374,8 +374,8 @@ public struct Shared_Proto_Signaling_V1_DirectReceipt: Sendable {
   /// Sender device ID (who sent this receipt)
   public var senderDeviceID: String = String()
 
-  /// Recipient user ID — the original message sender who should receive this receipt.
-  /// Populated by the client to allow server-side routing without a DB lookup.
+  /// Original sender's user ID — used by server to route the receipt back to
+  /// the correct stream without a Redis/DB lookup.  Always populated by client.
   public var recipientUserID: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()

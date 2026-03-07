@@ -998,6 +998,65 @@ public struct Shared_Proto_Services_V1_GetSenderCertificateResponse: Sendable {
   public init() {}
 }
 
+/// InitiateDeviceLinkRequest - Primary device starts the linking flow
+/// Identity is taken from the authenticated JWT (no fields needed).
+public struct Shared_Proto_Services_V1_InitiateDeviceLinkRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// InitiateDeviceLinkResponse - Short-lived token to encode in QR code
+public struct Shared_Proto_Services_V1_InitiateDeviceLinkResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// Opaque link token (32 random bytes, base64url encoded)
+  /// Encode this in a QR code for the new device to scan
+  public var linkToken: String = String()
+
+  /// Unix timestamp when the token expires (now + 15 minutes)
+  public var expiresAt: Int64 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// ConfirmDeviceLinkRequest - New device presents scanned QR token + its public keys
+public struct Shared_Proto_Services_V1_ConfirmDeviceLinkRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// Link token from QR code (base64url, 32 bytes)
+  public var linkToken: String = String()
+
+  /// New device identifier (derived from identity key)
+  public var deviceID: String = String()
+
+  /// New device public keys for E2EE and authentication
+  public var publicKeys: Shared_Proto_Services_V1_DevicePublicKeys {
+    get {_publicKeys ?? Shared_Proto_Services_V1_DevicePublicKeys()}
+    set {_publicKeys = newValue}
+  }
+  /// Returns true if `publicKeys` has been explicitly set.
+  public var hasPublicKeys: Bool {self._publicKeys != nil}
+  /// Clears the value of `publicKeys`. Subsequent reads from it will return its default value.
+  public mutating func clearPublicKeys() {self._publicKeys = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _publicKeys: Shared_Proto_Services_V1_DevicePublicKeys? = nil
+}
+
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
 fileprivate let _protobuf_package = "shared.proto.services.v1"
@@ -2391,6 +2450,104 @@ extension Shared_Proto_Services_V1_GetSenderCertificateResponse: SwiftProtobuf.M
   public static func ==(lhs: Shared_Proto_Services_V1_GetSenderCertificateResponse, rhs: Shared_Proto_Services_V1_GetSenderCertificateResponse) -> Bool {
     if lhs.certificate != rhs.certificate {return false}
     if lhs.expiresAt != rhs.expiresAt {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Shared_Proto_Services_V1_InitiateDeviceLinkRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".InitiateDeviceLinkRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap()
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    // Load everything into unknown fields
+    while try decoder.nextFieldNumber() != nil {}
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Services_V1_InitiateDeviceLinkRequest, rhs: Shared_Proto_Services_V1_InitiateDeviceLinkRequest) -> Bool {
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Shared_Proto_Services_V1_InitiateDeviceLinkResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".InitiateDeviceLinkResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}link_token\0\u{3}expires_at\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.linkToken) }()
+      case 2: try { try decoder.decodeSingularInt64Field(value: &self.expiresAt) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.linkToken.isEmpty {
+      try visitor.visitSingularStringField(value: self.linkToken, fieldNumber: 1)
+    }
+    if self.expiresAt != 0 {
+      try visitor.visitSingularInt64Field(value: self.expiresAt, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Services_V1_InitiateDeviceLinkResponse, rhs: Shared_Proto_Services_V1_InitiateDeviceLinkResponse) -> Bool {
+    if lhs.linkToken != rhs.linkToken {return false}
+    if lhs.expiresAt != rhs.expiresAt {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Shared_Proto_Services_V1_ConfirmDeviceLinkRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ConfirmDeviceLinkRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}link_token\0\u{3}device_id\0\u{3}public_keys\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.linkToken) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.deviceID) }()
+      case 3: try { try decoder.decodeSingularMessageField(value: &self._publicKeys) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    if !self.linkToken.isEmpty {
+      try visitor.visitSingularStringField(value: self.linkToken, fieldNumber: 1)
+    }
+    if !self.deviceID.isEmpty {
+      try visitor.visitSingularStringField(value: self.deviceID, fieldNumber: 2)
+    }
+    try { if let v = self._publicKeys {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Services_V1_ConfirmDeviceLinkRequest, rhs: Shared_Proto_Services_V1_ConfirmDeviceLinkRequest) -> Bool {
+    if lhs.linkToken != rhs.linkToken {return false}
+    if lhs.deviceID != rhs.deviceID {return false}
+    if lhs._publicKeys != rhs._publicKeys {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

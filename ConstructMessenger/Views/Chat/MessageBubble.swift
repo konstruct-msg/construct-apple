@@ -19,6 +19,7 @@ struct MessageBubble: View {
     let onSelect: ((Message) -> Void)?
     let onEnterSelectMode: ((Message) -> Void)?
     let onTapMedia: ((Message) -> Void)?
+    let onEdit: ((Message) -> Void)?
 
     @Environment(\.containerWidth) private var containerWidth
     @State private var swipeOffset: CGFloat = 0
@@ -33,7 +34,8 @@ struct MessageBubble: View {
         onDelete: ((Message) -> Void)? = nil,
         onSelect: ((Message) -> Void)? = nil,
         onEnterSelectMode: ((Message) -> Void)? = nil,
-        onTapMedia: ((Message) -> Void)? = nil
+        onTapMedia: ((Message) -> Void)? = nil,
+        onEdit: ((Message) -> Void)? = nil
     ) {
         self.message = message
         self.isLastInGroup = isLastInGroup
@@ -45,6 +47,7 @@ struct MessageBubble: View {
         self.onSelect = onSelect
         self.onEnterSelectMode = onEnterSelectMode
         self.onTapMedia = onTapMedia
+        self.onEdit = onEdit
     }
 
     var body: some View {
@@ -163,6 +166,12 @@ struct MessageBubble: View {
                             deliveryStatusView
                         }
 
+                        if message.isEdited {
+                            Text(NSLocalizedString("edited", comment: ""))
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+
                         Text(message.timestamp, style: .time)
                             .font(.caption2)
                             .foregroundColor(.secondary)
@@ -185,6 +194,18 @@ struct MessageBubble: View {
                             onReply(message)
                         } label: {
                             Label("reply", systemImage: "arrowshape.turn.up.left")
+                        }
+                    }
+
+                    if message.isSentByMe,
+                       message.decryptedContent != nil,
+                       !message.decryptedContent!.hasPrefix("[MEDIA]"),
+                       !message.decryptedContent!.hasPrefix("[FILE]"),
+                       let onEdit = onEdit {
+                        Button {
+                            onEdit(message)
+                        } label: {
+                            Label(NSLocalizedString("edit_message", comment: ""), systemImage: "pencil")
                         }
                     }
 

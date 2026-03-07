@@ -476,3 +476,10 @@
 "storage_keep_7_days" = "7 Days";
 "storage_keep_30_days" = "30 Days";
 "storage_keep_90_days" = "90 Days";
+
+// Message editing
+"edit_message" = "Edit";
+"edited" = "edited";
+"editing_message" = "Editing message";
+"edit_message_failed" = "Failed to edit message: %@";
+"edit_message_limit_reached" = "Edit limit reached (20 edits max)";
