@@ -171,25 +171,7 @@ struct RecoverySetupView: View {
     }
 
     private func quizWordField(index idx: Int) -> some View {
-        @Bindable var vm = vm
-        return VStack(alignment: .leading, spacing: 6) {
-            Text(String(format: NSLocalizedString("recovery_quiz_word_n", comment: ""), idx + 1))
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-            TextField(
-                NSLocalizedString("recovery_quiz_placeholder", comment: ""),
-                text: Binding(
-                    get: { vm.quizAnswers[idx] ?? "" },
-                    set: { vm.quizAnswers[idx] = $0 }
-                )
-            )
-            .autocorrectionDisabled()
-            .textInputAutocapitalization(.never)
-            .padding(10)
-            .background(Color(.secondarySystemBackground))
-            .cornerRadius(8)
-        }
-        .padding(.horizontal)
+        QuizWordField(vm: vm, index: idx)
     }
 
     // MARK: - Uploading
@@ -272,6 +254,34 @@ struct RecoverySetupView: View {
             .padding(.horizontal)
             .padding(.bottom)
         }
+    }
+}
+
+// MARK: - Quiz Word Field
+
+private struct QuizWordField: View {
+    @Bindable var vm: AccountRecoveryViewModel
+    let index: Int
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(String(format: NSLocalizedString("recovery_quiz_word_n", comment: ""), index + 1))
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+            TextField(
+                NSLocalizedString("recovery_quiz_placeholder", comment: ""),
+                text: Binding(
+                    get: { vm.quizAnswers[index] ?? "" },
+                    set: { vm.quizAnswers[index] = $0 }
+                )
+            )
+            .autocorrectionDisabled()
+            .textInputAutocapitalization(.never)
+            .padding(10)
+            .background(Color(.secondarySystemBackground))
+            .cornerRadius(8)
+        }
+        .padding(.horizontal)
     }
 }
 
