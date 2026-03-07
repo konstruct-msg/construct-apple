@@ -48,6 +48,9 @@ struct Construct_MessengerApp: App {
             }
             .environment(securityViewModel)
             .environment(recoveryViewModel)
+            .task {
+                await MediaManager.shared.evictOldFiles()
+            }
         }
     }
 }

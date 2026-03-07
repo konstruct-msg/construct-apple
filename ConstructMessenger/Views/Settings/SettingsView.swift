@@ -46,10 +46,6 @@ struct SettingsView: View {
                                                 .font(.caption)
                                                 .foregroundColor(.secondary)
                                         }
-                                        Spacer()
-                                        Image(systemName: "chevron.right")
-                                            .foregroundColor(.secondary)
-                                            .font(.caption)
                                     }
                                 }
                                 Button {
@@ -59,7 +55,7 @@ struct SettingsView: View {
                                     Image(systemName: "xmark")
                                         .foregroundColor(.secondary)
                                         .font(.caption.weight(.semibold))
-                                        .padding(6)
+                                        .padding(8)
                                 }
                             }
                             .padding(12)
@@ -128,6 +124,8 @@ struct SettingsView: View {
                             settingsNavRow(icon: "lock", text: "Security", destination: SecurityView())
                             settingsDivider()
                             settingsNavRow(icon: "laptopcomputer", text: "Devices", destination: DevicesView())
+                            settingsDivider()
+                            settingsNavRow(icon: "internaldrive", text: "data_and_storage", destination: DataStorageSettingsView())
                             settingsDivider()
                             settingsNavRow(icon: "paintbrush", text: "appearance", destination: AppearanceSettingsView())
                             settingsDivider()

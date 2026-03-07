@@ -457,3 +457,24 @@
 "ice_title" = "Лёд (ICE)";
 "ice_subtitle" = "Intrusion Countermeasures Electronics";
 "ice_footer" = "Лёд маскирует трафик мессенджера, делая его неотличимым от обычного HTTPS. Требует поддержки на сервере. Скоро.";
+
+// Data & Storage
+"data_and_storage" = "Данные и память";
+"storage_media_cache" = "Медиакэш";
+"storage_media_cache_footer" = "Кэшированные медиафайлы позволяют мгновенно открывать фото и файлы без повторной загрузки. Хранятся в системной папке Caches — iOS может очистить их автоматически при нехватке места.";
+"media_cache" = "Медиакэш";
+"storage_of_quota" = "%@ из %@";
+"storage_clearing" = "Очистка…";
+"storage_clear_media_cache" = "Очистить медиакэш";
+"storage_clear_confirm_title" = "Очистить медиакэш?";
+"storage_clear_confirm_message" = "Все кэшированные фото, видео и файлы будут удалены. При необходимости они будут загружены повторно.";
+"storage_limit" = "Лимит хранилища";
+"storage_limit_footer" = "Старые файлы удаляются автоматически, когда кэш превышает этот предел.";
+"storage_no_limit" = "Без лимита";
+"storage_no_limit_footer" = "Медиафайлы хранятся до ручной очистки или пока iOS не освободит место.";
+"storage_auto_clear" = "Хранить медиа";
+"storage_auto_clear_footer" = "Медиафайлы старше выбранного периода удаляются при каждом запуске приложения.";
+"storage_keep_forever" = "Всегда";
+"storage_keep_7_days" = "7 дней";
+"storage_keep_30_days" = "30 дней";
+"storage_keep_90_days" = "90 дней";

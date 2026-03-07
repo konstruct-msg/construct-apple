@@ -20,6 +20,13 @@ class MediaManager {
     
     static let shared = MediaManager()
     
+    // MARK: - UserDefaults Keys
+
+    static let maxDiskCacheBytesKey = "media.maxDiskCacheBytes"
+    static let evictAfterDaysKey = "media.evictAfterDays"
+    /// Default quota: 1 GB (0 = unlimited)
+    static let defaultMaxDiskCacheBytes: Int = 1_073_741_824
+
     // MARK: - In-Memory Cache
     
     /// Cache for downloaded/decrypted media to avoid re-downloading
@@ -49,6 +56,75 @@ class MediaManager {
     private func loadFromDiskCache(mediaId: String) -> Data? {
         let url = diskCacheURL(for: mediaId)
         return try? Data(contentsOf: url)
+    }
+
+    // MARK: - Cache Management
+
+    /// Total bytes used by the disk cache.
+    func diskCacheSize() -> Int64 {
+        guard let files = try? FileManager.default.contentsOfDirectory(
+            at: diskCacheDirectory,
+            includingPropertiesForKeys: [.fileSizeKey]
+        ) else { return 0 }
+        return files.reduce(Int64(0)) { total, url in
+            let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+            return total + Int64(size)
+        }
+    }
+
+    /// Evict oldest files (by modification date) until cache is under quota.
+    private func evictToQuota() {
+        let maxBytes = UserDefaults.standard.object(forKey: Self.maxDiskCacheBytesKey) as? Int
+            ?? Self.defaultMaxDiskCacheBytes
+        guard maxBytes > 0 else { return } // 0 = unlimited
+
+        var currentSize = diskCacheSize()
+        guard currentSize > Int64(maxBytes) else { return }
+
+        guard let files = try? FileManager.default.contentsOfDirectory(
+            at: diskCacheDirectory,
+            includingPropertiesForKeys: [.contentModificationDateKey, .fileSizeKey]
+        ) else { return }
+
+        let sorted = files.sorted {
+            let aDate = (try? $0.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+            let bDate = (try? $1.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+            return aDate < bDate
+        }
+
+        for file in sorted {
+            guard currentSize > Int64(maxBytes) else { break }
+            let size = Int64((try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
+            try? FileManager.default.removeItem(at: file)
+            mediaCache.removeValue(forKey: file.lastPathComponent)
+            currentSize -= size
+            Log.debug("🗑️ Evicted \(file.lastPathComponent.prefix(8))… (\(size / 1024)KB) — quota", category: "MediaManager")
+        }
+    }
+
+    /// Evict files older than the configured number of days. Call on app foreground.
+    func evictOldFiles() {
+        let days = UserDefaults.standard.object(forKey: Self.evictAfterDaysKey) as? Int ?? 0
+        guard days > 0 else { return }
+        let cutoff = Date().addingTimeInterval(-Double(days) * 86_400)
+
+        guard let files = try? FileManager.default.contentsOfDirectory(
+            at: diskCacheDirectory,
+            includingPropertiesForKeys: [.contentModificationDateKey]
+        ) else { return }
+
+        var count = 0
+        for file in files {
+            let mod = (try? file.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantFuture
+            if mod < cutoff {
+                try? FileManager.default.removeItem(at: file)
+                mediaCache.removeValue(forKey: file.lastPathComponent)
+                count += 1
+            }
+        }
+        if count > 0 {
+            Log.info("🗑️ Evicted \(count) cached file(s) older than \(days) days", category: "MediaManager")
+        }
     }
     
     private init() {}
@@ -260,6 +336,7 @@ class MediaManager {
         
         // Persist to disk cache so media survives app restarts and updates
         saveToDiskcache(decryptedData, mediaId: mediaId)
+        evictToQuota()
 
         // Store in memory cache if space available
         if currentCacheSize + decryptedData.count < maxCacheSize {

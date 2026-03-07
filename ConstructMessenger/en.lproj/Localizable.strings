@@ -455,3 +455,24 @@
 "ice_title" = "ICE";
 "ice_subtitle" = "Intrusion Countermeasures Electronics";
 "ice_footer" = "ICE masks and obfuscates traffic patterns to make your connection indistinguishable from regular HTTPS. Requires server support. Coming soon.";
+
+// Data & Storage
+"data_and_storage" = "Data & Storage";
+"storage_media_cache" = "Media Cache";
+"storage_media_cache_footer" = "Cached media files let you view photos and files instantly without re-downloading. Stored in the system Caches folder — iOS may clear this automatically when storage is low.";
+"media_cache" = "Media Cache";
+"storage_of_quota" = "%@ of %@";
+"storage_clearing" = "Clearing…";
+"storage_clear_media_cache" = "Clear Media Cache";
+"storage_clear_confirm_title" = "Clear Media Cache?";
+"storage_clear_confirm_message" = "All cached photos, videos and files will be removed. They will be re-downloaded when needed.";
+"storage_limit" = "Storage Limit";
+"storage_limit_footer" = "Oldest files are automatically removed when the cache exceeds this limit.";
+"storage_no_limit" = "No Limit";
+"storage_no_limit_footer" = "Media files will be kept until you clear them manually or iOS reclaims the space.";
+"storage_auto_clear" = "Keep Media For";
+"storage_auto_clear_footer" = "Media older than the selected period is removed each time the app launches.";
+"storage_keep_forever" = "Forever";
+"storage_keep_7_days" = "7 Days";
+"storage_keep_30_days" = "30 Days";
+"storage_keep_90_days" = "90 Days";
