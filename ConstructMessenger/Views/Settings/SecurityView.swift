@@ -166,5 +166,6 @@ struct SecurityView: View {
             Text("duress_pin_disable_warning")
         }
         .task { await recoveryVM.loadStatus() }
+        .onAppear { securityViewModel.refreshPinState() }
     }
 }

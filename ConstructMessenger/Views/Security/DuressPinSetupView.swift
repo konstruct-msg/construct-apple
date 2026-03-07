@@ -61,6 +61,10 @@ struct DuressPinSetupView: View {
                     Button("cancel") { dismiss() }
                 }
             }
+            .onAppear {
+                // Safety guard: duress PIN requires main PIN to be active
+                if !securityViewModel.isPinEnabled { dismiss() }
+            }
         }
     }
 
