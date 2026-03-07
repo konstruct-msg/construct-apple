@@ -301,6 +301,13 @@
 "duress_pin_coming_soon" = "Destruction PIN will be available in a future update.";
 "enable_duress_pin" = "Enable Destruction PIN";
 "disable_duress_pin" = "Disable Destruction PIN";
+"duress_pin_change" = "Change Destruction PIN";
+"create_duress_pin" = "Create Destruction PIN";
+"confirm_duress_pin" = "Confirm Destruction PIN";
+"duress_pin_setup_warning" = "When entered on the lock screen, this PIN silently wipes all local data and attempts to delete your account from the server. This action is irreversible.";
+"duress_pin_matches_main" = "Destruction PIN cannot match your main PIN. Choose a different code.";
+"duress_pin_disable_warning" = "Your Destruction PIN will be removed. The lock screen will no longer trigger a silent wipe.";
+"duress_pin_requires_main_pin" = "Enable a main PIN first to use the Destruction PIN.";
 
 // Linked Devices
 "linked_devices" = "Linked Devices";

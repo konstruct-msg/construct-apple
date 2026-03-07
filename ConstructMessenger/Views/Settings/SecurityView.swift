@@ -15,7 +15,8 @@ struct SecurityView: View {
     @State private var showingPinSetup = false
     @State private var showingDisablePinSheet = false
     @State private var showingRecoverySetup = false
-    @State private var showingDuressPin = false
+    @State private var showingDuressPinSetup = false
+    @State private var showingDisableDuressAlert = false
     
     var body: some View {
         @Bindable var securityViewModel = securityViewModel
@@ -90,19 +91,48 @@ struct SecurityView: View {
             }
 
             Section {
-                Button {
-                    showingDuressPin = true
-                } label: {
-                    Label {
-                        Text("duress_pin")
-                            .foregroundColor(.primary)
-                    } icon: {
-                        Image(systemName: "bolt.shield.fill")
-                            .foregroundColor(.gray)
+                if securityViewModel.isDuresspinEnabled {
+                    Button {
+                        showingDuressPinSetup = true
+                    } label: {
+                        Label {
+                            Text("duress_pin_change")
+                                .foregroundColor(.primary)
+                        } icon: {
+                            Image(systemName: "bolt.shield.fill")
+                                .foregroundColor(.red)
+                        }
                     }
+
+                    Button(role: .destructive) {
+                        showingDisableDuressAlert = true
+                    } label: {
+                        Label {
+                            Text("disable_duress_pin")
+                                .foregroundColor(.red)
+                        } icon: {
+                            Image(systemName: "bolt.shield")
+                                .foregroundColor(.red)
+                        }
+                    }
+                } else {
+                    Button {
+                        showingDuressPinSetup = true
+                    } label: {
+                        Label {
+                            Text("enable_duress_pin")
+                                .foregroundColor(securityViewModel.isPinEnabled ? .primary : .secondary)
+                        } icon: {
+                            Image(systemName: "bolt.shield.fill")
+                                .foregroundColor(securityViewModel.isPinEnabled ? .gray : .gray.opacity(0.4))
+                        }
+                    }
+                    .disabled(!securityViewModel.isPinEnabled)
                 }
             } footer: {
-                Text("duress_pin_hint")
+                Text(securityViewModel.isPinEnabled
+                     ? "duress_pin_hint"
+                     : "duress_pin_requires_main_pin")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
@@ -123,10 +153,17 @@ struct SecurityView: View {
                     Task { await recoveryVM.refreshStatus() }
                 }
         }
-        .alert("duress_pin", isPresented: $showingDuressPin) {
-            Button("ok", role: .cancel) { }
+        .sheet(isPresented: $showingDuressPinSetup) {
+            DuressPinSetupView()
+                .environment(securityViewModel)
+        }
+        .alert("disable_duress_pin", isPresented: $showingDisableDuressAlert) {
+            Button("disable_duress_pin", role: .destructive) {
+                securityViewModel.disableDuressPin()
+            }
+            Button("cancel", role: .cancel) {}
         } message: {
-            Text("duress_pin_coming_soon")
+            Text("duress_pin_disable_warning")
         }
         .task { await recoveryVM.loadStatus() }
     }

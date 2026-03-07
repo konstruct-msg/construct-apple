@@ -11,6 +11,7 @@ import SwiftUI
 
 struct PinLockView: View {
     @Environment(SecurityViewModel.self) private var securityViewModel
+    @Environment(AuthViewModel.self) private var authViewModel
 
     @State private var pin = ""
     @State private var errorMessage: String?
@@ -231,6 +232,11 @@ struct PinLockView: View {
             securityViewModel.isUnlocked = true
             return
         }
+        if securityViewModel.verifyDuressPin(pin) {
+            // Silent wipe — no error, no shake, just disappear as if unlocked
+            authViewModel.triggerDuressWipe()
+            return
+        }
         errorMessage = NSLocalizedString("wrong_pin_code", comment: "")
         pin = ""
         triggerShake()
@@ -248,15 +254,25 @@ struct PinLockView: View {
     }
 }
 
+#if DEBUG
 #Preview("PIN entry") {
-    PinLockView()
+    let container = PreviewHelpers.createPreviewContainer()
+    let authVM = AuthViewModel(context: container.viewContext)
+    authVM.configureMockAuth()
+    return PinLockView()
         .environment(SecurityViewModel())
+        .environment(authVM)
 }
 
 #Preview("Biometric") {
+    let container = PreviewHelpers.createPreviewContainer()
+    let authVM = AuthViewModel(context: container.viewContext)
+    authVM.configureMockAuth()
     let vm = SecurityViewModel()
     vm.isBiometricAvailable = true
     vm.isBiometricEnabled = true
     return PinLockView()
         .environment(vm)
+        .environment(authVM)
 }
+#endif

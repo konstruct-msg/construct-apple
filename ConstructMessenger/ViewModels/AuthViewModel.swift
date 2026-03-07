@@ -328,6 +328,19 @@ class AuthViewModel {
         handleDeleteAccountSuccess()
     }
 
+    /// Called when duress PIN is entered on the lock screen.
+    /// Immediately wipes all local data; attempts server deletion best-effort in background.
+    func triggerDuressWipe() {
+        Log.info("🚨 Duress PIN triggered — initiating silent wipe", category: "AuthViewModel")
+        Task {
+            _ = try? await UserServiceClient.shared.deleteAccount(
+                confirmation: "DELETE",
+                reason: "duress"
+            )
+        }
+        handleDeleteAccountSuccess()
+    }
+
     private func deleteAccountWithDeviceSignature() async throws {
         let response = try await UserServiceClient.shared.deleteAccount(
             confirmation: "DELETE",
