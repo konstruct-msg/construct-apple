@@ -399,5 +399,6 @@ struct SettingsView: View {
         .environment(\.managedObjectContext, context)
         .environment(authViewModel)
         .environment(SecurityViewModel())
+        .environment(AccountRecoveryViewModel())
 }
 #endif

@@ -220,6 +220,9 @@ struct OnboardingView: View {
     }
 }
 
+#if DEBUG
 #Preview {
     OnboardingView()
+        .environment(AccountRecoveryViewModel())
 }
+#endif
