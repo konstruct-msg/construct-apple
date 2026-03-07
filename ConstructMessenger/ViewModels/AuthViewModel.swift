@@ -79,7 +79,7 @@ class AuthViewModel {
         }
     }
 
-    deinit {
+    isolated deinit {
         tokenRefreshTimer?.invalidate()
         authOperationTimer?.invalidate()
         sessionRestoreTimer?.invalidate()

@@ -84,7 +84,7 @@ class ChatViewModel: NSObject {
         setupMessageQueueListener()
     }
 
-    deinit {
+    isolated deinit {
         publicKeyFetchTimer?.invalidate()
         observationTasks.forEach { $0.cancel() }
         Log.debug("🔧 ChatViewModel deinitialized", category: "ChatViewModel")
