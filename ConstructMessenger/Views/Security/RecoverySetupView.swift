@@ -34,16 +34,26 @@ struct RecoverySetupView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    if case .done = vm.setupStep { EmptyView() }
-                    else if case .uploading = vm.setupStep { EmptyView() }
-                    else {
-                        Button(NSLocalizedString("cancel", comment: "")) {
-                            vm.resetSetup()
-                            dismiss()
-                        }
-                    }
+                    cancelButton
                 }
             }
+        }
+    }
+
+    @ViewBuilder
+    private var cancelButton: some View {
+        if showsCancelButton {
+            Button(NSLocalizedString("cancel", comment: "")) {
+                vm.resetSetup()
+                dismiss()
+            }
+        }
+    }
+
+    private var showsCancelButton: Bool {
+        switch vm.setupStep {
+        case .done, .uploading: return false
+        default: return true
         }
     }
 
@@ -132,8 +142,7 @@ struct RecoverySetupView: View {
     // MARK: - Quiz
 
     private var quizView: some View {
-        @Bindable var vm = vm
-        return ScrollView {
+        ScrollView {
             VStack(spacing: 24) {
                 Text(NSLocalizedString("recovery_quiz_title", comment: ""))
                     .font(.headline)
@@ -141,23 +150,7 @@ struct RecoverySetupView: View {
                     .padding(.horizontal)
 
                 ForEach(vm.quizIndices, id: \.self) { idx in
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(String(format: NSLocalizedString("recovery_quiz_word_n", comment: ""), idx + 1))
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                        TextField(NSLocalizedString("recovery_quiz_placeholder", comment: ""),
-                                  text: Binding(
-                                    get: { vm.quizAnswers[idx] ?? "" },
-                                    set: { vm.quizAnswers[idx] = $0 }
-                                  )
-                        )
-                        .autocorrectionDisabled()
-                        .textInputAutocapitalization(.never)
-                        .padding(10)
-                        .background(Color(.secondarySystemBackground))
-                        .cornerRadius(8)
-                    }
-                    .padding(.horizontal)
+                    quizWordField(index: idx)
                 }
 
                 Spacer(minLength: 20)
@@ -175,6 +168,28 @@ struct RecoverySetupView: View {
             }
             .padding(.top)
         }
+    }
+
+    private func quizWordField(index idx: Int) -> some View {
+        @Bindable var vm = vm
+        return VStack(alignment: .leading, spacing: 6) {
+            Text(String(format: NSLocalizedString("recovery_quiz_word_n", comment: ""), idx + 1))
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+            TextField(
+                NSLocalizedString("recovery_quiz_placeholder", comment: ""),
+                text: Binding(
+                    get: { vm.quizAnswers[idx] ?? "" },
+                    set: { vm.quizAnswers[idx] = $0 }
+                )
+            )
+            .autocorrectionDisabled()
+            .textInputAutocapitalization(.never)
+            .padding(10)
+            .background(Color(.secondarySystemBackground))
+            .cornerRadius(8)
+        }
+        .padding(.horizontal)
     }
 
     // MARK: - Uploading
