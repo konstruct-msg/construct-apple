@@ -383,6 +383,10 @@
 
 // Account deletion
 "delete_account_countdown" = "Удалить через %dс";
+"delete_account_local_only" = "Удалить только локально";
+"delete_account_local_only_title" = "Удалить только локально?";
+"delete_account_local_only_warning" = "Аккаунт может остаться на сервере. Все ключи шифрования и данные приложения будут навсегда удалены с этого устройства. Вы больше не сможете использовать этот аккаунт здесь.";
+"delete_account_local_only_confirm" = "Удалить локально";
 
 // Reset Session
 "reset_session" = "Сбросить сессию";

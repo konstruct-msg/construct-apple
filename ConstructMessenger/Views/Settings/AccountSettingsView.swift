@@ -282,6 +282,7 @@ struct DeleteAccountConfirmationView: View {
 
     @State private var countdown = 7
     @State private var errorMessage: String?
+    @State private var showLocalDeleteConfirm = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -329,14 +330,24 @@ struct DeleteAccountConfirmationView: View {
                 .padding(.bottom, 28)
             }
 
-            // Error message
+            // Error message + local-delete fallback
             if let err = errorMessage {
                 Text(err)
                     .font(.footnote)
                     .foregroundColor(.red)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 32)
-                    .padding(.bottom, 16)
+                    .padding(.bottom, 12)
+
+                Button {
+                    showLocalDeleteConfirm = true
+                } label: {
+                    Text("delete_account_local_only")
+                        .font(.footnote)
+                        .underline()
+                        .foregroundColor(.red.opacity(0.75))
+                }
+                .padding(.bottom, 16)
             }
 
             Spacer()
@@ -375,6 +386,14 @@ struct DeleteAccountConfirmationView: View {
         }
         .presentationDetents([.medium])
         .presentationDragIndicator(.hidden)
+        .alert("delete_account_local_only_title", isPresented: $showLocalDeleteConfirm) {
+            Button("delete_account_local_only_confirm", role: .destructive) {
+                authViewModel.deleteAccountLocally()
+            }
+            Button("cancel", role: .cancel) {}
+        } message: {
+            Text("delete_account_local_only_warning")
+        }
         .task {
             // Count down from 7 to 0 using structured concurrency — avoids RunLoop blocking on macOS.
             while countdown > 0 {

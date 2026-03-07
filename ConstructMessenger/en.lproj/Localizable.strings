@@ -286,6 +286,10 @@
 "delete_account_irreversible_warning" = "This action is irreversible. All your data will be permanently deleted from the server and cannot be recovered.";
 "delete_account" = "Delete Identity";
 "delete_account_countdown" = "Delete in %ds";
+"delete_account_local_only" = "Delete local data only";
+"delete_account_local_only_title" = "Delete local data only?";
+"delete_account_local_only_warning" = "Your account may still exist on the server. All local encryption keys and app data will be permanently deleted from this device. You will no longer be able to use this account from here.";
+"delete_account_local_only_confirm" = "Delete locally";
 "warning" = "Warning";"DANGER_ZONE" = "Danger Zone";
 "account_recovery_seed" = "Identity Recovery (Seed Phrase)";
 "account_recovery_seed_hint" = "Restore access using your recovery seed phrase.";

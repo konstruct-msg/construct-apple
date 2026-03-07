@@ -321,6 +321,13 @@ class AuthViewModel {
         return String(format: NSLocalizedString("delete_account_failed", comment: ""), desc)
     }
 
+    /// Deletes all local data without contacting the server.
+    /// Used as a fallback when the server is unreachable (e.g. blocked by censorship).
+    func deleteAccountLocally() {
+        Log.info("🗑️ Deleting account locally only (server unreachable)", category: "AuthViewModel")
+        handleDeleteAccountSuccess()
+    }
+
     private func deleteAccountWithDeviceSignature() async throws {
         let response = try await UserServiceClient.shared.deleteAccount(
             confirmation: "DELETE",
