@@ -645,7 +645,7 @@ class CryptoManager {
 
         // All archives failed — restore the original active session into Rust core.
         if let json = activeSessionSnapshot {
-            try? core.importSessionJson(contactId: message.from, sessionJson: json)
+            _ = try? core.importSessionJson(contactId: message.from, sessionJson: json)
         }
         
         Log.info("⚠️ All \(archives.count) archived sessions failed to decrypt", category: "CryptoManager")

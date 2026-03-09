@@ -670,7 +670,7 @@ class ChatViewModel: NSObject {
                         Log.info("🔄 Updating message status from sending → \(deliveryStatus) for \(messageId)", category: "ChatViewModel")
                         updateMessageStatus(messageId: messageId, status: deliveryStatus)
                         Log.info("✅ Message sent via gRPC: \(response.messageId), server status: \(response.status)", category: "ChatViewModel")
-                        isSending = false
+                        self.isSending = false
                     }
                 } catch {
                     await MainActor.run {
@@ -683,8 +683,8 @@ class ChatViewModel: NSObject {
                             Log.error("❌ Failed to send message: \(error)", category: "ChatViewModel")
                         }
                         updateMessageStatus(messageId: messageId, status: .failed)
-                        errorMessage = "Failed to send message: \(error.userFacingMessage)"
-                        isSending = false
+                        self.errorMessage = "Failed to send message: \(error.userFacingMessage)"
+                        self.isSending = false
                     }
                 }
             }
@@ -769,11 +769,7 @@ class ChatViewModel: NSObject {
     }
 
     private func updateMessageStatus(messageId: String, status: DeliveryStatus) {
-        do {
-            try persistenceService.updateMessageStatus(messageId: messageId, status: status, in: viewContext)
-        } catch {
-            Log.error("❌ Failed to save message status: \(error)", category: "ChatViewModel")
-        }
+        persistenceService.updateMessageStatus(messageId: messageId, status: status, in: viewContext)
     }
 }
 

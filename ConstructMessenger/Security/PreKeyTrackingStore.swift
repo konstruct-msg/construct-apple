@@ -61,7 +61,7 @@ final class PreKeyTrackingStore {
 
     private func save() {
         if let encoded = try? JSONEncoder().encode(tracked) {
-            KeychainManager.shared.saveData(encoded, forKey: storageKey)
+            _ = KeychainManager.shared.saveData(encoded, forKey: storageKey)
         }
     }
 }

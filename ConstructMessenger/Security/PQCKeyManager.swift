@@ -259,7 +259,7 @@ final class PQCKeyManager {
 
     /// Discard any pending PQ contribution (e.g., when kem cannot be included in the message).
     func clearPendingContribution(for contactId: String) {
-        pqContributionLock.withLock { pendingPQContributions.removeValue(forKey: contactId) }
+        _ = pqContributionLock.withLock { pendingPQContributions.removeValue(forKey: contactId) }
     }
 
     // MARK: - PQXDH Receiver: Decapsulate + Strengthen Session

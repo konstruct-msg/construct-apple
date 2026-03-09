@@ -187,7 +187,7 @@ class InviteVerifier {
                 
                 if normalizedValid {
                     Log.info("✅ Invite signature valid after server normalization: jti=\(invite.jti.prefix(8))..., server=\(normalizedServer)", category: "InviteVerifier")
-                    jtiLock.withLock { usedJtis.insert(invite.jti) }
+                    _ = jtiLock.withLock { self.usedJtis.insert(invite.jti) }
                     return true
                 }
             }
@@ -197,7 +197,7 @@ class InviteVerifier {
         }
         
         if isValid {
-            jtiLock.withLock { usedJtis.insert(invite.jti) }
+            _ = jtiLock.withLock { self.usedJtis.insert(invite.jti) }
         }
         return isValid
     }
