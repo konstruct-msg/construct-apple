@@ -115,14 +115,10 @@ class CryptoManager {
     func generateRegistrationBundle() throws -> (deviceId: String, bundleJson: String, signingKey: Data, identityKey: Data) {
         Log.info("🔑 Generating registration bundle...", category: "CryptoManager")
         
-        // Use existing core if available, otherwise create a new one
-        let activeCore: ClassicCryptoCore
-        if let core = self.core {
-            activeCore = core
-        } else {
-            activeCore = try createCryptoCore()
-            self.core = activeCore
-        }
+        // Always generate fresh keys for registration — never reuse an existing core
+        // (an old core would carry a signature computed with the previous prologue/suite_id)
+        let activeCore = try createCryptoCore()
+        self.core = activeCore
         
         // Export registration bundle (contains all public keys)
         let bundleJson = try activeCore.exportRegistrationBundleJson()
@@ -251,6 +247,11 @@ class CryptoManager {
             }
         })
     }
+
+    /// Internal: save session to Keychain (used by deferred PQXDH application).
+    func saveSessionToKeychainPublic(for userId: String) {
+        saveSessionToKeychain(for: userId)
+    }
     
     /// Clear all archived sessions for a user
     func clearArchivedSessions(for userId: String) {
@@ -355,13 +356,17 @@ class CryptoManager {
     // MARK: - Session Management
 
     /// Initializes a secure session with a recipient using the Rust core.
-    func initializeSession(for userId: String, recipientBundle: (identityPublic: String, signedPrekeyPublic: String, signature: String, verifyingKey: String, suiteId: String), oneTimePreKeyPublic: Data? = nil, oneTimePreKeyId: UInt32? = nil) throws {
+    @discardableResult
+    func initializeSession(for userId: String, recipientBundle: (identityPublic: String, signedPrekeyPublic: String, signature: String, verifyingKey: String, suiteId: String), oneTimePreKeyPublic: Data? = nil, oneTimePreKeyId: UInt32? = nil, kyberPreKeyPublic: Data? = nil, kyberOneTimePreKeyPublic: Data? = nil, kyberOneTimePreKeyId: UInt32? = nil) throws -> (kemCiphertext: Data?, kyberOtpkId: UInt32) {
         do {
-            try sessionInitService.initializeSession(
+            let result = try sessionInitService.initializeSession(
                 for: userId,
                 recipientBundle: recipientBundle,
                 oneTimePreKeyPublic: oneTimePreKeyPublic,
                 oneTimePreKeyId: oneTimePreKeyId,
+                kyberPreKeyPublic: kyberPreKeyPublic,
+                kyberOneTimePreKeyPublic: kyberOneTimePreKeyPublic,
+                kyberOneTimePreKeyId: kyberOneTimePreKeyId,
                 core: core,
                 sessionStore: sessionStore,
                 archiveSession: { [weak self] userId, reason in
@@ -373,6 +378,7 @@ class CryptoManager {
                 }
             )
             Log.info("✅ Session initialized for user: \(userId)", category: "CryptoManager")
+            return result
         } catch CryptoManagerError.invalidKeyData {
             Log.error("Failed to decode base64-encoded keys from bundle", category: "CryptoManager")
             throw CryptoManagerError.invalidKeyData

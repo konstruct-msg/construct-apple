@@ -4,6 +4,38 @@ import os.log
 /// Service responsible for session initialization with retry logic and queue management
 @MainActor
 class SessionInitializationService {
+
+    // MARK: - PQC pending KEM ciphertexts
+
+    /// Keyed by userId; holds the kem_ciphertext from a fresh PQXDH handshake
+    /// until it can be attached to the outgoing first message.
+    private var pendingKemCiphertexts: [String: Data] = [:]
+
+    /// Keyed by userId; holds the Kyber OTPK ID used in a fresh PQXDH handshake.
+    private var pendingKyberOtpkIds: [String: UInt32] = [:]
+
+    /// Consume (and remove) the pending KEM ciphertext for a contact, if any.
+    /// Also applies the deferred PQXDH contribution to the DR session — msg0 was
+    /// already encrypted with classic-only state, so this is the correct moment.
+    func consumeKemCiphertext(for userId: String) -> Data? {
+        guard let kem = pendingKemCiphertexts.removeValue(forKey: userId) else { return nil }
+        // Apply deferred PQXDH now that msg0 has been encrypted with classic state.
+        if let core = CryptoManager.shared.core {
+            do {
+                try PQCKeyManager.shared.applyDeferredPQContribution(contactId: userId, core: core)
+                CryptoManager.shared.saveSessionToKeychainPublic(for: userId)
+            } catch {
+                Log.error("⚠️ PQC: Failed to apply deferred PQ contribution for \(userId.prefix(8))...: \(error)", category: "SessionInit")
+            }
+        }
+        return kem
+    }
+
+    /// Consume (and remove) the pending Kyber OTPK ID for a contact (0 if none).
+    func consumeKyberOtpkId(for userId: String) -> UInt32 {
+        defer { pendingKyberOtpkIds.removeValue(forKey: userId) }
+        return pendingKyberOtpkIds[userId] ?? 0
+    }
     
     // MARK: - Public Methods
     
@@ -40,11 +72,12 @@ class SessionInitializationService {
     }
     
     /// Initialize a session with a recipient using their public key bundle
+    @discardableResult
     func initializeSession(
         userId: String,
         bundle: PublicKeyBundleData,
         deleteExisting: Bool = true
-    ) throws {
+    ) throws -> Data? {
         // Proactively delete stale session if requested
         if deleteExisting {
             if CryptoManager.shared.hasSession(for: userId) {
@@ -52,7 +85,7 @@ class SessionInitializationService {
                 Log.info("🗑️ Proactively deleted any existing session for \(userId) before initialization.", category: "SessionInit")
             }
         }
-        
+
         let bundleWithSuite = (
             identityPublic: bundle.identityPublic,
             signedPrekeyPublic: bundle.signedPrekeyPublic,
@@ -63,20 +96,30 @@ class SessionInitializationService {
 
         let otpkPublic = bundle.oneTimePreKeyPublic.flatMap { Data(base64Encoded: $0) }
         let otpkId = bundle.oneTimePreKeyId
-        
+
         do {
-            try CryptoManager.shared.initializeSession(
+            let result = try CryptoManager.shared.initializeSession(
                 for: userId,
                 recipientBundle: bundleWithSuite,
                 oneTimePreKeyPublic: otpkPublic,
-                oneTimePreKeyId: otpkId
+                oneTimePreKeyId: otpkId,
+                kyberPreKeyPublic: bundle.kyberPreKeyPublic,
+                kyberOneTimePreKeyPublic: bundle.kyberOneTimePreKeyPublic,
+                kyberOneTimePreKeyId: bundle.kyberOneTimePreKeyId
             )
+            Log.info("✅ Session initialized as INITIATOR for \(userId)", category: "SessionInit")
+            if let kem = result.kemCiphertext {
+                pendingKemCiphertexts[userId] = kem
+            }
+            if result.kyberOtpkId > 0 {
+                pendingKyberOtpkIds[userId] = result.kyberOtpkId
+            }
+            return result.kemCiphertext
         } catch {
             Log.error("❌ Session init failed for \(userId): \(error)", category: "SessionInit")
             Log.error("   bundle.suiteId=\(bundle.suiteId), identityPublic.len=\(bundle.identityPublic.count), signedPrekeyPublic.len=\(bundle.signedPrekeyPublic.count)", category: "SessionInit")
             throw error
         }
-        Log.info("✅ Session initialized as INITIATOR for \(userId)", category: "SessionInit")
     }
     
     /// Proactively initialize session for a user (fetch bundle + initialize)
@@ -91,9 +134,9 @@ class SessionInitializationService {
             // Fetch bundle with retry
             let bundle = try await fetchPublicKeyWithRetry(userId: userId)
             
-            // Initialize sending session
-            try initializeSession(userId: userId, bundle: bundle, deleteExisting: true)
-            
+            // Initialize sending session (also stores pending KEM/OTPK IDs internally)
+            _ = try initializeSession(userId: userId, bundle: bundle, deleteExisting: true)
+
             Log.info("✅ SESSION_STATE[proactive_init_success]: userId=\(userId.prefix(8))...", category: "SessionInit")
             
             // Notify success on main actor

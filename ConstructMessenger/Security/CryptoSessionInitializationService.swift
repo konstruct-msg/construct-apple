@@ -14,11 +14,14 @@ final class CryptoSessionInitializationService {
         recipientBundle: (identityPublic: String, signedPrekeyPublic: String, signature: String, verifyingKey: String, suiteId: String),
         oneTimePreKeyPublic: Data? = nil,
         oneTimePreKeyId: UInt32? = nil,
+        kyberPreKeyPublic: Data? = nil,
+        kyberOneTimePreKeyPublic: Data? = nil,
+        kyberOneTimePreKeyId: UInt32? = nil,
         core: ClassicCryptoCore?,
         sessionStore: SessionStore,
         archiveSession: (String, ArchiveReason) -> Void,
         saveSession: (String) -> Void
-    ) throws {
+    ) throws -> (kemCiphertext: Data?, kyberOtpkId: UInt32) {  // Returns KEM ciphertext and Kyber OTPK ID used
         guard let core = core else {
             throw CryptoManagerError.coreNotInitialized
         }
@@ -99,8 +102,38 @@ final class CryptoSessionInitializationService {
             let sessionId = try core.initSession(contactId: userId, recipientBundle: bytes)
             sessionStore.setSession(userId: userId, sessionId: sessionId, suiteId: suiteID)
             saveSession(userId)
-            
+
+            // PQXDH: Prefer Kyber OTPK over SPK when available.
+            // Use encapsulateAndDefer so that msg0 is encrypted with classic-only DR state.
+            // The contribution is applied after msg0 is encrypted (in consumeKemCiphertext).
+            var kemCiphertext: Data? = nil
+            var kyberOtpkId: UInt32 = 0
+            if let otpkPK = kyberOneTimePreKeyPublic, let otpkId = kyberOneTimePreKeyId, !otpkPK.isEmpty {
+                do {
+                    kemCiphertext = try PQCKeyManager.shared.encapsulateAndDefer(
+                        kyberSPKPublic: otpkPK,
+                        contactId: userId
+                    )
+                    kyberOtpkId = otpkId
+                    Log.info("🔐 PQC: PQXDH encapsulated (Kyber OTPK id=\(otpkId)) for initiator session with \(userId.prefix(8))... (deferred)", category: "CryptoManager")
+                } catch {
+                    Log.error("⚠️ PQC: PQXDH encapsulation (OTPK) failed (using classic X3DH): \(error)", category: "CryptoManager")
+                }
+            } else if let kyberPK = kyberPreKeyPublic, !kyberPK.isEmpty {
+                do {
+                    kemCiphertext = try PQCKeyManager.shared.encapsulateAndDefer(
+                        kyberSPKPublic: kyberPK,
+                        contactId: userId
+                    )
+                    // kyberOtpkId stays 0 = SPK used
+                    Log.info("🔐 PQC: PQXDH encapsulated (Kyber SPK) for initiator session with \(userId.prefix(8))... (deferred)", category: "CryptoManager")
+                } catch {
+                    Log.error("⚠️ PQC: PQXDH encapsulation (SPK) failed (using classic X3DH): \(error)", category: "CryptoManager")
+                }
+            }
+
             Log.info("✅ INITIATOR session created: \(sessionId.prefix(16))...", category: "CryptoManager")
+            return (kemCiphertext: kemCiphertext, kyberOtpkId: kyberOtpkId)
         } catch {
             Log.error("❌ Rust core initSession failed: \(error)", category: "CryptoManager")
             throw CryptoManagerError.sessionInitializationFailed
@@ -253,6 +286,9 @@ final class CryptoSessionInitializationService {
                 if let msgNum = messageJSON["message_number"] {
                     Log.debug("   message_number: \(msgNum)", category: "CryptoManager")
                 }
+                if let otpkId = messageJSON["one_time_prekey_id"] {
+                    Log.debug("   one_time_prekey_id: \(otpkId)", category: "CryptoManager")
+                }
             }
             #endif
 
@@ -263,9 +299,39 @@ final class CryptoSessionInitializationService {
             )
 
             Log.info("✅ Session initialized successfully, decrypted: \(result.decryptedMessage.prefix(50))...", category: "CryptoManager")
-            
+
             sessionStore.setSession(userId: userId, sessionId: result.sessionId, suiteId: suiteID)
             saveSession(userId)
+
+            // PQXDH: If sender included a KEM ciphertext, decapsulate + strengthen session
+            if !firstMessage.kemCiphertext.isEmpty {
+                do {
+                    let kyberOtpkId = firstMessage.kyberOtpkId
+                    if kyberOtpkId > 0, let otpkSecret = PQCKeyManager.kyberOtpkSecret(forKeyId: kyberOtpkId) {
+                        try PQCKeyManager.shared.decapsulateAndStrengthen(
+                            kemCiphertext: firstMessage.kemCiphertext,
+                            contactId: userId,
+                            core: core,
+                            secretKeyOverride: otpkSecret
+                        )
+                        PQCKeyManager.deleteKyberOtpk(keyId: kyberOtpkId)
+                        Log.info("🔐 PQC: PQXDH Kyber OTPK id=\(kyberOtpkId) for \(userId.prefix(8))...", category: "CryptoManager")
+                    } else {
+                        try PQCKeyManager.shared.decapsulateAndStrengthen(
+                            kemCiphertext: firstMessage.kemCiphertext,
+                            contactId: userId,
+                            core: core
+                        )
+                        Log.info("🔐 PQC: PQXDH Kyber SPK for \(userId.prefix(8))...", category: "CryptoManager")
+                    }
+                    // Re-save session after PQ strengthening
+                    saveSession(userId)
+                } catch {
+                    // Non-fatal: session is still usable with classic X3DH security
+                    Log.error("⚠️ PQC: PQXDH decapsulation failed (using classic X3DH): \(error)", category: "CryptoManager")
+                }
+            }
+
             return result.decryptedMessage
         } catch {
             Log.error("❌ Rust core initReceivingSession failed: \(error)", category: "CryptoManager")
