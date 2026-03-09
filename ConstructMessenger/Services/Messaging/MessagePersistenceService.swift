@@ -73,13 +73,11 @@ class MessagePersistenceService {
             isNewMessage = true
         }
         
+        // Save synchronously — a deferred Task risks permanent data loss if the app is
+        // backgrounded or crashes before the Task executes.
         try context.save()
-        
-        // Update chat metadata if this is a new message
         if isNewMessage {
-            if !isSentByMe {
-                chat.unreadCount += 1
-            }
+            if !isSentByMe { chat.unreadCount += 1 }
             try updateChatMetadata(
                 chat: chat,
                 lastMessageText: decryptedContent,
@@ -123,7 +121,7 @@ class MessagePersistenceService {
         messageId: String,
         status: DeliveryStatus,
         in context: NSManagedObjectContext
-    ) throws {
+    ) {
         let fetchRequest = Message.fetchRequest()
         let messagePredicate = NSPredicate(format: "id == %@", messageId)
         fetchRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [messagePredicate])
@@ -134,7 +132,11 @@ class MessagePersistenceService {
         }
         
         message.deliveryStatus = status
-        try context.save()
+        do {
+            try context.save()
+        } catch {
+            Log.error("Core Data status save failed: \(error)", category: "MessagePersistence")
+        }
         
         Log.debug("✅ Updated message status to \(status) for \(messageId)", category: "MessagePersistence")
     }

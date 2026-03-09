@@ -603,7 +603,11 @@ class CryptoManager {
         }
         
         Log.info("📦 Trying \(archives.count) archived sessions for \(message.from)", category: "CryptoManager")
-        
+
+        // Snapshot the active session so we can restore it if all archives fail.
+        // Without this, each failed importSessionJson permanently overwrites the Rust core state.
+        let activeSessionSnapshot = try? core.exportSessionJson(contactId: message.from)
+
         // Try each archived session (newest first - already ordered)
         for (index, archive) in archives.enumerated().reversed() {
             do {
@@ -636,6 +640,11 @@ class CryptoManager {
                 Log.debug("❌ Archive #\(index) failed: \(error)", category: "CryptoManager")
                 continue
             }
+        }
+
+        // All archives failed — restore the original active session into Rust core.
+        if let json = activeSessionSnapshot {
+            try? core.importSessionJson(contactId: message.from, sessionJson: json)
         }
         
         Log.info("⚠️ All \(archives.count) archived sessions failed to decrypt", category: "CryptoManager")

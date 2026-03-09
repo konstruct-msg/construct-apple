@@ -253,6 +253,11 @@ final class PQCKeyManager {
         Log.info("🔐 PQC: Deferred PQXDH applied for \(contactId.prefix(8))...", category: "PQC")
     }
 
+    /// Discard any pending PQ contribution (e.g., when kem cannot be included in the message).
+    func clearPendingContribution(for contactId: String) {
+        pendingPQContributions.removeValue(forKey: contactId)
+    }
+
     // MARK: - PQXDH Receiver: Decapsulate + Strengthen Session
 
     /// Perform receiver-side PQXDH: decapsulate the received KEM ciphertext using

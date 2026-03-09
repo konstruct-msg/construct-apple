@@ -130,11 +130,11 @@ class InviteGenerator {
         
         Log.debug("🔐 Generated signature: \(signatureBase64)", category: "InviteGenerator")
         
-        // Step 10: Create final signed invite
+        // Step 10: Create final signed invite — use the same lowercased UUID that was signed
         let signedInvite = InviteObject(
             v: InviteConfig.currentVersion,
             jti: jti,
-            uuid: userId,
+            uuid: userId.lowercased(),
             deviceId: deviceId,
             server: server,
             ephKey: ephKeyBase64,

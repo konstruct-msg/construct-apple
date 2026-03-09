@@ -17,18 +17,24 @@ class SessionInitializationService {
     /// Consume (and remove) the pending KEM ciphertext for a contact, if any.
     /// Also applies the deferred PQXDH contribution to the DR session — msg0 was
     /// already encrypted with classic-only state, so this is the correct moment.
+    /// Returns nil (skipping PQ entirely) if the contribution cannot be applied,
+    /// so both sides stay in sync: neither applies PQXDH.
     func consumeKemCiphertext(for userId: String) -> Data? {
         guard let kem = pendingKemCiphertexts.removeValue(forKey: userId) else { return nil }
-        // Apply deferred PQXDH now that msg0 has been encrypted with classic state.
-        if let core = CryptoManager.shared.core {
-            do {
-                try PQCKeyManager.shared.applyDeferredPQContribution(contactId: userId, core: core)
-                CryptoManager.shared.saveSessionToKeychainPublic(for: userId)
-            } catch {
-                Log.error("⚠️ PQC: Failed to apply deferred PQ contribution for \(userId.prefix(8))...: \(error)", category: "SessionInit")
-            }
+        guard let core = CryptoManager.shared.core else {
+            Log.error("⚠️ PQC: Core nil at KEM consumption — skipping PQ for \(userId.prefix(8))...", category: "SessionInit")
+            PQCKeyManager.shared.clearPendingContribution(for: userId)
+            return nil  // Don't send kem; receiver won't apply PQ either → both stay classic
         }
-        return kem
+        do {
+            try PQCKeyManager.shared.applyDeferredPQContribution(contactId: userId, core: core)
+            CryptoManager.shared.saveSessionToKeychainPublic(for: userId)
+            return kem
+        } catch {
+            Log.error("⚠️ PQC: Failed to apply deferred PQ for \(userId.prefix(8))...: \(error) — skipping PQ", category: "SessionInit")
+            PQCKeyManager.shared.clearPendingContribution(for: userId)
+            return nil  // Don't send kem; receiver won't apply PQ either → both stay classic
+        }
     }
 
     /// Consume (and remove) the pending Kyber OTPK ID for a contact (0 if none).

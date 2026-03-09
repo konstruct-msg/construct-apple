@@ -168,7 +168,7 @@ final class MessageStreamManager {
         guard isPaused else { return }
         isPaused = false
         Log.info("📱 MessageStream resuming", category: "MessageStream")
-        connect(onMessageReceived: onMessageReceived)
+        connect(contactUserIds: subscriptionUserIds, onMessageReceived: onMessageReceived)
     }
 
     // MARK: - Send via Stream
@@ -443,7 +443,9 @@ final class MessageStreamManager {
                 suiteId: 1,
                 timestamp: UInt64(envelope.timestamp),
                 oneTimePreKeyId: decoded.oneTimePreKeyId,
-                editsMessageId: envelope.editsMessageID
+                editsMessageId: envelope.editsMessageID,
+                kemCiphertext: decoded.kemCiphertext ?? Data(),
+                kyberOtpkId: decoded.kyberOtpkId
             ))
         case .receipt(let receipt):
             // Deliver receipt: extract confirmed message IDs and propagate

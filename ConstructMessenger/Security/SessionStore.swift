@@ -10,41 +10,48 @@ import Foundation
 final class SessionStore {
     private var sessionIds: [String: String] = [:]
     private var suiteIds: [String: UInt16] = [:]
+    private let queue = DispatchQueue(label: "com.construct.sessionStore", attributes: .concurrent)
 
     func hasSession(for userId: String) -> Bool {
-        sessionIds[userId] != nil
+        queue.sync { sessionIds[userId] != nil }
     }
 
     func getSessionId(for userId: String) -> String? {
-        sessionIds[userId]
+        queue.sync { sessionIds[userId] }
     }
 
     func getSuiteId(for userId: String) -> UInt16? {
-        suiteIds[userId]
+        queue.sync { suiteIds[userId] }
     }
 
     func setSession(userId: String, sessionId: String, suiteId: UInt16) {
-        sessionIds[userId] = sessionId
-        suiteIds[userId] = suiteId
+        queue.async(flags: .barrier) {
+            self.sessionIds[userId] = sessionId
+            self.suiteIds[userId] = suiteId
+        }
     }
 
     func removeSession(for userId: String) {
-        sessionIds.removeValue(forKey: userId)
-        suiteIds.removeValue(forKey: userId)
+        queue.async(flags: .barrier) {
+            self.sessionIds.removeValue(forKey: userId)
+            self.suiteIds.removeValue(forKey: userId)
+        }
     }
 
     func allUserIds() -> [String] {
-        Array(sessionIds.keys)
+        queue.sync { Array(sessionIds.keys) }
     }
 
     func restoreSessionIfNeeded(userId: String, core: ClassicCryptoCore?, keychain: KeychainManager = .shared, onLog: ((String) -> Void)? = nil) -> Bool {
-        guard sessionIds[userId] == nil else { return true }
+        // Check without holding the lock during the potentially throwing Rust call
+        let alreadyRestored = queue.sync { sessionIds[userId] != nil }
+        guard !alreadyRestored else { return true }
         guard let core = core else { return false }
         guard let sessionJson = keychain.loadSessionJson(for: userId) else { return false }
 
         do {
             let sessionId = try core.importSessionJson(contactId: userId, sessionJson: sessionJson)
-            sessionIds[userId] = sessionId
+            queue.async(flags: .barrier) { self.sessionIds[userId] = sessionId }
             onLog?("✅ Restored session: \(userId)")
             return true
         } catch {
