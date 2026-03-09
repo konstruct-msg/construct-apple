@@ -451,10 +451,11 @@
 "mark_read" = "Mark Read";
 
 // ICE — traffic obfuscation
-"ice_section_header" = "ICE";
+"ice_section_header" = "Intrusion Countermeasures Electronics";
 "ice_title" = "ICE";
-"ice_subtitle" = "Intrusion Countermeasures Electronics";
-"ice_footer" = "ICE masks and obfuscates traffic patterns to make your connection indistinguishable from regular HTTPS. Requires server support. Coming soon.";
+"ice_subtitle" = "Obfuscated connection";
+"ice_footer" = "ICE masks your traffic to make it indistinguishable from regular HTTPS. The configuration is provided automatically by the server.";
+"ice_unavailable" = "Not available on this server";
 
 // Data & Storage
 "data_and_storage" = "Data & Storage";

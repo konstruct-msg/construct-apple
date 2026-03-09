@@ -30,11 +30,14 @@ struct OnboardingView: View {
                         .aspectRatio(contentMode: .fit)
                         .frame(width: 130, height: 130)
                         .padding(.bottom, 40)
+                    
+                    Image("MainTitle")
+                        .padding(.bottom, 40)
                                         
-                    Text("constrcut_title")
-                        .font(.largeTitle)
-                        .fontWeight(.bold)
-                        .tracking(9)
+//                    Text("constrcut_title")
+//                        .font(.largeTitle)
+//                        .fontWeight(.bold)
+//                        .tracking(9)
                     
                     Text("onboarding_tagline")
                         .font(.subheadline)

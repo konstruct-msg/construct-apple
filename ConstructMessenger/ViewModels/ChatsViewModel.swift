@@ -96,7 +96,7 @@ class ChatsViewModel {
                 withObservationTracking {
                     nextState = PollingState(
                         hasToken: SessionManager.shared.sessionToken != nil,
-                        status: connectionStatusManager.connectionStatus,
+                        status: self.connectionStatusManager.connectionStatus,
                         pushEnabled: PushNotificationManager.shared.isPushEnabled
                     )
                 } onChange: { /* handled by the loop */ }

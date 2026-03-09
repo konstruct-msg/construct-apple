@@ -326,9 +326,23 @@ public struct Shared_Proto_Services_V1_AuthTokensResponse: Sendable {
 
   public var expiresAt: Int64 = 0
 
+  /// ICE (obfs4) bridge cert for transport obfuscation.
+  /// Populated only when the server has ICE_ENABLED=true.
+  /// Client passes this to ClientConfig::from_bridge_cert() to connect via obfs4.
+  public var iceBridgeCert: String {
+    get {_iceBridgeCert ?? String()}
+    set {_iceBridgeCert = newValue}
+  }
+  /// Returns true if `iceBridgeCert` has been explicitly set.
+  public var hasIceBridgeCert: Bool {self._iceBridgeCert != nil}
+  /// Clears the value of `iceBridgeCert`. Subsequent reads from it will return its default value.
+  public mutating func clearIceBridgeCert() {self._iceBridgeCert = nil}
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
+
+  fileprivate var _iceBridgeCert: String? = nil
 }
 
 /// RefreshTokenRequest - Refresh access token
@@ -1313,7 +1327,7 @@ extension Shared_Proto_Services_V1_AuthenticateDeviceRequest: SwiftProtobuf.Mess
 
 extension Shared_Proto_Services_V1_AuthTokensResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".AuthTokensResponse"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}user_id\0\u{3}access_token\0\u{3}refresh_token\0\u{3}expires_at\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}user_id\0\u{3}access_token\0\u{3}refresh_token\0\u{3}expires_at\0\u{3}ice_bridge_cert\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1325,12 +1339,17 @@ extension Shared_Proto_Services_V1_AuthTokensResponse: SwiftProtobuf.Message, Sw
       case 2: try { try decoder.decodeSingularStringField(value: &self.accessToken) }()
       case 3: try { try decoder.decodeSingularStringField(value: &self.refreshToken) }()
       case 4: try { try decoder.decodeSingularInt64Field(value: &self.expiresAt) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self._iceBridgeCert) }()
       default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
     if !self.userID.isEmpty {
       try visitor.visitSingularStringField(value: self.userID, fieldNumber: 1)
     }
@@ -1343,6 +1362,9 @@ extension Shared_Proto_Services_V1_AuthTokensResponse: SwiftProtobuf.Message, Sw
     if self.expiresAt != 0 {
       try visitor.visitSingularInt64Field(value: self.expiresAt, fieldNumber: 4)
     }
+    try { if let v = self._iceBridgeCert {
+      try visitor.visitSingularStringField(value: v, fieldNumber: 5)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1351,6 +1373,7 @@ extension Shared_Proto_Services_V1_AuthTokensResponse: SwiftProtobuf.Message, Sw
     if lhs.accessToken != rhs.accessToken {return false}
     if lhs.refreshToken != rhs.refreshToken {return false}
     if lhs.expiresAt != rhs.expiresAt {return false}
+    if lhs._iceBridgeCert != rhs._iceBridgeCert {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

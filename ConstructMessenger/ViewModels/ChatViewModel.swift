@@ -39,7 +39,7 @@ class ChatViewModel: NSObject {
     private var queuedMessages: [QueuedMessage] = []
     
     // ✅ NEW: Track public key fetch timeout
-    nonisolated(unsafe) private var publicKeyFetchTimer: Timer?
+    private var publicKeyFetchTimer: Timer?
     private let publicKeyFetchTimeout: TimeInterval = 10.0 // 10 seconds timeout
     
     // ✅ Pagination support - optimized for performance
@@ -213,18 +213,19 @@ class ChatViewModel: NSObject {
         }
 
         // ✅ REFACTOR: Use SessionInitializationService with retry
-        Task {
+        Task { [weak self] in
+            guard let self else { return }
             do {
                 let publicKeyBundle = try await sessionInitService.fetchPublicKeyWithRetry(userId: userId)
                 
-                await MainActor.run {
-                    self.handlePublicKeyBundle(publicKeyBundle)
+                await MainActor.run { [weak self] in
+                    self?.handlePublicKeyBundle(publicKeyBundle)
                 }
             } catch {
-                await MainActor.run {
+                await MainActor.run { [weak self] in
                     Log.error("❌ Failed to fetch public key via gRPC after retries: \(error.localizedDescription)", category: "ChatViewModel")
-                    self.errorMessage = "Failed to fetch public key after retries: \(error.localizedDescription)"
-                    self.isSessionReady = false
+                    self?.errorMessage = "Failed to fetch public key after retries: \(error.userFacingMessage)"
+                    self?.isSessionReady = false
                 }
             }
         }
@@ -376,10 +377,10 @@ class ChatViewModel: NSObject {
             onFailure: { [weak self] error in
                 guard let self = self else { return }
                 self.isInitializingSession = false
-                self.errorMessage = "Failed to initialize secure connection: \(error.localizedDescription)"
+                self.errorMessage = "Failed to initialize secure connection: \(error.userFacingMessage)"
                 
                 // Mark queued messages as failed
-                self.failQueuedMessages(reason: error.localizedDescription)
+                self.failQueuedMessages(reason: error.userFacingMessage)
             }
         )
     }
@@ -454,156 +455,20 @@ class ChatViewModel: NSObject {
             return
         }
 
-        // Validate message size
+        // Validate text before delegating — media/file paths skip this since content is already encoded
         do {
             try MessageValidator.validateText(text)
         } catch let error as MessageValidationError {
-            errorMessage = error.localizedDescription
+            errorMessage = error.userFacingMessage
             Log.error("❌ Message validation failed: \(error.localizedDescription)", category: "ChatViewModel")
             return
         } catch {
-            errorMessage = "Failed to validate message: \(error.localizedDescription)"
+            errorMessage = "Failed to validate message: \(error.userFacingMessage)"
             Log.error("❌ Unexpected validation error: \(error)", category: "ChatViewModel")
             return
         }
 
-        Log.info("✅ Session is ready, sending via gRPC...", category: "ChatViewModel")
-
-        isSending = true
-        errorMessage = nil
-
-        do {
-            // Create ChatMessage with proper format per server spec
-            let messageId = UUID().uuidString
-            let plan = ChunkedMessageSender.shared.buildPlan(plaintext: text, messageId: UUID(uuidString: messageId) ?? UUID())
-            let firstPayload = plan.payloads.first ?? text
-            let firstComponents = try CryptoManager.shared.encryptMessage(firstPayload, for: recipientId)
-            let message = ChatMessage(
-                id: messageId,
-                from: currentUserId,
-                to: recipientId,
-                messageType: nil,  // Will be set by server as "DIRECT_MESSAGE"
-                ephemeralPublicKey: firstComponents.ephemeralPublicKey,  // Binary 32 bytes
-                messageNumber: firstComponents.messageNumber,
-                content: firstComponents.content,  // Base64(nonce || ciphertext_with_tag)
-                suiteId: firstComponents.suiteId,
-                timestamp: UInt64(Date().timeIntervalSince1970)
-                
-            )
-
-            Log.debug("📤 Sending message with ID: \(messageId)", category: "ChatViewModel")
-            Log.debug("   Message number: \(firstComponents.messageNumber)", category: "ChatViewModel")
-            Log.debug("   Content length: \(message.content.count) bytes", category: "ChatViewModel")
-
-            // Save with .sending status
-            saveMessage(
-                message,
-                decryptedContent: text,
-                isSentByMe: true,
-                status: .sending,
-                replyTo: replyTo,
-                suiteId: firstComponents.suiteId
-            )
-
-            // ✅ Send via gRPC
-        Log.info("📮 Sending message via gRPC: \(messageId)", category: "ChatViewModel")
-            Task {
-                // Apply timing jitter for traffic analysis resistance (0–50ms for user messages)
-                let jitterMs = TrafficProtectionService.shared.recommendedSendDelay(isHighPriority: true)
-                if jitterMs > 0 {
-                    try? await Task.sleep(for: .milliseconds(Int(jitterMs)))
-                }
-
-                do {
-                    let responses = try await ChunkedMessageSender.shared.sendChunks(
-                        plan: plan,
-                        senderId: currentUserId,
-                        recipientId: recipientId,
-                        conversationId: ConversationId.direct(myUserId: currentUserId, theirUserId: recipientId),
-                        timestamp: message.timestamp,
-                        preEncryptedFirst: firstComponents
-                    )
-                    let response = responses.first ?? SendMessageResponse(messageId: messageId, status: "sent")
-
-                    // Record real message sent for cover traffic coalescing
-                    TrafficProtectionService.shared.recordRealMessageSent()
-
-                    await MainActor.run {
-                        // ✅ IMPROVED: Use server-provided status if available
-                        let deliveryStatus: DeliveryStatus
-                        
-                        switch response.status.lowercased() {
-                        case "delivered":
-                            deliveryStatus = .delivered
-                        case "queued":
-                            deliveryStatus = .queued
-                        case "sent", "success":
-                            deliveryStatus = .sent
-                        case "failed":
-                            deliveryStatus = .failed
-                            Log.error("❌ Server rejected message \(messageId): status=failed", category: "ChatViewModel")
-                        default:
-                            deliveryStatus = .sent  // Fallback to sent
-                            Log.info("⚠️ Unknown server status: \(response.status), using .sent", category: "ChatViewModel")
-                        }
-                        
-                        Log.info("🔄 Updating message status from sending → \(deliveryStatus) for \(messageId)", category: "ChatViewModel")
-                        updateMessageStatus(messageId: messageId, status: deliveryStatus)
-                        Log.info("✅ Message sent via gRPC: \(response.messageId), server status: \(response.status)", category: "ChatViewModel")
-                    }
-                } catch {
-                    await MainActor.run {
-                        if let networkError = error as? NetworkError,
-                           case .serverError(let message, let responseBody) = networkError {
-                            Log.error("❌ Failed to send message via gRPC: \(message)\nResponse: \(responseBody ?? "empty")", category: "ChatViewModel")
-                        } else if let rpcError = error as? RPCError {
-                            Log.error("❌ SendMessage gRPC error: code=\(rpcError.code), message=\(rpcError.message)", category: "ChatViewModel")
-                        } else {
-                            Log.error("❌ Failed to send message: \(error)", category: "ChatViewModel")
-                        }
-                        updateMessageStatus(messageId: messageId, status: .failed)
-                        errorMessage = "Failed to send message: \(error.localizedDescription)"
-                    }
-                }
-            }
-
-        } catch {
-            // ✅ Session was corrupted and auto-deleted by CryptoManager
-            // Reinitialize session and retry
-            Log.debug("🔄 Encryption failed, session was deleted. Reinitializing...", category: "ChatViewModel")
-
-            // Delete old session from memory (already done by CryptoManager)
-            // Request new public key bundle to reinitialize
-            if let toUserId = chat.otherUser?.id {
-                Log.info("🔑 Requesting fresh public key bundle for reinitialization", category: "ChatViewModel")
-
-                // Mark session as not ready to trigger reinitialization flow
-                isSessionReady = false
-
-                // Queue this message using new system
-                let queued = QueuedMessage(text: text, images: [], replyTo: replyTo)
-                queuedMessages.append(queued)
-                errorMessage = "Session expired, reinitializing..."
-                isInitializingSession = true
-                Log.info("📝 Message queued for retry after session reinitialization", category: "ChatViewModel")
-
-                // ✅ Request fresh public key bundle via gRPC with retry
-                Task {
-                    await initializeSessionProactively(userId: toUserId)
-                }
-            } else {
-                errorMessage = "Failed to encrypt message: \(error.localizedDescription)"
-                Log.error("Failed to encrypt message: \(error.localizedDescription)", category: "ChatViewModel")
-            }
-        }
-        isSending = false
-    }
-
-    // ✅ DEPRECATED: Old method - replaced by sendQueuedMessages()
-    // Kept for reference, can be removed
-    private func processPendingMessages() {
-        // Now handled by sendQueuedMessages() in Session Initialization Utilities
-        Log.debug("processPendingMessages called - deprecated, use sendQueuedMessages()", category: "ChatViewModel")
+        sendTextMessage(text: text, replyTo: replyTo)
     }
 
     // ✅ Send all queued messages when connection is restored
@@ -672,7 +537,7 @@ class ChatViewModel: NSObject {
             } catch {
                 await MainActor.run {
                     Log.error("❌ Media upload failed: \(error.localizedDescription) | raw: \(error)", category: "ChatViewModel")
-                    errorMessage = error.localizedDescription
+                    errorMessage = error.userFacingMessage
                     isSending = false
                 }
             }
@@ -695,55 +560,100 @@ class ChatViewModel: NSObject {
             } catch {
                 await MainActor.run {
                     Log.error("❌ File upload failed: \(error.localizedDescription)", category: "ChatViewModel")
-                    errorMessage = error.localizedDescription
+                    errorMessage = error.userFacingMessage
                     isSending = false
                 }
             }
         }
     }
 
+    // MARK: - Core Text Delivery
+    // All send paths (text, media, files, voice) ultimately call this method.
+    // It is the single place that encrypts, attaches PQXDH KEM ciphertext, sends chunks,
+    // maps server status, and handles session recovery on encryption failure.
     private func sendTextMessage(text: String, replyTo: Message?, localThumbnails: [Data] = []) {
-        // Reuse existing logic for sending text messages
         guard let recipientId = chat.otherUser?.id,
               let currentUserId = SessionManager.shared.currentUserId else {
             isSending = false
             return
         }
 
+        isSending = true
+        errorMessage = nil
+
         do {
             let messageId = UUID().uuidString
             let plan = ChunkedMessageSender.shared.buildPlan(plaintext: text, messageId: UUID(uuidString: messageId) ?? UUID())
+            guard !plan.payloads.isEmpty else {
+                Log.error("❌ Message too large to send", category: "ChatViewModel")
+                isSending = false
+                errorMessage = "Message is too large to send"
+                return
+            }
             let firstPayload = plan.payloads.first ?? text
             let firstComponents = try CryptoManager.shared.encryptMessage(firstPayload, for: recipientId)
             let message = ChatMessage(
                 id: messageId,
                 from: currentUserId,
                 to: recipientId,
-                messageType: nil,  // Will be set by server
+                messageType: nil,
                 ephemeralPublicKey: firstComponents.ephemeralPublicKey,
                 messageNumber: firstComponents.messageNumber,
                 content: firstComponents.content,
                 suiteId: firstComponents.suiteId,
                 timestamp: UInt64(Date().timeIntervalSince1970)
-                
             )
+
+            Log.debug("📤 Sending message with ID: \(messageId)", category: "ChatViewModel")
+            Log.debug("   Message number: \(firstComponents.messageNumber)", category: "ChatViewModel")
+            Log.debug("   Content length: \(message.content.count) bytes", category: "ChatViewModel")
 
             saveMessage(message, decryptedContent: text, isSentByMe: true, status: .sending, replyTo: replyTo, localThumbnails: localThumbnails, suiteId: firstComponents.suiteId)
 
-            // ✅ Send via gRPC
-            Task {
+            Log.info("📮 Sending message via gRPC: \(messageId)", category: "ChatViewModel")
+            Task { [weak self] in
+                guard let self else { return }
+                let jitterMs = TrafficProtectionService.shared.recommendedSendDelay(isHighPriority: true)
+                if jitterMs > 0 {
+                    try? await Task.sleep(for: .milliseconds(Int(jitterMs)))
+                }
+
                 do {
-                    let _ = try await ChunkedMessageSender.shared.sendChunks(
+                    // Attach PQXDH KEM ciphertext to first message if this opened a new session
+                    let kemCiphertext = firstComponents.messageNumber == 0
+                        ? sessionInitService.consumeKemCiphertext(for: recipientId) : nil
+                    let kyberOtpkId = firstComponents.messageNumber == 0
+                        ? sessionInitService.consumeKyberOtpkId(for: recipientId) : 0
+                    let responses = try await ChunkedMessageSender.shared.sendChunks(
                         plan: plan,
                         senderId: currentUserId,
                         recipientId: recipientId,
                         conversationId: ConversationId.direct(myUserId: currentUserId, theirUserId: recipientId),
                         timestamp: message.timestamp,
-                        preEncryptedFirst: firstComponents
+                        preEncryptedFirst: firstComponents,
+                        kemCiphertext: kemCiphertext,
+                        kyberOtpkId: kyberOtpkId
                     )
-                    
+                    let response = responses.first ?? SendMessageResponse(messageId: messageId, status: "sent")
+
+                    TrafficProtectionService.shared.recordRealMessageSent()
+
                     await MainActor.run {
-                        updateMessageStatus(messageId: message.id, status: .sent)
+                        let deliveryStatus: DeliveryStatus
+                        switch response.status.lowercased() {
+                        case "delivered": deliveryStatus = .delivered
+                        case "queued":    deliveryStatus = .queued
+                        case "sent", "success": deliveryStatus = .sent
+                        case "failed":
+                            deliveryStatus = .failed
+                            Log.error("❌ Server rejected message \(messageId): status=failed", category: "ChatViewModel")
+                        default:
+                            deliveryStatus = .sent
+                            Log.info("⚠️ Unknown server status: \(response.status), using .sent", category: "ChatViewModel")
+                        }
+                        Log.info("🔄 Updating message status from sending → \(deliveryStatus) for \(messageId)", category: "ChatViewModel")
+                        updateMessageStatus(messageId: messageId, status: deliveryStatus)
+                        Log.info("✅ Message sent via gRPC: \(response.messageId), server status: \(response.status)", category: "ChatViewModel")
                         isSending = false
                     }
                 } catch {
@@ -751,20 +661,35 @@ class ChatViewModel: NSObject {
                         if let networkError = error as? NetworkError,
                            case .serverError(let message, let responseBody) = networkError {
                             Log.error("❌ Failed to send message via gRPC: \(message)\nResponse: \(responseBody ?? "empty")", category: "ChatViewModel")
+                        } else if let rpcError = error as? RPCError {
+                            Log.error("❌ SendMessage gRPC error: code=\(rpcError.code), message=\(rpcError.message)", category: "ChatViewModel")
                         } else {
-                            Log.error("❌ Failed to send message via gRPC: \(error.localizedDescription)", category: "ChatViewModel")
+                            Log.error("❌ Failed to send message: \(error)", category: "ChatViewModel")
                         }
-                        updateMessageStatus(messageId: message.id, status: .failed)
-                        errorMessage = "Failed to send message: \(error.localizedDescription)"
+                        updateMessageStatus(messageId: messageId, status: .failed)
+                        errorMessage = "Failed to send message: \(error.userFacingMessage)"
                         isSending = false
                     }
                 }
             }
 
         } catch {
-            Log.error("❌ Failed to encrypt message: \(error)", category: "ChatViewModel")
-            errorMessage = "Failed to encrypt message"
+            // Encryption failure = session likely corrupted; re-initialize and re-queue
+            Log.debug("🔄 Encryption failed, session was deleted. Reinitializing...", category: "ChatViewModel")
+            guard let toUserId = chat.otherUser?.id else {
+                errorMessage = "Failed to encrypt message: \(error.userFacingMessage)"
+                Log.error("❌ Failed to encrypt message: \(error.localizedDescription)", category: "ChatViewModel")
+                isSending = false
+                return
+            }
+            isSessionReady = false
+            let queued = QueuedMessage(text: text, images: [], replyTo: replyTo)
+            queuedMessages.append(queued)
+            errorMessage = "Session expired, reinitializing..."
+            isInitializingSession = true
             isSending = false
+            Log.info("📝 Message queued for retry after session reinitialization", category: "ChatViewModel")
+            Task { await initializeSessionProactively(userId: toUserId) }
         }
     }
 
@@ -841,15 +766,14 @@ class ChatViewModel: NSObject {
 extension ChatViewModel: NSFetchedResultsControllerDelegate {
     /// Called when FRC finishes processing changes to Core Data
     nonisolated func controllerDidChangeContent(_ controller: NSFetchedResultsController<NSFetchRequestResult>) {
-        // ✅ FIX: Synchronous update to prevent UI rendering deleted objects
-        // MainActor.assumeIsolated is safe here because FRC calls this on main thread
-        MainActor.assumeIsolated {
-            // ✅ REFACTOR: Automatic sync from Core Data - reverse to oldest-first
-            let fetchedMessages = controller.fetchedObjects as? [Message] ?? []
-            self.messages = Array(fetchedMessages.reversed())
-            Log.debug("🔄 FRC updated messages: \(self.messages.count) total (reversed to oldest-first)", category: "ChatViewModel")
-            
-            // Update pagination tracking (first = oldest after reversal)
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            let fetchedMessages = (controller.fetchedObjects as? [Message] ?? []).reversed() as [Message]
+            let fetchedIds = Set(fetchedMessages.map { $0.id })
+            // Keep historic messages loaded via pagination (not in current FRC window)
+            let historicMessages = self.messages.filter { !fetchedIds.contains($0.id) }
+            self.messages = historicMessages + fetchedMessages
+            Log.debug("🔄 FRC updated: \(fetchedMessages.count) recent + \(historicMessages.count) historic = \(self.messages.count) total", category: "ChatViewModel")
             if let first = self.messages.first {
                 self.oldestLoadedTimestamp = first.timestamp
             }

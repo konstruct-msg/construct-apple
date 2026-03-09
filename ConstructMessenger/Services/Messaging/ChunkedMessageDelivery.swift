@@ -23,7 +23,9 @@ final class ChunkedMessageSender {
         recipientId: String,
         conversationId: String,
         timestamp: UInt64,
-        preEncryptedFirst: CryptoManager.EncryptedMessageComponents? = nil
+        preEncryptedFirst: CryptoManager.EncryptedMessageComponents? = nil,
+        kemCiphertext: Data? = nil,
+        kyberOtpkId: UInt32 = 0
     ) async throws -> [SendMessageResponse] {
         var responses: [SendMessageResponse] = []
 
@@ -39,7 +41,12 @@ final class ChunkedMessageSender {
             let chunkMessageId = index == 0 ? plan.messageId.uuidString.lowercased()
                 : "\(plan.messageId.uuidString.lowercased())-c\(index)"
 
-            let encryptedPayload = try WirePayloadCoder.encode(components)
+            // Attach KEM ciphertext only to the first chunk (session-establishing message)
+            let encryptedPayload = try WirePayloadCoder.encode(
+                components,
+                kemCiphertext: index == 0 ? kemCiphertext : nil,
+                kyberOtpkId: index == 0 ? kyberOtpkId : 0
+            )
 
             let response = try await MessagingServiceClient.shared.sendMessage(
                 messageId: chunkMessageId,
@@ -53,7 +60,7 @@ final class ChunkedMessageSender {
 
             if index < plan.payloads.count - 1 {
                 let jitterMs = UInt64.random(in: ChunkedDeliveryConfig.chunkSendJitterMinMs...ChunkedDeliveryConfig.chunkSendJitterMaxMs)
-                try? await Task.sleep(nanoseconds: jitterMs * 1_000_000)
+                try await Task.sleep(nanoseconds: jitterMs * 1_000_000)
             }
         }
 
@@ -173,7 +180,7 @@ enum ChunkedMessageCodec {
         let totalChunks = UInt16((plaintext.count + payloadSize - 1) / payloadSize)
         if totalChunks > ChunkedDeliveryConfig.maxChunks {
             Log.error("❌ Chunked message exceeds max chunks (\(totalChunks) > \(ChunkedDeliveryConfig.maxChunks))", category: "ChunkedDelivery")
-            return [prefix + singleChunkBase64(plaintext: plaintext, messageId: messageId)]
+            return []
         }
         let clampedTotal = max(totalChunks, 1)
 

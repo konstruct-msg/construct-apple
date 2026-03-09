@@ -43,11 +43,28 @@ final class GRPCChannelManager: Sendable {
         NotificationCenter.default.post(name: .grpcServerChanged, object: nil)
     }
 
+    /// Returns the local proxy port if ICE is running, nil otherwise.
+    private func iceProxyPort() -> UInt16? {
+        guard ice_proxy_is_running() != 0 else { return nil }
+        let port = ice_proxy_port()
+        return port > 0 ? port : nil
+    }
+
     private init() {}
 
     /// Creates a new `GRPCClient` with TLS transport.
     /// Caller is responsible for running the client via `runConnections()` in a Task.
     func makeClient() throws -> GRPCClient<HTTP2ClientTransport.Posix> {
+        // ICE mode: connect to local proxy with plaintext, proxy handles obfs4 to relay
+        if let icePort = iceProxyPort() {
+            Log.info("🧊 gRPC via ICE proxy → 127.0.0.1:\(icePort) (obfs4 → relay)", category: "gRPC")
+            let transport = try HTTP2ClientTransport.Posix(
+                target: .ipv4(address: "127.0.0.1", port: Int(icePort)),
+                transportSecurity: .plaintext
+            )
+            return GRPCClient(transport: transport, interceptors: [AuthInterceptor()])
+        }
+
         let host = currentHost
         let port = currentPort
         Log.info("🔌 gRPC creating channel → \(host):\(port) TLS=true", category: "gRPC")

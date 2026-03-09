@@ -343,6 +343,7 @@ struct RegistrationFlowView: View {
                 expiresIn: Int(registerData.expires - Int64(Date().timeIntervalSince1970)),
                 userId: registerData.userId
             )
+            IceProxyManager.shared.configureFromServer(cert: registerData.iceBridgeCert ?? "")
             
             // 4. Verify session tokens
             Log.info("4️⃣ Verifying session tokens...", category: "Registration")
@@ -375,6 +376,33 @@ struct RegistrationFlowView: View {
             } catch {
                 Log.error("   ⚠️ OTPK upload failed (non-fatal): \(error)", category: "Registration")
             }
+
+            // 6.5 Upload Kyber SPK + OTPKs in a single request (detached — survives view dismissal)
+            Log.info("6️⃣🔐 Uploading Kyber SPK + OTPKs (PQC)...", category: "Registration")
+            do {
+                let spkId = PQCKeyManager.shared.kyberSPKId()
+                let (spkPublicKey, _) = try PQCKeyManager.shared.generateAndStoreKyberSPK(keyId: spkId)
+                guard let core = CryptoManager.shared.core else { throw PQCError.coreNotInitialized }
+                let spkSig = try PQCKeyManager.signKyberKey(publicKey: spkPublicKey, core: core)
+                let spkTuple = (keyId: spkId, publicKey: spkPublicKey, signature: spkSig)
+                let capturedDeviceId = deviceId
+                Task.detached(priority: .utility) {
+                    do {
+                        let kyberCount = try await PQCKeyManager.generateAndUploadKyberOtpks(
+                            count: 50,
+                            deviceId: capturedDeviceId,
+                            kyberSignedPreKey: spkTuple
+                        )
+                        UserDefaults.standard.set(true, forKey: "pqcKyberSPKMigrationV1Done")
+                        Log.info("   ✅ Kyber SPK uploaded (keyId=\(spkId))", category: "Registration")
+                        Log.info("   ✅ Kyber OTPKs on server: \(kyberCount)", category: "Registration")
+                    } catch {
+                        Log.error("   ⚠️ Kyber PQC upload failed (will retry on next launch): \(error)", category: "Registration")
+                    }
+                }
+            } catch {
+                Log.error("   ⚠️ Kyber PQC key generation failed: \(error)", category: "Registration")
+            }
             
             Log.info("   ✅ isAuthenticated: \(authViewModel.isAuthenticated)", category: "Registration")
             Log.info("   ✅ currentUserId: \(authViewModel.currentUserId ?? "nil")", category: "Registration")
@@ -398,7 +426,7 @@ struct RegistrationFlowView: View {
             
         } catch {
             Log.error("❌ Registration failed: \(error)", category: "Registration")
-            currentStep = .error(error.localizedDescription)
+            currentStep = .error(error.userFacingMessage)
         }
     }
 }

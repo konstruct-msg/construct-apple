@@ -57,3 +57,21 @@ extension String {
         return s
     }
 }
+
+// MARK: - Error + user-facing message
+
+import GRPCCore
+
+extension Error {
+    /// Returns a human-readable message suitable for display in the UI.
+    /// Extracts the server message from gRPC RPCError instead of the useless
+    /// "The operation couldn't be completed. (GRPCCore.RPCError error N.)" string.
+    var userFacingMessage: String {
+        if let rpcError = self as? RPCError {
+            let msg = rpcError.message
+            if !msg.isEmpty { return msg }
+            return "Server error (code \(rpcError.code.rawValue))"
+        }
+        return localizedDescription
+    }
+}

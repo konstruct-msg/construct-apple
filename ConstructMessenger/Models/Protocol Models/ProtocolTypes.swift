@@ -28,9 +28,17 @@ struct ChatMessage: Codable, Identifiable {
     /// OTPK key_id used by sender in X3DH (0 = no OTPK / fallback 3-DH).
     /// Only meaningful when messageNumber == 0 (X3DH handshake message).
     var oneTimePreKeyId: UInt32 = 0
-    
+
     /// If non-empty, this message is an edit to an existing message with this ID.
     var editsMessageId: String = ""
+
+    /// ML-KEM-768 KEM ciphertext for PQXDH (empty = classic X3DH only).
+    /// Only present when messageNumber == 0 (first message / session initiation).
+    var kemCiphertext: Data = Data()
+
+    /// Kyber OTPK key ID used by sender (0 = Kyber SPK was used, >0 = Kyber OTPK ID).
+    /// Only meaningful when messageNumber == 0 and kemCiphertext is non-empty.
+    var kyberOtpkId: UInt32 = 0
     
     /// Check if this is an END_SESSION control message
     var isEndSession: Bool {
@@ -76,6 +84,12 @@ struct PublicKeyBundleData: Codable {
     let suiteId: UInt16
     var oneTimePreKeyPublic: String?  // Base64; nil if server has no OTPKs left
     var oneTimePreKeyId: UInt32?      // nil if no OTPK available
+    // PQXDH fields (optional for backward compatibility with classic-only servers)
+    var kyberPreKeyPublic: Data?      // ML-KEM-768 SPK public key (1184 bytes)
+    var kyberPreKeyId: UInt32?        // Kyber SPK key ID
+    var kyberPreKeySignature: Data?   // Ed25519 signature over kyber_pre_key
+    var kyberOneTimePreKeyPublic: Data?   // ML-KEM-768 OTPK public key (1184 bytes)
+    var kyberOneTimePreKeyId: UInt32?     // Kyber OTPK key ID
 }
 
 struct EncryptedMessageV3: Codable {

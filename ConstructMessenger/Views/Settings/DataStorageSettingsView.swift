@@ -129,7 +129,7 @@ struct DataStorageSettingsView: View {
         }
         .navigationTitle("data_and_storage")
         .navigationBarTitleDisplayMode(.inline)
-        .task { cacheSize = await Task.detached { MediaManager.shared.diskCacheSize() }.value }
+        .task { cacheSize = MediaManager.shared.diskCacheSize() }
         .confirmationDialog("storage_clear_confirm_title",
                             isPresented: $showClearConfirm,
                             titleVisibility: .visible) {
@@ -146,8 +146,8 @@ struct DataStorageSettingsView: View {
 
     private func clearCache() async {
         isClearing = true
-        await MediaManager.shared.clearCache(includingDisk: true)
-        cacheSize = await Task.detached { MediaManager.shared.diskCacheSize() }.value
+        MediaManager.shared.clearCache(includingDisk: true)
+        cacheSize = MediaManager.shared.diskCacheSize()
         isClearing = false
     }
 

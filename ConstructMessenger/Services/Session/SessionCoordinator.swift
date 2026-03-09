@@ -206,6 +206,11 @@ final class SessionCoordinator {
                 Log.info("🔄 initReceivingSession failed — clearing queue, sending END_SESSION to \(userId.prefix(8))...", category: "SessionInit")
                 // ACK so server cursor advances past the undecryptable message.
                 streamManager?.sendReceipt([message.id], to: userId, status: .delivered)
+                // Mark as permanently processed so re-deliveries on reconnect are silently ignored
+                // instead of triggering a cascade of new failed session inits.
+                if let context = viewContext {
+                    PersistentACKStore.shared.markProcessed(message.id, senderId: userId, in: context)
+                }
                 pendingFirstMessages.removeValue(forKey: userId)
                 Task {
                     try? await sendEndSession(to: userId, reason: "session_init_failed")
@@ -260,6 +265,8 @@ final class SessionCoordinator {
                 if !canContinue {
                     Log.info("⛔ Heal exhausted — sending END_SESSION to \(userId.prefix(8))…", category: "SessionInit")
                     streamManager?.sendReceipt([failedMessage.id], to: userId, status: .delivered)
+                    // Mark permanently so re-deliveries on reconnect don't restart the cascade.
+                    PersistentACKStore.shared.markProcessed(failedMessage.id, senderId: userId, in: context)
                     pendingFirstMessages.removeValue(forKey: userId)
                     SessionHealingService.shared.clearQueue(for: userId, in: context)
                     try? await sendEndSession(to: userId, reason: "heal_exhausted")
@@ -296,11 +303,15 @@ final class SessionCoordinator {
         let deviceId = KeychainManager.shared.loadDeviceID() ?? ""
         guard !deviceId.isEmpty else { return }
         Log.info("🔑 Force-uploading \(OtpkReplenishmentService.replenishBatchSize) fresh OTPKs (\(reason))", category: "OTPK")
-        try? await OtpkReplenishmentService.generateAndUpload(
-            count: OtpkReplenishmentService.replenishBatchSize,
-            deviceId: deviceId,
-            replaceExisting: true
-        )
+        do {
+            try await OtpkReplenishmentService.generateAndUpload(
+                count: OtpkReplenishmentService.replenishBatchSize,
+                deviceId: deviceId,
+                replaceExisting: true
+            )
+        } catch {
+            Log.error("Failed to upload fresh OTPKs (\(reason)): \(error)", category: "OTPK")
+        }
     }
 
     // MARK: - Message persistence (session-init path only)

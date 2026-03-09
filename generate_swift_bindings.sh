@@ -283,9 +283,9 @@ build_for_target() {
 
     # Build the library — use PIPESTATUS to detect failures when filtering output
     if [ "$VERBOSE" = true ]; then
-        cargo build --lib --target "$target" --features ios $build_flag
+        cargo build --lib --target "$target" --features ios,post-quantum $build_flag
     else
-        cargo build --lib --target "$target" --features ios $build_flag 2>&1 \
+        cargo build --lib --target "$target" --features ios,post-quantum $build_flag 2>&1 \
             | grep -v "^\s*Compiling\|^\s*Finished\|^\s*Fresh"
         # pipefail catches cargo exit code through the pipe
     fi
@@ -495,6 +495,31 @@ main() {
     echo ""
 }
 
+# Merge construct-ice.a (ICE proxy FFI symbols) into the output library.
+# construct-ice's no_mangle symbols don't auto-include in staticlib deps — must merge explicitly.
+_merge_ice() {
+    local core_lib="$1"
+    local arch="$2"
+    local build_dir="$3"
+    local dest="$4"
+
+    # Use find to avoid glob + set -e/pipefail issues with unmatched patterns.
+    # Check construct-core's deps first, then standalone construct-ice target.
+    local ice_lib
+    ice_lib=$(find "$CORE_PATH/target/$arch/$build_dir/deps" -name "libconstruct_ice*.a" 2>/dev/null | head -1)
+    if [ -z "$ice_lib" ]; then
+        ice_lib=$(find "$CORE_PATH/../construct-ice/target/$arch/$build_dir" -name "libconstruct_ice*.a" 2>/dev/null | head -1)
+    fi
+
+    if [ -n "$ice_lib" ] && [ -f "$ice_lib" ]; then
+        libtool -static -o "$dest" "$core_lib" "$ice_lib"
+        print_info "Merged construct-ice FFI symbols into $(basename "$dest")"
+    else
+        cp "$core_lib" "$dest"
+        print_warning "construct-ice not found for $arch — ICE proxy symbols missing from $(basename "$dest")"
+    fi
+}
+
 # Copy library to project root
 copy_library_to_project_root() {
     print_header "Copying Library to Project Root"
@@ -520,7 +545,7 @@ copy_library_to_project_root() {
     local ios_lib
     ios_lib=$(_lib_path "aarch64-apple-ios")
     if [ -f "$ios_lib" ]; then
-        cp "$ios_lib" "$PROJECT_ROOT/libconstruct_core.a"
+        _merge_ice "$ios_lib" "aarch64-apple-ios" "$build_dir" "$PROJECT_ROOT/libconstruct_core.a"
         print_success "Copied iOS device library → libconstruct_core.a"
     fi
 
@@ -528,13 +553,14 @@ copy_library_to_project_root() {
     local macabi_lib
     macabi_lib=$(_lib_path "aarch64-apple-ios-macabi")
     if [ -f "$macabi_lib" ]; then
-        cp "$macabi_lib" "$PROJECT_ROOT/libconstruct_core_catalyst.a"
+        _merge_ice "$macabi_lib" "aarch64-apple-ios-macabi" "$build_dir" "$PROJECT_ROOT/libconstruct_core_catalyst.a"
         print_success "Copied Mac Catalyst library → libconstruct_core_catalyst.a"
     fi
 
     # Fallback: if no device lib, copy the first non-macabi arch built
     if [ ! -f "$PROJECT_ROOT/libconstruct_core.a" ]; then
         local latest_lib=""
+        local latest_arch=""
         local latest_time=0
         for arch in "${ARCHITECTURES[@]}"; do
             # macabi belongs in libconstruct_core_catalyst.a, never in libconstruct_core.a
@@ -547,11 +573,12 @@ copy_library_to_project_root() {
                 if [ "$lib_time" -gt "$latest_time" ]; then
                     latest_time=$lib_time
                     latest_lib="$lib_path"
+                    latest_arch="$arch"
                 fi
             fi
         done
         if [ -n "$latest_lib" ]; then
-            cp "$latest_lib" "$PROJECT_ROOT/libconstruct_core.a"
+            _merge_ice "$latest_lib" "$latest_arch" "$build_dir" "$PROJECT_ROOT/libconstruct_core.a"
             print_success "Copied fallback library → libconstruct_core.a (from $latest_lib)"
         else
             print_info "No iOS library built — skipping libconstruct_core.a"

@@ -216,12 +216,56 @@ public struct Shared_Proto_Messaging_V1_PreKeySignalMessage: Sendable {
   /// Clears the value of `message`. Subsequent reads from it will return its default value.
   public mutating func clearMessage() {self._message = nil}
 
+  /// KEM ciphertext (ML-KEM-1024 Encaps output, exactly 1568 bytes)
+  public var kemCiphertext: Data {
+    get {_kemCiphertext ?? Data()}
+    set {_kemCiphertext = newValue}
+  }
+  /// Returns true if `kemCiphertext` has been explicitly set.
+  public var hasKemCiphertext: Bool {self._kemCiphertext != nil}
+  /// Clears the value of `kemCiphertext`. Subsequent reads from it will return its default value.
+  public mutating func clearKemCiphertext() {self._kemCiphertext = nil}
+
+  /// Kyber signed pre-key ID used (matches PreKeyBundle.kyber_pre_key_id)
+  public var kyberPreKeyID: UInt32 {
+    get {_kyberPreKeyID ?? 0}
+    set {_kyberPreKeyID = newValue}
+  }
+  /// Returns true if `kyberPreKeyID` has been explicitly set.
+  public var hasKyberPreKeyID: Bool {self._kyberPreKeyID != nil}
+  /// Clears the value of `kyberPreKeyID`. Subsequent reads from it will return its default value.
+  public mutating func clearKyberPreKeyID() {self._kyberPreKeyID = nil}
+
+  /// KEM ciphertext from Kyber one-time pre-key (1568 bytes, if OTPK was used)
+  public var kyberOneTimeKemCiphertext: Data {
+    get {_kyberOneTimeKemCiphertext ?? Data()}
+    set {_kyberOneTimeKemCiphertext = newValue}
+  }
+  /// Returns true if `kyberOneTimeKemCiphertext` has been explicitly set.
+  public var hasKyberOneTimeKemCiphertext: Bool {self._kyberOneTimeKemCiphertext != nil}
+  /// Clears the value of `kyberOneTimeKemCiphertext`. Subsequent reads from it will return its default value.
+  public mutating func clearKyberOneTimeKemCiphertext() {self._kyberOneTimeKemCiphertext = nil}
+
+  /// Kyber one-time pre-key ID used
+  public var kyberOneTimePreKeyID: UInt32 {
+    get {_kyberOneTimePreKeyID ?? 0}
+    set {_kyberOneTimePreKeyID = newValue}
+  }
+  /// Returns true if `kyberOneTimePreKeyID` has been explicitly set.
+  public var hasKyberOneTimePreKeyID: Bool {self._kyberOneTimePreKeyID != nil}
+  /// Clears the value of `kyberOneTimePreKeyID`. Subsequent reads from it will return its default value.
+  public mutating func clearKyberOneTimePreKeyID() {self._kyberOneTimePreKeyID = nil}
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
   fileprivate var _preKeyID: UInt32? = nil
   fileprivate var _message: Shared_Proto_Messaging_V1_SignalMessage? = nil
+  fileprivate var _kemCiphertext: Data? = nil
+  fileprivate var _kyberPreKeyID: UInt32? = nil
+  fileprivate var _kyberOneTimeKemCiphertext: Data? = nil
+  fileprivate var _kyberOneTimePreKeyID: UInt32? = nil
 }
 
 /// SenderKeyMessage - Group message (Sender Key protocol)
@@ -596,7 +640,7 @@ extension Shared_Proto_Messaging_V1_SignalMessage: SwiftProtobuf.Message, SwiftP
 
 extension Shared_Proto_Messaging_V1_PreKeySignalMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".PreKeySignalMessage"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}version\0\u{3}registration_id\0\u{3}pre_key_id\0\u{3}signed_pre_key_id\0\u{3}base_key\0\u{3}identity_key\0\u{1}message\0\u{c}\u{8}\u{8}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}version\0\u{3}registration_id\0\u{3}pre_key_id\0\u{3}signed_pre_key_id\0\u{3}base_key\0\u{3}identity_key\0\u{1}message\0\u{3}kem_ciphertext\0\u{3}kyber_pre_key_id\0\u{3}kyber_one_time_kem_ciphertext\0\u{3}kyber_one_time_pre_key_id\0\u{c}\u{c}\u{4}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -611,6 +655,10 @@ extension Shared_Proto_Messaging_V1_PreKeySignalMessage: SwiftProtobuf.Message, 
       case 5: try { try decoder.decodeSingularBytesField(value: &self.baseKey) }()
       case 6: try { try decoder.decodeSingularBytesField(value: &self.identityKey) }()
       case 7: try { try decoder.decodeSingularMessageField(value: &self._message) }()
+      case 8: try { try decoder.decodeSingularBytesField(value: &self._kemCiphertext) }()
+      case 9: try { try decoder.decodeSingularUInt32Field(value: &self._kyberPreKeyID) }()
+      case 10: try { try decoder.decodeSingularBytesField(value: &self._kyberOneTimeKemCiphertext) }()
+      case 11: try { try decoder.decodeSingularUInt32Field(value: &self._kyberOneTimePreKeyID) }()
       default: break
       }
     }
@@ -642,6 +690,18 @@ extension Shared_Proto_Messaging_V1_PreKeySignalMessage: SwiftProtobuf.Message, 
     try { if let v = self._message {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 7)
     } }()
+    try { if let v = self._kemCiphertext {
+      try visitor.visitSingularBytesField(value: v, fieldNumber: 8)
+    } }()
+    try { if let v = self._kyberPreKeyID {
+      try visitor.visitSingularUInt32Field(value: v, fieldNumber: 9)
+    } }()
+    try { if let v = self._kyberOneTimeKemCiphertext {
+      try visitor.visitSingularBytesField(value: v, fieldNumber: 10)
+    } }()
+    try { if let v = self._kyberOneTimePreKeyID {
+      try visitor.visitSingularUInt32Field(value: v, fieldNumber: 11)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -653,6 +713,10 @@ extension Shared_Proto_Messaging_V1_PreKeySignalMessage: SwiftProtobuf.Message, 
     if lhs.baseKey != rhs.baseKey {return false}
     if lhs.identityKey != rhs.identityKey {return false}
     if lhs._message != rhs._message {return false}
+    if lhs._kemCiphertext != rhs._kemCiphertext {return false}
+    if lhs._kyberPreKeyID != rhs._kyberPreKeyID {return false}
+    if lhs._kyberOneTimeKemCiphertext != rhs._kyberOneTimeKemCiphertext {return false}
+    if lhs._kyberOneTimePreKeyID != rhs._kyberOneTimePreKeyID {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

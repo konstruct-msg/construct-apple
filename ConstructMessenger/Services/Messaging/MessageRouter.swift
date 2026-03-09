@@ -103,10 +103,26 @@ class MessageRouter {
             return
         }
 
-        // 3. Find or create chat
+        // 4. Handle messages from contacts whose chat was explicitly deleted.
+        //    messageNumber=0 means the sender fetched our *current* public keys (via a fresh invite)
+        //    and started a new session — this is a legitimate re-contact, so clear the deleted flag
+        //    and process normally (a new chat will be created by findOrCreateChat below).
+        //    messageNumber>0 is an old broken session we no longer have keys for — skip it.
+        if DeletedContactsStore.shared.isDeleted(otherUserId) {
+            if message.messageNumber == 0 {
+                Log.info("♻️ Fresh session (msgNum=0) from previously-deleted contact \(otherUserId.prefix(8))… — clearing deleted flag", category: "MessageRouter")
+                DeletedContactsStore.shared.remove(otherUserId)
+                // Fall through to normal processing below.
+            } else {
+                Log.debug("⏭️ Skipping old-session message (msgNum=\(message.messageNumber)) from deleted contact \(otherUserId.prefix(8))…", category: "MessageRouter")
+                return
+            }
+        }
+
+        // 5. Find or create chat
         let (chat, isNewChat) = findOrCreateChat(for: otherUserId, in: context)
         
-        // 4. Check if we have a session for this user
+        // 6. Check if we have a session for this user
         let hasSession = CryptoManager.shared.hasSession(for: otherUserId)
         Log.info("🔐 SESSION_STATE[incoming_message]: userId=\(otherUserId.prefix(8))..., hasSession=\(hasSession), messageId=\(message.id.prefix(8))...", category: "SessionInit")
         
@@ -186,6 +202,7 @@ class MessageRouter {
                 original.decryptedContent = decryptedContent
                 original.isEdited = true
                 original.editedAt = Date(timeIntervalSince1970: TimeInterval(message.timestamp))
+                try? context.save()
                 Log.info("✏️ Edited message \(message.editsMessageId.prefix(8))…", category: "MessageRouter")
             } else {
                 Log.error("❌ Cannot find original message to edit: \(message.editsMessageId)", category: "MessageRouter")

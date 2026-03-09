@@ -37,8 +37,7 @@ class SessionManager {
         if let savedUserId = KeychainManager.shared.loadUserID(), !savedUserId.isEmpty {
             return savedUserId
         }
-        // Legacy fallback: deviceId
-        return KeychainManager.shared.loadDeviceID()
+        return nil
     }
 
     // ✅ Get session expiration timestamp

@@ -122,42 +122,35 @@ struct MessageBubble: View {
                                 .stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2)
                         )
                 } else {
-                    // Regular text message with bubble
+                    // Flat text message — no bubble background
                     VStack(alignment: .leading, spacing: 0) {
                         // Reply/Quote preview
                         if let replyContent = message.replyToContent {
                             HStack(spacing: 4) {
                                 Rectangle()
-                                    .fill(message.isSentByMe ? Color.white.opacity(0.5) : Color.blue.opacity(0.5))
+                                    .fill(Color.accentColor.opacity(0.6))
                                     .frame(width: 3)
 
                                 Text(replyContent)
                                     .font(.caption)
-                                    .foregroundColor(message.isSentByMe ? .white.opacity(0.8) : .secondary)
+                                    .foregroundColor(.secondary)
                                     .lineLimit(2)
                                     .padding(.vertical, 4)
                                     .padding(.trailing, 8)
                             }
-                            .padding(.leading, 8)
-                            .padding(.top, 8)
+                            .padding(.leading, 4)
+                            .padding(.bottom, 4)
                         }
 
-                        // Main message content with link detection
+                        // Main message content
                         LinkDetectingText(
                             message.decryptedContent ?? NSLocalizedString("encrypted", comment: "Fallback for encrypted content"),
-                            color: message.isSentByMe ? .white : .primary
+                            color: .primary
                         )
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, message.replyToContent != nil ? 4 : 8)
-                        .padding(.bottom, message.replyToContent != nil ? 8 : 0)
                     }
-                    .background(message.isSentByMe ? Color.blue : Color.gray.opacity(0.2))
-                    .foregroundColor(message.isSentByMe ? .white : .primary)
-                    .cornerRadius(16)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2)
-                    )
+                    .padding(.vertical, 2)
+                    .background(isSelected ? Color.accentColor.opacity(0.12) : Color.clear)
+                    .cornerRadius(8)
                 }
 
                 if isLastInGroup {
@@ -181,7 +174,7 @@ struct MessageBubble: View {
             }
             .frame(maxWidth: containerWidth * 0.7, alignment: message.isSentByMe ? .trailing : .leading)
             .contentShape(.interaction, Rectangle())
-            .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 16))
+            .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 8))
             .onTapGesture {
                 if isEditMode {
                     onSelect?(message)

@@ -17,6 +17,10 @@ import Foundation
 /// ```
 class InviteVerifier {
     
+    // MARK: - JTI deduplication
+    private var usedJtis: Set<String> = []
+    private let jtiLock = NSLock()
+    
     // MARK: - Decoding
     
     /// Decode invite from Base64-encoded MessagePack
@@ -110,6 +114,12 @@ class InviteVerifier {
             throw InviteVerificationError.expired
         }
         
+        // Step 2a: Check JTI deduplication
+        guard !jtiLock.withLock({ usedJtis.contains(invite.jti) }) else {
+            Log.info("⚠️ Invite JTI already used: \(invite.jti.prefix(8))...", category: "InviteVerifier")
+            throw InviteVerificationError.alreadyUsed
+        }
+        
         // Step 3: Fetch sender's public key bundle
         let publicKeyBundle = try await fetchPublicKey(userId: invite.uuid, server: invite.server)
         
@@ -177,6 +187,7 @@ class InviteVerifier {
                 
                 if normalizedValid {
                     Log.info("✅ Invite signature valid after server normalization: jti=\(invite.jti.prefix(8))..., server=\(normalizedServer)", category: "InviteVerifier")
+                    jtiLock.withLock { usedJtis.insert(invite.jti) }
                     return true
                 }
             }
@@ -185,6 +196,9 @@ class InviteVerifier {
             throw InviteVerificationError.invalidSignature
         }
         
+        if isValid {
+            jtiLock.withLock { usedJtis.insert(invite.jti) }
+        }
         return isValid
     }
     
@@ -209,20 +223,11 @@ class InviteVerifier {
     /// - Throws: InviteVerificationError
     private func fetchPublicKey(userId: String, server: String) async throws -> PublicKeyBundleData {
         do {
-            let identityKeyData = try await KeyServiceClient.shared.getIdentityKey(userId: userId)
-            Log.debug("🔑 Fetched identity key for \(userId.prefix(8)): \(identityKeyData.count) bytes", category: "InviteVerifier")
-            let keyBase64 = identityKeyData.base64EncodedString()
-            return PublicKeyBundleData(
-                userId: userId,
-                username: "",
-                identityPublic: keyBase64,
-                signedPrekeyPublic: "",
-                signature: "",
-                verifyingKey: keyBase64,
-                suiteId: 1
-            )
+            let bundle = try await KeyServiceClient.shared.getPreKeyBundle(userId: userId)
+            Log.debug("🔑 Fetched key bundle for \(userId.prefix(8))", category: "InviteVerifier")
+            return bundle
         } catch {
-            Log.error("❌ Failed to fetch identity key for \(userId): \(error)", category: "InviteVerifier")
+            Log.error("❌ Failed to fetch key bundle for \(userId): \(error)", category: "InviteVerifier")
             throw InviteVerificationError.publicKeyFetchFailed(error)
         }
     }

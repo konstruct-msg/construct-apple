@@ -19,6 +19,7 @@ enum OtpkReplenishmentService {
     static let lowWaterMark: UInt32 = 20
     /// Batch size for replenishment uploads.
     static let replenishBatchSize: UInt32 = 50
+    private nonisolated(unsafe) static var isReplenishing = false
 
     // MARK: - Initial upload (called once at registration)
 
@@ -74,6 +75,9 @@ enum OtpkReplenishmentService {
     /// Check server-side OTPK count; upload a batch if below the low-water mark.
     /// Non-fatal — logs errors instead of throwing.
     static func replenishIfNeeded(deviceId: String) async {
+        guard !isReplenishing else { return }
+        isReplenishing = true
+        defer { isReplenishing = false }
         do {
             let serverCount = try await KeyServiceClient.shared.getPreKeyCount(deviceId: deviceId)
             Log.debug("🔑 OTPK server count: \(serverCount)", category: "OTPK")

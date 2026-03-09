@@ -453,10 +453,11 @@
 "mark_read" = "Отметить как прочитанное";
 
 // ICE — маскировка трафика
-"ice_section_header" = "Лёд";
-"ice_title" = "Лёд (ICE)";
-"ice_subtitle" = "Intrusion Countermeasures Electronics";
-"ice_footer" = "Лёд маскирует трафик мессенджера, делая его неотличимым от обычного HTTPS. Требует поддержки на сервере. Скоро.";
+"ice_section_header" = "Intrusion Countermeasures Electronics";
+"ice_title" = "ICE";
+"ice_subtitle" = "Обфусцированное соединение";
+"ice_footer" = "ICE маскирует трафик мессенджера, делая его неотличимым от обычного HTTPS. Конфигурация предоставляется сервером автоматически.";
+"ice_unavailable" = "Недоступно на этом сервере";
 
 // Data & Storage
 "data_and_storage" = "Данные и память";

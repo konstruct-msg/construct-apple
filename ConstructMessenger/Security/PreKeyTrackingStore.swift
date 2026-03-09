@@ -16,6 +16,7 @@ enum PreKeyTrackingResult {
 final class PreKeyTrackingStore {
     private let storageKey: String
     private var tracked: [String: String] = [:]
+    private let lock = NSLock()
 
     init(storageKey: String = "tracked_prekey_ids") {
         self.storageKey = storageKey
@@ -23,6 +24,8 @@ final class PreKeyTrackingStore {
     }
 
     func track(preKeyId: String, for userId: String) -> PreKeyTrackingResult {
+        lock.lock()
+        defer { lock.unlock() }
         let previous = tracked[userId]
 
         if previous == nil {

@@ -447,21 +447,11 @@ class BackgroundFetchManager: NSObject {
         
         if messagesByChat.count == 1, let (chatId, messages) = messagesByChat.first {
             // Single chat - show individual notification
-            let userId = chatUserIds[chatId] ?? "Unknown"
+            let _ = chatUserIds[chatId] ?? "Unknown"
             
-            // Get user display name from Core Data
             let context = PersistenceController.shared.container.viewContext
-            let userFetch = User.fetchRequest()
-            userFetch.predicate = NSPredicate(format: "id == %@", userId)
             
-            let senderName: String
-            if let user = try? context.fetch(userFetch).first {
-                senderName = user.displayName
-            } else {
-                senderName = userId
-            }
-            
-            let preview = messages.first.flatMap { msg -> String? in
+            _ = messages.first.flatMap { msg -> String? in
                 // Try to get decrypted content if available
                 let messageFetch = Message.fetchRequest()
                 messageFetch.predicate = NSPredicate(format: "id == %@", msg.id)

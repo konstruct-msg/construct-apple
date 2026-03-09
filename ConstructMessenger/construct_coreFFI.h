@@ -269,6 +269,11 @@ uint64_t uniffi_construct_core_fn_clone_classiccryptocore(uint64_t handle, RustC
 void uniffi_construct_core_fn_free_classiccryptocore(uint64_t handle, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_CLASSICCRYPTOCORE_APPLY_PQ_CONTRIBUTION
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_CLASSICCRYPTOCORE_APPLY_PQ_CONTRIBUTION
+void uniffi_construct_core_fn_method_classiccryptocore_apply_pq_contribution(uint64_t ptr, RustBuffer contact_id, RustBuffer kem_shared_secret, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_CLASSICCRYPTOCORE_DECRYPT_MESSAGE
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_CLASSICCRYPTOCORE_DECRYPT_MESSAGE
 RustBuffer uniffi_construct_core_fn_method_classiccryptocore_decrypt_message(uint64_t ptr, RustBuffer session_id, RustBuffer ephemeral_public_key, uint32_t message_number, RustBuffer content, RustCallStatus *_Nonnull out_status
@@ -489,6 +494,22 @@ int8_t uniffi_construct_core_fn_func_is_dummy_message(RustBuffer data, RustCallS
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_JITTERED_INTERVAL_MS
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_JITTERED_INTERVAL_MS
 uint64_t uniffi_construct_core_fn_func_jittered_interval_ms(uint64_t base_ms, uint64_t jitter_ms, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_MLKEM768_DECAPSULATE
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_MLKEM768_DECAPSULATE
+RustBuffer uniffi_construct_core_fn_func_mlkem768_decapsulate(RustBuffer secret_key, RustBuffer ciphertext, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_MLKEM768_ENCAPSULATE
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_MLKEM768_ENCAPSULATE
+RustBuffer uniffi_construct_core_fn_func_mlkem768_encapsulate(RustBuffer public_key, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_MLKEM768_KEYGEN
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_MLKEM768_KEYGEN
+RustBuffer uniffi_construct_core_fn_func_mlkem768_keygen(RustCallStatus *_Nonnull out_status
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_MNEMONIC_TO_SEED
@@ -886,6 +907,24 @@ uint16_t uniffi_construct_core_checksum_func_jittered_interval_ms(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_MLKEM768_DECAPSULATE
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_MLKEM768_DECAPSULATE
+uint16_t uniffi_construct_core_checksum_func_mlkem768_decapsulate(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_MLKEM768_ENCAPSULATE
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_MLKEM768_ENCAPSULATE
+uint16_t uniffi_construct_core_checksum_func_mlkem768_encapsulate(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_MLKEM768_KEYGEN
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_MLKEM768_KEYGEN
+uint16_t uniffi_construct_core_checksum_func_mlkem768_keygen(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_MNEMONIC_TO_SEED
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_MNEMONIC_TO_SEED
 uint16_t uniffi_construct_core_checksum_func_mnemonic_to_seed(void
@@ -937,6 +976,12 @@ uint16_t uniffi_construct_core_checksum_func_verify_pow(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_VERIFY_RECOVERY_SIGNATURE
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_VERIFY_RECOVERY_SIGNATURE
 uint16_t uniffi_construct_core_checksum_func_verify_recovery_signature(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_CLASSICCRYPTOCORE_APPLY_PQ_CONTRIBUTION
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_CLASSICCRYPTOCORE_APPLY_PQ_CONTRIBUTION
+uint16_t uniffi_construct_core_checksum_method_classiccryptocore_apply_pq_contribution(void
     
 );
 #endif

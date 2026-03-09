@@ -89,7 +89,8 @@ final class AuthServiceClient: Sendable {
                 username: username ?? "",
                 sessionToken: response.accessToken,
                 refreshToken: response.refreshToken,
-                expires: response.expiresAt
+                expires: response.expiresAt,
+                iceBridgeCert: response.hasIceBridgeCert ? response.iceBridgeCert : nil
             )
         }
     }
@@ -114,7 +115,8 @@ final class AuthServiceClient: Sendable {
                 accessToken: response.accessToken,
                 refreshToken: response.refreshToken,
                 expiresAt: response.expiresAt,
-                expiresIn: nil
+                expiresIn: nil,
+                iceBridgeCert: response.hasIceBridgeCert ? response.iceBridgeCert : nil
             )
         }
     }
@@ -238,7 +240,8 @@ final class AuthServiceClient: Sendable {
                 accessToken: response.tokens.accessToken,
                 refreshToken: response.tokens.refreshToken,
                 expiresAt: response.tokens.expiresAt,
-                expiresIn: nil
+                expiresIn: nil,
+                iceBridgeCert: response.tokens.hasIceBridgeCert ? response.tokens.iceBridgeCert : nil
             )
         }
     }

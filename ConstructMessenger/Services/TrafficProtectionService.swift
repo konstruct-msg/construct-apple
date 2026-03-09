@@ -100,7 +100,7 @@ class TrafficProtectionService {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.updateBatteryLevel()
+            Task { @MainActor [weak self] in self?.updateBatteryLevel() }
         }
         #endif
     }
@@ -128,7 +128,7 @@ class TrafficProtectionService {
             withTimeInterval: TrafficProtectionConfig.schedulerCheckInterval,
             repeats: true
         ) { [weak self] _ in
-            self?.checkAndSendDummy()
+            Task { @MainActor [weak self] in self?.checkAndSendDummy() }
         }
 
         Log.info("⏰ Traffic protection scheduler started", category: LogCategory.trafficProtection.name)

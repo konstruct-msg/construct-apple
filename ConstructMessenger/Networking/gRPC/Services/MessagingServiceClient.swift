@@ -90,7 +90,7 @@ final class MessagingServiceClient: Sendable {
             envelope.contentType = .sessionReset
             envelope.timestamp = Int64(Date().timeIntervalSince1970)
             // Always populate encrypted_payload — server validates it is non-empty.
-            envelope.encryptedPayload = Data((reason ?? "END_SESSION").utf8)
+            envelope.encryptedPayload = Data(count: 16)
 
             var request = Shared_Proto_Services_V1_SendMessageRequest()
             request.message = envelope
@@ -133,7 +133,7 @@ final class MessagingServiceClient: Sendable {
             let chatMessages = response.messages.compactMap { msg -> ChatMessage? in
                 // Unpack wire payload blob into crypto components
                 guard let decoded = try? WirePayloadCoder.decode(msg.encryptedPayload) else {
-                    Log.info("⚠️ Failed to decode encrypted_payload for message \(msg.messageID)", category: "MessagingServiceClient")
+                    Log.debug("⚠️ Failed to decode encrypted_payload for message \(msg.messageID)", category: "MessagingServiceClient")
                     return nil
                 }
                 return ChatMessage(
@@ -145,7 +145,9 @@ final class MessagingServiceClient: Sendable {
                     messageNumber: decoded.messageNumber,
                     content: decoded.content,
                     suiteId: 1,
-                    timestamp: UInt64(msg.timestamp)
+                    timestamp: UInt64(msg.timestamp),
+                    kemCiphertext: decoded.kemCiphertext ?? Data(),
+                    kyberOtpkId: decoded.kyberOtpkId
                 )
             }
 

@@ -65,7 +65,7 @@ final class AccountRecoveryViewModel {
             quizAnswers = [:]
             setupStep = .displayWords
         } catch {
-            setupStep = .failed(error.localizedDescription)
+            setupStep = .failed(error.userFacingMessage)
         }
     }
 
@@ -228,6 +228,7 @@ final class AccountRecoveryViewModel {
                 expiresIn: Int(response.expiresAt ?? 0),
                 userId: response.userId
             )
+            IceProxyManager.shared.configureFromServer(cert: response.iceBridgeCert ?? "")
 
             // 6. Upload new OTPKs (force replace)
             Task {

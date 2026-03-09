@@ -69,7 +69,7 @@ class MessageQueueManager {
     private func startPeriodicCheck() {
         // Check every 5 seconds for stuck messages
         checkTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
-            self?.checkForStuckMessages()
+            Task { @MainActor [weak self] in self?.checkForStuckMessages() }
         }
         Log.info("⏰ Started periodic message queue check", category: "MessageQueue")
     }
@@ -110,8 +110,8 @@ class MessageQueueManager {
                     if timeSinceSent > timeout {
                         Log.info("⏱️ Message \(message.id) stuck in sending state for \(Int(timeSinceSent))s, marking as queued", category: "MessageQueue")
                         message.deliveryStatus = .queued
-                        // Remove from pending sends if present
-                        self.markMessageAsFailed(message.id)
+                        let msgId = message.id
+                        Task { @MainActor [weak self] in self?.markMessageAsFailed(msgId) }
                         try? context.save()
                     }
                 }
@@ -129,7 +129,7 @@ class MessageQueueManager {
                     if message.deliveryStatus == .sending {
                         Log.info("⏱️ Message \(messageId) timed out, marking as queued", category: "MessageQueue")
                         message.deliveryStatus = .queued
-                        self.markMessageAsFailed(messageId)
+                        Task { @MainActor [weak self, messageId] in self?.markMessageAsFailed(messageId) }
                     }
                 }
             }
@@ -137,8 +137,8 @@ class MessageQueueManager {
             try? context.save()
             
             // Try to resend if network is available (gRPC reconnects automatically)
-            if self.networkManager.isReachable {
-                self.processQueuedMessages()
+            Task { @MainActor [weak self] in
+                if self?.networkManager.isReachable == true { self?.processQueuedMessages() }
             }
         }
     }

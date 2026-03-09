@@ -37,13 +37,13 @@ class AuthViewModel {
     var isLoading = false
     var errorMessage: String?
 
-    nonisolated(unsafe) private var sessionRestoreTimer: Timer?
-    nonisolated(unsafe) private var authOperationTimer: Timer?
+    private var sessionRestoreTimer: Timer?
+    private var authOperationTimer: Timer?
     private let viewContext: NSManagedObjectContext
     private var sessionExpiredTask: Task<Void, Never>?
 
     // Timer for monitoring token expiration
-    nonisolated(unsafe) private var tokenRefreshTimer: Timer?
+    private var tokenRefreshTimer: Timer?
 
     init(context: NSManagedObjectContext) {
         self.viewContext = context
@@ -101,7 +101,8 @@ class AuthViewModel {
         SessionManager.shared.loadSessionToken()
         
         if let _ = SessionManager.shared.sessionToken,
-           let userId = SessionManager.shared.currentUserId {
+           let userId = SessionManager.shared.currentUserId,
+           SessionManager.shared.isSessionValid {
             // We have session token - verify it's still valid
             print("✅ Found session token for user: \(userId)")
             await MainActor.run {
@@ -143,7 +144,7 @@ class AuthViewModel {
             // Save tokens
             let expiresInSeconds: Int
             if let expiresAt = response.expiresAt {
-                expiresInSeconds = max(Int(expiresAt - Int64(Date().timeIntervalSince1970)), 3600)
+                expiresInSeconds = max(Int(expiresAt - Int64(Date().timeIntervalSince1970)), 0)
             } else if let expiresIn = response.expiresIn {
                 expiresInSeconds = expiresIn
             } else {
@@ -160,6 +161,7 @@ class AuthViewModel {
                 self.currentUserId = response.userId
                 self.isAuthenticated = true
                 CryptoManager.shared.setLocalUserId(response.userId)
+                IceProxyManager.shared.configureFromServer(cert: response.iceBridgeCert ?? "")
                 print("✅ Device-based authentication successful")
             }
             
@@ -228,7 +230,7 @@ class AuthViewModel {
             await MainActor.run {
                 let expiresIn: Int
                 if let expiresAt = response.expiresAt {
-                    expiresIn = max(Int(expiresAt - Int64(Date().timeIntervalSince1970)), 3600)
+                    expiresIn = max(Int(expiresAt - Int64(Date().timeIntervalSince1970)), 0)
                 } else {
                     expiresIn = response.expiresIn ?? 3600
                 }
@@ -383,6 +385,8 @@ class AuthViewModel {
         authOperationTimer = nil
         sessionRestoreTimer?.invalidate()
         sessionRestoreTimer = nil
+        tokenRefreshTimer?.invalidate()
+        tokenRefreshTimer = nil
     }
 
     // MARK: - State Updaters

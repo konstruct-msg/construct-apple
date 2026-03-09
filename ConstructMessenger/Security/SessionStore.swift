@@ -29,6 +29,7 @@ final class SessionStore {
             self.sessionIds[userId] = sessionId
             self.suiteIds[userId] = suiteId
         }
+        UserDefaults.standard.set(Int(suiteId), forKey: "construct.session.suite.\(userId)")
     }
 
     func removeSession(for userId: String) {
@@ -36,6 +37,7 @@ final class SessionStore {
             self.sessionIds.removeValue(forKey: userId)
             self.suiteIds.removeValue(forKey: userId)
         }
+        UserDefaults.standard.removeObject(forKey: "construct.session.suite.\(userId)")
     }
 
     func allUserIds() -> [String] {
@@ -51,7 +53,11 @@ final class SessionStore {
 
         do {
             let sessionId = try core.importSessionJson(contactId: userId, sessionJson: sessionJson)
-            queue.async(flags: .barrier) { self.sessionIds[userId] = sessionId }
+            let savedSuiteId = UInt16(UserDefaults.standard.integer(forKey: "construct.session.suite.\(userId)"))
+            queue.async(flags: .barrier) {
+                self.sessionIds[userId] = sessionId
+                if savedSuiteId > 0 { self.suiteIds[userId] = savedSuiteId }
+            }
             onLog?("✅ Restored session: \(userId)")
             return true
         } catch {

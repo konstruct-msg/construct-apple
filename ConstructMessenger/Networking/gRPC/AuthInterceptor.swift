@@ -29,9 +29,10 @@ struct AuthInterceptor: ClientInterceptor {
             let (token, userId) = await MainActor.run {
                 (SessionManager.shared.sessionToken, SessionManager.shared.currentUserId)
             }
-            if let token {
-                request.metadata.addString("Bearer \(token)", forKey: "authorization")
+            guard let token else {
+                throw RPCError(code: .unauthenticated, message: "No session token — please log in")
             }
+            request.metadata.addString("Bearer \(token)", forKey: "authorization")
             if let userId {
                 request.metadata.addString(userId, forKey: "x-user-id")
             }

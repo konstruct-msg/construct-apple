@@ -51,6 +51,22 @@ struct DiagnosticsView: View {
                 .disabled(!LogCollector.shared.isEnabled)
             }
 
+            #if DEBUG
+            // MARK: - Dev Tools (Debug only)
+            Section {
+                Button(role: .destructive) {
+                    resetLocalData()
+                } label: {
+                    Label("Reset local data & Keychain", systemImage: "exclamationmark.triangle")
+                }
+            } header: {
+                Text("Developer")
+            } footer: {
+                Text("Clears all Keychain keys, sessions and UserDefaults. Use to test fresh registration without reinstalling.")
+                    .font(.caption)
+            }
+            #endif
+
             // MARK: - Recent Logs
             if !logText.isEmpty {
                 Section("Recent logs (tail)") {
@@ -106,6 +122,23 @@ struct DiagnosticsView: View {
         LogCollector.shared.clearLogs()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { refresh() }
     }
+
+    #if DEBUG
+    private func resetLocalData() {
+        // Wipe Keychain
+        KeychainManager.shared.deleteAllKeys()
+        // Wipe UserDefaults registration / migration flags
+        let keysToRemove = [
+            "construct.deviceId", "construct.userId",
+            "pqcKyberSPKMigrationV1Done",
+            "ice_bridge_cert", "iceActiveRelay", "ice_enabled",
+            "recovery_is_setup", "recovery_banner_dismissed",
+            "construct.kyber.otpk.nextKeyId",
+        ]
+        keysToRemove.forEach { UserDefaults.standard.removeObject(forKey: $0) }
+        Log.info("🗑️ [DEV] Local data and Keychain wiped", category: "Diagnostics")
+    }
+    #endif
 }
 
 #Preview {

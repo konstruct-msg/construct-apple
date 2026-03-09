@@ -16,6 +16,7 @@ struct NetworkSettingsView: View {
     @State private var showingAppliedAlert = false
 
     @AppStorage(UserDefaultsKey.iceEnabled.key) private var iceEnabled = false
+    @StateObject private var iceManager = IceProxyManager.shared
 
     var body: some View {
         List {
@@ -98,7 +99,18 @@ struct NetworkSettingsView: View {
 
             // MARK: - ICE
             Section {
-                Toggle(isOn: $iceEnabled) {
+                Toggle(isOn: Binding(
+                    get: { iceEnabled },
+                    set: { newValue in
+                        iceEnabled = newValue
+                        iceManager.isEnabled = newValue
+                        if newValue {
+                            iceManager.startIfEnabled()
+                        } else {
+                            iceManager.stop()
+                        }
+                    }
+                )) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("ice_title")
                             .fontWeight(.medium)
@@ -107,7 +119,30 @@ struct NetworkSettingsView: View {
                             .foregroundColor(.secondary)
                     }
                 }
-                .disabled(true) // Not yet implemented — requires server coordination
+                .disabled(!iceManager.hasCert)
+
+                if !iceManager.hasCert {
+                    Text("ice_unavailable")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                } else if iceEnabled {
+                    HStack {
+                        Text("status")
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        if iceManager.isRunning {
+                            Label("Connected", systemImage: "checkmark.circle.fill")
+                                .foregroundColor(.green)
+                                .font(.caption.weight(.semibold))
+                        } else {
+                            Text(iceManager.lastError ?? "Not connected")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+
+
+                }
             } header: {
                 Text("ice_section_header")
             } footer: {

@@ -45,16 +45,18 @@ class MessageRetryManager {
 
         // ✅ Re-encrypt and resend using SAME message ID
         do {
+            let capturedMessageId = message.id
+            let capturedSenderId = message.fromUserId
             let components = try CryptoManager.shared.encryptMessage(decryptedText, for: recipientId)
             let encryptedPayload = try WirePayloadCoder.encode(components)
 
             Task {
                 do {
                     let response = try await MessagingServiceClient.shared.sendMessage(
-                        messageId: message.id,
+                        messageId: capturedMessageId,
                         recipientId: recipientId,
-                        senderId: message.fromUserId,
-                        conversationId: ConversationId.direct(myUserId: message.fromUserId, theirUserId: recipientId),
+                        senderId: capturedSenderId,
+                        conversationId: ConversationId.direct(myUserId: capturedSenderId, theirUserId: recipientId),
                         encryptedPayload: encryptedPayload,
                         timestamp: UInt64(Date().timeIntervalSince1970)
                     )
@@ -67,15 +69,21 @@ class MessageRetryManager {
                         case "queued": deliveryStatus = .queued
                         default: deliveryStatus = .sent
                         }
-                        
-                        message.deliveryStatus = deliveryStatus
+                        let fetchRequest = Message.fetchRequest()
+                        fetchRequest.predicate = NSPredicate(format: "id == %@", capturedMessageId)
+                        fetchRequest.fetchLimit = 1
+                        guard let liveMsg = try? context.fetch(fetchRequest).first else { return }
+                        liveMsg.deliveryStatus = deliveryStatus
                         try? context.save()
                         Log.info("✅ Message retry successful: \(response.messageId), status: \(deliveryStatus)", category: "MessageRetryManager")
                     }
                 } catch {
                     await MainActor.run {
-                        // ✅ Keep existing message as failed
-                        message.deliveryStatus = .failed
+                        let fetchRequest = Message.fetchRequest()
+                        fetchRequest.predicate = NSPredicate(format: "id == %@", capturedMessageId)
+                        fetchRequest.fetchLimit = 1
+                        guard let liveMsg = try? context.fetch(fetchRequest).first else { return }
+                        liveMsg.deliveryStatus = .failed
                         try? context.save()
                         Log.error("❌ Message retry failed: \(error.localizedDescription)", category: "MessageRetryManager")
                         onError("Failed to send message: \(error.localizedDescription)")

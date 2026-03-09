@@ -44,6 +44,16 @@ final class KeyServiceClient: Sendable {
             let otpkPublic = bundle.oneTimePreKey.isEmpty ? nil : bundle.oneTimePreKey.base64EncodedString()
             let otpkId: UInt32? = bundle.oneTimePreKeyID > 0 ? bundle.oneTimePreKeyID : nil
 
+            // PQXDH fields (optional — nil if server doesn't support Kyber yet)
+            let kyberPK: Data? = bundle.hasKyberPreKey && !bundle.kyberPreKey.isEmpty ? bundle.kyberPreKey : nil
+            let kyberPKId: UInt32? = bundle.hasKyberPreKeyID && bundle.kyberPreKeyID > 0 ? bundle.kyberPreKeyID : nil
+            let kyberSig: Data? = bundle.hasKyberPreKeySignature && !bundle.kyberPreKeySignature.isEmpty ? bundle.kyberPreKeySignature : nil
+
+            let kyberOtpkPK: Data? = bundle.hasKyberOneTimePreKey && !bundle.kyberOneTimePreKey.isEmpty
+                ? bundle.kyberOneTimePreKey : nil
+            let kyberOtpkId: UInt32? = bundle.hasKyberOneTimePreKeyID && bundle.kyberOneTimePreKeyID > 0
+                ? bundle.kyberOneTimePreKeyID : nil
+
             return PublicKeyBundleData(
                 userId: userId,
                 username: "",
@@ -53,7 +63,12 @@ final class KeyServiceClient: Sendable {
                 verifyingKey: verifyingKeyB64,
                 suiteId: Self.parseSuiteId(bundle.cryptoSuite),
                 oneTimePreKeyPublic: otpkPublic,
-                oneTimePreKeyId: otpkId
+                oneTimePreKeyId: otpkId,
+                kyberPreKeyPublic: kyberPK,
+                kyberPreKeyId: kyberPKId,
+                kyberPreKeySignature: kyberSig,
+                kyberOneTimePreKeyPublic: kyberOtpkPK,
+                kyberOneTimePreKeyId: kyberOtpkId
             )
         }
     }
@@ -76,20 +91,24 @@ final class KeyServiceClient: Sendable {
     /// Upload a batch of one-time pre-keys to the server.
     func uploadPreKeys(
         deviceId: String,
-        preKeys: [(keyId: UInt32, publicKey: Data)],
+        preKeys: [(keyId: UInt32, publicKey: Data)]? = nil,
         signedPreKey: (keyId: UInt32, publicKey: Data, signature: Data)? = nil,
-        replaceExisting: Bool = false
-    ) async throws -> UInt32 {
+        replaceExisting: Bool = false,
+        kyberSignedPreKey: (keyId: UInt32, publicKey: Data, signature: Data)? = nil,
+        kyberOneTimePreKeys: [(keyId: UInt32, publicKey: Data, signature: Data)]? = nil
+    ) async throws -> (classicCount: UInt32, kyberCount: UInt32) {
         try await GRPCChannelManager.shared.performRPC { grpcClient in
             let keyClient = Shared_Proto_Services_V1_KeyService.Client(wrapping: grpcClient)
 
             var request = Shared_Proto_Services_V1_UploadPreKeysRequest()
             request.deviceID = deviceId
-            request.preKeys = preKeys.map { key in
-                var otpk = Shared_Proto_Services_V1_OneTimePreKey()
-                otpk.keyID = key.keyId
-                otpk.publicKey = key.publicKey
-                return otpk
+            if let pks = preKeys {
+                request.preKeys = pks.map { key in
+                    var otpk = Shared_Proto_Services_V1_OneTimePreKey()
+                    otpk.keyID = key.keyId
+                    otpk.publicKey = key.publicKey
+                    return otpk
+                }
             }
             if let spk = signedPreKey {
                 var signed = Shared_Proto_Services_V1_SignedPreKeyUpload()
@@ -98,12 +117,28 @@ final class KeyServiceClient: Sendable {
                 signed.signature = spk.signature
                 request.signedPreKey = signed
             }
+            if let kyberSpk = kyberSignedPreKey {
+                var kSigned = Shared_Proto_Services_V1_KyberSignedPreKeyUpload()
+                kSigned.keyID = kyberSpk.keyId
+                kSigned.publicKey = kyberSpk.publicKey
+                kSigned.signature = kyberSpk.signature
+                request.kyberSignedPreKey = kSigned
+            }
+            if let kyberOtpks = kyberOneTimePreKeys {
+                request.kyberPreKeys = kyberOtpks.map { key in
+                    var kotpk = Shared_Proto_Services_V1_KyberOneTimePreKey()
+                    kotpk.keyID = key.keyId
+                    kotpk.publicKey = key.publicKey
+                    kotpk.signature = key.signature
+                    return kotpk
+                }
+            }
             request.replaceExisting = replaceExisting
 
             let response = try await keyClient.uploadPreKeys(
                 request: .init(message: request)
             )
-            return response.preKeyCount
+            return (classicCount: response.preKeyCount, kyberCount: response.kyberPreKeyCount)
         }
     }
 

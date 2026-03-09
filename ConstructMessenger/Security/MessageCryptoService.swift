@@ -78,7 +78,6 @@ final class MessageCryptoService {
             saveSession(userId)
             return components
         } catch {
-            archiveSession(userId, .decryptionFailed)
             throw CryptoManagerError.encryptionFailed
         }
     }

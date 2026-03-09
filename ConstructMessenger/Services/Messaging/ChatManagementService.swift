@@ -59,6 +59,10 @@ class ChatManagementService {
             return existingChat
         }
         
+        // If this user was previously deleted, remove from deleted store so messages
+        // from them are no longer silently discarded.
+        DeletedContactsStore.shared.remove(user.id)
+
         // Check if User already exists before creating a new one
         let userFetchRequest = User.fetchRequest()
         let idPredicate = NSPredicate(format: "id == %@", user.id)
@@ -141,11 +145,11 @@ class ChatManagementService {
         }
         
         let chatId = chat.id
-        
-        // Archive crypto session when deleting chat
-        // This ensures we don't have orphaned sessions that could cause security issues
         let otherUser = chat.otherUser
-        if let userId = otherUser?.id {
+        
+        // Archive crypto session when deleting chat.
+        // Skip if already cleared (e.g. by END_SESSION sent before this call).
+        if let userId = otherUser?.id, CryptoManager.shared.hasSession(for: userId) {
             CryptoManager.shared.archiveSession(for: userId, reason: .manualReset)
             Log.info("🗑️ Archived crypto session for user: \(userId)", category: "ChatManagementService")
         }
@@ -156,6 +160,8 @@ class ChatManagementService {
         // Also delete the User entity so the stream no longer subscribes to this contact
         // and findOrCreateChat cannot recreate an empty chat on restart.
         if let user = otherUser {
+            // Persist the deletion so MessageRouter ignores future messages from this contact
+            DeletedContactsStore.shared.add(user.id)
             context.delete(user)
             Log.info("🗑️ Deleted user entity: \(user.id)", category: "ChatManagementService")
         }

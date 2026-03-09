@@ -49,7 +49,15 @@ struct Construct_MessengerApp: App {
             .environment(securityViewModel)
             .environment(recoveryViewModel)
             .task {
-                await MediaManager.shared.evictOldFiles()
+                MediaManager.shared.evictOldFiles()
+                // Start ICE proxy if user has it enabled
+                IceProxyManager.shared.startIfEnabled()
+                // One-time migration: upload Kyber SPK for users registered before PQC launch.
+                // Returns immediately if already done (UserDefaults flag). Remove in a future version.
+                if authViewModel.isAuthenticated,
+                   let deviceId = KeychainManager.shared.loadDeviceID() {
+                    await PQCKeyManager.migrateIfNeeded(deviceId: deviceId)
+                }
             }
         }
     }

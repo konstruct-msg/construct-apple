@@ -24,6 +24,7 @@ final class PQCKeyManager {
     // Stores KEM shared secret between encapsulate (session init) and msg0 send.
     // Applied only after msg0 is encrypted with classic state.
     private var pendingPQContributions: [String: [UInt8]] = [:]
+    private let pqContributionLock = NSLock()
 
     // MARK: - Keychain Keys
 
@@ -158,10 +159,13 @@ final class PQCKeyManager {
     // MARK: - Kyber OTPK Management
 
     private static let otpkNextKeyIdKey = "construct.kyber.otpk.nextKeyId"
+    private static let keyIdAllocationLock = NSLock()
     private static func otpkKeychainKey(_ keyId: UInt32) -> String { "construct.kyber.otpk.sk.\(keyId)" }
 
     /// Allocate `count` sequential key IDs for a new Kyber OTPK batch.
     private static func allocateKeyIds(count: Int) -> [UInt32] {
+        keyIdAllocationLock.lock()
+        defer { keyIdAllocationLock.unlock() }
         let start = UInt32(UserDefaults.standard.integer(forKey: otpkNextKeyIdKey))
         UserDefaults.standard.set(Int(start) + count, forKey: otpkNextKeyIdKey)
         return (0..<count).map { start + UInt32($0) }
@@ -240,7 +244,7 @@ final class PQCKeyManager {
     /// Call `applyDeferredPQContribution` after msg0 has been encrypted.
     func encapsulateAndDefer(kyberSPKPublic: Data, contactId: String) throws -> Data {
         let encapsulation = try mlkem768Encapsulate(publicKey: [UInt8](kyberSPKPublic))
-        pendingPQContributions[contactId] = encapsulation.sharedSecret
+        pqContributionLock.withLock { pendingPQContributions[contactId] = encapsulation.sharedSecret }
         Log.info("🔐 PQC: PQXDH encapsulated for \(contactId.prefix(8))..., ct=\(encapsulation.ciphertext.count)B (deferred)", category: "PQC")
         return Data(encapsulation.ciphertext)
     }
@@ -248,14 +252,14 @@ final class PQCKeyManager {
     /// Apply the deferred Kyber shared secret to the DR session.
     /// Must be called after msg0 is encrypted, before msg1 is encrypted.
     func applyDeferredPQContribution(contactId: String, core: ClassicCryptoCore) throws {
-        guard let ss = pendingPQContributions.removeValue(forKey: contactId) else { return }
+        guard let ss = pqContributionLock.withLock({ pendingPQContributions.removeValue(forKey: contactId) }) else { return }
         try core.applyPqContribution(contactId: contactId, kemSharedSecret: ss)
         Log.info("🔐 PQC: Deferred PQXDH applied for \(contactId.prefix(8))...", category: "PQC")
     }
 
     /// Discard any pending PQ contribution (e.g., when kem cannot be included in the message).
     func clearPendingContribution(for contactId: String) {
-        pendingPQContributions.removeValue(forKey: contactId)
+        pqContributionLock.withLock { pendingPQContributions.removeValue(forKey: contactId) }
     }
 
     // MARK: - PQXDH Receiver: Decapsulate + Strengthen Session

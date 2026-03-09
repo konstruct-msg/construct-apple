@@ -572,6 +572,15 @@ fileprivate struct FfiConverterString: FfiConverter {
 
 public protocol ClassicCryptoCoreProtocol: AnyObject, Sendable {
     
+    /**
+     * Mix a ML-KEM-768 shared secret into an existing session's root key.
+     *
+     * Call after init_session (sender) with kem_ss from mlkem768_encapsulate,
+     * or after init_receiving_session (receiver) with kem_ss from mlkem768_decapsulate.
+     * Both sides must call this with the same shared secret to stay in sync.
+     */
+    func applyPqContribution(contactId: String, kemSharedSecret: [UInt8]) throws 
+    
     func decryptMessage(sessionId: String, ephemeralPublicKey: [UInt8], messageNumber: UInt32, content: String) throws  -> String
     
     func encryptMessage(sessionId: String, plaintext: String) throws  -> EncryptedMessageComponents
@@ -654,6 +663,22 @@ open class ClassicCryptoCore: ClassicCryptoCoreProtocol, @unchecked Sendable {
 
     
 
+    
+    /**
+     * Mix a ML-KEM-768 shared secret into an existing session's root key.
+     *
+     * Call after init_session (sender) with kem_ss from mlkem768_encapsulate,
+     * or after init_receiving_session (receiver) with kem_ss from mlkem768_decapsulate.
+     * Both sides must call this with the same shared secret to stay in sync.
+     */
+open func applyPqContribution(contactId: String, kemSharedSecret: [UInt8])throws   {try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_classiccryptocore_apply_pq_contribution(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(contactId),
+        FfiConverterSequenceUInt8.lower(kemSharedSecret),$0
+    )
+}
+}
     
 open func decryptMessage(sessionId: String, ephemeralPublicKey: [UInt8], messageNumber: UInt32, content: String)throws  -> String  {
     return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
@@ -1043,6 +1068,93 @@ public func FfiConverterTypeTrafficProtectionManager_lower(_ value: TrafficProte
 
 
 
+/**
+ * Токены аутентификации (JWT)
+ */
+public struct AuthTokens: Equatable, Hashable {
+    /**
+     * Access token (JWT, живёт 1 час)
+     */
+    public var accessToken: String
+    /**
+     * Refresh token (JWT, живёт 30 дней)
+     */
+    public var refreshToken: String
+    /**
+     * Unix timestamp когда истекает access token
+     */
+    public var expiresAt: Int64
+    /**
+     * User ID (UUID)
+     */
+    public var userId: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Access token (JWT, живёт 1 час)
+         */accessToken: String, 
+        /**
+         * Refresh token (JWT, живёт 30 дней)
+         */refreshToken: String, 
+        /**
+         * Unix timestamp когда истекает access token
+         */expiresAt: Int64, 
+        /**
+         * User ID (UUID)
+         */userId: String) {
+        self.accessToken = accessToken
+        self.refreshToken = refreshToken
+        self.expiresAt = expiresAt
+        self.userId = userId
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension AuthTokens: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeAuthTokens: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> AuthTokens {
+        return
+            try AuthTokens(
+                accessToken: FfiConverterString.read(from: &buf), 
+                refreshToken: FfiConverterString.read(from: &buf), 
+                expiresAt: FfiConverterInt64.read(from: &buf), 
+                userId: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: AuthTokens, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.accessToken, into: &buf)
+        FfiConverterString.write(value.refreshToken, into: &buf)
+        FfiConverterInt64.write(value.expiresAt, into: &buf)
+        FfiConverterString.write(value.userId, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAuthTokens_lift(_ buf: RustBuffer) throws -> AuthTokens {
+    return try FfiConverterTypeAuthTokens.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAuthTokens_lower(_ value: AuthTokens) -> RustBuffer {
+    return FfiConverterTypeAuthTokens.lower(value)
+}
+
+
 public struct CoverTrafficConfig: Equatable, Hashable {
     public var enabled: Bool
     public var batteryLevelThreshold: Float
@@ -1328,6 +1440,116 @@ public func FfiConverterTypeInviteSignature_lift(_ buf: RustBuffer) throws -> In
 #endif
 public func FfiConverterTypeInviteSignature_lower(_ value: InviteSignature) -> RustBuffer {
     return FfiConverterTypeInviteSignature.lower(value)
+}
+
+
+/**
+ * Result of ML-KEM-768 encapsulation (sender side of PQXDH handshake).
+ */
+public struct MlkemEncapsulation: Equatable, Hashable {
+    public var ciphertext: [UInt8]
+    public var sharedSecret: [UInt8]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(ciphertext: [UInt8], sharedSecret: [UInt8]) {
+        self.ciphertext = ciphertext
+        self.sharedSecret = sharedSecret
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension MlkemEncapsulation: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeMLKEMEncapsulation: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> MlkemEncapsulation {
+        return
+            try MlkemEncapsulation(
+                ciphertext: FfiConverterSequenceUInt8.read(from: &buf), 
+                sharedSecret: FfiConverterSequenceUInt8.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: MlkemEncapsulation, into buf: inout [UInt8]) {
+        FfiConverterSequenceUInt8.write(value.ciphertext, into: &buf)
+        FfiConverterSequenceUInt8.write(value.sharedSecret, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMLKEMEncapsulation_lift(_ buf: RustBuffer) throws -> MlkemEncapsulation {
+    return try FfiConverterTypeMLKEMEncapsulation.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMLKEMEncapsulation_lower(_ value: MlkemEncapsulation) -> RustBuffer {
+    return FfiConverterTypeMLKEMEncapsulation.lower(value)
+}
+
+
+/**
+ * Generated ML-KEM-768 keypair (for Kyber Signed Pre-Key or One-Time Pre-Key upload).
+ */
+public struct MlkemKeyPair: Equatable, Hashable {
+    public var publicKey: [UInt8]
+    public var secretKey: [UInt8]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(publicKey: [UInt8], secretKey: [UInt8]) {
+        self.publicKey = publicKey
+        self.secretKey = secretKey
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension MlkemKeyPair: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeMLKEMKeyPair: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> MlkemKeyPair {
+        return
+            try MlkemKeyPair(
+                publicKey: FfiConverterSequenceUInt8.read(from: &buf), 
+                secretKey: FfiConverterSequenceUInt8.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: MlkemKeyPair, into buf: inout [UInt8]) {
+        FfiConverterSequenceUInt8.write(value.publicKey, into: &buf)
+        FfiConverterSequenceUInt8.write(value.secretKey, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMLKEMKeyPair_lift(_ buf: RustBuffer) throws -> MlkemKeyPair {
+    return try FfiConverterTypeMLKEMKeyPair.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMLKEMKeyPair_lower(_ value: MlkemKeyPair) -> RustBuffer {
+    return FfiConverterTypeMLKEMKeyPair.lower(value)
 }
 
 
@@ -2314,6 +2536,39 @@ public func jitteredIntervalMs(baseMs: UInt64, jitterMs: UInt64) -> UInt64  {
     )
 })
 }
+/**
+ * Decapsulate a received ML-KEM-768 ciphertext (receiver side PQXDH).
+ * Returns shared_secret to pass to ClassicCryptoCore.apply_pq_contribution.
+ */
+public func mlkem768Decapsulate(secretKey: [UInt8], ciphertext: [UInt8])throws  -> [UInt8]  {
+    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_func_mlkem768_decapsulate(
+        FfiConverterSequenceUInt8.lower(secretKey),
+        FfiConverterSequenceUInt8.lower(ciphertext),$0
+    )
+})
+}
+/**
+ * Encapsulate to a recipient's ML-KEM-768 public key (sender side PQXDH).
+ * Returns ciphertext (to include in proto PreKeySignalMessage.kem_ciphertext)
+ * and shared_secret (to pass to ClassicCryptoCore.apply_pq_contribution).
+ */
+public func mlkem768Encapsulate(publicKey: [UInt8])throws  -> MlkemEncapsulation  {
+    return try  FfiConverterTypeMLKEMEncapsulation_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_func_mlkem768_encapsulate(
+        FfiConverterSequenceUInt8.lower(publicKey),$0
+    )
+})
+}
+/**
+ * Generate an ML-KEM-768 keypair for PQC key registration.
+ */
+public func mlkem768Keygen()throws  -> MlkemKeyPair  {
+    return try  FfiConverterTypeMLKEMKeyPair_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_func_mlkem768_keygen($0
+    )
+})
+}
 public func mnemonicToSeed(mnemonic: String)throws  -> [UInt8]  {
     return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_func_mnemonic_to_seed(
@@ -2447,6 +2702,15 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_func_jittered_interval_ms() != 6840) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_func_mlkem768_decapsulate() != 25978) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_mlkem768_encapsulate() != 20667) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_mlkem768_keygen() != 2851) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_func_mnemonic_to_seed() != 53142) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -2472,6 +2736,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_verify_recovery_signature() != 1269) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_classiccryptocore_apply_pq_contribution() != 13706) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_classiccryptocore_decrypt_message() != 15129) {

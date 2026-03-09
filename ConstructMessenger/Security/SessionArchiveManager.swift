@@ -64,7 +64,7 @@ final class SessionArchiveManager {
         let cutoffDate = Date().addingTimeInterval(-TimeInterval(retentionDays * 24 * 60 * 60))
         var totalRemoved = 0
 
-        for userId in archives.keys {
+        for userId in Array(archives.keys) {
             guard var list = archives[userId] else { continue }
             let before = list.count
             list.removeAll { $0.archivedAt < cutoffDate }
