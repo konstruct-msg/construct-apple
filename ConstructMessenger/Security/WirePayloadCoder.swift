@@ -62,6 +62,10 @@ enum WirePayloadCoder {
         withUnsafeBytes(of: &kOtpkId) { payload.append(contentsOf: $0) }
 
         // 2 bytes: kem_ciphertext_len (LE); 0 = no PQC
+        guard kemLen <= Int(UInt16.max) else {
+            Log.error("❌ WirePayload: KEM ciphertext too large (\(kemLen) bytes, max \(UInt16.max))", category: "WirePayload")
+            throw WirePayloadError.kemTooLarge(kemLen)
+        }
         var kemLenField = UInt16(kemLen).littleEndian
         withUnsafeBytes(of: &kemLenField) { payload.append(contentsOf: $0) }
 
@@ -142,6 +146,7 @@ enum WirePayloadError: Error, LocalizedError {
     case invalidDHPublicKey
     case invalidBase64Content
     case payloadTooShort(Int)
+    case kemTooLarge(Int)
 
     var errorDescription: String? {
         switch self {
@@ -151,6 +156,8 @@ enum WirePayloadError: Error, LocalizedError {
             return "Content is not valid Base64"
         case .payloadTooShort(let size):
             return "Payload too short: \(size) bytes (minimum \(WirePayloadCoder.headerSize + 1))"
+        case .kemTooLarge(let size):
+            return "KEM ciphertext too large: \(size) bytes (max \(UInt16.max))"
         }
     }
 }

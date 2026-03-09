@@ -44,15 +44,24 @@ final class PreKeyTrackingStore {
     }
 
     private func load() {
+        // Primary: Keychain (encrypted social graph)
+        if let data = KeychainManager.shared.loadData(forKey: storageKey),
+           let decoded = try? JSONDecoder().decode([String: String].self, from: data) {
+            tracked = decoded
+            return
+        }
+        // Migration: if Keychain empty, check UserDefaults, then migrate and remove
         if let data = UserDefaults.standard.data(forKey: storageKey),
            let decoded = try? JSONDecoder().decode([String: String].self, from: data) {
             tracked = decoded
+            save()  // writes to Keychain
+            UserDefaults.standard.removeObject(forKey: storageKey)
         }
     }
 
     private func save() {
         if let encoded = try? JSONEncoder().encode(tracked) {
-            UserDefaults.standard.set(encoded, forKey: storageKey)
+            KeychainManager.shared.saveData(encoded, forKey: storageKey)
         }
     }
 }

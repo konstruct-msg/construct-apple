@@ -15,11 +15,15 @@ final class SessionRestoreService {
         self.persistence = persistence
     }
 
-    func restoreRecentSessions(limit: Int, restoreSession: @escaping (String) -> Bool) {
+    func restoreRecentSessions(limit: Int, restoreSession: @escaping (String) -> Bool, retryCount: Int = 0) {
         let context = persistence.container.viewContext
         guard context.persistentStoreCoordinator != nil else {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                self.restoreRecentSessions(limit: limit, restoreSession: restoreSession)
+            guard retryCount < 5 else {
+                Log.error("⚠️ SessionRestoreService: CoreData store unavailable after \(retryCount) retries, giving up", category: "SessionRestore")
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                self?.restoreRecentSessions(limit: limit, restoreSession: restoreSession, retryCount: retryCount + 1)
             }
             return
         }

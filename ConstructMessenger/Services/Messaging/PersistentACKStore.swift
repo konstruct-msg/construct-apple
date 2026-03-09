@@ -37,16 +37,17 @@ final class PersistentACKStore {
         cacheLock.unlock()
         if cached { return true }
 
-        // Persistent check
-        let fetch = ProcessedMessage.fetchRequest()
-        fetch.predicate = NSPredicate(format: "messageId == %@", messageId)
-        fetch.fetchLimit = 1
-        let found = (try? context.fetch(fetch))?.isEmpty == false
-        if found {
-            // Warm the cache so subsequent checks are fast
-            cacheLock.lock()
-            cache.insert(messageId)
-            cacheLock.unlock()
+        var found = false
+        context.performAndWait {
+            let fetch = ProcessedMessage.fetchRequest()
+            fetch.predicate = NSPredicate(format: "messageId == %@", messageId)
+            fetch.fetchLimit = 1
+            found = (try? context.fetch(fetch))?.isEmpty == false
+            if found {
+                cacheLock.lock()
+                cache.insert(messageId)
+                cacheLock.unlock()
+            }
         }
         return found
     }
@@ -60,21 +61,23 @@ final class PersistentACKStore {
         cache.insert(messageId)
         cacheLock.unlock()
 
-        // Persist (skip if uniqueness constraint would fire)
-        let fetch = ProcessedMessage.fetchRequest()
-        fetch.predicate = NSPredicate(format: "messageId == %@", messageId)
-        fetch.fetchLimit = 1
-        guard (try? context.fetch(fetch))?.isEmpty != false else { return }
+        // Persist on the context's own queue
+        context.performAndWait {
+            let fetch = ProcessedMessage.fetchRequest()
+            fetch.predicate = NSPredicate(format: "messageId == %@", messageId)
+            fetch.fetchLimit = 1
+            guard (try? context.fetch(fetch))?.isEmpty != false else { return }
 
-        let record = ProcessedMessage(context: context)
-        record.messageId = messageId
-        record.senderId = senderId
-        record.processedAt = Date()
+            let record = ProcessedMessage(context: context)
+            record.messageId = messageId
+            record.senderId = senderId
+            record.processedAt = Date()
 
-        do {
-            try context.save()
-        } catch {
-            Log.error("❌ PersistentACKStore: failed to save ACK for \(messageId.prefix(8))…: \(error)", category: "PersistentACK")
+            do {
+                try context.save()
+            } catch {
+                Log.error("❌ PersistentACKStore: failed to save ACK for \(messageId.prefix(8))…: \(error)", category: "PersistentACK")
+            }
         }
     }
 

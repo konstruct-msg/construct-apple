@@ -158,7 +158,11 @@ final class SessionCoordinator {
                 }
                 self.endSessionSentAt[userId] = now
                 Log.info("🔄 Sending END_SESSION to \(userId.prefix(8))... (session out of sync)", category: "ChatsViewModel")
-                try? await self.sendEndSession(to: userId, reason: "session_out_of_sync")
+                do {
+                    try await self.sendEndSession(to: userId, reason: "session_out_of_sync")
+                } catch {
+                    Log.error("⚠️ Failed to send END_SESSION to \(userId.prefix(8))...: \(error)", category: "SessionCoordinator")
+                }
             }
         }
 

@@ -170,6 +170,7 @@ class MessageRouter {
             return
         case .invalid(let reason):
             Log.error("❌ Invalid chunked message: \(reason)", category: "MessageRouter")
+            onReceiptNeeded?([message.id], otherUserId, .delivered)
             return
         }
     }
@@ -220,6 +221,7 @@ class MessageRouter {
         // 7. Update chat metadata
         chat.lastMessageText = Chat.formatPreviewText(decryptedContent)
         chat.lastMessageTime = Date(timeIntervalSince1970: TimeInterval(message.timestamp))
+        try? context.save()
 
         Log.info("📬 Message received and saved: \(message.id)", category: "MessageRouter")
     }

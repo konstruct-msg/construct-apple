@@ -268,21 +268,21 @@ final class MessageStreamManager {
     }
 
     private func fetchMissedMessages() async {
+        var cursor: String? = lastPendingCursor.isEmpty ? nil : lastPendingCursor
         do {
-            let cursor = lastPendingCursor.isEmpty ? nil : lastPendingCursor
-            Log.debug("🔍 fetchMissedMessages cursor=\(cursor ?? "nil")", category: "MessageStream")
-            let result = try await MessagingServiceClient.shared.getPendingMessages(sinceCursor: cursor)
-            if !result.messages.isEmpty {
-                Log.info("📨 Fetched \(result.messages.count) missed message(s) after reconnect", category: "MessageStream")
-                for msg in result.messages {
-                    onMessageReceived?(msg)
+            repeat {
+                let result = try await MessagingServiceClient.shared.getPendingMessages(sinceCursor: cursor)
+                if !result.messages.isEmpty {
+                    Log.info("📨 Fetched \(result.messages.count) missed message(s) after reconnect", category: "MessageStream")
+                    for msg in result.messages {
+                        onMessageReceived?(msg)
+                    }
+                } else {
+                    Log.debug("📭 fetchMissedMessages: no pending messages", category: "MessageStream")
                 }
-            } else {
-                Log.debug("📭 fetchMissedMessages: no pending messages", category: "MessageStream")
-            }
-            if !result.nextCursor.isEmpty {
-                lastPendingCursor = result.nextCursor
-            }
+                cursor = result.nextCursor.isEmpty ? nil : result.nextCursor
+                if let c = cursor { lastPendingCursor = c }
+            } while cursor != nil
         } catch is CancellationError {
             // Task was cancelled during force-reconnect or backgrounding — expected, no log needed
         } catch {
@@ -305,7 +305,6 @@ final class MessageStreamManager {
         // Create outbound stream
         let (outboundStream, continuation) = AsyncStream<Shared_Proto_Services_V1_MessageStreamRequest>.makeStream()
         self.outboundContinuation = continuation
-        self.isConnected = true
         Log.info("⏳ MessageStream opening to \(host):\(port)", category: "MessageStream")
 
         // Send initial subscribe
@@ -315,6 +314,7 @@ final class MessageStreamManager {
         subscribe.includePresence = true
         subscribeReq.request = .subscribe(subscribe)
         continuation.yield(subscribeReq)
+        self.isConnected = true
         Log.debug("📤 MessageStream subscribe sent: \(subscriptionUserIds.count) conversation(s)", category: "MessageStream")
 
         // Start heartbeat

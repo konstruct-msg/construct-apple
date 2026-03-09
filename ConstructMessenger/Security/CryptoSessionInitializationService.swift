@@ -328,7 +328,9 @@ final class CryptoSessionInitializationService {
                     saveSession(userId)
                 } catch {
                     // Non-fatal: session is still usable with classic X3DH security
-                    Log.error("⚠️ PQC: PQXDH decapsulation failed (using classic X3DH): \(error)", category: "CryptoManager")
+                    // 🚨 SECURITY: PQXDH was downgraded — note this in diagnostics
+                    Log.error("🚨 PQC: PQXDH decapsulation FAILED — session downgraded to classic X3DH for \(userId.prefix(8))...: \(error)", category: "CryptoManager")
+                    UserDefaults.standard.set(true, forKey: "construct.pqxdh.downgraded.\(userId)")
                 }
             }
 

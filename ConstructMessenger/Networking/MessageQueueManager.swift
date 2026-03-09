@@ -110,8 +110,6 @@ class MessageQueueManager {
                     if timeSinceSent > timeout {
                         Log.info("⏱️ Message \(message.id) stuck in sending state for \(Int(timeSinceSent))s, marking as queued", category: "MessageQueue")
                         message.deliveryStatus = .queued
-                        let msgId = message.id
-                        Task { @MainActor [weak self] in self?.markMessageAsFailed(msgId) }
                         try? context.save()
                     }
                 }

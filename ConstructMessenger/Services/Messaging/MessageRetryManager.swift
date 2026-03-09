@@ -129,6 +129,7 @@ class MessageRetryManager {
             guard let decryptedText = message.decryptedContent else {
                 continue
             }
+            let capturedId = message.id
 
             let plan = ChunkedMessageSender.shared.buildPlan(plaintext: decryptedText, messageId: UUID(uuidString: message.id) ?? UUID())
 
@@ -136,7 +137,6 @@ class MessageRetryManager {
             message.retryCount += 1
             try? context.save()
 
-            // ✅ Send via gRPC
             Task {
                 do {
                     let _ = try await ChunkedMessageSender.shared.sendChunks(
@@ -147,20 +147,23 @@ class MessageRetryManager {
                         timestamp: UInt64(Date().timeIntervalSince1970)
                     )
                     await MainActor.run {
-                        message.deliveryStatus = .sent
+                        let fr = Message.fetchRequest(); fr.predicate = NSPredicate(format: "id == %@", capturedId); fr.fetchLimit = 1
+                        guard let liveMsg = try? context.fetch(fr).first else { return }
+                        liveMsg.deliveryStatus = .sent
                         try? context.save()
-                        Log.debug("📮 Re-sent queued message via gRPC: \(message.id) (attempt \(message.retryCount))", category: "MessageRetryManager")
+                        Log.debug("📮 Re-sent queued message via gRPC: \(capturedId) (attempt \(liveMsg.retryCount))", category: "MessageRetryManager")
                     }
                 } catch {
                     await MainActor.run {
                         Log.error("Failed to re-send queued message: \(error)", category: "MessageRetryManager")
-                        message.deliveryStatus = .failed
+                        let fr = Message.fetchRequest(); fr.predicate = NSPredicate(format: "id == %@", capturedId); fr.fetchLimit = 1
+                        guard let liveMsg = try? context.fetch(fr).first else { return }
+                        liveMsg.deliveryStatus = .failed
                         try? context.save()
                     }
                 }
             }
-            messageQueueManager.markMessageAsSending(message.id)
-            Log.debug("📮 Re-sent queued message: \(message.id) (attempt \(message.retryCount))", category: "MessageRetryManager")
+            messageQueueManager.markMessageAsSending(capturedId)
         }
     }
 }

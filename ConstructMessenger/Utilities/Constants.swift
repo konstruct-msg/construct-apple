@@ -140,7 +140,7 @@ struct APIConstants {
 struct ValidationRules {
     static let minUsernameLength = 3
     static let maxUsernameLength = 30
-    static let minPasswordLength = 6
+    static let minPasswordLength = 8
 
     // Regex patterns
     static let usernamePattern = "^[a-zA-Z0-9_]{3,30}$"
@@ -150,7 +150,7 @@ struct ValidationRules {
 struct MessageSizeLimits {
     // Text Message Limits
     // Note: These are for encrypted content, actual plaintext will be smaller due to encryption overhead
-    static let maxTextMessageBytes: Int = 100 * 1024 * 1024  // 100 MB (encrypted)
+    static let maxTextMessageBytes: Int = 64 * 1024  // 64 KB (encrypted)
     static let maxPlaintextMessageBytes: Int = 50 * 1024 * 1024  // 50 MB (plaintext, conservative estimate)
 
     // File Attachment Limits

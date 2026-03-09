@@ -26,11 +26,11 @@ struct AuthInterceptor: ClientInterceptor {
         var request = request
 
         if !Self.unauthenticatedMethods.contains(methodName) {
-            let (token, userId) = await MainActor.run {
-                (SessionManager.shared.sessionToken, SessionManager.shared.currentUserId)
+            let (token, userId, isValid) = await MainActor.run {
+                (SessionManager.shared.sessionToken, SessionManager.shared.currentUserId, SessionManager.shared.isSessionValid)
             }
-            guard let token else {
-                throw RPCError(code: .unauthenticated, message: "No session token — please log in")
+            guard let token, isValid else {
+                throw RPCError(code: .unauthenticated, message: "Session token expired — please log in")
             }
             request.metadata.addString("Bearer \(token)", forKey: "authorization")
             if let userId {

@@ -88,7 +88,10 @@ final class SessionArchiveManager {
             let encoder = JSONEncoder()
             encoder.dateEncodingStrategy = .iso8601
             let data = try encoder.encode(list)
-            _ = keychain.saveData(data, forKey: keychainKey(for: userId))
+            let saved = keychain.saveData(data, forKey: keychainKey(for: userId))
+            if !saved {
+                Log.error("⚠️ SessionArchiveManager: failed to save archives to Keychain for \(userId.prefix(8))", category: "SessionArchive")
+            }
         } catch {
             // Intentionally swallow errors here; caller handles logging.
         }

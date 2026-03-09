@@ -97,10 +97,16 @@ final class GRPCChannelManager: Sendable {
     ) async throws -> Result {
         let client = try makeClient()
 
-        return try await withThrowingTaskGroup(of: Result.self) { group in
+        return try await withThrowingTaskGroup(of: Result?.self) { group in
             group.addTask {
-                try await client.runConnections()
-                throw CancellationError()
+                do {
+                    try await client.runConnections()
+                } catch is CancellationError {
+                    // Expected: cancelled after operation completes
+                } catch {
+                    Log.error("⚠️ gRPC transport error: \(error)", category: "GRPCChannel")
+                }
+                return nil
             }
 
             group.addTask {
@@ -109,12 +115,14 @@ final class GRPCChannelManager: Sendable {
                 return result
             }
 
-            guard let result = try await group.next() else {
+            while let next = try await group.next() {
+                if let result = next {
                     group.cancelAll()
-                    throw NetworkError.connectionFailed
+                    return result
                 }
-                group.cancelAll()
-                return result
+            }
+            group.cancelAll()
+            throw NetworkError.connectionFailed
         }
     }
 }

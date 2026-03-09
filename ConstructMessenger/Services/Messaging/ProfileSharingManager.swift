@@ -87,11 +87,12 @@ class ProfileSharingManager {
            let avatarMediaUrl = profileData.avatarMediaUrl,
            let avatarMediaKey = profileData.avatarMediaKey {
             // New format: download and decrypt media from Media Upload API
+            // Capture objectID to safely re-fetch after async boundary
+            let userObjectID = user.objectID
             Task {
                 do {
                     Log.info("📥 Downloading avatar from Media Upload API: \(avatarMediaId)", category: "ProfileSharingManager")
                     
-                    // Use MediaManager for avatar download and decryption
                     let decryptedData = try await MediaManager.shared.downloadAndDecryptAvatar(
                         mediaId: avatarMediaId,
                         mediaUrl: avatarMediaUrl,
@@ -99,9 +100,10 @@ class ProfileSharingManager {
                     )
                     
                     await MainActor.run {
-                        user.avatarData = decryptedData
-                        user.isSharingWithMe = true
-                        user.sharedWithMeAt = Date()
+                        guard let liveUser = context.object(with: userObjectID) as? User else { return }
+                        liveUser.avatarData = decryptedData
+                        liveUser.isSharingWithMe = true
+                        liveUser.sharedWithMeAt = Date()
                         
                         do {
                             try context.save()
@@ -112,7 +114,6 @@ class ProfileSharingManager {
                     }
                 } catch {
                     Log.error("❌ Failed to download avatar: \(error.localizedDescription)", category: "ProfileSharingManager")
-                    // Continue - displayName was already updated
                 }
             }
         } else if let avatarBase64 = profileData.avatarData,
@@ -121,9 +122,11 @@ class ProfileSharingManager {
             user.avatarData = avatarData
         }
         
-        // Mark as sharing with us
-        user.isSharingWithMe = true
-        user.sharedWithMeAt = Date()
+        // Mark as sharing with us — for async avatar download, isSharingWithMe is set inside the Task
+        if profileData.avatarMediaId == nil {
+            user.isSharingWithMe = true
+            user.sharedWithMeAt = Date()
+        }
         
         // Add system message to chat
         addSystemMessageToChat(

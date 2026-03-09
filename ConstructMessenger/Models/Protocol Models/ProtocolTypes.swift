@@ -51,6 +51,31 @@ struct ChatMessage: Codable, Identifiable {
     }
 }
 
+// Custom Codable: crypto fields absent in CONTROL_MESSAGE envelopes — provide safe defaults.
+extension ChatMessage {
+    private enum CodingKeys: String, CodingKey {
+        case id, from, to, messageType, ephemeralPublicKey, messageNumber, content, suiteId
+        case timestamp, oneTimePreKeyId, editsMessageId, kemCiphertext, kyberOtpkId
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        from = try c.decode(String.self, forKey: .from)
+        to = try c.decode(String.self, forKey: .to)
+        messageType = try c.decodeIfPresent(String.self, forKey: .messageType)
+        ephemeralPublicKey = (try? c.decodeIfPresent(Data.self, forKey: .ephemeralPublicKey)) ?? Data()
+        messageNumber = (try? c.decodeIfPresent(UInt32.self, forKey: .messageNumber)) ?? 0
+        content = try c.decode(String.self, forKey: .content)
+        suiteId = (try? c.decodeIfPresent(UInt16.self, forKey: .suiteId)) ?? 0
+        timestamp = (try? c.decodeIfPresent(UInt64.self, forKey: .timestamp)) ?? 0
+        oneTimePreKeyId = (try? c.decodeIfPresent(UInt32.self, forKey: .oneTimePreKeyId)) ?? 0
+        editsMessageId = (try? c.decodeIfPresent(String.self, forKey: .editsMessageId)) ?? ""
+        kemCiphertext = (try? c.decodeIfPresent(Data.self, forKey: .kemCiphertext)) ?? Data()
+        kyberOtpkId = (try? c.decodeIfPresent(UInt32.self, forKey: .kyberOtpkId)) ?? 0
+    }
+}
+
 // MARK: - Public User Info
 struct PublicUserInfo: Codable, Identifiable {
     let id: String

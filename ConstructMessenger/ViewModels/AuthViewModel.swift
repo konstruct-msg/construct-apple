@@ -554,9 +554,10 @@ class AuthViewModel {
                 if let newUsername = username, !newUsername.isEmpty {
                     if user.username.isEmpty || user.username != newUsername {
                         print("🔄 Updating username: '\(user.username)' -> '\(newUsername)'")
+                        let oldUsername = user.username
                         user.username = newUsername
                         // Also update displayName if it's empty or was same as old username
-                        if user.displayName.isEmpty || user.displayName == user.username {
+                        if user.displayName.isEmpty || user.displayName == oldUsername {
                             user.displayName = newUsername
                         }
                         needsSave = true

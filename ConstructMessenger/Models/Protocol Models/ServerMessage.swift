@@ -21,6 +21,7 @@ enum ServerMessage: Codable {
     case logoutSuccess
     case deleteAccountSuccess
     case offlineMessages(OfflineMessagesData)
+    case unknown  // Forward compatibility: silently ignore unknown server message types
 
     // MARK: - Codable Implementation
     
@@ -35,7 +36,13 @@ enum ServerMessage: Codable {
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        let type = try container.decode(MessageType.self, forKey: .type)
+        let typeString = try container.decode(String.self, forKey: .type)
+        guard let type = MessageType(rawValue: typeString) else {
+            // Unknown message type — silently ignore for forward compatibility
+            Log.info("ℹ️ ServerMessage: ignoring unknown type '\(typeString)'", category: "ServerMessage")
+            self = .unknown
+            return
+        }
         
         switch type {
         case .registerSuccess:
@@ -108,6 +115,8 @@ enum ServerMessage: Codable {
         case .offlineMessages(let data):
             try container.encode(MessageType.offlineMessages, forKey: .type)
             try container.encode(data, forKey: .payload)
+        case .unknown:
+            break  // Unknown messages are never re-encoded
         }
     }
 }
