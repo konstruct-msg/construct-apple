@@ -197,7 +197,7 @@ class MessagePersistenceService {
         // Sync parent context if needed
         if let parent = context.parent {
             parent.performAndWait {
-                try? parent.save()
+                do { try parent.save() } catch { Log.error("⚠️ MessagePersistenceService: parent context save failed: \(error)", category: "Persistence") }
             }
         }
         
@@ -239,7 +239,7 @@ class MessagePersistenceService {
         // Sync parent context if needed
         if let parent = context.parent {
             parent.performAndWait {
-                try? parent.save()
+                do { try parent.save() } catch { Log.error("⚠️ MessagePersistenceService: parent context save failed: \(error)", category: "Persistence") }
             }
         }
         

@@ -110,7 +110,11 @@ class MessageQueueManager {
                     if timeSinceSent > timeout {
                         Log.info("⏱️ Message \(message.id) stuck in sending state for \(Int(timeSinceSent))s, marking as queued", category: "MessageQueue")
                         message.deliveryStatus = .queued
-                        try? context.save()
+                        do {
+                            try context.save()
+                        } catch {
+                            Log.error("⚠️ MessageQueueManager: failed to save stuck-message status: \(error)", category: "MessageQueue")
+                        }
                     }
                 }
             }
@@ -132,8 +136,11 @@ class MessageQueueManager {
                 }
             }
             
-            try? context.save()
-            
+            do {
+                try context.save()
+            } catch {
+                Log.error("⚠️ MessageQueueManager: failed to save timed-out message statuses: \(error)", category: "MessageQueue")
+            }
             // Try to resend if network is available (gRPC reconnects automatically)
             Task { @MainActor [weak self] in
                 if self?.networkManager.isReachable == true { self?.processQueuedMessages() }

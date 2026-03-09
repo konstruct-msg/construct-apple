@@ -103,7 +103,8 @@ final class MessageStreamManager {
             ) { [weak self] _ in
                 guard let self else { return }
                 Log.info("🔄 gRPC server changed — reconnecting stream", category: "MessageStream")
-                Task { @MainActor in
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
                     let ids = self.subscriptionUserIds
                     let cb = self.onMessageReceived
                     self.forceDisconnect()

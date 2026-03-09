@@ -59,7 +59,7 @@ final class DeletedContactsStore {
     private func persist() {
         lock.lock()
         let snapshot = Array(deletedIds)
-        lock.unlock()
         UserDefaults.standard.set(snapshot, forKey: defaultsKey)
+        lock.unlock()
     }
 }

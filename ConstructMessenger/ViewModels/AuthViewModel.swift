@@ -474,7 +474,7 @@ class AuthViewModel {
         KeychainManager.shared.deleteDeviceKeys()
         
         // Clear CoreData - delete all user's data
-        let context = PersistenceController.shared.container.viewContext
+        let context = viewContext
         
         // ✅ FIX: Check if persistent store coordinator is ready before accessing entities
         guard context.persistentStoreCoordinator != nil else {

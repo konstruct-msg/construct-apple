@@ -330,8 +330,9 @@ class CryptoManager {
 
     // MARK: - Registration
 
-    /// Generates a complete bundle for server registration by calling the Rust core.
-    func generateRegistrationBundle() -> RegistrationBundle? {
+    /// Generates a compact RegistrationBundle struct for display / compatibility purposes.
+    /// Use `generateRegistrationBundle() throws` (FFI version) for new registrations.
+    func generateLegacyRegistrationBundle() -> RegistrationBundle? {
         guard let bundle = registrationBundleService.generateRegistrationBundle(core: core) else {
             Log.error("❌ Failed to generate registration bundle", category: "CryptoManager")
             return nil

@@ -400,12 +400,28 @@ class ChatViewModel: NSObject {
         }
     }
     
-    /// Mark all queued messages as failed
+    /// Mark all queued messages as failed and persist them to CoreData so user can see them
     private func failQueuedMessages(reason: String) {
         Log.error("❌ Failing \(queuedMessages.count) queued messages: \(reason)", category: "ChatViewModel")
+        guard !queuedMessages.isEmpty else { return }
+        guard let currentUserId = SessionManager.shared.currentUserId,
+              let recipientId = chat.otherUser?.id else {
+            queuedMessages.removeAll()
+            return
+        }
+        for queued in queuedMessages {
+            let msg = Message(context: viewContext)
+            msg.id = UUID().uuidString
+            msg.fromUserId = currentUserId
+            msg.toUserId = recipientId
+            msg.decryptedContent = queued.text
+            msg.timestamp = queued.timestamp
+            msg.deliveryStatus = .failed
+            msg.isSentByMe = true
+            msg.chat = chat
+        }
+        try? viewContext.save()
         queuedMessages.removeAll()
-        // Messages are lost - user needs to retry manually
-        // TODO: Could save to Core Data with .failed status for UI display
     }
 
     // MARK: - Send Message

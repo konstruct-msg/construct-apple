@@ -91,31 +91,26 @@ class ChatsViewModel {
             var lastState: PollingState? = nil
             while !Task.isCancelled {
                 guard let self else { return }
-                // Capture current state and register tracking for next iteration
+
+                // Read current state and register for change notification in a single call,
+                // eliminating the missed-observation window between two separate tracking blocks.
                 var nextState: PollingState!
-                withObservationTracking {
-                    nextState = PollingState(
-                        hasToken: SessionManager.shared.sessionToken != nil,
-                        status: self.connectionStatusManager.connectionStatus,
-                        pushEnabled: PushNotificationManager.shared.isPushEnabled
-                    )
-                } onChange: { /* handled by the loop */ }
-                
+                await withCheckedContinuation { continuation in
+                    withObservationTracking {
+                        nextState = PollingState(
+                            hasToken: SessionManager.shared.sessionToken != nil,
+                            status: self.connectionStatusManager.connectionStatus,
+                            pushEnabled: PushNotificationManager.shared.isPushEnabled
+                        )
+                    } onChange: {
+                        continuation.resume()
+                    }
+                }
+
                 if nextState != lastState {
                     lastState = nextState
                     Log.debug("📡 Stream state: token=\(nextState.hasToken ? "present" : "nil"), status=\(nextState.status.displayText), push=\(nextState.pushEnabled)", category: "ChatsViewModel")
                     self.handlePollingState(nextState)
-                }
-                
-                // Wait for any of the three values to change
-                await withCheckedContinuation { continuation in
-                    withObservationTracking {
-                        _ = SessionManager.shared.sessionToken
-                        _ = self.connectionStatusManager.connectionStatus
-                        _ = PushNotificationManager.shared.isPushEnabled
-                    } onChange: {
-                        continuation.resume()
-                    }
                 }
             }
         }
