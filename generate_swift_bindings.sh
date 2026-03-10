@@ -361,32 +361,27 @@ generate_bindings() {
     
     # Need to run from CORE_PATH directory for cargo metadata to work
     cd "$CORE_PATH"
-    
-    # Generate bindings using LIBRARY MODE (not UDL mode)
-    local lib_path=""
-    for arch in "${ARCHITECTURES[@]}"; do
-        local build_dir="release"
-        if [ "$BUILD_TYPE" == "debug" ]; then
-            build_dir="debug"
-        fi
-        local candidate="$PROJECT_ROOT/target/$arch/$build_dir/libconstruct_core.a"
-        [ -f "$candidate" ] || candidate="$CORE_PATH/target/$arch/$build_dir/libconstruct_core.a"
-        if [ -f "$candidate" ]; then
-            lib_path="$candidate"
-            break
-        fi
-    done
 
-    print_info "Generating bindings with $bindgen_cmd in LIBRARY MODE..."
-    print_info "Using library: $lib_path"
-    $bindgen_cmd generate --library "$lib_path" \
+    # UniFFI bindgen requires a dylib (not a static .a) to extract metadata.
+    # Build a macOS host dylib just for binding generation — it is NOT shipped.
+    local host_dylib="$CORE_PATH/target/debug/libconstruct_core.dylib"
+    print_info "Building macOS host dylib for UniFFI metadata extraction..."
+    cargo build --lib --features ios,post-quantum 2>&1 \
+        | grep -E "^error|Compiling construct-core|Finished" || true
+    if [ ! -f "$host_dylib" ]; then
+        print_error "Host dylib not found after build: $host_dylib"
+        exit 1
+    fi
+
+    print_info "Generating bindings with $bindgen_cmd using host dylib..."
+    print_info "Using library: $host_dylib"
+    $bindgen_cmd generate --library "$host_dylib" \
         --language swift \
         --out-dir "$OUTPUT_DIR" || {
         print_error "Failed to generate bindings with $bindgen_cmd"
         print_error "Make sure:"
-        print_error "  1. The library is built (cargo build completed successfully)"
-        print_error "  2. uniffi-bindgen version matches uniffi version in Cargo.toml (0.30)"
-        print_error "  3. Library path exists: $lib_path"
+        print_error "  1. uniffi-bindgen version matches uniffi version in Cargo.toml (0.30)"
+        print_error "  2. Library path exists: $host_dylib"
         exit 1
     }
     

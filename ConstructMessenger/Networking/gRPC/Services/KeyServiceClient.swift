@@ -201,7 +201,7 @@ final class KeyServiceClient: Sendable {
 
             return try await keyClient.rotateSignedPreKey(
                 request: .init(message: request)
-            ).message
+            )
         }
     }
 
