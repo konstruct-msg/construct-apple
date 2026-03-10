@@ -108,8 +108,19 @@ class MessageRouter {
         //    and started a new session — this is a legitimate re-contact, so clear the deleted flag
         //    and process normally (a new chat will be created by findOrCreateChat below).
         //    messageNumber>0 is an old broken session we no longer have keys for — skip it.
+        //    Exception: if this exact message is already in our pending queue (a previous heal
+        //    attempt started and failed), the server is re-delivering a stuck undecryptable message.
+        //    Do NOT resurrect the contact in that case — just ACK and discard.
         if DeletedContactsStore.shared.isDeleted(otherUserId) {
             if message.messageNumber == 0 {
+                // Guard: don't resurrect a deleted contact for a message we already queued
+                // but couldn't decrypt. This prevents an infinite delete→re-appear loop when
+                // the server keeps re-delivering stuck undecryptable messages.
+                if pendingMessages[otherUserId]?.contains(where: { $0.id == message.id }) == true {
+                    Log.debug("⏭️ Skipping stale pending message \(message.id.prefix(8))… from deleted contact — not resurrecting", category: "MessageRouter")
+                    onReceiptNeeded?([message.id], otherUserId, .delivered)
+                    return
+                }
                 Log.info("♻️ Fresh session (msgNum=0) from previously-deleted contact \(otherUserId.prefix(8))… — clearing deleted flag", category: "MessageRouter")
                 DeletedContactsStore.shared.remove(otherUserId)
                 // Fall through to normal processing below.

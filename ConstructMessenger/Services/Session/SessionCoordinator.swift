@@ -65,6 +65,17 @@ final class SessionCoordinator {
         messageRouter.routeIncomingMessage(message, in: context, pendingMessages: &pendingFirstMessages)
     }
 
+    /// Drop any pending (not-yet-decrypted) messages for a contact whose chat was deleted.
+    /// Call this when the user explicitly deletes a chat so stale queued messages from
+    /// that contact cannot trigger accidental contact resurrection.
+    func clearPendingMessages(for userId: String) {
+        let count = pendingFirstMessages[userId]?.count ?? 0
+        pendingFirstMessages.removeValue(forKey: userId)
+        if count > 0 {
+            Log.debug("🗑️ Cleared \(count) pending message(s) for deleted contact \(userId.prefix(8))…", category: "SessionCoordinator")
+        }
+    }
+
     /// Called when the stream receives a KEY_SYNC control message.
     func handleKeySyncRequest(for userId: String) {
         guard !usersInitializingSession.contains(userId) else {

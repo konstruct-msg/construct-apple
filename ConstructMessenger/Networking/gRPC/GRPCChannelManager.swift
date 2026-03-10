@@ -11,6 +11,11 @@ final class GRPCChannelManager: Sendable {
     static let customHostKey = "grpcCustomHost"
     static let customPortKey = "grpcCustomPort"
 
+    // ICE relay health tracking: avoid routing through a dead relay.
+    // Stores the Date.timeIntervalSinceReferenceDate of the last relay failure.
+    private static let iceFailedAtKey = "iceRelayLastFailedAt"
+    private static let iceCooldown: TimeInterval = 60.0
+
     private static let defaultHost: String = {
         Bundle.main.object(forInfoDictionaryKey: "GRPC_HOST") as? String ?? "ams.konstruct.cc"
     }()
@@ -43,9 +48,27 @@ final class GRPCChannelManager: Sendable {
         NotificationCenter.default.post(name: .grpcServerChanged, object: nil)
     }
 
-    /// Returns the local proxy port if ICE is running, nil otherwise.
+    /// Record that the ICE relay just failed. Subsequent calls will bypass ICE for `iceCooldown` seconds.
+    func recordICEFailure() {
+        UserDefaults.standard.set(Date().timeIntervalSinceReferenceDate, forKey: Self.iceFailedAtKey)
+        Log.warning("⚠️ ICE relay failure recorded — bypassing ICE for \(Int(Self.iceCooldown))s", category: "gRPC")
+    }
+
+    /// True if the ICE relay failed recently and we should fall back to direct TLS.
+    private func isICEOnCooldown() -> Bool {
+        let stored = UserDefaults.standard.double(forKey: Self.iceFailedAtKey)
+        guard stored > 0 else { return false }
+        let elapsed = Date().timeIntervalSinceReferenceDate - stored
+        return elapsed < Self.iceCooldown
+    }
+
+    /// Returns the local proxy port if ICE is running AND the relay is not on cooldown, nil otherwise.
     private func iceProxyPort() -> UInt16? {
         guard ice_proxy_is_running() != 0 else { return nil }
+        guard !isICEOnCooldown() else {
+            Log.debug("🧊 ICE on cooldown — using direct TLS", category: "gRPC")
+            return nil
+        }
         let port = ice_proxy_port()
         return port > 0 ? port : nil
     }
@@ -92,37 +115,48 @@ final class GRPCChannelManager: Sendable {
 
     /// Execute a gRPC operation with automatic client lifecycle management.
     /// Creates a client, runs connections in background, executes the operation, then shuts down.
+    /// If the operation fails while ICE is active, records the failure so future calls bypass ICE.
     func performRPC<Result: Sendable>(
         _ operation: @Sendable @escaping (GRPCClient<HTTP2ClientTransport.Posix>) async throws -> Result
     ) async throws -> Result {
+        let usingICE = iceProxyPort() != nil
         let client = try makeClient()
 
-        return try await withThrowingTaskGroup(of: Result?.self) { group in
-            group.addTask {
-                do {
-                    try await client.runConnections()
-                } catch is CancellationError {
-                    // Expected: cancelled after operation completes
-                } catch {
-                    Log.error("⚠️ gRPC transport error: \(error)", category: "GRPCChannel")
+        do {
+            return try await withThrowingTaskGroup(of: Result?.self) { group in
+                group.addTask {
+                    do {
+                        try await client.runConnections()
+                    } catch is CancellationError {
+                        // Expected: cancelled after operation completes
+                    } catch {
+                        Log.error("⚠️ gRPC transport error: \(error)", category: "GRPCChannel")
+                    }
+                    return nil
                 }
-                return nil
-            }
 
-            group.addTask {
-                let result = try await operation(client)
-                client.beginGracefulShutdown()
-                return result
-            }
-
-            while let next = try await group.next() {
-                if let result = next {
-                    group.cancelAll()
+                group.addTask {
+                    let result = try await operation(client)
+                    client.beginGracefulShutdown()
                     return result
                 }
+
+                while let next = try await group.next() {
+                    if let result = next {
+                        group.cancelAll()
+                        return result
+                    }
+                }
+                group.cancelAll()
+                throw NetworkError.connectionFailed
             }
-            group.cancelAll()
-            throw NetworkError.connectionFailed
+        } catch {
+            // If the call failed while routing through ICE, record the relay failure so the
+            // next call skips ICE and goes directly over TLS while the relay is unreachable.
+            if usingICE {
+                recordICEFailure()
+            }
+            throw error
         }
     }
 }

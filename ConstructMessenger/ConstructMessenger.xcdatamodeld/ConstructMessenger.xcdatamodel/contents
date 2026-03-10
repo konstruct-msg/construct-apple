@@ -36,7 +36,7 @@
         <attribute name="decryptedContent" optional="YES" attributeType="String"/>
         <attribute name="deliveryStatusRaw" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="editedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
-        <attribute name="encryptedContent" attributeType="String"/>
+        <attribute name="encryptedContent" optional="YES" attributeType="String"/>
         <attribute name="fromUserId" attributeType="String"/>
         <attribute name="id" attributeType="String"/>
         <attribute name="isEdited" optional="YES" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>

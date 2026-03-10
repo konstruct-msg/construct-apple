@@ -294,6 +294,9 @@ class ChatsViewModel {
             } catch {
                 Log.error("❌ END_SESSION failed before chat delete (continuing): \(error)", category: "ChatsViewModel")
             }
+            // Drop any queued-but-undecryptable messages for this contact so they cannot
+            // accidentally resurrect the chat if the server re-delivers them after deletion.
+            sessionCoordinator.clearPendingMessages(for: userId)
         }
         chatManagementService.deleteChat(chat)
         // Update stream subscriptions so we stop receiving messages for the deleted chat
