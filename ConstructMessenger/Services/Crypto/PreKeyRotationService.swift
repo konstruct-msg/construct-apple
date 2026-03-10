@@ -37,7 +37,10 @@ final class PreKeyRotationService {
         }
         Log.info("🔑 SPK rotation due — starting atomic rotation", category: "SPKRotation")
         do {
-            try await performAtomicRotation(deviceId: deviceId, reason: .scheduled)
+            // Use .unspecified until server adds key_update_reason DB column —
+            // proto3 omits default values (0) from the wire, so the server
+            // won't attempt to write the missing column.
+            try await performAtomicRotation(deviceId: deviceId, reason: .unspecified)
         } catch {
             Log.error("❌ SPK rotation failed: \(error)", category: "SPKRotation")
         }
@@ -57,6 +60,10 @@ final class PreKeyRotationService {
     ///  3. Both uploaded in ONE RotateSignedPreKeyRequest RPC
     ///  4. On server success → commit Kyber SPK to Keychain
     ///  5. Persist Rust core state and update last-rotation timestamp
+    ///
+    ///  On ANY failure after Phase 1, the Rust core is reloaded from Keychain to
+    ///  roll back the in-memory SPK mutation and prevent AEAD decryption failures
+    ///  caused by a desync between the in-memory state and what the server serves.
     private func performAtomicRotation(
         deviceId: String,
         reason: Shared_Proto_Services_V1_SignedPreKeyRotationReason
@@ -67,29 +74,48 @@ final class PreKeyRotationService {
 
         // ── Phase 1: generate both keys ──────────────────────────────────────
 
-        // Classic SPK: Rust core rotates internally and returns new public material
+        // Classic SPK: Rust core rotates internally and returns new public material.
+        // NOTE: rotateSignedPrekey() mutates the Rust core in memory immediately.
+        // If Phase 2 (RPC) fails, we MUST reload from Keychain to roll back.
         let rotatedSpk = try core.rotateSignedPrekey()
         guard let classicPubData = Data(base64Encoded: rotatedSpk.publicKey),
               let classicSigData = Data(base64Encoded: rotatedSpk.signature) else {
+            CryptoManager.shared.reloadCoreFromKeychain()
             throw PreKeyRotationError.invalidKeyMaterial
         }
         let classicKey = (keyId: rotatedSpk.keyId, publicKey: classicPubData, signature: classicSigData)
 
         // Kyber SPK: generated in memory only — NOT committed yet
-        let kyberInMemory = try PQCKeyManager.shared.generateKyberSPKInMemory()
-        let kyberSig = try PQCKeyManager.signKyberKey(publicKey: kyberInMemory.publicKey, core: core)
-        let kyberKey = (keyId: kyberInMemory.keyId, publicKey: kyberInMemory.publicKey, signature: kyberSig)
+        let kyberInMemory: (publicKey: Data, secretKey: Data, keyId: UInt32)
+        let kyberKey: (keyId: UInt32, publicKey: Data, signature: Data)
+        do {
+            kyberInMemory = try PQCKeyManager.shared.generateKyberSPKInMemory()
+            let kyberSig = try PQCKeyManager.signKyberKey(publicKey: kyberInMemory.publicKey, core: core)
+            kyberKey = (keyId: kyberInMemory.keyId, publicKey: kyberInMemory.publicKey, signature: kyberSig)
+        } catch {
+            CryptoManager.shared.reloadCoreFromKeychain()
+            throw error
+        }
 
         Log.info("🔑 SPK rotation: classic keyId=\(classicKey.keyId) kyber keyId=\(kyberKey.keyId)", category: "SPKRotation")
 
         // ── Phase 2: single atomic RPC ───────────────────────────────────────
 
-        _ = try await KeyServiceClient.shared.rotateSignedPreKey(
-            deviceId: deviceId,
-            newClassicKey: classicKey,
-            newKyberKey: kyberKey,
-            reason: reason
-        )
+        do {
+            _ = try await KeyServiceClient.shared.rotateSignedPreKey(
+                deviceId: deviceId,
+                newClassicKey: classicKey,
+                newKyberKey: kyberKey,
+                reason: reason
+            )
+        } catch {
+            // RPC failed — roll back the in-memory Rust core to Keychain state.
+            // Without this, the core has a new SPK that the server doesn't know
+            // about, causing AEAD failures for all incoming session initiations.
+            Log.error("❌ SPK rotation RPC failed — rolling back Rust core: \(error)", category: "SPKRotation")
+            CryptoManager.shared.reloadCoreFromKeychain()
+            throw error
+        }
 
         // ── Phase 3: commit on success ───────────────────────────────────────
 

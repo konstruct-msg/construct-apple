@@ -109,8 +109,18 @@ class ChatsViewModel {
 
                 if nextState != lastState {
                     lastState = nextState
-                    Log.debug("📡 Stream state: token=\(nextState.hasToken ? "present" : "nil"), status=\(nextState.status.displayText), push=\(nextState.pushEnabled)", category: "ChatsViewModel")
-                    self.handlePollingState(nextState)
+                    // Yield so any pending @Observable property writes (e.g.
+                    // markStreamConnected()) settle before we act on the state.
+                    await Task.yield()
+                    // Re-read after yield in case status changed during yield
+                    let settled = PollingState(
+                        hasToken: SessionManager.shared.sessionToken != nil,
+                        status: self.connectionStatusManager.connectionStatus,
+                        pushEnabled: PushNotificationManager.shared.isPushEnabled
+                    )
+                    lastState = settled
+                    Log.debug("📡 Stream state: token=\(settled.hasToken ? "present" : "nil"), status=\(settled.status.displayText), push=\(settled.pushEnabled)", category: "ChatsViewModel")
+                    self.handlePollingState(settled)
                 }
             }
         }

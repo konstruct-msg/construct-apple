@@ -274,6 +274,21 @@ class CryptoManager {
             Log.error("❌ persistCoreState: export failed: \(error)", category: "CryptoManager")
         }
     }
+
+    /// Reload the Rust core from Keychain, discarding any in-memory mutations.
+    ///
+    /// Call after a failed SPK rotation to roll back the in-memory state change
+    /// made by `rotateSignedPrekey()`, ensuring the core stays in sync with the
+    /// Keychain (and thus with what the server has).
+    func reloadCoreFromKeychain() {
+        let result = coreProvider.loadCore()
+        guard result.wasRestoredFromKeychain, let reloaded = result.core else {
+            Log.error("❌ reloadCoreFromKeychain: failed to reload — Keychain state unavailable", category: "CryptoManager")
+            return
+        }
+        core = reloaded
+        Log.info("🔄 Rust core reloaded from Keychain (rotation rollback)", category: "CryptoManager")
+    }
     
     /// Clear all archived sessions for a user
     func clearArchivedSessions(for userId: String) {
