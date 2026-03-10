@@ -94,11 +94,10 @@ final class IceProxyManager: ObservableObject {
     @Published private(set) var activeRelay: IceRelay?
     @Published private(set) var lastError: String?
 
-    // MARK: - UserDefaults keys
+    // MARK: - Persistence keys
 
     private let enabledKey = "ice_enabled"
     private let relayKey   = "iceActiveRelay"
-    private let certKey    = "ice_bridge_cert"
 
     /// Whether the user has enabled ICE obfuscation. Persists across launches.
     var isEnabled: Bool {
@@ -106,10 +105,17 @@ final class IceProxyManager: ObservableObject {
         set { UserDefaults.standard.set(newValue, forKey: enabledKey) }
     }
 
-    /// Whether the server has provided a bridge cert (ICE is available on this server).
+    /// Whether a bridge cert is available (from Keychain or hardcoded fallback).
     var hasCert: Bool {
-        guard let cert = UserDefaults.standard.string(forKey: certKey) else { return false }
-        return !cert.isEmpty
+        !bridgeCert().isEmpty
+    }
+
+    /// Returns the bridge cert to use: Keychain value if present, hardcoded fallback otherwise.
+    func bridgeCert() -> String {
+        if let stored = KeychainManager.shared.loadIceBridgeCert(), !stored.isEmpty {
+            return stored
+        }
+        return ICEConfig.hardcodedBridgeCert
     }
 
     // MARK: - Start / Stop
@@ -125,17 +131,18 @@ final class IceProxyManager: ObservableObject {
         let result: Int32
 
         if let sni = relay.tlsServerName {
-            // TLS-over-obfs4 mode: outer TLS wrap before obfs4 handshake.
-            // Requires ice_proxy_start_tls in libconstruct_core — add to
-            // bridging header and rebuild once the Rust side exports it.
-            // TODO: replace with ice_proxy_start_tls(bridgePtr, addrPtr, sniPtr, &port)
-            Log.info("🧊 ICE TLS mode configured (SNI: \(sni)) — falling back to plain until Rust lib updated", category: "ICE")
+            // TLS-over-obfs4 mode: outer TLS (SecureTransport, SNI=sni) before obfs4.
+            // DPI sees a normal TLS ClientHello on port 443.
+            Log.info("🧊 ICE TLS mode → \(relay.address) (SNI: \(sni))", category: "ICE")
             result = relay.bridgeLine.withCString { bridgePtr in
                 relay.address.withCString { addrPtr in
-                    ice_proxy_start(bridgePtr, addrPtr, &port)
+                    sni.withCString { sniPtr in
+                        ice_proxy_start_tls(bridgePtr, addrPtr, sniPtr, &port)
+                    }
                 }
             }
         } else {
+            Log.info("🧊 ICE plain-obfs4 mode → \(relay.address)", category: "ICE")
             result = relay.bridgeLine.withCString { bridgePtr in
                 relay.address.withCString { addrPtr in
                     ice_proxy_start(bridgePtr, addrPtr, &port)
@@ -164,10 +171,20 @@ final class IceProxyManager: ObservableObject {
     }
 
     /// Start with the stored relay (called at app launch if `isEnabled`).
+    /// Falls back to building a relay from the Keychain cert if no relay is stored yet.
     func startIfEnabled() {
         guard isEnabled else { return }
-        guard let relay = loadStoredRelay() else { return }
-        start(relay: relay)
+        if let relay = loadStoredRelay() {
+            start(relay: relay)
+        } else {
+            // No stored relay config yet — build one from Keychain cert (or hardcoded fallback)
+            let cert = bridgeCert()
+            guard !cert.isEmpty else { return }
+            let host = GRPCChannelManager.shared.currentHost
+            let iceHost = "ice.\(host)"
+            let relay = IceRelay(address: "\(iceHost):443", bridgeCert: cert, iatMode: .none, tlsServerName: iceHost)
+            start(relay: relay)
+        }
     }
 
     // MARK: - Server-provided configuration
@@ -180,8 +197,9 @@ final class IceProxyManager: ObservableObject {
     /// outer connection look like plain HTTPS to DPI.
     func configureFromServer(cert: String) {
         guard !cert.isEmpty else { return }
-        // Persist the cert — this is the source of truth for "ICE available"
-        UserDefaults.standard.set(cert, forKey: certKey)
+        // Persist to Keychain — cert survives reinstalls and is unavailable
+        // without device unlock (kSecAttrAccessibleAfterFirstUnlock)
+        KeychainManager.shared.saveIceBridgeCert(cert)
         let host = GRPCChannelManager.shared.currentHost
         // TLS mode: Traefik routes `ice.<host>:443` → gateway:9443 via SNI passthrough.
         // Gateway terminates TLS, then hands the stream to the obfs4 listener.

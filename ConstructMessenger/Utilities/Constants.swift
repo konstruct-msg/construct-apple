@@ -347,6 +347,14 @@ enum UserDefaultsKey: String {
     var key: String { rawValue }
 }
 
+// MARK: - ICE Bridge Configuration
+struct ICEConfig {
+    /// Hardcoded fallback bridge cert used when Keychain is empty (first launch before login).
+    /// This is the server's public obfs4 identity — not a secret, safe to embed in binary.
+    /// Update this when the production server rotates its ICE identity keypair.
+    static let hardcodedBridgeCert = "3J8A3lAtPb3R4+td9UVLuzggZeva+o8TDNVw4aHx8HWdvdYpS4gV6t8gmxbGMIQTB5eGJA"
+}
+
 // MARK: - Log Categories
 enum LogCategory: String {
     case trafficProtection = "TrafficProtection"

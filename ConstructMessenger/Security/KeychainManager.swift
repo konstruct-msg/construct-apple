@@ -285,6 +285,28 @@ class KeychainManager {
     func deleteCustomServerURL() {
         delete(forKey: APIConstants.customServerURLKey)
     }
+
+    // MARK: - ICE Bridge Cert
+
+    private let iceBridgeCertKey = "ice_bridge_cert"
+
+    /// Save the ICE bridge cert (obfs4 server identity) to Keychain.
+    /// Stored with `AfterFirstUnlock` so it survives device restarts.
+    func saveIceBridgeCert(_ cert: String) {
+        guard let data = cert.data(using: .utf8) else { return }
+        let ok = save(data, forKey: iceBridgeCertKey, accessible: kSecAttrAccessibleAfterFirstUnlock)
+        if !ok { Log.error("Failed to save ICE bridge cert to Keychain", category: "Keychain") }
+    }
+
+    /// Load the ICE bridge cert from Keychain. Returns nil if not yet stored.
+    func loadIceBridgeCert() -> String? {
+        guard let data = load(forKey: iceBridgeCertKey) else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    func deleteIceBridgeCert() {
+        delete(forKey: iceBridgeCertKey)
+    }
     
     func deleteAllKeys() {
         delete(forKey: "identity_key")
