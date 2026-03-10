@@ -611,6 +611,14 @@ public protocol ClassicCryptoCoreProtocol: AnyObject, Sendable {
     
     func removeSession(contactId: String)  -> Bool
     
+    /**
+     * Rotate the signed pre-key. Generates a new X25519 keypair, signs it with
+     * the device Ed25519 signing key, updates internal state, and returns the
+     * new public key + signature for atomic upload to the key server.
+     * The old SPK is kept in memory for a grace period to decrypt in-flight messages.
+     */
+    func rotateSignedPrekey() throws  -> RotatedSpkBundle
+    
     func setLocalUserId(userId: String) 
     
     func signBundleData(bundleDataJson: [UInt8]) throws  -> String
@@ -812,6 +820,20 @@ open func removeSession(contactId: String) -> Bool  {
     uniffi_construct_core_fn_method_classiccryptocore_remove_session(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(contactId),$0
+    )
+})
+}
+    
+    /**
+     * Rotate the signed pre-key. Generates a new X25519 keypair, signs it with
+     * the device Ed25519 signing key, updates internal state, and returns the
+     * new public key + signature for atomic upload to the key server.
+     * The old SPK is kept in memory for a grace period to decrypt in-flight messages.
+     */
+open func rotateSignedPrekey()throws  -> RotatedSpkBundle  {
+    return try  FfiConverterTypeRotatedSpkBundle_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_classiccryptocore_rotate_signed_prekey(
+            self.uniffiCloneHandle(),$0
     )
 })
 }
@@ -1949,6 +1971,66 @@ public func FfiConverterTypeRegistrationBundleJson_lower(_ value: RegistrationBu
 }
 
 
+/**
+ * Result of a signed pre-key rotation.
+ * All byte fields are base64-encoded for cross-language compatibility.
+ */
+public struct RotatedSpkBundle: Equatable, Hashable {
+    public var keyId: UInt32
+    public var publicKey: String
+    public var signature: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(keyId: UInt32, publicKey: String, signature: String) {
+        self.keyId = keyId
+        self.publicKey = publicKey
+        self.signature = signature
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension RotatedSpkBundle: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeRotatedSpkBundle: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RotatedSpkBundle {
+        return
+            try RotatedSpkBundle(
+                keyId: FfiConverterUInt32.read(from: &buf), 
+                publicKey: FfiConverterString.read(from: &buf), 
+                signature: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: RotatedSpkBundle, into buf: inout [UInt8]) {
+        FfiConverterUInt32.write(value.keyId, into: &buf)
+        FfiConverterString.write(value.publicKey, into: &buf)
+        FfiConverterString.write(value.signature, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRotatedSpkBundle_lift(_ buf: RustBuffer) throws -> RotatedSpkBundle {
+    return try FfiConverterTypeRotatedSpkBundle.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRotatedSpkBundle_lower(_ value: RotatedSpkBundle) -> RustBuffer {
+    return FfiConverterTypeRotatedSpkBundle.lower(value)
+}
+
+
 public struct SessionInitResult: Equatable, Hashable {
     public var sessionId: String
     public var decryptedMessage: String
@@ -2784,6 +2866,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_classiccryptocore_remove_session() != 11481) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_classiccryptocore_rotate_signed_prekey() != 9984) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_classiccryptocore_set_local_user_id() != 65330) {

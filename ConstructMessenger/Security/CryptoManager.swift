@@ -252,6 +252,28 @@ class CryptoManager {
     func saveSessionToKeychainPublic(for userId: String) {
         saveSessionToKeychain(for: userId)
     }
+
+    /// Persist the current Rust core private key state to Keychain.
+    ///
+    /// Call after in-core mutations (e.g., SPK rotation via `rotateSignedPrekey()`)
+    /// so the updated state survives app restarts.
+    func persistCoreState() {
+        guard let core else {
+            Log.error("❌ persistCoreState: core not initialized", category: "CryptoManager")
+            return
+        }
+        do {
+            let privateKeysJson = try core.exportPrivateKeysJson()
+            let saved = KeychainManager.shared.savePrivateKeysJson(privateKeysJson)
+            if saved {
+                Log.info("✅ Persisted Rust core private key state to Keychain", category: "CryptoManager")
+            } else {
+                Log.error("❌ Failed to persist Rust core state — Keychain save returned false", category: "CryptoManager")
+            }
+        } catch {
+            Log.error("❌ persistCoreState: export failed: \(error)", category: "CryptoManager")
+        }
+    }
     
     /// Clear all archived sessions for a user
     func clearArchivedSessions(for userId: String) {

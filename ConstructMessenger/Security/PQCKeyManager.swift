@@ -58,6 +58,35 @@ final class PQCKeyManager {
         return (publicKey: pubKeyData, keyId: keyId)
     }
 
+    // MARK: - Two-phase Kyber SPK generation (for atomic rotation)
+
+    /// Phase 1: Generate a new Kyber SPK in memory WITHOUT writing to Keychain.
+    ///
+    /// Used during atomic SPK rotation: generate both keys first, send a single
+    /// RotateSignedPreKeyRequest RPC with both, and only commit to Keychain
+    /// (via `commitKyberSPK`) after the server confirms success.
+    ///
+    /// - Returns: In-memory key material + the next key ID to use.
+    func generateKyberSPKInMemory() throws -> (publicKey: Data, secretKey: Data, keyId: UInt32) {
+        let keyPair = try mlkem768Keygen()
+        let pubKeyData = Data(keyPair.publicKey)
+        let secKeyData = Data(keyPair.secretKey)
+        let keyId = kyberSPKId() + 1
+        return (publicKey: pubKeyData, secretKey: secKeyData, keyId: keyId)
+    }
+
+    /// Phase 2: Commit a previously-generated in-memory Kyber SPK to Keychain.
+    ///
+    /// Call ONLY after the server has confirmed the rotation RPC succeeded.
+    func commitKyberSPK(publicKey: Data, secretKey: Data, keyId: UInt32) throws {
+        guard KeychainManager.shared.saveData(publicKey, forKey: kyberSPKPublicKey),
+              KeychainManager.shared.saveData(secretKey, forKey: kyberSPKSecretKey),
+              KeychainManager.shared.saveData(Data(withUInt32: keyId), forKey: kyberSPKIdKey) else {
+            throw PQCError.keychainSaveFailed
+        }
+        Log.info("🔐 PQC: Committed rotated Kyber SPK to Keychain, keyId=\(keyId)", category: "PQC")
+    }
+
     // MARK: - Retrieval
 
     /// Retrieve the stored Kyber SPK public key for upload.

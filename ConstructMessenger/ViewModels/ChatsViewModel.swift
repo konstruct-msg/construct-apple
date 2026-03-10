@@ -220,6 +220,9 @@ class ChatsViewModel {
                 } else {
                     await OtpkReplenishmentService.replenishIfNeeded(deviceId: deviceId)
                 }
+
+                // Check if SPK rotation is due (runs monthly; no-op otherwise)
+                await PreKeyRotationService.shared.rotateIfNeeded(deviceId: deviceId)
             }
         }
     }
