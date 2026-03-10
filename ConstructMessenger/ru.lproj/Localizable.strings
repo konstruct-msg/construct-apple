@@ -213,6 +213,7 @@
 "denied" = "Запрещено";
 
 // MARK: - Background Fetch & Local Notifications
+"construct_app_name" = "Construct";
 "construct_new_message" = "Новое сообщение";
 "construct_new_messages" = "Новые сообщения";
 "construct_new_message_from" = "Новое сообщение от %@";

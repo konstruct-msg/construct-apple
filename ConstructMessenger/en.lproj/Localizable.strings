@@ -215,6 +215,7 @@
 "denied" = "Denied";
 
 // MARK: - Background Fetch & Local Notifications
+"construct_app_name" = "Construct";
 "construct_new_message" = "New Message";
 "construct_new_messages" = "New Messages";
 "construct_new_message_from" = "New message from %@";

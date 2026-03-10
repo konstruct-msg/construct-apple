@@ -9,6 +9,7 @@
 
 import Foundation
 import CoreData
+import UIKit
 
 /// Routes and processes incoming messages
 @MainActor
@@ -343,6 +344,19 @@ class MessageRouter {
             return
         }
 
+        // Guard: msgNum=0 with empty kemCiphertext = DR reply for a session we no longer have.
+        // This happens when the user manually resets the session and the other side's in-flight
+        // reply arrives after the reset. initReceivingSession cannot use a DR reply to init —
+        // discard it and ask sender to restart their session.
+        if message.messageNumber == 0 && message.kemCiphertext.isEmpty && isFirstForUser {
+            Log.info("⚠️ No session for \(userId.prefix(8)) but msgNum=0 with empty kem — DR reply for lost session, discarding and requesting END_SESSION", category: "MessageRouter")
+            PersistentACKStore.shared.markProcessed(message.id, senderId: userId, in: context)
+            onReceiptNeeded?([message.id], userId, .failed)
+            if isNewChat { context.delete(chat) }
+            onEndSessionNeeded?(userId)
+            return
+        }
+
         // Append to the queue (do NOT overwrite — we need message_number=0 for session init)
         pendingMessages[userId, default: []].append(message)
 
@@ -579,6 +593,13 @@ class MessageRouter {
         
         do {
             try context.save()
+            // Show a local notification if the app is in the background
+            // (server only sends silent content-available pushes; we must notify manually)
+            DispatchQueue.main.async {
+                if UIApplication.shared.applicationState != .active {
+                    LocalNotificationManager.shared.showNewMessageNotification()
+                }
+            }
         } catch {
             Log.error("❌ Failed to save message: \(error)", category: "MessageRouter")
         }
