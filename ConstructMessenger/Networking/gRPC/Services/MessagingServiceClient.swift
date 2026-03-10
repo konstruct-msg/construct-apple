@@ -110,8 +110,16 @@ final class MessagingServiceClient: Sendable {
 
     // MARK: - Get Pending Messages (for background fetch)
 
+    struct FailedMessage: Sendable {
+        let id: String
+        let senderId: String
+    }
+
     struct PendingMessagesResult: Sendable {
         let messages: [ChatMessage]
+        /// Messages that arrived but could not be decoded (e.g. lost session key).
+        /// The client should ACK these as `.failed` so the server removes them from the pending queue.
+        let failedMessages: [FailedMessage]
         let nextCursor: String
         let hasMore: Bool
     }
@@ -130,10 +138,12 @@ final class MessagingServiceClient: Sendable {
                 request: .init(message: request)
             )
 
+            var failed: [FailedMessage] = []
             let chatMessages = response.messages.compactMap { msg -> ChatMessage? in
                 // Unpack wire payload blob into crypto components
                 guard let decoded = try? WirePayloadCoder.decode(msg.encryptedPayload) else {
-                    Log.debug("⚠️ Failed to decode encrypted_payload for message \(msg.messageID)", category: "MessagingServiceClient")
+                    Log.debug("⚠️ Failed to decode encrypted_payload for message \(msg.messageID) — queuing failed ACK", category: "MessagingServiceClient")
+                    failed.append(FailedMessage(id: msg.messageID, senderId: msg.senderID))
                     return nil
                 }
                 return ChatMessage(
@@ -153,6 +163,7 @@ final class MessagingServiceClient: Sendable {
 
             return PendingMessagesResult(
                 messages: chatMessages,
+                failedMessages: failed,
                 nextCursor: response.nextCursor,
                 hasMore: response.hasMore_p
             )

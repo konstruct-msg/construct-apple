@@ -156,7 +156,7 @@ class ConnectionStatusManager {
     }
 
     func markConnecting() {
-        if connectionStatus != .connected {
+        if connectionStatus != .connected && connectionStatus != .connecting {
             connectionStatus = .connecting
         }
     }

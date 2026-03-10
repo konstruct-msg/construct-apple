@@ -61,6 +61,10 @@ final class MessageStreamManager {
     /// Continuation for sending messages into the stream
     private var outboundContinuation: AsyncStream<Shared_Proto_Services_V1_MessageStreamRequest>.Continuation?
 
+    /// Messages that failed decoding during fetchMissedMessages (before stream was open).
+    /// Flushed as `.failed` receipts once the stream is established.
+    private var pendingFailedAcks: [MessagingServiceClient.FailedMessage] = []
+
     // MARK: - Configuration
 
     private let heartbeatInterval: TimeInterval = 25
@@ -269,21 +273,24 @@ final class MessageStreamManager {
     }
 
     private func fetchMissedMessages() async {
-        var cursor: String? = lastPendingCursor.isEmpty ? nil : lastPendingCursor
+        let cursor: String? = lastPendingCursor.isEmpty ? nil : lastPendingCursor
         do {
-            repeat {
-                let result = try await MessagingServiceClient.shared.getPendingMessages(sinceCursor: cursor)
-                if !result.messages.isEmpty {
-                    Log.info("📨 Fetched \(result.messages.count) missed message(s) after reconnect", category: "MessageStream")
-                    for msg in result.messages {
-                        onMessageReceived?(msg)
-                    }
-                } else {
-                    Log.debug("📭 fetchMissedMessages: no pending messages", category: "MessageStream")
+            let result = try await MessagingServiceClient.shared.getPendingMessages(sinceCursor: cursor)
+            if !result.messages.isEmpty {
+                Log.info("📨 Fetched \(result.messages.count) missed message(s) after reconnect", category: "MessageStream")
+                for msg in result.messages {
+                    onMessageReceived?(msg)
                 }
-                cursor = result.nextCursor.isEmpty ? nil : result.nextCursor
-                if let c = cursor { lastPendingCursor = c }
-            } while cursor != nil
+            } else {
+                Log.debug("📭 fetchMissedMessages: no pending messages", category: "MessageStream")
+            }
+            if !result.failedMessages.isEmpty {
+                Log.info("⚠️ fetchMissedMessages: \(result.failedMessages.count) undecryptable message(s) — will ACK as failed once stream opens", category: "MessageStream")
+                pendingFailedAcks.append(contentsOf: result.failedMessages)
+            }
+            if !result.nextCursor.isEmpty {
+                lastPendingCursor = result.nextCursor
+            }
         } catch is CancellationError {
             // Task was cancelled during force-reconnect or backgrounding — expected, no log needed
         } catch {
@@ -317,6 +324,17 @@ final class MessageStreamManager {
         continuation.yield(subscribeReq)
         self.isConnected = true
         Log.debug("📤 MessageStream subscribe sent: \(subscriptionUserIds.count) conversation(s)", category: "MessageStream")
+
+        // Flush any ACKs for messages that failed decoding before the stream was open
+        if !pendingFailedAcks.isEmpty {
+            let toFlush = pendingFailedAcks
+            pendingFailedAcks.removeAll()
+            let bySender = Dictionary(grouping: toFlush, by: \.senderId)
+            for (senderId, entries) in bySender {
+                sendReceipt(entries.map(\.id), to: senderId, status: .failed)
+            }
+            Log.info("📤 Flushed \(toFlush.count) failed ACK(s) for undecryptable pending message(s)", category: "MessageStream")
+        }
 
         // Start heartbeat
         let hbInterval = self.heartbeatInterval

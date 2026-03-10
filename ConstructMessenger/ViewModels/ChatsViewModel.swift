@@ -296,6 +296,8 @@ class ChatsViewModel {
             }
         }
         chatManagementService.deleteChat(chat)
+        // Update stream subscriptions so we stop receiving messages for the deleted chat
+        forceReconnectStream()
     }
 
     // MARK: - Incoming message dispatch
