@@ -414,6 +414,7 @@ class ChatViewModel: NSObject {
             msg.id = UUID().uuidString
             msg.fromUserId = currentUserId
             msg.toUserId = recipientId
+            msg.encryptedContent = ""
             msg.decryptedContent = queued.text
             msg.timestamp = queued.timestamp
             msg.deliveryStatus = .failed
@@ -668,7 +669,7 @@ class ChatViewModel: NSObject {
                             Log.info("⚠️ Unknown server status: \(response.status), using .sent", category: "ChatViewModel")
                         }
                         Log.info("🔄 Updating message status from sending → \(deliveryStatus) for \(messageId)", category: "ChatViewModel")
-                        updateMessageStatus(messageId: messageId, status: deliveryStatus)
+                        self.updateMessageStatus(messageId: messageId, status: deliveryStatus)
                         Log.info("✅ Message sent via gRPC: \(response.messageId), server status: \(response.status)", category: "ChatViewModel")
                         self.isSending = false
                     }
@@ -682,7 +683,7 @@ class ChatViewModel: NSObject {
                         } else {
                             Log.error("❌ Failed to send message: \(error)", category: "ChatViewModel")
                         }
-                        updateMessageStatus(messageId: messageId, status: .failed)
+                        self.updateMessageStatus(messageId: messageId, status: .failed)
                         self.errorMessage = "Failed to send message: \(error.userFacingMessage)"
                         self.isSending = false
                     }
