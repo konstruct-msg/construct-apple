@@ -781,10 +781,20 @@ extension ChatViewModel: NSFetchedResultsControllerDelegate {
     nonisolated func controllerDidChangeContent(_ controller: NSFetchedResultsController<NSFetchRequestResult>) {
         Task { @MainActor [weak self] in
             guard let self else { return }
-            let fetchedMessages = (controller.fetchedObjects as? [Message] ?? []).reversed() as [Message]
+            // If the parent chat was deleted, clear messages and stop — accessing
+            // properties on deleted Core Data objects crashes with EXC_BREAKPOINT.
+            guard !self.chat.isDeleted, self.chat.managedObjectContext != nil else {
+                self.messages = []
+                return
+            }
+            let fetchedMessages = (controller.fetchedObjects as? [Message] ?? [])
+                .filter { !$0.isDeleted }
+                .reversed() as [Message]
             let fetchedIds = Set(fetchedMessages.map { $0.id })
             // Keep historic messages loaded via pagination (not in current FRC window)
-            let historicMessages = self.messages.filter { !fetchedIds.contains($0.id) }
+            let historicMessages = self.messages.filter {
+                !fetchedIds.contains($0.id) && !$0.isDeleted
+            }
             self.messages = historicMessages + fetchedMessages
             Log.debug("🔄 FRC updated: \(fetchedMessages.count) recent + \(historicMessages.count) historic = \(self.messages.count) total", category: "ChatViewModel")
             if let first = self.messages.first {
