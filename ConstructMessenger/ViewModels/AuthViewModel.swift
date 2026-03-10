@@ -403,7 +403,7 @@ class AuthViewModel {
         SessionManager.shared.saveTokens(
             accessToken: token,
             refreshToken: refreshToken,
-            expiresIn: max(expiresIn, 3600)  // At least 1 hour
+            expiresIn: max(expiresIn, 0)  // Don't clamp negative (already-expired) TTL to 1 hour
         )
         
         // ✅ DEBUG: Verify token was saved correctly
