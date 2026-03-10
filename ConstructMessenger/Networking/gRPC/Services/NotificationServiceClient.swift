@@ -2,8 +2,8 @@
 //  NotificationServiceClient.swift
 //  Construct Messenger
 //
-//  Push token registration via DeviceService.UpdatePushToken.
-//  Envoy route: /shared.proto.services.v1.DeviceService/UpdatePushToken
+//  Push token registration via NotificationService.RegisterDeviceToken.
+//  Envoy route: /shared.proto.services.v1.NotificationService/RegisterDeviceToken
 //
 
 import Foundation
@@ -19,7 +19,7 @@ final class NotificationServiceClient: Sendable {
     // MARK: - Register / Update Device Token
 
     /// Registers (or updates) the APNs push token with the server.
-    /// Uses DeviceService.UpdatePushToken — the only endpoint that writes to device_tokens.
+    /// Uses NotificationService.RegisterDeviceToken (canonical push endpoint).
     func registerDeviceToken(token: String) async throws -> DeviceTokenResponse {
         let deviceId = KeychainManager.shared.loadDeviceID() ?? ""
 
@@ -29,16 +29,18 @@ final class NotificationServiceClient: Sendable {
         let environment = Shared_Proto_Services_V1_PushEnvironment.pushEnvProduction
         #endif
 
-        return try await GRPCChannelManager.shared.performRPC { grpcClient in
-            let client = Shared_Proto_Services_V1_DeviceService.Client(wrapping: grpcClient)
+        Log.info("📲 Registering APNs token — environment: \(environment.rawValue) (\(environment == .pushEnvProduction ? "production" : "sandbox"))", category: "Notifications")
 
-            var request = Shared_Proto_Services_V1_UpdatePushTokenRequest()
+        return try await GRPCChannelManager.shared.performRPC { grpcClient in
+            let client = Shared_Proto_Services_V1_NotificationService.Client(wrapping: grpcClient)
+
+            var request = Shared_Proto_Services_V1_RegisterDeviceTokenRequest()
+            request.deviceToken = token
             request.deviceID = deviceId
-            request.pushToken = token
             request.provider = .apns
             request.environment = environment
 
-            let response = try await client.updatePushToken(
+            let response = try await client.registerDeviceToken(
                 request: .init(message: request)
             )
 
@@ -53,15 +55,13 @@ final class NotificationServiceClient: Sendable {
 
     /// Removes the push token on logout / notifications disabled.
     func unregisterDeviceToken(token: String) async throws {
-        let deviceId = KeychainManager.shared.loadDeviceID() ?? ""
-
         try await GRPCChannelManager.shared.performRPC { grpcClient in
-            let client = Shared_Proto_Services_V1_DeviceService.Client(wrapping: grpcClient)
+            let client = Shared_Proto_Services_V1_NotificationService.Client(wrapping: grpcClient)
 
-            var request = Shared_Proto_Services_V1_UnregisterPushTokenRequest()
-            request.deviceID = deviceId
+            var request = Shared_Proto_Services_V1_UnregisterDeviceTokenRequest()
+            request.deviceToken = token
 
-            _ = try await client.unregisterPushToken(
+            _ = try await client.unregisterDeviceToken(
                 request: .init(message: request)
             )
         }
