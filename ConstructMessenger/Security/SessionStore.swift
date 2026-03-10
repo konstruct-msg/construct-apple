@@ -49,7 +49,10 @@ final class SessionStore {
         let alreadyRestored = queue.sync { sessionIds[userId] != nil }
         guard !alreadyRestored else { return true }
         guard let core = core else { return false }
-        guard let sessionJson = keychain.loadSessionJson(for: userId) else { return false }
+        guard let sessionJson = keychain.loadSessionJson(for: userId) else {
+            onLog?("⚠️ No session JSON in Keychain for \(userId) — session must be re-established")
+            return false
+        }
 
         do {
             let sessionId = try core.importSessionJson(contactId: userId, sessionJson: sessionJson)
@@ -61,7 +64,10 @@ final class SessionStore {
             onLog?("✅ Restored session: \(userId)")
             return true
         } catch {
-            onLog?("⚠️ Failed to restore session for \(userId): \(error)")
+            // Deserialization failed (e.g. format incompatibility after core upgrade).
+            // Remove the stale JSON so it doesn't block future re-establishes.
+            _ = keychain.saveSessionJson("", for: userId)   // overwrite with empty to invalidate
+            onLog?("❌ Session JSON import FAILED for \(userId) (stale/incompatible format — cleared): \(error)")
             return false
         }
     }

@@ -1,0 +1,123 @@
+========================================
+Construct Messenger Debug Logs
+========================================
+Exported: 2026-03-10 04:19:30 +0000
+App Version: 0.9.9
+Build: 175
+Device: iPhone
+iOS Version: 18.6.2
+Identifier: 4D5928CB-A0A0-4204-9111-3EDEF2ED2590
+========================================
+
+=== Log File 1/1: current.log ===
+========================================
+Construct Messenger - Log Session
+========================================
+App Version: 0.9.9
+Build: 175
+Device: iPhone
+iOS Version: 18.6.2
+Started: 2026-03-10 04:17:50 +0000
+========================================
+[2026-03-10T04:17:50Z] [DEBUG] [Keychain] ✅ Device keys found in Keychain
+[2026-03-10T04:17:50Z] [DEBUG] [Keychain]    deviceId: a39e516f9a7222ec...
+[2026-03-10T04:17:50Z] [DEBUG] [Keychain]    signingKey: 32 bytes
+[2026-03-10T04:17:50Z] [DEBUG] [Keychain]    identityKey: 32 bytes
+[2026-03-10T04:17:50Z] [INFO] [Default] Application did finish launching
+[2026-03-10T04:17:50Z] [INFO] [BackgroundFetch] BackgroundFetchManager initialized
+[2026-03-10T04:17:50Z] [INFO] [EnergyMonitor] Network status changed: satisfied
+[2026-03-10T04:17:50Z] [INFO] [Default] Background tasks registered successfully
+[2026-03-10T04:17:50Z] [INFO] [Default] Background fetch is disabled by user or Low Power Mode
+[2026-03-10T04:17:50Z] [INFO] [Push] 📱 PushNotificationManager initialized
+[2026-03-10T04:17:50Z] [INFO] [NetworkReachability] 🌐 Network reachability monitoring started
+[2026-03-10T04:17:50Z] [INFO] [ConnectionStatus] 🔄 ConnectionStatusManager initialized: Connecting (network reachable)
+[2026-03-10T04:17:50Z] [DEBUG] [Keychain] ✅ Device keys found in Keychain
+[2026-03-10T04:17:50Z] [DEBUG] [Keychain]    deviceId: a39e516f9a7222ec...
+[2026-03-10T04:17:50Z] [DEBUG] [Keychain]    signingKey: 32 bytes
+[2026-03-10T04:17:50Z] [DEBUG] [Keychain]    identityKey: 32 bytes
+[2026-03-10T04:17:50Z] [INFO] [ChatsViewModel] 📱 No session — skipping reconnect
+[2026-03-10T04:17:50Z] [INFO] [ChatsViewModel] 📱 No session — skipping reconnect
+[2026-03-10T04:17:50Z] [DEBUG] [Keychain] ✅ Session token loaded from Keychain (length: 927, prefix: eyJ0eXAiOiJKV1QiLCJhbGciOiJSUz...)
+[2026-03-10T04:17:50Z] [DEBUG] [Keychain] ✅ Refresh token loaded from Keychain (length: 927)
+[2026-03-10T04:17:50Z] [DEBUG] [Keychain] ✅ User ID loaded from Keychain: 922ceb92...
+[2026-03-10T04:17:50Z] [DEBUG] [Default] Notification authorization status: 2
+[2026-03-10T04:17:50Z] [INFO] [CryptoManager] 🔑 Found existing keys in Keychain, restoring CryptoCore...
+[2026-03-10T04:17:50Z] [INFO] [CryptoManager] ✅ Restored 150 OTPKs from Keychain
+[2026-03-10T04:17:50Z] [INFO] [CryptoManager] ✅ CryptoCore restored from saved keys!
+[2026-03-10T04:17:50Z] [DEBUG] [CryptoManager] 🔑 CryptoManager: local user ID set to 922ceb92-066c-4af4-8ce9-3e3535f25c03
+[2026-03-10T04:17:50Z] [DEBUG] [Push] 📱 Push authorization status: authorized
+[2026-03-10T04:17:50Z] [INFO] [CryptoManager] 📦 Session restore: 0 restored, 1 failed
+[2026-03-10T04:17:50Z] [DEBUG] [CryptoManager] ✅ Garbage collection: no expired archives found
+[2026-03-10T04:17:50Z] [DEBUG] [CryptoManager] ⏰ Started archive GC timer (interval: 24h)
+[2026-03-10T04:17:50Z] [INFO] [Push] 📱 Registering for remote notifications (authorized, no token yet)
+[2026-03-10T04:17:50Z] [DEBUG] [LocalNotifications] 📛 Badge cleared
+[2026-03-10T04:17:50Z] [INFO] [Push] 📱 Received device token from APNs
+[2026-03-10T04:17:50Z] [INFO] [Push] 📱 Registering device token (length: 64)
+[2026-03-10T04:17:50Z] [INFO] [Push] 📡 Registering device token with server
+[2026-03-10T04:17:50Z] [INFO] [gRPC] 🔌 gRPC creating channel → ams.konstruct.cc:443 TLS=true
+[2026-03-10T04:17:50Z] [INFO] [ChatsViewModel] 📱 App became active — force reconnecting stream
+[2026-03-10T04:17:50Z] [INFO] [MessageStream] 🔁 Force reconnecting stream
+[2026-03-10T04:17:50Z] [INFO] [MessageStream] 📡 Starting MessageStream connection (subscribed to 1 contacts)
+[2026-03-10T04:17:50Z] [INFO] [MessageStream] 🔄 MessageStream connectLoop started → ams.konstruct.cc:443
+[2026-03-10T04:17:50Z] [INFO] [gRPC] 🔌 gRPC creating channel → ams.konstruct.cc:443 TLS=true
+[2026-03-10T04:17:50Z] [DEBUG] [Keychain] ✅ Session token loaded from Keychain (length: 927, prefix: eyJ0eXAiOiJKV1QiLCJhbGciOiJSUz...)
+[2026-03-10T04:17:50Z] [DEBUG] [Keychain] ✅ Refresh token loaded from Keychain (length: 927)
+[2026-03-10T04:17:50Z] [DEBUG] [Keychain] ✅ User ID loaded from Keychain: 922ceb92...
+[2026-03-10T04:17:50Z] [DEBUG] [CryptoManager] 🔑 CryptoManager: local user ID set to 922ceb92-066c-4af4-8ce9-3e3535f25c03
+[2026-03-10T04:17:52Z] [INFO] [MessageQueue] ⏰ Started periodic message queue check
+[2026-03-10T04:17:52Z] [INFO] [MessageQueue] 📦 MessageQueueManager initialized
+[2026-03-10T04:17:52Z] [DEBUG] [ChatViewModel] 🔧 ChatViewModel init: chat.id=EFD36D0F-95B9-4C66-95A6-2A339B0CF3BD, chat.otherUser?.id=d937236c-62c7-4e69-b5b6-5fce8a7b5b41, chat.otherUser?.username=
+[2026-03-10T04:17:52Z] [DEBUG] [ChatViewModel] ✅ FRC initial fetch: 7 messages (reversed to oldest-first)
+[2026-03-10T04:17:52Z] [DEBUG] [CryptoManager] 🔑 Session check for d937236c-62c7-4e69-b5b6-5fce8a7b5b41: MISSING
+[2026-03-10T04:17:52Z] [DEBUG] [ChatViewModel] No session yet for user: d937236c-62c7-4e69-b5b6-5fce8a7b5b41
+[2026-03-10T04:17:52Z] [DEBUG] [ChatViewModel] 🔑 Fetching public key for userId: d937236c-62c7-4e69-b5b6-5fce8a7b5b41, currentUserId: 922ceb92-066c-4af4-8ce9-3e3535f25c03
+[2026-03-10T04:17:52Z] [DEBUG] [ChatViewModel] 🔧 ChatViewModel initialized with viewContext
+[2026-03-10T04:17:52Z] [DEBUG] [ChatViewModel] 📥 Loading more messages before 2026-03-09 19:38:35 +0000
+[2026-03-10T04:17:52Z] [DEBUG] [ChatViewModel] 📭 No more older messages to load
+[2026-03-10T04:17:52Z] [INFO] [SessionInit] 🔑 SESSION_STATE[fetch_bundle_attempt_1]: userId=d937236c..., deviceId=nil...
+[2026-03-10T04:17:52Z] [INFO] [gRPC] 🔌 gRPC creating channel → ams.konstruct.cc:443 TLS=true
+[2026-03-10T04:17:52Z] [DEBUG] [LocalNotifications] 📛 Badge cleared
+[2026-03-10T04:17:54Z] [DEBUG] [LocalNotifications] 📛 Badge cleared
+[2026-03-10T04:17:55Z] [INFO] [gRPC] 🔌 gRPC creating channel → ams.konstruct.cc:443 TLS=true
+[2026-03-10T04:18:02Z] [ERROR] [ChatViewModel] ⏱️ Timeout waiting for public key bundle from server
+[2026-03-10T04:18:32Z] [INFO] [EnergyMonitor] Network status changed: satisfied
+[2026-03-10T04:18:38Z] [INFO] [EnergyMonitor] Network status changed: satisfied
+[2026-03-10T04:18:42Z] [DEBUG] [LocalNotifications] 📛 Badge cleared
+[2026-03-10T04:18:43Z] [DEBUG] [ChatViewModel] 🔧 ChatViewModel init: chat.id=EFD36D0F-95B9-4C66-95A6-2A339B0CF3BD, chat.otherUser?.id=d937236c-62c7-4e69-b5b6-5fce8a7b5b41, chat.otherUser?.username=
+[2026-03-10T04:18:43Z] [DEBUG] [ChatViewModel] ✅ FRC initial fetch: 7 messages (reversed to oldest-first)
+[2026-03-10T04:18:43Z] [DEBUG] [CryptoManager] 🔑 Session check for d937236c-62c7-4e69-b5b6-5fce8a7b5b41: MISSING
+[2026-03-10T04:18:43Z] [DEBUG] [ChatViewModel] No session yet for user: d937236c-62c7-4e69-b5b6-5fce8a7b5b41
+[2026-03-10T04:18:43Z] [DEBUG] [ChatViewModel] 🔑 Fetching public key for userId: d937236c-62c7-4e69-b5b6-5fce8a7b5b41, currentUserId: 922ceb92-066c-4af4-8ce9-3e3535f25c03
+[2026-03-10T04:18:43Z] [DEBUG] [ChatViewModel] 🔧 ChatViewModel initialized with viewContext
+[2026-03-10T04:18:43Z] [DEBUG] [ChatViewModel] 📥 Loading more messages before 2026-03-09 19:38:35 +0000
+[2026-03-10T04:18:43Z] [DEBUG] [ChatViewModel] 📭 No more older messages to load
+[2026-03-10T04:18:43Z] [INFO] [SessionInit] 🔑 SESSION_STATE[fetch_bundle_attempt_1]: userId=d937236c..., deviceId=nil...
+[2026-03-10T04:18:43Z] [INFO] [gRPC] 🔌 gRPC creating channel → ams.konstruct.cc:443 TLS=true
+[2026-03-10T04:18:43Z] [DEBUG] [LocalNotifications] 📛 Badge cleared
+[2026-03-10T04:18:53Z] [ERROR] [ChatViewModel] ⏱️ Timeout waiting for public key bundle from server
+[2026-03-10T04:19:03Z] [ERROR] [SessionInit] ⚠️ SESSION_STATE[fetch_bundle_failed]: attempt=1/3, error=unavailable: "The server accepted the TCP connection but closed the connection before completing the HTTP/2 connection preface." (cause: "read(descriptor:pointer:size:): Operation timed out) (errno: 60)") (RPCError)
+[2026-03-10T04:19:03Z] [INFO] [SessionInit] ⏳ Retrying public key fetch in 1.0s...
+[2026-03-10T04:19:04Z] [INFO] [SessionInit] 🔑 SESSION_STATE[fetch_bundle_attempt_2]: userId=d937236c..., deviceId=nil...
+[2026-03-10T04:19:04Z] [INFO] [gRPC] 🔌 gRPC creating channel → ams.konstruct.cc:443 TLS=true
+[2026-03-10T04:19:09Z] [ERROR] [Push] ❌ Failed to register device token with server: unavailable: "The server accepted the TCP connection but closed the connection before completing the HTTP/2 connection preface." (cause: "read(descriptor:pointer:size:): Operation timed out) (errno: 60)")
+[2026-03-10T04:19:09Z] [DEBUG] [Push] 📱 Push authorization status: authorized
+[2026-03-10T04:19:09Z] [DEBUG] [ChatsViewModel] 📡 Stream state: token=present, status=Connecting..., push=false
+[2026-03-10T04:19:09Z] [INFO] [ChatsViewModel] 📡 Connecting message stream
+[2026-03-10T04:19:09Z] [INFO] [MessageStream] 📡 MessageStream already reconnecting
+[2026-03-10T04:19:09Z] [INFO] [gRPC] 🔌 gRPC creating channel → ams.konstruct.cc:443 TLS=true
+[2026-03-10T04:19:10Z] [INFO] [ChatsViewModel] 📱 App going to background - pausing messaging
+[2026-03-10T04:19:10Z] [INFO] [MessageStream] 📡 MessageStream disconnected
+[2026-03-10T04:19:10Z] [INFO] [MessageStream] 📱 MessageStream paused
+[2026-03-10T04:19:10Z] [INFO] [MessageStream] 🏁 MessageStream connectLoop finished
+[2026-03-10T04:19:24Z] [INFO] [ChatsViewModel] 📱 App became active — force reconnecting stream
+[2026-03-10T04:19:24Z] [INFO] [MessageStream] 🔁 Force reconnecting stream
+[2026-03-10T04:19:24Z] [INFO] [MessageStream] 📡 Starting MessageStream connection (subscribed to 1 contacts)
+[2026-03-10T04:19:24Z] [INFO] [MessageStream] 🔄 MessageStream connectLoop started → ams.konstruct.cc:443
+[2026-03-10T04:19:24Z] [INFO] [gRPC] 🔌 gRPC creating channel → ams.konstruct.cc:443 TLS=true
+[2026-03-10T04:19:24Z] [DEBUG] [Keychain] ✅ Session token loaded from Keychain (length: 927, prefix: eyJ0eXAiOiJKV1QiLCJhbGciOiJSUz...)
+[2026-03-10T04:19:24Z] [DEBUG] [Keychain] ✅ Refresh token loaded from Keychain (length: 927)
+[2026-03-10T04:19:24Z] [DEBUG] [Keychain] ✅ User ID loaded from Keychain: 922ceb92...
+[2026-03-10T04:19:24Z] [DEBUG] [CryptoManager] 🔑 CryptoManager: local user ID set to 922ceb92-066c-4af4-8ce9-3e3535f25c03
+[2026-03-10T04:19:24Z] [DEBUG] [LocalNotifications] 📛 Badge cleared
+
+

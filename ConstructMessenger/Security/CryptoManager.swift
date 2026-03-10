@@ -298,7 +298,11 @@ class CryptoManager {
     @discardableResult
     func restoreSession(for userId: String) -> Bool {
         sessionStore.restoreSessionIfNeeded(userId: userId, core: core, onLog: { message in
-            Log.debug(message, category: "CryptoManager")
+            if message.hasPrefix("❌") || message.hasPrefix("⚠️") {
+                Log.error(message, category: "CryptoManager")
+            } else {
+                Log.debug(message, category: "CryptoManager")
+            }
         })
     }
 
