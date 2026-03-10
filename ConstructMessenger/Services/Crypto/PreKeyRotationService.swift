@@ -37,10 +37,7 @@ final class PreKeyRotationService {
         }
         Log.info("🔑 SPK rotation due — starting atomic rotation", category: "SPKRotation")
         do {
-            // Use .unspecified until server adds key_update_reason DB column —
-            // proto3 omits default values (0) from the wire, so the server
-            // won't attempt to write the missing column.
-            try await performAtomicRotation(deviceId: deviceId, reason: .unspecified)
+            try await performAtomicRotation(deviceId: deviceId, reason: .scheduled)
         } catch {
             Log.error("❌ SPK rotation failed: \(error)", category: "SPKRotation")
         }
