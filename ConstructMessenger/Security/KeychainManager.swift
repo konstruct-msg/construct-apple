@@ -22,7 +22,7 @@ class KeychainManager {
         if !success {
             Log.error("Failed to save session token to Keychain", category: "Keychain")
         } else {
-            Log.info("✅ Session token saved to Keychain (length: \(token.count), prefix: \(token.prefix(30))...)", category: "Keychain")
+            Log.info("✅ Session token saved to Keychain (length: \(token.count))", category: "Keychain")
         }
     }
 
@@ -67,7 +67,7 @@ class KeychainManager {
     
     /// Save device signing key (Ed25519 private key, 32 bytes)
     func saveDeviceSigningKey(_ key: Data) {
-        let success = save(key, forKey: "deviceSigningKey", accessible: kSecAttrAccessibleAfterFirstUnlock)
+        let success = save(key, forKey: "deviceSigningKey", accessible: kSecAttrAccessibleWhenUnlockedThisDeviceOnly)
         if success {
             Log.info("✅ Device signing key saved to Keychain", category: "Keychain")
         }
@@ -80,7 +80,7 @@ class KeychainManager {
     
     /// Save device identity key (for E2EE)
     func saveDeviceIdentityKey(_ key: Data) {
-        let success = save(key, forKey: "deviceIdentityKey", accessible: kSecAttrAccessibleAfterFirstUnlock)
+        let success = save(key, forKey: "deviceIdentityKey", accessible: kSecAttrAccessibleWhenUnlockedThisDeviceOnly)
         if success {
             Log.info("✅ Device identity key saved to Keychain", category: "Keychain")
         }
