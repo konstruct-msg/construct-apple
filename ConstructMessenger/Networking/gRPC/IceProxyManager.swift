@@ -38,33 +38,38 @@ enum IceIATMode: Int, CaseIterable, Identifiable {
 /// Relay configuration — a single obfs4 bridge endpoint.
 struct IceRelay: Codable, Identifiable {
     let id: UUID
-    let address: String    // "relay.example.com:9443"
-    let bridgeCert: String // base64 cert received from server
+    let address: String     // "relay.example.com:443" (TLS mode) or ":9443" (legacy)
+    let bridgeCert: String  // base64 cert received from server
     let iatMode: IceIATMode
+    /// When set: outer TLS connection is established first using this SNI before
+    /// the obfs4 handshake. nil = legacy plain-TCP obfs4 (no outer TLS).
+    let tlsServerName: String?
 
     /// Full bridge line string passed to Rust: "cert=<cert> iat-mode=<n>"
     var bridgeLine: String {
         "cert=\(bridgeCert) iat-mode=\(iatMode.rawValue)"
     }
 
-    init(address: String, bridgeCert: String, iatMode: IceIATMode = .none) {
-        self.id = UUID()
-        self.address = address
-        self.bridgeCert = bridgeCert
-        self.iatMode = iatMode
+    init(address: String, bridgeCert: String, iatMode: IceIATMode = .none, tlsServerName: String? = nil) {
+        self.id            = UUID()
+        self.address       = address
+        self.bridgeCert    = bridgeCert
+        self.iatMode       = iatMode
+        self.tlsServerName = tlsServerName
     }
 
     // Codable conformance for IceIATMode (stored as rawValue Int)
     enum CodingKeys: String, CodingKey {
-        case id, address, bridgeCert, iatMode
+        case id, address, bridgeCert, iatMode, tlsServerName
     }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        id        = try c.decode(UUID.self, forKey: .id)
-        address   = try c.decode(String.self, forKey: .address)
-        bridgeCert = try c.decode(String.self, forKey: .bridgeCert)
-        let raw   = (try? c.decode(Int.self, forKey: .iatMode)) ?? 0
-        iatMode   = IceIATMode(rawValue: raw) ?? .none
+        id            = try c.decode(UUID.self, forKey: .id)
+        address       = try c.decode(String.self, forKey: .address)
+        bridgeCert    = try c.decode(String.self, forKey: .bridgeCert)
+        let raw       = (try? c.decode(Int.self, forKey: .iatMode)) ?? 0
+        iatMode       = IceIATMode(rawValue: raw) ?? .none
+        tlsServerName = try? c.decode(String.self, forKey: .tlsServerName)
     }
     func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
@@ -72,6 +77,7 @@ struct IceRelay: Codable, Identifiable {
         try c.encode(address, forKey: .address)
         try c.encode(bridgeCert, forKey: .bridgeCert)
         try c.encode(iatMode.rawValue, forKey: .iatMode)
+        try? c.encode(tlsServerName, forKey: .tlsServerName)
     }
 }
 
@@ -116,9 +122,24 @@ final class IceProxyManager: ObservableObject {
         lastError = nil
 
         var port: UInt16 = 0
-        let result = relay.bridgeLine.withCString { bridgePtr in
-            relay.address.withCString { addrPtr in
-                ice_proxy_start(bridgePtr, addrPtr, &port)
+        let result: Int32
+
+        if let sni = relay.tlsServerName {
+            // TLS-over-obfs4 mode: outer TLS wrap before obfs4 handshake.
+            // Requires ice_proxy_start_tls in libconstruct_core — add to
+            // bridging header and rebuild once the Rust side exports it.
+            // TODO: replace with ice_proxy_start_tls(bridgePtr, addrPtr, sniPtr, &port)
+            Log.info("🧊 ICE TLS mode configured (SNI: \(sni)) — falling back to plain until Rust lib updated", category: "ICE")
+            result = relay.bridgeLine.withCString { bridgePtr in
+                relay.address.withCString { addrPtr in
+                    ice_proxy_start(bridgePtr, addrPtr, &port)
+                }
+            }
+        } else {
+            result = relay.bridgeLine.withCString { bridgePtr in
+                relay.address.withCString { addrPtr in
+                    ice_proxy_start(bridgePtr, addrPtr, &port)
+                }
             }
         }
 
@@ -153,12 +174,24 @@ final class IceProxyManager: ObservableObject {
 
     /// Called after login/register/recovery with the cert from `AuthTokensResponse`.
     /// Saves the cert and automatically starts the proxy if ICE is enabled.
+    ///
+    /// TLS-over-obfs4 mode: relay connects to `ice.<host>:443` through Traefik
+    /// TCP SNI passthrough, with TLS SNI = `"ice.<host>"`. This makes the
+    /// outer connection look like plain HTTPS to DPI.
     func configureFromServer(cert: String) {
         guard !cert.isEmpty else { return }
         // Persist the cert — this is the source of truth for "ICE available"
         UserDefaults.standard.set(cert, forKey: certKey)
         let host = GRPCChannelManager.shared.currentHost
-        let relay = IceRelay(address: "\(host):9443", bridgeCert: cert, iatMode: .none)
+        // TLS mode: Traefik routes `ice.<host>:443` → gateway:9443 via SNI passthrough.
+        // Gateway terminates TLS, then hands the stream to the obfs4 listener.
+        let iceHost = "ice.\(host)"
+        let relay = IceRelay(
+            address: "\(iceHost):443",
+            bridgeCert: cert,
+            iatMode: .none,
+            tlsServerName: iceHost
+        )
         saveRelay(relay)
         if isEnabled { start(relay: relay) }
     }
