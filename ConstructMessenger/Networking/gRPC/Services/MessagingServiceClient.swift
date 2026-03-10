@@ -140,6 +140,23 @@ final class MessagingServiceClient: Sendable {
 
             var failed: [FailedMessage] = []
             let chatMessages = response.messages.compactMap { msg -> ChatMessage? in
+                // END_SESSION: dummy payload (Data(count:16)) — route as control message directly
+                if msg.contentType == .sessionReset {
+                    Log.debug("🛑 END_SESSION pending message from \(msg.senderID.prefix(8))… id=\(msg.messageID.prefix(8))…", category: "MessagingServiceClient")
+                    return ChatMessage(
+                        id: msg.messageID,
+                        from: msg.senderID,
+                        to: "",
+                        messageType: "CONTROL_MESSAGE",
+                        ephemeralPublicKey: Data(),
+                        messageNumber: 0,
+                        content: "END_SESSION",
+                        suiteId: 1,
+                        timestamp: UInt64(msg.timestamp),
+                        kemCiphertext: Data(),
+                        kyberOtpkId: 0
+                    )
+                }
                 // Unpack wire payload blob into crypto components
                 guard let decoded = try? WirePayloadCoder.decode(msg.encryptedPayload) else {
                     Log.debug("⚠️ Failed to decode encrypted_payload for message \(msg.messageID) — queuing failed ACK", category: "MessagingServiceClient")

@@ -563,30 +563,36 @@ class CryptoManager {
         Log.debug("   ephemeralPublicKey: \(message.ephemeralPublicKey.count) bytes", category: "CryptoManager")
         Log.debug("   content length: \(message.content.count) chars", category: "CryptoManager")
 
-        let plaintext = try messageCrypto.decryptMessage(
-            message,
-            core: core,
-            sessionStore: sessionStore,
-            restoreSession: { [weak self] userId in
-                Log.info("🔄 Session not in memory, attempting restore: \(userId)", category: "CryptoManager")
-                return self?.restoreSession(for: userId) ?? false
-            },
-            saveSession: { [weak self] userId in
-                self?.saveSessionToKeychain(for: userId)
-            },
-            archiveSession: { [weak self] userId, reason in
-                Log.debug("🔄 Archiving corrupted session for \(userId) to allow reinitialization", category: "CryptoManager")
-                self?.archiveSession(for: userId, reason: reason)
-            },
-            tryDecryptWithArchived: { [weak self] message in
-                guard let self = self else {
-                    throw CryptoManagerError.decryptionFailed
+        let plaintext: String
+        do {
+            plaintext = try messageCrypto.decryptMessage(
+                message,
+                core: core,
+                sessionStore: sessionStore,
+                restoreSession: { [weak self] userId in
+                    Log.info("🔄 Session not in memory, attempting restore: \(userId)", category: "CryptoManager")
+                    return self?.restoreSession(for: userId) ?? false
+                },
+                saveSession: { [weak self] userId in
+                    self?.saveSessionToKeychain(for: userId)
+                },
+                archiveSession: { [weak self] userId, reason in
+                    Log.debug("🔄 Archiving corrupted session for \(userId) to allow reinitialization", category: "CryptoManager")
+                    self?.archiveSession(for: userId, reason: reason)
+                },
+                tryDecryptWithArchived: { [weak self] message in
+                    guard let self = self else {
+                        throw CryptoManagerError.decryptionFailed
+                    }
+                    let plaintext = try self.tryDecryptWithArchivedSessions(message: message)
+                    Log.info("✅ Successfully decrypted with archived session!", category: "CryptoManager")
+                    return plaintext
                 }
-                let plaintext = try self.tryDecryptWithArchivedSessions(message: message)
-                Log.info("✅ Successfully decrypted with archived session!", category: "CryptoManager")
-                return plaintext
-            }
-        )
+            )
+        } catch {
+            Log.error("❌ Rust core decryptMessage failed for \(message.id.prefix(8))… msgNum=\(message.messageNumber): \(error)", category: "CryptoManager")
+            throw error
+        }
 
         Log.info("✅ Message decrypted successfully (messageNumber: \(message.messageNumber), plaintext: \(plaintext.count) chars)", category: "CryptoManager")
         return plaintext

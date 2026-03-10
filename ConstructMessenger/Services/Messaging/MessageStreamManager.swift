@@ -446,6 +446,23 @@ final class MessageStreamManager {
                 Log.info("🔑 KEY_SYNC envelope from \(envelope.sender.userID.prefix(8))…", category: "MessageStream")
                 return .keySyncRequest(envelope.sender.userID)
             }
+            // END_SESSION: dummy payload (Data(count:16)) — route as control message directly
+            if envelope.contentType == .sessionReset {
+                Log.info("🛑 END_SESSION envelope from \(envelope.sender.userID.prefix(8))… id=\(envelope.messageID.prefix(8))…", category: "MessageStream")
+                return .message(ChatMessage(
+                    id: envelope.messageID,
+                    from: envelope.sender.userID,
+                    to: envelope.recipient.userID,
+                    messageType: "CONTROL_MESSAGE",
+                    ephemeralPublicKey: Data(),
+                    messageNumber: 0,
+                    content: "END_SESSION",
+                    suiteId: 1,
+                    timestamp: UInt64(envelope.timestamp),
+                    kemCiphertext: Data(),
+                    kyberOtpkId: 0
+                ))
+            }
             // Unpack wire payload blob into crypto components
             guard let decoded = try? WirePayloadCoder.decode(envelope.encryptedPayload) else {
                 Log.info("⚠️ Failed to decode encrypted_payload for message \(envelope.messageID)", category: "MessageStream")
@@ -455,7 +472,7 @@ final class MessageStreamManager {
                 id: envelope.messageID,
                 from: envelope.sender.userID,
                 to: envelope.recipient.userID,
-                messageType: envelope.contentType == .sessionReset ? "CONTROL_MESSAGE" : "DIRECT_MESSAGE",
+                messageType: "DIRECT_MESSAGE",
                 ephemeralPublicKey: Data(decoded.ephemeralPublicKey),
                 messageNumber: decoded.messageNumber,
                 content: decoded.content,
