@@ -47,10 +47,12 @@ final class SessionHealingService {
 
     /// Returns `true` when the message CAN be healed without END_SESSION.
     ///
-    /// Only `messageNumber == 0` is healable — it indicates the sender re-keyed
-    /// and this message is the new X3DH handshake initiation.
+    /// A real X3DH init has `messageNumber == 0` AND a non-empty `kemCiphertext`
+    /// (the KEM-encapsulated shared secret targeting the receiver's one-time pre-key).
+    /// DR replies also have `messageNumber == 0` in the sender's ratchet chain but
+    /// carry an empty `kemCiphertext` — they are NOT healable via `initReceivingSession`.
     func canHeal(_ message: ChatMessage) -> Bool {
-        return message.messageNumber == 0
+        return message.messageNumber == 0 && !message.kemCiphertext.isEmpty
     }
 
     // MARK: - Enqueue

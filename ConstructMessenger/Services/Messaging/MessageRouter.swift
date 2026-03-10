@@ -373,12 +373,20 @@ class MessageRouter {
             Log.error("🔐 SESSION_STATE[decrypt_failed]: userId=\(userId.prefix(8))..., messageId=\(message.id.prefix(8))..., messageNumber=\(message.messageNumber)", category: "SessionInit")
 
             if SessionHealingService.shared.canHeal(message) {
-                // messageNumber == 0 means the sender RE-KEYED (new X3DH session init).
+                // messageNumber == 0 AND non-empty kemCiphertext → real X3DH re-init from sender.
                 // Session was already archived by decryptMessage (reason: decryptionFailed) — skip redundant archive.
-                Log.info("🩹 SESSION_STATE[heal_triggered]: messageNumber=0 from \(userId.prefix(8))… — sender re-keyed, healing", category: "SessionInit")
+                Log.info("🩹 SESSION_STATE[heal_triggered]: msgNum=0, kemCiphertext=\(message.kemCiphertext.count)b from \(userId.prefix(8))… — sender re-keyed, healing", category: "SessionInit")
                 SessionHealingService.shared.enqueue(message, in: context)
                 pendingMessages[userId, default: []].append(message)
                 onSessionHealNeeded?(userId, message)
+            } else if message.messageNumber == 0 {
+                // messageNumber == 0 but empty kemCiphertext → DR reply (not X3DH init).
+                // Cannot heal via initReceivingSession; request explicit re-key from sender.
+                Log.info("🔄 SESSION_STATE[heal_impossible_dr_reply]: msgNum=0, kemCiphertext empty — DR reply cannot be healed, sending END_SESSION", category: "SessionInit")
+                onReceiptNeeded?([message.id], userId, .failed)
+                pendingMessages.removeValue(forKey: userId)
+                SessionHealingService.shared.clearQueue(for: userId, in: context)
+                onEndSessionNeeded?(userId)
             } else {
                 // messageNumber > 0 → DR ratchet diverged, healing is impossible.
                 // Send FAILED receipt: server automatically relays SESSION_RESET to sender (server-side item 12).
