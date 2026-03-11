@@ -504,6 +504,31 @@ class CryptoManager {
         Log.info("✅ Removed session from Keychain: \(userId)", category: "CryptoManager")
     }
     
+    /// Restore the most recently archived session as the active session.
+    /// Used for tie-breaking when we are the INITIATOR in a dual-INITIATOR clash:
+    /// after a failed decrypt the INITIATOR session was just moved to archives —
+    /// this undoes that and makes it active again so we keep the INITIATOR role.
+    @discardableResult
+    func restoreLatestArchive(for userId: String) -> Bool {
+        guard let core = core,
+              let archives = archiveManager.loadArchives(for: userId),
+              !archives.isEmpty else { return false }
+        let idx = archives.count - 1
+        let latest = archives[idx]
+        do {
+            _ = try core.importSessionJson(contactId: userId, sessionJson: latest.sessionJson)
+            let suiteId = sessionStore.getSuiteId(for: userId) ?? 0
+            sessionStore.setSession(userId: userId, sessionId: userId, suiteId: suiteId)
+            saveSessionToKeychain(for: userId)
+            archiveManager.restoreArchiveToCurrent(for: userId, index: idx)
+            Log.info("♻️ Restored INITIATOR session from archive for \(userId.prefix(8))… (tie-break)", category: "CryptoManager")
+            return true
+        } catch {
+            Log.error("❌ restoreLatestArchive failed for \(userId.prefix(8))…: \(error)", category: "CryptoManager")
+            return false
+        }
+    }
+
     /// Delete a session (legacy - use archiveSession instead)
     @available(*, deprecated, message: "Use archiveSession() instead for better error recovery")
     func deleteSession(for userId: String) {
