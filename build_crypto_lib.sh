@@ -39,18 +39,21 @@ CARGO_FLAGS="--release"
 BUILD_IOS=true
 BUILD_CAT=true
 BUILD_MAC=false
+BUILD_SIM=false
 DO_CLEAN=false
 
 for arg in "$@"; do
   case "$arg" in
-    --ios)   BUILD_CAT=false; BUILD_MAC=false ;;
-    --cat)   BUILD_IOS=false; BUILD_MAC=false ;;
-    --mac)   BUILD_IOS=false; BUILD_CAT=false; BUILD_MAC=true ;;
+    --ios)   BUILD_CAT=false; BUILD_MAC=false; BUILD_SIM=false ;;
+    --cat)   BUILD_IOS=false; BUILD_MAC=false; BUILD_SIM=false ;;
+    --mac)   BUILD_IOS=false; BUILD_CAT=false; BUILD_MAC=true; BUILD_SIM=false ;;
+    --sim)   BUILD_IOS=false; BUILD_CAT=false; BUILD_MAC=false; BUILD_SIM=true ;;
     --clean) DO_CLEAN=true ;;
     --debug) BUILD_DIR="debug"; CARGO_FLAGS="" ;;
     -h|--help)
-      echo "Использование: $0 [--ios] [--cat] [--mac] [--clean] [--debug]"
+      echo "Использование: $0 [--ios] [--cat] [--mac] [--sim] [--clean] [--debug]"
       echo "  --mac  Нативный macOS (aarch64-apple-darwin) → libconstruct_core_mac.a"
+      echo "  --sim  iOS Симулятор (aarch64-apple-ios-sim) → target/aarch64-apple-ios-sim/libconstruct_core.a"
       exit 0 ;;
     *) warn "Неизвестный аргумент: $arg" ;;
   esac
@@ -119,13 +122,20 @@ fi
 $BUILD_IOS && build_target "aarch64-apple-ios"
 $BUILD_CAT && build_target "aarch64-apple-ios-macabi"
 $BUILD_MAC && build_target "aarch64-apple-darwin"
+$BUILD_SIM && build_target "aarch64-apple-ios-sim"
 
 # ── Мёрдж + копирование ───────────────────────────────────────────────────────
 hdr "Мёрдж ICE и копирование"
 
+SIM_OUT="$PROJECT_ROOT/target/aarch64-apple-ios-sim/release"
+
 $BUILD_IOS && merge_ice "aarch64-apple-ios"        "$PROJECT_ROOT/libconstruct_core.a"
 $BUILD_CAT && merge_ice "aarch64-apple-ios-macabi"  "$PROJECT_ROOT/libconstruct_core_catalyst.a"
 $BUILD_MAC && merge_ice "aarch64-apple-darwin"      "$PROJECT_ROOT/libconstruct_core_mac.a"
+if $BUILD_SIM; then
+  mkdir -p "$SIM_OUT"
+  merge_ice "aarch64-apple-ios-sim" "$SIM_OUT/libconstruct_core.a"
+fi
 
 # ── Верификация пролога ───────────────────────────────────────────────────────
 hdr "Верификация"
@@ -143,6 +153,7 @@ check_prologue() {
 $BUILD_IOS && check_prologue "$PROJECT_ROOT/libconstruct_core.a"          "iOS"
 $BUILD_CAT && check_prologue "$PROJECT_ROOT/libconstruct_core_catalyst.a" "Catalyst"
 $BUILD_MAC && check_prologue "$PROJECT_ROOT/libconstruct_core_mac.a"      "macOS"
+$BUILD_SIM && check_prologue "$SIM_OUT/libconstruct_core.a"               "Simulator"
 
 # ── Готово ────────────────────────────────────────────────────────────────────
 echo ""
