@@ -33,132 +33,110 @@ struct ContactQRCodeView: View {
     }
 
     var body: some View {
-        ZStack(alignment: .topTrailing) {
-            ScrollView {
-                VStack(spacing: 24) {
-                    // Space for the close button row
-                    Color.clear.frame(height: 44)
+        NavigationStack {
+            VStack(spacing: 24) {
 
-                    VStack(spacing: 24) {
-
-                    // QR Code
-                    if let payload = qrPayload, let qrImage = generateQRCode(from: payload) {
-                        Image(uiImage: qrImage)
-                            .interpolation(.none)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: QRCodeSize.standard(in: containerWidth), height: QRCodeSize.standard(in: containerWidth))
-                            .padding(QRCodeSize.padding)
-                            .background(Color.white)
-                            .cornerRadius(QRCodeSize.cornerRadius)
-                    } else if let error = generationError {
-                        Rectangle()
-                            .fill(Color.gray.opacity(0.2))
-                            .frame(width: QRCodeSize.standard(in: containerWidth), height: QRCodeSize.standard(in: containerWidth))
-                            .cornerRadius(QRCodeSize.cornerRadius)
-                            .overlay {
-                                VStack(spacing: 8) {
-                                    Image(systemName: "exclamationmark.triangle")
-                                        .font(.largeTitle)
-                                        .foregroundColor(.orange)
-                                    Text(error)
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                        .multilineTextAlignment(.center)
-                                        .padding(.horizontal)
-                                }
+                // QR Code
+                if let payload = qrPayload, let qrImage = generateQRCode(from: payload) {
+                    Image(uiImage: qrImage)
+                        .interpolation(.none)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: QRCodeSize.standard(in: containerWidth), height: QRCodeSize.standard(in: containerWidth))
+                        .padding(QRCodeSize.padding)
+                        .background(Color.white)  // QR needs white bg for camera readability
+                        .cornerRadius(QRCodeSize.cornerRadius)
+                        .shadow(color: .black.opacity(0.12), radius: 8, x: 0, y: 2)
+                } else if let error = generationError {
+                    Rectangle()
+                        .fill(Color.gray.opacity(0.2))
+                        .frame(width: QRCodeSize.standard(in: containerWidth), height: QRCodeSize.standard(in: containerWidth))
+                        .cornerRadius(QRCodeSize.cornerRadius)
+                        .overlay {
+                            VStack(spacing: 8) {
+                                Image(systemName: "exclamationmark.triangle")
+                                    .font(.largeTitle)
+                                    .foregroundColor(.orange)
+                                Text(error)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                    .multilineTextAlignment(.center)
+                                    .padding(.horizontal)
                             }
-                    } else {
-                        ProgressView()
-                            .frame(width: QRCodeSize.standard(in: containerWidth), height: QRCodeSize.standard(in: containerWidth))
-                    }
-
-                    VStack(spacing: 8) {
-                        if !username.isEmpty {
-                            Text("@\(username)")
-                                .font(.headline)
-                                .foregroundColor(.primary)
-                        } else {
-                            Text(DisplayNameGenerator.generate(from: userId))
-                                .font(.headline)
-                                .foregroundColor(.secondary)
                         }
+                } else {
+                    ProgressView()
+                        .frame(width: QRCodeSize.standard(in: containerWidth), height: QRCodeSize.standard(in: containerWidth))
+                }
 
-                        // Countdown timer
-                        if timeRemaining > 0 {
-                            HStack(spacing: 4) {
-                                Image(systemName: "clock")
-                                    .font(.caption)
-                                Text("Expires in \(formatTime(timeRemaining))")
-                                    .font(.caption)
-                            }
-                            .foregroundColor(timeRemaining < InviteConfig.qrWarningThresholdSeconds ? .orange : .secondary)
-                        } else {
-                            Text("Code expired")
+                VStack(spacing: 8) {
+                    // Countdown timer
+                    if timeRemaining > 0 {
+                        HStack(spacing: 4) {
+                            Image(systemName: "clock")
                                 .font(.caption)
-                                .foregroundColor(.red)
+                            Text("Expires in \(formatTime(timeRemaining))")
+                                .font(.caption)
                         }
-                        
-                        Text("show_this_code_to_someone_nearby")
+                        .foregroundColor(timeRemaining < InviteConfig.qrWarningThresholdSeconds ? .orange : .secondary)
+                    } else {
+                        Text("Code expired")
                             .font(.caption)
-                            .foregroundColor(.secondary)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal)
+                            .foregroundColor(.red)
                     }
-                    }
-                    .frame(maxWidth: .infinity)
 
-                    // Regenerate button if expired
-                    if timeRemaining <= 0 {
-                        Button {
-                            regenerateQRCode()
-                        } label: {
-                            Label("Generate New Code", systemImage: "arrow.clockwise")
-                                .padding()
-                                .frame(maxWidth: .infinity)
-                                .background(Color.accentColor)
-                                .foregroundColor(.white)
-                                .cornerRadius(12)
-                        }
-                        .padding(.horizontal, 32)
+                    Text("show_this_code_to_someone_nearby")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
+                }
+
+                // Regenerate button if expired
+                if timeRemaining <= 0 {
+                    Button {
+                        regenerateQRCode()
+                    } label: {
+                        Label("Generate New Code", systemImage: "arrow.clockwise")
+                            .padding()
+                            .frame(maxWidth: .infinity)
+                            .background(Color.accentColor)
+                            .foregroundColor(.white)
+                            .cornerRadius(12)
                     }
-                
-                // Hint text
+                    .padding(.horizontal, 32)
+                }
+
                 Text("scan_with_camera_or_screenshot")
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 32)
-                    .padding(.bottom, 32)
             }
-            .padding(.horizontal)
-            .scrollIndicators(.hidden)
-            } // ScrollView
-
-            // Close button — overlay, always visible at top right
-            Button {
-                dismiss()
-            } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 28))
-                    .symbolRenderingMode(.hierarchical)
-                    .foregroundStyle(.secondary)
-            }
-            .padding(16)
-            .buttonStyle(.plain)
-        }
-        .onAppear {
-                if let preview = previewPayload {
-                    qrPayload = preview
-                    generatedAt = Date()
-                } else {
-                    generateInitialQRCode()
+            .padding(.vertical, 24)
+            .frame(maxWidth: .infinity)
+            .navigationTitle(username.isEmpty ? DisplayNameGenerator.generate(from: userId) : "@\(username)")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("close") { dismiss() }
                 }
             }
-            .onReceive(timer) { _ in
-                updateTimeRemaining()
+        }
+        // Catalyst preferred sheet window size
+        .frame(idealWidth: 400, idealHeight: 520)
+        .onAppear {
+            if let preview = previewPayload {
+                qrPayload = preview
+                generatedAt = Date()
+            } else {
+                generateInitialQRCode()
             }
         }
+        .onReceive(timer) { _ in
+            updateTimeRemaining()
+        }
+    }
 
     // MARK: - QR Code Generation
     

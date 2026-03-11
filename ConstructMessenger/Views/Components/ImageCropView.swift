@@ -95,10 +95,10 @@ struct ImageCropView: View {
                     } label: {
                         Text("crop_use_photo")
                             .font(.headline)
-                            .foregroundColor(.black)
+                            .foregroundColor(Color(uiColor: .label))
                             .frame(maxWidth: .infinity)
                             .frame(height: 50)
-                            .background(Color.white)
+                            .background(Color(uiColor: .systemBackground))
                             .cornerRadius(12)
                     }
                 }

@@ -234,8 +234,6 @@ struct SettingsView: View {
                         userId: viewModel.userId,
                         username: viewModel.username
                     )
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
                 }
             }
         }

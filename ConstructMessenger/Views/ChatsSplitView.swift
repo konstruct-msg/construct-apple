@@ -40,8 +40,10 @@ struct ChatsSplitView: View {
             VStack(spacing: 0) {
                 sidebarChats
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                #if !targetEnvironment(macCatalyst)
                 Divider()
                 sidebarTabBar
+                #endif
             }
             .navigationTitle("chats")
             .toolbar {
@@ -55,6 +57,20 @@ struct ChatsSplitView: View {
                 ToolbarItem(placement: .principal) {
                     ConnectionStatusIndicator()
                 }
+                #if targetEnvironment(macCatalyst)
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button {
+                        if activeTab == .settings {
+                            activeTab = .chats
+                        } else {
+                            activeTab = .settings
+                            selectedChatId = nil
+                        }
+                    } label: {
+                        Image(systemName: activeTab == .settings ? "message" : "gear")
+                    }
+                }
+                #endif
             }
             .sheet(isPresented: $showingQRScanner) {
                 QRScannerView { contactURL in
