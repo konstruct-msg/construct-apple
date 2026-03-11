@@ -38,16 +38,19 @@ CARGO_FLAGS="--release"
 # ── Аргументы ────────────────────────────────────────────────────────────────
 BUILD_IOS=true
 BUILD_CAT=true
+BUILD_MAC=false
 DO_CLEAN=false
 
 for arg in "$@"; do
   case "$arg" in
-    --ios)   BUILD_CAT=false ;;
-    --cat)   BUILD_IOS=false ;;
+    --ios)   BUILD_CAT=false; BUILD_MAC=false ;;
+    --cat)   BUILD_IOS=false; BUILD_MAC=false ;;
+    --mac)   BUILD_IOS=false; BUILD_CAT=false; BUILD_MAC=true ;;
     --clean) DO_CLEAN=true ;;
     --debug) BUILD_DIR="debug"; CARGO_FLAGS="" ;;
     -h|--help)
-      echo "Использование: $0 [--ios] [--cat] [--clean] [--debug]"
+      echo "Использование: $0 [--ios] [--cat] [--mac] [--clean] [--debug]"
+      echo "  --mac  Нативный macOS (aarch64-apple-darwin) → libconstruct_core_mac.a"
       exit 0 ;;
     *) warn "Неизвестный аргумент: $arg" ;;
   esac
@@ -108,14 +111,21 @@ merge_ice() {
 # ── Сборка ────────────────────────────────────────────────────────────────────
 hdr "Сборка библиотек"
 
+if $BUILD_MAC; then
+  # macOS native uses "mac" feature instead of "ios"
+  FEATURES="mac,post-quantum"
+fi
+
 $BUILD_IOS && build_target "aarch64-apple-ios"
 $BUILD_CAT && build_target "aarch64-apple-ios-macabi"
+$BUILD_MAC && build_target "aarch64-apple-darwin"
 
 # ── Мёрдж + копирование ───────────────────────────────────────────────────────
 hdr "Мёрдж ICE и копирование"
 
 $BUILD_IOS && merge_ice "aarch64-apple-ios"        "$PROJECT_ROOT/libconstruct_core.a"
 $BUILD_CAT && merge_ice "aarch64-apple-ios-macabi"  "$PROJECT_ROOT/libconstruct_core_catalyst.a"
+$BUILD_MAC && merge_ice "aarch64-apple-darwin"      "$PROJECT_ROOT/libconstruct_core_mac.a"
 
 # ── Верификация пролога ───────────────────────────────────────────────────────
 hdr "Верификация"
@@ -132,6 +142,7 @@ check_prologue() {
 
 $BUILD_IOS && check_prologue "$PROJECT_ROOT/libconstruct_core.a"          "iOS"
 $BUILD_CAT && check_prologue "$PROJECT_ROOT/libconstruct_core_catalyst.a" "Catalyst"
+$BUILD_MAC && check_prologue "$PROJECT_ROOT/libconstruct_core_mac.a"      "macOS"
 
 # ── Готово ────────────────────────────────────────────────────────────────────
 echo ""
