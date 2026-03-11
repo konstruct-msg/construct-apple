@@ -7,9 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		BF7098BF2F01D3C400CC6F04 /* libconstruct_core.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BF7098BE2F01D3C400CC6F04 /* libconstruct_core.a */; platformFilter = ios; };
-		BF7098C02F01D3C400CC6F04 /* libconstruct_core.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BF7098BE2F01D3C400CC6F04 /* libconstruct_core.a */; platformFilter = ios; };
-		BF7098C12F01D3C400CC6F04 /* libconstruct_core_catalyst.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BF7098C32F01D3C400CC6F04 /* libconstruct_core_catalyst.a */; platformFilter = maccatalyst; };
+		BF7098D12F01D3C400CC6F04 /* ConstructCore.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = BF7098D02F01D3C400CC6F04 /* ConstructCore.xcframework */; };
+		BF7098D22F01D3C400CC6F04 /* ConstructCore.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = BF7098D02F01D3C400CC6F04 /* ConstructCore.xcframework */; };
 		BFF6FC9D2F4C3E1F00A31F36 /* GRPCCore in Frameworks */ = {isa = PBXBuildFile; productRef = BFF6FC9C2F4C3E1F00A31F36 /* GRPCCore */; };
 		BFF6FCF42F4C4CCA00A31F36 /* GRPCProtobuf in Frameworks */ = {isa = PBXBuildFile; productRef = BFF6FCF32F4C4CCA00A31F36 /* GRPCProtobuf */; };
 		BFF6FCF92F4C4D6600A31F36 /* GRPCNIOTransportHTTP2 in Frameworks */ = {isa = PBXBuildFile; productRef = BFF6FCF82F4C4D6600A31F36 /* GRPCNIOTransportHTTP2 */; };
@@ -28,8 +27,7 @@
 
 /* Begin PBXFileReference section */
 		BF103A6F2EED889800324CEA /* ConstructMessenger.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ConstructMessenger.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		BF7098BE2F01D3C400CC6F04 /* libconstruct_core.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = libconstruct_core.a; sourceTree = "<group>"; };
-		BF7098C32F01D3C400CC6F04 /* libconstruct_core_catalyst.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = libconstruct_core_catalyst.a; sourceTree = "<group>"; };
+		BF7098D02F01D3C400CC6F04 /* ConstructCore.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = ConstructCore.xcframework; sourceTree = "<group>"; };
 		BF8A96FA2EFF0FAF009C5EF7 /* ConstructMessengerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ConstructMessengerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -70,8 +68,7 @@
 				BFF6FC9D2F4C3E1F00A31F36 /* GRPCCore in Frameworks */,
 				BFF6FD002F4C4E5300A31F36 /* SwiftProtobuf in Frameworks */,
 				BFF6FCF92F4C4D6600A31F36 /* GRPCNIOTransportHTTP2 in Frameworks */,
-				BF7098BF2F01D3C400CC6F04 /* libconstruct_core.a in Frameworks */,
-				BF7098C12F01D3C400CC6F04 /* libconstruct_core_catalyst.a in Frameworks */,
+				BF7098D12F01D3C400CC6F04 /* ConstructCore.xcframework in Frameworks */,
 				BFF6FCF42F4C4CCA00A31F36 /* GRPCProtobuf in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -80,7 +77,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				BF7098C02F01D3C400CC6F04 /* libconstruct_core.a in Frameworks */,
+				BF7098D22F01D3C400CC6F04 /* ConstructCore.xcframework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -109,8 +106,7 @@
 		BF5F2DF92EF96B1C00BB01C5 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
-				BF7098BE2F01D3C400CC6F04 /* libconstruct_core.a */,
-				BF7098C32F01D3C400CC6F04 /* libconstruct_core_catalyst.a */,
+				BF7098D02F01D3C400CC6F04 /* ConstructCore.xcframework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -522,9 +518,6 @@
 					"$(PROJECT_DIR)/target/aarch64-apple-ios-sim/release",
 					"$(PROJECT_DIR)/target/aarch64-apple-ios-macabi/release",
 				);
-				"LIBRARY_SEARCH_PATHS[sdk=iphonesimulator*]" = (
-					"$(PROJECT_DIR)/target/aarch64-apple-ios-sim/release",
-				);
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				MARKETING_VERSION = 0.9.17;
 				PRODUCT_BUNDLE_IDENTIFIER = maximeliseyev.constructmessenger;
@@ -585,9 +578,6 @@
 					"$(PROJECT_DIR)/target/aarch64-apple-ios/release",
 					"$(PROJECT_DIR)/target/aarch64-apple-ios-sim/release",
 					"$(PROJECT_DIR)/target/aarch64-apple-ios-macabi/release",
-				);
-				"LIBRARY_SEARCH_PATHS[sdk=iphonesimulator*]" = (
-					"$(PROJECT_DIR)/target/aarch64-apple-ios-sim/release",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				MARKETING_VERSION = 0.9.17;
