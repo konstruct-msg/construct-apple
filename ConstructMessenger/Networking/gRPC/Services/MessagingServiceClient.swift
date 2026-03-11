@@ -140,9 +140,12 @@ final class MessagingServiceClient: Sendable {
 
             var failed: [FailedMessage] = []
             let chatMessages = response.messages.compactMap { msg -> ChatMessage? in
-                // END_SESSION: dummy payload (Data(count:16)) — route as control message directly
-                if msg.contentType == .sessionReset {
-                    Log.debug("🛑 END_SESSION pending message from \(msg.senderID.prefix(8))… id=\(msg.messageID.prefix(8))…", category: "MessagingServiceClient")
+                // END_SESSION: detect by contentType OR sentinel payload size (server may strip contentType).
+                let isEndSession = msg.contentType == .sessionReset ||
+                    (!msg.encryptedPayload.isEmpty && msg.encryptedPayload.count < WirePayloadCoder.headerSize)
+                if isEndSession {
+                    let detected = msg.contentType == .sessionReset ? "contentType" : "sentinel payload (\(msg.encryptedPayload.count)b)"
+                    Log.debug("🛑 END_SESSION pending from \(msg.senderID.prefix(8))… id=\(msg.messageID.prefix(8))… via \(detected)", category: "MessagingServiceClient")
                     return ChatMessage(
                         id: msg.messageID,
                         from: msg.senderID,

@@ -446,9 +446,15 @@ final class MessageStreamManager {
                 Log.info("🔑 KEY_SYNC envelope from \(envelope.sender.userID.prefix(8))…", category: "MessageStream")
                 return .keySyncRequest(envelope.sender.userID)
             }
-            // END_SESSION: dummy payload (Data(count:16)) — route as control message directly
-            if envelope.contentType == .sessionReset {
-                Log.info("🛑 END_SESSION envelope from \(envelope.sender.userID.prefix(8))… id=\(envelope.messageID.prefix(8))…", category: "MessageStream")
+            // END_SESSION: detect by contentType OR by payload size.
+            // Servers may strip contentType when relaying — fall back to payload size:
+            // real WirePayload is always ≥ WirePayloadCoder.headerSize (46) bytes;
+            // END_SESSION uses Data(count:16), so any non-empty payload < 46 bytes is a control sentinel.
+            let isEndSession = envelope.contentType == .sessionReset ||
+                (!envelope.encryptedPayload.isEmpty && envelope.encryptedPayload.count < WirePayloadCoder.headerSize)
+            if isEndSession {
+                let detected = envelope.contentType == .sessionReset ? "contentType" : "sentinel payload (\(envelope.encryptedPayload.count)b)"
+                Log.info("🛑 END_SESSION from \(envelope.sender.userID.prefix(8))… id=\(envelope.messageID.prefix(8))… detected via \(detected)", category: "MessageStream")
                 return .message(ChatMessage(
                     id: envelope.messageID,
                     from: envelope.sender.userID,
