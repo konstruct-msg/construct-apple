@@ -257,7 +257,19 @@ final class IceProxyManager: ObservableObject {
     }
 
     func loadStoredRelay() -> IceRelay? {
-        guard let data = UserDefaults.standard.data(forKey: relayKey) else { return nil }
-        return try? JSONDecoder().decode(IceRelay.self, from: data)
+        guard let data = UserDefaults.standard.data(forKey: relayKey),
+              let relay = try? JSONDecoder().decode(IceRelay.self, from: data) else { return nil }
+        // Migrate old relay format (pre-TLS mode): address was host:9443, no tlsServerName.
+        // Upgrade transparently to TLS mode: ice.<host>:443 with SNI set.
+        if relay.tlsServerName == nil || relay.address.hasSuffix(":9443") {
+            let host = GRPCChannelManager.shared.currentHost
+            let iceHost = "ice.\(host)"
+            let upgraded = IceRelay(address: "\(iceHost):443", bridgeCert: relay.bridgeCert,
+                                    iatMode: relay.iatMode, tlsServerName: iceHost)
+            saveRelay(upgraded)
+            Log.info("🧊 Migrated stored relay to TLS mode: \(upgraded.address)", category: "ICE")
+            return upgraded
+        }
+        return relay
     }
 }
