@@ -17,6 +17,8 @@ class ChatsViewModel {
 
     // 🔑 OTPK replenishment: check server count once per app session on stream connect
     private var hasPerformedStartupOtpkCheck = false
+    // 🔥 Session prewarm: init sessions with lower-UUID contacts once per app launch
+    private var hasPerformedSessionPrewarm = false
 
     // ✅ Chat ID to open programmatically (e.g., from deep link)
     var chatToOpen: String?
@@ -234,6 +236,13 @@ class ChatsViewModel {
                 // Check if SPK rotation is due (runs monthly; no-op otherwise)
                 await PreKeyRotationService.shared.rotateIfNeeded(deviceId: deviceId)
             }
+        }
+
+        // Pre-warm sessions for contacts where we're the natural INITIATOR (lower UUID).
+        // Runs once per launch so first messages are instant without "Initializing..." wait.
+        if !hasPerformedSessionPrewarm {
+            hasPerformedSessionPrewarm = true
+            sessionCoordinator.prewarmSessions(for: currentContactIds())
         }
     }
 

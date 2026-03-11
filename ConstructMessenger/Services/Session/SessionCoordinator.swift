@@ -101,6 +101,31 @@ final class SessionCoordinator {
     }
 
     /// Broadcast END_SESSION to all peers that have an active session (e.g., on logout).
+    /// Pre-warm sessions for contacts where we are the natural INITIATOR (lower userId).
+    /// Called once per app launch after stream connects. Ensures first messages are instant.
+    func prewarmSessions(for contactIds: [String]) {
+        let myId = SessionManager.shared.currentUserId ?? ""
+        guard !myId.isEmpty else { return }
+
+        let toPrewarm = contactIds.filter {
+            myId < $0 && !CryptoManager.shared.hasSession(for: $0)
+        }
+        guard !toPrewarm.isEmpty else { return }
+
+        Log.info("🔥 Session prewarm: \(toPrewarm.count) contact(s) need sessions", category: "SessionInit")
+        Task {
+            for contactId in toPrewarm {
+                guard !CryptoManager.shared.hasSession(for: contactId),
+                      !usersInitializingSession.contains(contactId) else { continue }
+                await sessionInitService.initializeSessionProactively(
+                    userId: contactId,
+                    onSuccess: { Log.info("🔥 Prewarm ✅ \(contactId.prefix(8))…", category: "SessionInit") },
+                    onFailure: { err in Log.info("🔥 Prewarm ❌ \(contactId.prefix(8))…: \(err.localizedDescription)", category: "SessionInit") }
+                )
+            }
+        }
+    }
+
     func sendEndSessionToAllContacts(reason: String = "logout") async {
         Log.info("🔄 Sending END_SESSION to all contacts: \(reason)", category: "ChatsViewModel")
         let sessionUserIds = CryptoManager.shared.getAllSessionUserIds()
