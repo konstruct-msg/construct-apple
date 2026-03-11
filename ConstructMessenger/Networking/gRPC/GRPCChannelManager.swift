@@ -49,9 +49,15 @@ final class GRPCChannelManager: Sendable {
     }
 
     /// Record that the ICE relay just failed. Subsequent calls will bypass ICE for `iceCooldown` seconds.
+    /// Also triggers a background cert refresh in case the cert is stale after server key rotation.
     func recordICEFailure() {
         UserDefaults.standard.set(Date().timeIntervalSinceReferenceDate, forKey: Self.iceFailedAtKey)
-        Log.warning("⚠️ ICE relay failure recorded — bypassing ICE for \(Int(Self.iceCooldown))s", category: "gRPC")
+        Log.info("⚠️ ICE relay failure recorded — bypassing ICE for \(Int(Self.iceCooldown))s", category: "gRPC")
+        // Attempt background cert refresh — if cert changed on server, proxy will auto-restart
+        // after fetching the new cert from .well-known and clearing the Keychain cache.
+        Task { @MainActor in
+            await IceProxyManager.shared.refreshCertAndRestart()
+        }
     }
 
     /// True if the ICE relay failed recently and we should fall back to direct TLS.

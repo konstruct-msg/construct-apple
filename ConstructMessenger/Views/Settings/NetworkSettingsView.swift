@@ -105,7 +105,7 @@ struct NetworkSettingsView: View {
                         iceEnabled = newValue
                         iceManager.isEnabled = newValue
                         if newValue {
-                            iceManager.startIfEnabled()
+                            Task { await iceManager.startIfEnabled() }
                         } else {
                             iceManager.stop()
                         }

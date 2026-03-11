@@ -110,12 +110,49 @@ final class IceProxyManager: ObservableObject {
         !bridgeCert().isEmpty
     }
 
-    /// Returns the bridge cert to use: Keychain value if present, hardcoded fallback otherwise.
+    /// Sync cert read: Keychain → hardcoded. Use when async context unavailable.
     func bridgeCert() -> String {
         if let stored = KeychainManager.shared.loadIceBridgeCert(), !stored.isEmpty {
             return stored
         }
         return ICEConfig.hardcodedBridgeCert
+    }
+
+    /// Full async cert chain (levels 2–4 — level 1 is AuthTokensResponse, handled at login):
+    ///   2. Keychain cache
+    ///   3. https://konstruct.cc/.well-known/ice-cert  (Cloudflare CDN, reachable in Russia)
+    ///   4. Hardcoded fallback in binary
+    func getIceBridgeCert() async -> String {
+        if let cached = KeychainManager.shared.loadIceBridgeCert(), !cached.isEmpty {
+            return cached
+        }
+        if let fetched = await IceCertFetcher.shared.fetchFromHTTPS() {
+            KeychainManager.shared.saveIceBridgeCert(fetched)
+            return fetched
+        }
+        Log.info("🧊 Using hardcoded ICE bridge cert (last resort)", category: "ICE")
+        return ICEConfig.hardcodedBridgeCert
+    }
+
+    /// Called when ICE handshake fails repeatedly (stale cert after server key rotation).
+    /// Clears Keychain cache, fetches fresh cert via .well-known, restarts proxy.
+    /// Returns true if a new cert was obtained and proxy was restarted.
+    @discardableResult
+    func refreshCertAndRestart() async -> Bool {
+        Log.info("🧊 ICE cert stale — clearing cache and re-fetching via .well-known", category: "ICE")
+        KeychainManager.shared.deleteIceBridgeCert()
+        guard let freshCert = await IceCertFetcher.shared.fetchFromHTTPS() else {
+            Log.error("🧊 Failed to fetch fresh ICE cert — proxy not restarted", category: "ICE")
+            return false
+        }
+        KeychainManager.shared.saveIceBridgeCert(freshCert)
+        let host = GRPCChannelManager.shared.currentHost
+        let iceHost = "ice.\(host)"
+        let relay = IceRelay(address: "\(iceHost):443", bridgeCert: freshCert, iatMode: .none, tlsServerName: iceHost)
+        saveRelay(relay)
+        if isEnabled { start(relay: relay) }
+        Log.info("🧊 ICE proxy restarted with fresh cert", category: "ICE")
+        return true
     }
 
     // MARK: - Start / Stop
@@ -171,18 +208,17 @@ final class IceProxyManager: ObservableObject {
     }
 
     /// Start with the stored relay (called at app launch if `isEnabled`).
-    /// Falls back to building a relay from the Keychain cert if no relay is stored yet.
-    func startIfEnabled() {
+    /// Falls back to building a relay from getIceBridgeCert() (Keychain → .well-known → hardcoded).
+    func startIfEnabled() async {
         guard isEnabled else { return }
         if let relay = loadStoredRelay() {
             start(relay: relay)
         } else {
-            // No stored relay config yet — build one from Keychain cert (or hardcoded fallback)
-            let cert = bridgeCert()
-            guard !cert.isEmpty else { return }
+            let cert = await getIceBridgeCert()
             let host = GRPCChannelManager.shared.currentHost
             let iceHost = "ice.\(host)"
             let relay = IceRelay(address: "\(iceHost):443", bridgeCert: cert, iatMode: .none, tlsServerName: iceHost)
+            saveRelay(relay)
             start(relay: relay)
         }
     }
