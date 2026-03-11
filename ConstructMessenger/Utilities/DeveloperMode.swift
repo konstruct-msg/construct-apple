@@ -73,15 +73,16 @@ class DeveloperMode {
         
         print("🔧 Developer Mode toggled: \(isEnabled ? "ENABLED ✅" : "DISABLED ❌")")
         
-        // Haptic feedback
+        // Haptic feedback (iOS only)
+        #if canImport(UIKit)
         let generator = UINotificationFeedbackGenerator()
         if isEnabled {
             generator.notificationOccurred(.success)
-            print("✅ Developer Mode ENABLED - Debug Logs now available!")
         } else {
             generator.notificationOccurred(.warning)
             print("❌ Developer Mode DISABLED")
         }
+        #endif
     }
     
     /// Force disable (for security)

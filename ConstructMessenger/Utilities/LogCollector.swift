@@ -7,7 +7,6 @@
 //
 
 import Foundation
-import UIKit
 
 /// Collects logs to a rotating file buffer for debugging
 class LogCollector {
@@ -110,8 +109,8 @@ class LogCollector {
         ========================================
         App Version: \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown")
         Build: \(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "Unknown")
-        Device: \(UIDevice.current.model)
-        iOS Version: \(UIDevice.current.systemVersion)
+        Device: \(DeviceInfo.deviceModel)
+        iOS Version: \(DeviceInfo.systemVersion)
         Started: \(Date())
         ========================================
         
@@ -158,9 +157,9 @@ class LogCollector {
         Exported: \(Date())
         App Version: \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown")
         Build: \(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "Unknown")
-        Device: \(UIDevice.current.model)
-        iOS Version: \(UIDevice.current.systemVersion)
-        Identifier: \(UIDevice.current.identifierForVendor?.uuidString ?? "Unknown")
+        Device: \(DeviceInfo.deviceModel)
+        iOS Version: \(DeviceInfo.systemVersion)
+        Identifier: \(DeviceInfo.identifierForVendor ?? "Unknown")
         ========================================
         
         

@@ -9,7 +9,6 @@
 //
 
 import Foundation
-import UIKit
 import Observation
 
 @MainActor
@@ -214,7 +213,7 @@ final class AccountRecoveryViewModel {
                 challenge: challenge,
                 recoverySignature: Data(sigBytes),
                 deviceId: deviceId,
-                deviceName: UIDevice.current.name,
+                deviceName: DeviceInfo.deviceName,
                 publicKeys: publicKeys
             )
 

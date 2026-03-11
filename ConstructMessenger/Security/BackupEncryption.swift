@@ -7,7 +7,6 @@
 //
 
 import Foundation
-import UIKit
 import CryptoKit
 import CommonCrypto
 
@@ -212,7 +211,7 @@ struct BackupMetadata: Codable {
 
     static var current: BackupMetadata {
         return BackupMetadata(
-            deviceModel: UIDevice.current.model,
+            deviceModel: DeviceInfo.deviceModel,
             appVersion: AppConstants.appVersion,
             messageCount: nil,
             backupSizeBytes: nil

@@ -150,7 +150,7 @@ class ChatsViewModel {
     private func setupAppLifecycleObservers() {
         // Pause stream when app goes to background
         let resignTask = Task { [weak self] in
-            for await _ in NotificationCenter.default.notifications(named: UIApplication.willResignActiveNotification) {
+            for await _ in NotificationCenter.default.notifications(named: .appWillResignActive) {
                 Log.info("📱 App going to background - pausing messaging", category: "ChatsViewModel")
                 self?.streamManager.pause()
             }
@@ -159,7 +159,7 @@ class ChatsViewModel {
         
         // Force reconnect when app becomes active
         let activeTask = Task { [weak self] in
-            for await _ in NotificationCenter.default.notifications(named: UIApplication.didBecomeActiveNotification) {
+            for await _ in NotificationCenter.default.notifications(named: .appDidBecomeActive) {
                 Log.info("📱 App became active — force reconnecting stream", category: "ChatsViewModel")
                 self?.forceReconnectStream()
             }
