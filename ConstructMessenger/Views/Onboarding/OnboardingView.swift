@@ -21,30 +21,23 @@ struct OnboardingView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 32) {
-                Spacer()
-                
                 // Logo/Branding
                 VStack(spacing: 12) {
                     Image("KonstructLogo")
                         .resizable()
                         .aspectRatio(contentMode: .fit)
                         .frame(width: 130, height: 130)
-                        .padding(.bottom, 40)
                     
                     Image("MainTitle")
-                        .padding(.bottom, 40)
-                                        
-//                    Text("constrcut_title")
-//                        .font(.largeTitle)
-//                        .fontWeight(.bold)
-//                        .tracking(9)
+                        .padding(.top, 16)
                     
                     Text("onboarding_tagline")
                         .font(.subheadline)
                         .padding(.vertical, 8)
-                    
                 }
-                .padding(.bottom, 80)
+                .padding(.top, 24)
+                
+                Spacer()
                 
                 // Username input (optional)
                 VStack(alignment: .leading, spacing: 8) {
