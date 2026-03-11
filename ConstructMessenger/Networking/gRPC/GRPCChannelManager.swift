@@ -89,7 +89,19 @@ final class GRPCChannelManager: Sendable {
             Log.info("🧊 gRPC via ICE proxy → 127.0.0.1:\(icePort) (obfs4 → relay)", category: "gRPC")
             let transport = try HTTP2ClientTransport.Posix(
                 target: .ipv4(address: "127.0.0.1", port: Int(icePort)),
-                transportSecurity: .plaintext
+                transportSecurity: .plaintext,
+                config: .defaults {
+                    // Keepalive is essential on cellular: carrier NAT drops idle TCP connections
+                    // after ~30-60s. Without keepalive pings the tunnel dies silently.
+                    $0.connection = .init(
+                        maxIdleTime: .seconds(300),
+                        keepalive: .init(
+                            time: .seconds(25),
+                            timeout: .seconds(10),
+                            allowWithoutCalls: true
+                        )
+                    )
+                }
             )
             return GRPCClient(transport: transport, interceptors: [AuthInterceptor()])
         }

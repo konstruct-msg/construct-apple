@@ -505,14 +505,8 @@ class MessageRouter {
         CryptoManager.shared.archiveSession(for: userId, reason: .endSessionReceived)
         Log.debug("✅ Session archived for \(userId)", category: "MessageRouter")
         
-        // 2. Add system message to chat
-        addSystemMessage(
-            "Encrypted session was reset. Send a message to re-establish encryption.",
-            toUserId: userId,
-            in: context
-        )
-        
-        // 3. Remove any pending messages and healing queue for this user
+        // 2. Remove any pending messages and healing queue for this user
+        // Note: no system message — session self-heals automatically via tie-breaking
         pendingMessages.removeValue(forKey: userId)
         SessionHealingService.shared.clearQueue(for: userId, in: context)
         
