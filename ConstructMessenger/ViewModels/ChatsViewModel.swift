@@ -287,6 +287,9 @@ class ChatsViewModel {
         let chat = chatManagementService.startChat(with: user)
         // New contact added — resubscribe stream so server pushes messages from this contact.
         forceReconnectStream()
+        // Prewarm session immediately: if we're the natural INITIATOR (lower UUID),
+        // kick off X3DH init now so the first message is instant.
+        sessionCoordinator.prewarmSessions(for: [user.id])
         return chat
     }
 
