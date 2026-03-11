@@ -149,9 +149,9 @@ struct ValidationRules {
 // MARK: - Message Size Limits
 struct MessageSizeLimits {
     // Text Message Limits
-    // Note: These are for encrypted content, actual plaintext will be smaller due to encryption overhead
-    static let maxTextMessageBytes: Int = 64 * 1024  // 64 KB (encrypted)
-    static let maxPlaintextMessageBytes: Int = 50 * 1024 * 1024  // 50 MB (plaintext, conservative estimate)
+    static let maxTextCharacters: Int = 4_096          // UI hard limit (matches Telegram; ≈4–8 KB UTF-8)
+    static let maxTextMessageBytes: Int = 64 * 1024    // 64 KB encrypted wire limit
+    static let maxPlaintextMessageBytes: Int = 16 * 1024  // 16 KB plaintext (4096 chars × ~4 bytes)
 
     // File Attachment Limits
     static let maxFileAttachmentBytes: Int64 = 500 * 1024 * 1024  // 500 MB

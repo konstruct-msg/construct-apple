@@ -45,7 +45,13 @@ struct MessageValidator {
             throw MessageValidationError.emptyMessage
         }
 
-        // Check size (using UTF-8 byte count for accurate size)
+        // Check size: limit by character count (UI) and byte count (wire)
+        guard text.count <= MessageSizeLimits.maxTextCharacters else {
+            throw MessageValidationError.textTooLarge(
+                currentSize: text.count,
+                maxSize: MessageSizeLimits.maxTextCharacters
+            )
+        }
         let textBytes = text.utf8.count
         guard textBytes <= MessageSizeLimits.maxPlaintextMessageBytes else {
             throw MessageValidationError.textTooLarge(

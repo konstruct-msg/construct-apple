@@ -184,6 +184,11 @@ struct MessageInputView: View {
                         .focused($isTextFieldFocused)
 #endif
 
+                    if showCharCounter {
+                        charCounterView
+                            .transition(.opacity)
+                    }
+
                     if canSend {
                         Button {
                             sendMessage()
@@ -252,8 +257,21 @@ struct MessageInputView: View {
 
     private var canSend: Bool {
         !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && text.count <= MessageSizeLimits.maxTextCharacters
             || !selectedImages.isEmpty
             || !selectedFileURLs.isEmpty
+    }
+
+    private var isOverLimit: Bool { text.count > MessageSizeLimits.maxTextCharacters }
+
+    private var showCharCounter: Bool { text.count > MessageSizeLimits.maxTextCharacters - 200 }
+
+    private var charCounterView: some View {
+        let remaining = MessageSizeLimits.maxTextCharacters - text.count
+        return Text(remaining >= 0 ? "\(remaining)" : "\(-remaining) over limit")
+            .font(.caption2)
+            .foregroundColor(isOverLimit ? .red : .secondary)
+            .padding(.trailing, 4)
     }
 
     // MARK: - Photo Preview
