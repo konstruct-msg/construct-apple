@@ -201,8 +201,8 @@ final class IceProxyManager: ObservableObject {
         // without device unlock (kSecAttrAccessibleAfterFirstUnlock)
         KeychainManager.shared.saveIceBridgeCert(cert)
         let host = GRPCChannelManager.shared.currentHost
-        // TLS mode: Traefik routes `ice.<host>:443` → gateway:9443 via SNI passthrough.
-        // Gateway terminates TLS, then hands the stream to the obfs4 listener.
+        // TLS mode: Traefik terminates TLS for SNI `ice.<host>:443`, routes
+        // plaintext TCP to gateway:9443. Gateway runs obfs4 on the plaintext stream.
         let iceHost = "ice.\(host)"
         let relay = IceRelay(
             address: "\(iceHost):443",
