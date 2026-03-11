@@ -287,6 +287,9 @@ class ChatsViewModel {
         let chat = chatManagementService.startChat(with: user)
         // New contact added — resubscribe stream so server pushes messages from this contact.
         forceReconnectStream()
+        // Clear any stale session archives from a previous conversation with this user
+        // (happens when contact is deleted and re-added via QR). Fresh start.
+        CryptoManager.shared.clearArchivedSessions(for: user.id)
         // Prewarm session immediately: if we're the natural INITIATOR (lower UUID),
         // kick off X3DH init now so the first message is instant.
         sessionCoordinator.prewarmSessions(for: [user.id])
