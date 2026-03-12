@@ -197,6 +197,21 @@ final class SessionCoordinator {
                 await self.handleSessionHealNeeded(userId: userId, failedMessage: failedMessage)
             }
         }
+
+        // When we receive END_SESSION from a peer, prewarm if we are the natural INITIATOR
+        // (lower userId). This ensures the session re-establishes without user action,
+        // and prevents the RESPONDER from incorrectly acting as INITIATOR with stale OTPKs.
+        messageRouter.onEndSessionReceived = { [weak self] userId in
+            guard let self else { return }
+            let myId = SessionManager.shared.currentUserId ?? ""
+            guard !myId.isEmpty, myId < userId else { return }
+            Log.info("🔥 END_SESSION received — re-prewarming as natural INITIATOR for \(userId.prefix(8))…", category: "SessionInit")
+            Task {
+                // Brief delay so END_SESSION processing (archive, queue clear) finishes first.
+                try? await Task.sleep(nanoseconds: 300_000_000) // 300 ms
+                self.prewarmSessions(for: [userId])
+            }
+        }
     }
 
     // MARK: - RECEIVER session init

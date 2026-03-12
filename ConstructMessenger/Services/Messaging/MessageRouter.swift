@@ -38,6 +38,10 @@ class MessageRouter {
     /// Caller should send END_SESSION to that userId so the sender restarts from messageNumber=0.
     var onEndSessionNeeded: ((String) -> Void)?
 
+    /// Called when an END_SESSION *from* a peer has been processed (session cleared).
+    /// Receiver should re-initiate if it is the natural INITIATOR (lower userId).
+    var onEndSessionReceived: ((String) -> Void)?
+
     /// Called when an existing session failed to decrypt a `messageNumber==0` message.
     /// The remote peer re-keyed — caller should archive the current session and
     /// attempt `initReceivingSession` with the supplied message as the new X3DH init.
@@ -509,7 +513,10 @@ class MessageRouter {
         // Note: no system message — session self-heals automatically via tie-breaking
         pendingMessages.removeValue(forKey: userId)
         SessionHealingService.shared.clearQueue(for: userId, in: context)
-        
+
+        // 3. Notify coordinator so natural initiator can prewarm immediately.
+        onEndSessionReceived?(userId)
+
         Log.info("✅ END_SESSION handled for \(userId)", category: "MessageRouter")
     }
     
