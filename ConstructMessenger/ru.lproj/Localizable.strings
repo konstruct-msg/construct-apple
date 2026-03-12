@@ -454,7 +454,7 @@
 "mark_read" = "Отметить как прочитанное";
 
 // ICE — маскировка трафика
-"ice_section_header" = "Intrusion Countermeasures Electronics";
+"ice_section_header" = "Противодействие блокировкам";
 "ice_title" = "ICE";
 "ice_subtitle" = "Обфусцированное соединение";
 "ice_footer" = "ICE маскирует трафик мессенджера, делая его неотличимым от обычного HTTPS. Конфигурация предоставляется сервером автоматически.";

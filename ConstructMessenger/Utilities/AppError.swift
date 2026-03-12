@@ -8,6 +8,7 @@
 //
 
 import Foundation
+import GRPCCore
 
 // MARK: - AppError
 
@@ -181,6 +182,15 @@ extension AppError {
                  .invalidCiphertext:           return .decryptionFailed
             case .encryptionFailed,
                  .invalidKeyData:              return .keyOperationFailed(e.localizedDescription)
+            }
+        case let e as RPCError:
+            switch e.code {
+            case .unauthenticated:             return .sessionExpired
+            case .unavailable, .deadlineExceeded:
+                                               return .network(.connectionFailed)
+            default:
+                let msg = e.message.isEmpty ? "Server error (code \(e.code.rawValue))" : e.message
+                return .unknown(msg)
             }
         default:
             let msg = error.localizedDescription

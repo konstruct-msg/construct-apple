@@ -158,26 +158,12 @@ class ProfileShareViewModel {
                     }
                     return
                 }
-            } catch let error as CryptoManagerError {
-                Log.error("❌ Failed to share profile (CryptoManagerError): \(error)", category: "ProfileShare")
-                let errorMessage: String
-                switch error {
-                case .sessionNotFound:
-                    errorMessage = "Secure session not found. Please send a message first."
-                case .encryptionFailed:
-                    errorMessage = "Encryption failed. The session may be corrupted. Please try sending a message first."
-                case .coreNotInitialized:
-                    errorMessage = "Crypto core not initialized. Please restart the app."
-                default:
-                    errorMessage = error.localizedDescription
-                }
-                await MainActor.run {
-                    completion(false, errorMessage)
-                }
             } catch {
-                Log.error("❌ Failed to share profile (unexpected error): \(error)", category: "ProfileShare")
+                Log.error("❌ Failed to share profile: \(error)", category: "ProfileShare")
+                let appError = AppError.from(error)
                 await MainActor.run {
-                    completion(false, error.localizedDescription)
+                    ErrorRouter.shared.report(appError)
+                    completion(false, appError.errorDescription)
                 }
             }
         }

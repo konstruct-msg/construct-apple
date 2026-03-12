@@ -30,8 +30,6 @@ struct ChatsSplitView: View {
     @State private var showingQRScanner = false
     @State private var activeTab: SidebarTab = .chats
     @State private var showingDrafts = false
-    @State private var showingError = false
-    @State private var errorMessage = ""
 
     private enum SidebarTab { case chats, settings }
 
@@ -79,11 +77,6 @@ struct ChatsSplitView: View {
             }
             .sheet(isPresented: $showingDrafts) {
                 DraftsView()
-            }
-            .alert("error", isPresented: $showingError) {
-                Button("ok") {}
-            } message: {
-                Text(errorMessage)
             }
         } detail: {
             detailContent
@@ -266,9 +259,8 @@ struct ChatsSplitView: View {
     }
 
     private func showErrorAfterDismiss(_ message: String) {
-        errorMessage = message
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-            showingError = true
+            ErrorRouter.shared.report(.unknown(message))
         }
     }
 }

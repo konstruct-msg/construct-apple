@@ -17,8 +17,6 @@ struct ChatsListView: View {
     @Environment(ChatsViewModel.self) private var chatsViewModel
     @State private var showingQRScanner = false
     @State private var navigationPath = NavigationPath()
-    @State private var showingError = false
-    @State private var errorMessage = ""
     @State private var showingDrafts = false
 
     init() {
@@ -90,11 +88,6 @@ struct ChatsListView: View {
             }
             .sheet(isPresented: $showingDrafts) {
                 DraftsView()
-            }
-            .alert("error", isPresented: $showingError) {
-                Button("ok") {}
-            } message: {
-                Text(errorMessage)
             }
             .onAppear {
                 chatsViewModel.setContext(viewContext)
@@ -186,10 +179,9 @@ struct ChatsListView: View {
     }
 
     private func showErrorAfterDismiss(_ message: String) {
-        errorMessage = message
         showingQRScanner = false
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-            showingError = true
+            ErrorRouter.shared.report(.unknown(message))
         }
     }
 }

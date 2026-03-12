@@ -452,7 +452,7 @@
 "mark_read" = "Mark Read";
 
 // ICE — traffic obfuscation
-"ice_section_header" = "Intrusion Countermeasures Electronics";
+"ice_section_header" = "Intrusion Countermeasures";
 "ice_title" = "ICE";
 "ice_subtitle" = "Obfuscated connection";
 "ice_footer" = "ICE masks your traffic to make it indistinguishable from regular HTTPS. The configuration is provided automatically by the server.";

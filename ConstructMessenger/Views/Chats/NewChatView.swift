@@ -20,8 +20,6 @@ struct NewChatView: View {
     var chatsViewModel: ChatsViewModel
 
     @State private var showingQRScanner = false
-    @State private var showingError = false
-    @State private var errorMessage = ""
     @State private var initialContactInfo: ContactInfo?
 
     init(chatsViewModel: ChatsViewModel, initialContactInfo: ContactInfo? = nil) {
@@ -47,11 +45,6 @@ struct NewChatView: View {
                 QRScannerView { contactURL in
                     handleScannedContact(contactURL)
                 }
-            }
-            .alert("error", isPresented: $showingError) {
-                Button("ok") {}
-            } message: {
-                Text(errorMessage)
             }
             .onAppear {
                 if let contactInfo = initialContactInfo {
@@ -111,10 +104,9 @@ struct NewChatView: View {
     }
 
     private func showErrorAfterDismiss(_ message: String) {
-        errorMessage = message
         showingQRScanner = false
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-            showingError = true
+            ErrorRouter.shared.report(.unknown(message))
         }
     }
 }

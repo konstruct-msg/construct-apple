@@ -14,8 +14,6 @@ struct QRScannerView: View {
     let onCodeScanned: (String) -> Void
 
     @State private var scanner = QRCodeScanner()
-    @State private var showingError = false
-    @State private var errorMessage = ""
     @State private var showingPermissionAlert = false
     @State private var showDebugInfo = false
 
@@ -90,11 +88,6 @@ struct QRScannerView: View {
             }
             .onChange(of: scanner.scannedCode) { _, newValue in
                 if let code = newValue { handleScannedCode(code) }
-            }
-            .alert("error", isPresented: $showingError) {
-                Button("ok") { dismiss() }
-            } message: {
-                Text(errorMessage)
             }
         }
     }
@@ -232,8 +225,8 @@ struct QRScannerView: View {
     private func handleClipboardPaste() {
         guard let text = PlatformClipboard.paste()?.trimmingCharacters(in: .whitespacesAndNewlines),
               !text.isEmpty else {
-            errorMessage = NSLocalizedString("clipboard_no_valid_invite", comment: "")
-            showingError = true
+            dismiss()
+            ErrorRouter.shared.report(.unknown(NSLocalizedString("clipboard_no_valid_invite", comment: "")))
             return
         }
         Log.debug("📋 QRScannerView: pasting from clipboard: \(text.prefix(80))", category: "QRScannerView")
@@ -271,8 +264,8 @@ struct QRScannerView: View {
         } else if isBase64Like(normalized) {
             onCodeScanned("konstruct://add?invite=\(normalized)")
         } else {
-            errorMessage = NSLocalizedString("invalid_qr_code_construct", comment: "")
-            showingError = true
+            dismiss()
+            ErrorRouter.shared.report(.unknown(NSLocalizedString("invalid_qr_code_construct", comment: "")))
         }
     }
 
