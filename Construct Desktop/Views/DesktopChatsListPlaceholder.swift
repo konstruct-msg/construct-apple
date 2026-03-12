@@ -17,7 +17,7 @@ struct DesktopChatsListPlaceholder: View {
         List(selection: $selectedChatID) {
             Section {
                 Label("New conversation", systemImage: "square.and.pencil")
-                    .foregroundStyle(.accent)
+                    .foregroundStyle(Color.accentColor)
             }
             Section("Conversations") {
                 Text("No conversations yet")
