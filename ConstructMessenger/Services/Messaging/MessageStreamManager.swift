@@ -273,32 +273,43 @@ final class MessageStreamManager {
     }
 
     private func fetchMissedMessages() async {
-        let cursor: String? = lastPendingCursor.isEmpty ? nil : lastPendingCursor
-        do {
-            let result = try await MessagingServiceClient.shared.getPendingMessages(sinceCursor: cursor)
-            if !result.messages.isEmpty {
-                Log.info("📨 Fetched \(result.messages.count) missed message(s) after reconnect", category: "MessageStream")
-                for msg in result.messages {
-                    onMessageReceived?(msg)
+        // Drain ALL pending pages so the user sees every missed message on the first reconnect,
+        // not just the first 50 (the previous single-fetch behaviour — bug B08).
+        var cursor: String? = lastPendingCursor.isEmpty ? nil : lastPendingCursor
+        var totalFetched = 0
+        repeat {
+            guard !Task.isCancelled else { return }
+            do {
+                let result = try await MessagingServiceClient.shared.getPendingMessages(sinceCursor: cursor)
+                if !result.messages.isEmpty {
+                    totalFetched += result.messages.count
+                    for msg in result.messages {
+                        onMessageReceived?(msg)
+                    }
                 }
-            } else {
-                Log.debug("📭 fetchMissedMessages: no pending messages", category: "MessageStream")
-            }
-            if !result.failedMessages.isEmpty {
-                Log.info("⚠️ fetchMissedMessages: \(result.failedMessages.count) undecryptable message(s) — will ACK as failed once stream opens", category: "MessageStream")
-                pendingFailedAcks.append(contentsOf: result.failedMessages)
-            }
-            if !result.nextCursor.isEmpty {
+                if !result.failedMessages.isEmpty {
+                    Log.info("⚠️ fetchMissedMessages: \(result.failedMessages.count) undecryptable message(s) — will ACK as failed once stream opens", category: "MessageStream")
+                    pendingFailedAcks.append(contentsOf: result.failedMessages)
+                }
+                cursor = result.nextCursor.isEmpty ? nil : result.nextCursor
                 lastPendingCursor = result.nextCursor
+            } catch is CancellationError {
+                // Task was cancelled during force-reconnect or backgrounding — expected, no log needed
+                return
+            } catch {
+                if let rpcError = error as? RPCError {
+                    Log.error("⚠️ fetchMissedMessages RPC error: code=\(rpcError.code) message=\"\(rpcError.message)\"", category: "MessageStream")
+                } else {
+                    Log.debug("fetchMissedMessages failed: \(error)", category: "MessageStream")
+                }
+                return
             }
-        } catch is CancellationError {
-            // Task was cancelled during force-reconnect or backgrounding — expected, no log needed
-        } catch {
-            if let rpcError = error as? RPCError {
-                Log.error("⚠️ fetchMissedMessages RPC error: code=\(rpcError.code) message=\"\(rpcError.message)\"", category: "MessageStream")
-            } else {
-                Log.debug("fetchMissedMessages failed: \(error)", category: "MessageStream")
-            }
+        } while cursor != nil
+
+        if totalFetched > 0 {
+            Log.info("📨 Fetched \(totalFetched) missed message(s) after reconnect", category: "MessageStream")
+        } else {
+            Log.debug("📭 fetchMissedMessages: no pending messages", category: "MessageStream")
         }
     }
 
