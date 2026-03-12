@@ -207,6 +207,9 @@ final class MessageStreamManager {
         // If the live stream isn't open yet, queue delivered receipts for flush when it opens.
         // (outboundContinuation?.yield silently drops if nil — see sendReceipt guard below)
         if outboundContinuation == nil, status == .delivered {
+            guard !pendingDeliveredAcks.contains(where: { $0.messageIds == messageIds && $0.recipientUserId == recipientUserId }) else {
+                return  // already queued — dedup to prevent bloat during paging cycles
+            }
             pendingDeliveredAcks.append(PendingDeliveredAck(messageIds: messageIds, recipientUserId: recipientUserId))
             Log.info("📨 Receipt queued (stream not open): \(status) for \(messageIds.count) msg(s) → recipient=\(recipientUserId.prefix(8))…", category: "MessageStream")
             return
@@ -297,6 +300,9 @@ final class MessageStreamManager {
         // not just the first 50 (the previous single-fetch behaviour — bug B08).
         var cursor: String? = lastPendingCursor.isEmpty ? nil : lastPendingCursor
         var totalFetched = 0
+        // Track message IDs seen in this fetch run to detect server returning the same
+        // unacknowledged messages across multiple pages (infinite cursor cycle).
+        var seenMessageIds: Set<String> = []
         repeat {
             guard !Task.isCancelled else { return }
             do {
@@ -304,17 +310,30 @@ final class MessageStreamManager {
                 // Successful fetch = server is reachable; update connection status
                 ConnectionStatusManager.shared.markRequestSucceeded()
                 if !result.messages.isEmpty {
-                    totalFetched += result.messages.count
-                    for msg in result.messages {
-                        onMessageReceived?(msg)
+                    let pageIds = Set(result.messages.map { $0.id })
+                    let newIds = pageIds.subtracting(seenMessageIds)
+                    if newIds.isEmpty {
+                        // Server is cycling the same unACKed messages — receipts haven't been
+                        // sent yet (stream not open). Stop paging; openStream() will flush ACKs.
+                        Log.info("📭 fetchMissedMessages: all \(pageIds.count) message(s) on this page already seen — breaking paging cycle to open stream", category: "MessageStream")
+                        cursor = nil
+                    } else {
+                        seenMessageIds.formUnion(pageIds)
+                        totalFetched += result.messages.count
+                        for msg in result.messages {
+                            onMessageReceived?(msg)
+                        }
+                        cursor = result.nextCursor.isEmpty ? nil : result.nextCursor
+                        lastPendingCursor = result.nextCursor
                     }
+                } else {
+                    cursor = result.nextCursor.isEmpty ? nil : result.nextCursor
+                    lastPendingCursor = result.nextCursor
                 }
                 if !result.failedMessages.isEmpty {
                     Log.info("⚠️ fetchMissedMessages: \(result.failedMessages.count) undecryptable message(s) — will ACK as failed once stream opens", category: "MessageStream")
                     pendingFailedAcks.append(contentsOf: result.failedMessages)
                 }
-                cursor = result.nextCursor.isEmpty ? nil : result.nextCursor
-                lastPendingCursor = result.nextCursor
             } catch is CancellationError {
                 // Task was cancelled during force-reconnect or backgrounding — expected, no log needed
                 return
