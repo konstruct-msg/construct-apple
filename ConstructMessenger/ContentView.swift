@@ -35,6 +35,7 @@ struct ContentView: View {
                     }
             }
         }
+        .errorToast()
         .preferredColorScheme(appTheme.colorScheme)
         .onAppear {
             authViewModel.refreshDeviceKeyState()
