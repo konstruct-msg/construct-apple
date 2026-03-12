@@ -197,12 +197,16 @@ struct NetworkSettingsView: View {
             Section {
                 VStack(alignment: .leading, spacing: 8) {
                     TextField("Host (e.g. dev.konstruct.cc)", text: $customHost)
+                        #if canImport(UIKit)
                         .autocapitalization(.none)
                         .keyboardType(.URL)
+                        #endif
                         .textFieldStyle(.roundedBorder)
 
                     TextField("Port (e.g. 443)", text: $customPort)
+                        #if canImport(UIKit)
                         .keyboardType(.numberPad)
+                        #endif
                         .textFieldStyle(.roundedBorder)
 
                     HStack {
@@ -236,7 +240,9 @@ struct NetworkSettingsView: View {
             #endif
         }
         .navigationTitle("network")
+        #if canImport(UIKit)
         .navigationBarTitleDisplayMode(.inline)
+        #endif
         .alert("server_applied_title", isPresented: $showingAppliedAlert) {
             Button("ok") { }
         } message: {

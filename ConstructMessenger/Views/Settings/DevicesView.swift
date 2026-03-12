@@ -4,6 +4,9 @@
 //
 
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
 
 struct DevicesView: View {
 
@@ -18,7 +21,13 @@ struct DevicesView: View {
                         .foregroundColor(.blue)
                         .frame(width: 32)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(UIDevice.current.name)
+                        Text({
+                            #if canImport(UIKit)
+                            UIDevice.current.name
+                            #else
+                            Host.current().localizedName ?? "Mac"
+                            #endif
+                        }())
                             .font(.body)
                         Text("this_device")
                             .font(.caption)

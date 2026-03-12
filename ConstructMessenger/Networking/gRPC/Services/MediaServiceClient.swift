@@ -6,7 +6,11 @@
 //
 
 import Foundation
+#if canImport(UIKit)
 import UIKit
+#else
+import AppKit
+#endif
 import CryptoKit
 import GRPCCore
 import GRPCNIOTransportHTTP2
@@ -151,7 +155,7 @@ extension MediaServiceClient {
 
     // MARK: - High-Level: Download & Decrypt Image
 
-    func downloadAndDecryptImage(from mediaUrl: String, encryptionKey: Data) async throws -> UIImage {
+    func downloadAndDecryptImage(from mediaUrl: String, encryptionKey: Data) async throws -> PlatformImage {
         let mediaId = URL(string: mediaUrl)?.lastPathComponent ?? mediaUrl
         let encryptedData = try await downloadEncryptedFile(mediaId: mediaId)
 
@@ -166,7 +170,7 @@ extension MediaServiceClient {
         let sealedBox = try AES.GCM.SealedBox(nonce: nonce, ciphertext: ciphertext, tag: tag)
         let decryptedData = try AES.GCM.open(sealedBox, using: SymmetricKey(data: encryptionKey))
 
-        guard let image = UIImage(data: decryptedData) else {
+        guard let image = PlatformImage(data: decryptedData) else {
             throw NetworkError.serverError(message: "Failed to decode image", responseBody: nil)
         }
         return image

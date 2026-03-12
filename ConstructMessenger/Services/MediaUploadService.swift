@@ -8,7 +8,9 @@
 
 import Foundation
 import CryptoKit
+#if canImport(UIKit)
 import UIKit
+#endif
 
 // MARK: - Media Upload Error
 enum MediaUploadError: LocalizedError {

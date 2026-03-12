@@ -54,12 +54,20 @@ struct LinkDetectingText: View {
                 _ = handler.handleURL(url)
             } else {
                 // Will be handled by system deep link handler
+                #if canImport(UIKit)
                 UIApplication.shared.open(url)
+                #else
+                NSWorkspace.shared.open(url)
+                #endif
             }
         } else {
             // External link - open in Safari
             Log.info("🌐 Opening external link: \(urlString)", category: "LinkDetectingText")
+            #if canImport(UIKit)
             UIApplication.shared.open(url)
+            #else
+            NSWorkspace.shared.open(url)
+            #endif
         }
     }
     

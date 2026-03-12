@@ -1,5 +1,7 @@
 import Foundation
+#if canImport(UIKit)
 import UIKit
+#endif
 import os.log
 
 /// Manages media message upload, encoding, and sending
@@ -23,7 +25,7 @@ class MediaUploadManager {
     /// - Returns: MediaUploadResult with content and thumbnails
     /// - Throws: MediaUploadError if upload fails
     func uploadMediaAndBuildContent(
-        images: [UIImage],
+        images: [PlatformImage],
         caption: String,
         recipientId: String
     ) async throws -> MediaUploadResult {

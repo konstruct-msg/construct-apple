@@ -7,7 +7,9 @@
 
 import Foundation
 import CoreData
-import UIKit  // ✅ Required for UIApplication notifications
+#if canImport(UIKit)
+import UIKit
+#endif
 
 @Observable
 @MainActor
@@ -100,7 +102,13 @@ class ChatsViewModel {
                         nextState = PollingState(
                             hasToken: SessionManager.shared.sessionToken != nil,
                             status: self.connectionStatusManager.connectionStatus,
-                            pushEnabled: PushNotificationManager.shared.isPushEnabled
+                            pushEnabled: {
+                                #if canImport(UIKit)
+                                PushNotificationManager.shared.isPushEnabled
+                                #else
+                                false
+                                #endif
+                            }()
                         )
                     } onChange: {
                         continuation.resume()
@@ -116,7 +124,13 @@ class ChatsViewModel {
                     let settled = PollingState(
                         hasToken: SessionManager.shared.sessionToken != nil,
                         status: self.connectionStatusManager.connectionStatus,
-                        pushEnabled: PushNotificationManager.shared.isPushEnabled
+                        pushEnabled: {
+                            #if canImport(UIKit)
+                            PushNotificationManager.shared.isPushEnabled
+                            #else
+                            false
+                            #endif
+                        }()
                     )
                     lastState = settled
                     Log.debug("📡 Stream state: token=\(settled.hasToken ? "present" : "nil"), status=\(settled.status.displayText), push=\(settled.pushEnabled)", category: "ChatsViewModel")
@@ -170,6 +184,7 @@ class ChatsViewModel {
         let silentPushTask = Task { [weak self] in
             while !Task.isCancelled {
                 guard let self else { return }
+                #if canImport(UIKit)
                 await withCheckedContinuation { continuation in
                     withObservationTracking {
                         _ = PushNotificationManager.shared.lastSilentPushDate
@@ -182,6 +197,9 @@ class ChatsViewModel {
                     Log.info("📱 Silent push — reconnecting stream to fetch pending messages", category: "ChatsViewModel")
                     self.forceReconnectStream()
                 }
+                #else
+                try? await Task.sleep(for: .seconds(60))
+                #endif
             }
         }
         observationTasks.append(silentPushTask)

@@ -8,7 +8,12 @@
 //
 
 import Foundation
+#if canImport(UIKit)
 import UIKit
+#else
+import AppKit
+import CoreGraphics
+#endif
 import CryptoKit
 import UniformTypeIdentifiers
 
@@ -136,7 +141,7 @@ class MediaManager {
     ///   - image: UIImage to upload
     ///   - recipientId: User ID to encrypt media key for
     /// - Returns: Media metadata for message content
-    func uploadImage(_ image: UIImage, for recipientId: String) async throws -> MediaMessageData {
+    func uploadImage(_ image: PlatformImage, for recipientId: String) async throws -> MediaMessageData {
         Log.info("📤 Uploading image for recipient: \(recipientId)", category: "MediaManager")
         
         // Optimize before upload (resize + compress + strip metadata)
@@ -258,7 +263,7 @@ class MediaManager {
     /// Upload avatar image (profile sharing)
     /// - Parameter image: Avatar image to upload
     /// - Returns: Avatar upload result with raw encryption key
-    func uploadAvatar(_ image: UIImage) async throws -> AvatarUploadResult {
+    func uploadAvatar(_ image: PlatformImage) async throws -> AvatarUploadResult {
         Log.info("📤 Uploading avatar", category: "MediaManager")
         
         // Optimize avatar (resize + compress) using ImageHelper
@@ -416,7 +421,7 @@ class MediaManager {
     ///   - image: Source image
     ///   - maxSize: Maximum dimension (width or height)
     /// - Returns: Thumbnail image data (JPEG)
-    func generateThumbnail(from image: UIImage, maxSize: CGFloat = 250) -> Data? {
+    func generateThumbnail(from image: PlatformImage, maxSize: CGFloat = 250) -> Data? {
         Log.debug("🖼️ Generating thumbnail (maxSize: \(maxSize))", category: "MediaManager")
         
         do {
@@ -435,8 +440,8 @@ class MediaManager {
     ///   - maxSize: Maximum dimension (width or height)
     /// - Returns: Thumbnail image data (JPEG)
     func generateThumbnail(from data: Data, maxSize: CGFloat = 250) -> Data? {
-        guard let image = UIImage(data: data) else {
-            Log.error("❌ Failed to create UIImage from data", category: "MediaManager")
+        guard let image = PlatformImage(data: data) else {
+            Log.error("❌ Failed to create PlatformImage from data", category: "MediaManager")
             return nil
         }
         
@@ -448,22 +453,24 @@ class MediaManager {
     ///   - image: Source image
     ///   - maxSize: Maximum dimension
     /// - Returns: Thumbnail UIImage
-    func generateThumbnailImage(from image: UIImage, maxSize: CGFloat) -> UIImage {
+    func generateThumbnailImage(from image: PlatformImage, maxSize: CGFloat) -> PlatformImage {
         let size = image.size
-        let scale: CGFloat
-        
-        if size.width > size.height {
-            scale = maxSize / size.width
-        } else {
-            scale = maxSize / size.height
-        }
-        
+        let scale = size.width > size.height ? maxSize / size.width : maxSize / size.height
         let thumbnailSize = CGSize(width: size.width * scale, height: size.height * scale)
+        #if canImport(UIKit)
         let renderer = UIGraphicsImageRenderer(size: thumbnailSize)
-        
         return renderer.image { _ in
             image.draw(in: CGRect(origin: .zero, size: thumbnailSize))
         }
+        #else
+        let dest = NSImage(size: thumbnailSize)
+        dest.lockFocus()
+        image.draw(in: NSRect(origin: .zero, size: thumbnailSize),
+                   from: NSRect(origin: .zero, size: size),
+                   operation: .copy, fraction: 1.0)
+        dest.unlockFocus()
+        return dest
+        #endif
     }
     
     // MARK: - Thumbnail Storage (UserDefaults - temporary solution)

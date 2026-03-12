@@ -6,6 +6,9 @@
 //
 
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
 
 struct DraftsView: View {
     @State private var draftText: String = ""
@@ -20,7 +23,13 @@ struct DraftsView: View {
                     TextEditor(text: $draftText)
                         .frame(minHeight: 120, maxHeight: 180)
                         .padding(8)
-                        .background(Color(UIColor.secondarySystemBackground))
+                        .background({
+                            #if canImport(UIKit)
+                            Color(UIColor.secondarySystemBackground)
+                            #else
+                            Color(NSColor.textBackgroundColor)
+                            #endif
+                        }())
                         .cornerRadius(12)
 
                     Button {

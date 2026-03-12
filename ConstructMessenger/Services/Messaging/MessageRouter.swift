@@ -9,7 +9,9 @@
 
 import Foundation
 import CoreData
+#if canImport(UIKit)
 import UIKit
+#endif
 
 /// Routes and processes incoming messages
 @MainActor
@@ -610,9 +612,11 @@ class MessageRouter {
             // Show a local notification if the app is in the background
             // (server only sends silent content-available pushes; we must notify manually)
             DispatchQueue.main.async {
+                #if canImport(UIKit)
                 if UIApplication.shared.applicationState != .active {
                     LocalNotificationManager.shared.showNewMessageNotification()
                 }
+                #endif
             }
         } catch {
             Log.error("❌ Failed to save message: \(error)", category: "MessageRouter")

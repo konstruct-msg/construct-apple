@@ -9,6 +9,9 @@ import Foundation
 import SwiftUI
 import CoreData
 import Observation
+#if canImport(UIKit)
+import UIKit
+#endif
 
 @MainActor
 @Observable
@@ -16,7 +19,7 @@ class SettingsViewModel {
     var displayName: String = ""
     var username: String = ""
     var userId: String = ""
-    var profileImage: UIImage?
+    var profileImage: PlatformImage?
     var showResetAllSessionsConfirm = false
     var showDeleteKeysConfirm = false
 
@@ -71,7 +74,7 @@ class SettingsViewModel {
     }
 
     /// Saves avatar to Core Data using ImageHelper for processing
-    func saveAvatar(_ image: UIImage, authViewModel: AuthViewModel) {
+    func saveAvatar(_ image: PlatformImage, authViewModel: AuthViewModel) {
         guard let context = viewContext, !userId.isEmpty else {
             print("⚠️ Cannot save avatar: context or userId missing")
             return

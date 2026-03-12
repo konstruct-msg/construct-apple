@@ -216,7 +216,13 @@ extension Color {
         /// Primary app background (AppBackgroundPrimary asset)
         static var primary: Color { Color("AppBackgroundPrimary") }
         /// Secondary background (slightly gray)
-        static var secondary: Color { Color(uiColor: .systemGray6) }
+        static var secondary: Color {
+            #if canImport(UIKit)
+            Color(uiColor: .systemGray6)
+            #else
+            Color(nsColor: .windowBackgroundColor)
+            #endif
+        }
         /// Clear background
         static var clear: Color { Color.clear }
     }

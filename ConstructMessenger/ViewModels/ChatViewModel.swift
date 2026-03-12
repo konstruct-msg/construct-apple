@@ -1,6 +1,8 @@
 import Foundation
 import CoreData
+#if canImport(UIKit)
 import UIKit
+#endif
 import os.log
 import GRPCCore
 
@@ -9,11 +11,11 @@ import GRPCCore
 /// Represents a message queued for sending when session is not ready
 struct QueuedMessage {
     let text: String
-    let images: [UIImage]
+    let images: [PlatformImage]
     let replyTo: Message?
     let timestamp: Date
     
-    init(text: String, images: [UIImage] = [], replyTo: Message? = nil) {
+    init(text: String, images: [PlatformImage] = [], replyTo: Message? = nil) {
         self.text = text
         self.images = images
         self.replyTo = replyTo
@@ -430,7 +432,7 @@ class ChatViewModel: NSObject {
     }
 
     // MARK: - Send Message
-    func sendMessage(text: String, images: [UIImage] = [], fileURLs: [URL] = [], replyTo: Message? = nil) {
+    func sendMessage(text: String, images: [PlatformImage] = [], fileURLs: [URL] = [], replyTo: Message? = nil) {
         Log.info("📤 sendMessage called with \(images.count) images, \(fileURLs.count) files", category: "ChatViewModel")
 
         guard let recipientId = chat.otherUser?.id else {
@@ -532,7 +534,7 @@ class ChatViewModel: NSObject {
     // MARK: - Core Data Operations
     // MARK: - Media Messages
 
-    private func sendMediaMessage(images: [UIImage], caption: String, replyTo: Message?) {
+    private func sendMediaMessage(images: [PlatformImage], caption: String, replyTo: Message?) {
         guard let recipientId = chat.otherUser?.id else {
             Log.error("❌ No recipient ID for media message", category: "ChatViewModel")
             ErrorRouter.shared.report(.unknown("Cannot send media: no recipient"))

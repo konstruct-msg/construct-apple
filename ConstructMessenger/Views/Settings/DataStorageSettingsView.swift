@@ -104,7 +104,7 @@ struct DataStorageSettingsView: View {
                         Text(option.label).tag(option.bytes)
                     }
                 }
-                .pickerStyle(.navigationLink)
+                .pickerStyle(.menu)
             } header: {
                 Text("storage_limit")
             } footer: {
@@ -120,7 +120,7 @@ struct DataStorageSettingsView: View {
                         Text(option.label).tag(option.days)
                     }
                 }
-                .pickerStyle(.navigationLink)
+                .pickerStyle(.menu)
             } header: {
                 Text("storage_auto_clear")
             } footer: {
@@ -128,7 +128,9 @@ struct DataStorageSettingsView: View {
             }
         }
         .navigationTitle("data_and_storage")
+        #if canImport(UIKit)
         .navigationBarTitleDisplayMode(.inline)
+        #endif
         .task { cacheSize = MediaManager.shared.diskCacheSize() }
         .confirmationDialog("storage_clear_confirm_title",
                             isPresented: $showClearConfirm,

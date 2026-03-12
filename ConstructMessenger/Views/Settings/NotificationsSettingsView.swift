@@ -6,6 +6,9 @@
 //
 
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
 import UserNotifications
 
 struct NotificationsSettingsView: View {
@@ -181,7 +184,9 @@ struct NotificationsSettingsView: View {
             }
         }
         .navigationTitle("notifications")
+        #if canImport(UIKit)
         .navigationBarTitleDisplayMode(.inline)
+        #endif
         .onAppear {
             checkNotificationAuthorization()
         }
@@ -260,9 +265,13 @@ struct NotificationsSettingsView: View {
     }
 
     private func openSystemSettings() {
+        #if canImport(UIKit)
         if let url = URL(string: UIApplication.openSettingsURLString) {
             UIApplication.shared.open(url)
         }
+        #else
+        NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Library/PreferencePanes/Notifications.prefPane"))
+        #endif
     }
 }
 

@@ -14,6 +14,11 @@
 		BFF6FCF42F4C4CCA00A31F36 /* GRPCProtobuf in Frameworks */ = {isa = PBXBuildFile; productRef = BFF6FCF32F4C4CCA00A31F36 /* GRPCProtobuf */; };
 		BFF6FCF92F4C4D6600A31F36 /* GRPCNIOTransportHTTP2 in Frameworks */ = {isa = PBXBuildFile; productRef = BFF6FCF82F4C4D6600A31F36 /* GRPCNIOTransportHTTP2 */; };
 		BFF6FD002F4C4E5300A31F36 /* SwiftProtobuf in Frameworks */ = {isa = PBXBuildFile; productRef = BFF6FCFF2F4C4E5300A31F36 /* SwiftProtobuf */; };
+		BF3DE8702F62C2000058C1AA /* ConstructCore.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = BF7098D02F01D3C400CC6F04 /* ConstructCore.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		BF3DE8722F62C2000058C1AA /* GRPCCore in Frameworks */ = {isa = PBXBuildFile; productRef = BF3DE8712F62C2000058C1AA /* GRPCCore */; };
+		BF3DE8742F62C2000058C1AA /* GRPCProtobuf in Frameworks */ = {isa = PBXBuildFile; productRef = BF3DE8732F62C2000058C1AA /* GRPCProtobuf */; };
+		BF3DE8762F62C2000058C1AA /* GRPCNIOTransportHTTP2 in Frameworks */ = {isa = PBXBuildFile; productRef = BF3DE8752F62C2000058C1AA /* GRPCNIOTransportHTTP2 */; };
+		BF3DE8782F62C2000058C1AA /* SwiftProtobuf in Frameworks */ = {isa = PBXBuildFile; productRef = BF3DE8772F62C2000058C1AA /* SwiftProtobuf */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -61,6 +66,65 @@
 			);
 			target = BF103A6E2EED889800324CEA /* ConstructMessenger */;
 		};
+		BF1804182F0D59AA001EA291 /* Exceptions for "ConstructMessenger" folder in "Construct Desktop" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				AppDelegate.swift,
+				Config/Beta.xcconfig,
+				Config/Debug.xcconfig,
+				Config/Release.xcconfig,
+				ConstructMessengerApp.swift,
+				ContentView.swift,
+				Info.plist,
+				Networking/PushNotificationManager.swift,
+				Services/BackgroundFetch/BackgroundFetchManager.swift,
+				Services/BackgroundFetch/EnergyMonitor.swift,
+				Services/BackgroundFetch/LocalNotificationManager.swift,
+				Views/Auth/AuthView.swift,
+				Views/Auth/PinInputView.swift,
+				Views/Auth/QRCodeView.swift,
+				Views/Auth/RegistrationView.swift,
+				Views/Auth/WelcomeView.swift,
+				Views/Chat/AudioMessageView.swift,
+				Views/Chat/ChatHeaderView.swift,
+				Views/Chat/ChatInputView.swift,
+				Views/Chat/ChatScrollView.swift,
+				Views/Chat/ChatView.swift,
+				Views/Chat/FullScreenImageView.swift,
+				Views/Chat/ImageMessageView.swift,
+				Views/Chat/MessageBubble.swift,
+				Views/Chat/MessageContextMenu.swift,
+				Views/Chat/VideoPlayerView.swift,
+				Views/MainTabView.swift,
+			Views/Chats/ChatRowView.swift,
+			Views/Chats/ChatsListView.swift,
+				Views/Chats/NewChatView.swift,
+				Views/ChatsSplitView.swift,
+				Views/Components/ErrorToastView.swift,
+				Views/Components/QRScannerView.swift,
+				Views/Profile/ProfileShareView.swift,
+				Views/Chats/UserProfileView.swift,
+			Views/Profile/UserProfileView.swift,
+				Views/Settings/SettingsView.swift,
+				Views/Chat/MediaGalleryViewer.swift,
+			Views/Chat/MessageInputView.swift,
+			Views/Components/ImageCropView.swift,
+			Views/Settings/AccountSettingsView.swift,
+			Views/Settings/BackgroundFetchSettingsView.swift,
+			Views/Settings/ContactQRCodeView.swift,
+			Views/Settings/SecurityView.swift,
+			Views/Settings/DebugSettingsView.swift,
+Views/Components/PinDotsView.swift,
+Views/Onboarding/OnboardingView.swift,
+Views/Onboarding/RecoveryEntryView.swift,
+Views/Onboarding/RegistrationFlowView.swift,
+Views/Security/DuressPinSetupView.swift,
+Views/Security/PinDisableView.swift,
+Views/Security/PinSetupView.swift,
+Views/Security/RecoverySetupView.swift,
+			);
+			target = BF3DE82F2F62C1C30058C1AA /* Construct Desktop */;
+		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -68,6 +132,7 @@
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				BF1804172F0D59AA001EA291 /* Exceptions for "ConstructMessenger" folder in "ConstructMessenger" target */,
+				BF1804182F0D59AA001EA291 /* Exceptions for "ConstructMessenger" folder in "Construct Desktop" target */,
 			);
 			path = ConstructMessenger;
 			sourceTree = "<group>";
@@ -111,6 +176,11 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				BF3DE8702F62C2000058C1AA /* ConstructCore.xcframework in Frameworks */,
+				BF3DE8722F62C2000058C1AA /* GRPCCore in Frameworks */,
+				BF3DE8742F62C2000058C1AA /* GRPCProtobuf in Frameworks */,
+				BF3DE8762F62C2000058C1AA /* GRPCNIOTransportHTTP2 in Frameworks */,
+				BF3DE8782F62C2000058C1AA /* SwiftProtobuf in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -215,10 +285,15 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
+				BF103A712EED889800324CEA /* ConstructMessenger */,
 				BF3DE8312F62C1C30058C1AA /* Construct Desktop */,
 			);
 			name = "Construct Desktop";
 			packageProductDependencies = (
+				BF3DE8712F62C2000058C1AA /* GRPCCore */,
+				BF3DE8732F62C2000058C1AA /* GRPCProtobuf */,
+				BF3DE8752F62C2000058C1AA /* GRPCNIOTransportHTTP2 */,
+				BF3DE8772F62C2000058C1AA /* SwiftProtobuf */,
 			);
 			productName = "Construct Desktop";
 			productReference = BF3DE8302F62C1C30058C1AA /* Construct Desktop.app */;
@@ -365,7 +440,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				C7CC10F1186C473F896E7413 /* ConstructMessenger.xcdatamodeld in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -525,7 +599,7 @@
 					"$(PROJECT_DIR)/target/aarch64-apple-ios-sim/release",
 					"$(PROJECT_DIR)/target/aarch64-apple-ios-macabi/release",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MARKETING_VERSION = 0.9.20;
 				PRODUCT_BUNDLE_IDENTIFIER = maximeliseyev.constructmessenger;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -715,7 +789,7 @@
 					"$(PROJECT_DIR)/target/aarch64-apple-ios-sim/release",
 					"$(PROJECT_DIR)/target/aarch64-apple-ios-macabi/release",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MARKETING_VERSION = 0.9.20;
 				PRODUCT_BUNDLE_IDENTIFIER = maximeliseyev.constructmessenger;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -776,7 +850,7 @@
 					"$(PROJECT_DIR)/target/aarch64-apple-ios-sim/release",
 					"$(PROJECT_DIR)/target/aarch64-apple-ios-macabi/release",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MARKETING_VERSION = 0.9.20;
 				PRODUCT_BUNDLE_IDENTIFIER = maximeliseyev.constructmessenger;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -824,18 +898,18 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MARKETING_VERSION = 0.1;
 				PRODUCT_BUNDLE_IDENTIFIER = "maximeliseyev.construct-desktop";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = macosx;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_INCLUDE_PATHS = "$(PROJECT_DIR)";
+				SWIFT_OBJC_BRIDGING_HEADER = "ConstructMessenger/ConstructMessenger-Bridging-Header.h";
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 5.7;
 			};
 			name = Debug;
 		};
@@ -870,18 +944,18 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MARKETING_VERSION = 0.1;
 				PRODUCT_BUNDLE_IDENTIFIER = "maximeliseyev.construct-desktop";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = macosx;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_INCLUDE_PATHS = "$(PROJECT_DIR)";
+				SWIFT_OBJC_BRIDGING_HEADER = "ConstructMessenger/ConstructMessenger-Bridging-Header.h";
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 5.7;
 			};
 			name = Beta;
 		};
@@ -916,18 +990,18 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MARKETING_VERSION = 0.1;
 				PRODUCT_BUNDLE_IDENTIFIER = "maximeliseyev.construct-desktop";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = macosx;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_INCLUDE_PATHS = "$(PROJECT_DIR)";
+				SWIFT_OBJC_BRIDGING_HEADER = "ConstructMessenger/ConstructMessenger-Bridging-Header.h";
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 5.7;
 			};
 			name = Release;
 		};
@@ -1302,6 +1376,26 @@
 			productName = GRPCNIOTransportHTTP2;
 		};
 		BFF6FCFF2F4C4E5300A31F36 /* SwiftProtobuf */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BFF6FCFE2F4C4E5300A31F36 /* XCRemoteSwiftPackageReference "swift-protobuf" */;
+			productName = SwiftProtobuf;
+		};
+		BF3DE8712F62C2000058C1AA /* GRPCCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BFF6FD0A2F5C000000A31F36 /* XCRemoteSwiftPackageReference "grpc-swift-2" */;
+			productName = GRPCCore;
+		};
+		BF3DE8732F62C2000058C1AA /* GRPCProtobuf */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BFF6FCF22F4C4CCA00A31F36 /* XCRemoteSwiftPackageReference "grpc-swift-protobuf" */;
+			productName = GRPCProtobuf;
+		};
+		BF3DE8752F62C2000058C1AA /* GRPCNIOTransportHTTP2 */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BFF6FCF72F4C4D6600A31F36 /* XCRemoteSwiftPackageReference "grpc-swift-nio-transport" */;
+			productName = GRPCNIOTransportHTTP2;
+		};
+		BF3DE8772F62C2000058C1AA /* SwiftProtobuf */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = BFF6FCFE2F4C4E5300A31F36 /* XCRemoteSwiftPackageReference "swift-protobuf" */;
 			productName = SwiftProtobuf;

@@ -435,12 +435,14 @@ class AuthViewModel {
         // ✅ NEW: Request push notification permission after successful registration/login
         // This is done async to not block the auth flow
         Task {
+            #if canImport(UIKit)
             let granted = await PushNotificationManager.shared.requestPermission()
             if granted {
                 Log.info("📱 Push notifications enabled for user", category: "Auth")
             } else {
                 Log.info("📱 Push notifications declined by user", category: "Auth")
             }
+            #endif
         }
         
         // ✅ REMOVED: NotificationCenter - now using Combine reactive approach

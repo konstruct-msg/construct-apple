@@ -9,6 +9,9 @@
 import SwiftUI
 import Combine
 import Observation
+#if canImport(UIKit)
+import UIKit
+#endif
 
 /// Manages scroll state and behavior for ChatView
 ///
@@ -127,6 +130,7 @@ class ChatScrollManager {
     // MARK: - Keyboard Handling
     
     private func setupKeyboardObservers() {
+        #if canImport(UIKit)
         // Observe keyboard will show
         NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)
             .compactMap { notification in
@@ -147,6 +151,7 @@ class ChatScrollManager {
                 self?.keyboardHeight = 0
             }
             .store(in: &cancellables)
+        #endif
     }
 }
 
