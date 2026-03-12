@@ -16,6 +16,20 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		BF3DE83D2F62C1C40058C1AA /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = BF103A672EED889800324CEA /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = BF3DE82F2F62C1C30058C1AA;
+			remoteInfo = "Construct Desktop";
+		};
+		BF3DE8472F62C1C40058C1AA /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = BF103A672EED889800324CEA /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = BF3DE82F2F62C1C30058C1AA;
+			remoteInfo = "Construct Desktop";
+		};
 		BF8A96FE2EFF0FAF009C5EF7 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = BF103A672EED889800324CEA /* Project object */;
@@ -27,6 +41,9 @@
 
 /* Begin PBXFileReference section */
 		BF103A6F2EED889800324CEA /* ConstructMessenger.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ConstructMessenger.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		BF3DE8302F62C1C30058C1AA /* Construct Desktop.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Construct Desktop.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		BF3DE83C2F62C1C40058C1AA /* Construct DesktopTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Construct DesktopTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		BF3DE8462F62C1C40058C1AA /* Construct DesktopUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Construct DesktopUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		BF7098D02F01D3C400CC6F04 /* ConstructCore.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = ConstructCore.xcframework; sourceTree = "<group>"; };
 		BF8A96FA2EFF0FAF009C5EF7 /* ConstructMessengerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ConstructMessengerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -53,6 +70,21 @@
 			path = ConstructMessenger;
 			sourceTree = "<group>";
 		};
+		BF3DE8312F62C1C30058C1AA /* Construct Desktop */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "Construct Desktop";
+			sourceTree = "<group>";
+		};
+		BF3DE83F2F62C1C40058C1AA /* Construct DesktopTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "Construct DesktopTests";
+			sourceTree = "<group>";
+		};
+		BF3DE8492F62C1C40058C1AA /* Construct DesktopUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "Construct DesktopUITests";
+			sourceTree = "<group>";
+		};
 		BF8A96FB2EFF0FAF009C5EF7 /* ConstructMessengerTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = ConstructMessengerTests;
@@ -73,6 +105,27 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		BF3DE82D2F62C1C30058C1AA /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BF3DE8392F62C1C40058C1AA /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BF3DE8432F62C1C40058C1AA /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		BF8A96F72EFF0FAF009C5EF7 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -89,6 +142,9 @@
 			children = (
 				BF103A712EED889800324CEA /* ConstructMessenger */,
 				BF8A96FB2EFF0FAF009C5EF7 /* ConstructMessengerTests */,
+				BF3DE8312F62C1C30058C1AA /* Construct Desktop */,
+				BF3DE83F2F62C1C40058C1AA /* Construct DesktopTests */,
+				BF3DE8492F62C1C40058C1AA /* Construct DesktopUITests */,
 				BF5F2DF92EF96B1C00BB01C5 /* Frameworks */,
 				BF103A702EED889800324CEA /* Products */,
 			);
@@ -99,6 +155,9 @@
 			children = (
 				BF103A6F2EED889800324CEA /* ConstructMessenger.app */,
 				BF8A96FA2EFF0FAF009C5EF7 /* ConstructMessengerTests.xctest */,
+				BF3DE8302F62C1C30058C1AA /* Construct Desktop.app */,
+				BF3DE83C2F62C1C40058C1AA /* Construct DesktopTests.xctest */,
+				BF3DE8462F62C1C40058C1AA /* Construct DesktopUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -140,6 +199,74 @@
 			productReference = BF103A6F2EED889800324CEA /* ConstructMessenger.app */;
 			productType = "com.apple.product-type.application";
 		};
+		BF3DE82F2F62C1C30058C1AA /* Construct Desktop */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = BF3DE84E2F62C1C40058C1AA /* Build configuration list for PBXNativeTarget "Construct Desktop" */;
+			buildPhases = (
+				BF3DE82C2F62C1C30058C1AA /* Sources */,
+				BF3DE82D2F62C1C30058C1AA /* Frameworks */,
+				BF3DE82E2F62C1C30058C1AA /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				BF3DE8312F62C1C30058C1AA /* Construct Desktop */,
+			);
+			name = "Construct Desktop";
+			packageProductDependencies = (
+			);
+			productName = "Construct Desktop";
+			productReference = BF3DE8302F62C1C30058C1AA /* Construct Desktop.app */;
+			productType = "com.apple.product-type.application";
+		};
+		BF3DE83B2F62C1C40058C1AA /* Construct DesktopTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = BF3DE8522F62C1C40058C1AA /* Build configuration list for PBXNativeTarget "Construct DesktopTests" */;
+			buildPhases = (
+				BF3DE8382F62C1C40058C1AA /* Sources */,
+				BF3DE8392F62C1C40058C1AA /* Frameworks */,
+				BF3DE83A2F62C1C40058C1AA /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				BF3DE83E2F62C1C40058C1AA /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				BF3DE83F2F62C1C40058C1AA /* Construct DesktopTests */,
+			);
+			name = "Construct DesktopTests";
+			packageProductDependencies = (
+			);
+			productName = "Construct DesktopTests";
+			productReference = BF3DE83C2F62C1C40058C1AA /* Construct DesktopTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		BF3DE8452F62C1C40058C1AA /* Construct DesktopUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = BF3DE8562F62C1C40058C1AA /* Build configuration list for PBXNativeTarget "Construct DesktopUITests" */;
+			buildPhases = (
+				BF3DE8422F62C1C40058C1AA /* Sources */,
+				BF3DE8432F62C1C40058C1AA /* Frameworks */,
+				BF3DE8442F62C1C40058C1AA /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				BF3DE8482F62C1C40058C1AA /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				BF3DE8492F62C1C40058C1AA /* Construct DesktopUITests */,
+			);
+			name = "Construct DesktopUITests";
+			packageProductDependencies = (
+			);
+			productName = "Construct DesktopUITests";
+			productReference = BF3DE8462F62C1C40058C1AA /* Construct DesktopUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 		BF8A96F92EFF0FAF009C5EF7 /* ConstructMessengerTests */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = BF8A97002EFF0FAF009C5EF7 /* Build configuration list for PBXNativeTarget "ConstructMessengerTests" */;
@@ -170,11 +297,22 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
-				LastSwiftUpdateCheck = 2620;
+				LastSwiftUpdateCheck = 2630;
 				LastUpgradeCheck = 2630;
 				TargetAttributes = {
 					BF103A6E2EED889800324CEA = {
 						CreatedOnToolsVersion = 26.1.1;
+					};
+					BF3DE82F2F62C1C30058C1AA = {
+						CreatedOnToolsVersion = 26.3;
+					};
+					BF3DE83B2F62C1C40058C1AA = {
+						CreatedOnToolsVersion = 26.3;
+						TestTargetID = BF3DE82F2F62C1C30058C1AA;
+					};
+					BF3DE8452F62C1C40058C1AA = {
+						CreatedOnToolsVersion = 26.3;
+						TestTargetID = BF3DE82F2F62C1C30058C1AA;
 					};
 					BF8A96F92EFF0FAF009C5EF7 = {
 						CreatedOnToolsVersion = 26.2;
@@ -205,12 +343,36 @@
 			targets = (
 				BF103A6E2EED889800324CEA /* ConstructMessenger */,
 				BF8A96F92EFF0FAF009C5EF7 /* ConstructMessengerTests */,
+				BF3DE82F2F62C1C30058C1AA /* Construct Desktop */,
+				BF3DE83B2F62C1C40058C1AA /* Construct DesktopTests */,
+				BF3DE8452F62C1C40058C1AA /* Construct DesktopUITests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		BF103A6D2EED889800324CEA /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BF3DE82E2F62C1C30058C1AA /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BF3DE83A2F62C1C40058C1AA /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BF3DE8442F62C1C40058C1AA /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -234,6 +396,27 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		BF3DE82C2F62C1C30058C1AA /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BF3DE8382F62C1C40058C1AA /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BF3DE8422F62C1C40058C1AA /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		BF8A96F62EFF0FAF009C5EF7 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -244,6 +427,16 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		BF3DE83E2F62C1C40058C1AA /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = BF3DE82F2F62C1C30058C1AA /* Construct Desktop */;
+			targetProxy = BF3DE83D2F62C1C40058C1AA /* PBXContainerItemProxy */;
+		};
+		BF3DE8482F62C1C40058C1AA /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = BF3DE82F2F62C1C30058C1AA /* Construct Desktop */;
+			targetProxy = BF3DE8472F62C1C40058C1AA /* PBXContainerItemProxy */;
+		};
 		BF8A96FF2EFF0FAF009C5EF7 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = BF103A6E2EED889800324CEA /* ConstructMessenger */;
@@ -596,6 +789,273 @@
 			};
 			name = Release;
 		};
+		BF3DE84F2F62C1C40058C1AA /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = PK2473XF3P;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_INCOMING_NETWORK_CONNECTIONS = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
+				ENABLE_RESOURCE_ACCESS_BLUETOOTH = NO;
+				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
+				ENABLE_RESOURCE_ACCESS_CAMERA = YES;
+				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
+				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
+				ENABLE_RESOURCE_ACCESS_PRINTING = NO;
+				ENABLE_RESOURCE_ACCESS_USB = NO;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Konstruct;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.6;
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = "maximeliseyev.construct-desktop";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		BF3DE8502F62C1C40058C1AA /* Beta */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = PK2473XF3P;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_INCOMING_NETWORK_CONNECTIONS = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
+				ENABLE_RESOURCE_ACCESS_BLUETOOTH = NO;
+				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
+				ENABLE_RESOURCE_ACCESS_CAMERA = YES;
+				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
+				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
+				ENABLE_RESOURCE_ACCESS_PRINTING = NO;
+				ENABLE_RESOURCE_ACCESS_USB = NO;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Konstruct;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.6;
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = "maximeliseyev.construct-desktop";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Beta;
+		};
+		BF3DE8512F62C1C40058C1AA /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = PK2473XF3P;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_INCOMING_NETWORK_CONNECTIONS = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
+				ENABLE_RESOURCE_ACCESS_BLUETOOTH = NO;
+				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
+				ENABLE_RESOURCE_ACCESS_CAMERA = YES;
+				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
+				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
+				ENABLE_RESOURCE_ACCESS_PRINTING = NO;
+				ENABLE_RESOURCE_ACCESS_USB = NO;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Konstruct;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.6;
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = "maximeliseyev.construct-desktop";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		BF3DE8532F62C1C40058C1AA /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = PK2473XF3P;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.7;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "maximeliseyev.Construct-DesktopTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Construct Desktop.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Construct Desktop";
+			};
+			name = Debug;
+		};
+		BF3DE8542F62C1C40058C1AA /* Beta */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = PK2473XF3P;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.7;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "maximeliseyev.Construct-DesktopTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Construct Desktop.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Construct Desktop";
+			};
+			name = Beta;
+		};
+		BF3DE8552F62C1C40058C1AA /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = PK2473XF3P;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.7;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "maximeliseyev.Construct-DesktopTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Construct Desktop.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Construct Desktop";
+			};
+			name = Release;
+		};
+		BF3DE8572F62C1C40058C1AA /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = PK2473XF3P;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.7;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "maximeliseyev.Construct-DesktopUITests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = "Construct Desktop";
+			};
+			name = Debug;
+		};
+		BF3DE8582F62C1C40058C1AA /* Beta */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = PK2473XF3P;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.7;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "maximeliseyev.Construct-DesktopUITests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = "Construct Desktop";
+			};
+			name = Beta;
+		};
+		BF3DE8592F62C1C40058C1AA /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = PK2473XF3P;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.7;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "maximeliseyev.Construct-DesktopUITests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = "Construct Desktop";
+			};
+			name = Release;
+		};
 		BF8A97012EFF0FAF009C5EF7 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReferenceAnchor = BF103A712EED889800324CEA /* ConstructMessenger */;
@@ -740,6 +1200,36 @@
 				BF103A7D2EED889800324CEA /* Debug */,
 				B0AB8C452EED889800324CEA /* Beta */,
 				BF103A7E2EED889800324CEA /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		BF3DE84E2F62C1C40058C1AA /* Build configuration list for PBXNativeTarget "Construct Desktop" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BF3DE84F2F62C1C40058C1AA /* Debug */,
+				BF3DE8502F62C1C40058C1AA /* Beta */,
+				BF3DE8512F62C1C40058C1AA /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		BF3DE8522F62C1C40058C1AA /* Build configuration list for PBXNativeTarget "Construct DesktopTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BF3DE8532F62C1C40058C1AA /* Debug */,
+				BF3DE8542F62C1C40058C1AA /* Beta */,
+				BF3DE8552F62C1C40058C1AA /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		BF3DE8562F62C1C40058C1AA /* Build configuration list for PBXNativeTarget "Construct DesktopUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BF3DE8572F62C1C40058C1AA /* Debug */,
+				BF3DE8582F62C1C40058C1AA /* Beta */,
+				BF3DE8592F62C1C40058C1AA /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

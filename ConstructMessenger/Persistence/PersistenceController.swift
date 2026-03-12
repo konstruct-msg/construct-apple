@@ -2,27 +2,64 @@
 //  PersistenceController.swift
 //  Construct Messenger
 //
-//  Session persistence support
+//  Cross-platform Core Data stack.
+//  Used by both the iOS target (ConstructMessengerApp) and the
+//  native macOS target (ConstructMessengerMacApp).
+//
+//  The iOS/macOS apps each get their OWN SQLite store in their respective
+//  Application Support directory — same schema, separate files.
+//  iCloud/CloudKit sync can be added later to share data across platforms.
 //
 
 import CoreData
 
-/// Simple wrapper for accessing Core Data persistent container
+/// Cross-platform wrapper for the shared NSPersistentContainer.
+/// Self-contained: does not depend on any App struct.
 struct PersistenceController {
     static let shared = PersistenceController()
 
+    /// In-memory store for SwiftUI previews and unit tests.
+    static let preview: PersistenceController = {
+        let controller = PersistenceController(inMemory: true)
+        return controller
+    }()
+
     let container: NSPersistentContainer
 
-    private init() {
-        self.container = Construct_MessengerApp.persistentContainer
+    init(inMemory: Bool = false) {
+        container = NSPersistentContainer(name: "ConstructMessenger")
+
+        if inMemory {
+            container.persistentStoreDescriptions.first?.url = URL(fileURLWithPath: "/dev/null")
+        } else if let description = container.persistentStoreDescriptions.first {
+            // Automatic lightweight migration for model changes
+            description.shouldInferMappingModelAutomatically = true
+            description.shouldMigrateStoreAutomatically = true
+        }
+
+        container.loadPersistentStores { _, error in
+            if let error = error {
+                // On first launch the store may not exist yet — that is normal.
+                // A real failure (disk full, model mismatch without migration) is logged.
+                print("❌ Core Data: failed to load persistent stores: \(error)")
+            } else {
+                print("✅ Core Data: persistent stores loaded")
+            }
+        }
+
+        container.viewContext.automaticallyMergesChangesFromParent = true
+        container.viewContext.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
     }
-    
-    /// Check if Core Data is ready to use
+
+    /// Creates a fresh background context for off-main-thread writes.
+    func newBackgroundContext() -> NSManagedObjectContext {
+        container.newBackgroundContext()
+    }
+
     var isReady: Bool {
-        return container.viewContext.persistentStoreCoordinator != nil
+        container.viewContext.persistentStoreCoordinator != nil
     }
-    
-    /// Get the view context if Core Data is ready, otherwise nil
+
     var safeViewContext: NSManagedObjectContext? {
         guard isReady else { return nil }
         return container.viewContext
