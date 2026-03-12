@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		C7CC10F1186C473F896E7413 /* ConstructMessenger.xcdatamodeld in Resources */ = {isa = PBXBuildFile; fileRef = 1FC23B2B49E141EBA1C6CE15 /* ConstructMessenger.xcdatamodeld */; };
 		BF7098D12F01D3C400CC6F04 /* ConstructCore.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = BF7098D02F01D3C400CC6F04 /* ConstructCore.xcframework */; };
 		BF7098D22F01D3C400CC6F04 /* ConstructCore.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = BF7098D02F01D3C400CC6F04 /* ConstructCore.xcframework */; };
 		BFF6FC9D2F4C3E1F00A31F36 /* GRPCCore in Frameworks */ = {isa = PBXBuildFile; productRef = BFF6FC9C2F4C3E1F00A31F36 /* GRPCCore */; };
@@ -44,6 +45,7 @@
 		BF3DE8302F62C1C30058C1AA /* Construct Desktop.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Construct Desktop.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		BF3DE83C2F62C1C40058C1AA /* Construct DesktopTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Construct DesktopTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		BF3DE8462F62C1C40058C1AA /* Construct DesktopUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Construct DesktopUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		1FC23B2B49E141EBA1C6CE15 /* ConstructMessenger.xcdatamodeld */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodeld; name = ConstructMessenger.xcdatamodeld; path = ConstructMessenger/ConstructMessenger.xcdatamodeld; sourceTree = "<group>"; };
 		BF7098D02F01D3C400CC6F04 /* ConstructCore.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = ConstructCore.xcframework; sourceTree = "<group>"; };
 		BF8A96FA2EFF0FAF009C5EF7 /* ConstructMessengerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ConstructMessengerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -165,6 +167,7 @@
 		BF5F2DF92EF96B1C00BB01C5 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				1FC23B2B49E141EBA1C6CE15 /* ConstructMessenger.xcdatamodeld */,
 				BF7098D02F01D3C400CC6F04 /* ConstructCore.xcframework */,
 			);
 			name = Frameworks;
@@ -362,6 +365,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C7CC10F1186C473F896E7413 /* ConstructMessenger.xcdatamodeld in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

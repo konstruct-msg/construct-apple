@@ -59,4 +59,5 @@ private struct DesktopEmptyDetailView: View {
 
 #Preview {
     DesktopRootView()
+        .environment(\.managedObjectContext, PersistenceController(inMemory: true).container.viewContext)
 }
