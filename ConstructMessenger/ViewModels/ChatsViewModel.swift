@@ -17,8 +17,6 @@ class ChatsViewModel {
 
     // 🔑 OTPK replenishment: check server count once per app session on stream connect
     private var hasPerformedStartupOtpkCheck = false
-    // 🔥 Session prewarm: init sessions with lower-UUID contacts once per app launch
-    private var hasPerformedSessionPrewarm = false
 
     // ✅ Chat ID to open programmatically (e.g., from deep link)
     var chatToOpen: String?
@@ -239,11 +237,9 @@ class ChatsViewModel {
         }
 
         // Pre-warm sessions for contacts where we're the natural INITIATOR (lower UUID).
-        // Runs once per launch so first messages are instant without "Initializing..." wait.
-        if !hasPerformedSessionPrewarm {
-            hasPerformedSessionPrewarm = true
-            sessionCoordinator.prewarmSessions(for: currentContactIds())
-        }
+        // Runs on every stream connect — prewarmSessions is idempotent (no-op if session exists).
+        // This covers the case where the session was reset while the app was in background.
+        sessionCoordinator.prewarmSessions(for: currentContactIds())
     }
 
     /// Cancel any in-progress backoff and reconnect immediately.
@@ -262,6 +258,9 @@ class ChatsViewModel {
         streamManager.forceReconnect(contactUserIds: currentConversationIds()) { [weak self] message in
             self?.handleIncomingMessage(message)
         }
+        // Re-run prewarm: app may have been in background while session was reset.
+        // prewarmSessions is idempotent — no-op if sessions already exist.
+        sessionCoordinator.prewarmSessions(for: currentContactIds())
     }
 
     private func currentContactIds() -> [String] {
