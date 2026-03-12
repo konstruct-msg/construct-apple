@@ -98,6 +98,8 @@ class MessageRouter {
             PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
             Log.info("🛑 Received END_SESSION from \(otherUserId)", category: "MessageRouter")
             handleEndSession(from: otherUserId, in: context, pendingMessages: &pendingMessages)
+            // ACK so the server removes it from the pending queue
+            onReceiptNeeded?([message.id], otherUserId, .delivered)
             return
         }
 

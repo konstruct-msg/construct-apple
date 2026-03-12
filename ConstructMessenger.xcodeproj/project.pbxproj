@@ -7,18 +7,17 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		C7CC10F1186C473F896E7413 /* ConstructMessenger.xcdatamodeld in Resources */ = {isa = PBXBuildFile; fileRef = 1FC23B2B49E141EBA1C6CE15 /* ConstructMessenger.xcdatamodeld */; };
+		BF3DE8702F62C2000058C1AA /* ConstructCore.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = BF7098D02F01D3C400CC6F04 /* ConstructCore.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		BF3DE8722F62C2000058C1AA /* GRPCCore in Frameworks */ = {isa = PBXBuildFile; productRef = BF3DE8712F62C2000058C1AA /* GRPCCore */; };
+		BF3DE8742F62C2000058C1AA /* GRPCProtobuf in Frameworks */ = {isa = PBXBuildFile; productRef = BF3DE8732F62C2000058C1AA /* GRPCProtobuf */; };
+		BF3DE8762F62C2000058C1AA /* GRPCNIOTransportHTTP2 in Frameworks */ = {isa = PBXBuildFile; productRef = BF3DE8752F62C2000058C1AA /* GRPCNIOTransportHTTP2 */; };
+		BF3DE8782F62C2000058C1AA /* SwiftProtobuf in Frameworks */ = {isa = PBXBuildFile; productRef = BF3DE8772F62C2000058C1AA /* SwiftProtobuf */; };
 		BF7098D12F01D3C400CC6F04 /* ConstructCore.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = BF7098D02F01D3C400CC6F04 /* ConstructCore.xcframework */; };
 		BF7098D22F01D3C400CC6F04 /* ConstructCore.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = BF7098D02F01D3C400CC6F04 /* ConstructCore.xcframework */; };
 		BFF6FC9D2F4C3E1F00A31F36 /* GRPCCore in Frameworks */ = {isa = PBXBuildFile; productRef = BFF6FC9C2F4C3E1F00A31F36 /* GRPCCore */; };
 		BFF6FCF42F4C4CCA00A31F36 /* GRPCProtobuf in Frameworks */ = {isa = PBXBuildFile; productRef = BFF6FCF32F4C4CCA00A31F36 /* GRPCProtobuf */; };
 		BFF6FCF92F4C4D6600A31F36 /* GRPCNIOTransportHTTP2 in Frameworks */ = {isa = PBXBuildFile; productRef = BFF6FCF82F4C4D6600A31F36 /* GRPCNIOTransportHTTP2 */; };
 		BFF6FD002F4C4E5300A31F36 /* SwiftProtobuf in Frameworks */ = {isa = PBXBuildFile; productRef = BFF6FCFF2F4C4E5300A31F36 /* SwiftProtobuf */; };
-		BF3DE8702F62C2000058C1AA /* ConstructCore.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = BF7098D02F01D3C400CC6F04 /* ConstructCore.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
-		BF3DE8722F62C2000058C1AA /* GRPCCore in Frameworks */ = {isa = PBXBuildFile; productRef = BF3DE8712F62C2000058C1AA /* GRPCCore */; };
-		BF3DE8742F62C2000058C1AA /* GRPCProtobuf in Frameworks */ = {isa = PBXBuildFile; productRef = BF3DE8732F62C2000058C1AA /* GRPCProtobuf */; };
-		BF3DE8762F62C2000058C1AA /* GRPCNIOTransportHTTP2 in Frameworks */ = {isa = PBXBuildFile; productRef = BF3DE8752F62C2000058C1AA /* GRPCNIOTransportHTTP2 */; };
-		BF3DE8782F62C2000058C1AA /* SwiftProtobuf in Frameworks */ = {isa = PBXBuildFile; productRef = BF3DE8772F62C2000058C1AA /* SwiftProtobuf */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -46,17 +45,17 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		BF103A6F2EED889800324CEA /* ConstructMessenger.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ConstructMessenger.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		1FC23B2B49E141EBA1C6CE15 /* ConstructMessenger.xcdatamodeld */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodeld; name = ConstructMessenger.xcdatamodeld; path = ConstructMessenger/ConstructMessenger.xcdatamodeld; sourceTree = "<group>"; };
+		BF103A6F2EED889800324CEA /* Construct Messenger.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Construct Messenger.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		BF3DE8302F62C1C30058C1AA /* Construct Desktop.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Construct Desktop.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		BF3DE83C2F62C1C40058C1AA /* Construct DesktopTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Construct DesktopTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		BF3DE8462F62C1C40058C1AA /* Construct DesktopUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Construct DesktopUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
-		1FC23B2B49E141EBA1C6CE15 /* ConstructMessenger.xcdatamodeld */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodeld; name = ConstructMessenger.xcdatamodeld; path = ConstructMessenger/ConstructMessenger.xcdatamodeld; sourceTree = "<group>"; };
 		BF7098D02F01D3C400CC6F04 /* ConstructCore.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = ConstructCore.xcframework; sourceTree = "<group>"; };
 		BF8A96FA2EFF0FAF009C5EF7 /* ConstructMessengerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ConstructMessengerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		BF1804172F0D59AA001EA291 /* Exceptions for "ConstructMessenger" folder in "ConstructMessenger" target */ = {
+		BF1804172F0D59AA001EA291 /* Exceptions for "ConstructMessenger" folder in "Construct Messenger" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Config/Beta.xcconfig,
@@ -64,7 +63,7 @@
 				Config/Release.xcconfig,
 				Info.plist,
 			);
-			target = BF103A6E2EED889800324CEA /* ConstructMessenger */;
+			target = BF103A6E2EED889800324CEA /* Construct Messenger */;
 		};
 		BF1804182F0D59AA001EA291 /* Exceptions for "ConstructMessenger" folder in "Construct Desktop" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
@@ -80,48 +79,32 @@
 				Services/BackgroundFetch/BackgroundFetchManager.swift,
 				Services/BackgroundFetch/EnergyMonitor.swift,
 				Services/BackgroundFetch/LocalNotificationManager.swift,
-				Views/Auth/AuthView.swift,
-				Views/Auth/PinInputView.swift,
-				Views/Auth/QRCodeView.swift,
-				Views/Auth/RegistrationView.swift,
-				Views/Auth/WelcomeView.swift,
-				Views/Chat/AudioMessageView.swift,
-				Views/Chat/ChatHeaderView.swift,
-				Views/Chat/ChatInputView.swift,
-				Views/Chat/ChatScrollView.swift,
 				Views/Chat/ChatView.swift,
-				Views/Chat/FullScreenImageView.swift,
-				Views/Chat/ImageMessageView.swift,
+				Views/Chat/MediaGalleryViewer.swift,
 				Views/Chat/MessageBubble.swift,
-				Views/Chat/MessageContextMenu.swift,
-				Views/Chat/VideoPlayerView.swift,
-				Views/MainTabView.swift,
-			Views/Chats/ChatRowView.swift,
-			Views/Chats/ChatsListView.swift,
+				Views/Chat/MessageInputView.swift,
+				Views/Chats/ChatRowView.swift,
+				Views/Chats/ChatsListView.swift,
 				Views/Chats/NewChatView.swift,
+				Views/Chats/UserProfileView.swift,
 				Views/ChatsSplitView.swift,
 				Views/Components/ErrorToastView.swift,
+				Views/Components/ImageCropView.swift,
+				Views/Components/PinDotsView.swift,
 				Views/Components/QRScannerView.swift,
-				Views/Profile/ProfileShareView.swift,
-				Views/Chats/UserProfileView.swift,
-			Views/Profile/UserProfileView.swift,
+				Views/MainTabView.swift,
+				Views/Onboarding/OnboardingView.swift,
+				Views/Onboarding/RecoveryEntryView.swift,
+				Views/Onboarding/RegistrationFlowView.swift,
+				Views/Security/DuressPinSetupView.swift,
+				Views/Security/PinDisableView.swift,
+				Views/Security/PinSetupView.swift,
+				Views/Security/RecoverySetupView.swift,
+				Views/Settings/AccountSettingsView.swift,
+				Views/Settings/BackgroundFetchSettingsView.swift,
+				Views/Settings/ContactQRCodeView.swift,
+				Views/Settings/SecurityView.swift,
 				Views/Settings/SettingsView.swift,
-				Views/Chat/MediaGalleryViewer.swift,
-			Views/Chat/MessageInputView.swift,
-			Views/Components/ImageCropView.swift,
-			Views/Settings/AccountSettingsView.swift,
-			Views/Settings/BackgroundFetchSettingsView.swift,
-			Views/Settings/ContactQRCodeView.swift,
-			Views/Settings/SecurityView.swift,
-			Views/Settings/DebugSettingsView.swift,
-Views/Components/PinDotsView.swift,
-Views/Onboarding/OnboardingView.swift,
-Views/Onboarding/RecoveryEntryView.swift,
-Views/Onboarding/RegistrationFlowView.swift,
-Views/Security/DuressPinSetupView.swift,
-Views/Security/PinDisableView.swift,
-Views/Security/PinSetupView.swift,
-Views/Security/RecoverySetupView.swift,
 			);
 			target = BF3DE82F2F62C1C30058C1AA /* Construct Desktop */;
 		};
@@ -131,7 +114,7 @@ Views/Security/RecoverySetupView.swift,
 		BF103A712EED889800324CEA /* ConstructMessenger */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				BF1804172F0D59AA001EA291 /* Exceptions for "ConstructMessenger" folder in "ConstructMessenger" target */,
+				BF1804172F0D59AA001EA291 /* Exceptions for "ConstructMessenger" folder in "Construct Messenger" target */,
 				BF1804182F0D59AA001EA291 /* Exceptions for "ConstructMessenger" folder in "Construct Desktop" target */,
 			);
 			path = ConstructMessenger;
@@ -225,7 +208,7 @@ Views/Security/RecoverySetupView.swift,
 		BF103A702EED889800324CEA /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				BF103A6F2EED889800324CEA /* ConstructMessenger.app */,
+				BF103A6F2EED889800324CEA /* Construct Messenger.app */,
 				BF8A96FA2EFF0FAF009C5EF7 /* ConstructMessengerTests.xctest */,
 				BF3DE8302F62C1C30058C1AA /* Construct Desktop.app */,
 				BF3DE83C2F62C1C40058C1AA /* Construct DesktopTests.xctest */,
@@ -246,9 +229,9 @@ Views/Security/RecoverySetupView.swift,
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		BF103A6E2EED889800324CEA /* ConstructMessenger */ = {
+		BF103A6E2EED889800324CEA /* Construct Messenger */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = BF103A7C2EED889800324CEA /* Build configuration list for PBXNativeTarget "ConstructMessenger" */;
+			buildConfigurationList = BF103A7C2EED889800324CEA /* Build configuration list for PBXNativeTarget "Construct Messenger" */;
 			buildPhases = (
 				BF103A6B2EED889800324CEA /* Sources */,
 				BF103A6C2EED889800324CEA /* Frameworks */,
@@ -261,7 +244,7 @@ Views/Security/RecoverySetupView.swift,
 			fileSystemSynchronizedGroups = (
 				BF103A712EED889800324CEA /* ConstructMessenger */,
 			);
-			name = ConstructMessenger;
+			name = "Construct Messenger";
 			packageProductDependencies = (
 				BFF6FC9C2F4C3E1F00A31F36 /* GRPCCore */,
 				BFF6FCF32F4C4CCA00A31F36 /* GRPCProtobuf */,
@@ -269,7 +252,7 @@ Views/Security/RecoverySetupView.swift,
 				BFF6FCFF2F4C4E5300A31F36 /* SwiftProtobuf */,
 			);
 			productName = "Construct Messenger";
-			productReference = BF103A6F2EED889800324CEA /* ConstructMessenger.app */;
+			productReference = BF103A6F2EED889800324CEA /* Construct Messenger.app */;
 			productType = "com.apple.product-type.application";
 		};
 		BF3DE82F2F62C1C30058C1AA /* Construct Desktop */ = {
@@ -419,7 +402,7 @@ Views/Security/RecoverySetupView.swift,
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				BF103A6E2EED889800324CEA /* ConstructMessenger */,
+				BF103A6E2EED889800324CEA /* Construct Messenger */,
 				BF8A96F92EFF0FAF009C5EF7 /* ConstructMessengerTests */,
 				BF3DE82F2F62C1C30058C1AA /* Construct Desktop */,
 				BF3DE83B2F62C1C40058C1AA /* Construct DesktopTests */,
@@ -517,7 +500,7 @@ Views/Security/RecoverySetupView.swift,
 		};
 		BF8A96FF2EFF0FAF009C5EF7 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = BF103A6E2EED889800324CEA /* ConstructMessenger */;
+			target = BF103A6E2EED889800324CEA /* Construct Messenger */;
 			targetProxy = BF8A96FE2EFF0FAF009C5EF7 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
@@ -564,7 +547,7 @@ Views/Security/RecoverySetupView.swift,
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = ConstructMessenger/ConstructMessenger.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 186;
+				CURRENT_PROJECT_VERSION = 187;
 				DEVELOPMENT_TEAM = PK2473XF3P;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -600,7 +583,7 @@ Views/Security/RecoverySetupView.swift,
 					"$(PROJECT_DIR)/target/aarch64-apple-ios-macabi/release",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.9.20;
+				MARKETING_VERSION = 0.9.21;
 				PRODUCT_BUNDLE_IDENTIFIER = maximeliseyev.constructmessenger;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -754,7 +737,7 @@ Views/Security/RecoverySetupView.swift,
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = ConstructMessenger/ConstructMessenger.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 186;
+				CURRENT_PROJECT_VERSION = 187;
 				DEVELOPMENT_TEAM = PK2473XF3P;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -790,7 +773,7 @@ Views/Security/RecoverySetupView.swift,
 					"$(PROJECT_DIR)/target/aarch64-apple-ios-macabi/release",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.9.20;
+				MARKETING_VERSION = 0.9.21;
 				PRODUCT_BUNDLE_IDENTIFIER = maximeliseyev.constructmessenger;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -815,7 +798,7 @@ Views/Security/RecoverySetupView.swift,
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = ConstructMessenger/ConstructMessenger.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 186;
+				CURRENT_PROJECT_VERSION = 187;
 				DEVELOPMENT_TEAM = PK2473XF3P;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -851,7 +834,7 @@ Views/Security/RecoverySetupView.swift,
 					"$(PROJECT_DIR)/target/aarch64-apple-ios-macabi/release",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.9.20;
+				MARKETING_VERSION = 0.9.21;
 				PRODUCT_BUNDLE_IDENTIFIER = maximeliseyev.constructmessenger;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -1272,7 +1255,7 @@ Views/Security/RecoverySetupView.swift,
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		BF103A7C2EED889800324CEA /* Build configuration list for PBXNativeTarget "ConstructMessenger" */ = {
+		BF103A7C2EED889800324CEA /* Build configuration list for PBXNativeTarget "Construct Messenger" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				BF103A7D2EED889800324CEA /* Debug */,
@@ -1360,26 +1343,6 @@ Views/Security/RecoverySetupView.swift,
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		BFF6FC9C2F4C3E1F00A31F36 /* GRPCCore */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = BFF6FD0A2F5C000000A31F36 /* XCRemoteSwiftPackageReference "grpc-swift-2" */;
-			productName = GRPCCore;
-		};
-		BFF6FCF32F4C4CCA00A31F36 /* GRPCProtobuf */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = BFF6FCF22F4C4CCA00A31F36 /* XCRemoteSwiftPackageReference "grpc-swift-protobuf" */;
-			productName = GRPCProtobuf;
-		};
-		BFF6FCF82F4C4D6600A31F36 /* GRPCNIOTransportHTTP2 */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = BFF6FCF72F4C4D6600A31F36 /* XCRemoteSwiftPackageReference "grpc-swift-nio-transport" */;
-			productName = GRPCNIOTransportHTTP2;
-		};
-		BFF6FCFF2F4C4E5300A31F36 /* SwiftProtobuf */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = BFF6FCFE2F4C4E5300A31F36 /* XCRemoteSwiftPackageReference "swift-protobuf" */;
-			productName = SwiftProtobuf;
-		};
 		BF3DE8712F62C2000058C1AA /* GRPCCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = BFF6FD0A2F5C000000A31F36 /* XCRemoteSwiftPackageReference "grpc-swift-2" */;
@@ -1396,6 +1359,26 @@ Views/Security/RecoverySetupView.swift,
 			productName = GRPCNIOTransportHTTP2;
 		};
 		BF3DE8772F62C2000058C1AA /* SwiftProtobuf */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BFF6FCFE2F4C4E5300A31F36 /* XCRemoteSwiftPackageReference "swift-protobuf" */;
+			productName = SwiftProtobuf;
+		};
+		BFF6FC9C2F4C3E1F00A31F36 /* GRPCCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BFF6FD0A2F5C000000A31F36 /* XCRemoteSwiftPackageReference "grpc-swift-2" */;
+			productName = GRPCCore;
+		};
+		BFF6FCF32F4C4CCA00A31F36 /* GRPCProtobuf */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BFF6FCF22F4C4CCA00A31F36 /* XCRemoteSwiftPackageReference "grpc-swift-protobuf" */;
+			productName = GRPCProtobuf;
+		};
+		BFF6FCF82F4C4D6600A31F36 /* GRPCNIOTransportHTTP2 */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BFF6FCF72F4C4D6600A31F36 /* XCRemoteSwiftPackageReference "grpc-swift-nio-transport" */;
+			productName = GRPCNIOTransportHTTP2;
+		};
+		BFF6FCFF2F4C4E5300A31F36 /* SwiftProtobuf */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = BFF6FCFE2F4C4E5300A31F36 /* XCRemoteSwiftPackageReference "swift-protobuf" */;
 			productName = SwiftProtobuf;

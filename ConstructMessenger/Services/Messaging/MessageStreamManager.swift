@@ -67,6 +67,14 @@ final class MessageStreamManager {
     /// Flushed as `.failed` receipts once the stream is established.
     private var pendingFailedAcks: [MessagingServiceClient.FailedMessage] = []
 
+    /// Delivered receipts queued when the stream was not yet open.
+    /// Flushed as `.delivered` receipts once the stream is established.
+    private struct PendingDeliveredAck {
+        let messageIds: [String]
+        let recipientUserId: String
+    }
+    private var pendingDeliveredAcks: [PendingDeliveredAck] = []
+
     // MARK: - Configuration
 
     private let heartbeatInterval: TimeInterval = 25
@@ -195,6 +203,15 @@ final class MessageStreamManager {
     ///   - status: `.delivered` after successful decrypt, `.failed` on unrecoverable decrypt error.
     func sendReceipt(_ messageIds: [String], to recipientUserId: String = "", status: Shared_Proto_Signaling_V1_ReceiptStatus) {
         guard !messageIds.isEmpty else { return }
+
+        // If the live stream isn't open yet, queue delivered receipts for flush when it opens.
+        // (outboundContinuation?.yield silently drops if nil — see sendReceipt guard below)
+        if outboundContinuation == nil, status == .delivered {
+            pendingDeliveredAcks.append(PendingDeliveredAck(messageIds: messageIds, recipientUserId: recipientUserId))
+            Log.info("📨 Receipt queued (stream not open): \(status) for \(messageIds.count) msg(s) → recipient=\(recipientUserId.prefix(8))…", category: "MessageStream")
+            return
+        }
+
         var direct = Shared_Proto_Signaling_V1_DirectReceipt()
         direct.messageIds = messageIds
         direct.status = status
@@ -226,6 +243,7 @@ final class MessageStreamManager {
 
             guard !Task.isCancelled else { break }
 
+            Log.info("🔄 connectLoop: fetchMissedMessages done, isCancelled=\(Task.isCancelled) — opening stream", category: "MessageStream")
             ConnectionStatusManager.shared.markConnecting()
             do {
                 try await openStream()
@@ -283,6 +301,8 @@ final class MessageStreamManager {
             guard !Task.isCancelled else { return }
             do {
                 let result = try await MessagingServiceClient.shared.getPendingMessages(sinceCursor: cursor)
+                // Successful fetch = server is reachable; update connection status
+                ConnectionStatusManager.shared.markRequestSucceeded()
                 if !result.messages.isEmpty {
                     totalFetched += result.messages.count
                     for msg in result.messages {
@@ -347,6 +367,16 @@ final class MessageStreamManager {
                 sendReceipt(entries.map(\.id), to: senderId, status: .failed)
             }
             Log.info("📤 Flushed \(toFlush.count) failed ACK(s) for undecryptable pending message(s)", category: "MessageStream")
+        }
+
+        // Flush delivered receipts that were queued while the stream was closed
+        if !pendingDeliveredAcks.isEmpty {
+            let toFlush = pendingDeliveredAcks
+            pendingDeliveredAcks.removeAll()
+            for ack in toFlush {
+                sendReceipt(ack.messageIds, to: ack.recipientUserId, status: .delivered)
+            }
+            Log.info("📤 Flushed \(toFlush.count) pending delivered receipt(s)", category: "MessageStream")
         }
 
         // Start heartbeat
