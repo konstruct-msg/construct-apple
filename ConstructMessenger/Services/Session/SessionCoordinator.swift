@@ -367,7 +367,7 @@ final class SessionCoordinator {
         if let existing = try? context.fetch(fetchRequest).first {
             if existing.decryptedContent == nil {
                 existing.decryptedContent = plaintext
-                try? context.save()
+                context.saveAndLog()
             }
             return
         }
@@ -387,6 +387,6 @@ final class SessionCoordinator {
         chat.lastMessageText = Chat.formatPreviewText(plaintext)
         chat.lastMessageTime = message.timestamp
 
-        try? context.save()
+        context.saveAndLog()
     }
 }

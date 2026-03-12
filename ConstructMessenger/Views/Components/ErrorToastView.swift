@@ -50,11 +50,10 @@ struct ErrorToastView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            if let actionTitle = error.recoveryActionTitle {
+            if let actionTitle = error.recoveryActionTitle, router.recoveryHandler != nil {
+                // Show action button only when a recovery handler is registered
                 Button(actionTitle) {
-                    router.dismiss()
-                    // Recovery callbacks are handled by the ViewModel that originally
-                    // triggered the error; the toast just dismisses here.
+                    router.executeRecovery()
                 }
                 .font(.subheadline.weight(.semibold))
                 .foregroundColor(tintColor(for: error))

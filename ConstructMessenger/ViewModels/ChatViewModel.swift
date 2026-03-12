@@ -205,7 +205,9 @@ class ChatViewModel: NSObject {
                 guard let self = self else { return }
                 if !self.isSessionReady {
                     Log.error("⏱️ Timeout waiting for public key bundle from server", category: "ChatViewModel")
-                    ErrorRouter.shared.report(.sessionInitFailed(contactId: userId))
+                    ErrorRouter.shared.report(.sessionInitFailed(contactId: userId), recovery: { [weak self] in
+                        self?.fetchRecipientPublicKey()
+                    })
                     self.isSessionReady = false
                 }
             }
@@ -223,7 +225,9 @@ class ChatViewModel: NSObject {
             } catch {
                 await MainActor.run { [weak self] in
                     Log.error("❌ Failed to fetch public key via gRPC after retries: \(error.localizedDescription)", category: "ChatViewModel")
-                    ErrorRouter.shared.report(.sessionInitFailed(contactId: userId))
+                    ErrorRouter.shared.report(.sessionInitFailed(contactId: userId), recovery: { [weak self] in
+                        self?.fetchRecipientPublicKey()
+                    })
                     self?.isSessionReady = false
                 }
             }
@@ -244,7 +248,7 @@ class ChatViewModel: NSObject {
                 user.username = ""
                 user.displayName = DisplayNameGenerator.generate(from: data.userId)
             }
-            try? viewContext.save()
+            viewContext.saveAndLog()
             Log.info("Updated username for user: \(data.username)", category: "ChatViewModel")
         }
 
@@ -375,8 +379,10 @@ class ChatViewModel: NSObject {
             onFailure: { [weak self] error in
                 guard let self = self else { return }
                 self.isInitializingSession = false
-                ErrorRouter.shared.report(.sessionInitFailed(contactId: userId))
-                
+                ErrorRouter.shared.report(.sessionInitFailed(contactId: userId), recovery: { [weak self] in
+                    self?.fetchRecipientPublicKey()
+                })
+
                 // Mark queued messages as failed
                 self.failQueuedMessages(reason: error.userFacingMessage)
             }
@@ -419,7 +425,7 @@ class ChatViewModel: NSObject {
             msg.isSentByMe = true
             msg.chat = chat
         }
-        try? viewContext.save()
+        viewContext.saveAndLog()
         queuedMessages.removeAll()
     }
 
@@ -550,7 +556,9 @@ class ChatViewModel: NSObject {
             } catch {
                 await MainActor.run {
                     Log.error("❌ Media upload failed: \(error.localizedDescription) | raw: \(error)", category: "ChatViewModel")
-                    ErrorRouter.shared.report(error)
+                    ErrorRouter.shared.report(error, recovery: { [weak self] in
+                        self?.sendMediaMessage(images: images, caption: caption, replyTo: replyTo)
+                    })
                     isSending = false
                 }
             }
@@ -572,7 +580,9 @@ class ChatViewModel: NSObject {
             } catch {
                 await MainActor.run {
                     Log.error("❌ File upload failed: \(error.localizedDescription)", category: "ChatViewModel")
-                    ErrorRouter.shared.report(error)
+                    ErrorRouter.shared.report(error, recovery: { [weak self] in
+                        self?.sendFileMessage(fileURLs: fileURLs, caption: caption, replyTo: replyTo)
+                    })
                     isSending = false
                 }
             }
@@ -678,7 +688,9 @@ class ChatViewModel: NSObject {
                             Log.error("❌ Failed to send message: \(error)", category: "ChatViewModel")
                         }
                         self.updateMessageStatus(messageId: messageId, status: .failed)
-                        ErrorRouter.shared.report(error)
+                        ErrorRouter.shared.report(error, recovery: { [weak self] in
+                            self?.sendTextMessage(text: text, replyTo: replyTo, localThumbnails: localThumbnails)
+                        })
                         self.isSending = false
                     }
                 }

@@ -145,7 +145,7 @@ class PublicKeyBundleHandler {
                 user.username = ""
                 user.displayName = DisplayNameGenerator.generate(from: data.userId)
             }
-            try? context.save()
+            context.saveAndLog()
             Log.info("Updated username for user: \(data.username)", category: "PublicKeyBundleHandler")
         }
         
@@ -189,7 +189,7 @@ class PublicKeyBundleHandler {
                 // Call success callback with the decrypted data
                 onSuccess(chat, message, decryptedContent)
                 // Note: chat.lastMessageText is updated by onSuccess (saveMessage) with correct plaintext
-                try? context.save()
+                context.saveAndLog()
                 Log.info("✅ Successfully saved decrypted pending message", category: "PublicKeyBundleHandler")
                 return true
             } else {

@@ -376,7 +376,9 @@ class AuthViewModel {
     private func handleTimeout() {
         if self.isLoading && !self.isAuthenticated {
             self.isLoading = false
-            ErrorRouter.shared.report(.network(.connectionFailed))
+            ErrorRouter.shared.report(.network(.connectionFailed), recovery: { [weak self] in
+                self?.restoreSession()
+            })
             print("⏱️ Session restore timeout - showing login screen")
         }
     }

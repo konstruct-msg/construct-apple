@@ -215,7 +215,7 @@ class MessageRouter {
                 original.decryptedContent = decryptedContent
                 original.isEdited = true
                 original.editedAt = Date(timeIntervalSince1970: TimeInterval(message.timestamp))
-                try? context.save()
+                context.saveAndLog()
                 Log.info("✏️ Edited message \(message.editsMessageId.prefix(8))…", category: "MessageRouter")
             } else {
                 Log.error("❌ Cannot find original message to edit: \(message.editsMessageId)", category: "MessageRouter")
@@ -233,7 +233,7 @@ class MessageRouter {
         // 7. Update chat metadata
         chat.lastMessageText = Chat.formatPreviewText(decryptedContent)
         chat.lastMessageTime = Date(timeIntervalSince1970: TimeInterval(message.timestamp))
-        try? context.save()
+        context.saveAndLog()
 
         Log.info("📬 Message received and saved: \(message.id)", category: "MessageRouter")
     }

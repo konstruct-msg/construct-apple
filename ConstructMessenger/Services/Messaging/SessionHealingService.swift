@@ -129,7 +129,7 @@ final class SessionHealingService {
     func removeRecord(for messageId: String, in context: NSManagedObjectContext) {
         guard let record = healingRecord(for: messageId, in: context) else { return }
         context.delete(record)
-        try? context.save()
+        context.saveAndLog()
     }
 
     /// Removes ALL healing records for `senderId`.
@@ -140,7 +140,7 @@ final class SessionHealingService {
         if !records.isEmpty {
             Log.info("🧹 SessionHealingService: clearing \(records.count) healing record(s) for \(senderId.prefix(8))…", category: "SessionHealing")
             records.forEach { context.delete($0) }
-            try? context.save()
+            context.saveAndLog()
         }
     }
 
@@ -154,6 +154,6 @@ final class SessionHealingService {
         guard let stale = try? context.fetch(fetch), !stale.isEmpty else { return }
         Log.info("🧹 SessionHealingService: pruning \(stale.count) stale healing record(s)", category: "SessionHealing")
         stale.forEach { context.delete($0) }
-        try? context.save()
+        context.saveAndLog()
     }
 }

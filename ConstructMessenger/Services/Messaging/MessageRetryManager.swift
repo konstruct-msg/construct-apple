@@ -35,13 +35,13 @@ class MessageRetryManager {
 
         // ✅ Increment retry count
         message.retryCount += 1
-        try? context.save()
+        context.saveAndLog()
 
         Log.info("🔄 Retrying message \(message.id.prefix(8))... (attempt \(message.retryCount))", category: "MessageRetryManager")
 
         // ✅ Update existing message status instead of creating new one
         message.deliveryStatus = .sending
-        try? context.save()
+        context.saveAndLog()
 
         // ✅ Re-encrypt and resend using SAME message ID
         do {
@@ -74,7 +74,7 @@ class MessageRetryManager {
                         fetchRequest.fetchLimit = 1
                         guard let liveMsg = try? context.fetch(fetchRequest).first else { return }
                         liveMsg.deliveryStatus = deliveryStatus
-                        try? context.save()
+                        context.saveAndLog()
                         Log.info("✅ Message retry successful: \(response.messageId), status: \(deliveryStatus)", category: "MessageRetryManager")
                     }
                 } catch {
@@ -84,7 +84,7 @@ class MessageRetryManager {
                         fetchRequest.fetchLimit = 1
                         guard let liveMsg = try? context.fetch(fetchRequest).first else { return }
                         liveMsg.deliveryStatus = .failed
-                        try? context.save()
+                        context.saveAndLog()
                         Log.error("❌ Message retry failed: \(error.localizedDescription)", category: "MessageRetryManager")
                         onError("Failed to send message: \(error.localizedDescription)")
                     }
@@ -93,7 +93,7 @@ class MessageRetryManager {
         } catch {
             // ✅ Encryption failed - mark as failed
             message.deliveryStatus = .failed
-            try? context.save()
+            context.saveAndLog()
             onError("Failed to encrypt message: \(error.localizedDescription)")
             Log.error("❌ Retry encryption failed: \(error.localizedDescription)", category: "MessageRetryManager")
         }
@@ -135,7 +135,7 @@ class MessageRetryManager {
 
             message.deliveryStatus = .sending
             message.retryCount += 1
-            try? context.save()
+            context.saveAndLog()
 
             Task {
                 do {
@@ -150,7 +150,7 @@ class MessageRetryManager {
                         let fr = Message.fetchRequest(); fr.predicate = NSPredicate(format: "id == %@", capturedId); fr.fetchLimit = 1
                         guard let liveMsg = try? context.fetch(fr).first else { return }
                         liveMsg.deliveryStatus = .sent
-                        try? context.save()
+                        context.saveAndLog()
                         Log.debug("📮 Re-sent queued message via gRPC: \(capturedId) (attempt \(liveMsg.retryCount))", category: "MessageRetryManager")
                     }
                 } catch {
@@ -159,7 +159,7 @@ class MessageRetryManager {
                         let fr = Message.fetchRequest(); fr.predicate = NSPredicate(format: "id == %@", capturedId); fr.fetchLimit = 1
                         guard let liveMsg = try? context.fetch(fr).first else { return }
                         liveMsg.deliveryStatus = .failed
-                        try? context.save()
+                        context.saveAndLog()
                     }
                 }
             }

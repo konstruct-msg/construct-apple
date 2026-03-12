@@ -141,7 +141,7 @@ class SettingsViewModel {
                 fetchRequest.fetchLimit = 1
                 if let user = try? context.fetch(fetchRequest).first {
                     user.username = trimmed
-                    try? context.save()
+                    context.saveAndLog()
                 }
             }
             username = trimmed

@@ -370,7 +370,7 @@ class BackgroundFetchManager: NSObject {
             do {
                 try backgroundContext.save()
                 context.performAndWait {
-                    try? context.save()
+                    context.saveAndLog()
                 }
                 
                 Log.info("✅ Saved \(newMessagesCount) new messages to Core Data", category: "BackgroundFetch")

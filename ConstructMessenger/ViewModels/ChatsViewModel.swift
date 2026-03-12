@@ -353,7 +353,7 @@ class ChatsViewModel {
                 message.deliveryStatus = .delivered
                 Log.info("📬 Receipt: message \(messageId) marked delivered (was \(prev))", category: "MessageStream")
             }
-            try? context.save()
+            context.saveAndLog()
         }
     }
 }

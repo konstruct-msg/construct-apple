@@ -75,3 +75,21 @@ extension Error {
         return localizedDescription
     }
 }
+
+// MARK: - NSManagedObjectContext helpers
+
+import CoreData
+
+extension NSManagedObjectContext {
+    /// Saves the context and logs any error. Use instead of `try? save()` in
+    /// service-layer code where a silent failure would lose message or session data.
+    func saveAndLog(category: String = "CoreData", file: String = #file, line: Int = #line) {
+        guard hasChanges else { return }
+        do {
+            try save()
+        } catch {
+            Log.error("❌ Core Data save failed (\(file.split(separator: "/").last ?? ""):\(line)): \(error)",
+                      category: category)
+        }
+    }
+}

@@ -114,7 +114,7 @@ class MessagePersistenceService {
         message.decryptedContent = newContent
         message.isEdited = isEdited
         message.editedAt = editedAt
-        try? context.save()
+        context.saveAndLog()
     }
 
     func updateMessageStatus(
