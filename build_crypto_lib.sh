@@ -127,15 +127,10 @@ $BUILD_SIM && build_target "aarch64-apple-ios-sim"
 # ── Мёрдж + копирование ───────────────────────────────────────────────────────
 hdr "Мёрдж ICE и копирование"
 
-SIM_OUT="$PROJECT_ROOT/target/aarch64-apple-ios-sim/release"
-
 $BUILD_IOS && merge_ice "aarch64-apple-ios"        "$PROJECT_ROOT/libconstruct_core.a"
 $BUILD_CAT && merge_ice "aarch64-apple-ios-macabi"  "$PROJECT_ROOT/libconstruct_core_catalyst.a"
 $BUILD_MAC && merge_ice "aarch64-apple-darwin"      "$PROJECT_ROOT/libconstruct_core_mac.a"
-if $BUILD_SIM; then
-  mkdir -p "$SIM_OUT"
-  merge_ice "aarch64-apple-ios-sim" "$SIM_OUT/libconstruct_core.a"
-fi
+$BUILD_SIM && merge_ice "aarch64-apple-ios-sim"     "$PROJECT_ROOT/libconstruct_core_sim.a"
 
 # ── Верификация пролога ───────────────────────────────────────────────────────
 hdr "Верификация"
@@ -153,7 +148,7 @@ check_prologue() {
 $BUILD_IOS && check_prologue "$PROJECT_ROOT/libconstruct_core.a"          "iOS"
 $BUILD_CAT && check_prologue "$PROJECT_ROOT/libconstruct_core_catalyst.a" "Catalyst"
 $BUILD_MAC && check_prologue "$PROJECT_ROOT/libconstruct_core_mac.a"      "macOS"
-$BUILD_SIM && check_prologue "$SIM_OUT/libconstruct_core.a"               "Simulator"
+$BUILD_SIM && check_prologue "$PROJECT_ROOT/libconstruct_core_sim.a"      "Simulator"
 
 # ── Готово ────────────────────────────────────────────────────────────────────
 echo ""

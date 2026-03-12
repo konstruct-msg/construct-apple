@@ -281,7 +281,6 @@ struct DeleteAccountConfirmationView: View {
     let onCancel: () -> Void
 
     @State private var countdown = 7
-    @State private var errorMessage: String?
     @State private var showLocalDeleteConfirm = false
 
     var body: some View {
@@ -330,15 +329,8 @@ struct DeleteAccountConfirmationView: View {
                 .padding(.bottom, 28)
             }
 
-            // Error message + local-delete fallback
-            if let err = errorMessage {
-                Text(err)
-                    .font(.footnote)
-                    .foregroundColor(.red)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 32)
-                    .padding(.bottom, 12)
-
+            // Local-delete fallback — shown after a server-side deletion failure
+            if authViewModel.deleteAccountFailed {
                 Button {
                     showLocalDeleteConfirm = true
                 } label: {
@@ -402,12 +394,9 @@ struct DeleteAccountConfirmationView: View {
                 countdown -= 1
             }
         }
-        .onChange(of: authViewModel.errorMessage) { _, msg in
-            if let msg { errorMessage = msg }
-        }
         .onChange(of: authViewModel.isLoading) { _, loading in
-            // Clear error when new attempt starts
-            if loading { errorMessage = nil }
+            // Reset failed state when a new deletion attempt starts
+            if loading { authViewModel.deleteAccountFailed = false }
         }
         // On macOS Catalyst, sheets are child windows and don't auto-close
         // when parent view changes — explicitly dismiss when account is deleted.

@@ -261,11 +261,6 @@ struct ChatView: View {
             }
         }
         .overlay(alignment: .top, content: searchOverlay)
-        .overlay(alignment: .top) {
-            // ✅ Status banner as overlay (doesn't block messages)
-            statusBanner
-                .padding(.top, 0)  // Align to top under navbar
-        }
         .sheet(isPresented: $showingUserProfile) {
             if let user = viewModel.chat.otherUser {
                 UserProfileView(user: user)
@@ -289,46 +284,6 @@ struct ChatView: View {
     }
     
     // MARK: - View Components
-    
-    @ViewBuilder
-    private var statusBanner: some View {
-        // Only show banner for actual error messages — network/session status moved to navigation subtitle
-        if let errorMessage = viewModel.errorMessage, !errorMessage.isEmpty {
-            statusBannerRow(text: errorMessage, color: .red, isLocalized: false)
-        }
-    }
-    
-    @ViewBuilder
-    private func statusBannerRow(text: String, color: Color, showProgress: Bool = false, isLocalized: Bool = true) -> some View {
-        HStack(spacing: 8) {
-            if showProgress {
-                ProgressView()
-                    .scaleEffect(0.7)
-            }
-            // If text is already a full message (contains spaces or special chars), use it directly
-            // Otherwise, try to localize it
-            let displayText = isLocalized ? NSLocalizedString(text, comment: "") : text
-            Text(displayText)
-                .font(.caption)
-                .foregroundColor(color)
-        }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 12)
-        .frame(maxWidth: .infinity)
-        .background(
-            // ✅ Solid background with blur for overlay
-            Color.AppBackground.primary
-                .opacity(0.95)
-        )
-        .overlay(
-            Rectangle()
-                .fill(color.opacity(0.2))
-        )
-        .cornerRadius(8)
-        .padding(.horizontal, 12)
-        .padding(.top, 4)
-        .shadow(color: Color.black.opacity(0.1), radius: 4, x: 0, y: 2)
-    }
     
     @ViewBuilder
     private var deleteButtonBar: some View {

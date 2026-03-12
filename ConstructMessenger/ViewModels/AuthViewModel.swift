@@ -35,7 +35,8 @@ class AuthViewModel {
     }
     
     var isLoading = false
-    var errorMessage: String?
+    /// Set to true when a server-side account deletion fails, enabling the local-only fallback button.
+    var deleteAccountFailed = false
 
     private var sessionRestoreTimer: Timer?
     private var authOperationTimer: Timer?
@@ -296,7 +297,6 @@ class AuthViewModel {
     
     func deleteAccount() {
         self.isLoading = true
-        self.errorMessage = nil
         
         Log.info("🗑️ Requesting account deletion", category: "AuthViewModel")
         
@@ -308,7 +308,8 @@ class AuthViewModel {
                 await MainActor.run {
                     cancelTimeouts()
                     self.isLoading = false
-                    self.errorMessage = Self.friendlyDeleteError(error)
+                    self.deleteAccountFailed = true
+                    ErrorRouter.shared.report(.unknown(Self.friendlyDeleteError(error)))
                 }
             }
         }
@@ -375,7 +376,7 @@ class AuthViewModel {
     private func handleTimeout() {
         if self.isLoading && !self.isAuthenticated {
             self.isLoading = false
-            self.errorMessage = "Connection timeout. Please check your internet and try again."
+            ErrorRouter.shared.report(.network(.connectionFailed))
             print("⏱️ Session restore timeout - showing login screen")
         }
     }
@@ -460,7 +461,7 @@ class AuthViewModel {
     private func handleSessionExpired() {
         SessionManager.shared.clearSession()
         self.isAuthenticated = false
-        self.errorMessage = "Session expired. Please login again."
+        ErrorRouter.shared.report(.sessionExpired)
     }
     
     private func handleDeleteAccountSuccess() {

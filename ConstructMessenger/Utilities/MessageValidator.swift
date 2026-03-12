@@ -14,6 +14,7 @@ enum MessageValidationError: LocalizedError {
     case unsupportedFileType(fileName: String, extension: String)
     case totalSizeTooLarge(currentSize: Int64, maxSize: Int64)
     case emptyMessage
+    case selfSend
 
     var errorDescription: String? {
         switch self {
@@ -27,6 +28,8 @@ enum MessageValidationError: LocalizedError {
             return "Total message size is too large (\(MessageSizeLimits.formatFileSize(current))). Maximum allowed: \(MessageSizeLimits.formatFileSize(max))"
         case .emptyMessage:
             return "Message cannot be empty"
+        case .selfSend:
+            return "Cannot send encrypted messages to yourself"
         }
     }
 }

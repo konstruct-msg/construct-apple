@@ -26,7 +26,6 @@ struct QueuedMessage {
 class ChatViewModel: NSObject {
     var messages: [Message] = []
     var isSending = false
-    var errorMessage: String?
     var isLoadingMore = false
     var hasMoreMessages = true
     var editingMessage: Message?
@@ -187,7 +186,7 @@ class ChatViewModel: NSObject {
 
         // 🚫 BLOCK: Cannot send encrypted messages to yourself
         if userId == currentUserId {
-            errorMessage = "Cannot send encrypted messages to yourself. Use notes instead."
+            ErrorRouter.shared.report(.validation(.selfSend))
             Log.debug("Blocked attempt to initialize session with self", category: "ChatViewModel")
             return
         }
@@ -206,7 +205,7 @@ class ChatViewModel: NSObject {
                 guard let self = self else { return }
                 if !self.isSessionReady {
                     Log.error("⏱️ Timeout waiting for public key bundle from server", category: "ChatViewModel")
-                    self.errorMessage = "Failed to establish secure connection: server did not respond"
+                    ErrorRouter.shared.report(.sessionInitFailed(contactId: userId))
                     self.isSessionReady = false
                 }
             }
@@ -224,7 +223,7 @@ class ChatViewModel: NSObject {
             } catch {
                 await MainActor.run { [weak self] in
                     Log.error("❌ Failed to fetch public key via gRPC after retries: \(error.localizedDescription)", category: "ChatViewModel")
-                    self?.errorMessage = "Failed to fetch public key after retries: \(error.userFacingMessage)"
+                    ErrorRouter.shared.report(.sessionInitFailed(contactId: userId))
                     self?.isSessionReady = false
                 }
             }
@@ -367,8 +366,7 @@ class ChatViewModel: NSObject {
                 guard let self = self else { return }
                 self.isSessionReady = true
                 self.isInitializingSession = false
-                self.errorMessage = nil
-                
+
                 // Send queued messages
                 Task {
                     await self.sendQueuedMessages(userId: userId)
@@ -377,7 +375,7 @@ class ChatViewModel: NSObject {
             onFailure: { [weak self] error in
                 guard let self = self else { return }
                 self.isInitializingSession = false
-                self.errorMessage = "Failed to initialize secure connection: \(error.userFacingMessage)"
+                ErrorRouter.shared.report(.sessionInitFailed(contactId: userId))
                 
                 // Mark queued messages as failed
                 self.failQueuedMessages(reason: error.userFacingMessage)
@@ -439,7 +437,7 @@ class ChatViewModel: NSObject {
         }
         // 🚫 BLOCK: Cannot send encrypted messages to yourself
         guard recipientId != currentUserId else {
-            errorMessage = "Cannot send encrypted messages to yourself. Use notes app instead."
+            ErrorRouter.shared.report(.validation(.selfSend))
             Log.debug("❌ Blocked attempt to send message to self", category: "ChatViewModel")
             return
         }
@@ -449,7 +447,6 @@ class ChatViewModel: NSObject {
         if !hasSession {
             let queued = QueuedMessage(text: text, images: images, replyTo: replyTo)
             queuedMessages.append(queued)
-            errorMessage = "Initializing secure connection..."
             isInitializingSession = true
             Log.info("📝 SESSION_STATE[queue_message]: userId=\(recipientId.prefix(8))..., queueSize=\(queuedMessages.count)", category: "SessionInit")
             Task {
@@ -476,11 +473,11 @@ class ChatViewModel: NSObject {
         do {
             try MessageValidator.validateText(text)
         } catch let error as MessageValidationError {
-            errorMessage = error.userFacingMessage
+            ErrorRouter.shared.report(error)
             Log.error("❌ Message validation failed: \(error.localizedDescription)", category: "ChatViewModel")
             return
         } catch {
-            errorMessage = "Failed to validate message: \(error.userFacingMessage)"
+            ErrorRouter.shared.report(.unknown(error.userFacingMessage))
             Log.error("❌ Unexpected validation error: \(error)", category: "ChatViewModel")
             return
         }
@@ -516,7 +513,7 @@ class ChatViewModel: NSObject {
             recipientId: recipientId,
             context: viewContext,
             onError: { [weak self] error in
-                self?.errorMessage = error
+                ErrorRouter.shared.report(.unknown(error))
             }
         )
     }
@@ -532,13 +529,12 @@ class ChatViewModel: NSObject {
     private func sendMediaMessage(images: [UIImage], caption: String, replyTo: Message?) {
         guard let recipientId = chat.otherUser?.id else {
             Log.error("❌ No recipient ID for media message", category: "ChatViewModel")
-            errorMessage = "Cannot send media: no recipient"
+            ErrorRouter.shared.report(.unknown("Cannot send media: no recipient"))
             return
         }
         // Note: session existence is already guaranteed by sendMessage() before this is called.
 
         isSending = true
-        errorMessage = nil
 
         Task {
             do {
@@ -554,7 +550,7 @@ class ChatViewModel: NSObject {
             } catch {
                 await MainActor.run {
                     Log.error("❌ Media upload failed: \(error.localizedDescription) | raw: \(error)", category: "ChatViewModel")
-                    errorMessage = error.userFacingMessage
+                    ErrorRouter.shared.report(error)
                     isSending = false
                 }
             }
@@ -563,7 +559,6 @@ class ChatViewModel: NSObject {
 
     private func sendFileMessage(fileURLs: [URL], caption: String, replyTo: Message?) {
         isSending = true
-        errorMessage = nil
 
         Task {
             do {
@@ -577,7 +572,7 @@ class ChatViewModel: NSObject {
             } catch {
                 await MainActor.run {
                     Log.error("❌ File upload failed: \(error.localizedDescription)", category: "ChatViewModel")
-                    errorMessage = error.userFacingMessage
+                    ErrorRouter.shared.report(error)
                     isSending = false
                 }
             }
@@ -596,7 +591,6 @@ class ChatViewModel: NSObject {
         }
 
         isSending = true
-        errorMessage = nil
 
         do {
             let messageId = UUID().uuidString
@@ -604,7 +598,7 @@ class ChatViewModel: NSObject {
             guard !plan.payloads.isEmpty else {
                 Log.error("❌ Message too large to send", category: "ChatViewModel")
                 isSending = false
-                errorMessage = "Message is too large to send"
+                ErrorRouter.shared.report(.validation(.textTooLarge(currentSize: text.count, maxSize: MessageSizeLimits.maxTextCharacters)))
                 return
             }
             let firstPayload = plan.payloads.first ?? text
@@ -684,7 +678,7 @@ class ChatViewModel: NSObject {
                             Log.error("❌ Failed to send message: \(error)", category: "ChatViewModel")
                         }
                         self.updateMessageStatus(messageId: messageId, status: .failed)
-                        self.errorMessage = "Failed to send message: \(error.userFacingMessage)"
+                        ErrorRouter.shared.report(error)
                         self.isSending = false
                     }
                 }
@@ -694,7 +688,7 @@ class ChatViewModel: NSObject {
             // Encryption failure = session likely corrupted; re-initialize and re-queue
             Log.debug("🔄 Encryption failed, session was deleted. Reinitializing...", category: "ChatViewModel")
             guard let toUserId = chat.otherUser?.id else {
-                errorMessage = "Failed to encrypt message: \(error.userFacingMessage)"
+                ErrorRouter.shared.report(error)
                 Log.error("❌ Failed to encrypt message: \(error.localizedDescription)", category: "ChatViewModel")
                 isSending = false
                 return
@@ -702,7 +696,6 @@ class ChatViewModel: NSObject {
             isSessionReady = false
             let queued = QueuedMessage(text: text, images: [], replyTo: replyTo)
             queuedMessages.append(queued)
-            errorMessage = "Session expired, reinitializing..."
             isInitializingSession = true
             isSending = false
             Log.info("📝 Message queued for retry after session reinitialization", category: "ChatViewModel")
@@ -741,7 +734,7 @@ class ChatViewModel: NSObject {
                 }
             } catch {
                 await MainActor.run {
-                    errorMessage = String(format: NSLocalizedString("edit_message_failed", comment: ""), error.localizedDescription)
+                    ErrorRouter.shared.report(.unknown(String(format: NSLocalizedString("edit_message_failed", comment: ""), error.localizedDescription)))
                 }
             }
         }
