@@ -29,6 +29,8 @@ build/
 out/
 .vercel/
 .turbo/
+logs/
+
 
 # Static library symbol files (macOS)
 __.SYMDEF

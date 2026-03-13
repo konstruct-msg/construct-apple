@@ -106,12 +106,44 @@ class AuthViewModel {
            SessionManager.shared.isSessionValid {
             // We have session token - verify it's still valid
             print("✅ Found session token for user: \(userId)")
-            await MainActor.run {
+            self.currentUserId = userId
+            self.isAuthenticated = true
+            scheduleTokenRefresh()
+            loadUserFromCoreData(userId: userId)
+            return
+        }
+
+        // Step 1.5: Token exists but is expired/near-expired — refresh using refresh token first.
+        // This is faster and less error-prone than full device auth, and keeps the gRPC stream stable.
+        if SessionManager.shared.sessionToken != nil,
+           let userId = SessionManager.shared.currentUserId,
+           let refresh = SessionManager.shared.refreshToken {
+            do {
+                Log.info("🔄 Session token expired — attempting refresh", category: "Auth")
+                let response = try await AuthServiceClient.shared.refreshToken(refreshToken: refresh)
+
+                let expiresIn: Int
+                if let expiresAt = response.expiresAt {
+                    expiresIn = max(Int(expiresAt - Int64(Date().timeIntervalSince1970)), 0)
+                } else {
+                    expiresIn = response.expiresIn ?? 3600
+                }
+
+                SessionManager.shared.saveTokens(
+                    accessToken: response.accessToken,
+                    refreshToken: response.refreshToken,
+                    expiresIn: expiresIn
+                )
+
                 self.currentUserId = userId
                 self.isAuthenticated = true
+                scheduleTokenRefresh()
                 loadUserFromCoreData(userId: userId)
+                Log.info("✅ Session refreshed successfully", category: "Auth")
+                return
+            } catch {
+                Log.error("❌ Session refresh failed, falling back to device auth: \(error)", category: "Auth")
             }
-            return
         }
         
         // Step 2: No session token - try device-based auth
@@ -158,13 +190,12 @@ class AuthViewModel {
                 expiresIn: expiresInSeconds
             )
             
-            await MainActor.run {
-                self.currentUserId = response.userId
-                self.isAuthenticated = true
-                CryptoManager.shared.setLocalUserId(response.userId)
-                IceProxyManager.shared.configureFromServer(cert: response.iceBridgeCert ?? "")
-                print("✅ Device-based authentication successful")
-            }
+            self.currentUserId = response.userId
+            self.isAuthenticated = true
+            scheduleTokenRefresh()
+            CryptoManager.shared.setLocalUserId(response.userId)
+            IceProxyManager.shared.configureFromServer(cert: response.iceBridgeCert ?? "")
+            print("✅ Device-based authentication successful")
             
             // Load user from Core Data
             loadUserFromCoreData(userId: response.userId)
@@ -259,6 +290,7 @@ class AuthViewModel {
     func finalizeDeviceRegistration(userId: String, username: String?) {
         currentUserId = userId
         isAuthenticated = true
+        scheduleTokenRefresh()
         loadUserFromCoreData(userId: userId, username: username)
     }
 
@@ -429,6 +461,7 @@ class AuthViewModel {
         
         currentUserId = userId
         isAuthenticated = true
+        scheduleTokenRefresh()
         CryptoManager.shared.setLocalUserId(userId)
         // Pass username parameter so it gets saved to Core Data
         loadUserFromCoreData(userId: userId, username: username)
@@ -457,6 +490,7 @@ class AuthViewModel {
 
         currentUserId = userId
         isAuthenticated = true
+        scheduleTokenRefresh()
 
         // ✅ REFACTOR Phase 1.2: Load User entity and set currentUser
         loadUserFromCoreData(userId: userId)

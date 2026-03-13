@@ -145,12 +145,16 @@ final class GRPCChannelManager: Sendable {
                 group.addTask {
                     do {
                         try await client.runConnections()
+                        return nil
                     } catch is CancellationError {
                         // Expected: cancelled after operation completes
+                        return nil
                     } catch {
+                        // If the transport dies before the RPC completes, don't hang forever.
+                        // Propagate the error to fail the RPC promptly.
                         Log.error("⚠️ gRPC transport error: \(error)", category: "GRPCChannel")
+                        throw error
                     }
-                    return nil
                 }
 
                 group.addTask {
@@ -169,6 +173,7 @@ final class GRPCChannelManager: Sendable {
                 throw NetworkError.connectionFailed
             }
         } catch {
+            client.beginGracefulShutdown()
             // If the call failed while routing through ICE, record the relay failure so the
             // next call skips ICE and goes directly over TLS while the relay is unreachable.
             if usingICE {
