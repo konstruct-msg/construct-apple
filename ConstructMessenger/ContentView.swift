@@ -40,6 +40,7 @@ struct ContentView: View {
         .onAppear {
             authViewModel.refreshDeviceKeyState()
             chatsViewModel.setContext(viewContext)
+            handleDeepLink(deepLinkHandler.deepLink)
         }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
@@ -53,38 +54,42 @@ struct ContentView: View {
             }
         }
         .onChange(of: deepLinkHandler.deepLink) { _, newDeepLink in
-            Log.debug("ContentView: Deep link changed: \(String(describing: newDeepLink))", category: "DeepLink")
-            if case .contact(let contactInfo) = newDeepLink {
-                Log.info("ContentView: Creating chat directly for userId: \(contactInfo.userId), username: \(contactInfo.username)", category: "DeepLink")
-                
-                // ✅ Create chat directly instead of opening modal
-                let publicUserInfo = PublicUserInfo(
-                    id: contactInfo.userId,
-                    username: contactInfo.username,
-                    avatarUrl: nil,
-                    bio: nil,
-                    deviceId: contactInfo.deviceId
-                )
-                
-                if let chat = chatsViewModel.startChat(with: publicUserInfo) {
-                    Log.info("ContentView: Chat created successfully, opening chat with id: \(chat.id)", category: "DeepLink")
-                    chatsViewModel.chatToOpen = chat.id
-                } else {
-                    Log.error("ContentView: Failed to create chat for userId: \(contactInfo.userId)", category: "DeepLink")
-                }
-                
-                deepLinkHandler.deepLink = nil
-            } else if case .openChat(let chatId) = newDeepLink {
-                Log.info("ContentView: Opening chat from push notification: \(chatId)", category: "DeepLink")
-                chatsViewModel.chatToOpen = chatId
-                deepLinkHandler.deepLink = nil
-            }
+            handleDeepLink(newDeepLink)
         }
         .onOpenURL { url in
             // ✅ Handle Universal Links in SwiftUI (iOS 13+)
             Log.info("ContentView: Received URL via onOpenURL: \(url.absoluteString)", category: "DeepLink")
             let result = deepLinkHandler.handleURL(url)
             Log.info("ContentView: Deep link handling result: \(result)", category: "DeepLink")
+        }
+    }
+
+    private func handleDeepLink(_ deepLink: DeepLinkType?) {
+        Log.debug("ContentView: Deep link changed: \(String(describing: deepLink))", category: "DeepLink")
+        if case .contact(let contactInfo) = deepLink {
+            Log.info("ContentView: Creating chat directly for userId: \(contactInfo.userId), username: \(contactInfo.username)", category: "DeepLink")
+
+            // ✅ Create chat directly instead of opening modal
+            let publicUserInfo = PublicUserInfo(
+                id: contactInfo.userId,
+                username: contactInfo.username,
+                avatarUrl: nil,
+                bio: nil,
+                deviceId: contactInfo.deviceId
+            )
+
+            if let chat = chatsViewModel.startChat(with: publicUserInfo) {
+                Log.info("ContentView: Chat created successfully, opening chat with id: \(chat.id)", category: "DeepLink")
+                chatsViewModel.chatToOpen = chat.id
+            } else {
+                Log.error("ContentView: Failed to create chat for userId: \(contactInfo.userId)", category: "DeepLink")
+            }
+
+            deepLinkHandler.deepLink = nil
+        } else if case .openChat(let chatId) = deepLink {
+            Log.info("ContentView: Opening chat from push notification: \(chatId)", category: "DeepLink")
+            chatsViewModel.chatToOpen = chatId
+            deepLinkHandler.deepLink = nil
         }
     }
     

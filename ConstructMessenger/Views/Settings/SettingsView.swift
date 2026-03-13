@@ -195,7 +195,7 @@ struct SettingsView: View {
                         }
 
                         // MARK: - Developer Section
-//                        #if DEBUG
+                        #if DEBUG
                         settingsSection(header: "Developer") {
                             NavigationLink(destination: DiagnosticsView()) {
                                 HStack {
@@ -211,7 +211,7 @@ struct SettingsView: View {
                             }
                             .buttonStyle(.plain)
                         }
-//                        #endif
+                        #endif
                     }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 24)

@@ -386,9 +386,11 @@ struct MessageInputView: View {
     }
 
     private func removePhoto(at index: Int) {
-        guard index < selectedImages.count && index < selectedPhotos.count else { return }
+        guard index < selectedImages.count else { return }
         selectedImages.remove(at: index)
-        selectedPhotos.remove(at: index)
+        if index < selectedPhotos.count {
+            selectedPhotos.remove(at: index)
+        }
     }
 
     private func loadImagesFromURLs(_ urls: [URL]) {
@@ -415,7 +417,16 @@ struct MessageInputView: View {
             if imageExtensions.contains(ext) {
                 loadImagesFromURLs([url])
             } else {
-                selectedFileURLs.append(url)
+                do {
+                    try MessageValidator.validateFile(at: url)
+                    selectedFileURLs.append(url)
+                } catch let error as MessageValidationError {
+                    ErrorRouter.shared.report(error)
+                    Log.error("❌ File validation failed: \(error.localizedDescription)", category: "MessageInput")
+                } catch {
+                    ErrorRouter.shared.report(.unknown(error.userFacingMessage))
+                    Log.error("❌ Unexpected file validation error: \(error)", category: "MessageInput")
+                }
             }
         }
     }
@@ -427,4 +438,3 @@ struct MessageInputView: View {
         selectedFileURLs.removeAll()
     }
 }
-

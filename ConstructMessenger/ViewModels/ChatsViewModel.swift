@@ -16,6 +16,9 @@ import UIKit
 class ChatsViewModel {
     private var observationTasks: [Task<Void, Never>] = []
     private var viewContext: NSManagedObjectContext?
+    /// Debounce task for forceReconnectStream — prevents channel-creation flood when
+    /// multiple observers (networkPathChanged, appDidBecomeActive, etc.) fire at once.
+    private var reconnectDebounceTask: Task<Void, Never>?
 
     // 🔑 OTPK replenishment: check server count once per app session on stream connect
     private var hasPerformedStartupOtpkCheck = false
@@ -281,18 +284,24 @@ class ChatsViewModel {
             Log.info("📱 No session — skipping reconnect", category: "ChatsViewModel")
             return
         }
-        streamManager.onDeliveryReceipt = { [weak self] messageIds in
-            self?.handleDeliveryReceipts(messageIds)
+        // Debounce: if multiple triggers fire within 300 ms (e.g. networkPathChanged +
+        // appDidBecomeActive + reachabilityChanged all at once), only the last one runs.
+        // This prevents 80+ concurrent connectLoop tasks each creating a gRPC channel.
+        reconnectDebounceTask?.cancel()
+        reconnectDebounceTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(300))
+            guard !Task.isCancelled, let self else { return }
+            self.streamManager.onDeliveryReceipt = { [weak self] messageIds in
+                self?.handleDeliveryReceipts(messageIds)
+            }
+            self.streamManager.onKeySyncReceived = { [weak self] userId in
+                self?.sessionCoordinator.handleKeySyncRequest(for: userId)
+            }
+            self.streamManager.forceReconnect(contactUserIds: self.currentConversationIds()) { [weak self] message in
+                self?.handleIncomingMessage(message)
+            }
+            self.sessionCoordinator.prewarmSessions(for: self.currentContactIds())
         }
-        streamManager.onKeySyncReceived = { [weak self] userId in
-            self?.sessionCoordinator.handleKeySyncRequest(for: userId)
-        }
-        streamManager.forceReconnect(contactUserIds: currentConversationIds()) { [weak self] message in
-            self?.handleIncomingMessage(message)
-        }
-        // Re-run prewarm: app may have been in background while session was reset.
-        // prewarmSessions is idempotent — no-op if sessions already exist.
-        sessionCoordinator.prewarmSessions(for: currentContactIds())
     }
 
     private func currentContactIds() -> [String] {

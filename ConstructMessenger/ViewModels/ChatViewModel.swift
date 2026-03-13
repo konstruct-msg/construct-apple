@@ -467,6 +467,17 @@ class ChatViewModel: NSObject {
 
         // Handle files if provided (document attachments)
         if !fileURLs.isEmpty {
+            do {
+                try MessageValidator.validateMessage(text: text, fileURLs: fileURLs)
+            } catch let error as MessageValidationError {
+                ErrorRouter.shared.report(error)
+                Log.error("❌ File message validation failed: \(error.localizedDescription)", category: "ChatViewModel")
+                return
+            } catch {
+                ErrorRouter.shared.report(.unknown(error.userFacingMessage))
+                Log.error("❌ Unexpected file validation error: \(error)", category: "ChatViewModel")
+                return
+            }
             sendFileMessage(fileURLs: fileURLs, caption: text, replyTo: replyTo)
             return
         }
