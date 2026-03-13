@@ -193,7 +193,8 @@ final class IceProxyManager: ObservableObject {
             activeRelay = relay
             return port
         } else {
-            lastError = "Failed to start proxy (check bridge cert)"
+            // result == 1 → cert/handshake failure; result == 2 → network/bind failure (heuristic)
+            lastError = result == 2 ? "Failed to start proxy (network unreachable)" : "Failed to start proxy (check bridge cert)"
             return nil
         }
     }
@@ -211,16 +212,34 @@ final class IceProxyManager: ObservableObject {
     /// Falls back to building a relay from getIceBridgeCert() (Keychain → .well-known → hardcoded).
     func startIfEnabled() async {
         guard isEnabled else { return }
-        if let relay = loadStoredRelay() {
-            start(relay: relay)
+        let relay: IceRelay
+        if let stored = loadStoredRelay() {
+            relay = stored
         } else {
             let cert = await getIceBridgeCert()
             let host = GRPCChannelManager.shared.currentHost
             let iceHost = "ice.\(host)"
-            let relay = IceRelay(address: "\(iceHost):443", bridgeCert: cert, iatMode: .none, tlsServerName: iceHost)
-            saveRelay(relay)
-            start(relay: relay)
+            let newRelay = IceRelay(address: "\(iceHost):443", bridgeCert: cert, iatMode: .none, tlsServerName: iceHost)
+            saveRelay(newRelay)
+            relay = newRelay
         }
+
+        // First attempt with the stored/cached cert.
+        if start(relay: relay) != nil { return }
+
+        // Stored cert may be stale (server key rotation). Fetch a fresh one from
+        // .well-known and retry once before giving up.
+        Log.info("🧊 ICE start failed — fetching fresh cert from .well-known and retrying", category: "ICE")
+        guard let freshCert = await IceCertFetcher.shared.fetchFromHTTPS() else {
+            Log.error("🧊 ICE start failed and fresh cert unavailable — proxy not running", category: "ICE")
+            return
+        }
+        KeychainManager.shared.saveIceBridgeCert(freshCert)
+        let host = GRPCChannelManager.shared.currentHost
+        let iceHost = "ice.\(host)"
+        let freshRelay = IceRelay(address: "\(iceHost):443", bridgeCert: freshCert, iatMode: .none, tlsServerName: iceHost)
+        saveRelay(freshRelay)
+        start(relay: freshRelay)
     }
 
     // MARK: - Server-provided configuration

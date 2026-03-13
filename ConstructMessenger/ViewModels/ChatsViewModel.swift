@@ -180,6 +180,20 @@ class ChatsViewModel {
         }
         observationTasks.append(activeTask)
 
+        // Force reconnect when network interface switches (VPN off → WiFi, WiFi → cellular, etc.).
+        // Old TCP connections bound to the previous interface are dead; cancel them and reopen.
+        let pathTask = Task { [weak self] in
+            for await _ in NotificationCenter.default.notifications(named: .networkPathChanged) {
+                Log.info("🌐 Network interface changed — restarting stream and ICE proxy", category: "ChatsViewModel")
+                // Restart ICE proxy: its relay connection was bound to the old interface.
+                Task { @MainActor in
+                    await IceProxyManager.shared.startIfEnabled()
+                }
+                self?.forceReconnectStream()
+            }
+        }
+        observationTasks.append(pathTask)
+
         // Wake up when silent push arrives (app is in background)
         let silentPushTask = Task { [weak self] in
             while !Task.isCancelled {

@@ -16,8 +16,8 @@ class NetworkReachabilityManager {
     
     var isReachable = true
     var connectionType: ConnectionType = .unknown
-    
-    enum ConnectionType {
+
+    enum ConnectionType: Equatable {
         case wifi
         case cellular
         case ethernet
@@ -25,9 +25,11 @@ class NetworkReachabilityManager {
         case unavailable
         case unknown
     }
-    
+
     private var monitor: NWPathMonitor?
     private var queue: DispatchQueue?
+    /// Tracks the previous connection type to detect interface changes (e.g. VPN → WiFi).
+    private var prevConnectionType: ConnectionType = .unknown
     
     private init() {
         // Always set default values first
@@ -81,10 +83,14 @@ class NetworkReachabilityManager {
                     self.connectionType = .unavailable
                 }
                 
-                // Notify subscribers if reachability changed
-                if wasReachable != self.isReachable {
-                    Log.info("🌐 Network reachability changed: \(self.isReachable ? "ONLINE" : "OFFLINE")", category: "NetworkReachability")
-                    
+                // Notify subscribers if reachability changed OR if the network interface
+                // changed while still reachable (e.g. VPN off → direct WiFi).
+                // In both cases existing TCP connections are dead and must be reopened.
+                let interfaceSwitched = self.isReachable && self.connectionType != self.prevConnectionType && self.prevConnectionType != .unknown
+                self.prevConnectionType = self.connectionType
+                if wasReachable != self.isReachable || interfaceSwitched {
+                    Log.info("🌐 Network reachability changed: \(self.isReachable ? "ONLINE" : "OFFLINE") (\(self.connectionType))", category: "NetworkReachability")
+
                     // Post notification for other components
                     let notification = Notification(
                         name: .networkReachabilityChanged,
@@ -92,6 +98,16 @@ class NetworkReachabilityManager {
                         userInfo: ["isReachable": self.isReachable, "connectionType": self.connectionType]
                     )
                     NotificationCenter.default.post(notification)
+
+                    // Also post a path-changed notification so subscribers can restart ICE /
+                    // cancel stale TCP connections even when reachability stays .satisfied.
+                    if interfaceSwitched {
+                        NotificationCenter.default.post(
+                            name: .networkPathChanged,
+                            object: nil,
+                            userInfo: ["connectionType": self.connectionType]
+                        )
+                    }
                 }
             }
         }
@@ -123,4 +139,7 @@ class NetworkReachabilityManager {
 // MARK: - Notifications
 extension Notification.Name {
     static let networkReachabilityChanged = Notification.Name("networkReachabilityChanged")
+    /// Fired when network interface switches (e.g. VPN off → WiFi) while remaining reachable.
+    /// Stale TCP connections bound to the old interface must be closed and reopened.
+    static let networkPathChanged = Notification.Name("networkPathChanged")
 }
