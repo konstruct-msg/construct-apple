@@ -567,6 +567,24 @@ fileprivate struct FfiConverterString: FfiConverter {
     }
 }
 
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterData: FfiConverterRustBuffer {
+    typealias SwiftType = Data
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Data {
+        let len: Int32 = try readInt(&buf)
+        return Data(try readBytes(&buf, count: Int(len)))
+    }
+
+    public static func write(_ value: Data, into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        writeBytes(&buf, value)
+    }
+}
+
 
 
 
@@ -898,6 +916,639 @@ public func FfiConverterTypeClassicCryptoCore_lift(_ handle: UInt64) throws -> C
 #endif
 public func FfiConverterTypeClassicCryptoCore_lower(_ value: ClassicCryptoCore) -> UInt64 {
     return FfiConverterTypeClassicCryptoCore.lower(value)
+}
+
+
+
+
+
+
+/**
+ * Top-level orchestration facade.
+ *
+ * Swift / Kotlin call `handle_event_json` with a JSON-encoded `IncomingEvent`
+ * and receive a JSON-encoded `Vec<Action>`. All I/O is delegated back to the
+ * platform via these `Action` values.
+ *
+ * Replaces: CryptoManager + MessageRouter + SessionCoordinator + SessionHealingService
+ *           + PersistentACKStore + PQCKeyManager + SessionInitializationService.
+ */
+public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
+    
+    /**
+     * Check if a message ID is in the in-memory ACK cache.
+     */
+    func ackIsProcessed(messageId: String)  -> AckCheckResult
+    
+    /**
+     * Mark a message as processed in the ACK cache. Returns action JSON.
+     */
+    func ackMarkProcessed(messageId: String)  -> String
+    
+    /**
+     * Export non-crypto orchestration state to JSON.
+     */
+    func exportStateJson() throws  -> String
+    
+    /**
+     * Unified event handler.
+     *
+     * `event_json` — JSON-encoded `IncomingEvent` (see Rust `orchestration::actions`).
+     * Returns a JSON array of `Action` objects for the platform to execute.
+     */
+    func handleEventJson(eventJson: String) throws  -> [String]
+    
+    /**
+     * `true` iff `msg_number == 0` (healing-eligible message).
+     */
+    func healingCanHeal(msgNumber: UInt32)  -> Bool
+    
+}
+/**
+ * Top-level orchestration facade.
+ *
+ * Swift / Kotlin call `handle_event_json` with a JSON-encoded `IncomingEvent`
+ * and receive a JSON-encoded `Vec<Action>`. All I/O is delegated back to the
+ * platform via these `Action` values.
+ *
+ * Replaces: CryptoManager + MessageRouter + SessionCoordinator + SessionHealingService
+ *           + PersistentACKStore + PQCKeyManager + SessionInitializationService.
+ */
+open class OrchestratorCore: OrchestratorCoreProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_construct_core_fn_clone_orchestratorcore(self.handle, $0) }
+    }
+    /**
+     * Construct from an existing `ClassicCryptoCore` key JSON export and a
+     * `PlatformBridge` implementation.
+     */
+public convenience init(keysJson: String, myUserId: String)throws  {
+    let handle =
+        try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_constructor_orchestratorcore_new(
+        FfiConverterString.lower(keysJson),
+        FfiConverterString.lower(myUserId),$0
+    )
+}
+    self.init(unsafeFromHandle: handle)
+}
+
+    deinit {
+        try! rustCall { uniffi_construct_core_fn_free_orchestratorcore(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * Check if a message ID is in the in-memory ACK cache.
+     */
+open func ackIsProcessed(messageId: String) -> AckCheckResult  {
+    return try!  FfiConverterTypeAckCheckResult_lift(try! rustCall() {
+    uniffi_construct_core_fn_method_orchestratorcore_ack_is_processed(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(messageId),$0
+    )
+})
+}
+    
+    /**
+     * Mark a message as processed in the ACK cache. Returns action JSON.
+     */
+open func ackMarkProcessed(messageId: String) -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_orchestratorcore_ack_mark_processed(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(messageId),$0
+    )
+})
+}
+    
+    /**
+     * Export non-crypto orchestration state to JSON.
+     */
+open func exportStateJson()throws  -> String  {
+    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_export_state_json(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * Unified event handler.
+     *
+     * `event_json` — JSON-encoded `IncomingEvent` (see Rust `orchestration::actions`).
+     * Returns a JSON array of `Action` objects for the platform to execute.
+     */
+open func handleEventJson(eventJson: String)throws  -> [String]  {
+    return try  FfiConverterSequenceString.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_handle_event_json(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(eventJson),$0
+    )
+})
+}
+    
+    /**
+     * `true` iff `msg_number == 0` (healing-eligible message).
+     */
+open func healingCanHeal(msgNumber: UInt32) -> Bool  {
+    return try!  FfiConverterBool.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_orchestratorcore_healing_can_heal(
+            self.uniffiCloneHandle(),
+        FfiConverterUInt32.lower(msgNumber),$0
+    )
+})
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeOrchestratorCore: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = OrchestratorCore
+
+    public static func lift(_ handle: UInt64) throws -> OrchestratorCore {
+        return OrchestratorCore(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: OrchestratorCore) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> OrchestratorCore {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: OrchestratorCore, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOrchestratorCore_lift(_ handle: UInt64) throws -> OrchestratorCore {
+    return try FfiConverterTypeOrchestratorCore.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOrchestratorCore_lower(_ value: OrchestratorCore) -> UInt64 {
+    return FfiConverterTypeOrchestratorCore.lower(value)
+}
+
+
+
+
+
+
+/**
+ * Thread-safe ACK deduplication store.
+ *
+ * Replaces Swift `PersistentACKStore`. The in-memory `HashSet` lives here;
+ * CoreData / Room persistence is requested via returned `Action` JSON strings.
+ */
+public protocol RustAckStoreProtocol: AnyObject, Sendable {
+    
+    /**
+     * Current in-memory cache size (diagnostic).
+     */
+    func cacheLen()  -> UInt64
+    
+    /**
+     * Returns `InCache` if the hot-path cache contains `message_id`, else `NeedDbCheck`.
+     */
+    func isProcessed(messageId: String)  -> AckCheckResult
+    
+    /**
+     * Mark `message_id` as processed.  Returns a JSON-encoded `Action` array
+     * (typically a single `PersistMessage` action) that the platform must execute.
+     */
+    func markProcessed(messageId: String)  -> String
+    
+    /**
+     * Returns a JSON-encoded `Action` requesting the platform to delete expired records.
+     */
+    func pruneExpired()  -> String
+    
+}
+/**
+ * Thread-safe ACK deduplication store.
+ *
+ * Replaces Swift `PersistentACKStore`. The in-memory `HashSet` lives here;
+ * CoreData / Room persistence is requested via returned `Action` JSON strings.
+ */
+open class RustAckStore: RustAckStoreProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_construct_core_fn_clone_rustackstore(self.handle, $0) }
+    }
+public convenience init() {
+    let handle =
+        try! rustCall() {
+    uniffi_construct_core_fn_constructor_rustackstore_new($0
+    )
+}
+    self.init(unsafeFromHandle: handle)
+}
+
+    deinit {
+        try! rustCall { uniffi_construct_core_fn_free_rustackstore(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * Current in-memory cache size (diagnostic).
+     */
+open func cacheLen() -> UInt64  {
+    return try!  FfiConverterUInt64.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_rustackstore_cache_len(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * Returns `InCache` if the hot-path cache contains `message_id`, else `NeedDbCheck`.
+     */
+open func isProcessed(messageId: String) -> AckCheckResult  {
+    return try!  FfiConverterTypeAckCheckResult_lift(try! rustCall() {
+    uniffi_construct_core_fn_method_rustackstore_is_processed(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(messageId),$0
+    )
+})
+}
+    
+    /**
+     * Mark `message_id` as processed.  Returns a JSON-encoded `Action` array
+     * (typically a single `PersistMessage` action) that the platform must execute.
+     */
+open func markProcessed(messageId: String) -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_rustackstore_mark_processed(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(messageId),$0
+    )
+})
+}
+    
+    /**
+     * Returns a JSON-encoded `Action` requesting the platform to delete expired records.
+     */
+open func pruneExpired() -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_rustackstore_prune_expired(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeRustAckStore: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = RustAckStore
+
+    public static func lift(_ handle: UInt64) throws -> RustAckStore {
+        return RustAckStore(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: RustAckStore) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RustAckStore {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: RustAckStore, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRustAckStore_lift(_ handle: UInt64) throws -> RustAckStore {
+    return try FfiConverterTypeRustAckStore.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRustAckStore_lower(_ value: RustAckStore) -> UInt64 {
+    return FfiConverterTypeRustAckStore.lower(value)
+}
+
+
+
+
+
+
+/**
+ * Thread-safe session healing queue.
+ *
+ * Replaces Swift `SessionHealingService`.
+ */
+public protocol RustHealingQueueProtocol: AnyObject, Sendable {
+    
+    /**
+     * `true` iff `msg_number == 0` — the only case eligible for healing.
+     */
+    func canHeal(msgNumber: UInt32)  -> Bool
+    
+    /**
+     * Enqueue `message_json` for `contact_id` (idempotent).
+     * Returns JSON-encoded `Action` array for persistence.
+     */
+    func enqueue(contactId: String, messageJson: String)  -> String
+    
+    /**
+     * Number of pending healing records.
+     */
+    func len()  -> UInt64
+    
+    /**
+     * Returns JSON-encoded `Action` array to delete expired records.
+     */
+    func pruneExpired()  -> String
+    
+    /**
+     * Increment attempt counter for `contact_id`.
+     */
+    func recordAttempt(contactId: String)  -> HealingAttemptResult
+    
+    /**
+     * Remove the healing record after successful re-key.
+     */
+    func removeRecord(contactId: String)  -> Bool
+    
+}
+/**
+ * Thread-safe session healing queue.
+ *
+ * Replaces Swift `SessionHealingService`.
+ */
+open class RustHealingQueue: RustHealingQueueProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_construct_core_fn_clone_rusthealingqueue(self.handle, $0) }
+    }
+public convenience init() {
+    let handle =
+        try! rustCall() {
+    uniffi_construct_core_fn_constructor_rusthealingqueue_new($0
+    )
+}
+    self.init(unsafeFromHandle: handle)
+}
+
+    deinit {
+        try! rustCall { uniffi_construct_core_fn_free_rusthealingqueue(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * `true` iff `msg_number == 0` — the only case eligible for healing.
+     */
+open func canHeal(msgNumber: UInt32) -> Bool  {
+    return try!  FfiConverterBool.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_rusthealingqueue_can_heal(
+            self.uniffiCloneHandle(),
+        FfiConverterUInt32.lower(msgNumber),$0
+    )
+})
+}
+    
+    /**
+     * Enqueue `message_json` for `contact_id` (idempotent).
+     * Returns JSON-encoded `Action` array for persistence.
+     */
+open func enqueue(contactId: String, messageJson: String) -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_rusthealingqueue_enqueue(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(contactId),
+        FfiConverterString.lower(messageJson),$0
+    )
+})
+}
+    
+    /**
+     * Number of pending healing records.
+     */
+open func len() -> UInt64  {
+    return try!  FfiConverterUInt64.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_rusthealingqueue_len(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * Returns JSON-encoded `Action` array to delete expired records.
+     */
+open func pruneExpired() -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_rusthealingqueue_prune_expired(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * Increment attempt counter for `contact_id`.
+     */
+open func recordAttempt(contactId: String) -> HealingAttemptResult  {
+    return try!  FfiConverterTypeHealingAttemptResult_lift(try! rustCall() {
+    uniffi_construct_core_fn_method_rusthealingqueue_record_attempt(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(contactId),$0
+    )
+})
+}
+    
+    /**
+     * Remove the healing record after successful re-key.
+     */
+open func removeRecord(contactId: String) -> Bool  {
+    return try!  FfiConverterBool.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_rusthealingqueue_remove_record(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(contactId),$0
+    )
+})
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeRustHealingQueue: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = RustHealingQueue
+
+    public static func lift(_ handle: UInt64) throws -> RustHealingQueue {
+        return RustHealingQueue(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: RustHealingQueue) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RustHealingQueue {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: RustHealingQueue, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRustHealingQueue_lift(_ handle: UInt64) throws -> RustHealingQueue {
+    return try FfiConverterTypeRustHealingQueue.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRustHealingQueue_lower(_ value: RustHealingQueue) -> UInt64 {
+    return FfiConverterTypeRustHealingQueue.lower(value)
 }
 
 
@@ -1414,6 +2065,73 @@ public func FfiConverterTypeEphemeralKeyPair_lift(_ buf: RustBuffer) throws -> E
 #endif
 public func FfiConverterTypeEphemeralKeyPair_lower(_ value: EphemeralKeyPair) -> RustBuffer {
     return FfiConverterTypeEphemeralKeyPair.lower(value)
+}
+
+
+/**
+ * Packed result of `RustHealingQueue.record_attempt`.
+ */
+public struct HealingAttemptResult: Equatable, Hashable {
+    /**
+     * "retry_allowed" | "max_attempts_reached" | "not_found"
+     */
+    public var decision: String
+    /**
+     * 1-based attempt number (valid when decision == "retry_allowed").
+     */
+    public var attempt: UInt32
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * "retry_allowed" | "max_attempts_reached" | "not_found"
+         */decision: String, 
+        /**
+         * 1-based attempt number (valid when decision == "retry_allowed").
+         */attempt: UInt32) {
+        self.decision = decision
+        self.attempt = attempt
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension HealingAttemptResult: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeHealingAttemptResult: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> HealingAttemptResult {
+        return
+            try HealingAttemptResult(
+                decision: FfiConverterString.read(from: &buf), 
+                attempt: FfiConverterUInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: HealingAttemptResult, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.decision, into: &buf)
+        FfiConverterUInt32.write(value.attempt, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHealingAttemptResult_lift(_ buf: RustBuffer) throws -> HealingAttemptResult {
+    return try FfiConverterTypeHealingAttemptResult.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHealingAttemptResult_lower(_ value: HealingAttemptResult) -> RustBuffer {
+    return FfiConverterTypeHealingAttemptResult.lower(value)
 }
 
 
@@ -2146,6 +2864,90 @@ public func FfiConverterTypeTimingConfig_lower(_ value: TimingConfig) -> RustBuf
     return FfiConverterTypeTimingConfig.lower(value)
 }
 
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * Result of checking whether a message has already been processed.
+ */
+
+public enum AckCheckResult: Equatable, Hashable {
+    
+    /**
+     * Definitely a duplicate — found in the in-memory cache.
+     */
+    case inCache
+    /**
+     * Not in cache; caller must query the persistent store before deciding.
+     */
+    case needDbCheck
+    /**
+     * Confirmed not a duplicate (after DB check returned nothing).
+     */
+    case notProcessed
+
+
+
+}
+
+#if compiler(>=6)
+extension AckCheckResult: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeAckCheckResult: FfiConverterRustBuffer {
+    typealias SwiftType = AckCheckResult
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> AckCheckResult {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .inCache
+        
+        case 2: return .needDbCheck
+        
+        case 3: return .notProcessed
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: AckCheckResult, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .inCache:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .needDbCheck:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .notProcessed:
+            writeInt(&buf, Int32(3))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAckCheckResult_lift(_ buf: RustBuffer) throws -> AckCheckResult {
+    return try FfiConverterTypeAckCheckResult.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAckCheckResult_lower(_ value: AckCheckResult) -> RustBuffer {
+    return FfiConverterTypeAckCheckResult.lower(value)
+}
+
+
 
 public enum CryptoError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError {
 
@@ -2285,6 +3087,268 @@ public func FfiConverterTypeCryptoError_lower(_ value: CryptoError) -> RustBuffe
 
 
 
+/**
+ * Callback interface implemented by Swift / Kotlin.
+ *
+ * Rust orchestration logic is I/O-free: it calls through this bridge to
+ * request platform operations (Keychain, Core Data, os_log / Logcat).
+ * Each method is synchronous from Rust's perspective.
+ */
+public protocol PlatformBridge: AnyObject, Sendable {
+    
+    /**
+     * Persist `data` under `key` in the platform secure store (Keychain / Keystore).
+     */
+    func saveToSecureStore(key: String, data: Data) 
+    
+    /**
+     * Retrieve data previously saved under `key`. Returns null if absent.
+     */
+    func loadFromSecureStore(key: String)  -> Data?
+    
+    /**
+     * Append / upsert a JSON record in the platform data store (Core Data / Room).
+     * `table` is a logical table name; `json` is the record payload.
+     */
+    func persistRecord(table: String, json: String) 
+    
+    /**
+     * Query the platform data store. Returns a JSON-encoded result or null.
+     */
+    func queryRecord(table: String, queryJson: String)  -> String?
+    
+    /**
+     * Emit a log entry through the platform logging system (os_log / Logcat).
+     * `level` ∈ {"debug", "info", "warn", "error"}.
+     */
+    func logEvent(level: String, tag: String, message: String) 
+    
+}
+
+
+// Put the implementation in a struct so we don't pollute the top-level namespace
+fileprivate struct UniffiCallbackInterfacePlatformBridge {
+
+    // Create the VTable using a series of closures.
+    // Swift automatically converts these into C callback functions.
+    //
+    // This creates 1-element array, since this seems to be the only way to construct a const
+    // pointer that we can pass to the Rust code.
+    static let vtable: [UniffiVTableCallbackInterfacePlatformBridge] = [UniffiVTableCallbackInterfacePlatformBridge(
+        uniffiFree: { (uniffiHandle: UInt64) -> () in
+            do {
+                try FfiConverterCallbackInterfacePlatformBridge.handleMap.remove(handle: uniffiHandle)
+            } catch {
+                print("Uniffi callback interface PlatformBridge: handle missing in uniffiFree")
+            }
+        },
+        uniffiClone: { (uniffiHandle: UInt64) -> UInt64 in
+            do {
+                return try FfiConverterCallbackInterfacePlatformBridge.handleMap.clone(handle: uniffiHandle)
+            } catch {
+                fatalError("Uniffi callback interface PlatformBridge: handle missing in uniffiClone")
+            }
+        },
+        saveToSecureStore: { (
+            uniffiHandle: UInt64,
+            key: RustBuffer,
+            data: RustBuffer,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterCallbackInterfacePlatformBridge.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.saveToSecureStore(
+                     key: try FfiConverterString.lift(key),
+                     data: try FfiConverterData.lift(data)
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        loadFromSecureStore: { (
+            uniffiHandle: UInt64,
+            key: RustBuffer,
+            uniffiOutReturn: UnsafeMutablePointer<RustBuffer>,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> Data? in
+                guard let uniffiObj = try? FfiConverterCallbackInterfacePlatformBridge.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.loadFromSecureStore(
+                     key: try FfiConverterString.lift(key)
+                )
+            }
+
+            
+            let writeReturn = { uniffiOutReturn.pointee = FfiConverterOptionData.lower($0) }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        persistRecord: { (
+            uniffiHandle: UInt64,
+            table: RustBuffer,
+            json: RustBuffer,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterCallbackInterfacePlatformBridge.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.persistRecord(
+                     table: try FfiConverterString.lift(table),
+                     json: try FfiConverterString.lift(json)
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        queryRecord: { (
+            uniffiHandle: UInt64,
+            table: RustBuffer,
+            queryJson: RustBuffer,
+            uniffiOutReturn: UnsafeMutablePointer<RustBuffer>,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> String? in
+                guard let uniffiObj = try? FfiConverterCallbackInterfacePlatformBridge.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.queryRecord(
+                     table: try FfiConverterString.lift(table),
+                     queryJson: try FfiConverterString.lift(queryJson)
+                )
+            }
+
+            
+            let writeReturn = { uniffiOutReturn.pointee = FfiConverterOptionString.lower($0) }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        logEvent: { (
+            uniffiHandle: UInt64,
+            level: RustBuffer,
+            tag: RustBuffer,
+            message: RustBuffer,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterCallbackInterfacePlatformBridge.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.logEvent(
+                     level: try FfiConverterString.lift(level),
+                     tag: try FfiConverterString.lift(tag),
+                     message: try FfiConverterString.lift(message)
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        }
+    )]
+}
+
+private func uniffiCallbackInitPlatformBridge() {
+    uniffi_construct_core_fn_init_callback_vtable_platformbridge(UniffiCallbackInterfacePlatformBridge.vtable)
+}
+
+// FfiConverter protocol for callback interfaces
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterCallbackInterfacePlatformBridge {
+    fileprivate static let handleMap = UniffiHandleMap<PlatformBridge>()
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+extension FfiConverterCallbackInterfacePlatformBridge : FfiConverter {
+    typealias SwiftType = PlatformBridge
+    typealias FfiType = UInt64
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public static func lift(_ handle: UInt64) throws -> SwiftType {
+        try handleMap.get(handle: handle)
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public static func lower(_ v: SwiftType) -> UInt64 {
+        return handleMap.insert(obj: v)
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public static func write(_ v: SwiftType, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(v))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterCallbackInterfacePlatformBridge_lift(_ handle: UInt64) throws -> PlatformBridge {
+    return try FfiConverterCallbackInterfacePlatformBridge.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterCallbackInterfacePlatformBridge_lower(_ v: PlatformBridge) -> UInt64 {
+    return FfiConverterCallbackInterfacePlatformBridge.lower(v)
+}
+
+
+
+
 public protocol PowProgressCallback: AnyObject, Sendable {
     
     func onProgress(currentNonce: UInt64, attempts: UInt64, estimatedProgress: Float) 
@@ -2408,6 +3472,54 @@ public func FfiConverterCallbackInterfacePowProgressCallback_lift(_ handle: UInt
 #endif
 public func FfiConverterCallbackInterfacePowProgressCallback_lower(_ v: PowProgressCallback) -> UInt64 {
     return FfiConverterCallbackInterfacePowProgressCallback.lower(v)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionString: FfiConverterRustBuffer {
+    typealias SwiftType = String?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterString.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterString.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionData: FfiConverterRustBuffer {
+    typealias SwiftType = Data?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterData.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterData.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
 }
 
 #if swift(>=5.8)
@@ -2689,6 +3801,20 @@ public func signRecoveryChallenge(privateKey: [UInt8], message: String)throws  -
     )
 })
 }
+/**
+ * Verify that a PlatformBridge implementation correctly round-trips a
+ * save → load through the platform secure store.
+ * Returns true if the loaded bytes equal the saved bytes.
+ */
+public func testPlatformBridgeRoundtrip(bridge: PlatformBridge, key: String, data: Data)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_func_test_platform_bridge_roundtrip(
+        FfiConverterCallbackInterfacePlatformBridge_lower(bridge),
+        FfiConverterString.lower(key),
+        FfiConverterData.lower(data),$0
+    )
+})
+}
 public func validateMnemonic(mnemonic: String) -> Bool  {
     return try!  FfiConverterBool.lift(try! rustCall() {
     uniffi_construct_core_fn_func_validate_mnemonic(
@@ -2808,6 +3934,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_func_sign_recovery_challenge() != 2630) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_func_test_platform_bridge_roundtrip() != 58358) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_func_validate_mnemonic() != 51524) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -2877,6 +4006,51 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_classiccryptocore_sign_bundle_data() != 39138) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_ack_is_processed() != 63134) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_ack_mark_processed() != 8078) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_export_state_json() != 38010) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_handle_event_json() != 27506) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_healing_can_heal() != 20996) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_rustackstore_cache_len() != 41894) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_rustackstore_is_processed() != 16063) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_rustackstore_mark_processed() != 42779) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_rustackstore_prune_expired() != 30275) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_rusthealingqueue_can_heal() != 46759) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_rusthealingqueue_enqueue() != 65078) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_rusthealingqueue_len() != 8116) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_rusthealingqueue_prune_expired() != 10424) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_rusthealingqueue_record_attempt() != 50030) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_rusthealingqueue_remove_record() != 39701) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_method_trafficprotectionmanager_current_interval_ms() != 34869) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -2901,13 +4075,38 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_trafficprotectionmanager_update_battery_level() != 31087) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_constructor_orchestratorcore_new() != 18118) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_constructor_rustackstore_new() != 64675) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_constructor_rusthealingqueue_new() != 42495) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_constructor_trafficprotectionmanager_new() != 21642) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_platformbridge_save_to_secure_store() != 64407) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_platformbridge_load_from_secure_store() != 51286) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_platformbridge_persist_record() != 26855) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_platformbridge_query_record() != 16143) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_platformbridge_log_event() != 27900) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_powprogresscallback_on_progress() != 50608) {
         return InitializationResult.apiChecksumMismatch
     }
 
+    uniffiCallbackInitPlatformBridge()
     uniffiCallbackInitPowProgressCallback()
     return InitializationResult.ok
 }()
