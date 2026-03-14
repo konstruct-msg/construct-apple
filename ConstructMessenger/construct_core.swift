@@ -1556,6 +1556,199 @@ public func FfiConverterTypeRustHealingQueue_lower(_ value: RustHealingQueue) ->
 
 
 
+/**
+ * Thread-safe store for deferred PQXDH shared secrets.
+ *
+ * Replaces `pendingPQContributions: [String: [UInt8]] + NSLock` in PQCKeyManager.
+ *
+ * Protocol: encapsulate (session init) → store SS here → encrypt msg0 with
+ * classic-only DR state → consume SS here → applyPqContribution to DR session.
+ * Both sides must apply PQ at the same moment; if consume returns null, skip PQ.
+ */
+public protocol RustPqContributionsProtocol: AnyObject, Sendable {
+    
+    /**
+     * Discard any pending contribution (e.g. on send failure).
+     */
+    func clear(contactId: String) 
+    
+    /**
+     * `true` if a deferred contribution exists for `contact_id`.
+     */
+    func hasPending(contactId: String)  -> Bool
+    
+    /**
+     * Store the KEM shared secret for `contact_id`.
+     */
+    func storeDeferred(contactId: String, sharedSecret: [UInt8]) 
+    
+    /**
+     * Remove and return the stored shared secret. Returns null if not found.
+     */
+    func takeDeferred(contactId: String)  -> [UInt8]?
+    
+}
+/**
+ * Thread-safe store for deferred PQXDH shared secrets.
+ *
+ * Replaces `pendingPQContributions: [String: [UInt8]] + NSLock` in PQCKeyManager.
+ *
+ * Protocol: encapsulate (session init) → store SS here → encrypt msg0 with
+ * classic-only DR state → consume SS here → applyPqContribution to DR session.
+ * Both sides must apply PQ at the same moment; if consume returns null, skip PQ.
+ */
+open class RustPqContributions: RustPqContributionsProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_construct_core_fn_clone_rustpqcontributions(self.handle, $0) }
+    }
+public convenience init() {
+    let handle =
+        try! rustCall() {
+    uniffi_construct_core_fn_constructor_rustpqcontributions_new($0
+    )
+}
+    self.init(unsafeFromHandle: handle)
+}
+
+    deinit {
+        try! rustCall { uniffi_construct_core_fn_free_rustpqcontributions(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * Discard any pending contribution (e.g. on send failure).
+     */
+open func clear(contactId: String)  {try! rustCall() {
+    uniffi_construct_core_fn_method_rustpqcontributions_clear(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(contactId),$0
+    )
+}
+}
+    
+    /**
+     * `true` if a deferred contribution exists for `contact_id`.
+     */
+open func hasPending(contactId: String) -> Bool  {
+    return try!  FfiConverterBool.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_rustpqcontributions_has_pending(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(contactId),$0
+    )
+})
+}
+    
+    /**
+     * Store the KEM shared secret for `contact_id`.
+     */
+open func storeDeferred(contactId: String, sharedSecret: [UInt8])  {try! rustCall() {
+    uniffi_construct_core_fn_method_rustpqcontributions_store_deferred(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(contactId),
+        FfiConverterSequenceUInt8.lower(sharedSecret),$0
+    )
+}
+}
+    
+    /**
+     * Remove and return the stored shared secret. Returns null if not found.
+     */
+open func takeDeferred(contactId: String) -> [UInt8]?  {
+    return try!  FfiConverterOptionSequenceUInt8.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_rustpqcontributions_take_deferred(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(contactId),$0
+    )
+})
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeRustPQContributions: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = RustPqContributions
+
+    public static func lift(_ handle: UInt64) throws -> RustPqContributions {
+        return RustPqContributions(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: RustPqContributions) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RustPqContributions {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: RustPqContributions, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRustPQContributions_lift(_ handle: UInt64) throws -> RustPqContributions {
+    return try FfiConverterTypeRustPQContributions.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRustPQContributions_lower(_ value: RustPqContributions) -> UInt64 {
+    return FfiConverterTypeRustPQContributions.lower(value)
+}
+
+
+
+
+
+
 public protocol TrafficProtectionManagerProtocol: AnyObject, Sendable {
     
     func currentIntervalMs()  -> UInt64
@@ -3549,6 +3742,30 @@ fileprivate struct FfiConverterOptionCallbackInterfacePowProgressCallback: FfiCo
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionSequenceUInt8: FfiConverterRustBuffer {
+    typealias SwiftType = [UInt8]?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterSequenceUInt8.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterSequenceUInt8.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceUInt8: FfiConverterRustBuffer {
     typealias SwiftType = [UInt8]
 
@@ -4051,6 +4268,18 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_rusthealingqueue_remove_record() != 39701) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_method_rustpqcontributions_clear() != 36635) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_rustpqcontributions_has_pending() != 44477) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_rustpqcontributions_store_deferred() != 22265) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_rustpqcontributions_take_deferred() != 5516) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_method_trafficprotectionmanager_current_interval_ms() != 34869) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -4082,6 +4311,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_constructor_rusthealingqueue_new() != 42495) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_constructor_rustpqcontributions_new() != 4456) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_constructor_trafficprotectionmanager_new() != 21642) {

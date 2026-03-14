@@ -8,6 +8,12 @@
 //  - Upload to key server alongside classic X25519 keys
 //  - Retrieval of secret key for decapsulation on incoming sessions
 //
+//  Migration status (M3):
+//  - mlkem768Keygen / mlkem768Encapsulate / mlkem768Decapsulate → already Rust ✅
+//  - signBundleData → already Rust (ClassicCryptoCore) ✅
+//  - pendingPQContributions + NSLock → replaced by RustPQContributions ✅
+//  - Keychain storage (SPK/OTPK) → stays Swift until PlatformBridge (M4)
+//
 
 import Foundation
 
@@ -21,10 +27,10 @@ final class PQCKeyManager {
     private init() {}
 
     // MARK: - Deferred PQ contributions
+    // Rust-backed thread-safe store replacing [String: [UInt8]] + NSLock.
     // Stores KEM shared secret between encapsulate (session init) and msg0 send.
     // Applied only after msg0 is encrypted with classic state.
-    private var pendingPQContributions: [String: [UInt8]] = [:]
-    private let pqContributionLock = NSLock()
+    private let rustContributions = RustPqContributions()
 
     // MARK: - Keychain Keys
 
@@ -273,7 +279,7 @@ final class PQCKeyManager {
     /// Call `applyDeferredPQContribution` after msg0 has been encrypted.
     func encapsulateAndDefer(kyberSPKPublic: Data, contactId: String) throws -> Data {
         let encapsulation = try mlkem768Encapsulate(publicKey: [UInt8](kyberSPKPublic))
-        pqContributionLock.withLock { pendingPQContributions[contactId] = encapsulation.sharedSecret }
+        rustContributions.storeDeferred(contactId: contactId, sharedSecret: encapsulation.sharedSecret)
         Log.info("🔐 PQC: PQXDH encapsulated for \(contactId.prefix(8))..., ct=\(encapsulation.ciphertext.count)B (deferred)", category: "PQC")
         return Data(encapsulation.ciphertext)
     }
@@ -281,14 +287,14 @@ final class PQCKeyManager {
     /// Apply the deferred Kyber shared secret to the DR session.
     /// Must be called after msg0 is encrypted, before msg1 is encrypted.
     func applyDeferredPQContribution(contactId: String, core: ClassicCryptoCore) throws {
-        guard let ss = pqContributionLock.withLock({ pendingPQContributions.removeValue(forKey: contactId) }) else { return }
+        guard let ss = rustContributions.takeDeferred(contactId: contactId) else { return }
         try core.applyPqContribution(contactId: contactId, kemSharedSecret: ss)
         Log.info("🔐 PQC: Deferred PQXDH applied for \(contactId.prefix(8))...", category: "PQC")
     }
 
     /// Discard any pending PQ contribution (e.g., when kem cannot be included in the message).
     func clearPendingContribution(for contactId: String) {
-        _ = pqContributionLock.withLock { pendingPQContributions.removeValue(forKey: contactId) }
+        rustContributions.clear(contactId: contactId)
     }
 
     // MARK: - PQXDH Receiver: Decapsulate + Strengthen Session
