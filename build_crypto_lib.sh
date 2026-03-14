@@ -150,6 +150,25 @@ $BUILD_CAT && check_prologue "$PROJECT_ROOT/libconstruct_core_catalyst.a" "Catal
 $BUILD_MAC && check_prologue "$PROJECT_ROOT/libconstruct_core_mac.a"      "macOS"
 $BUILD_SIM && check_prologue "$PROJECT_ROOT/libconstruct_core_sim.a"      "Simulator"
 
+# ── Обновление ConstructCore.xcframework ─────────────────────────────────────
+XCFW="$PROJECT_ROOT/ConstructCore.xcframework"
+if [ -d "$XCFW" ]; then
+  hdr "Обновление xcframework"
+  $BUILD_IOS && cp "$PROJECT_ROOT/libconstruct_core.a"          "$XCFW/ios-arm64/libconstruct_core.a"          && ok "ios-arm64 → xcframework"
+  $BUILD_CAT && cp "$PROJECT_ROOT/libconstruct_core_catalyst.a" "$XCFW/ios-arm64-maccatalyst/libconstruct_core_catalyst.a" && ok "ios-arm64-maccatalyst → xcframework"
+  $BUILD_MAC && cp "$PROJECT_ROOT/libconstruct_core_mac.a"      "$XCFW/macos-arm64/libconstruct_core_mac.a"    && ok "macos-arm64 → xcframework"
+  if $BUILD_SIM; then
+    XCFW_SIM="$XCFW/ios-arm64-simulator/libconstruct_core.a"
+    ICE_SIM=$(find "$CORE_PATH/target/aarch64-apple-ios-sim/release/deps" -name "libconstruct_ice-*.a" 2>/dev/null | head -1)
+    RUST_SIM="$CORE_PATH/target/aarch64-apple-ios-sim/release/libconstruct_core.a"
+    if [ -n "$ICE_SIM" ] && [ -f "$RUST_SIM" ]; then
+      libtool -static -o "$XCFW_SIM" "$RUST_SIM" "$ICE_SIM" && ok "ios-arm64-simulator → xcframework (ICE merged)"
+    else
+      cp "$PROJECT_ROOT/libconstruct_core_sim.a" "$XCFW_SIM" && ok "ios-arm64-simulator → xcframework"
+    fi
+  fi
+fi
+
 # ── Готово ────────────────────────────────────────────────────────────────────
 echo ""
 echo -e "${BOLD}Готово! Следующие шаги в Xcode:${NC}"
