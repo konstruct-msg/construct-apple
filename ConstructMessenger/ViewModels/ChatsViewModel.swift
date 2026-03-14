@@ -16,6 +16,7 @@ import UIKit
 class ChatsViewModel {
     private var observationTasks: [Task<Void, Never>] = []
     private var viewContext: NSManagedObjectContext?
+    private var didPerformFirstContextSetup = false
     /// Debounce task for forceReconnectStream — prevents channel-creation flood when
     /// multiple observers (networkPathChanged, appDidBecomeActive, etc.) fire at once.
     private var reconnectDebounceTask: Task<Void, Never>?
@@ -76,12 +77,16 @@ class ChatsViewModel {
     }
 
     func setContext(_ context: NSManagedObjectContext) {
+        if let existing = viewContext, existing === context {
+            return
+        }
         self.viewContext = context
         sessionCoordinator.setContext(context)
         chatManagementService.setContext(context)
         // Resubscribe with actual contacts now that DB is available.
         // Only force-reconnect if we previously had 0 subscriptions (startup race condition).
-        if streamManager.subscriptionUserIds.isEmpty {
+        if !didPerformFirstContextSetup && streamManager.subscriptionUserIds.isEmpty {
+            didPerformFirstContextSetup = true
             forceReconnectStream()
         }
         // Prune expired ACK and healing records once per app session

@@ -326,9 +326,8 @@ class MessageRouter {
         // Deduplicate: skip if same message ID is already in the queue
         if pendingMessages[userId]?.contains(where: { $0.id == message.id }) == true {
             Log.debug("⏭️ Skipping duplicate queued message \(message.id.prefix(8))...", category: "MessageRouter")
-            // ACK so server removes it from the pending queue — session init is already
-            // in flight for this user and will handle the message from the queue.
-            onReceiptNeeded?([message.id], userId, .delivered)
+            // Do NOT ACK as delivered yet: session init may still fail, and acknowledging would
+            // cause the server to drop the pending message even though we haven't decrypted it.
             return
         }
 
@@ -352,13 +351,12 @@ class MessageRouter {
             return
         }
 
-        // Guard: msgNum=0 with empty kemCiphertext = stale DR message from a previous session.
-        // Sending END_SESSION here creates a reset loop — discard silently instead.
-        if message.messageNumber == 0 && message.kemCiphertext.isEmpty && isFirstForUser {
-            Log.info("🔇 No session, msgNum=0, empty kem from \(userId.prefix(8))… — stale DR, silently dropped", category: "MessageRouter")
-            PersistentACKStore.shared.markProcessed(message.id, senderId: userId, in: context)
-            onReceiptNeeded?([message.id], userId, .delivered)
-            if isNewChat { context.delete(chat) }
+        // Cap per-user queue to prevent unbounded memory growth during prolonged
+        // session-init failures. Unqueued messages stay on the server and will be
+        // re-delivered once the session is established and the queue drains.
+        let maxPendingPerUser = 100
+        if (pendingMessages[userId]?.count ?? 0) >= maxPendingPerUser {
+            Log.info("⚠️ Pending queue saturated for \(userId.prefix(8))… (\(maxPendingPerUser) messages) — not queueing until session init completes", category: "MessageRouter")
             return
         }
 
@@ -403,7 +401,7 @@ class MessageRouter {
             Log.error("🔐 SESSION_STATE[decrypt_failed]: userId=\(userId.prefix(8))..., messageId=\(message.id.prefix(8))..., messageNumber=\(message.messageNumber)", category: "SessionInit")
 
             if SessionHealingService.shared.canHeal(message) {
-                // messageNumber == 0 AND non-empty kemCiphertext → real X3DH re-init from sender.
+                // messageNumber == 0 → X3DH re-init from sender (classic or PQXDH).
                 // Session was already archived by decryptMessage (reason: decryptionFailed).
                 //
                 // Tie-break: if BOTH sides re-inited as INITIATOR simultaneously, we must pick
@@ -411,12 +409,21 @@ class MessageRouter {
                 // The winner restores its just-archived INITIATOR session; the loser heals.
                 let myUserId = SessionManager.shared.currentUserId ?? ""
                 if !myUserId.isEmpty && myUserId < userId {
-                    // We're lower userId → we are the INITIATOR. Restore our session and
-                    // silently ACK their X3DH init — they will heal from ours instead.
-                    CryptoManager.shared.restoreLatestArchive(for: userId)
-                    Log.info("🏆 SESSION_STATE[tie_break_win]: kept INITIATOR (lower userId), ACKed X3DH from \(userId.prefix(8))…", category: "SessionInit")
-                    PersistentACKStore.shared.markProcessed(message.id, senderId: userId, in: context)
-                    onReceiptNeeded?([message.id], userId, .delivered)
+                    // We're lower userId → we are the INITIATOR. Try to restore our
+                    // just-archived session so we keep the INITIATOR role.
+                    let restored = CryptoManager.shared.restoreLatestArchive(for: userId)
+                    if restored {
+                        Log.info("🏆 SESSION_STATE[tie_break_win]: kept INITIATOR (lower userId), ACKed X3DH from \(userId.prefix(8))…", category: "SessionInit")
+                        PersistentACKStore.shared.markProcessed(message.id, senderId: userId, in: context)
+                        onReceiptNeeded?([message.id], userId, .delivered)
+                    } else {
+                        // Archive missing or corrupt — can't restore INITIATOR role.
+                        // Fall through to RESPONDER heal instead of silently losing the message.
+                        Log.info("⚠️ SESSION_STATE[tie_break_fallback]: no archive to restore for \(userId.prefix(8))… — healing as RESPONDER instead", category: "SessionInit")
+                        SessionHealingService.shared.enqueue(message, in: context)
+                        pendingMessages[userId, default: []].append(message)
+                        onSessionHealNeeded?(userId, message)
+                    }
                 } else {
                     // We're higher userId → become RESPONDER and heal from their X3DH init.
                     Log.info("🩹 SESSION_STATE[heal_triggered]: msgNum=0, kemCiphertext=\(message.kemCiphertext.count)b from \(userId.prefix(8))… — healing (tie-break: we are RESPONDER)", category: "SessionInit")
@@ -424,15 +431,6 @@ class MessageRouter {
                     pendingMessages[userId, default: []].append(message)
                     onSessionHealNeeded?(userId, message)
                 }
-            } else if message.messageNumber == 0 {
-                // messageNumber == 0 but empty kemCiphertext → stale DR message from a previous
-                // session delivered after a reset. Cannot heal; silently discard to break the
-                // END_SESSION feedback loop (sending END_SESSION here just triggers another reset).
-                Log.info("🔇 SESSION_STATE[discard_stale_dr]: msgNum=0, empty kem from \(userId.prefix(8))… — silently dropped", category: "SessionInit")
-                PersistentACKStore.shared.markProcessed(message.id, senderId: userId, in: context)
-                onReceiptNeeded?([message.id], userId, .delivered)
-                pendingMessages.removeValue(forKey: userId)
-                SessionHealingService.shared.clearQueue(for: userId, in: context)
             } else {
                 // messageNumber > 0 → DR ratchet diverged, healing is impossible.
                 // Send FAILED receipt: server automatically relays SESSION_RESET to sender (server-side item 12).

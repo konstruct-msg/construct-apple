@@ -24,6 +24,7 @@ class EnergyMonitor {
 
     /// Current network path
     private var currentPath: NWPath?
+    private var lastPathStatus: NWPath.Status?
 
     // MARK: - Initialization
 
@@ -39,8 +40,13 @@ class EnergyMonitor {
 
     private func setupNetworkMonitoring() {
         pathMonitor.pathUpdateHandler = { [weak self] path in
-            self?.currentPath = path
-            Log.info("Network status changed: \(path.status)", category: "EnergyMonitor")
+            guard let self else { return }
+            self.currentPath = path
+            // NWPathMonitor may call this repeatedly with the same status; avoid log spam.
+            if self.lastPathStatus != path.status {
+                self.lastPathStatus = path.status
+                Log.debug("Network status changed: \(path.status)", category: "EnergyMonitor")
+            }
         }
         pathMonitor.start(queue: monitorQueue)
     }

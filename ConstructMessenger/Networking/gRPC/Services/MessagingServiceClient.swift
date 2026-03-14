@@ -25,7 +25,7 @@ final class MessagingServiceClient: Sendable {
         encryptedPayload: Data,
         timestamp: UInt64
     ) async throws -> SendMessageResponse {
-        try await GRPCChannelManager.shared.performRPC { grpcClient in
+        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.sendMessage) { grpcClient in
             let msgClient = Shared_Proto_Services_V1_MessagingService.Client(wrapping: grpcClient)
 
             var sender = Shared_Proto_Core_V1_UserId()
@@ -72,7 +72,7 @@ final class MessagingServiceClient: Sendable {
     // MARK: - Send End Session (replaces MessagingAPI.sendEndSession)
 
     func sendEndSession(to recipientId: String, reason: String? = nil) async throws -> EndSessionResponse {
-        try await GRPCChannelManager.shared.performRPC { grpcClient in
+        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.endSession) { grpcClient in
             let msgClient = Shared_Proto_Services_V1_MessagingService.Client(wrapping: grpcClient)
 
             let messageId = UUID().uuidString
@@ -124,69 +124,77 @@ final class MessagingServiceClient: Sendable {
         let hasMore: Bool
     }
 
-    func getPendingMessages(sinceCursor: String? = nil, limit: Int32 = 50) async throws -> PendingMessagesResult {
-        try await GRPCChannelManager.shared.performRPC { grpcClient in
-            let msgClient = Shared_Proto_Services_V1_MessagingService.Client(wrapping: grpcClient)
+    static func getPendingMessagesPage(
+        grpcClient: GRPCClient<HTTP2ClientTransport.Posix>,
+        sinceCursor: String? = nil,
+        limit: Int32 = 50
+    ) async throws -> PendingMessagesResult {
+        let msgClient = Shared_Proto_Services_V1_MessagingService.Client(wrapping: grpcClient)
 
-            var request = Shared_Proto_Services_V1_GetPendingMessagesRequest()
-            if let sinceCursor, !sinceCursor.isEmpty {
-                request.sinceCursor = sinceCursor
-            }
-            request.limit = limit
+        var request = Shared_Proto_Services_V1_GetPendingMessagesRequest()
+        if let sinceCursor, !sinceCursor.isEmpty {
+            request.sinceCursor = sinceCursor
+        }
+        request.limit = limit
 
-            let response = try await msgClient.getPendingMessages(
-                request: .init(message: request)
-            )
+        let response = try await msgClient.getPendingMessages(
+            request: .init(message: request)
+        )
 
-            var failed: [FailedMessage] = []
-            let chatMessages = response.messages.compactMap { msg -> ChatMessage? in
-                // END_SESSION: detect by contentType OR sentinel payload size (server may strip contentType).
-                let isEndSession = msg.contentType == .sessionReset ||
-                    (!msg.encryptedPayload.isEmpty && msg.encryptedPayload.count < WirePayloadCoder.headerSize)
-                if isEndSession {
-                    let detected = msg.contentType == .sessionReset ? "contentType" : "sentinel payload (\(msg.encryptedPayload.count)b)"
-                    Log.debug("🛑 END_SESSION pending from \(msg.senderID.prefix(8))… id=\(msg.messageID.prefix(8))… via \(detected)", category: "MessagingServiceClient")
-                    return ChatMessage(
-                        id: msg.messageID,
-                        from: msg.senderID,
-                        to: "",
-                        messageType: "CONTROL_MESSAGE",
-                        ephemeralPublicKey: Data(),
-                        messageNumber: 0,
-                        content: "END_SESSION",
-                        suiteId: 1,
-                        timestamp: UInt64(msg.timestamp),
-                        kemCiphertext: Data(),
-                        kyberOtpkId: 0
-                    )
-                }
-                // Unpack wire payload blob into crypto components
-                guard let decoded = try? WirePayloadCoder.decode(msg.encryptedPayload) else {
-                    Log.debug("⚠️ Failed to decode encrypted_payload for message \(msg.messageID) — queuing failed ACK", category: "MessagingServiceClient")
-                    failed.append(FailedMessage(id: msg.messageID, senderId: msg.senderID))
-                    return nil
-                }
+        var failed: [FailedMessage] = []
+        let chatMessages = response.messages.compactMap { msg -> ChatMessage? in
+            // END_SESSION: detect by contentType OR sentinel payload size (server may strip contentType).
+            let isEndSession = msg.contentType == .sessionReset ||
+                (!msg.encryptedPayload.isEmpty && msg.encryptedPayload.count < WirePayloadCoder.headerSize)
+            if isEndSession {
+                let detected = msg.contentType == .sessionReset ? "contentType" : "sentinel payload (\(msg.encryptedPayload.count)b)"
+                Log.debug("🛑 END_SESSION pending from \(msg.senderID.prefix(8))… id=\(msg.messageID.prefix(8))… via \(detected)", category: "MessagingServiceClient")
                 return ChatMessage(
                     id: msg.messageID,
                     from: msg.senderID,
                     to: "",
-                    messageType: "DIRECT_MESSAGE",
-                    ephemeralPublicKey: Data(decoded.ephemeralPublicKey),
-                    messageNumber: decoded.messageNumber,
-                    content: decoded.content,
+                    messageType: "CONTROL_MESSAGE",
+                    ephemeralPublicKey: Data(),
+                    messageNumber: 0,
+                    content: "END_SESSION",
                     suiteId: 1,
                     timestamp: UInt64(msg.timestamp),
-                    kemCiphertext: decoded.kemCiphertext ?? Data(),
-                    kyberOtpkId: decoded.kyberOtpkId
+                    kemCiphertext: Data(),
+                    kyberOtpkId: 0
                 )
             }
-
-            return PendingMessagesResult(
-                messages: chatMessages,
-                failedMessages: failed,
-                nextCursor: response.nextCursor,
-                hasMore: response.hasMore_p
+            // Unpack wire payload blob into crypto components
+            guard let decoded = try? WirePayloadCoder.decode(msg.encryptedPayload) else {
+                Log.debug("⚠️ Failed to decode encrypted_payload for message \(msg.messageID) — queuing failed ACK", category: "MessagingServiceClient")
+                failed.append(FailedMessage(id: msg.messageID, senderId: msg.senderID))
+                return nil
+            }
+            return ChatMessage(
+                id: msg.messageID,
+                from: msg.senderID,
+                to: "",
+                messageType: "DIRECT_MESSAGE",
+                ephemeralPublicKey: Data(decoded.ephemeralPublicKey),
+                messageNumber: decoded.messageNumber,
+                content: decoded.content,
+                suiteId: 1,
+                timestamp: UInt64(msg.timestamp),
+                kemCiphertext: decoded.kemCiphertext ?? Data(),
+                kyberOtpkId: decoded.kyberOtpkId
             )
+        }
+
+        return PendingMessagesResult(
+            messages: chatMessages,
+            failedMessages: failed,
+            nextCursor: response.nextCursor,
+            hasMore: response.hasMore_p
+        )
+    }
+
+    func getPendingMessages(sinceCursor: String? = nil, limit: Int32 = 50) async throws -> PendingMessagesResult {
+        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.getPendingMessages) { grpcClient in
+            try await Self.getPendingMessagesPage(grpcClient: grpcClient, sinceCursor: sinceCursor, limit: limit)
         }
     }
 
@@ -198,7 +206,7 @@ final class MessagingServiceClient: Sendable {
         newEncryptedContent: Data,
         recipientUserId: String
     ) async throws -> Shared_Proto_Services_V1_EditMessageResponse {
-        try await GRPCChannelManager.shared.performRPC { grpcClient in
+        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.editMessage) { grpcClient in
             let msgClient = Shared_Proto_Services_V1_MessagingService.Client(wrapping: grpcClient)
 
             var request = Shared_Proto_Services_V1_EditMessageRequest()

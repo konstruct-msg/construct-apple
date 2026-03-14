@@ -30,6 +30,10 @@ out/
 .vercel/
 .turbo/
 logs/
+logs_and_screenshots/
+
+# Xcode per-user state
+*.xcuserstate
 
 
 # Static library symbol files (macOS)

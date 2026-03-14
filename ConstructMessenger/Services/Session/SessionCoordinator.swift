@@ -23,7 +23,7 @@ final class SessionCoordinator {
 
     private let messageRouter = MessageRouter()
     private let publicKeyBundleHandler = PublicKeyBundleHandler()
-    private let sessionInitService = SessionInitializationService()
+    private let sessionInitService = SessionInitializationService.shared
     private let initMessageReassembler = ChunkedMessageReassembler()
 
     // MARK: - State
@@ -35,6 +35,12 @@ final class SessionCoordinator {
     /// Tracks when we last sent END_SESSION to each peer to prevent loop storms.
     private var endSessionSentAt: [String: Date] = [:]
     private let endSessionCooldown: TimeInterval = 30.0
+
+    /// Tracks when we last attempted an automatic resend after receiving END_SESSION from a peer.
+    /// Prevents resend loops when both sides reset simultaneously.
+    private var resendAttemptedAt: [String: Date] = [:]
+    private let resendCooldown: TimeInterval = 10.0
+    private let resendWindow: TimeInterval = 5 * 60 // 5 minutes
 
     /// Prevents parallel session-init attempts for the same peer.
     private var usersInitializingSession: Set<String> = []
@@ -203,6 +209,7 @@ final class SessionCoordinator {
         // and prevents the RESPONDER from incorrectly acting as INITIATOR with stale OTPKs.
         messageRouter.onEndSessionReceived = { [weak self] userId in
             guard let self else { return }
+            self.resendUnconfirmedOutgoingMessagesIfNeeded(to: userId)
             let myId = SessionManager.shared.currentUserId ?? ""
             guard !myId.isEmpty, myId < userId else { return }
             Log.info("🔥 END_SESSION received — re-prewarming as natural INITIATOR for \(userId.prefix(8))…", category: "SessionInit")
@@ -239,6 +246,14 @@ final class SessionCoordinator {
             if success {
                 // New session established — reset END_SESSION cooldown so future failures are handled.
                 endSessionSentAt.removeValue(forKey: userId)
+
+                // ACK only after we successfully decrypted + persisted the first message.
+                // This prevents message loss when initReceivingSession fails mid-flight.
+                streamManager?.sendReceipt([message.id], to: userId, status: .delivered)
+                if let context = viewContext {
+                    PersistentACKStore.shared.markProcessed(message.id, senderId: userId, in: context)
+                }
+
                 // Replenish OTPKs — Bob consumed one OTPK for this X3DH session init.
                 Task {
                     let deviceId = KeychainManager.shared.loadDeviceID() ?? ""
@@ -248,8 +263,9 @@ final class SessionCoordinator {
             } else {
                 // initReceivingSession failed — prekey exhausted or invalid.
                 Log.info("🔄 initReceivingSession failed — clearing queue, sending END_SESSION to \(userId.prefix(8))...", category: "SessionInit")
-                // ACK so server cursor advances past the undecryptable message.
-                streamManager?.sendReceipt([message.id], to: userId, status: .delivered)
+                // Do NOT ACK as delivered: we failed to decrypt. Mark as failed so the sender
+                // is forced to reset and re-send under a fresh session.
+                streamManager?.sendReceipt([message.id], to: userId, status: .failed)
                 // Mark as permanently processed so re-deliveries on reconnect are silently ignored
                 // instead of triggering a cascade of new failed session inits.
                 if let context = viewContext {
@@ -303,12 +319,18 @@ final class SessionCoordinator {
             if healed {
                 Log.info("✅ SESSION_STATE[heal_success]: session healed for \(userId.prefix(8))…", category: "SessionInit")
                 SessionHealingService.shared.removeRecord(for: failedMessage.id, in: context)
+
+                // We can now decrypt the previously-failed X3DH init message: ACK it as delivered.
+                streamManager?.sendReceipt([failedMessage.id], to: userId, status: .delivered)
+                PersistentACKStore.shared.markProcessed(failedMessage.id, senderId: userId, in: context)
+
                 drainPendingQueue(for: userId, skippingFirst: true)
             } else {
                 Log.error("❌ SESSION_STATE[heal_failed]: initReceivingSession still failing for \(userId.prefix(8))…", category: "SessionInit")
                 if !canContinue {
                     Log.info("⛔ Heal exhausted — sending END_SESSION to \(userId.prefix(8))…", category: "SessionInit")
-                    streamManager?.sendReceipt([failedMessage.id], to: userId, status: .delivered)
+                    // Heal is impossible, so do NOT report delivered. Report failed to force a reset.
+                    streamManager?.sendReceipt([failedMessage.id], to: userId, status: .failed)
                     // Mark permanently so re-deliveries on reconnect don't restart the cascade.
                     PersistentACKStore.shared.markProcessed(failedMessage.id, senderId: userId, in: context)
                     pendingFirstMessages.removeValue(forKey: userId)
@@ -403,5 +425,120 @@ final class SessionCoordinator {
         chat.lastMessageTime = message.timestamp
 
         context.saveAndLog()
+    }
+
+    // MARK: - Auto-resend After END_SESSION (sender-side recovery)
+
+    /// If we receive END_SESSION from a peer, it usually means they couldn't decrypt something we sent
+    /// (or their local session state was reset). In that case, resend recent unconfirmed messages
+    /// under a fresh session to avoid silent message loss.
+    private func resendUnconfirmedOutgoingMessagesIfNeeded(to userId: String) {
+        guard let context = viewContext else { return }
+        guard let myId = SessionManager.shared.currentUserId, !myId.isEmpty else { return }
+
+        let now = Date()
+        if let last = resendAttemptedAt[userId], now.timeIntervalSince(last) < resendCooldown {
+            Log.info("⏸️ Auto-resend cooldown active for \(userId.prefix(8))..., skipping", category: "SessionInit")
+            return
+        }
+        resendAttemptedAt[userId] = now
+
+        let cutoff = now.addingTimeInterval(-resendWindow) as NSDate
+        let statusPredicate = NSCompoundPredicate(orPredicateWithSubpredicates: [
+            NSPredicate(format: "deliveryStatusRaw == %d", DeliveryStatus.sending.rawValue),
+            NSPredicate(format: "deliveryStatusRaw == %d", DeliveryStatus.sent.rawValue)
+        ])
+
+        let fetch = Message.fetchRequest()
+        fetch.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+            NSPredicate(format: "isSentByMe == YES"),
+            NSPredicate(format: "fromUserId == %@", myId),
+            NSPredicate(format: "toUserId == %@", userId),
+            NSPredicate(format: "timestamp >= %@", cutoff),
+            NSPredicate(format: "retryCount == 0"),
+            statusPredicate
+        ])
+        fetch.sortDescriptors = [NSSortDescriptor(key: "timestamp", ascending: true)]
+        fetch.fetchLimit = 20
+
+        guard let candidates = try? context.fetch(fetch), !candidates.isEmpty else {
+            return
+        }
+
+        Log.info("🔁 END_SESSION recovery: attempting auto-resend of \(candidates.count) message(s) to \(userId.prefix(8))...", category: "SessionInit")
+
+        Task { @MainActor in
+            do {
+                try await ensureSendingSession(for: userId)
+            } catch {
+                Log.error("❌ Auto-resend: session init failed for \(userId.prefix(8))…: \(error.localizedDescription)", category: "SessionInit")
+                return
+            }
+
+            for msg in candidates {
+                guard let plaintext = msg.decryptedContent else { continue }
+
+                msg.deliveryStatus = .sending
+                msg.retryCount += 1
+                context.saveAndLog()
+
+                do {
+                    let messageUUID = UUID(uuidString: msg.id) ?? UUID()
+                    let plan = ChunkedMessageSender.shared.buildPlan(plaintext: plaintext, messageId: messageUUID)
+                    guard let firstPayload = plan.payloads.first, !plan.payloads.isEmpty else {
+                        Log.error("❌ Auto-resend: message too large to build chunk plan: \(msg.id.prefix(8))…", category: "SessionInit")
+                        msg.deliveryStatus = .failed
+                        context.saveAndLog()
+                        continue
+                    }
+
+                    let firstComponents = try CryptoManager.shared.encryptMessage(firstPayload, for: userId)
+                    let kemCiphertext = firstComponents.messageNumber == 0 ? sessionInitService.consumeKemCiphertext(for: userId) : nil
+                    let kyberOtpkId = firstComponents.messageNumber == 0 ? sessionInitService.consumeKyberOtpkId(for: userId) : 0
+
+                    let responses = try await ChunkedMessageSender.shared.sendChunks(
+                        plan: plan,
+                        senderId: myId,
+                        recipientId: userId,
+                        conversationId: ConversationId.direct(myUserId: myId, theirUserId: userId),
+                        timestamp: UInt64(msg.timestamp.timeIntervalSince1970),
+                        preEncryptedFirst: firstComponents,
+                        kemCiphertext: kemCiphertext,
+                        kyberOtpkId: kyberOtpkId
+                    )
+
+                    let response = responses.first ?? SendMessageResponse(messageId: msg.id, status: "sent")
+                    let newStatus: DeliveryStatus
+                    switch response.status.lowercased() {
+                    case "delivered": newStatus = .delivered
+                    case "queued": newStatus = .queued
+                    case "failed": newStatus = .failed
+                    default: newStatus = .sent
+                    }
+                    msg.deliveryStatus = newStatus
+                    context.saveAndLog()
+                    Log.info("✅ Auto-resend: message \(msg.id.prefix(8))… status=\(newStatus)", category: "SessionInit")
+                } catch {
+                    msg.deliveryStatus = .failed
+                    context.saveAndLog()
+                    Log.error("❌ Auto-resend failed for \(msg.id.prefix(8))…: \(error.localizedDescription)", category: "SessionInit")
+                }
+            }
+        }
+    }
+
+    private func ensureSendingSession(for userId: String) async throws {
+        if CryptoManager.shared.hasSession(for: userId) {
+            return
+        }
+        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
+            Task { @MainActor in
+                await sessionInitService.initializeSessionProactively(
+                    userId: userId,
+                    onSuccess: { cont.resume(returning: ()) },
+                    onFailure: { cont.resume(throwing: $0) }
+                )
+            }
+        }
     }
 }

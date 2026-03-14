@@ -303,11 +303,27 @@ final class CryptoSessionInitializationService {
             sessionStore.setSession(userId: userId, sessionId: result.sessionId, suiteId: suiteID)
             saveSession(userId)
 
-            // PQXDH: If sender included a KEM ciphertext, decapsulate + strengthen session
+            // PQXDH: If sender included a KEM ciphertext, decapsulate + strengthen session.
+            // The INITIATOR has already applied the PQ contribution to their DR state,
+            // so we MUST either apply the same contribution correctly, or skip PQ entirely
+            // (both sides stay classic X3DH for msg0; msg1+ will diverge and trigger END_SESSION).
             if !firstMessage.kemCiphertext.isEmpty {
                 do {
                     let kyberOtpkId = firstMessage.kyberOtpkId
-                    if kyberOtpkId > 0, let otpkSecret = PQCKeyManager.kyberOtpkSecret(forKeyId: kyberOtpkId) {
+                    if kyberOtpkId > 0 {
+                        // Sender encapsulated with a Kyber OTPK
+                        guard let otpkSecret = PQCKeyManager.kyberOtpkSecret(forKeyId: kyberOtpkId) else {
+                            // OTPK secret missing — MUST skip PQ entirely.
+                            // Decapsulating with SPK would produce garbage via ML-KEM implicit
+                            // rejection, corrupting the DR root key irreversibly.
+                            // The session stays classic X3DH; subsequent messages from the
+                            // INITIATOR (who applied PQ) will fail to decrypt, triggering
+                            // END_SESSION and a clean re-init.
+                            Log.error("🚨 PQC: Kyber OTPK id=\(kyberOtpkId) secret MISSING for \(userId.prefix(8))… — skipping PQ to avoid shared secret mismatch", category: "CryptoManager")
+                            UserDefaults.standard.set(true, forKey: "construct.pqxdh.downgraded.\(userId)")
+                            // Fall through without applying PQ — don't re-save session
+                            return result.decryptedMessage
+                        }
                         try PQCKeyManager.shared.decapsulateAndStrengthen(
                             kemCiphertext: firstMessage.kemCiphertext,
                             contactId: userId,
@@ -317,6 +333,7 @@ final class CryptoSessionInitializationService {
                         PQCKeyManager.deleteKyberOtpk(keyId: kyberOtpkId)
                         Log.info("🔐 PQC: PQXDH Kyber OTPK id=\(kyberOtpkId) for \(userId.prefix(8))...", category: "CryptoManager")
                     } else {
+                        // kyberOtpkId == 0 → sender used Kyber SPK
                         try PQCKeyManager.shared.decapsulateAndStrengthen(
                             kemCiphertext: firstMessage.kemCiphertext,
                             contactId: userId,
@@ -327,9 +344,10 @@ final class CryptoSessionInitializationService {
                     // Re-save session after PQ strengthening
                     saveSession(userId)
                 } catch {
-                    // Non-fatal: session is still usable with classic X3DH security
-                    // 🚨 SECURITY: PQXDH was downgraded — note this in diagnostics
-                    Log.error("🚨 PQC: PQXDH decapsulation FAILED — session downgraded to classic X3DH for \(userId.prefix(8))...: \(error)", category: "CryptoManager")
+                    // PQ decapsulation failed. msg0 decrypted fine (classic X3DH), but the
+                    // INITIATOR already applied PQ to their DR state — subsequent messages
+                    // will fail to decrypt, triggering END_SESSION and clean re-init.
+                    Log.error("🚨 PQC: PQXDH decapsulation FAILED for \(userId.prefix(8))...: \(error) — session stays classic X3DH, expect ratchet divergence on msg1+", category: "CryptoManager")
                     UserDefaults.standard.set(true, forKey: "construct.pqxdh.downgraded.\(userId)")
                 }
             }

@@ -42,9 +42,13 @@ class AuthViewModel {
     private var authOperationTimer: Timer?
     private let viewContext: NSManagedObjectContext
     private var sessionExpiredTask: Task<Void, Never>?
+    private var tokenObserverTask: Task<Void, Never>?
 
     // Timer for monitoring token expiration
     private var tokenRefreshTimer: Timer?
+
+    private var restoreInFlight = false
+    private var lastRestoreAttemptAt: Date?
 
     init(context: NSManagedObjectContext) {
         self.viewContext = context
@@ -85,17 +89,47 @@ class AuthViewModel {
         authOperationTimer?.invalidate()
         sessionRestoreTimer?.invalidate()
         sessionExpiredTask?.cancel()
+        tokenObserverTask?.cancel()
     }
 
     private func setupSubscribers() {
         // ✅ Using gRPC for all messaging
         // Session expiration is handled via setupSessionExpiredListener()
+        // Keep the token refresh timer in sync even if tokens are refreshed outside AuthViewModel
+        // (e.g. on-demand refresh after an `.unauthenticated` gRPC error).
+        tokenObserverTask?.cancel()
+        tokenObserverTask = Task { [weak self] in
+            guard let self else { return }
+            while !Task.isCancelled {
+                await withCheckedContinuation { continuation in
+                    withObservationTracking {
+                        _ = SessionManager.shared.sessionToken
+                        _ = SessionManager.shared.sessionExpires
+                    } onChange: {
+                        continuation.resume()
+                    }
+                }
+                guard !Task.isCancelled else { break }
+                if self.isAuthenticated {
+                    self.scheduleTokenRefresh()
+                }
+            }
+        }
     }
 
     // MARK: - Session Management
     
     /// Restore existing session OR authenticate with device keys
     func restoreOrAuthenticateDevice() async {
+        // Coalesce repeated calls (scenePhase, permission prompts, etc.)
+        if restoreInFlight { return }
+        if let last = lastRestoreAttemptAt, Date().timeIntervalSince(last) < 2 {
+            return
+        }
+        lastRestoreAttemptAt = Date()
+        restoreInFlight = true
+        defer { restoreInFlight = false }
+
         print("🔄 restoreOrAuthenticateDevice() called")
         
         // Step 1: Try to restore existing session token

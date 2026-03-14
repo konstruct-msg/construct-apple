@@ -108,7 +108,7 @@ final class GRPCChannelManager: Sendable {
 
         let host = currentHost
         let port = currentPort
-        Log.info("🔌 gRPC creating channel → \(host):\(port) TLS=true", category: "gRPC")
+        Log.debug("🔌 gRPC creating channel → \(host):\(port) TLS=true", category: "gRPC")
 
         let transport = try HTTP2ClientTransport.Posix(
             target: .dns(host: host, port: port),
@@ -135,52 +135,106 @@ final class GRPCChannelManager: Sendable {
     /// Creates a client, runs connections in background, executes the operation, then shuts down.
     /// If the operation fails while ICE is active, records the failure so future calls bypass ICE.
     func performRPC<Result: Sendable>(
+        timeout: TimeInterval? = nil,
+        allowAuthRetry: Bool = true,
         _ operation: @Sendable @escaping (GRPCClient<HTTP2ClientTransport.Posix>) async throws -> Result
     ) async throws -> Result {
-        let usingICE = iceProxyPort() != nil
-        let client = try makeClient()
+        func shouldRecordIceFailure(_ error: Error) -> Bool {
+            if let rpc = error as? RPCError {
+                switch rpc.code {
+                case .unavailable, .deadlineExceeded:
+                    return true
+                case .unauthenticated, .permissionDenied, .invalidArgument:
+                    return false
+                default:
+                    return true
+                }
+            }
+            if error is CancellationError { return false }
+            return true
+        }
 
-        do {
-            return try await withThrowingTaskGroup(of: Result?.self) { group in
-                group.addTask {
-                    do {
-                        try await client.runConnections()
-                        return nil
-                    } catch is CancellationError {
-                        // Expected: cancelled after operation completes
-                        return nil
-                    } catch {
-                        // If the transport dies before the RPC completes, don't hang forever.
-                        // Propagate the error to fail the RPC promptly.
-                        Log.error("⚠️ gRPC transport error: \(error)", category: "GRPCChannel")
-                        throw error
+        var lastError: Error?
+        for attempt in 0..<2 {
+            let usingICE = iceProxyPort() != nil
+            let client = try makeClient()
+
+            do {
+                return try await withThrowingTaskGroup(of: Result?.self) { group in
+                    group.addTask {
+                        do {
+                            try await client.runConnections()
+                            return nil
+                        } catch is CancellationError {
+                            // Expected: cancelled after operation completes
+                            return nil
+                        } catch {
+                            // If the transport dies before the RPC completes, don't hang forever.
+                            // Propagate the error to fail the RPC promptly.
+                            Log.error("⚠️ gRPC transport error: \(error)", category: "GRPCChannel")
+                            throw error
+                        }
                     }
-                }
 
-                group.addTask {
-                    let result = try await operation(client)
-                    client.beginGracefulShutdown()
-                    return result
-                }
-
-                while let next = try await group.next() {
-                    if let result = next {
-                        group.cancelAll()
+                    group.addTask {
+                        let result: Result
+                        if let timeout {
+                            result = try await withThrowingTaskGroup(of: Result.self) { inner in
+                                inner.addTask { try await operation(client) }
+                                inner.addTask {
+                                    try await Task.sleep(for: .seconds(timeout))
+                                    throw RPCError(code: .deadlineExceeded, message: "Request timed out")
+                                }
+                                let first = try await inner.next()!
+                                inner.cancelAll()
+                                return first
+                            }
+                        } else {
+                            result = try await operation(client)
+                        }
+                        client.beginGracefulShutdown()
                         return result
                     }
+
+                    while let next = try await group.next() {
+                        if let result = next {
+                            group.cancelAll()
+                            return result
+                        }
+                    }
+                    group.cancelAll()
+                    throw NetworkError.connectionFailed
                 }
-                group.cancelAll()
-                throw NetworkError.connectionFailed
+            } catch {
+                lastError = error
+                client.beginGracefulShutdown()
+
+                if let rpc = error as? RPCError,
+                   rpc.code == .unauthenticated,
+                   allowAuthRetry,
+                   attempt == 0 {
+                    // Try to refresh access token once, then retry the RPC.
+                    do {
+                        let refreshed = try await TokenRefreshCoordinator.shared.refreshIfPossible()
+                        if refreshed {
+                            continue
+                        }
+                    } catch {
+                        // Fall through to throw the original unauthenticated error.
+                        Log.error("⚠️ Token refresh failed during RPC retry: \(error)", category: "GRPCChannel")
+                    }
+                }
+
+                // If the call failed while routing through ICE, record relay failure only for
+                // network-ish failures. Don't disable ICE due to auth/validation errors.
+                if usingICE, shouldRecordIceFailure(error) {
+                    recordICEFailure()
+                }
+                throw error
             }
-        } catch {
-            client.beginGracefulShutdown()
-            // If the call failed while routing through ICE, record the relay failure so the
-            // next call skips ICE and goes directly over TLS while the relay is unreachable.
-            if usingICE {
-                recordICEFailure()
-            }
-            throw error
         }
+
+        throw lastError ?? NetworkError.connectionFailed
     }
 }
 

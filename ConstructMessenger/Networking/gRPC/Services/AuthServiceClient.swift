@@ -24,7 +24,7 @@ final class AuthServiceClient: Sendable {
     // MARK: - PoW Challenge (replaces AuthAPI.getRegistrationChallenge)
 
     func getPowChallenge() async throws -> ChallengeResponse {
-        try await GRPCChannelManager.shared.performRPC { grpcClient in
+        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.powChallenge, allowAuthRetry: false) { grpcClient in
             let authClient = Shared_Proto_Services_V1_AuthService.Client(wrapping: grpcClient)
 
             let response = try await authClient.getPowChallenge(
@@ -57,7 +57,7 @@ final class AuthServiceClient: Sendable {
         let signedPrekeySignature = (bundleDict["signed_prekey_signature"] as? String)
             ?? (bundleDict["signature"] as? String) ?? ""
 
-        return try await GRPCChannelManager.shared.performRPC { grpcClient in
+        return try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.registerDevice, allowAuthRetry: false) { grpcClient in
             let authClient = Shared_Proto_Services_V1_AuthService.Client(wrapping: grpcClient)
 
             var publicKeys = Shared_Proto_Services_V1_DevicePublicKeys()
@@ -98,7 +98,7 @@ final class AuthServiceClient: Sendable {
     // MARK: - Authenticate Device (replaces AuthAPI.authenticateDevice)
 
     func authenticateDevice(deviceId: String, timestamp: Int64, signature: String) async throws -> AuthResponse {
-        try await GRPCChannelManager.shared.performRPC { grpcClient in
+        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.authenticateDevice, allowAuthRetry: false) { grpcClient in
             let authClient = Shared_Proto_Services_V1_AuthService.Client(wrapping: grpcClient)
 
             var request = Shared_Proto_Services_V1_AuthenticateDeviceRequest()
@@ -123,8 +123,8 @@ final class AuthServiceClient: Sendable {
 
     // MARK: - Refresh Token (replaces AuthAPI.refreshToken)
 
-    func refreshToken(refreshToken: String, deviceId: String = "") async throws -> AuthResponse {
-        try await GRPCChannelManager.shared.performRPC { grpcClient in
+    func refreshToken(refreshToken: String, deviceId: String = "", allowAuthRetry: Bool = false) async throws -> AuthResponse {
+        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.refreshToken, allowAuthRetry: allowAuthRetry) { grpcClient in
             let authClient = Shared_Proto_Services_V1_AuthService.Client(wrapping: grpcClient)
 
             var request = Shared_Proto_Services_V1_RefreshTokenRequest()
@@ -150,7 +150,7 @@ final class AuthServiceClient: Sendable {
     // MARK: - Logout (replaces AuthAPI.logout)
 
     func logout(allDevices: Bool = false) async throws {
-        try await GRPCChannelManager.shared.performRPC { grpcClient in
+        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.logout) { grpcClient in
             let authClient = Shared_Proto_Services_V1_AuthService.Client(wrapping: grpcClient)
 
             var request = Shared_Proto_Services_V1_LogoutRequest()
@@ -169,7 +169,7 @@ final class AuthServiceClient: Sendable {
     }
 
     func setRecoveryKey(publicKey: Data, signature: Data, timestamp: Int64) async throws -> RecoveryKeyResult {
-        try await GRPCChannelManager.shared.performRPC { grpcClient in
+        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.recovery) { grpcClient in
             let authClient = Shared_Proto_Services_V1_AuthService.Client(wrapping: grpcClient)
 
             var request = Shared_Proto_Services_V1_SetRecoveryKeyRequest()
@@ -193,7 +193,7 @@ final class AuthServiceClient: Sendable {
     }
 
     func getRecoveryStatus() async throws -> RecoveryStatus {
-        try await GRPCChannelManager.shared.performRPC { grpcClient in
+        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.recovery) { grpcClient in
             let authClient = Shared_Proto_Services_V1_AuthService.Client(wrapping: grpcClient)
 
             let response = try await authClient.getRecoveryStatus(
@@ -217,7 +217,7 @@ final class AuthServiceClient: Sendable {
         deviceName: String,
         publicKeys: Shared_Proto_Services_V1_DevicePublicKeys
     ) async throws -> AuthResponse {
-        try await GRPCChannelManager.shared.performRPC { grpcClient in
+        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.recovery, allowAuthRetry: false) { grpcClient in
             let authClient = Shared_Proto_Services_V1_AuthService.Client(wrapping: grpcClient)
 
             var newDevice = Shared_Proto_Services_V1_NewDeviceForRecovery()

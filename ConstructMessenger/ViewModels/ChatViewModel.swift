@@ -61,7 +61,7 @@ class ChatViewModel: NSObject {
     private var fetchedResultsController: NSFetchedResultsController<Message>?
     
     // ✅ REFACTOR: Extracted services
-    private let sessionInitService = SessionInitializationService()
+    private let sessionInitService = SessionInitializationService.shared
     private let persistenceService = MessagePersistenceService()
     private let mediaUploadManager = MediaUploadManager()
     private let retryManager = MessageRetryManager()

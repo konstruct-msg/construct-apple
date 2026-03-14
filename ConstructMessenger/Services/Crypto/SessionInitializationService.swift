@@ -1,9 +1,14 @@
 import Foundation
 import os.log
 
-/// Service responsible for session initialization with retry logic and queue management
+/// Service responsible for session initialization with retry logic and queue management.
+/// Singleton: the pending KEM ciphertexts / OTPK IDs must be visible across all
+/// call-sites (SessionCoordinator prewarm, ChatViewModel send, auto-resend, etc.).
 @MainActor
 class SessionInitializationService {
+
+    static let shared = SessionInitializationService()
+    private init() {}
 
     // MARK: - PQC pending KEM ciphertexts
 

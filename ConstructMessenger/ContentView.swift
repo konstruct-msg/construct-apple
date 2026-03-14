@@ -46,7 +46,11 @@ struct ContentView: View {
             if newPhase == .active {
                 // Always restore connection when coming from background to foreground
                 print("📱 App became active, attempting to restore connection...")
-                authViewModel.restoreSession()
+                // Avoid spamming Keychain/session restore while the session is already valid
+                // (e.g. permission prompts can trigger multiple active/inactive transitions).
+                if SessionManager.shared.sessionToken == nil || !SessionManager.shared.isSessionValid {
+                    authViewModel.restoreSession()
+                }
             } else if newPhase == .background {
                 print("⏹️ App went to background.")
                 // gRPC architecture - stream disconnected gracefully

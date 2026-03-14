@@ -31,11 +31,13 @@ final class PersistentACKStore {
     // MARK: - Check
 
     /// Returns `true` if the message was already processed (in-memory or persisted).
+    /// The lock is held across both the cache check and the CoreData fetch to prevent
+    /// a TOCTOU race where two threads both see "not in cache" before either persists.
     func isProcessed(_ messageId: String, in context: NSManagedObjectContext) -> Bool {
         cacheLock.lock()
-        let cached = cache.contains(messageId)
-        cacheLock.unlock()
-        if cached { return true }
+        defer { cacheLock.unlock() }
+
+        if cache.contains(messageId) { return true }
 
         var found = false
         context.performAndWait {
@@ -44,9 +46,7 @@ final class PersistentACKStore {
             fetch.fetchLimit = 1
             found = (try? context.fetch(fetch))?.isEmpty == false
             if found {
-                cacheLock.lock()
                 cache.insert(messageId)
-                cacheLock.unlock()
             }
         }
         return found

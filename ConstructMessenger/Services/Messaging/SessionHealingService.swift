@@ -47,12 +47,12 @@ final class SessionHealingService {
 
     /// Returns `true` when the message CAN be healed without END_SESSION.
     ///
-    /// A real X3DH init has `messageNumber == 0` AND a non-empty `kemCiphertext`
-    /// (the KEM-encapsulated shared secret targeting the receiver's one-time pre-key).
-    /// DR replies also have `messageNumber == 0` in the sender's ratchet chain but
-    /// carry an empty `kemCiphertext` — they are NOT healable via `initReceivingSession`.
+    /// A `messageNumber == 0` message is a PreKeyMessage (X3DH init) regardless of
+    /// whether it carries a KEM ciphertext. KEM is the post-quantum (PQXDH) layer —
+    /// its absence simply means the sender's bundle had no Kyber keys, falling back
+    /// to classic X3DH. Both cases are healable via `initReceivingSession`.
     func canHeal(_ message: ChatMessage) -> Bool {
-        return message.messageNumber == 0 && !message.kemCiphertext.isEmpty
+        return message.messageNumber == 0
     }
 
     // MARK: - Enqueue
@@ -108,19 +108,24 @@ final class SessionHealingService {
 
     /// Increments the attempt counter.  Returns `false` and removes the record
     /// if the max retry count has been exceeded.
+    /// The entire read-modify-write is inside `performAndWait` to prevent concurrent
+    /// callers from reading the same stale `healAttempts` value.
     @discardableResult
     func recordAttempt(for messageId: String, in context: NSManagedObjectContext) -> Bool {
-        guard let record = healingRecord(for: messageId, in: context) else { return false }
-        record.healAttempts += 1
-        record.lastAttemptAt = Date()
+        var shouldContinue = false
+        context.performAndWait {
+            guard let record = healingRecord(for: messageId, in: context) else { return }
+            record.healAttempts += 1
+            record.lastAttemptAt = Date()
+            do { try context.save() } catch {}
 
-        do { try context.save() } catch {}
-
-        if record.healAttempts >= maxHealAttempts {
-            Log.info("⛔ SessionHealingService: max attempts (\(maxHealAttempts)) reached for \(messageId.prefix(8))…", category: "SessionHealing")
-            return false
+            if record.healAttempts >= maxHealAttempts {
+                Log.info("⛔ SessionHealingService: max attempts (\(maxHealAttempts)) reached for \(messageId.prefix(8))…", category: "SessionHealing")
+            } else {
+                shouldContinue = true
+            }
         }
-        return true
+        return shouldContinue
     }
 
     // MARK: - Remove

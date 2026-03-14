@@ -49,6 +49,7 @@ final class MessageStreamManager {
 
     private var streamTask: Task<Void, Never>?
     private var heartbeatTask: Task<Void, Never>?
+    private var heartbeatWatchdogTask: Task<Void, Never>?
     private var serverChangedObserver: NSObjectProtocol?
     private var retryCount = 0
     private let maxRetryDelay: TimeInterval = 60
@@ -62,6 +63,11 @@ final class MessageStreamManager {
 
     /// Continuation for sending messages into the stream
     private var outboundContinuation: AsyncStream<Shared_Proto_Services_V1_MessageStreamRequest>.Continuation?
+
+    /// Monotonically increasing token for stream lifetimes. Used to prevent a previous
+    /// stream's teardown from clobbering state of a newer connection (race during reconnect).
+    private var streamGeneration: UInt64 = 0
+    private var activeStreamGeneration: UInt64 = 0
 
     /// Messages that failed decoding during fetchMissedMessages (before stream was open).
     /// Flushed as `.failed` receipts once the stream is established.
@@ -78,6 +84,9 @@ final class MessageStreamManager {
     // MARK: - Configuration
 
     private let heartbeatInterval: TimeInterval = 25
+    private let heartbeatTimeoutMultiplier: Double = 3.0
+    private var lastWatchdogRestartAt: Date?
+    private let watchdogMinRestartInterval: TimeInterval = 30
 
     // MARK: - Public API
 
@@ -146,6 +155,8 @@ final class MessageStreamManager {
         outboundContinuation = nil
         heartbeatTask?.cancel()
         heartbeatTask = nil
+        heartbeatWatchdogTask?.cancel()
+        heartbeatWatchdogTask = nil
         retryCount = 0
         connect(contactUserIds: contactUserIds, onMessageReceived: onMessageReceived)
     }
@@ -165,6 +176,9 @@ final class MessageStreamManager {
         outboundContinuation = nil
         heartbeatTask?.cancel()
         heartbeatTask = nil
+        heartbeatWatchdogTask?.cancel()
+        heartbeatWatchdogTask = nil
+        activeStreamGeneration = 0
         streamTask?.cancel()
         streamTask = nil
         retryCount = 0
@@ -260,6 +274,20 @@ final class MessageStreamManager {
                 break
             } catch {
                 guard !Task.isCancelled else { break }
+                // If the stream was rejected due to expired token, refresh and retry immediately
+                // (skip exponential backoff to reduce perceived downtime).
+                if let rpcError = error as? RPCError, rpcError.code == .unauthenticated {
+                    Log.info("🔐 MessageStream unauthenticated — attempting token refresh", category: "MessageStream")
+                    do {
+                        let refreshed = try await TokenRefreshCoordinator.shared.refreshIfPossible()
+                        if refreshed {
+                            retryCount = 0
+                            continue
+                        }
+                    } catch {
+                        Log.error("❌ Token refresh failed for MessageStream: \(error)", category: "MessageStream")
+                    }
+                }
                 // Log full error details for diagnosis
                 if let rpcError = error as? RPCError {
                     Log.error("""
@@ -298,63 +326,121 @@ final class MessageStreamManager {
     private func fetchMissedMessages() async {
         // Drain ALL pending pages so the user sees every missed message on the first reconnect,
         // not just the first 50 (the previous single-fetch behaviour — bug B08).
-        var cursor: String? = lastPendingCursor.isEmpty ? nil : lastPendingCursor
-        var totalFetched = 0
-        // Track message IDs seen in this fetch run to detect server returning the same
-        // unacknowledged messages across multiple pages (infinite cursor cycle).
-        var seenMessageIds: Set<String> = []
-        repeat {
-            guard !Task.isCancelled else { return }
-            do {
-                let result = try await MessagingServiceClient.shared.getPendingMessages(sinceCursor: cursor)
-                // Successful fetch = server is reachable; update connection status
-                ConnectionStatusManager.shared.markRequestSucceeded()
-                if !result.messages.isEmpty {
-                    let pageIds = Set(result.messages.map { $0.id })
-                    let newIds = pageIds.subtracting(seenMessageIds)
-                    if newIds.isEmpty {
-                        // Server is cycling the same unACKed messages — receipts haven't been
-                        // sent yet (stream not open). Stop paging; openStream() will flush ACKs.
-                        Log.info("📭 fetchMissedMessages: all \(pageIds.count) message(s) on this page already seen — breaking paging cycle to open stream", category: "MessageStream")
-                        cursor = nil
-                    } else {
-                        seenMessageIds.formUnion(pageIds)
-                        totalFetched += result.messages.count
-                        for msg in result.messages {
-                            onMessageReceived?(msg)
-                        }
-                        cursor = result.nextCursor.isEmpty ? nil : result.nextCursor
-                        lastPendingCursor = result.nextCursor
-                    }
-                } else {
-                    cursor = result.nextCursor.isEmpty ? nil : result.nextCursor
-                    lastPendingCursor = result.nextCursor
-                }
-                if !result.failedMessages.isEmpty {
-                    Log.info("⚠️ fetchMissedMessages: \(result.failedMessages.count) undecryptable message(s) — will ACK as failed once stream opens", category: "MessageStream")
-                    pendingFailedAcks.append(contentsOf: result.failedMessages)
-                }
-            } catch is CancellationError {
-                // Task was cancelled during force-reconnect or backgrounding — expected, no log needed
-                return
-            } catch {
-                if let rpcError = error as? RPCError {
-                    Log.error("⚠️ fetchMissedMessages RPC error: code=\(rpcError.code) message=\"\(rpcError.message)\"", category: "MessageStream")
-                } else {
-                    Log.debug("fetchMissedMessages failed: \(error)", category: "MessageStream")
-                }
-                return
+        //
+        // IMPORTANT: use a single gRPC channel for the entire paging loop to avoid creating
+        // dozens of short-lived channels when there are many pending pages.
+        do {
+            struct FetchResult: Sendable {
+                let messages: [ChatMessage]
+                let failed: [MessagingServiceClient.FailedMessage]
+                let nextCursor: String
             }
-        } while cursor != nil
 
-        if totalFetched > 0 {
-            Log.info("📨 Fetched \(totalFetched) missed message(s) after reconnect", category: "MessageStream")
-        } else {
-            Log.debug("📭 fetchMissedMessages: no pending messages", category: "MessageStream")
+            let startCursor = lastPendingCursor
+            let fetchResult: FetchResult = try await GRPCChannelManager.shared.performRPC { grpcClient in
+                func withTimeout<T: Sendable>(
+                    seconds: TimeInterval,
+                    _ operation: @Sendable @escaping () async throws -> T
+                ) async throws -> T {
+                    try await withThrowingTaskGroup(of: T.self) { group in
+                        group.addTask { try await operation() }
+                        group.addTask {
+                            try await Task.sleep(for: .seconds(seconds))
+                            throw RPCError(code: .deadlineExceeded, message: "Request timed out")
+                        }
+                        let first = try await group.next()!
+                        group.cancelAll()
+                        return first
+                    }
+                }
+
+                var cursor: String? = startCursor.isEmpty ? nil : startCursor
+                var cursorToPersist: String = startCursor
+                var messages: [ChatMessage] = []
+                var failed: [MessagingServiceClient.FailedMessage] = []
+                var failedIds: Set<String> = []
+                var seenMessageIds: Set<String> = []
+
+                while !Task.isCancelled {
+                    // Snapshot the cursor for this iteration to avoid capturing a mutable var
+                    // in a concurrently-executing (Swift 6) Sendable closure.
+                    let cursorSnapshot = cursor
+                    let page: MessagingServiceClient.PendingMessagesResult = try await withTimeout(
+                        seconds: GRPCTimeouts.getPendingMessages
+                    ) {
+                        try await MessagingServiceClient.getPendingMessagesPage(
+                            grpcClient: grpcClient,
+                            sinceCursor: cursorSnapshot,
+                            limit: 50
+                        )
+                    }
+
+                    cursorToPersist = page.nextCursor
+
+                    if !page.messages.isEmpty {
+                        let pageIds = Set(page.messages.map(\.id))
+                        let newIds = pageIds.subtracting(seenMessageIds)
+                        if newIds.isEmpty {
+                            // Server is cycling the same unACKed messages — receipts haven't been
+                            // sent yet (stream not open). Stop paging; openStream() will flush ACKs.
+                            break
+                        }
+                        seenMessageIds.formUnion(pageIds)
+                        messages.append(contentsOf: page.messages)
+                    }
+
+                    if !page.failedMessages.isEmpty {
+                        for item in page.failedMessages where !failedIds.contains(item.id) {
+                            failedIds.insert(item.id)
+                            failed.append(item)
+                        }
+                    }
+
+                    cursor = page.nextCursor.isEmpty ? nil : page.nextCursor
+                    if cursor == nil { break }
+                }
+
+                return FetchResult(messages: messages, failed: failed, nextCursor: cursorToPersist)
+            }
+
+            ConnectionStatusManager.shared.markRequestSucceeded()
+
+            if !fetchResult.messages.isEmpty {
+                for msg in fetchResult.messages {
+                    onMessageReceived?(msg)
+                }
+            }
+
+            lastPendingCursor = fetchResult.nextCursor
+
+            if !fetchResult.failed.isEmpty {
+                Log.info("⚠️ fetchMissedMessages: \(fetchResult.failed.count) undecryptable message(s) — will ACK as failed once stream opens", category: "MessageStream")
+                pendingFailedAcks.append(contentsOf: fetchResult.failed)
+            }
+
+            if !fetchResult.messages.isEmpty {
+                Log.info("📨 Fetched \(fetchResult.messages.count) missed message(s) after reconnect", category: "MessageStream")
+            } else {
+                Log.debug("📭 fetchMissedMessages: no pending messages", category: "MessageStream")
+            }
+        } catch is CancellationError {
+            // Task was cancelled during force-reconnect or backgrounding — expected, no log needed
+            return
+        } catch {
+            if let rpcError = error as? RPCError {
+                Log.error("⚠️ fetchMissedMessages RPC error: code=\(rpcError.code) message=\"\(rpcError.message)\"", category: "MessageStream")
+            } else {
+                Log.debug("fetchMissedMessages failed: \(error)", category: "MessageStream")
+            }
+            return
         }
     }
 
     private func openStream() async throws {
+        streamGeneration &+= 1
+        let generation = streamGeneration
+        activeStreamGeneration = generation
+
         let host = GRPCChannelManager.shared.currentHost
         let port = GRPCChannelManager.shared.currentPort
         Log.info("📡 openStream → \(host):\(port) subscriptions=[\(subscriptionUserIds.joined(separator: ", "))]", category: "MessageStream")
@@ -374,7 +460,6 @@ final class MessageStreamManager {
         subscribe.includePresence = true
         subscribeReq.request = .subscribe(subscribe)
         continuation.yield(subscribeReq)
-        self.isConnected = true
         Log.debug("📤 MessageStream subscribe sent: \(subscriptionUserIds.count) conversation(s)", category: "MessageStream")
 
         // Flush any ACKs for messages that failed decoding before the stream was open
@@ -408,6 +493,17 @@ final class MessageStreamManager {
         }
         self.heartbeatTask = hbTask
 
+        // Heartbeat watchdog: reconnect if we stop receiving heartbeat acks.
+        let watchdogTask = Task { [weak self] () -> Void in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(hbInterval))
+                await MainActor.run {
+                    self?.checkHeartbeatAndReconnectIfStale()
+                }
+            }
+        }
+        self.heartbeatWatchdogTask = watchdogTask
+
         let request = StreamingClientRequest<Shared_Proto_Services_V1_MessageStreamRequest>(
             metadata: [],
             producer: { writer in
@@ -422,11 +518,19 @@ final class MessageStreamManager {
 
         defer {
             hbTask.cancel()
+            watchdogTask.cancel()
             connectTask.cancel()
             grpcClient.beginGracefulShutdown()
-            self.isConnected = false
-            self.outboundContinuation = nil
-            Log.info("🔌 MessageStream disconnected from \(host):\(port)", category: "MessageStream")
+            // Only tear down shared state if this is still the active stream.
+            if self.activeStreamGeneration == generation {
+                self.isConnected = false
+                self.outboundContinuation = nil
+                self.heartbeatTask = nil
+                self.heartbeatWatchdogTask = nil
+                Log.info("🔌 MessageStream disconnected from \(host):\(port)", category: "MessageStream")
+            } else {
+                Log.info("🔌 MessageStream disconnected (stale generation) from \(host):\(port)", category: "MessageStream")
+            }
         }
 
         // Use an async stream to bridge responses back to MainActor
@@ -473,6 +577,8 @@ final class MessageStreamManager {
                 case .success(let c):
                     Task { @MainActor in
                         ConnectionStatusManager.shared.markStreamConnected()
+                        self.isConnected = true
+                        self.lastHeartbeatDate = Date()
                         Log.info("✅ MessageStream RPC accepted — stream connected", category: "MessageStream")
                     }
                     contents = c
@@ -580,5 +686,23 @@ final class MessageStreamManager {
         case .none:
             return nil
         }
+    }
+
+    private func checkHeartbeatAndReconnectIfStale() {
+        guard isConnected else { return }
+        guard let last = lastHeartbeatDate else { return }
+        let timeout = heartbeatInterval * heartbeatTimeoutMultiplier
+        let elapsed = Date().timeIntervalSince(last)
+        guard elapsed > timeout else { return }
+
+        if let lastRestartAt = lastWatchdogRestartAt,
+           Date().timeIntervalSince(lastRestartAt) < watchdogMinRestartInterval {
+            return
+        }
+        lastWatchdogRestartAt = Date()
+
+        Log.info("💔 Heartbeat timeout (\(Int(elapsed))s) — restarting MessageStream", category: "MessageStream")
+        guard let cb = onMessageReceived else { return }
+        forceReconnect(contactUserIds: subscriptionUserIds, onMessageReceived: cb)
     }
 }

@@ -54,7 +54,7 @@ class ProfileShareViewModel {
             // Check if session is ready; if not, initialize it on-demand
             if !CryptoManager.shared.hasSession(for: userId) {
                 Log.info("🔐 No session for \(userId) — initializing before profile share", category: "ProfileShare")
-                let service = SessionInitializationService()
+                let service = SessionInitializationService.shared
                 do {
                     let bundle = try await service.fetchPublicKeyWithRetry(userId: userId)
                     try service.initializeSession(userId: userId, bundle: bundle, deleteExisting: false)
