@@ -65,7 +65,7 @@ final class PreKeyRotationService {
         deviceId: String,
         reason: Shared_Proto_Services_V1_SignedPreKeyRotationReason
     ) async throws {
-        guard let core = CryptoManager.shared.core else {
+        guard let core = CryptoManager.shared.orchestratorCore else {
             throw PreKeyRotationError.cryptoCoreNotInitialized
         }
 

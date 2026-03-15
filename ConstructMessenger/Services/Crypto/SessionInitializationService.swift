@@ -26,7 +26,7 @@ class SessionInitializationService {
     /// so both sides stay in sync: neither applies PQXDH.
     func consumeKemCiphertext(for userId: String) -> Data? {
         guard let kem = pendingKemCiphertexts.removeValue(forKey: userId) else { return nil }
-        guard let core = CryptoManager.shared.core else {
+        guard let core = CryptoManager.shared.orchestratorCore else {
             Log.error("⚠️ PQC: Core nil at KEM consumption — skipping PQ for \(userId.prefix(8))...", category: "SessionInit")
             PQCKeyManager.shared.clearPendingContribution(for: userId)
             return nil  // Don't send kem; receiver won't apply PQ either → both stay classic

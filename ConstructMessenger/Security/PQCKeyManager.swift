@@ -136,7 +136,7 @@ final class PQCKeyManager {
         guard !UserDefaults.standard.bool(forKey: migrationDoneKey) else { return }
 
         do {
-            guard let core = CryptoManager.shared.core else { return }
+            guard let core = CryptoManager.shared.orchestratorCore else { return }
             let spkId = shared.kyberSPKId()
             let (spkPublicKey, _) = try shared.generateAndStoreKyberSPK(keyId: spkId)
             let spkSig = try signKyberKey(publicKey: spkPublicKey, core: core)
@@ -156,7 +156,7 @@ final class PQCKeyManager {
     ///
     /// Called at registration (new users) and by `migrateIfNeeded` (existing users).
     static func uploadKyberSPK(deviceId: String) async throws {
-        guard let core = CryptoManager.shared.core else {
+        guard let core = CryptoManager.shared.orchestratorCore else {
             throw PQCError.coreNotInitialized
         }
 
@@ -185,7 +185,7 @@ final class PQCKeyManager {
     }
 
     /// Sign a Kyber public key with the device Ed25519 identity key.
-    static func signKyberKey(publicKey: Data, core: ClassicCryptoCore) throws -> Data {
+    static func signKyberKey(publicKey: Data, core: OrchestratorCore) throws -> Data {
         let sigBase64 = try core.signBundleData(bundleDataJson: kyberSignMessage(publicKey: publicKey))
         guard let sigData = Data(base64Encoded: sigBase64) else { throw PQCError.signatureFailed }
         return sigData
@@ -225,7 +225,7 @@ final class PQCKeyManager {
         deviceId: String,
         kyberSignedPreKey: (keyId: UInt32, publicKey: Data, signature: Data)? = nil
     ) async throws -> UInt32 {
-        guard let core = CryptoManager.shared.core else { throw PQCError.coreNotInitialized }
+        guard let core = CryptoManager.shared.orchestratorCore else { throw PQCError.coreNotInitialized }
         let keyIds = allocateKeyIds(count: count)
         var uploadBatch: [(keyId: UInt32, publicKey: Data, signature: Data)] = []
         for keyId in keyIds {
@@ -261,7 +261,7 @@ final class PQCKeyManager {
     func encapsulateAndStrengthen(
         kyberSPKPublic: Data,
         contactId: String,
-        core: ClassicCryptoCore
+        core: OrchestratorCore
     ) throws -> Data {
         let encapsulation = try mlkem768Encapsulate(publicKey: [UInt8](kyberSPKPublic))
         try core.applyPqContribution(
@@ -286,7 +286,7 @@ final class PQCKeyManager {
 
     /// Apply the deferred Kyber shared secret to the DR session.
     /// Must be called after msg0 is encrypted, before msg1 is encrypted.
-    func applyDeferredPQContribution(contactId: String, core: ClassicCryptoCore) throws {
+    func applyDeferredPQContribution(contactId: String, core: OrchestratorCore) throws {
         guard let ss = rustContributions.takeDeferred(contactId: contactId) else { return }
         try core.applyPqContribution(contactId: contactId, kemSharedSecret: ss)
         Log.info("🔐 PQC: Deferred PQXDH applied for \(contactId.prefix(8))...", category: "PQC")
@@ -311,7 +311,7 @@ final class PQCKeyManager {
     func decapsulateAndStrengthen(
         kemCiphertext: Data,
         contactId: String,
-        core: ClassicCryptoCore,
+        core: OrchestratorCore,
         secretKeyOverride: Data? = nil
     ) throws {
         let spkSecret = try secretKeyOverride ?? kyberSPKSecret()

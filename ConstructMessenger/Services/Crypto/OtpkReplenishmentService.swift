@@ -28,7 +28,7 @@ enum OtpkReplenishmentService {
     /// survives app restarts (the Rust core's OTPK store is in-memory only otherwise).
     @discardableResult
     static func generateAndUpload(count: UInt32, deviceId: String, replaceExisting: Bool = false) async throws -> Int {
-        guard let core = CryptoManager.shared.core else {
+        guard let core = CryptoManager.shared.orchestratorCore else {
             throw CryptoManagerError.coreNotInitialized
         }
 
@@ -60,7 +60,7 @@ enum OtpkReplenishmentService {
     }
 
     /// Export all OTPKs from the Rust core and save to Keychain.
-    static func persistOtpks(core: ClassicCryptoCore) {
+    static func persistOtpks(core: OrchestratorCore) {
         do {
             let json = try core.exportOneTimePrekeysJson()
             KeychainManager.shared.saveOtpksJson(json)

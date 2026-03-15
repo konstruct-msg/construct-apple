@@ -1,0 +1,197 @@
+╔════════════════════════════════════════════════════════════════════════════════╗
+║         CONSTRUCT CORE FFI SURFACE - QUICK REFERENCE                            ║
+╚════════════════════════════════════════════════════════════════════════════════╝
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ FACTORIES (Create/Restore Instances)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  create_crypto_core() 
+    → Arc<ClassicCryptoCore> [NEW instance with random keys]
+
+  create_crypto_core_from_keys_json(keys_json: String)
+    → Arc<ClassicCryptoCore> [RESTORE from Keychain]
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ CORE CRYPTO OPERATIONS (ClassicCryptoCore interface)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  KEY MANAGEMENT:
+    export_registration_bundle_json()      → String (base64 pubkeys)
+    export_private_keys_json()             → String (base64 privkeys) [KEYCHAIN!]
+    sign_bundle_data(data: Vec<u8>)        → String (base64 signature)
+    rotate_signed_prekey()                 → RotatedSpkBundle (new SPK ready to upload)
+    set_local_user_id(user_id: String)    → void
+
+  SESSION INITIALIZATION (X3DH Handshake):
+    init_session(contact_id, recipient_bundle)                      → String [SENDER-side]
+    init_receiving_session(contact_id, recipient_bundle, first_msg) → SessionInitResult [RECEIVER-side]
+
+  MESSAGE ENCRYPTION/DECRYPTION (Double Ratchet):
+    encrypt_message(session_id, plaintext)     → EncryptedMessageComponents
+    decrypt_message(session_id, ephemeral_key, msg_num, content) → String
+
+  SESSION MANAGEMENT:
+    export_session_json(contact_id)     → String [PERSIST to Keychain]
+    import_session_json(contact_id, json) → String [RESTORE from Keychain]
+    get_all_session_contact_ids()       → Vec<String>
+    remove_session(contact_id)          → bool
+
+  ONE-TIME PREKEYS (X3DH):
+    generate_one_time_prekeys(count: u32)           → Vec<OtpkPair>
+    prekeys_available_count()                        → u32
+    one_time_prekey_count()                          → u32
+    export_one_time_prekeys_json()                   → String [PERSIST]
+    import_one_time_prekeys_json(json: String)      → void [RESTORE]
+
+  POST-QUANTUM (ML-KEM-768):
+    apply_pq_contribution(contact_id, kem_shared_secret) → void
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ INVITE CRYPTO (Namespace functions)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  generate_ephemeral_keypair()                        → EphemeralKeyPair
+  sign_invite_data(data, identity_secret_key)        → InviteSignature
+  verify_invite_signature(data, signature, verifying_key) → bool
+  derive_verifying_key_from_secret(identity_secret_key) → Vec<u8>
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ ACCOUNT RECOVERY (Namespace functions - BIP39 + SLIP-0010)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  generate_mnemonic(word_count: u8)              → String
+  validate_mnemonic(mnemonic: String)            → bool
+  mnemonic_to_seed(mnemonic: String)             → Vec<u8> (64 bytes)
+  derive_recovery_keypair(seed: Vec<u8>)         → RecoveryKeypair
+  sign_recovery_challenge(private_key, message) → Vec<u8> (64-byte sig)
+  verify_recovery_signature(public_key, msg, sig) → bool
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ TRAFFIC PROTECTION (Namespace functions + Interface)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  NAMESPACE (Utility functions):
+    generate_dummy_message(size: u64)                  → Vec<u8>
+    is_dummy_message(data: Vec<u8>)                    → bool
+    jittered_interval_ms(base_ms, jitter_ms)          → u64
+    random_send_delay_ms(max_delay_ms)                → u64
+    heartbeat_interval_ms(base_interval_sec)          → u64
+    battery_aware_jitter_ms(base, max_jitter, level)  → u64
+    recommended_send_delay_ms(is_high_priority, level) → u64
+
+  INTERFACE (TrafficProtectionManager):
+    constructor(CoverTrafficConfig)
+    update_battery_level(float)      → void
+    record_real_message_sent()       → void
+    should_send_dummy()              → bool
+    generate_dummy()                 → Vec<u8>
+    get_metrics()                    → EnergyMetrics
+    reset_metrics()                  → void
+    current_interval_ms()            → u64
+    is_currently_active()            → bool
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ DEVICE AUTHENTICATION (Namespace functions)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  compute_pow(challenge, difficulty)                     → PowSolution
+  compute_pow_with_progress(challenge, difficulty, cb?)  → PowSolution [with callback]
+  verify_pow(challenge, solution, required_difficulty)   → bool
+  derive_device_id(identity_public_key)                  → String
+  format_federated_id(device_id, server_hostname)        → String
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ POST-QUANTUM KEM (ML-KEM-768, Namespace functions)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  mlkem768_keygen()                     → MLKEMKeyPair (pub:1184B, sec:2400B)
+  mlkem768_encapsulate(public_key)      → MLKEMEncapsulation (ct:1088B, ss:32B)
+  mlkem768_decapsulate(secret_key, ct)  → Vec<u8> (32-byte shared_secret)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ CALLBACKS (UniFFI)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  PowProgressCallback (Rust → Swift):
+    on_progress(current_nonce: u64, attempts: u64, estimated_progress: f32)
+
+
+╔════════════════════════════════════════════════════════════════════════════════╗
+║         STATE MANAGEMENT ARCHITECTURE                                           ║
+╚════════════════════════════════════════════════════════════════════════════════╝
+
+  PER-INSTANCE (No Global Singleton):
+  ┌─────────────────────────────────────────────────────┐
+  │ Arc<ClassicCryptoCore>  [Thread-safe reference]     │
+  │   └─ Mutex<ClassicClient>  [Interior mutability]    │
+  │       ├─ KeyManager        [Long-term keys]         │
+  │       ├─ HashMap<contact_id, Session>  [Sessions]   │
+  │       ├─ HashMap<contact_id, otpk_id>  [OTPKs]      │
+  │       └─ local_user_id: String                      │
+  └─────────────────────────────────────────────────────┘
+
+  Session Storage:
+    • IN-MEMORY: HashMap<contact_id, Session>
+    • PERSISTENCE: export_session_json() → JSON → Keychain
+    • RESTORATION: import_session_json() → HashMap
+
+  Global State:
+    • OnceLock<Config> [ONLY global state]
+      - Cryptographic parameters (PBKDF2, nonce lengths, suite IDs)
+      - Double Ratchet limits (max_skipped_messages)
+      - No session or user state
+
+
+╔════════════════════════════════════════════════════════════════════════════════╗
+║         WHAT'S MISSING FOR SESSION COORDINATOR                                  ║
+╚════════════════════════════════════════════════════════════════════════════════╝
+
+  ❌ Session Event Callbacks (SessionCoordinatorDelegate)
+     • on_session_created(contact_id)
+     • on_session_expired(contact_id)
+     • on_key_ratchet(contact_id, message_number)
+
+  ❌ Lifecycle Tracking
+     • created_at, last_activity timestamps
+     • Session status (Active, Idle, Expired)
+     • Auto-cleanup on idle timeout
+
+  ❌ Persistent Storage Integration
+     • Auto-save sessions after creation/decryption
+     • Auto-load sessions on startup
+     • Pluggable storage backends (Keychain, IndexedDB, etc.)
+
+  ❌ Multi-Device Coordination
+     • Device ID tracking
+     • Cross-device message relay
+     • Global delegate for all devices
+
+  ❌ Ratchet Event Tracking
+     • DH ratchet notifications
+     • Chain key advancement tracking
+     • OTPK consumption notifications
+
+
+╔════════════════════════════════════════════════════════════════════════════════╗
+║         IMPLEMENTATION ROADMAP                                                  ║
+╚════════════════════════════════════════════════════════════════════════════════╝
+
+  PHASE 1: Add Session Callbacks
+    ✓ SessionCoordinatorDelegate UDL trait
+    ✓ Hook callbacks in init_session / encrypt / decrypt
+
+  PHASE 2: Lifecycle Management
+    ✓ Track created_at, last_activity
+    ✓ cleanup_expired_sessions(max_idle_secs)
+    ✓ Session status enum
+
+  PHASE 3: Storage Integration
+    ✓ SessionStore trait (abstract Keychain/DB)
+    ✓ Auto-save on init_session / decrypt
+    ✓ Auto-load on app startup
+
+  PHASE 4: Multi-Device Coordination
+    ✓ DeviceCoordinator wrapper
+    ✓ Cross-device message relay (if needed)
+
+  PHASE 5: Advanced Tracking
+    ✓ Ratchet event callbacks
+    ✓ OTPK consumption tracking
+    ✓ Message ordering guarantees
+
+

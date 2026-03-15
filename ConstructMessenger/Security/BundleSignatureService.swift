@@ -8,7 +8,7 @@
 import Foundation
 
 final class BundleSignatureService {
-    func signBundleData(_ bundleDataJSON: Data, core: ClassicCryptoCore?) throws -> String {
+    func signBundleData(_ bundleDataJSON: Data, core: OrchestratorCore?) throws -> String {
         guard let core = core else {
             throw CryptoManagerError.coreNotInitialized
         }

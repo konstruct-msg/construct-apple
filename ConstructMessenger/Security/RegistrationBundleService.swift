@@ -9,7 +9,7 @@ import Foundation
 import os.log
 
 final class RegistrationBundleService {
-    func generateRegistrationBundle(core: ClassicCryptoCore?) -> RegistrationBundle? {
+    func generateRegistrationBundle(core: OrchestratorCore?) -> RegistrationBundle? {
         guard let core = core else { return nil }
 
         do {

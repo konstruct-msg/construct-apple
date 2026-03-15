@@ -1,0 +1,330 @@
+╔════════════════════════════════════════════════════════════════════════════════╗
+║              COMPLETE FFI FUNCTION INVENTORY                                    ║
+║          (All functions exposed via construct_core.udl)                         ║
+╚════════════════════════════════════════════════════════════════════════════════╝
+
+Total Functions: 60+ across 8 functional domains
+Entry Points: 2 factory functions, 1 interface (ClassicCryptoCore), 5+ namespaces
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DOMAIN 1: FACTORY FUNCTIONS (Entry Points)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ 1. create_crypto_core() 
+    → Arc<ClassicCryptoCore>
+    Creates fresh instance with randomly generated keys
+
+ 2. create_crypto_core_from_keys_json(keys_json: String)
+    → Arc<ClassicCryptoCore>
+    Restores instance from persisted private keys (e.g., Keychain)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DOMAIN 2: CORE CRYPTOGRAPHY (ClassicCryptoCore Interface)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ KEY MANAGEMENT FUNCTIONS (5):
+ ─────────────────────────────
+  3. export_registration_bundle_json() → String
+     Exports: identity_public, signed_prekey_public, signature, verifying_key
+     Purpose: For device registration to server
+
+  4. sign_bundle_data(bundle_data_json: Vec<u8>) → String
+     Signs with Ed25519 signing key
+     Purpose: Create signature for UploadableKeyBundle
+
+  5. export_private_keys_json() → String
+     Exports: identity_secret, signing_secret, signed_prekey_secret, signature
+     Purpose: Persist to Keychain/secure storage ⚠️ SENSITIVE
+
+  6. set_local_user_id(user_id: String) → void
+     Stores UUID from server
+     Purpose: Track which user owns this crypto instance
+
+  7. rotate_signed_prekey() → RotatedSpkBundle
+     Returns: new key_id, public_key (base64), signature (base64)
+     Purpose: Refresh SPK, upload to server, delete old one from server
+
+ SESSION INITIALIZATION FUNCTIONS (2):
+ ─────────────────────────────────────
+  8. init_session(contact_id: String, recipient_bundle: Vec<u8>) → String
+     X3DH handshake as SENDER side
+     Returns: session_id (== contact_id for Swift compatibility)
+     Purpose: Start new conversation with contact
+
+  9. init_receiving_session(
+        contact_id: String,
+        recipient_bundle: Vec<u8>,
+        first_message: Vec<u8>
+     ) → SessionInitResult
+     X3DH handshake as RECEIVER side + decrypt first message
+     Returns: session_id, decrypted_message
+     Purpose: Accept incoming conversation and decrypt opening message
+
+ MESSAGE ENCRYPTION/DECRYPTION (2):
+ ─────────────────────────────────
+ 10. encrypt_message(session_id: String, plaintext: String)
+        → EncryptedMessageComponents
+     Returns: ephemeral_public_key, message_number, content (base64), otpk_id
+     Purpose: Encrypt message using Double Ratchet
+
+ 11. decrypt_message(
+        session_id: String,
+        ephemeral_public_key: Vec<u8>,
+        message_number: u32,
+        content: String
+     ) → String
+     Returns: decrypted plaintext
+     Purpose: Decrypt received message using Double Ratchet
+
+ SESSION PERSISTENCE (4):
+ ──────────────────────
+ 12. export_session_json(contact_id: String) → String
+     Serializes session state to JSON
+     Purpose: Persist to Keychain ⚠️ UNENCRYPTED crypto material!
+
+ 13. import_session_json(contact_id: String, session_json: String) → String
+     Deserializes session from JSON
+     Purpose: Restore from Keychain
+
+ 14. get_all_session_contact_ids() → Vec<String>
+     Returns list of contact IDs with active sessions
+     Purpose: Enumerate sessions for restoration, cleanup
+
+ 15. remove_session(contact_id: String) → bool
+     Deletes session from in-memory storage
+     Purpose: Clean up after conversation ends
+
+ ONE-TIME PREKEY FUNCTIONS (5):
+ ──────────────────────────────
+ 16. generate_one_time_prekeys(count: u32) → Vec<OtpkPair>
+     Generates batch of X25519 keypairs
+     Returns: key_id, public_key pairs
+     Purpose: Create pool for X3DH handshakes
+
+ 17. prekeys_available_count() → u32
+     Counts unused OTPKs
+     Purpose: Monitor when to replenish
+
+ 18. one_time_prekey_count() → u32
+     Total OTPK count (used + unused)
+     Purpose: Overall inventory tracking
+
+ 19. export_one_time_prekeys_json() → String
+     Serializes OTPK private keys
+     Purpose: Persist to Keychain (backup/restore)
+
+ 20. import_one_time_prekeys_json(json: String) → void
+     Deserializes OTPK private keys
+     Purpose: Restore from Keychain
+
+ POST-QUANTUM SUPPORT (1):
+ ────────────────────────
+ 21. apply_pq_contribution(contact_id: String, kem_shared_secret: Vec<u8>)
+        → void
+     Mixes ML-KEM-768 shared secret into session root key
+     Purpose: Strengthen against quantum threats
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DOMAIN 3: INVITE CRYPTO (Namespace Functions)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ 22. generate_ephemeral_keypair() → EphemeralKeyPair
+     Fresh X25519 keypair (32 bytes each)
+     Purpose: Single-use key for invite QR codes
+
+ 23. sign_invite_data(data: String, identity_secret_key: Vec<u8>)
+        → InviteSignature
+     Ed25519 signature (64 bytes)
+     Purpose: Prove authenticity of invite link
+
+ 24. verify_invite_signature(
+        data: String,
+        signature: Vec<u8>,
+        verifying_key: Vec<u8>
+     ) → bool
+     Purpose: Verify invite authenticity
+
+ 25. derive_verifying_key_from_secret(identity_secret_key: Vec<u8>)
+        → Vec<u8>
+     Derives public key from secret key
+     Purpose: Debugging signature verification
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DOMAIN 4: ACCOUNT RECOVERY (Namespace Functions - BIP39 + SLIP-0010)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ 26. generate_mnemonic(word_count: u8) → String
+     12-word or 24-word BIP39 mnemonic
+     Purpose: Create recovery phrase
+
+ 27. validate_mnemonic(mnemonic: String) → bool
+     Checks BIP39 checksum and word membership
+     Purpose: Validate user-entered mnemonic
+
+ 28. mnemonic_to_seed(mnemonic: String) → Vec<u8>
+     64-byte seed via PBKDF2-HMAC-SHA512
+     Purpose: Convert mnemonic to cryptographic seed
+
+ 29. derive_recovery_keypair(seed: Vec<u8>) → RecoveryKeypair
+     Ed25519 keypair via SLIP-0010 hardened path
+     Purpose: Account recovery key (uploaded to server)
+
+ 30. sign_recovery_challenge(private_key: Vec<u8>, message: String)
+        → Vec<u8>
+     64-byte Ed25519 signature
+     Purpose: Prove ownership during account recovery
+
+ 31. verify_recovery_signature(
+        public_key: Vec<u8>,
+        message: String,
+        signature: Vec<u8>
+     ) → bool
+     Purpose: Server-side recovery signature verification
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DOMAIN 5: TRAFFIC PROTECTION (Namespace Functions + Interface)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ NAMESPACE UTILITY FUNCTIONS (7):
+ ────────────────────────────────
+ 32. generate_dummy_message(size: u64) → Vec<u8>
+     Random padding for cover traffic
+     Purpose: Obfuscate message patterns
+
+ 33. is_dummy_message(data: Vec<u8>) → bool
+     Identify dummy vs. real messages
+     Purpose: Filter on receiver side
+
+ 34. jittered_interval_ms(base_ms: u64, jitter_ms: u64) → u64
+     Random interval = base ± jitter
+     Purpose: Variable message sending timing
+
+ 35. random_send_delay_ms(max_delay_ms: u64) → u64
+     Random delay up to max
+     Purpose: Avoid traffic analysis patterns
+
+ 36. heartbeat_interval_ms(base_interval_sec: u64) → u64
+     Keep-alive pulse with variance
+     Purpose: Regular dummy message rate
+
+ 37. battery_aware_jitter_ms(
+        base_ms: u64,
+        max_jitter_ms: u64,
+        battery_level: f32
+     ) → u64
+     Jitter scaled by battery level
+     Purpose: Reduce overhead on low battery
+
+ 38. recommended_send_delay_ms(
+        is_high_priority: bool,
+        battery_level: f32
+     ) → u64
+     Smart delay based on priority and battery
+     Purpose: Adaptive timing for efficiency
+
+ INTERFACE - TrafficProtectionManager (8 methods):
+ ──────────────────────────────────────────────────
+ 39. constructor(CoverTrafficConfig)
+ 40. update_battery_level(level: f32) → void
+ 41. record_real_message_sent() → void
+ 42. should_send_dummy() → bool
+ 43. generate_dummy() → Vec<u8>
+ 44. get_metrics() → EnergyMetrics
+ 45. reset_metrics() → void
+ 46. current_interval_ms() → u64
+ 47. is_currently_active() → bool
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DOMAIN 6: DEVICE AUTHENTICATION (Namespace Functions - PoW)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ 48. compute_pow(challenge: String, difficulty: u32) → PowSolution
+     Argon2id hash with leading zeros
+     Purpose: Device registration PoW (anti-bot)
+
+ 49. compute_pow_with_progress(
+        challenge: String,
+        difficulty: u32,
+        progress_callback: Option<PowProgressCallback>
+     ) → PowSolution
+     With callback for UI updates
+     Purpose: PoW with progress indication
+
+ 50. verify_pow(
+        challenge: String,
+        solution: PowSolution,
+        required_difficulty: u32
+     ) → bool
+     Server-side verification
+     Purpose: Validate PoW before registration
+
+ 51. derive_device_id(identity_public_key: Vec<u8>) → String
+     Hash identity key to device ID
+     Purpose: Unique device identifier
+
+ 52. format_federated_id(device_id: String, server_hostname: String)
+        → String
+     Purpose: Create federated identifier for multi-server setup
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DOMAIN 7: POST-QUANTUM CRYPTOGRAPHY (Namespace Functions - ML-KEM-768)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ 53. mlkem768_keygen() → MLKEMKeyPair
+     Generates public (1184B) + secret (2400B) keys
+     Purpose: Post-quantum Kyber keypair for registration
+
+ 54. mlkem768_encapsulate(public_key: Vec<u8>)
+        → MLKEMEncapsulation
+     Returns: ciphertext (1088B), shared_secret (32B)
+     Purpose: Sender-side ML-KEM encapsulation
+
+ 55. mlkem768_decapsulate(secret_key: Vec<u8>, ciphertext: Vec<u8>)
+        → Vec<u8>
+     Returns: shared_secret (32B)
+     Purpose: Receiver-side ML-KEM decapsulation
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DOMAIN 8: CALLBACKS (UniFFI)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ 56. PowProgressCallback interface (1 method)
+     on_progress(current_nonce: u64, attempts: u64, estimated_progress: f32)
+     Purpose: Called from Rust during PoW computation
+
+     ⚠️ ONLY callback interface currently exposed!
+     Needed but NOT YET exposed:
+       • SessionCoordinatorDelegate (for session events)
+       • RatchetCallback (for ratchet events)
+       • GlobalDelegate (for multi-device events)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SUMMARY BY STATISTICS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Total Functions Exposed:        56
+  Factory Entry Points:           2
+  Interface Methods:              20 (ClassicCryptoCore)
+  Namespace Functions:            34
+    ├─ Invite Crypto:            4
+    ├─ Account Recovery:          6
+    ├─ Traffic Protection:        7 + 8 interface methods
+    ├─ Device Auth (PoW):         5
+    └─ Post-Quantum (ML-KEM):     3
+
+  Callback Interfaces:            1 (need 3 more)
+  Error Types:                    1 (CryptoError with 8 variants)
+  Data Types:                     12 dictionaries + enums
+
+  Threads Safety:
+    ✅ All public types: Send + Sync
+    ✅ Interior mutability: Arc<Mutex<>>
+    ✅ No global singleton (except Config)
+
+  Persistence:
+    ✅ Export methods: 5 (bundle, keys, sessions, OTPKs, one metric)
+    ✅ Import methods: 2 (keys, sessions, OTPKs)
+    ❌ No automatic persistence
+    ❌ No storage abstraction layer
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+

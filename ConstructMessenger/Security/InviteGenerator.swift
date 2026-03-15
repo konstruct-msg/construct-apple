@@ -201,7 +201,7 @@ class InviteGenerator {
     /// - Throws: InviteGenerationError if key not available
     private func getSigningSecretKey() throws -> [UInt8] {
         // Get CryptoManager core instance
-        guard let core = CryptoManager.shared.core else {
+        guard let core = CryptoManager.shared.orchestratorCore else {
             throw InviteGenerationError.missingIdentityKey
         }
         

@@ -945,10 +945,28 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
      */
     func ackMarkProcessed(messageId: String)  -> String
     
+    func applyPqContribution(contactId: String, kemSharedSecret: [UInt8]) throws 
+    
+    func decryptMessage(contactId: String, ephemeralPublicKey: [UInt8], messageNumber: UInt32, content: String) throws  -> String
+    
+    func encryptMessage(contactId: String, plaintext: String) throws  -> EncryptedMessageComponents
+    
+    func exportOneTimePrekeysJson() throws  -> String
+    
+    func exportPrivateKeysJson() throws  -> String
+    
+    func exportRegistrationBundleJson() throws  -> String
+    
+    func exportSessionJson(contactId: String) throws  -> String
+    
     /**
      * Export non-crypto orchestration state to JSON.
      */
     func exportStateJson() throws  -> String
+    
+    func generateOneTimePrekeys(count: UInt32) throws  -> [OtpkPair]
+    
+    func getAllSessionContactIds()  -> [String]
     
     /**
      * Unified event handler.
@@ -958,10 +976,32 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
      */
     func handleEventJson(eventJson: String) throws  -> [String]
     
+    func hasSession(contactId: String)  -> Bool
+    
     /**
      * `true` iff `msg_number == 0` (healing-eligible message).
      */
     func healingCanHeal(msgNumber: UInt32)  -> Bool
+    
+    func importOneTimePrekeysJson(json: String) throws 
+    
+    func importSessionJson(contactId: String, sessionJson: String) throws  -> String
+    
+    func initReceivingSession(contactId: String, recipientBundle: [UInt8], firstMessage: [UInt8]) throws  -> SessionInitResult
+    
+    func initSession(contactId: String, recipientBundle: [UInt8]) throws  -> String
+    
+    func oneTimePrekeyCount()  -> UInt32
+    
+    func prekeysAvailableCount()  -> UInt32
+    
+    func removeSession(contactId: String)  -> Bool
+    
+    func rotateSignedPrekey() throws  -> RotatedSpkBundle
+    
+    func setLocalUserId(userId: String) 
+    
+    func signBundleData(bundleDataJson: [UInt8]) throws  -> String
     
 }
 /**
@@ -1059,12 +1099,93 @@ open func ackMarkProcessed(messageId: String) -> String  {
 })
 }
     
+open func applyPqContribution(contactId: String, kemSharedSecret: [UInt8])throws   {try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_apply_pq_contribution(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(contactId),
+        FfiConverterSequenceUInt8.lower(kemSharedSecret),$0
+    )
+}
+}
+    
+open func decryptMessage(contactId: String, ephemeralPublicKey: [UInt8], messageNumber: UInt32, content: String)throws  -> String  {
+    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_decrypt_message(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(contactId),
+        FfiConverterSequenceUInt8.lower(ephemeralPublicKey),
+        FfiConverterUInt32.lower(messageNumber),
+        FfiConverterString.lower(content),$0
+    )
+})
+}
+    
+open func encryptMessage(contactId: String, plaintext: String)throws  -> EncryptedMessageComponents  {
+    return try  FfiConverterTypeEncryptedMessageComponents_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_encrypt_message(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(contactId),
+        FfiConverterString.lower(plaintext),$0
+    )
+})
+}
+    
+open func exportOneTimePrekeysJson()throws  -> String  {
+    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_export_one_time_prekeys_json(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+open func exportPrivateKeysJson()throws  -> String  {
+    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_export_private_keys_json(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+open func exportRegistrationBundleJson()throws  -> String  {
+    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_export_registration_bundle_json(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+open func exportSessionJson(contactId: String)throws  -> String  {
+    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_export_session_json(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(contactId),$0
+    )
+})
+}
+    
     /**
      * Export non-crypto orchestration state to JSON.
      */
 open func exportStateJson()throws  -> String  {
     return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_method_orchestratorcore_export_state_json(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+open func generateOneTimePrekeys(count: UInt32)throws  -> [OtpkPair]  {
+    return try  FfiConverterSequenceTypeOtpkPair.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_generate_one_time_prekeys(
+            self.uniffiCloneHandle(),
+        FfiConverterUInt32.lower(count),$0
+    )
+})
+}
+    
+open func getAllSessionContactIds() -> [String]  {
+    return try!  FfiConverterSequenceString.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_orchestratorcore_get_all_session_contact_ids(
             self.uniffiCloneHandle(),$0
     )
 })
@@ -1085,6 +1206,15 @@ open func handleEventJson(eventJson: String)throws  -> [String]  {
 })
 }
     
+open func hasSession(contactId: String) -> Bool  {
+    return try!  FfiConverterBool.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_orchestratorcore_has_session(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(contactId),$0
+    )
+})
+}
+    
     /**
      * `true` iff `msg_number == 0` (healing-eligible message).
      */
@@ -1093,6 +1223,95 @@ open func healingCanHeal(msgNumber: UInt32) -> Bool  {
     uniffi_construct_core_fn_method_orchestratorcore_healing_can_heal(
             self.uniffiCloneHandle(),
         FfiConverterUInt32.lower(msgNumber),$0
+    )
+})
+}
+    
+open func importOneTimePrekeysJson(json: String)throws   {try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_import_one_time_prekeys_json(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(json),$0
+    )
+}
+}
+    
+open func importSessionJson(contactId: String, sessionJson: String)throws  -> String  {
+    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_import_session_json(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(contactId),
+        FfiConverterString.lower(sessionJson),$0
+    )
+})
+}
+    
+open func initReceivingSession(contactId: String, recipientBundle: [UInt8], firstMessage: [UInt8])throws  -> SessionInitResult  {
+    return try  FfiConverterTypeSessionInitResult_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_init_receiving_session(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(contactId),
+        FfiConverterSequenceUInt8.lower(recipientBundle),
+        FfiConverterSequenceUInt8.lower(firstMessage),$0
+    )
+})
+}
+    
+open func initSession(contactId: String, recipientBundle: [UInt8])throws  -> String  {
+    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_init_session(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(contactId),
+        FfiConverterSequenceUInt8.lower(recipientBundle),$0
+    )
+})
+}
+    
+open func oneTimePrekeyCount() -> UInt32  {
+    return try!  FfiConverterUInt32.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_orchestratorcore_one_time_prekey_count(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+open func prekeysAvailableCount() -> UInt32  {
+    return try!  FfiConverterUInt32.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_orchestratorcore_prekeys_available_count(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+open func removeSession(contactId: String) -> Bool  {
+    return try!  FfiConverterBool.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_orchestratorcore_remove_session(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(contactId),$0
+    )
+})
+}
+    
+open func rotateSignedPrekey()throws  -> RotatedSpkBundle  {
+    return try  FfiConverterTypeRotatedSpkBundle_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_rotate_signed_prekey(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+open func setLocalUserId(userId: String)  {try! rustCall() {
+    uniffi_construct_core_fn_method_orchestratorcore_set_local_user_id(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(userId),$0
+    )
+}
+}
+    
+open func signBundleData(bundleDataJson: [UInt8])throws  -> String  {
+    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_sign_bundle_data(
+            self.uniffiCloneHandle(),
+        FfiConverterSequenceUInt8.lower(bundleDataJson),$0
     )
 })
 }
@@ -4229,13 +4448,73 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_orchestratorcore_ack_mark_processed() != 8078) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_apply_pq_contribution() != 43446) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_decrypt_message() != 63166) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_encrypt_message() != 40183) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_export_one_time_prekeys_json() != 49177) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_export_private_keys_json() != 1679) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_export_registration_bundle_json() != 25604) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_export_session_json() != 54141) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_method_orchestratorcore_export_state_json() != 38010) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_generate_one_time_prekeys() != 33822) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_get_all_session_contact_ids() != 44779) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_handle_event_json() != 27506) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_has_session() != 45817) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_method_orchestratorcore_healing_can_heal() != 20996) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_import_one_time_prekeys_json() != 33728) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_import_session_json() != 46860) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_init_receiving_session() != 270) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_init_session() != 47404) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_one_time_prekey_count() != 21478) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_prekeys_available_count() != 33104) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_remove_session() != 15351) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_rotate_signed_prekey() != 11331) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_set_local_user_id() != 22865) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_sign_bundle_data() != 12427) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_rustackstore_cache_len() != 41894) {

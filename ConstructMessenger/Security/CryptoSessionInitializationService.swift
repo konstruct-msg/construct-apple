@@ -17,8 +17,7 @@ final class CryptoSessionInitializationService {
         kyberPreKeyPublic: Data? = nil,
         kyberOneTimePreKeyPublic: Data? = nil,
         kyberOneTimePreKeyId: UInt32? = nil,
-        core: ClassicCryptoCore?,
-        sessionStore: SessionStore,
+        core: OrchestratorCore?,
         archiveSession: (String, ArchiveReason) -> Void,
         saveSession: (String) -> Void
     ) throws -> (kemCiphertext: Data?, kyberOtpkId: UInt32) {  // Returns KEM ciphertext and Kyber OTPK ID used
@@ -26,7 +25,7 @@ final class CryptoSessionInitializationService {
             throw CryptoManagerError.coreNotInitialized
         }
 
-        if sessionStore.hasSession(for: userId) {
+        if core.hasSession(contactId: userId) {
             archiveSession(userId, .manualReset)
         }
 
@@ -100,7 +99,7 @@ final class CryptoSessionInitializationService {
             #endif
             
             let sessionId = try core.initSession(contactId: userId, recipientBundle: bytes)
-            sessionStore.setSession(userId: userId, sessionId: sessionId, suiteId: suiteID)
+            UserDefaults.standard.set(Int(suiteID), forKey: "construct.session.suite.\(userId)")
             saveSession(userId)
 
             // PQXDH: Prefer Kyber OTPK over SPK when available.
@@ -144,8 +143,7 @@ final class CryptoSessionInitializationService {
         for userId: String,
         recipientBundle: (identityPublic: String, signedPrekeyPublic: String, signature: String, verifyingKey: String, suiteId: String),
         firstMessage: ChatMessage,
-        core: ClassicCryptoCore?,
-        sessionStore: SessionStore,
+        core: OrchestratorCore?,
         archiveSession: (String, ArchiveReason) -> Void,
         saveSession: (String) -> Void
     ) throws -> String {
@@ -153,7 +151,7 @@ final class CryptoSessionInitializationService {
             throw CryptoManagerError.coreNotInitialized
         }
 
-        if sessionStore.hasSession(for: userId) {
+        if core.hasSession(contactId: userId) {
             archiveSession(userId, .manualReset)
         }
 
@@ -300,7 +298,7 @@ final class CryptoSessionInitializationService {
 
             Log.info("✅ Session initialized successfully, decrypted: \(result.decryptedMessage.prefix(50))...", category: "CryptoManager")
 
-            sessionStore.setSession(userId: userId, sessionId: result.sessionId, suiteId: suiteID)
+            UserDefaults.standard.set(Int(suiteID), forKey: "construct.session.suite.\(userId)")
             saveSession(userId)
 
             // PQXDH: If sender included a KEM ciphertext, decapsulate + strengthen session.
