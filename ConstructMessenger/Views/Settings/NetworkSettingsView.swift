@@ -20,7 +20,39 @@ struct NetworkSettingsView: View {
 
     var body: some View {
         List {
-            // MARK: - gRPC Stream
+            // MARK: - Connection Route
+            Section {
+                let path = iceManager.currentTrafficPath
+                HStack(spacing: 12) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(pathColor(path).opacity(0.15))
+                            .frame(width: 36, height: 36)
+                        Image(systemName: path.symbolName)
+                            .foregroundColor(pathColor(path))
+                            .font(.system(size: 16, weight: .semibold))
+                    }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(path.displayTitle)
+                            .fontWeight(.semibold)
+                        Text(path.displayDetail)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .textSelection(.enabled)
+                    }
+                    Spacer()
+                    Circle()
+                        .fill(pathColor(path))
+                        .frame(width: 9, height: 9)
+                }
+                .padding(.vertical, 4)
+            } header: {
+                Text("connection_route")
+            } footer: {
+                Text(connectionRouteFooter(iceManager.currentTrafficPath))
+                    .font(.caption)
+            }
+
             Section {
                 statusRow(
                     label: NSLocalizedString("status", comment: ""),
@@ -131,8 +163,9 @@ struct NetworkSettingsView: View {
                             .foregroundColor(.secondary)
                         Spacer()
                         if iceManager.isRunning {
-                            Label("Connected", systemImage: "checkmark.circle.fill")
-                                .foregroundColor(.green)
+                            let path = iceManager.currentTrafficPath
+                            Label(path.displayTitle, systemImage: path.symbolName)
+                                .foregroundColor(pathColor(path))
                                 .font(.caption.weight(.semibold))
                         } else {
                             Text(iceManager.lastError ?? "Not connected")
@@ -141,7 +174,25 @@ struct NetworkSettingsView: View {
                         }
                     }
 
-
+                    if iceManager.isRunning, let relay = iceManager.activeRelay {
+                        HStack {
+                            Text("endpoint")
+                                .foregroundColor(.secondary)
+                            Spacer()
+                            Text(relay.address)
+                                .font(.system(size: 12, design: .monospaced))
+                                .foregroundColor(.primary)
+                                .textSelection(.enabled)
+                        }
+                        HStack {
+                            Text("mode")
+                                .foregroundColor(.secondary)
+                            Spacer()
+                            Text(relay.tlsServerName != nil ? "TLS + obfs4" : "obfs4 (plain)")
+                                .font(.system(size: 12, design: .monospaced))
+                                .foregroundColor(.secondary)
+                        }
+                    }
                 }
             } header: {
                 Text("ice_section_header")
@@ -293,6 +344,31 @@ struct NetworkSettingsView: View {
         case .other:       return "Other"
         case .unavailable: return "Unavailable"
         case .unknown:     return "Unknown"
+        }
+    }
+
+    private func pathColor(_ path: TrafficPath) -> Color {
+        switch path {
+        case .direct:        return .blue
+        case .icePrimary:    return Color.AppStatus.success
+        case .iceRelay:      return .purple
+        case .iceCooldown:   return .orange
+        case .iceConnecting: return .orange
+        }
+    }
+
+    private func connectionRouteFooter(_ path: TrafficPath) -> String {
+        switch path {
+        case .direct:
+            return "Traffic goes directly to Construct servers over TLS 1.3. Enable Traffic Protection (ICE) for obfuscation."
+        case .icePrimary:
+            return "Traffic is obfuscated with obfs4 over TLS. Your ISP sees an HTTPS connection to an ICE endpoint."
+        case .iceRelay(let address):
+            return "Traffic is obfuscated with obfs4 and forwarded via a relay (\(address)). Your ISP sees a TCP connection to the relay IP only."
+        case .iceCooldown:
+            return "ICE encountered an error and is temporarily bypassed. Reconnect attempt is in progress."
+        case .iceConnecting:
+            return "Traffic Protection (ICE) is enabled and the obfs4 proxy is starting."
         }
     }
 }

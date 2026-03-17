@@ -17,7 +17,61 @@
 import Foundation
 import Combine
 
-/// IAT (Inter-Arrival Time) obfuscation mode.
+/// Describes the current effective traffic routing path.
+/// Used for the Network Settings "Connection Route" indicator.
+enum TrafficPath: Equatable {
+    /// Direct TLS gRPC — no ICE obfuscation.
+    case direct
+    /// ICE primary: TLS 1.3 → obfs4 → Amsterdam (via Traefik).
+    case icePrimary(host: String)
+    /// ICE relay: plain obfs4 → Moscow TCP relay → Amsterdam.
+    case iceRelay(address: String)
+    /// ICE is enabled but proxy is temporarily bypassed (cooldown after failure).
+    case iceCooldown
+    /// ICE is enabled but the proxy has not started yet / is starting.
+    case iceConnecting
+
+    var displayTitle: String {
+        switch self {
+        case .direct:           return "Direct gRPC"
+        case .icePrimary:       return "ICE (Primary)"
+        case .iceRelay:         return "ICE (Relay)"
+        case .iceCooldown:      return "Direct gRPC (ICE recovering)"
+        case .iceConnecting:    return "ICE (Connecting…)"
+        }
+    }
+
+    var displayDetail: String {
+        switch self {
+        case .direct:                  return "TLS 1.3 · ams.konstruct.cc:443"
+        case .icePrimary(let host):    return "TLS + obfs4 · \(host)"
+        case .iceRelay(let address):   return "obfs4 relay · \(address)"
+        case .iceCooldown:             return "Reconnecting via ICE…"
+        case .iceConnecting:           return "Starting obfs4 proxy…"
+        }
+    }
+
+    var symbolName: String {
+        switch self {
+        case .direct:        return "network"
+        case .icePrimary:    return "lock.shield.fill"
+        case .iceRelay:      return "arrow.triangle.2.circlepath.circle.fill"
+        case .iceCooldown:   return "exclamationmark.arrow.circlepath"
+        case .iceConnecting: return "clock.arrow.circlepath"
+        }
+    }
+
+    var color: String {   // colour name for SwiftUI, avoid Color dependency here
+        switch self {
+        case .direct:        return "blue"
+        case .icePrimary:    return "green"
+        case .iceRelay:      return "purple"
+        case .iceCooldown:   return "orange"
+        case .iceConnecting: return "orange"
+        }
+    }
+}
+
 /// Higher modes resist timing analysis at the cost of latency.
 enum IceIATMode: Int, CaseIterable, Identifiable {
     case none     = 0  // No timing obfuscation (fastest)
@@ -103,6 +157,22 @@ final class IceProxyManager: ObservableObject {
     var isEnabled: Bool {
         get { UserDefaults.standard.bool(forKey: enabledKey) }
         set { UserDefaults.standard.set(newValue, forKey: enabledKey) }
+    }
+
+    /// The current effective routing path for traffic.
+    /// Updates automatically because it reads `@Published` properties.
+    var currentTrafficPath: TrafficPath {
+        guard isEnabled else { return .direct }
+        guard isRunning, let relay = activeRelay else {
+            return .iceConnecting
+        }
+        if GRPCChannelManager.shared.isICEOnCooldown {
+            return .iceCooldown
+        }
+        if relay.tlsServerName != nil {
+            return .icePrimary(host: relay.address)
+        }
+        return .iceRelay(address: relay.address)
     }
 
     /// Whether a bridge cert is available (from Keychain or hardcoded fallback).

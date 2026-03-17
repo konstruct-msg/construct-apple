@@ -61,7 +61,9 @@ final class GRPCChannelManager: Sendable {
     }
 
     /// True if the ICE relay failed recently and we should fall back to direct TLS.
-    private func isICEOnCooldown() -> Bool {
+    var isICEOnCooldown: Bool { isICEOnCooldownInternal() }
+
+    private func isICEOnCooldownInternal() -> Bool {
         let stored = UserDefaults.standard.double(forKey: Self.iceFailedAtKey)
         guard stored > 0 else { return false }
         let elapsed = Date().timeIntervalSinceReferenceDate - stored
@@ -71,7 +73,7 @@ final class GRPCChannelManager: Sendable {
     /// Returns the local proxy port if ICE is running AND the relay is not on cooldown, nil otherwise.
     private func iceProxyPort() -> UInt16? {
         guard ice_proxy_is_running() != 0 else { return nil }
-        guard !isICEOnCooldown() else {
+        guard !isICEOnCooldownInternal() else {
             Log.debug("🧊 ICE on cooldown — using direct TLS", category: "gRPC")
             return nil
         }

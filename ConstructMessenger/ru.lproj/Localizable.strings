@@ -487,3 +487,8 @@
 "editing_message" = "Редактирование сообщения";
 "edit_message_failed" = "Не удалось изменить сообщение: %@";
 "edit_message_limit_reached" = "Достигнут лимит правок (максимум 20)";
+
+// MARK: - Network Settings — Connection Route
+"connection_route" = "Маршрут подключения";
+"endpoint" = "Эндпоинт";
+"mode" = "Режим";

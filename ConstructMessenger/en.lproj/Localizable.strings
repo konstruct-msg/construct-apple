@@ -485,3 +485,8 @@
 "editing_message" = "Editing message";
 "edit_message_failed" = "Failed to edit message: %@";
 "edit_message_limit_reached" = "Edit limit reached (20 edits max)";
+
+// MARK: - Network Settings — Connection Route
+"connection_route" = "Connection Route";
+"endpoint" = "Endpoint";
+"mode" = "Mode";
