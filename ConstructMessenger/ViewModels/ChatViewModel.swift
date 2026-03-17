@@ -913,20 +913,36 @@ extension ChatViewModel: NSFetchedResultsControllerDelegate {
                 self.messages = []
                 return
             }
-            let fetchedMessages = (controller.fetchedObjects as? [Message] ?? [])
-                .filter { !$0.isDeleted }
-                .reversed() as [Message]
-            let fetchedIds = Set(fetchedMessages.map { $0.id })
-            // Keep historic messages loaded via pagination (not in current FRC window)
-            let historicMessages = self.messages.filter {
-                !fetchedIds.contains($0.id) && !$0.isDeleted
+
+            // Helper: a message is only safe to use if its context is non-nil AND it isn't
+            // marked deleted. Check managedObjectContext FIRST — it is not an @NSManaged
+            // property and is safe on zombies. Only after that check @NSManaged properties
+            // like .id or .timestamp, which throw on zombies.
+            func isValid(_ msg: Message) -> Bool {
+                msg.managedObjectContext != nil && !msg.isDeleted
             }
+
+            let fetchedMessages = (controller.fetchedObjects as? [Message] ?? [])
+                .filter { isValid($0) }
+                .reversed() as [Message]
+
+            let fetchedIds = Set(fetchedMessages.map { $0.id })
+
+            // Keep historic messages loaded via pagination (not in current FRC window).
+            // Guard validity before accessing $0.id to avoid zombie property access.
+            let historicMessages = self.messages.filter {
+                isValid($0) && !fetchedIds.contains($0.id)
+            }
+
             self.messages = historicMessages + fetchedMessages
             Log.debug("🔄 FRC updated: \(fetchedMessages.count) recent + \(historicMessages.count) historic = \(self.messages.count) total", category: "ChatViewModel")
-            if let first = self.messages.first {
+
+            if let first = self.messages.first, isValid(first) {
                 self.oldestLoadedTimestamp = first.timestamp
             }
-            self.allLoadedMessageIds = Set(self.messages.map { $0.id })
+            self.allLoadedMessageIds = Set(self.messages.compactMap {
+                isValid($0) ? $0.id : nil
+            })
         }
     }
 }
