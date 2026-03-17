@@ -2,16 +2,20 @@
 //  IceCertFetcher.swift
 //  Construct Messenger
 //
-//  Fetches the ICE bridge cert from the .well-known HTTPS endpoint on the
-//  Cloudflare-proxied domain. Used as level 3 in the cert fallback chain:
+//  Fetches the ICE bridge cert and relay list from .well-known endpoints.
+//  Used as level 3 in the cert fallback chain:
 //
 //    1. AuthTokensResponse (after login) → saved to Keychain by IceProxyManager
 //    2. Keychain cache                   → IceProxyManager.getIceBridgeCert()
 //    3. https://<inviteHost>/.well-known/ice-cert   ← this file
 //    4. Hardcoded in binary              → ICEConfig.hardcodedBridgeCert
 //
-//  The endpoint returns: {"cert":"<base64>","iat_mode":0}
-//  No authentication required — the cert is the server's public obfs4 identity.
+//  The cert endpoint returns: {"cert":"<base64>","iat_mode":0}
+//
+//  Relay list is fetched from:
+//    https://ams.konstruct.cc/.well-known/construct-server
+//  Response: {"ice":{"primary":"ice.ams.konstruct.cc:443","relays":["ice.msk.konstruct.cc:9443"]}}
+//  Result is cached in UserDefaults under ICEConfig.cachedRelayListKey.
 
 import Foundation
 
@@ -23,6 +27,14 @@ private struct IceCertWellKnown: Decodable {
         case cert
         case iatMode = "iat_mode"
     }
+}
+
+private struct ConstructServerWellKnown: Decodable {
+    struct ICEEndpoints: Decodable {
+        let primary: String?
+        let relays: [String]?
+    }
+    let ice: ICEEndpoints?
 }
 
 actor IceCertFetcher {
@@ -52,6 +64,38 @@ actor IceCertFetcher {
             return parsed.cert
         } catch {
             Log.debug("🧊 ICE .well-known fetch error: \(error)", category: "ICE")
+            return nil
+        }
+    }
+
+    /// Fetch the relay list from `https://ams.konstruct.cc/.well-known/construct-server`.
+    ///
+    /// On success, updates the UserDefaults cache under `ICEConfig.cachedRelayListKey`
+    /// and returns the relay address strings (e.g. `["ice.msk.konstruct.cc:9443"]`).
+    /// Returns nil if the server is unreachable or the response cannot be parsed.
+    @discardableResult
+    func fetchAndCacheRelayList() async -> [String]? {
+        let urlString = "https://ams.konstruct.cc/.well-known/construct-server"
+        guard let url = URL(string: urlString) else { return nil }
+
+        var request = URLRequest(url: url, timeoutInterval: timeout)
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+                Log.debug("🧊 construct-server .well-known returned non-200", category: "ICE")
+                return nil
+            }
+            let parsed = try JSONDecoder().decode(ConstructServerWellKnown.self, from: data)
+            guard let relays = parsed.ice?.relays, !relays.isEmpty else { return nil }
+
+            // Cache for use at next launch or when starting ICE with relay fallback.
+            UserDefaults.standard.set(relays, forKey: ICEConfig.cachedRelayListKey)
+            Log.info("🧊 ICE relay list updated: \(relays)", category: "ICE")
+            return relays
+        } catch {
+            Log.debug("🧊 construct-server .well-known fetch error: \(error)", category: "ICE")
             return nil
         }
     }

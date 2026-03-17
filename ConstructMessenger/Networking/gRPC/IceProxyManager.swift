@@ -135,8 +135,8 @@ final class IceProxyManager: ObservableObject {
     }
 
     /// Called when ICE handshake fails repeatedly (stale cert after server key rotation).
-    /// Clears Keychain cache, fetches fresh cert via .well-known, restarts proxy.
-    /// Returns true if a new cert was obtained and proxy was restarted.
+    /// Clears Keychain cache, fetches fresh cert via .well-known, restarts proxy via fallback chain.
+    /// Returns true if a new cert was obtained and proxy was restarted successfully.
     @discardableResult
     func refreshCertAndRestart() async -> Bool {
         Log.info("🧊 ICE cert stale — clearing cache and re-fetching via .well-known", category: "ICE")
@@ -146,13 +146,10 @@ final class IceProxyManager: ObservableObject {
             return false
         }
         KeychainManager.shared.saveIceBridgeCert(freshCert)
-        let host = GRPCChannelManager.shared.currentHost
-        let iceHost = "ice.\(host)"
-        let relay = IceRelay(address: "\(iceHost):443", bridgeCert: freshCert, iatMode: .none, tlsServerName: iceHost)
-        saveRelay(relay)
-        if isEnabled { start(relay: relay) }
-        Log.info("🧊 ICE proxy restarted with fresh cert", category: "ICE")
-        return true
+        if isEnabled {
+            return startWithRelayFallback(cert: freshCert)
+        }
+        return false
     }
 
     // MARK: - Start / Stop
@@ -208,56 +205,86 @@ final class IceProxyManager: ObservableObject {
         activeRelay = nil
     }
 
-    /// Start with the stored relay (called at app launch if `isEnabled`).
-    /// Falls back to building a relay from getIceBridgeCert() (Keychain → .well-known → hardcoded).
-    func startIfEnabled() async {
-        guard isEnabled else { return }
-        let relay: IceRelay
-        if let stored = loadStoredRelay() {
-            relay = stored
-        } else {
-            let cert = await getIceBridgeCert()
-            let host = GRPCChannelManager.shared.currentHost
-            let iceHost = "ice.\(host)"
-            let newRelay = IceRelay(address: "\(iceHost):443", bridgeCert: cert, iatMode: .none, tlsServerName: iceHost)
-            saveRelay(newRelay)
-            relay = newRelay
+    // MARK: - Relay list
+
+    /// Returns the relay address list: server-cached list first, then hardcoded fallback.
+    /// Deduplicates while preserving order (server list takes priority).
+    func cachedRelayAddresses() -> [String] {
+        let server   = UserDefaults.standard.stringArray(forKey: ICEConfig.cachedRelayListKey) ?? []
+        let fallback = ICEConfig.hardcodedRelayAddresses
+        var seen = Set<String>()
+        return (server + fallback).filter { seen.insert($0).inserted }
+    }
+
+    // MARK: - Multi-endpoint startup
+
+    /// Start the ICE proxy trying the primary TLS endpoint first, then each relay (plain obfs4).
+    ///
+    /// Connection order:
+    ///   1. Primary: `ice.<grpcHost>:443` (TLS + obfs4)
+    ///   2. Relay 1…N from `cachedRelayAddresses()` — plain obfs4, no TLS wrapper
+    ///
+    /// Returns `true` if any endpoint started successfully.
+    @discardableResult
+    private func startWithRelayFallback(cert: String) -> Bool {
+        let host = GRPCChannelManager.shared.currentHost
+        let iceHost = "ice.\(host)"
+        let primary = IceRelay(address: "\(iceHost):443", bridgeCert: cert, iatMode: .none, tlsServerName: iceHost)
+        if start(relay: primary) != nil {
+            saveRelay(primary)
+            Log.info("🧊 ICE started via primary: \(iceHost):443", category: "ICE")
+            return true
+        }
+        Log.info("🧊 ICE primary failed — trying relay endpoints", category: "ICE")
+
+        for relayAddress in cachedRelayAddresses() {
+            // Plain obfs4 (no TLS wrapper) — relay is a transparent TCP passthrough.
+            // The obfs4 handshake targets Amsterdam's cert; the relay just forwards bytes.
+            let relayConfig = IceRelay(address: relayAddress, bridgeCert: cert, iatMode: .none, tlsServerName: nil)
+            if start(relay: relayConfig) != nil {
+                saveRelay(relayConfig)
+                Log.info("🧊 ICE started via relay: \(relayAddress)", category: "ICE")
+                return true
+            }
+            Log.info("🧊 ICE relay \(relayAddress) failed", category: "ICE")
         }
 
-        // First attempt with the stored/cached cert.
-        if start(relay: relay) != nil { return }
+        Log.error("🧊 ICE start failed on all endpoints (1 primary + \(cachedRelayAddresses().count) relay(s))", category: "ICE")
+        return false
+    }
 
-        // Stored cert may be stale (server key rotation). Fetch a fresh one from
-        // .well-known and retry once before giving up.
-        Log.info("🧊 ICE start failed — fetching fresh cert from .well-known and retrying", category: "ICE")
+    // MARK: - App-lifecycle entry points
+
+    /// Start with the stored relay (called at app launch if `isEnabled`).
+    /// Tries primary TLS → relay fallback → fresh cert → retry, in that order.
+    func startIfEnabled() async {
+        guard isEnabled else { return }
+
+        let cert = await getIceBridgeCert()
+        if startWithRelayFallback(cert: cert) {
+            // Background: refresh relay list so it's up-to-date for next time.
+            Task { await IceCertFetcher.shared.fetchAndCacheRelayList() }
+            return
+        }
+
+        // All endpoints failed with current cert. May be stale after key rotation.
+        Log.info("🧊 All ICE endpoints failed — fetching fresh cert and retrying", category: "ICE")
         guard let freshCert = await IceCertFetcher.shared.fetchFromHTTPS() else {
             Log.error("🧊 ICE start failed and fresh cert unavailable — proxy not running", category: "ICE")
             return
         }
         KeychainManager.shared.saveIceBridgeCert(freshCert)
-        let host = GRPCChannelManager.shared.currentHost
-        let iceHost = "ice.\(host)"
-        let freshRelay = IceRelay(address: "\(iceHost):443", bridgeCert: freshCert, iatMode: .none, tlsServerName: iceHost)
-        saveRelay(freshRelay)
-        start(relay: freshRelay)
+        startWithRelayFallback(cert: freshCert)
     }
 
     // MARK: - Server-provided configuration
 
     /// Called after login/register/recovery with the cert from `AuthTokensResponse`.
-    /// Saves the cert and automatically starts the proxy if ICE is enabled.
-    ///
-    /// TLS-over-obfs4 mode: relay connects to `ice.<host>:443` through Traefik
-    /// TCP SNI passthrough, with TLS SNI = `"ice.<host>"`. This makes the
-    /// outer connection look like plain HTTPS to DPI.
+    /// Saves the cert, refreshes the relay list, and starts the proxy if ICE is enabled.
     func configureFromServer(cert: String) {
         guard !cert.isEmpty else { return }
-        // Persist to Keychain — cert survives reinstalls and is unavailable
-        // without device unlock (kSecAttrAccessibleAfterFirstUnlock)
         KeychainManager.shared.saveIceBridgeCert(cert)
         let host = GRPCChannelManager.shared.currentHost
-        // TLS mode: Traefik terminates TLS for SNI `ice.<host>:443`, routes
-        // plaintext TCP to gateway:9443. Gateway runs obfs4 on the plaintext stream.
         let iceHost = "ice.\(host)"
         let relay = IceRelay(
             address: "\(iceHost):443",
@@ -266,7 +293,10 @@ final class IceProxyManager: ObservableObject {
             tlsServerName: iceHost
         )
         saveRelay(relay)
-        if isEnabled { start(relay: relay) }
+        if isEnabled { startWithRelayFallback(cert: cert) }
+
+        // Background: refresh relay list now that we're authenticated and can reach AMS.
+        Task { await IceCertFetcher.shared.fetchAndCacheRelayList() }
     }
 
     func saveRelay(_ relay: IceRelay) {
@@ -278,9 +308,14 @@ final class IceProxyManager: ObservableObject {
     func loadStoredRelay() -> IceRelay? {
         guard let data = UserDefaults.standard.data(forKey: relayKey),
               let relay = try? JSONDecoder().decode(IceRelay.self, from: data) else { return nil }
-        // Migrate old relay format (pre-TLS mode): address was host:9443, no tlsServerName.
+        // Migrate old relay format (pre-TLS mode): address was "ice.<host>:9443", no tlsServerName.
         // Upgrade transparently to TLS mode: ice.<host>:443 with SNI set.
-        if relay.tlsServerName == nil || relay.address.hasSuffix(":9443") {
+        // IMPORTANT: do NOT migrate known relay addresses — MSK relay is intentionally plain obfs4
+        // on port 9443 (no TLS wrapper).
+        let knownRelayAddresses = Set(cachedRelayAddresses())
+        let needsMigration = !knownRelayAddresses.contains(relay.address)
+                          && (relay.tlsServerName == nil || relay.address.hasSuffix(":9443"))
+        if needsMigration {
             let host = GRPCChannelManager.shared.currentHost
             let iceHost = "ice.\(host)"
             let upgraded = IceRelay(address: "\(iceHost):443", bridgeCert: relay.bridgeCert,

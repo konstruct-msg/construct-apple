@@ -353,6 +353,20 @@ struct ICEConfig {
     /// This is the server's public obfs4 identity — not a secret, safe to embed in binary.
     /// Update this when the production server rotates its ICE identity keypair.
     static let hardcodedBridgeCert = "3J8A3lAtPb3R4+td9UVLuzggZeva+o8TDNVw4aHx8HWdvdYpS4gV6t8gmxbGMIQTB5eGJA"
+
+    /// Primary ICE endpoint: TLS 1.3 → obfs4 → gRPC (Amsterdam, via Traefik).
+    /// Uses `ice.<grpcHost>:443` derived at runtime from GRPCChannelManager.currentHost.
+
+    /// Moscow relay: plain TCP → obfs4 → TCP relay → Amsterdam.
+    /// No outer TLS wrapper — Yandex Cloud VM does transparent TCP forwarding.
+    /// Same bridge cert as primary (the relay just passes obfs4 bytes through).
+    static let mskRelayAddress = "ice.msk.konstruct.cc:9443"
+
+    /// Hardcoded relay list used as a last resort when discovery is unavailable.
+    static let hardcodedRelayAddresses: [String] = [mskRelayAddress]
+
+    /// UserDefaults key where the relay list fetched from the server is cached.
+    static let cachedRelayListKey = "construct.ice_relays"
 }
 
 // MARK: - Log Categories
