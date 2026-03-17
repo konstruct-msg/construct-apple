@@ -13,6 +13,15 @@ extension UIImage {
     static func platformImage(data: Data) -> UIImage? { UIImage(data: data) }
     static func platformImage(named: String) -> UIImage? { UIImage(named: named) }
 }
+
+import SwiftUI
+
+extension Image {
+    /// Platform-agnostic initialiser: accepts UIImage on iOS/Catalyst, NSImage on macOS.
+    init(platformImage: PlatformImage) {
+        self.init(uiImage: platformImage)
+    }
+}
 #elseif canImport(AppKit)
 import AppKit
 
@@ -30,5 +39,18 @@ extension NSImage {
 
     static func platformImage(data: Data) -> NSImage? { NSImage(data: data) }
     static func platformImage(named: String) -> NSImage? { NSImage(named: named) }
+}
+
+import SwiftUI
+
+extension Image {
+    /// Platform-agnostic initialiser: accepts UIImage on iOS/Catalyst, NSImage on macOS.
+    init(platformImage: PlatformImage) {
+#if canImport(UIKit)
+        self.init(uiImage: platformImage)
+#else
+        self.init(nsImage: platformImage)
+#endif
+    }
 }
 #endif

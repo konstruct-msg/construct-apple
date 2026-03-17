@@ -408,25 +408,6 @@ struct MessageBubble: View {
     }
 }
 
-// MARK: - File Message Types
-
-struct FileMessageContent: Codable {
-    let type: String
-    let caption: String
-    let files: [FileEntry]
-
-    struct FileEntry: Codable {
-        let mediaId: String
-        let mediaUrl: String
-        let mediaKey: String
-        let mediaType: String
-        let size: Int
-        let hash: String
-        let filename: String
-        let compressed: Bool
-    }
-}
-
 // MARK: - File Attachment Bubble View
 
 struct FileAttachmentBubbleView: View {
@@ -587,12 +568,6 @@ struct ProfileShareBubbleView: View {
         .background(Color.gray.opacity(0.1))
         .cornerRadius(16)
     }
-}
-
-// MARK: - Media Message Content
-struct MediaMessageContent {
-    let caption: String
-    let media: [String: Any]
 }
 
 // MARK: - Media Message View

@@ -28,27 +28,6 @@ final class MediaImageCache {
 
 // MARK: - Parse Helper
 
-/// Parses a message's `decryptedContent` JSON into a `MediaMessageContent`.
-/// Returns `nil` if the content is not a media message.
-/// Shared between `MessageBubble` and `MediaGalleryPage`.
-func parseMediaContent(from content: String?) -> MediaMessageContent? {
-    guard let content = content,
-          let data = content.data(using: .utf8),
-          let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-          let type = json["type"] as? String,
-          type == "media",
-          let mediaArray = json["media"] as? [[String: Any]] else {
-        return nil
-    }
-    // `mediaArray` may be empty only for upload placeholders (which carry `_placeholder: true`
-    // as the sole entry).  Regular sent messages always have at least one real item.
-    let firstMedia = mediaArray.first ?? [:]
-    return MediaMessageContent(
-        caption: json["caption"] as? String ?? "",
-        media: firstMedia
-    )
-}
-
 // MARK: - Gallery Presenter Token
 
 /// Drives `fullScreenCover(item:)` from ChatView.

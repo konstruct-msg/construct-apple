@@ -20,7 +20,7 @@ struct ReplyPreviewContent: View {
     /// Number of text lines allowed (1 for input bar, 2 for bubble).
     let lineLimit: Int
 
-    @State private var thumbnail: UIImage? = nil
+    @State private var thumbnail: PlatformImage? = nil
 
     private var mediaContent: MediaMessageContent? { parseMediaContent(from: content) }
 
@@ -64,11 +64,18 @@ struct ReplyPreviewContent: View {
     private var thumbnailView: some View {
         Group {
             if let img = thumbnail {
-                Image(uiImage: img)
+                Image(platformImage: img)
                     .resizable()
                     .scaledToFill()
             } else {
-                Color(uiColor: .systemGray4)
+                let placeholderColor: Color = {
+#if canImport(UIKit)
+                    return Color(uiColor: .systemGray4)
+#else
+                    return Color(NSColor.systemGray)
+#endif
+                }()
+                placeholderColor
                     .overlay(
                         Image(systemName: "photo")
                             .font(.system(size: thumbnailSize * 0.38))
@@ -102,7 +109,7 @@ struct ReplyPreviewContent: View {
     private func loadThumbnail() {
         guard let id = messageId,
               let data = MediaManager.shared.retrieveThumbnail(for: id),
-              let img = UIImage(data: data) else { return }
+              let img = PlatformImage.platformImage(data: data) else { return }
         thumbnail = img
     }
 }
