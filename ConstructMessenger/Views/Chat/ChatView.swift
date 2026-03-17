@@ -485,10 +485,13 @@ struct ChatView: View {
     // MARK: - Computed Properties
     
     private var filteredMessages: [Message] {
+        // Guard against accessing deleted/faulted Core Data objects that the FRC
+        // may not have removed from viewModel.messages before SwiftUI re-evaluates.
+        let valid = viewModel.messages.filter { !$0.isDeleted && $0.managedObjectContext != nil }
         if searchText.isEmpty {
-            return viewModel.messages // oldest-first from FRC; ScrollView anchored to bottom
+            return valid
         }
-        return viewModel.messages.filter { message in
+        return valid.filter { message in
             message.decryptedContent?.localizedCaseInsensitiveContains(searchText) ?? false
         }
     }
@@ -497,6 +500,7 @@ struct ChatView: View {
     /// Upload placeholders (with `_placeholder: true`) are excluded — they have no real URL.
     private var mediaMessages: [Message] {
         viewModel.messages.filter {
+            guard !$0.isDeleted, $0.managedObjectContext != nil else { return false }
             if let mc = parseMediaContent(from: $0.decryptedContent) {
                 return (mc.media["_placeholder"] as? Bool) != true
             }

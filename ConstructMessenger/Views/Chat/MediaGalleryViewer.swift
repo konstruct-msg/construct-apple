@@ -214,7 +214,10 @@ struct MediaGalleryPage: View {
     @State private var lastOffset: CGSize = .zero
 
     var body: some View {
-        GeometryReader { geo in
+        guard !message.isDeleted, message.managedObjectContext != nil else {
+            return AnyView(Color.black)
+        }
+        return AnyView(GeometryReader { geo in
             ZStack {
                 Color.black
 
@@ -240,6 +243,7 @@ struct MediaGalleryPage: View {
             }
         }
         .onAppear { loadImage() }
+        ) // AnyView
     }
 
     // MARK: Gestures
@@ -291,6 +295,8 @@ struct MediaGalleryPage: View {
     // MARK: Loading
 
     private func loadImage() {
+        guard !message.isDeleted, message.managedObjectContext != nil else { return }
+
         // Already cached — show immediately
         if let cached = MediaImageCache.shared.image(for: message.id) {
             image = cached
