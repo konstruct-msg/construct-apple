@@ -51,14 +51,21 @@ struct MessageBubble: View {
     }
 
     var body: some View {
+        // Guard against accessing a deleted or faulted Core Data object.
+        // This can happen when a placeholder is deleted while SwiftUI still
+        // holds a stale reference to it (between FRC delete notification and
+        // the next SwiftUI layout pass).
+        guard !message.isDeleted, message.managedObjectContext != nil else {
+            return AnyView(EmptyView())
+        }
         // ✅ Check if this is a system message by fromUserId
         if message.fromUserId == "SYSTEM" {
-            systemMessageView(message.decryptedContent ?? "System message")
+            return AnyView(systemMessageView(message.decryptedContent ?? "System message"))
         } else if let content = message.decryptedContent, content.hasPrefix("[SYSTEM]") {
             // ✅ Legacy support for [SYSTEM] prefix
-            systemMessageView(content.replacingOccurrences(of: "[SYSTEM]", with: "").trimmingCharacters(in: .whitespaces))
+            return AnyView(systemMessageView(content.replacingOccurrences(of: "[SYSTEM]", with: "").trimmingCharacters(in: .whitespaces)))
         } else {
-            regularMessageView
+            return AnyView(regularMessageView)
         }
     }
     

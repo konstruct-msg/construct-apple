@@ -173,13 +173,19 @@ class MessagePersistenceService {
 
     /// Delete a placeholder (or any) message by ID — used after upload succeeds so the
     /// real sent message can take its place.
-    func deleteMessage(id: String, in context: NSManagedObjectContext) {
+    /// Delete a message by ID.
+    ///
+    /// Pass `autoSave: false` when you intend to batch this with another
+    /// Core Data write (e.g., deleting a placeholder then inserting the real
+    /// message).  The caller is then responsible for calling
+    /// `context.saveAndLog()` once all changes are staged.
+    func deleteMessage(id: String, in context: NSManagedObjectContext, autoSave: Bool = true) {
         let req = Message.fetchRequest()
         req.predicate = NSPredicate(format: "id == %@", id)
         req.fetchLimit = 1
         guard let msg = try? context.fetch(req).first else { return }
         context.delete(msg)
-        context.saveAndLog()
+        if autoSave { context.saveAndLog() }
         Log.debug("🗑️ Deleted placeholder \(id.prefix(8))…", category: "MessagePersistence")
     }
 

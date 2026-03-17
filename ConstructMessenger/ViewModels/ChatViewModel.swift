@@ -614,9 +614,12 @@ class ChatViewModel: NSObject {
                 )
 
                 await MainActor.run {
-                    // 3a. Upload succeeded — delete placeholder, send the real message.
+                    // 3a. Upload succeeded — delete placeholder and send the real message.
+                    // Use autoSave:false so the delete and the new message insertion are
+                    // batched into a single Core Data save (and single FRC notification),
+                    // avoiding a window where SwiftUI tries to render the deleted object.
                     self.pendingMediaUploads.removeValue(forKey: placeholderId)
-                    self.persistenceService.deleteMessage(id: placeholderId, in: self.viewContext)
+                    self.persistenceService.deleteMessage(id: placeholderId, in: self.viewContext, autoSave: false)
                     self.sendTextMessage(text: result.messageContent, replyTo: replyTo, localThumbnails: result.thumbnails)
                 }
             } catch {
@@ -672,7 +675,7 @@ class ChatViewModel: NSObject {
                 )
                 await MainActor.run {
                     self.pendingMediaUploads.removeValue(forKey: placeholderId)
-                    self.persistenceService.deleteMessage(id: placeholderId, in: self.viewContext)
+                    self.persistenceService.deleteMessage(id: placeholderId, in: self.viewContext, autoSave: false)
                     self.sendTextMessage(text: result.messageContent, replyTo: replyTo)
                 }
             } catch {
