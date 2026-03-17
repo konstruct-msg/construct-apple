@@ -105,9 +105,15 @@ class SettingsViewModel {
                 // Update UI
                 profileImage = ImageHelper.imageFromData(processedData)
                 print("✅ Avatar saved successfully")
-                
+
                 // Force UI refresh by posting notification
                 NotificationCenter.default.post(name: .NSManagedObjectContextDidSave, object: context)
+
+                // Re-send profile to all contacts we share with so they see the new avatar
+                Task {
+                    let shareVM = ProfileShareViewModel(context: context)
+                    shareVM.rebroadcastProfileToSharedContacts()
+                }
             } else {
                 print("⚠️ User not found in Core Data")
             }
@@ -182,6 +188,12 @@ class SettingsViewModel {
                 // @Observable AuthViewModel tracks property access automatically
                 
                 print("✅ Display name saved: \(trimmed)")
+
+                // Re-send profile to all contacts we share with so they see the updated name
+                Task {
+                    let shareVM = ProfileShareViewModel(context: context)
+                    shareVM.rebroadcastProfileToSharedContacts()
+                }
             }
         } catch {
             print("⚠️ Failed to save display name: \(error)")

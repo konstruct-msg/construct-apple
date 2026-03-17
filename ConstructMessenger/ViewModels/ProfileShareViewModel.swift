@@ -18,6 +18,12 @@ class ProfileShareViewModel {
     private var viewContext: NSManagedObjectContext?
     private var isSharingProfile = false
 
+    init() {}
+
+    init(context: NSManagedObjectContext) {
+        self.viewContext = context
+    }
+
     func setContext(_ context: NSManagedObjectContext) {
         self.viewContext = context
     }
@@ -253,6 +259,43 @@ class ProfileShareViewModel {
             Log.info("✅ Profile data updated for user \(userId)", category: "ProfileShare")
         } catch {
             Log.error("❌ Failed to save profile data: \(error)", category: "ProfileShare")
+        }
+    }
+
+    // MARK: - Avatar rebroadcast
+
+    /// Re-send current profile (including updated avatar) to all contacts we are sharing with.
+    /// Call this whenever the user changes their avatar or display name so contacts stay in sync.
+    /// Uses a background Task per contact — failures are logged but don't surface to the user.
+    func rebroadcastProfileToSharedContacts() {
+        guard let context = viewContext,
+              let currentUserId = SessionManager.shared.currentUserId else { return }
+
+        // Fetch all contacts we have chosen to share our profile with
+        let fetchRequest: NSFetchRequest<User> = User.fetchRequest()
+        fetchRequest.predicate = NSPredicate(format: "amISharingWith == YES AND id != %@", currentUserId)
+
+        guard let contacts = try? context.fetch(fetchRequest), !contacts.isEmpty else {
+            Log.info("📤 No contacts to rebroadcast profile to", category: "ProfileShare")
+            return
+        }
+
+        let contactIds = contacts.map(\.id)
+        Log.info("📤 Rebroadcasting profile to \(contactIds.count) contact(s)", category: "ProfileShare")
+
+        for contactId in contactIds {
+            Task {
+                await withCheckedContinuation { continuation in
+                    shareProfile(with: contactId) { success, error in
+                        if success {
+                            Log.info("✅ Profile rebroadcast to \(contactId.prefix(8))", category: "ProfileShare")
+                        } else {
+                            Log.error("⚠️ Profile rebroadcast to \(contactId.prefix(8)) failed: \(error ?? "unknown")", category: "ProfileShare")
+                        }
+                        continuation.resume()
+                    }
+                }
+            }
         }
     }
 }
