@@ -447,7 +447,7 @@ class ChatViewModel: NSObject {
     }
 
     // MARK: - Send Message
-    func sendMessage(text: String, images: [PlatformImage] = [], fileURLs: [URL] = [], replyTo: Message? = nil) {
+    func sendMessage(text: String, images: [PlatformImage] = [], fileURLs: [URL] = [], replyTo: Message? = nil, replyToContentOverride: String? = nil) {
         Log.info("📤 sendMessage called with \(images.count) images, \(fileURLs.count) files", category: "ChatViewModel")
 
         guard let recipientId = chat.otherUser?.id else {
@@ -493,13 +493,13 @@ class ChatViewModel: NSObject {
                 Log.error("❌ Unexpected file validation error: \(error)", category: "ChatViewModel")
                 return
             }
-            sendFileMessage(fileURLs: fileURLs, caption: text, replyTo: replyTo)
+            sendFileMessage(fileURLs: fileURLs, caption: text, replyTo: replyTo, replyToContentOverride: replyToContentOverride)
             return
         }
 
         // Handle images if provided
         if !images.isEmpty {
-            sendMediaMessage(images: images, caption: text, replyTo: replyTo)
+            sendMediaMessage(images: images, caption: text, replyTo: replyTo, replyToContentOverride: replyToContentOverride)
             return
         }
 
@@ -516,7 +516,7 @@ class ChatViewModel: NSObject {
             return
         }
 
-        sendTextMessage(text: text, replyTo: replyTo)
+        sendTextMessage(text: text, replyTo: replyTo, replyToContentOverride: replyToContentOverride)
     }
 
     // ✅ Send all queued messages when connection is restored
@@ -573,7 +573,7 @@ class ChatViewModel: NSObject {
     // MARK: - Core Data Operations
     // MARK: - Media Messages
 
-    private func sendMediaMessage(images: [PlatformImage], caption: String, replyTo: Message?) {
+    private func sendMediaMessage(images: [PlatformImage], caption: String, replyTo: Message?, replyToContentOverride: String? = nil) {
         guard let recipientId = chat.otherUser?.id,
               let currentUserId = SessionManager.shared.currentUserId else {
             Log.error("❌ No recipient/user ID for media message", category: "ChatViewModel")
@@ -593,6 +593,7 @@ class ChatViewModel: NSObject {
             caption: caption,
             thumbnail: thumbnail,
             replyTo: replyTo,
+            replyToContentOverride: replyToContentOverride,
             chat: chat,
             in: viewContext
         )
@@ -620,7 +621,7 @@ class ChatViewModel: NSObject {
                     // avoiding a window where SwiftUI tries to render the deleted object.
                     self.pendingMediaUploads.removeValue(forKey: placeholderId)
                     self.persistenceService.deleteMessage(id: placeholderId, in: self.viewContext, autoSave: false)
-                    self.sendTextMessage(text: result.messageContent, replyTo: replyTo, localThumbnails: result.thumbnails)
+                    self.sendTextMessage(text: result.messageContent, replyTo: replyTo, replyToContentOverride: replyToContentOverride, localThumbnails: result.thumbnails)
                 }
             } catch {
                 await MainActor.run {
@@ -641,7 +642,7 @@ class ChatViewModel: NSObject {
         }
     }
 
-    private func sendFileMessage(fileURLs: [URL], caption: String, replyTo: Message?) {
+    private func sendFileMessage(fileURLs: [URL], caption: String, replyTo: Message?, replyToContentOverride: String? = nil) {
         guard let recipientId = chat.otherUser?.id,
               let currentUserId = SessionManager.shared.currentUserId else {
             isSending = false
@@ -657,6 +658,7 @@ class ChatViewModel: NSObject {
             caption: caption.isEmpty ? (fileURLs.first?.lastPathComponent ?? "File") : caption,
             thumbnail: nil,
             replyTo: replyTo,
+            replyToContentOverride: replyToContentOverride,
             chat: chat,
             in: viewContext
         )
@@ -676,7 +678,7 @@ class ChatViewModel: NSObject {
                 await MainActor.run {
                     self.pendingMediaUploads.removeValue(forKey: placeholderId)
                     self.persistenceService.deleteMessage(id: placeholderId, in: self.viewContext, autoSave: false)
-                    self.sendTextMessage(text: result.messageContent, replyTo: replyTo)
+                    self.sendTextMessage(text: result.messageContent, replyTo: replyTo, replyToContentOverride: replyToContentOverride)
                 }
             } catch {
                 await MainActor.run {
@@ -709,7 +711,7 @@ class ChatViewModel: NSObject {
         retryMessage(msg)
     }
 
-    private func sendTextMessage(text: String, replyTo: Message?, localThumbnails: [Data] = []) {
+    private func sendTextMessage(text: String, replyTo: Message?, replyToContentOverride: String? = nil, localThumbnails: [Data] = []) {
         guard let recipientId = chat.otherUser?.id,
               let currentUserId = SessionManager.shared.currentUserId else {
             isSending = false
@@ -746,7 +748,7 @@ class ChatViewModel: NSObject {
             Log.debug("   Message number: \(firstComponents.messageNumber)", category: "ChatViewModel")
             Log.debug("   Content length: \(message.content.count) bytes", category: "ChatViewModel")
 
-            saveMessage(message, decryptedContent: text, isSentByMe: true, status: .sending, replyTo: replyTo, localThumbnails: localThumbnails, suiteId: firstComponents.suiteId)
+            saveMessage(message, decryptedContent: text, isSentByMe: true, status: .sending, replyTo: replyTo, replyToContentOverride: replyToContentOverride, localThumbnails: localThumbnails, suiteId: firstComponents.suiteId)
 
             Log.info("📮 Sending message via gRPC: \(messageId)", category: "ChatViewModel")
             Task { [weak self] in
@@ -810,7 +812,7 @@ class ChatViewModel: NSObject {
                         }
                         self.updateMessageStatus(messageId: messageId, status: .failed)
                         ErrorRouter.shared.report(error, recovery: { [weak self] in
-                            self?.sendTextMessage(text: text, replyTo: replyTo, localThumbnails: localThumbnails)
+                            self?.sendTextMessage(text: text, replyTo: replyTo, replyToContentOverride: replyToContentOverride, localThumbnails: localThumbnails)
                         })
                         self.isSending = false
                     }
@@ -873,7 +875,7 @@ class ChatViewModel: NSObject {
         }
     }
 
-    private func saveMessage(_ message: ChatMessage, decryptedContent: String, isSentByMe: Bool, status: DeliveryStatus, replyTo: Message? = nil, localThumbnails: [Data] = [], suiteId: UInt16) {
+    private func saveMessage(_ message: ChatMessage, decryptedContent: String, isSentByMe: Bool, status: DeliveryStatus, replyTo: Message? = nil, replyToContentOverride: String? = nil, localThumbnails: [Data] = [], suiteId: UInt16) {
         // ✅ REFACTOR: Use MessagePersistenceService
         do {
             let isNewMessage = try persistenceService.saveMessage(
@@ -883,6 +885,7 @@ class ChatViewModel: NSObject {
                 status: status,
                 chat: chat,
                 replyTo: replyTo,
+                replyToContentOverride: replyToContentOverride,
                 localThumbnails: localThumbnails,
                 suiteId: suiteId,
                 in: viewContext

@@ -490,3 +490,12 @@
 "connection_route" = "Connection Route";
 "endpoint" = "Endpoint";
 "mode" = "Mode";
+
+// MARK: - Quote & Reply
+"quote_reply" = "Quote & Reply";
+"select_quote" = "Select Quote";
+"quote_selection_hint" = "Select the text you want to quote, then tap Reply.";
+"reply_with_selection" = "Reply to Selection";
+"photo" = "Photo";
+"video" = "Video";
+"file_attachment" = "File";

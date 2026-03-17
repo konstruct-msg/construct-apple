@@ -17,6 +17,10 @@ struct ChatView: View {
     private var connectionManager = ConnectionStatusManager.shared
     @State private var messageText = ""
     @State private var replyingTo: Message?
+    /// When non-nil, the user selected a partial quote from `replyingTo` for reply.
+    @State private var replyQuoteText: String? = nil
+    /// Message opened for "Quote & Reply" selection sheet.
+    @State private var quotingMessage: Message? = nil
     @State private var showingUserProfile = false
 
     @State private var searchText = ""
@@ -91,6 +95,7 @@ struct ChatView: View {
                                     },
                                     onReply: { msg in
                                         replyingTo = msg
+                                        replyQuoteText = nil
                                     },
                                     onDelete: { msg in
                                         viewModel.deleteMessage(msg)
@@ -111,6 +116,9 @@ struct ChatView: View {
                                     },
                                     onEdit: { msg in
                                         viewModel.editingMessage = msg
+                                    },
+                                    onReplyWithQuote: { msg, _ in
+                                        quotingMessage = msg
                                     }
                                 )
                                 .id(message.id)
@@ -268,6 +276,14 @@ struct ChatView: View {
                     .presentationDragIndicator(.visible)
             }
         }
+        .sheet(item: $quotingMessage) { msg in
+            QuoteSelectionSheet(message: msg) { selectedQuote in
+                replyingTo = msg
+                replyQuoteText = selectedQuote
+            }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
         .onAppear {
             markChatAsRead()
         }
@@ -314,15 +330,23 @@ struct ChatView: View {
             droppedImages: $chatDropImages,
             isSending: viewModel.isSending,
             replyingTo: replyingTo,
+            quoteOverride: replyQuoteText,
             editingMessage: viewModel.editingMessage,
             onSend: { images, fileURLs in
                 if let editMsg = viewModel.editingMessage {
                     viewModel.editMessage(editMsg, newText: messageText)
                     messageText = ""
                 } else {
-                    viewModel.sendMessage(text: messageText, images: images, fileURLs: fileURLs, replyTo: replyingTo)
+                    viewModel.sendMessage(
+                        text: messageText,
+                        images: images,
+                        fileURLs: fileURLs,
+                        replyTo: replyingTo,
+                        replyToContentOverride: replyQuoteText
+                    )
                     messageText = ""
                     replyingTo = nil
+                    replyQuoteText = nil
 
                     // ✅ Enable auto-scroll for new message
                     scrollManager.shouldScrollToBottom = true
@@ -337,6 +361,7 @@ struct ChatView: View {
             },
             onCancelReply: {
                 replyingTo = nil
+                replyQuoteText = nil
             },
             onCancelEdit: {
                 viewModel.editingMessage = nil

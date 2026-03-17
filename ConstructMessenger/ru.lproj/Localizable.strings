@@ -492,3 +492,12 @@
 "connection_route" = "Маршрут подключения";
 "endpoint" = "Эндпоинт";
 "mode" = "Режим";
+
+// MARK: - Quote & Reply
+"quote_reply" = "Цитировать и ответить";
+"select_quote" = "Выбор цитаты";
+"quote_selection_hint" = "Выделите текст для цитирования, затем нажмите «Ответить».";
+"reply_with_selection" = "Ответить на выделенное";
+"photo" = "Фото";
+"video" = "Видео";
+"file_attachment" = "Файл";

@@ -14,6 +14,9 @@ struct MessageInputView: View {
     @Binding var droppedImages: [UIImage]  // Images pushed from ChatView drop zone
     let isSending: Bool
     let replyingTo: Message?
+    /// Optional override for the quoted text shown in the reply bar.
+    /// When set (partial quote), this is displayed instead of replyingTo.decryptedContent.
+    let quoteOverride: String?
     let editingMessage: Message?
     let onSend: ([UIImage], [URL]) -> Void  // images + file URLs
     let onCancelReply: () -> Void
@@ -45,10 +48,12 @@ struct MessageInputView: View {
                             .font(.caption)
                             .foregroundColor(.secondary)
 
-                        Text(replyMessage.decryptedContent ?? NSLocalizedString("message", comment: "Fallback for reply preview"))
-                            .font(.subheadline)
-                            .lineLimit(1)
-                            .foregroundColor(.primary)
+                        ReplyPreviewContent(
+                            content: quoteOverride ?? replyMessage.decryptedContent,
+                            messageId: replyMessage.id,
+                            thumbnailSize: 36,
+                            lineLimit: 1
+                        )
                     }
                     .fixedSize(horizontal: false, vertical: true)
 

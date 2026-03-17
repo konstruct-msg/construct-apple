@@ -27,6 +27,7 @@ class MessagePersistenceService {
         status: DeliveryStatus,
         chat: Chat,
         replyTo: Message? = nil,
+        replyToContentOverride: String? = nil,
         localThumbnails: [Data] = [],
         suiteId: UInt16,
         in context: NSManagedObjectContext
@@ -62,7 +63,7 @@ class MessagePersistenceService {
             // Set reply information
             if let replyMessage = replyTo {
                 newMessage.replyToMessageId = replyMessage.id
-                newMessage.replyToContent = replyMessage.decryptedContent
+                newMessage.replyToContent = replyToContentOverride ?? replyMessage.decryptedContent
             }
             
             // Store thumbnails locally for media messages
@@ -131,6 +132,7 @@ class MessagePersistenceService {
         caption: String,
         thumbnail: Data?,
         replyTo: Message?,
+        replyToContentOverride: String? = nil,
         chat: Chat,
         in context: NSManagedObjectContext
     ) {
@@ -155,7 +157,7 @@ class MessagePersistenceService {
 
         if let replyMessage = replyTo {
             newMessage.replyToMessageId = replyMessage.id
-            newMessage.replyToContent = replyMessage.decryptedContent
+            newMessage.replyToContent = replyToContentOverride ?? replyMessage.decryptedContent
         }
 
         if let thumb = thumbnail {

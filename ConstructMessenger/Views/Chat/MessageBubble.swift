@@ -20,6 +20,8 @@ struct MessageBubble: View {
     let onEnterSelectMode: ((Message) -> Void)?
     let onTapMedia: ((Message) -> Void)?
     let onEdit: ((Message) -> Void)?
+    /// Called when the user chooses "Quote & Reply" — provides the message and the selected quote text.
+    let onReplyWithQuote: ((Message, String) -> Void)?
 
     @Environment(\.containerWidth) private var containerWidth
     @State private var swipeOffset: CGFloat = 0
@@ -35,7 +37,8 @@ struct MessageBubble: View {
         onSelect: ((Message) -> Void)? = nil,
         onEnterSelectMode: ((Message) -> Void)? = nil,
         onTapMedia: ((Message) -> Void)? = nil,
-        onEdit: ((Message) -> Void)? = nil
+        onEdit: ((Message) -> Void)? = nil,
+        onReplyWithQuote: ((Message, String) -> Void)? = nil
     ) {
         self.message = message
         self.isLastInGroup = isLastInGroup
@@ -48,6 +51,7 @@ struct MessageBubble: View {
         self.onEnterSelectMode = onEnterSelectMode
         self.onTapMedia = onTapMedia
         self.onEdit = onEdit
+        self.onReplyWithQuote = onReplyWithQuote
     }
 
     var body: some View {
@@ -119,35 +123,26 @@ struct MessageBubble: View {
                 // ✅ Check if this is a media message
                 else if let mediaContent = parseMediaMessage(message.decryptedContent) {
                     // Display media message without bubble - just rounded corners
-                    MediaMessageView(mediaContent: mediaContent, message: message, isSelected: isSelected, onTapFullScreen: { onTapMedia?(message) })
+                    VStack(alignment: .leading, spacing: 0) {
+                        replyIndicatorView
+                        MediaMessageView(mediaContent: mediaContent, message: message, isSelected: isSelected, onTapFullScreen: { onTapMedia?(message) })
+                    }
                 }
                 // ✅ Check if this is a file attachment message
                 else if let fileContent = parseFileMessage(message.decryptedContent) {
-                    FileAttachmentBubbleView(fileContent: fileContent, isSentByMe: message.isSentByMe)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 16)
-                                .stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2)
-                        )
+                    VStack(alignment: .leading, spacing: 0) {
+                        replyIndicatorView
+                        FileAttachmentBubbleView(fileContent: fileContent, isSentByMe: message.isSentByMe)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2)
+                            )
+                    }
                 } else {
                     // Flat text message — no bubble background
                     VStack(alignment: .leading, spacing: 0) {
                         // Reply/Quote preview
-                        if let replyContent = message.replyToContent {
-                            HStack(spacing: 4) {
-                                Rectangle()
-                                    .fill(Color.accentColor.opacity(0.6))
-                                    .frame(width: 3)
-
-                                Text(replyContent)
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                    .lineLimit(2)
-                                    .padding(.vertical, 4)
-                                    .padding(.trailing, 8)
-                            }
-                            .padding(.leading, 4)
-                            .padding(.bottom, 4)
-                        }
+                        replyIndicatorView
 
                         // Main message content
                         LinkDetectingText(
@@ -194,6 +189,18 @@ struct MessageBubble: View {
                             onReply(message)
                         } label: {
                             Label("reply", systemImage: "arrowshape.turn.up.left")
+                        }
+                    }
+
+                    // "Quote & Reply" — only for plain text messages
+                    if let onReplyWithQuote,
+                       let content = message.decryptedContent,
+                       parseMediaContent(from: content) == nil,
+                       parseFileMessage(content) == nil {
+                        Button {
+                            onReplyWithQuote(message, content)
+                        } label: {
+                            Label(NSLocalizedString("quote_reply", comment: ""), systemImage: "text.quote")
                         }
                     }
 
@@ -375,6 +382,29 @@ struct MessageBubble: View {
               json.type == "file"
         else { return nil }
         return json
+    }
+
+    /// Reply context bar shown above media, file, and text message content.
+    @ViewBuilder
+    private var replyIndicatorView: some View {
+        if let replyContent = message.replyToContent {
+            HStack(spacing: 4) {
+                Rectangle()
+                    .fill(Color.accentColor.opacity(0.6))
+                    .frame(width: 3)
+
+                ReplyPreviewContent(
+                    content: replyContent,
+                    messageId: message.replyToMessageId,
+                    thumbnailSize: 40,
+                    lineLimit: 2
+                )
+                .padding(.vertical, 4)
+                .padding(.trailing, 8)
+            }
+            .padding(.leading, 4)
+            .padding(.bottom, 4)
+        }
     }
 }
 
