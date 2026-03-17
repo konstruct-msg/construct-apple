@@ -161,6 +161,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 
         // Refresh push authorization state and re-register if needed
         Task { await PushNotificationManager.shared.checkAuthorizationStatus() }
+        Task { await PushNotificationManager.shared.ensureTokenRegistered() }
     }
 
     func applicationDidEnterBackground(_ application: UIApplication) {

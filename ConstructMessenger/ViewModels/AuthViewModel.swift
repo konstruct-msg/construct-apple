@@ -500,8 +500,9 @@ class AuthViewModel {
         // Pass username parameter so it gets saved to Core Data
         loadUserFromCoreData(userId: userId, username: username)
         
-        // ✅ NEW: Request push notification permission after successful registration/login
-        // This is done async to not block the auth flow
+        // Request push permission (first login) or ensure the token is on the server
+        // (subsequent logins where permission is already granted). Both paths end with
+        // the device token reliably registered in the backend DB.
         Task {
             #if canImport(UIKit)
             let granted = await PushNotificationManager.shared.requestPermission()
@@ -510,6 +511,9 @@ class AuthViewModel {
             } else {
                 Log.info("📱 Push notifications declined by user", category: "Auth")
             }
+            // requestPermission() may return immediately if already granted without
+            // triggering a new APNs token delivery, so explicitly ensure registration.
+            await PushNotificationManager.shared.ensureTokenRegistered()
             #endif
         }
         

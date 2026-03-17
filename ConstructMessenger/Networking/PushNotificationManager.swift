@@ -203,6 +203,30 @@ class PushNotificationManager: NSObject {
     
     // MARK: - Server Communication
 
+    /// Public entry point: ensure the current token is registered with the server.
+    /// Call this after login and on every foreground transition so the DB record is
+    /// always current even if a previous attempt failed or the server DB was cleared.
+    func ensureTokenRegistered() async {
+        #if targetEnvironment(macCatalyst)
+        return
+        #else
+        // If we don't have a token yet, ask APNs for one.
+        // APNs will call didRegisterForRemoteNotificationsWithDeviceToken which
+        // calls registerDeviceToken(_:) → registerWithServer.
+        guard let token = deviceToken else {
+            Log.info("📱 ensureTokenRegistered — no token, requesting from APNs", category: "Push")
+            await MainActor.run { UIApplication.shared.registerForRemoteNotifications() }
+            return
+        }
+        // Token exists but not yet confirmed on server (e.g. previous attempt failed,
+        // app reinstalled, or server DB was cleared).
+        if !isRegisteredWithServer {
+            Log.info("🔄 ensureTokenRegistered — token exists but not on server, retrying", category: "Push")
+            await registerWithServer(token)
+        }
+        #endif
+    }
+
     /// Retry registering with the server if we have a token but haven't succeeded yet.
     /// Called whenever SessionManager.sessionToken changes to non-nil.
     private func retryServerRegistrationIfNeeded() async {
