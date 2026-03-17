@@ -334,12 +334,17 @@ class MessageRouter {
                 KeychainManager.shared.deleteSession(for: contactId)
                 UserDefaults.standard.removeObject(forKey: "construct.session.suite.\(contactId)")
                 Log.debug("🗑️ Deleted hot session for \(contactId.prefix(8))… (Rust archive_session)", category: "MessageRouter")
+                // Persist updated orchestrator state after archive/delete.
+                CryptoManager.shared.saveOrchestratorStateCFE()
             } else {
                 CryptoManager.shared.saveSessionToKeychainPublic(for: contactId)
+                // Persist updated orchestrator state after session save.
+                CryptoManager.shared.saveOrchestratorStateCFE()
             }
         } else if key.hasPrefix("archive_") {
             let contactId = String(key.dropFirst("archive_".count))
             CryptoManager.shared.acceptRustSessionArchive(contactId: contactId, sessionJsonBytes: rawBytes)
+            CryptoManager.shared.saveOrchestratorStateCFE()
         } else if key.hasPrefix("pq_deferred_") {
             let storageKey = "construct.pq_deferred.\(String(key.dropFirst("pq_deferred_".count)))"
             if rawBytes.isEmpty {

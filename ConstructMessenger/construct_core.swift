@@ -1024,6 +1024,13 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
     
     func exportOneTimePrekeysJson() throws  -> String
     
+    /**
+     * Export the full orchestrator coordination state (ACK cache, healing queue,
+     * init locks, archive index, prekey tracker) as a CFE binary blob.
+     * Persist under key "orchestrator_state" in the secure store.
+     */
+    func exportOrchestratorState() throws  -> [UInt8]
+    
     func exportPrivateKeys() throws  -> [UInt8]
     
     func exportPrivateKeysJson() throws  -> String
@@ -1066,6 +1073,12 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
     func importOneTimePrekeys(data: [UInt8]) throws 
     
     func importOneTimePrekeysJson(json: String) throws 
+    
+    /**
+     * Restore the full orchestrator coordination state from a CFE blob.
+     * Call at app start before processing any messages.
+     */
+    func importOrchestratorState(data: [UInt8]) throws 
     
     func importSession(contactId: String, data: [UInt8]) throws  -> String
     
@@ -1248,6 +1261,19 @@ open func exportOneTimePrekeysJson()throws  -> String  {
 })
 }
     
+    /**
+     * Export the full orchestrator coordination state (ACK cache, healing queue,
+     * init locks, archive index, prekey tracker) as a CFE binary blob.
+     * Persist under key "orchestrator_state" in the secure store.
+     */
+open func exportOrchestratorState()throws  -> [UInt8]  {
+    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_export_orchestrator_state(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
 open func exportPrivateKeys()throws  -> [UInt8]  {
     return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_method_orchestratorcore_export_private_keys(
@@ -1377,6 +1403,18 @@ open func importOneTimePrekeysJson(json: String)throws   {try rustCallWithError(
     uniffi_construct_core_fn_method_orchestratorcore_import_one_time_prekeys_json(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(json),$0
+    )
+}
+}
+    
+    /**
+     * Restore the full orchestrator coordination state from a CFE blob.
+     * Call at app start before processing any messages.
+     */
+open func importOrchestratorState(data: [UInt8])throws   {try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_import_orchestrator_state(
+            self.uniffiCloneHandle(),
+        FfiConverterSequenceUInt8.lower(data),$0
     )
 }
 }
@@ -4692,6 +4730,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_orchestratorcore_export_one_time_prekeys_json() != 49177) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_export_orchestrator_state() != 49630) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_method_orchestratorcore_export_private_keys() != 53846) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -4732,6 +4773,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_import_one_time_prekeys_json() != 33728) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_import_orchestrator_state() != 51713) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_import_session() != 64657) {

@@ -326,13 +326,57 @@ class CryptoManager {
                 }
             }
             PQCKeyManager.loadCFESnapshot(into: newCore)
+            loadOrchestratorStateCFE(into: newCore)
             orchestratorCore = newCore
             Log.info("🔄 Rust core reloaded from Keychain (CFE)", category: "CryptoManager")
         } catch {
             Log.error("❌ reloadCoreFromKeychain: OrchestratorCore init failed: \(error)", category: "CryptoManager")
         }
     }
-    
+
+    // MARK: - Orchestrator State CFE Persistence
+
+    private static let orchestratorStateCFEKey = "construct.orchestrator_state"
+
+    /// Save the full orchestrator coordination state (ACK cache, healing queue,
+    /// init locks, archive index) to Keychain as a CFE blob.
+    /// Call after any significant state change in the orchestrator.
+    func saveOrchestratorStateCFE() {
+        guard let core = orchestratorCore else { return }
+        do {
+            let blob = try core.exportOrchestratorState()
+            let ok = KeychainManager.shared.saveData(Data(blob), forKey: Self.orchestratorStateCFEKey)
+            if ok {
+                Log.debug("💾 Orchestrator state saved (CFE, \(blob.count)B)", category: "CryptoManager")
+            } else {
+                Log.error("❌ Orchestrator state CFE save failed (Keychain write error)", category: "CryptoManager")
+            }
+        } catch {
+            Log.error("❌ Orchestrator state CFE export failed: \(error)", category: "CryptoManager")
+        }
+    }
+
+    /// Restore the orchestrator coordination state into `core` from Keychain.
+    /// Called during `reloadCoreFromKeychain` and `setLocalUserId`.
+    private func loadOrchestratorStateCFE(into core: OrchestratorCore) {
+        guard let data = KeychainManager.shared.loadData(forKey: Self.orchestratorStateCFEKey) else {
+            Log.debug("ℹ️ No orchestrator state CFE found in Keychain (first launch or cleared)", category: "CryptoManager")
+            return
+        }
+        do {
+            try core.importOrchestratorState(data: [UInt8](data))
+            Log.info("📦 Orchestrator state restored (CFE, \(data.count)B)", category: "CryptoManager")
+        } catch {
+            Log.error("❌ Orchestrator state CFE import failed: \(error) — starting fresh", category: "CryptoManager")
+        }
+    }
+
+    /// Delete the persisted orchestrator state (e.g., on full account reset).
+    func clearOrchestratorStateCFE() {
+        KeychainManager.shared.deleteData(forKey: Self.orchestratorStateCFEKey)
+        Log.debug("🗑️ Orchestrator state CFE cleared", category: "CryptoManager")
+    }
+
     /// Clear all archived sessions for a user
     func clearArchivedSessions(for userId: String) {
         archiveManager.clearArchives(for: userId)
@@ -528,6 +572,8 @@ class CryptoManager {
             }
             // Restore Kyber deferred contribution state from CFE snapshot.
             PQCKeyManager.loadCFESnapshot(into: newCore)
+            // Restore ACK cache, healing queue, and init locks.
+            loadOrchestratorStateCFE(into: newCore)
             orchestratorCore = newCore
             _bootstrapCore = nil
             _cachedKeysJson = nil
