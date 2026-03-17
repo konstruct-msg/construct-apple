@@ -49,6 +49,11 @@ class MessageRouter {
     /// attempt `initReceivingSession` with the supplied message as the new X3DH init.
     var onSessionHealNeeded: ((String, ChatMessage) -> Void)?
 
+    /// Called when this device wins the tie-break (lower userId restores INITIATOR session).
+    /// Receiver should send END_SESSION to the loser and then send a session establishment
+    /// ping so the loser can immediately become RESPONDER without user action.
+    var onTieBreakWin: ((String) -> Void)?
+
     /// Called when a receipt should be sent via the stream.
     /// Provides message IDs, the original sender's user ID (for server routing), and receipt status.
     var onReceiptNeeded: (([String], String, Shared_Proto_Signaling_V1_ReceiptStatus) -> Void)?
@@ -77,6 +82,7 @@ class MessageRouter {
         Log.debug("   from: \(message.from)", category: "MessageRouter")
         Log.debug("   to: \(message.to)", category: "MessageRouter")
         Log.debug("   messageNumber: \(message.messageNumber)", category: "MessageRouter")
+        Log.debug("   oneTimePreKeyId: \(message.oneTimePreKeyId)", category: "MessageRouter")
         Log.debug("   ephemeralPublicKey: \(message.ephemeralPublicKey.count) bytes", category: "MessageRouter")
         let ephemeralPreview = message.ephemeralPublicKey.prefix(16).map { String(format: "%02x", $0) }.joined()
         Log.debug("   ephemeralPublicKey preview: \(ephemeralPreview)...", category: "MessageRouter")
@@ -159,7 +165,23 @@ class MessageRouter {
             )
             return
         } else {
-            // Existing session - decrypt normally
+            // M5: Try routing through Rust orchestrator first
+            if let core = CryptoManager.shared.orchestratorCore,
+               let eventJson = buildIncomingEventJson(message: message, otherUserId: otherUserId) {
+                do {
+                    let actions = try core.handleEventJson(eventJson: eventJson)
+                    if actions.contains(where: { $0.contains("\"MessageDecrypted\"") }) {
+                        executeRustActions(actions, for: message, chat: chat, otherUserId: otherUserId, in: context)
+                        return
+                    }
+                    // No MessageDecrypted — fall through to Swift path (tie-break, heal, archive restore)
+                    Log.debug("⚠️ handleEventJson returned no MessageDecrypted for \(message.id.prefix(8))… — falling back to Swift path", category: "MessageRouter")
+                } catch {
+                    Log.error("❌ handleEventJson failed for \(message.id.prefix(8))…: \(error) — falling back to Swift path", category: "MessageRouter")
+                }
+            }
+
+            // Swift fallback: handles tie-break, heal, archived-session decrypt
             decryptedContent = handleMessageWithSession(
                 message,
                 from: otherUserId,
@@ -168,7 +190,6 @@ class MessageRouter {
                 pendingMessages: &pendingMessages
             ) ?? ""
             
-            // If decryption failed, roll back any newly-created chat so it isn't persisted empty
             if decryptedContent.isEmpty {
                 if isNewChat { context.delete(chat) }
                 return
@@ -177,7 +198,6 @@ class MessageRouter {
 
         switch chunkReassembler.process(decryptedText: decryptedContent) {
         case .legacy(let text), .complete(let text):
-            // Continue with resolved plaintext
             return handleResolvedMessage(
                 text,
                 for: message,
@@ -192,6 +212,145 @@ class MessageRouter {
             Log.error("❌ Invalid chunked message: \(reason)", category: "MessageRouter")
             onReceiptNeeded?([message.id], otherUserId, .delivered)
             return
+        }
+    }
+
+    // MARK: - Rust Orchestrator Routing (M5)
+
+    /// Build the JSON payload for `OrchestratorCore.handleEventJson` from a server message.
+    private func buildIncomingEventJson(message: ChatMessage, otherUserId: String) -> String? {
+        let unpaddedContent = MessagePadding.unpadCiphertextBase64(message.content)
+        guard let sealedBox = Data(base64Encoded: unpaddedContent), sealedBox.count >= 12 else {
+            Log.error("❌ buildIncomingEventJson: cannot decode content for \(message.id.prefix(8))…", category: "MessageRouter")
+            return nil
+        }
+
+        let nonce     = Array(sealedBox.prefix(12)).map { Int($0) }
+        let ciphertext = Array(sealedBox.dropFirst(12)).map { Int($0) }
+        let dhPublicKey = Array(message.ephemeralPublicKey).map { Int($0) }
+
+        let wireMessage: [String: Any] = [
+            "dh_public_key": dhPublicKey,
+            "message_number": Int(message.messageNumber),
+            "ciphertext": ciphertext,
+            "nonce": nonce,
+            "previous_chain_length": 0,
+            "suite_id": 1
+        ]
+
+        guard let wireJsonData = try? JSONSerialization.data(withJSONObject: wireMessage),
+              let wireJsonStr = String(data: wireJsonData, encoding: .utf8) else { return nil }
+
+        let wireDataBytes = Array(wireJsonStr.utf8).map { Int($0) }
+        let event: [String: Any] = [
+            "MessageReceived": [
+                "message_id": message.id,
+                "from": otherUserId,
+                "data": wireDataBytes,
+                "msg_num": Int(message.messageNumber),
+                "kem_ct": Array(message.kemCiphertext).map { Int($0) },
+                "otpk_id": Int(message.kyberOtpkId),
+                "is_control": false
+            ]
+        ]
+
+        return (try? JSONSerialization.data(withJSONObject: event))
+            .flatMap { String(data: $0, encoding: .utf8) }
+    }
+
+    /// Execute actions returned by `OrchestratorCore.handleEventJson`.
+    private func executeRustActions(
+        _ actions: [String],
+        for message: ChatMessage,
+        chat: Chat,
+        otherUserId: String,
+        in context: NSManagedObjectContext
+    ) {
+        for actionJson in actions {
+            guard let data = actionJson.data(using: .utf8),
+                  let dict = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+                  let type = dict["type"] as? String else { continue }
+
+            switch type {
+            case "MessageDecrypted":
+                guard let plaintext = dict["plaintext_utf8"] as? String else { continue }
+                checkUsernameUpdate(for: otherUserId, chat: chat, in: context)
+                switch chunkReassembler.process(decryptedText: plaintext) {
+                case .legacy(let text), .complete(let text):
+                    handleResolvedMessage(text, for: message, from: otherUserId, chat: chat, in: context)
+                case .incomplete:
+                    Log.debug("🧩 Chunked message incomplete, waiting for more chunks", category: "MessageRouter")
+                case .invalid(let reason):
+                    Log.error("❌ Invalid chunked message: \(reason)", category: "MessageRouter")
+                    onReceiptNeeded?([message.id], otherUserId, .delivered)
+                }
+
+            case "SaveSessionToSecureStore":
+                handleStorageAction(dict)
+
+            case "NotifyNewMessage":
+                break // Notification triggered by saveMessage inside handleResolvedMessage
+
+            case "NotifyError":
+                let code = dict["code"] as? String ?? "unknown"
+                let msg = dict["message"] as? String ?? ""
+                Log.error("❌ Rust orchestrator error [\(code)]: \(msg)", category: "MessageRouter")
+
+            default:
+                Log.debug("🔷 Unhandled Rust action in M5 path: \(type)", category: "MessageRouter")
+            }
+        }
+    }
+
+    /// Execute only storage actions from a Rust action list (no ChatMessage context needed).
+    /// Used for control-message paths (e.g., END_SESSION) where we have no ChatMessage.
+    private func executeStorageActions(_ actions: [String]) {
+        for actionJson in actions {
+            guard let data = actionJson.data(using: .utf8),
+                  let dict = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+                  let type = dict["type"] as? String,
+                  type == "SaveSessionToSecureStore" else { continue }
+            handleStorageAction(dict)
+        }
+    }
+
+    /// Unified handler for a single `SaveSessionToSecureStore` action dictionary.
+    ///
+    /// Key conventions (established by `session_lifecycle.rs`):
+    /// - `"session_<contactId>"` + non-empty bytes → save hot session to Keychain
+    /// - `"session_<contactId>"` + empty bytes    → delete sentinel: clear Keychain + UserDefaults
+    /// - `"archive_<contactId>"` + bytes          → accept pre-archived session from Rust
+    /// - `"pq_deferred_<contactId>"` + bytes      → persist deferred PQ contribution
+    /// - `"pq_deferred_<contactId>"` + empty      → delete stored PQ contribution
+    private func handleStorageAction(_ dict: [String: Any]) {
+        guard let key = dict["key"] as? String else { return }
+        // UniFFI serialises Vec<u8> as JSON array of integers (0–255).
+        let rawBytes = (dict["data"] as? [Any])?.compactMap { ($0 as? Int).map { UInt8(clamping: $0) } } ?? []
+
+        if key.hasPrefix("session_") {
+            let contactId = String(key.dropFirst("session_".count))
+            if rawBytes.isEmpty {
+                // Delete sentinel: Rust archived the session and removed it from memory.
+                KeychainManager.shared.deleteSession(for: contactId)
+                UserDefaults.standard.removeObject(forKey: "construct.session.suite.\(contactId)")
+                Log.debug("🗑️ Deleted hot session for \(contactId.prefix(8))… (Rust archive_session)", category: "MessageRouter")
+            } else {
+                CryptoManager.shared.saveSessionToKeychainPublic(for: contactId)
+            }
+        } else if key.hasPrefix("archive_") {
+            let contactId = String(key.dropFirst("archive_".count))
+            CryptoManager.shared.acceptRustSessionArchive(contactId: contactId, sessionJsonBytes: rawBytes)
+        } else if key.hasPrefix("pq_deferred_") {
+            let storageKey = "construct.pq_deferred.\(String(key.dropFirst("pq_deferred_".count)))"
+            if rawBytes.isEmpty {
+                KeychainManager.shared.deleteData(forKey: storageKey)
+                Log.debug("🗑️ Deleted PQ deferred for key \(storageKey)", category: "MessageRouter")
+            } else {
+                _ = KeychainManager.shared.saveData(Data(rawBytes), forKey: storageKey)
+                Log.debug("💾 Persisted PQ deferred for key \(storageKey)", category: "MessageRouter")
+            }
+        } else {
+            Log.debug("🔷 Unhandled storage key: \(key)", category: "MessageRouter")
         }
     }
 
@@ -416,6 +575,9 @@ class MessageRouter {
                         Log.info("🏆 SESSION_STATE[tie_break_win]: kept INITIATOR (lower userId), ACKed X3DH from \(userId.prefix(8))…", category: "SessionInit")
                         PersistentACKStore.shared.markProcessed(message.id, senderId: userId, in: context)
                         onReceiptNeeded?([message.id], userId, .delivered)
+                        // Send END_SESSION to stop the loser's invalid message stream, then send a
+                        // session establishment ping so the loser can immediately become RESPONDER.
+                        onTieBreakWin?(userId)
                     } else {
                         // Archive missing or corrupt — can't restore INITIATOR role.
                         // Fall through to RESPONDER heal instead of silently losing the message.
@@ -498,25 +660,56 @@ class MessageRouter {
     }
     
     // MARK: - END_SESSION Handling
-    
-    /// Handle END_SESSION message
+
+    /// Handle END_SESSION message.
+    ///
+    /// Primary path: delegate archiving to Rust via `handleEventJson` so the
+    /// archive format is canonical and owned by the Rust orchestrator.
+    /// Fallback: if the Rust path fails (e.g., no active session), use the
+    /// existing Swift `archiveSession` to preserve existing behaviour.
     private func handleEndSession(
         from userId: String,
         in context: NSManagedObjectContext,
         pendingMessages: inout [String: [ChatMessage]]
     ) {
         Log.info("🛑 Handling END_SESSION from \(userId)", category: "MessageRouter")
-        
-        // 1. Archive the current session
-        CryptoManager.shared.archiveSession(for: userId, reason: .endSessionReceived)
-        Log.debug("✅ Session archived for \(userId)", category: "MessageRouter")
-        
+
+        // 1. Archive the session — prefer Rust-owned archiving.
+        var rustHandled = false
+        if let core = CryptoManager.shared.orchestratorCore {
+            let endSessionBytes = Array("__END_SESSION__".utf8).map { Int($0) }
+            let event: [String: Any] = [
+                "MessageReceived": [
+                    "message_id": "end_session_\(userId)_\(Int(Date().timeIntervalSince1970))",
+                    "from": userId,
+                    "data": endSessionBytes,
+                    "msg_num": 0,
+                    "kem_ct": [Int](),
+                    "otpk_id": 0,
+                    "is_control": true
+                ]
+            ]
+            if let eventJson = (try? JSONSerialization.data(withJSONObject: event))
+                    .flatMap({ String(data: $0, encoding: .utf8) }),
+               let actions = try? core.handleEventJson(eventJson: eventJson) {
+                executeStorageActions(actions)
+                rustHandled = true
+                Log.debug("✅ END_SESSION: session archived via Rust orchestrator for \(userId.prefix(8))…", category: "MessageRouter")
+            } else {
+                Log.debug("⚠️ END_SESSION: Rust handleEventJson failed for \(userId.prefix(8))… — falling back to Swift archive", category: "MessageRouter")
+            }
+        }
+
+        if !rustHandled {
+            CryptoManager.shared.archiveSession(for: userId, reason: .endSessionReceived)
+            Log.debug("✅ END_SESSION: session archived via Swift fallback for \(userId.prefix(8))…", category: "MessageRouter")
+        }
+
         // 2. Remove any pending messages and healing queue for this user
-        // Note: no system message — session self-heals automatically via tie-breaking
         pendingMessages.removeValue(forKey: userId)
         SessionHealingService.shared.clearQueue(for: userId, in: context)
 
-        // 3. Notify coordinator so natural initiator can prewarm immediately.
+        // 3. Notify coordinator so the natural INITIATOR can prewarm immediately.
         onEndSessionReceived?(userId)
 
         Log.info("✅ END_SESSION handled for \(userId)", category: "MessageRouter")

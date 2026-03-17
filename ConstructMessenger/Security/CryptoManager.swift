@@ -13,6 +13,12 @@ import Foundation
 import CoreData
 import os.log
 
+/// Singleton wrapper around the Rust `construct-core` FFI.
+///
+/// **Threading requirement**: All methods that touch `orchestratorCore` or `_bootstrapCore`
+/// must be called from the same thread (in practice `@MainActor`). The only known exception
+/// is `BackgroundFetchManager`, which dispatches crypto calls via `MainActor.run`.
+/// Do NOT call crypto methods from arbitrary background threads or Tasks.
 class CryptoManager {
     static let shared = CryptoManager()
 
@@ -25,6 +31,11 @@ class CryptoManager {
     private var _cachedUserId: String?
     private let coreProvider = CryptoCoreProvider()
     
+    // Serializes all access to orchestratorCore and _bootstrapCore so that
+    // callers on different threads (e.g. BackgroundFetchManager, MessageRouter)
+    // don't race on Rust FFI state.
+    private let coreLock = NSLock()
+
     // MARK: - Session Archive
     private let archiveManager = SessionArchiveManager()
     private let messageCrypto = MessageCryptoService()
@@ -128,17 +139,22 @@ class CryptoManager {
         let bundleJson = try activeCore.exportRegistrationBundleJson()
         Log.debug("📦 Registration bundle: \(bundleJson.prefix(200))...", category: "CryptoManager")
         
-        // Export private keys to extract what we need
+        // Export private keys to extract what we need (JSON for intermediate parsing)
         let privateKeysJson = try activeCore.exportPrivateKeysJson()
         self._cachedKeysJson = privateKeysJson
         Log.debug("🔐 Private keys JSON: \(privateKeysJson.prefix(200))...", category: "CryptoManager")
 
-        // Persist the new core keys so the app uses the same keypair after registration
-        let saved = KeychainManager.shared.savePrivateKeysJson(privateKeysJson)
-        if saved {
-            Log.info("✅ Saved registration private keys JSON to Keychain", category: "CryptoManager")
+        // Persist in CFE binary format
+        let saved: Bool
+        if let cfeData = try? Data(activeCore.exportPrivateKeys()) {
+            saved = KeychainManager.shared.savePrivateKeys(cfeData)
         } else {
-            Log.error("⚠️ Failed to save registration private keys JSON to Keychain", category: "CryptoManager")
+            saved = KeychainManager.shared.savePrivateKeysJson(privateKeysJson)
+        }
+        if saved {
+            Log.info("✅ Saved registration private keys (CFE) to Keychain", category: "CryptoManager")
+        } else {
+            Log.error("⚠️ Failed to save registration private keys to Keychain", category: "CryptoManager")
         }
         
         // Parse private keys JSON to get signing and identity keys
@@ -246,10 +262,10 @@ class CryptoManager {
     private func saveSessionToKeychain(for userId: String) {
         guard let core = orchestratorCore else { return }
         do {
-            let sessionJson = try core.exportSessionJson(contactId: userId)
-            let saved = KeychainManager.shared.saveSessionJson(sessionJson, for: userId)
+            let sessionData = Data(try core.exportSession(contactId: userId))
+            let saved = KeychainManager.shared.saveSessionData(sessionData, for: userId)
             if saved {
-                Log.debug("💾 Session saved to Keychain: \(userId)", category: "CryptoManager")
+                Log.debug("💾 Session (CFE) saved to Keychain: \(userId)", category: "CryptoManager")
             } else {
                 Log.debug("⚠️ Failed to save session to Keychain: \(userId)", category: "CryptoManager")
             }
@@ -273,10 +289,10 @@ class CryptoManager {
             return
         }
         do {
-            let privateKeysJson = try core.exportPrivateKeysJson()
-            let saved = KeychainManager.shared.savePrivateKeysJson(privateKeysJson)
+            let data = Data(try core.exportPrivateKeys())
+            let saved = KeychainManager.shared.savePrivateKeys(data)
             if saved {
-                Log.info("✅ Persisted Rust core private key state to Keychain", category: "CryptoManager")
+                Log.info("✅ Persisted Rust core state (CFE) to Keychain", category: "CryptoManager")
             } else {
                 Log.error("❌ Failed to persist Rust core state — Keychain save returned false", category: "CryptoManager")
             }
@@ -295,17 +311,23 @@ class CryptoManager {
             Log.error("❌ reloadCoreFromKeychain: no cached userId — cannot recreate OrchestratorCore", category: "CryptoManager")
             return
         }
-        guard let keysJson = KeychainManager.shared.loadPrivateKeysJson() else {
+        guard let keysData = KeychainManager.shared.loadPrivateKeysData() else {
             Log.error("❌ reloadCoreFromKeychain: failed to reload — Keychain state unavailable", category: "CryptoManager")
             return
         }
         do {
-            let newCore = try OrchestratorCore(keysJson: keysJson, myUserId: userId)
-            if let otpksJson = KeychainManager.shared.loadOtpksJson() {
-                try? newCore.importOneTimePrekeysJson(json: otpksJson)
+            let newCore = try createOrchestratorCoreFromKeys(keysData: [UInt8](keysData), myUserId: userId)
+            if let otpksData = KeychainManager.shared.loadOtpksData() {
+                do {
+                    try newCore.importOneTimePrekeys(data: [UInt8](otpksData))
+                    Log.debug("✅ Imported OTPKs on core reload (\(newCore.oneTimePrekeyCount()) keys)", category: "CryptoManager")
+                } catch {
+                    Log.error("❌ Failed to import OTPKs on core reload: \(error)", category: "CryptoManager")
+                }
             }
+            PQCKeyManager.loadCFESnapshot(into: newCore)
             orchestratorCore = newCore
-            Log.info("🔄 Rust core reloaded from Keychain (rotation rollback)", category: "CryptoManager")
+            Log.info("🔄 Rust core reloaded from Keychain (CFE)", category: "CryptoManager")
         } catch {
             Log.error("❌ reloadCoreFromKeychain: OrchestratorCore init failed: \(error)", category: "CryptoManager")
         }
@@ -356,17 +378,17 @@ class CryptoManager {
     func restoreSession(for userId: String) -> Bool {
         guard let core = orchestratorCore else { return false }
         if core.hasSession(contactId: userId) { return true }
-        guard let sessionJson = KeychainManager.shared.loadSessionJson(for: userId) else {
-            Log.error("⚠️ No session JSON in Keychain for \(userId) — session must be re-established", category: "CryptoManager")
+        guard let sessionData = KeychainManager.shared.loadSessionData(for: userId) else {
+            Log.error("⚠️ No session data in Keychain for \(userId) — session must be re-established", category: "CryptoManager")
             return false
         }
         do {
-            _ = try core.importSessionJson(contactId: userId, sessionJson: sessionJson)
-            Log.debug("✅ Restored session: \(userId)", category: "CryptoManager")
+            _ = try core.importSession(contactId: userId, data: [UInt8](sessionData))
+            Log.debug("✅ Restored session (CFE): \(userId)", category: "CryptoManager")
             return true
         } catch {
-            _ = KeychainManager.shared.saveSessionJson("", for: userId)
-            Log.error("❌ Session JSON import FAILED for \(userId) (stale/incompatible format — cleared): \(error)", category: "CryptoManager")
+            _ = KeychainManager.shared.saveSessionData(Data(), for: userId)
+            Log.error("❌ Session import FAILED for \(userId) (stale/incompatible format — cleared): \(error)", category: "CryptoManager")
             return false
         }
     }
@@ -428,7 +450,7 @@ class CryptoManager {
 
     /// Initializes a secure session with a recipient using the Rust core.
     @discardableResult
-    func initializeSession(for userId: String, recipientBundle: (identityPublic: String, signedPrekeyPublic: String, signature: String, verifyingKey: String, suiteId: String), oneTimePreKeyPublic: Data? = nil, oneTimePreKeyId: UInt32? = nil, kyberPreKeyPublic: Data? = nil, kyberOneTimePreKeyPublic: Data? = nil, kyberOneTimePreKeyId: UInt32? = nil) throws -> (kemCiphertext: Data?, kyberOtpkId: UInt32) {
+    func initializeSession(for userId: String, recipientBundle: (identityPublic: String, signedPrekeyPublic: String, signature: String, verifyingKey: String, suiteId: String), oneTimePreKeyPublic: Data? = nil, oneTimePreKeyId: UInt32? = nil, kyberPreKeyPublic: Data? = nil, kyberOneTimePreKeyPublic: Data? = nil, kyberOneTimePreKeyId: UInt32? = nil, spkUploadedAt: UInt64 = 0, spkRotationEpoch: UInt32 = 0, kyberSpkUploadedAt: UInt64 = 0, kyberSpkRotationEpoch: UInt32 = 0) throws -> (kemCiphertext: Data?, kyberOtpkId: UInt32) {
         do {
             let result = try sessionInitService.initializeSession(
                 for: userId,
@@ -438,6 +460,10 @@ class CryptoManager {
                 kyberPreKeyPublic: kyberPreKeyPublic,
                 kyberOneTimePreKeyPublic: kyberOneTimePreKeyPublic,
                 kyberOneTimePreKeyId: kyberOneTimePreKeyId,
+                spkUploadedAt: spkUploadedAt,
+                spkRotationEpoch: spkRotationEpoch,
+                kyberSpkUploadedAt: kyberSpkUploadedAt,
+                kyberSpkRotationEpoch: kyberSpkRotationEpoch,
                 core: orchestratorCore,
                 archiveSession: { [weak self] userId, reason in
                     Log.info("⚠️ Existing session found for \(userId) - archiving before reinitialization to prevent desync", category: "CryptoManager")
@@ -472,25 +498,36 @@ class CryptoManager {
             return
         }
 
-        // Build OrchestratorCore from keys + userId
-        let keysJson: String
-        if let cached = _cachedKeysJson {
-            keysJson = cached
-        } else if let fromBootstrap = try? _bootstrapCore?.exportPrivateKeysJson() {
-            keysJson = fromBootstrap
-        } else if let fromKeychain = KeychainManager.shared.loadPrivateKeysJson() {
-            keysJson = fromKeychain
+        // Build OrchestratorCore — prefer CFE binary from Keychain, fallback to cached JSON
+        let keysData: [UInt8]?
+        if let cached = _cachedKeysJson, let d = cached.data(using: .utf8) {
+            keysData = [UInt8](d)
+        } else if let d = KeychainManager.shared.loadPrivateKeysData() {
+            keysData = [UInt8](d)
+        } else if let bootstrapData = try? _bootstrapCore?.exportPrivateKeys() {
+            keysData = bootstrapData
         } else {
             Log.error("❌ setLocalUserId: no keys available to create OrchestratorCore", category: "CryptoManager")
             return
         }
 
+        guard let keys = keysData else { return }
+
         do {
-            let newCore = try OrchestratorCore(keysJson: keysJson, myUserId: userId)
+            let newCore = try createOrchestratorCoreFromKeys(keysData: keys, myUserId: userId)
             // Import OTPKs if available
-            if let otpksJson = KeychainManager.shared.loadOtpksJson() {
-                try? newCore.importOneTimePrekeysJson(json: otpksJson)
+            if let otpksData = KeychainManager.shared.loadOtpksData() {
+                do {
+                    try newCore.importOneTimePrekeys(data: [UInt8](otpksData))
+                    Log.debug("✅ Imported OTPKs into OrchestratorCore (\(newCore.oneTimePrekeyCount()) keys)", category: "CryptoManager")
+                } catch {
+                    Log.error("❌ Failed to import OTPKs into OrchestratorCore: \(error)", category: "CryptoManager")
+                }
+            } else {
+                Log.info("⚠️ No OTPKs found in Keychain — key_manager will have empty OTPK store", category: "CryptoManager")
             }
+            // Restore Kyber deferred contribution state from CFE snapshot.
+            PQCKeyManager.loadCFESnapshot(into: newCore)
             orchestratorCore = newCore
             _bootstrapCore = nil
             _cachedKeysJson = nil
@@ -524,31 +561,31 @@ class CryptoManager {
         
         Log.info("📦 Archiving session for \(userId), reason: \(reason.rawValue)", category: "CryptoManager")
         
-        // 1. Export current session to JSON
+        // 1. Export current session to JSON and store archive.
+        //    IMPORTANT: only proceed with deletion if export succeeded — otherwise the session
+        //    would be permanently lost with no archive to restore from.
         do {
             let sessionJson = try core.exportSessionJson(contactId: userId)
             
-            // 2. Create archive entry
             let archive = SessionArchive(
                 sessionJson: sessionJson,
                 archivedAt: Date(),
                 reason: reason
             )
-            
-            // 3. Add to archives (keep max limit)
             archiveManager.storeArchive(archive, for: userId)
             let count = archiveManager.loadArchives(for: userId)?.count ?? 0
             Log.info("✅ Session archived (\(count) total for user)", category: "CryptoManager")
-            
         } catch {
-            Log.error("❌ Failed to export session for archiving: \(error)", category: "CryptoManager")
+            Log.error("❌ Failed to export session for archiving — session NOT deleted to prevent data loss: \(error)", category: "CryptoManager")
+            // Do not proceed with deletion: losing the session without an archive
+            // would permanently break communication with this contact.
+            return
         }
         
-        // 5. Remove from active sessions
+        // 2. Remove from active storage — only reached when archive is safely stored above.
         UserDefaults.standard.removeObject(forKey: "construct.session.suite.\(userId)")
         Log.info("✅ Removed session suite ID from UserDefaults: \(userId)", category: "CryptoManager")
         
-        // 6. Remove from Rust core
         let removed = (orchestratorCore?.removeSession(contactId: userId)) ?? false
         if removed {
             Log.info("✅ Removed session from Rust core: \(userId)", category: "CryptoManager")
@@ -556,12 +593,29 @@ class CryptoManager {
             Log.info("⚠️ Session not found in Rust core: \(userId)", category: "CryptoManager")
         }
         
-        // 7. Remove from Keychain
         KeychainManager.shared.deleteSession(for: userId)
         Log.info("✅ Removed session from Keychain: \(userId)", category: "CryptoManager")
     }
-    
-    /// Restore the most recently archived session as the active session.
+
+    /// Accept a pre-archived session produced by Rust's `lifecycle.archive_session`.
+    ///
+    /// Called when `handleEventJson` returns a `SaveSessionToSecureStore` action
+    /// with key `"archive_<contactId>"`.  Rust has already removed the session from
+    /// memory, so we must NOT call `exportSessionJson` here — we store the bytes
+    /// Rust handed us directly into `SessionArchiveManager`.
+    func acceptRustSessionArchive(contactId: String, sessionJsonBytes: [UInt8]) {
+        guard !sessionJsonBytes.isEmpty,
+              let json = String(bytes: sessionJsonBytes, encoding: .utf8) else {
+            Log.error("❌ acceptRustSessionArchive: invalid/empty bytes for \(contactId.prefix(8))…", category: "CryptoManager")
+            return
+        }
+        let archive = SessionArchive(sessionJson: json, archivedAt: Date(), reason: .endSessionReceived)
+        archiveManager.storeArchive(archive, for: contactId)
+        let count = archiveManager.loadArchives(for: contactId)?.count ?? 0
+        Log.info("📦 acceptRustSessionArchive: archived session for \(contactId.prefix(8))… (\(count) total)", category: "CryptoManager")
+    }
+
+
     /// Used for tie-breaking when we are the INITIATOR in a dual-INITIATOR clash:
     /// after a failed decrypt the INITIATOR session was just moved to archives —
     /// this undoes that and makes it active again so we keep the INITIATOR role.
@@ -662,7 +716,7 @@ class CryptoManager {
             }
         )
 
-        Log.debug("✅ ENCRYPT: msgNum=\(components.messageNumber), ephemKey=\(components.ephemeralPublicKey.prefix(8).map { String(format: "%02x", $0) }.joined()), content=\(components.content.prefix(20))...", category: "CryptoManager")
+        Log.debug("✅ ENCRYPT: msgNum=\(components.messageNumber), otpkId=\(components.oneTimePreKeyId), ephemKey=\(components.ephemeralPublicKey.prefix(8).map { String(format: "%02x", $0) }.joined()), content=\(components.content.prefix(20))...", category: "CryptoManager")
 
         return components
     }
@@ -784,6 +838,10 @@ enum CryptoManagerError: Error, LocalizedError {
     case decryptionFailed
     case invalidCiphertext
     case invalidKeyData
+    /// Kyber OTPK secret is missing locally for the given key ID.
+    /// Throwing this forces session init to fail, which triggers END_SESSION + clean re-init
+    /// instead of silently establishing a PQ-diverged session that will break on msg1+.
+    case pqxdhOtpkMissing(UInt32)
 
     var errorDescription: String? {
         switch self {
@@ -801,6 +859,8 @@ enum CryptoManagerError: Error, LocalizedError {
             return "Invalid ciphertext format"
         case .invalidKeyData:
             return "Invalid key data"
+        case .pqxdhOtpkMissing(let id):
+            return "Kyber OTPK id=\(id) not found locally — session init failed to prevent PQ root key divergence"
         }
     }
 }

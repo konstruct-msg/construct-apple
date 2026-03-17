@@ -570,21 +570,43 @@ struct MediaMessageView: View {
     @State private var loadError: String?
     @State private var downloadProgress: Double = 0
 
+    /// True when this message is a local upload placeholder (not yet sent to server).
+    private var isPlaceholder: Bool {
+        (mediaContent.media["_placeholder"] as? Bool) == true
+    }
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             // Thumbnail — preserves natural aspect ratio, max 250×250
             if let thumbnail = thumbnailImage {
+                let isUploading = isPlaceholder && message.deliveryStatus == .sending
                 Image(uiImage: thumbnail)
                     .resizable()
                     .scaledToFit()
                     .frame(maxWidth: 250, maxHeight: 250)
                     .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .overlay(alignment: .bottom) {
+                        if isUploading {
+                            HStack(spacing: 5) {
+                                ProgressView()
+                                    .scaleEffect(0.75)
+                                    .tint(.white)
+                                Text("Uploading…")
+                                    .font(.caption2.weight(.medium))
+                                    .foregroundColor(.white)
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(.black.opacity(0.55))
+                            .clipShape(Capsule())
+                            .padding(.bottom, 8)
+                        }
+                    }
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
                             .stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2)
                     )
                     .onTapGesture {
-                        onTapFullScreen?()
+                        if !isPlaceholder { onTapFullScreen?() }
                     }
             } else if isLoading {
                 // ✅ Loading state with progress indicator

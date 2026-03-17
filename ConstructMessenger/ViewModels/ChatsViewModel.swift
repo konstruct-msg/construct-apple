@@ -276,10 +276,10 @@ class ChatsViewModel {
             }
         }
 
-        // Pre-warm sessions for contacts where we're the natural INITIATOR (lower UUID).
-        // Runs on every stream connect — prewarmSessions is idempotent (no-op if session exists).
-        // This covers the case where the session was reset while the app was in background.
-        sessionCoordinator.prewarmSessions(for: currentContactIds())
+        // Pre-warm sessions for contacts where we're the natural INITIATOR (lower UUID)
+        // and already have message history. Contacts without history (e.g. just added via QR)
+        // are prewarmed in startChat instead, guaranteeing fresh OTPKs after QR scan.
+        sessionCoordinator.prewarmSessions(for: prewarmEligibleContactIds())
     }
 
     /// Cancel any in-progress backoff and reconnect immediately.
@@ -305,7 +305,7 @@ class ChatsViewModel {
             self.streamManager.forceReconnect(contactUserIds: self.currentConversationIds()) { [weak self] message in
                 self?.handleIncomingMessage(message)
             }
-            self.sessionCoordinator.prewarmSessions(for: self.currentContactIds())
+            self.sessionCoordinator.prewarmSessions(for: self.prewarmEligibleContactIds())
         }
     }
 
@@ -315,6 +315,20 @@ class ChatsViewModel {
         fetchRequest.predicate = NSPredicate(format: "id != %@", SessionManager.shared.currentUserId ?? "")
         let users = (try? context.fetch(fetchRequest)) ?? []
         return users.compactMap { $0.id }
+    }
+
+    /// Contact IDs eligible for proactive prewarm on stream connect.
+    /// Only includes contacts with an existing message history (Chat.lastMessageTime != nil).
+    /// Fresh contacts (added via QR but no messages yet) are excluded — their session is
+    /// established via startChat → prewarmSessions after QR scan, not on app launch.
+    private func prewarmEligibleContactIds() -> [String] {
+        guard let context = viewContext else { return [] }
+        let myId = SessionManager.shared.currentUserId ?? ""
+        guard !myId.isEmpty else { return [] }
+        let fetchRequest = Chat.fetchRequest()
+        fetchRequest.predicate = NSPredicate(format: "lastMessageTime != nil AND otherUser.id != %@", myId)
+        let chats = (try? context.fetch(fetchRequest)) ?? []
+        return chats.compactMap { $0.otherUser?.id }
     }
 
     /// Canonical conversation IDs for all known contacts (used for stream subscription).
@@ -332,8 +346,11 @@ class ChatsViewModel {
         let chat = chatManagementService.startChat(with: user)
         // New contact added — resubscribe stream so server pushes messages from this contact.
         forceReconnectStream()
-        // Clear any stale session archives from a previous conversation with this user
-        // (happens when contact is deleted and re-added via QR). Fresh start.
+        // Clear both active and archived sessions so we always prewarm with fresh OTPKs.
+        // If the contact was previously in CoreData with a stale prewarm session (e.g. their
+        // device was reset), the old session would cause AEAD failure on their side. Archiving
+        // and then clearing guarantees the subsequent prewarm fetches their current key bundle.
+        CryptoManager.shared.archiveSession(for: user.id, reason: .manualReset)
         CryptoManager.shared.clearArchivedSessions(for: user.id)
         // Prewarm session immediately: if we're the natural INITIATOR (lower UUID),
         // kick off X3DH init now so the first message is instant.

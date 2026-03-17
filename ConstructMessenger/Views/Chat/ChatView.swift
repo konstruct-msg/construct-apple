@@ -494,8 +494,14 @@ struct ChatView: View {
     }
 
     /// All media messages in this chat, in display order. Used by the gallery viewer.
+    /// Upload placeholders (with `_placeholder: true`) are excluded — they have no real URL.
     private var mediaMessages: [Message] {
-        viewModel.messages.filter { parseMediaContent(from: $0.decryptedContent) != nil }
+        viewModel.messages.filter {
+            if let mc = parseMediaContent(from: $0.decryptedContent) {
+                return (mc.media["_placeholder"] as? Bool) != true
+            }
+            return false
+        }
     }
 
     // MARK: - Actions

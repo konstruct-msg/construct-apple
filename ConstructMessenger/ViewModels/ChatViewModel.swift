@@ -31,6 +31,10 @@ class ChatViewModel: NSObject {
     var isLoadingMore = false
     var hasMoreMessages = true
     var editingMessage: Message?
+    /// Set to true when the server rejects a message with ERROR_CODE_BLOCKED.
+    /// The UI should show a one-time banner (e.g. "You have been blocked by this user").
+    /// Reset to false after the UI has consumed it.
+    var blockedByRecipient = false
 
     // ✅ FIXED: Track session initialization state
     var isSessionReady = false
@@ -65,6 +69,17 @@ class ChatViewModel: NSObject {
     private let persistenceService = MessagePersistenceService()
     private let mediaUploadManager = MediaUploadManager()
     private let retryManager = MessageRetryManager()
+
+    // MARK: - Pending media uploads
+    // Maps placeholder message-ID → the original payload so retryMessage() can
+    // re-launch the upload instead of trying to re-encrypt an empty placeholder.
+    private struct MediaUploadPayload {
+        let images: [PlatformImage]
+        let fileURLs: [URL]
+        let caption: String
+        let replyTo: Message?
+    }
+    private var pendingMediaUploads: [String: MediaUploadPayload] = [:]
 
     init(chat: Chat, context: NSManagedObjectContext) {
         self.chat = chat
@@ -521,6 +536,19 @@ class ChatViewModel: NSObject {
     }
 
     func retryMessage(_ message: Message) {
+        // If this is a failed upload placeholder, re-launch the upload instead of
+        // trying to re-encrypt an empty placeholder via retryManager.
+        if let payload = pendingMediaUploads[message.id] {
+            pendingMediaUploads.removeValue(forKey: message.id)
+            persistenceService.deleteMessage(id: message.id, in: viewContext)
+            if !payload.images.isEmpty {
+                sendMediaMessage(images: payload.images, caption: payload.caption, replyTo: payload.replyTo)
+            } else {
+                sendFileMessage(fileURLs: payload.fileURLs, caption: payload.caption, replyTo: payload.replyTo)
+            }
+            return
+        }
+
         // ✅ REFACTOR: Use MessageRetryManager
         guard let recipientId = chat.otherUser?.id else {
             Log.error("❌ No recipient ID for retry", category: "ChatViewModel")
@@ -546,57 +574,118 @@ class ChatViewModel: NSObject {
     // MARK: - Media Messages
 
     private func sendMediaMessage(images: [PlatformImage], caption: String, replyTo: Message?) {
-        guard let recipientId = chat.otherUser?.id else {
-            Log.error("❌ No recipient ID for media message", category: "ChatViewModel")
+        guard let recipientId = chat.otherUser?.id,
+              let currentUserId = SessionManager.shared.currentUserId else {
+            Log.error("❌ No recipient/user ID for media message", category: "ChatViewModel")
             ErrorRouter.shared.report(.unknown("Cannot send media: no recipient"))
             return
         }
         // Note: session existence is already guaranteed by sendMessage() before this is called.
 
-        isSending = true
+        // 1. Generate a local thumbnail and save a placeholder bubble immediately so the
+        //    user sees the image in the chat even before the upload completes.
+        let placeholderId = UUID().uuidString
+        let thumbnail: Data? = images.first.flatMap { MediaManager.shared.generateThumbnail(from: $0) }
+        persistenceService.savePlaceholderMessage(
+            id: placeholderId,
+            fromUserId: currentUserId,
+            toUserId: recipientId,
+            caption: caption,
+            thumbnail: thumbnail,
+            replyTo: replyTo,
+            chat: chat,
+            in: viewContext
+        )
 
-        Task {
+        // 2. Track the payload for retry support.
+        pendingMediaUploads[placeholderId] = MediaUploadPayload(
+            images: images, fileURLs: [], caption: caption, replyTo: replyTo)
+
+        isSending = true
+        Log.info("📤 Uploading \(images.count) image(s) (placeholder \(placeholderId.prefix(8))…)", category: "ChatViewModel")
+
+        Task { [weak self] in
+            guard let self else { return }
             do {
                 let result = try await mediaUploadManager.uploadMediaAndBuildContent(
                     images: images,
                     caption: caption,
                     recipientId: recipientId
                 )
-                
+
                 await MainActor.run {
-                    sendTextMessage(text: result.messageContent, replyTo: replyTo, localThumbnails: result.thumbnails)
+                    // 3a. Upload succeeded — delete placeholder, send the real message.
+                    self.pendingMediaUploads.removeValue(forKey: placeholderId)
+                    self.persistenceService.deleteMessage(id: placeholderId, in: self.viewContext)
+                    self.sendTextMessage(text: result.messageContent, replyTo: replyTo, localThumbnails: result.thumbnails)
                 }
             } catch {
                 await MainActor.run {
+                    // 3b. Upload failed — mark placeholder as failed so the user sees the
+                    //     red "!" badge and the context-menu retry option.
                     Log.error("❌ Media upload failed: \(error.localizedDescription) | raw: \(error)", category: "ChatViewModel")
-                    ErrorRouter.shared.report(error, recovery: { [weak self] in
-                        self?.sendMediaMessage(images: images, caption: caption, replyTo: replyTo)
-                    })
-                    isSending = false
+                    self.updateMessageStatus(messageId: placeholderId, status: .failed)
+                    // pendingMediaUploads[placeholderId] stays so retryMessage() can reuse it.
+                    ErrorRouter.shared.report(
+                        AppError.mediaUploadFailed(error.localizedDescription),
+                        recovery: { [weak self] in
+                            self?.retryMessage_byId(placeholderId)
+                        }
+                    )
+                    self.isSending = false
                 }
             }
         }
     }
 
     private func sendFileMessage(fileURLs: [URL], caption: String, replyTo: Message?) {
-        isSending = true
+        guard let recipientId = chat.otherUser?.id,
+              let currentUserId = SessionManager.shared.currentUserId else {
+            isSending = false
+            return
+        }
 
-        Task {
+        // 1. Save a placeholder so the file appears in chat immediately.
+        let placeholderId = UUID().uuidString
+        persistenceService.savePlaceholderMessage(
+            id: placeholderId,
+            fromUserId: currentUserId,
+            toUserId: recipientId,
+            caption: caption.isEmpty ? (fileURLs.first?.lastPathComponent ?? "File") : caption,
+            thumbnail: nil,
+            replyTo: replyTo,
+            chat: chat,
+            in: viewContext
+        )
+        pendingMediaUploads[placeholderId] = MediaUploadPayload(
+            images: [], fileURLs: fileURLs, caption: caption, replyTo: replyTo)
+
+        isSending = true
+        Log.info("📎 Uploading \(fileURLs.count) file(s) (placeholder \(placeholderId.prefix(8))…)", category: "ChatViewModel")
+
+        Task { [weak self] in
+            guard let self else { return }
             do {
                 let result = try await mediaUploadManager.uploadFilesAndBuildContent(
                     urls: fileURLs,
                     caption: caption
                 )
                 await MainActor.run {
-                    sendTextMessage(text: result.messageContent, replyTo: replyTo)
+                    self.pendingMediaUploads.removeValue(forKey: placeholderId)
+                    self.persistenceService.deleteMessage(id: placeholderId, in: self.viewContext)
+                    self.sendTextMessage(text: result.messageContent, replyTo: replyTo)
                 }
             } catch {
                 await MainActor.run {
                     Log.error("❌ File upload failed: \(error.localizedDescription)", category: "ChatViewModel")
-                    ErrorRouter.shared.report(error, recovery: { [weak self] in
-                        self?.sendFileMessage(fileURLs: fileURLs, caption: caption, replyTo: replyTo)
-                    })
-                    isSending = false
+                    self.updateMessageStatus(messageId: placeholderId, status: .failed)
+                    ErrorRouter.shared.report(
+                        AppError.mediaUploadFailed(error.localizedDescription),
+                        recovery: { [weak self] in
+                            self?.retryMessage_byId(placeholderId)
+                        }
+                    )
+                    self.isSending = false
                 }
             }
         }
@@ -606,6 +695,17 @@ class ChatViewModel: NSObject {
     // All send paths (text, media, files, voice) ultimately call this method.
     // It is the single place that encrypts, attaches PQXDH KEM ciphertext, sends chunks,
     // maps server status, and handles session recovery on encryption failure.
+
+    /// Retry a media upload / file upload placeholder by its message ID.
+    /// Used by both the ErrorToast "Retry" button and `retryMessage(_:)`.
+    private func retryMessage_byId(_ messageId: String) {
+        let fetchRequest = Message.fetchRequest()
+        fetchRequest.predicate = NSPredicate(format: "id == %@", messageId)
+        fetchRequest.fetchLimit = 1
+        guard let msg = try? viewContext.fetch(fetchRequest).first else { return }
+        retryMessage(msg)
+    }
+
     private func sendTextMessage(text: String, replyTo: Message?, localThumbnails: [Data] = []) {
         guard let recipientId = chat.otherUser?.id,
               let currentUserId = SessionManager.shared.currentUserId else {
@@ -635,7 +735,8 @@ class ChatViewModel: NSObject {
                 messageNumber: firstComponents.messageNumber,
                 content: firstComponents.content,
                 suiteId: firstComponents.suiteId,
-                timestamp: UInt64(Date().timeIntervalSince1970)
+                timestamp: UInt64(Date().timeIntervalSince1970),
+                oneTimePreKeyId: firstComponents.oneTimePreKeyId
             )
 
             Log.debug("📤 Sending message with ID: \(messageId)", category: "ChatViewModel")
@@ -678,9 +779,13 @@ class ChatViewModel: NSObject {
                         case "delivered": deliveryStatus = .delivered
                         case "queued":    deliveryStatus = .queued
                         case "sent", "success": deliveryStatus = .sent
+                        case "blocked":
+                            deliveryStatus = .failed
+                            self.blockedByRecipient = true
+                            Log.error("🚫 Message blocked by recipient — suppressing retry for \(messageId)", category: "ChatViewModel")
                         case "failed":
                             deliveryStatus = .failed
-                            Log.error("❌ Server rejected message \(messageId): status=failed", category: "ChatViewModel")
+                            Log.error("❌ Server rejected message \(messageId): status=failed retryable=\(response.retryable)", category: "ChatViewModel")
                         default:
                             deliveryStatus = .sent
                             Log.info("⚠️ Unknown server status: \(response.status), using .sent", category: "ChatViewModel")

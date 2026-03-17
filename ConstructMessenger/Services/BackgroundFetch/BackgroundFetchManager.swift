@@ -326,16 +326,21 @@ class BackgroundFetchManager: NSObject {
                         continue // Already exists
                     }
                     
-                    // Try to decrypt message
+                    // Try to decrypt message.
+                    // CryptoManager is not thread-safe: all crypto calls must run on MainActor.
+                    // Use DispatchQueue.main.sync to serialize with foreground session state.
+                    // This is safe because backgroundContext.perform runs on a private queue,
+                    // not the main queue, so there is no deadlock risk.
                     var decryptedContent: String?
-                    
+
                     if CryptoManager.shared.hasSession(for: otherUserId) {
-                        do {
-                            decryptedContent = try CryptoManager.shared.decryptMessage(messageData)
-                            Log.debug("✅ Decrypted message \(messageData.id)", category: "BackgroundFetch")
-                        } catch {
-                            Log.error("❌ Failed to decrypt message \(messageData.id): \(error)", category: "BackgroundFetch")
-                            // Continue without decryption - will be decrypted when user opens chat
+                        DispatchQueue.main.sync {
+                            do {
+                                decryptedContent = try CryptoManager.shared.decryptMessage(messageData)
+                                Log.debug("✅ Decrypted message \(messageData.id)", category: "BackgroundFetch")
+                            } catch {
+                                Log.error("❌ Failed to decrypt message \(messageData.id): \(error)", category: "BackgroundFetch")
+                            }
                         }
                     } else {
                         Log.info("⚠️ No session for user \(otherUserId), message will be decrypted later", category: "BackgroundFetch")

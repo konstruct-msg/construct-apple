@@ -60,11 +60,26 @@ final class MessagingServiceClient: Sendable {
                 request: .init(message: request)
             )
 
-            Log.info("✅ sendMessage response: success=\(response.success) messageId=\(response.messageID)", category: "MessagingServiceClient")
+            Log.info("✅ sendMessage response: success=\(response.success) errorCode=\(response.error.errorCode) messageId=\(response.messageID)", category: "MessagingServiceClient")
+
+            let status: String
+            let retryable: Bool
+            if response.success {
+                status = "sent"
+                retryable = true
+            } else if response.error.errorCode == .blocked {
+                status = "blocked"
+                retryable = false
+                Log.error("🚫 Message rejected — recipient has blocked sender (messageId=\(response.messageID))", category: "MessagingServiceClient")
+            } else {
+                status = "failed"
+                retryable = response.error.retryable
+            }
 
             return SendMessageResponse(
                 messageId: response.messageID,
-                status: response.success ? "sent" : "failed"
+                status: status,
+                retryable: retryable
             )
         }
     }
@@ -179,6 +194,7 @@ final class MessagingServiceClient: Sendable {
                 content: decoded.content,
                 suiteId: 1,
                 timestamp: UInt64(msg.timestamp),
+                oneTimePreKeyId: decoded.oneTimePreKeyId,
                 kemCiphertext: decoded.kemCiphertext ?? Data(),
                 kyberOtpkId: decoded.kyberOtpkId
             )

@@ -19,17 +19,130 @@ import subprocess
 import sys
 import time
 import http.client
+import re
+from dataclasses import dataclass
 
-GREEN  = "\033[92m"
-RED    = "\033[91m"
+GREEN = "\033[92m"
+RED = "\033[91m"
 YELLOW = "\033[93m"
-RESET  = "\033[0m"
-BOLD   = "\033[1m"
+RESET = "\033[0m"
+BOLD = "\033[1m"
+
+VPN_IFACE_RE = re.compile(
+    r"^(utun\d+|tun\d+|tap\d+|ppp\d+|wg\d+|wg0|tailscale0|ipsec\d+|ppp|tun|tap|wg)$",
+    re.IGNORECASE,
+)
 
 
-def ok(msg):  print(f"  {GREEN}✅ {msg}{RESET}")
-def fail(msg): print(f"  {RED}❌ {msg}{RESET}")
-def warn(msg): print(f"  {YELLOW}⚠️  {msg}{RESET}")
+@dataclass(frozen=True)
+class NetPathInfo:
+    default_iface: str | None
+    default_gateway: str | None
+    source_ip: str | None
+    vpn_likely: bool | None  # True/False/None=unknown
+    details: str | None
+
+
+def _run(cmd: list[str]) -> str | None:
+    try:
+        out = subprocess.check_output(cmd, stderr=subprocess.STDOUT, text=True)
+        return out.strip()
+    except Exception:
+        return None
+
+
+def detect_network_path() -> NetPathInfo:
+    """
+    Best-effort VPN detection.
+    - Primary signal: default route interface (darwin/linux).
+    - Secondary signal: presence of common VPN tunnel interfaces.
+    """
+    platform = sys.platform
+
+    # macOS / iOS simulator / etc.
+    if platform == "darwin":
+        out = _run(["route", "-n", "get", "default"])
+        iface = gw = src = None
+        if out:
+            for line in out.splitlines():
+                line = line.strip()
+                if line.startswith("interface:"):
+                    iface = line.split(":", 1)[1].strip() or None
+                elif line.startswith("gateway:"):
+                    gw = line.split(":", 1)[1].strip() or None
+                elif line.startswith("source:"):
+                    src = line.split(":", 1)[1].strip() or None
+
+        vpn_likely = None
+        if iface:
+            vpn_likely = bool(VPN_IFACE_RE.match(iface))
+
+        # If iface is unknown, look for any "utun/tun/wg/ppp" interface that is up.
+        if vpn_likely is None:
+            ifconfig = _run(["ifconfig"])
+            if ifconfig:
+                up_vpn = False
+                current = None
+                current_is_vpn = False
+                for line in ifconfig.splitlines():
+                    if line and not line.startswith("\t") and ":" in line:
+                        current = line.split(":", 1)[0].strip()
+                        current_is_vpn = bool(current and VPN_IFACE_RE.match(current))
+                    if current_is_vpn and "status: active" in line:
+                        up_vpn = True
+                        break
+                vpn_likely = True if up_vpn else False
+
+        details = f"default_iface={iface or '?'} src={src or '?'} gw={gw or '?'}"
+        return NetPathInfo(iface, gw, src, vpn_likely, details)
+
+    # Linux
+    if platform.startswith("linux"):
+        out = _run(["ip", "route", "get", "1.1.1.1"])
+        iface = gw = src = None
+        if out:
+            # Example: "1.1.1.1 via 192.168.1.1 dev wlan0 src 192.168.1.10 uid 1000"
+            m_dev = re.search(r"\bdev\s+(\S+)", out)
+            m_src = re.search(r"\bsrc\s+(\S+)", out)
+            m_via = re.search(r"\bvia\s+(\S+)", out)
+            iface = m_dev.group(1) if m_dev else None
+            src = m_src.group(1) if m_src else None
+            gw = m_via.group(1) if m_via else None
+
+        vpn_likely = None
+        if iface:
+            vpn_likely = bool(VPN_IFACE_RE.match(iface))
+        else:
+            links = _run(["ip", "-o", "link", "show"])
+            if links:
+                vpn_likely = any(
+                    VPN_IFACE_RE.match(line.split(":")[1].strip())
+                    for line in links.splitlines()
+                    if ":" in line
+                )
+
+        details = f"default_iface={iface or '?'} src={src or '?'} gw={gw or '?'}"
+        return NetPathInfo(iface, gw, src, vpn_likely, details)
+
+    raise SystemExit(f"Unsupported OS: {platform} (this script supports macOS and Linux only)")
+
+
+def fmt_vpn_state(vpn_likely: bool | None) -> str:
+    if vpn_likely is None:
+        return f"{YELLOW}UNKNOWN{RESET}"
+    return f"{GREEN}ON{RESET}" if vpn_likely else f"{RED}OFF{RESET}"
+
+
+def ok(msg):
+    print(f"  {GREEN}✅ {msg}{RESET}")
+
+
+def fail(msg):
+    print(f"  {RED}❌ {msg}{RESET}")
+
+
+def warn(msg):
+    print(f"  {YELLOW}⚠️  {msg}{RESET}")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -67,7 +180,9 @@ def test_tls_plain(host: str, port: int, timeout: float = 10.0) -> bool:
             raw.settimeout(timeout)
             with ctx.wrap_socket(raw, server_hostname=host) as s:
                 elapsed = time.time() - t0
-                ok(f"Handshake OK in {elapsed:.2f}s — TLS={s.version()}  ALPN={s.selected_alpn_protocol()}")
+                ok(
+                    f"Handshake OK in {elapsed:.2f}s — TLS={s.version()}  ALPN={s.selected_alpn_protocol()}"
+                )
                 return True
     except ssl.SSLError as e:
         fail(f"TLS error: {e}")
@@ -102,11 +217,15 @@ def test_tls_h2(host: str, port: int, timeout: float = 15.0) -> bool:
         fail(f"TLS error: {e}")
         return False
     except socket.timeout:
-        fail(f"Timed out after {timeout}s — DPI likely blocking h2 ALPN in TLS ClientHello")
+        fail(
+            f"Timed out after {timeout}s — DPI likely blocking h2 ALPN in TLS ClientHello"
+        )
         return False
     except ConnectionResetError:
         elapsed = time.time() - t0
-        fail(f"Connection reset after {elapsed:.2f}s — DPI injecting RST when it sees h2 ALPN")
+        fail(
+            f"Connection reset after {elapsed:.2f}s — DPI injecting RST when it sees h2 ALPN"
+        )
         return False
     except Exception as e:
         fail(f"{e}")
@@ -116,7 +235,9 @@ def test_tls_h2(host: str, port: int, timeout: float = 15.0) -> bool:
 # ─────────────────────────────────────────────────────────────────────────────
 # Layer 4: HTTP/1.1 GET (sanity check the web server)
 # ─────────────────────────────────────────────────────────────────────────────
-def test_http1(host: str, port: int, path: str = "/.well-known/ice-cert", timeout: float = 10.0) -> bool:
+def test_http1(
+    host: str, port: int, path: str = "/.well-known/ice-cert", timeout: float = 10.0
+) -> bool:
     print(f"\n{BOLD}[4] HTTPS/1.1 GET{RESET} {path}")
     t0 = time.time()
     try:
@@ -155,7 +276,7 @@ def test_grpc_channel(host: str, port: int, timeout: float = 15.0) -> bool:
             options=[
                 ("grpc.enable_http_proxy", 0),
                 ("grpc.keepalive_time_ms", 10000),
-            ]
+            ],
         )
         future = grpc.channel_ready_future(channel)
         future.result(timeout=timeout)
@@ -165,7 +286,9 @@ def test_grpc_channel(host: str, port: int, timeout: float = 15.0) -> bool:
         return True
     except grpc.FutureTimeoutError:
         elapsed = time.time() - t0
-        fail(f"Channel not ready after {timeout}s — HTTP/2 connection never established")
+        fail(
+            f"Channel not ready after {timeout}s — HTTP/2 connection never established"
+        )
         return False
     except Exception as e:
         fail(f"{e}")
@@ -176,10 +299,13 @@ def test_grpc_channel(host: str, port: int, timeout: float = 15.0) -> bool:
 # Layer 6: gRPC call — GetPowChallenge (no auth required)
 # ─────────────────────────────────────────────────────────────────────────────
 def test_grpc_pow(host: str, port: int, timeout: float = 15.0) -> bool:
-    print(f"\n{BOLD}[6] gRPC call{RESET} — AuthService.GetPowChallenge (no auth needed)")
+    print(
+        f"\n{BOLD}[6] gRPC call{RESET} — AuthService.GetPowChallenge (no auth needed)"
+    )
     try:
         import grpc
         import sys, os
+
         sys.path.insert(0, os.path.join(os.path.dirname(__file__), "proto_gen"))
         from services import auth_service_pb2, auth_service_pb2_grpc
     except ImportError as e:
@@ -194,17 +320,20 @@ def test_grpc_pow(host: str, port: int, timeout: float = 15.0) -> bool:
         )
         stub = auth_service_pb2_grpc.AuthServiceStub(channel)
         response = stub.GetPowChallenge(
-            auth_service_pb2.GetPowChallengeRequest(),
-            timeout=timeout
+            auth_service_pb2.GetPowChallengeRequest(), timeout=timeout
         )
         elapsed = time.time() - t0
-        ok(f"Response in {elapsed:.2f}s — challenge={response.challenge[:16] if hasattr(response, 'challenge') else '?'}... difficulty={getattr(response, 'difficulty', '?')}")
+        ok(
+            f"Response in {elapsed:.2f}s — challenge={response.challenge[:16] if hasattr(response, 'challenge') else '?'}... difficulty={getattr(response, 'difficulty', '?')}"
+        )
         channel.close()
         return True
     except Exception as e:
         elapsed = time.time() - t0
-        code = getattr(e, 'code', lambda: None)()
-        fail(f"RPC failed after {elapsed:.2f}s — {code}: {e.details() if hasattr(e, 'details') else e}")
+        code = getattr(e, "code", lambda: None)()
+        fail(
+            f"RPC failed after {elapsed:.2f}s — {code}: {e.details() if hasattr(e, 'details') else e}"
+        )
         return False
 
 
@@ -212,10 +341,13 @@ def test_grpc_pow(host: str, port: int, timeout: float = 15.0) -> bool:
 # Layer 7: gRPC call — CheckUsernameAvailability (no auth required)
 # ─────────────────────────────────────────────────────────────────────────────
 def test_grpc_username(host: str, port: int, timeout: float = 15.0) -> bool:
-    print(f"\n{BOLD}[7] gRPC call{RESET} — UserService.CheckUsernameAvailability (no auth needed)")
+    print(
+        f"\n{BOLD}[7] gRPC call{RESET} — UserService.CheckUsernameAvailability (no auth needed)"
+    )
     try:
         import grpc
         import sys, os
+
         sys.path.insert(0, os.path.join(os.path.dirname(__file__), "proto_gen"))
         from services import user_service_pb2, user_service_pb2_grpc
     except ImportError as e:
@@ -230,17 +362,26 @@ def test_grpc_username(host: str, port: int, timeout: float = 15.0) -> bool:
         req.username = "test_connectivity_probe"
         response = stub.CheckUsernameAvailability(req, timeout=timeout)
         elapsed = time.time() - t0
-        ok(f"Response in {elapsed:.2f}s — available={response.available}  reason={getattr(response, 'reason', '?')}")
+        ok(
+            f"Response in {elapsed:.2f}s — available={response.available}  reason={getattr(response, 'reason', '?')}"
+        )
         channel.close()
         return True
     except Exception as e:
         elapsed = time.time() - t0
-        code = getattr(e, 'code', lambda: None)()
+        code = getattr(e, "code", lambda: None)()
         # unauthenticated / permission_denied is still a "server responded" success
-        if code and str(code) in ("StatusCode.UNAUTHENTICATED", "StatusCode.PERMISSION_DENIED"):
-            ok(f"Server responded in {elapsed:.2f}s — {code} (endpoint reached, auth required)")
+        if code and str(code) in (
+            "StatusCode.UNAUTHENTICATED",
+            "StatusCode.PERMISSION_DENIED",
+        ):
+            ok(
+                f"Server responded in {elapsed:.2f}s — {code} (endpoint reached, auth required)"
+            )
             return True
-        fail(f"RPC failed after {elapsed:.2f}s — {code}: {e.details() if hasattr(e, 'details') else e}")
+        fail(
+            f"RPC failed after {elapsed:.2f}s — {code}: {e.details() if hasattr(e, 'details') else e}"
+        )
         return False
 
 
@@ -251,27 +392,34 @@ def main():
     parser = argparse.ArgumentParser(description="Construct server connectivity test")
     parser.add_argument("--host", default="ams.konstruct.cc")
     parser.add_argument("--port", type=int, default=443)
+    # The .well-known/ice-cert lives on the public/CDN host, not the gRPC host.
+    parser.add_argument("--web-host", default="konstruct.cc",
+                        help="Public web host for .well-known checks (default: konstruct.cc)")
     args = parser.parse_args()
 
-    host, port = args.host, args.port
+    host, port, web_host = args.host, args.port, args.web_host
+    net = detect_network_path()
 
     print(f"\n{BOLD}{'='*55}")
     print(f"  Construct Server Connectivity Test")
-    print(f"  Target: {host}:{port}")
+    print(f"  gRPC target : {host}:{port}")
+    print(f"  Web target  : {web_host}:443")
+    print(f"  VPN         : {fmt_vpn_state(net.vpn_likely)}  ({net.details})")
     print(f"{'='*55}{RESET}")
 
     results = {}
-    results["TCP connect"]         = test_tcp(host, port)
-    results["TLS (no ALPN)"]       = test_tls_plain(host, port)
-    results["TLS (h2 ALPN)"]       = test_tls_h2(host, port)
-    results["HTTPS/1.1 GET"]       = test_http1(host, port)
-    results["gRPC channel ready"]  = test_grpc_channel(host, port)
-    results["gRPC GetPowChallenge"]= test_grpc_pow(host, port)
-    results["gRPC CheckUsername"]  = test_grpc_username(host, port)
+    results["TCP connect"] = test_tcp(host, port)
+    results["TLS (no ALPN)"] = test_tls_plain(host, port)
+    results["TLS (h2 ALPN)"] = test_tls_h2(host, port)
+    results["HTTPS GET /.well-known/ice-cert"] = test_http1(web_host, 443)
+    results["gRPC channel ready"] = test_grpc_channel(host, port)
+    results["gRPC GetPowChallenge"] = test_grpc_pow(host, port)
+    results["gRPC CheckUsername"] = test_grpc_username(host, port)
 
     print(f"\n{BOLD}{'='*55}")
     print(f"  SUMMARY")
     print(f"{'='*55}{RESET}")
+    
     for name, result in results.items():
         if result is None:
             print(f"  {YELLOW}⚠️  SKIP{RESET}  {name}")
@@ -280,9 +428,31 @@ def main():
         else:
             print(f"  {RED}❌ FAIL{RESET}  {name}")
 
-    print(f"\n{BOLD}Expected results:{RESET}")
-    print(f"  Without VPN (DPI active):  TCP ✅  TLS/no-ALPN ✅  TLS/h2 ❌  gRPC ❌")
-    print(f"  With VPN:                  all ✅")
+    def _icon(value):
+        if value is None:
+            return "⚠️"
+        return "✅" if value else "❌"
+
+    grpc_values = [
+        results.get("gRPC channel ready"),
+        results.get("gRPC GetPowChallenge"),
+        results.get("gRPC CheckUsername"),
+    ]
+    grpc_non_null = [v for v in grpc_values if v is not None]
+    if not grpc_non_null:
+        grpc_overall = None
+    else:
+        grpc_overall = any(grpc_non_null)
+
+    print(f"\n{BOLD}Actual results (this run):{RESET}")
+    print(
+        "  TCP {tcp}  TLS/no-ALPN {tls1}  TLS/h2 {tls2}  gRPC {grpc}".format(
+            tcp=_icon(results.get("TCP connect")),
+            tls1=_icon(results.get("TLS (no ALPN)")),
+            tls2=_icon(results.get("TLS (h2 ALPN)")),
+            grpc=_icon(grpc_overall),
+        )
+    )
     print()
 
 

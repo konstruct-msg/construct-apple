@@ -17,6 +17,10 @@ final class CryptoSessionInitializationService {
         kyberPreKeyPublic: Data? = nil,
         kyberOneTimePreKeyPublic: Data? = nil,
         kyberOneTimePreKeyId: UInt32? = nil,
+        spkUploadedAt: UInt64 = 0,
+        spkRotationEpoch: UInt32 = 0,
+        kyberSpkUploadedAt: UInt64 = 0,
+        kyberSpkRotationEpoch: UInt32 = 0,
         core: OrchestratorCore?,
         archiveSession: (String, ArchiveReason) -> Void,
         saveSession: (String) -> Void
@@ -68,6 +72,12 @@ final class CryptoSessionInitializationService {
             "signature": [UInt8](signatureData),
             "verifying_key": [UInt8](verifyingKeyData),
             "suite_id": suiteID,
+            // SPK freshness fields — Rust validates these in validate_bundle_freshness().
+            // 0 = legacy server; Rust skips validation when 0.
+            "spk_uploaded_at": spkUploadedAt,
+            "spk_rotation_epoch": spkRotationEpoch,
+            "kyber_spk_uploaded_at": kyberSpkUploadedAt,
+            "kyber_spk_rotation_epoch": kyberSpkRotationEpoch,
         ]
         if let otpkPublic = oneTimePreKeyPublic, let otpkId = oneTimePreKeyId, otpkId > 0 {
             bundleDict["one_time_prekey_public"] = [UInt8](otpkPublic)
@@ -111,7 +121,8 @@ final class CryptoSessionInitializationService {
                 do {
                     kemCiphertext = try PQCKeyManager.shared.encapsulateAndDefer(
                         kyberSPKPublic: otpkPK,
-                        contactId: userId
+                        contactId: userId,
+                        core: core
                     )
                     kyberOtpkId = otpkId
                     Log.info("🔐 PQC: PQXDH encapsulated (Kyber OTPK id=\(otpkId)) for initiator session with \(userId.prefix(8))... (deferred)", category: "CryptoManager")
@@ -122,7 +133,8 @@ final class CryptoSessionInitializationService {
                 do {
                     kemCiphertext = try PQCKeyManager.shared.encapsulateAndDefer(
                         kyberSPKPublic: kyberPK,
-                        contactId: userId
+                        contactId: userId,
+                        core: core
                     )
                     // kyberOtpkId stays 0 = SPK used
                     Log.info("🔐 PQC: PQXDH encapsulated (Kyber SPK) for initiator session with \(userId.prefix(8))... (deferred)", category: "CryptoManager")
@@ -249,6 +261,7 @@ final class CryptoSessionInitializationService {
             Log.debug("   contactId: \(userId)", category: "CryptoManager")
             Log.debug("   recipientBundle: \(bundleBytes.count) bytes JSON", category: "CryptoManager")
             Log.debug("   firstMessage: \(messageBytes.count) bytes JSON", category: "CryptoManager")
+            Log.debug("   localOtpkCount: \(core.oneTimePrekeyCount()) (must have ID \(firstMessage.oneTimePreKeyId) to succeed)", category: "CryptoManager")
             
             // Log JSON structure for debugging (only in debug builds)
             #if DEBUG
@@ -299,7 +312,9 @@ final class CryptoSessionInitializationService {
             Log.info("✅ Session initialized successfully, decrypted: \(result.decryptedMessage.prefix(50))...", category: "CryptoManager")
 
             UserDefaults.standard.set(Int(suiteID), forKey: "construct.session.suite.\(userId)")
-            saveSession(userId)
+            // NOTE: saveSession is intentionally deferred until AFTER PQXDH strengthening below.
+            // Writing the session to Keychain before applying the KEM contribution would leave a
+            // partially-initialised session on disk if the process crashes between the two steps.
 
             // PQXDH: If sender included a KEM ciphertext, decapsulate + strengthen session.
             // The INITIATOR has already applied the PQ contribution to their DR state,
@@ -311,16 +326,13 @@ final class CryptoSessionInitializationService {
                     if kyberOtpkId > 0 {
                         // Sender encapsulated with a Kyber OTPK
                         guard let otpkSecret = PQCKeyManager.kyberOtpkSecret(forKeyId: kyberOtpkId) else {
-                            // OTPK secret missing — MUST skip PQ entirely.
-                            // Decapsulating with SPK would produce garbage via ML-KEM implicit
-                            // rejection, corrupting the DR root key irreversibly.
-                            // The session stays classic X3DH; subsequent messages from the
-                            // INITIATOR (who applied PQ) will fail to decrypt, triggering
-                            // END_SESSION and a clean re-init.
-                            Log.error("🚨 PQC: Kyber OTPK id=\(kyberOtpkId) secret MISSING for \(userId.prefix(8))… — skipping PQ to avoid shared secret mismatch", category: "CryptoManager")
-                            UserDefaults.standard.set(true, forKey: "construct.pqxdh.downgraded.\(userId)")
-                            // Fall through without applying PQ — don't re-save session
-                            return result.decryptedMessage
+                            // OTPK secret missing — throw so session init fails and triggers
+                            // END_SESSION + clean re-init. If we silently skipped PQ here,
+                            // INITIATOR's DR root key would diverge from ours (they applied PQ,
+                            // we didn't), causing every message from msg1+ to fail AEAD permanently.
+                            // Failing fast forces both sides to negotiate a fresh session correctly.
+                            Log.error("🚨 PQC: Kyber OTPK id=\(kyberOtpkId) secret MISSING for \(userId.prefix(8))… — failing session init to force clean re-init", category: "CryptoManager")
+                            throw CryptoManagerError.pqxdhOtpkMissing(kyberOtpkId)
                         }
                         try PQCKeyManager.shared.decapsulateAndStrengthen(
                             kemCiphertext: firstMessage.kemCiphertext,
@@ -339,8 +351,6 @@ final class CryptoSessionInitializationService {
                         )
                         Log.info("🔐 PQC: PQXDH Kyber SPK for \(userId.prefix(8))...", category: "CryptoManager")
                     }
-                    // Re-save session after PQ strengthening
-                    saveSession(userId)
                 } catch {
                     // PQ decapsulation failed. msg0 decrypted fine (classic X3DH), but the
                     // INITIATOR already applied PQ to their DR state — subsequent messages
@@ -349,6 +359,9 @@ final class CryptoSessionInitializationService {
                     UserDefaults.standard.set(true, forKey: "construct.pqxdh.downgraded.\(userId)")
                 }
             }
+
+            // Single atomic Keychain write after the entire handshake (X3DH + PQXDH) is complete.
+            saveSession(userId)
 
             return result.decryptedMessage
         } catch {

@@ -23,6 +23,9 @@ struct AuthResponse: Codable {
 struct SendMessageResponse: Codable {
     let messageId: String
     let status: String
+    /// False when the server returned a permanent error (e.g. BLOCKED).
+    /// The sender should NOT retry the message.
+    var retryable: Bool = true
 }
 
 struct EndSessionResponse: Codable {

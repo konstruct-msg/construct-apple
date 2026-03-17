@@ -1,6 +1,20 @@
 import Foundation
 import os.log
 
+/// Errors specific to the session-init layer (distinct from CryptoManagerError).
+enum SessionError: Error, LocalizedError {
+    /// Server returned a bundle whose SPK rotation epoch is older than the last
+    /// seen epoch for this contact — possible replay attack.
+    case staleSPKBundle(epoch: UInt32, knownEpoch: UInt32)
+
+    var errorDescription: String? {
+        switch self {
+        case .staleSPKBundle(let epoch, let knownEpoch):
+            return "SPK bundle replay: received epoch \(epoch) ≤ known epoch \(knownEpoch)"
+        }
+    }
+}
+
 /// Service responsible for session initialization with retry logic and queue management.
 /// Singleton: the pending KEM ciphertexts / OTPK IDs must be visible across all
 /// call-sites (SessionCoordinator prewarm, ChatViewModel send, auto-resend, etc.).
@@ -97,6 +111,18 @@ class SessionInitializationService {
             }
         }
 
+        // Epoch replay-attack check: reject bundles where the server's monotonic
+        // rotation counter has not advanced beyond what we last saw for this contact.
+        // (Skip when epoch == 0, which means the server hasn't migrated yet.)
+        if bundle.spkRotationEpoch > 0 {
+            let knownEpoch = UInt32(UserDefaults.standard.integer(forKey: "construct.spk_epoch.\(userId)"))
+            if bundle.spkRotationEpoch < knownEpoch {
+                Log.error("⚠️ SESSION_STATE[spk_replay_rejected]: epoch=\(bundle.spkRotationEpoch) < known=\(knownEpoch) for \(userId.prefix(8))… — possible SPK replay attack", category: "SessionInit")
+                throw SessionError.staleSPKBundle(epoch: bundle.spkRotationEpoch, knownEpoch: knownEpoch)
+            }
+            UserDefaults.standard.set(Int(bundle.spkRotationEpoch), forKey: "construct.spk_epoch.\(userId)")
+        }
+
         let bundleWithSuite = (
             identityPublic: bundle.identityPublic,
             signedPrekeyPublic: bundle.signedPrekeyPublic,
@@ -116,7 +142,11 @@ class SessionInitializationService {
                 oneTimePreKeyId: otpkId,
                 kyberPreKeyPublic: bundle.kyberPreKeyPublic,
                 kyberOneTimePreKeyPublic: bundle.kyberOneTimePreKeyPublic,
-                kyberOneTimePreKeyId: bundle.kyberOneTimePreKeyId
+                kyberOneTimePreKeyId: bundle.kyberOneTimePreKeyId,
+                spkUploadedAt: bundle.spkUploadedAt,
+                spkRotationEpoch: bundle.spkRotationEpoch,
+                kyberSpkUploadedAt: bundle.kyberSpkUploadedAt,
+                kyberSpkRotationEpoch: bundle.kyberSpkRotationEpoch
             )
             Log.info("✅ Session initialized as INITIATOR for \(userId)", category: "SessionInit")
             if let kem = result.kemCiphertext {

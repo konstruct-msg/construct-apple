@@ -117,6 +117,74 @@ class MessagePersistenceService {
         context.saveAndLog()
     }
 
+    // MARK: - Upload Placeholder
+
+    /// Save a "pending upload" placeholder that shows the local thumbnail while media is
+    /// being uploaded to the server.  The placeholder carries a special sentinel JSON so
+    /// `parseMediaContent` renders it as a media bubble (with local thumbnail) rather than
+    /// a raw-text bubble.  Call `deleteMessage` on success and `updateMessageStatus(.failed)`
+    /// on failure so the existing retry flow can kick in.
+    func savePlaceholderMessage(
+        id: String,
+        fromUserId: String,
+        toUserId: String,
+        caption: String,
+        thumbnail: Data?,
+        replyTo: Message?,
+        chat: Chat,
+        in context: NSManagedObjectContext
+    ) {
+        // Sentinel JSON — media array contains a single placeholder entry so that
+        // parseMediaContent() returns non-nil and MediaMessageView is rendered.
+        let placeholderJson = """
+        {"type":"media","caption":\(jsonStringLiteral(caption)),"media":[{"_placeholder":true}]}
+        """
+
+        let now = Date()
+        let newMessage = Message(context: context)
+        newMessage.id = id
+        newMessage.fromUserId = fromUserId
+        newMessage.toUserId = toUserId
+        newMessage.encryptedContent = ""
+        newMessage.decryptedContent = placeholderJson
+        newMessage.timestamp = now
+        newMessage.isSentByMe = true
+        newMessage.deliveryStatus = .sending
+        newMessage.retryCount = 0
+        newMessage.chat = chat
+
+        if let replyMessage = replyTo {
+            newMessage.replyToMessageId = replyMessage.id
+            newMessage.replyToContent = replyMessage.decryptedContent
+        }
+
+        if let thumb = thumbnail {
+            MediaManager.shared.storeThumbnail(thumb, for: id)
+        }
+
+        context.saveAndLog()
+
+        // Update chat metadata so the preview row shows something sensible.
+        let preview = caption.isEmpty ? "📷 Photo" : caption
+        try? updateChatMetadata(chat: chat, lastMessageText: preview, lastMessageTime: now, in: context)
+
+        Log.debug("📎 Saved upload placeholder \(id.prefix(8))…", category: "MessagePersistence")
+    }
+
+    /// Delete a placeholder (or any) message by ID — used after upload succeeds so the
+    /// real sent message can take its place.
+    func deleteMessage(id: String, in context: NSManagedObjectContext) {
+        let req = Message.fetchRequest()
+        req.predicate = NSPredicate(format: "id == %@", id)
+        req.fetchLimit = 1
+        guard let msg = try? context.fetch(req).first else { return }
+        context.delete(msg)
+        context.saveAndLog()
+        Log.debug("🗑️ Deleted placeholder \(id.prefix(8))…", category: "MessagePersistence")
+    }
+
+    // MARK: - Update Status
+
     func updateMessageStatus(
         messageId: String,
         status: DeliveryStatus,
@@ -274,5 +342,16 @@ class MessagePersistenceService {
         
         try context.save()
         Log.debug("✅ Updated chat metadata after deletion", category: "MessagePersistence")
+    }
+
+    // MARK: - Private Helpers
+
+    private func jsonStringLiteral(_ s: String) -> String {
+        let escaped = s
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+            .replacingOccurrences(of: "\n", with: "\\n")
+            .replacingOccurrences(of: "\r", with: "\\r")
+        return "\"\(escaped)\""
     }
 }

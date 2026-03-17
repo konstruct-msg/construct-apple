@@ -133,8 +133,8 @@ class ProfileShareViewModel {
                     messageNumber: firstComponents.messageNumber,
                     content: firstComponents.content,
                     suiteId: firstComponents.suiteId,
-                    timestamp: UInt64(Date().timeIntervalSince1970)
-                    
+                    timestamp: UInt64(Date().timeIntervalSince1970),
+                    oneTimePreKeyId: firstComponents.oneTimePreKeyId
                 )
 
                 // ✅ Send via gRPC
@@ -149,6 +149,11 @@ class ProfileShareViewModel {
                         preEncryptedFirst: firstComponents
                     )
                     let response = responses.first ?? SendMessageResponse(messageId: message.id, status: "sent")
+                    if response.status.lowercased() == "blocked" {
+                        Log.error("🚫 Profile share rejected — sender is blocked by \(userId.prefix(8))…", category: "ProfileShare")
+                        await MainActor.run { completion(false, "blocked") }
+                        return
+                    }
                     Log.info("✅ Profile shared with user \(userId) via gRPC: \(response.messageId)", category: "ProfileShare")
                     await MainActor.run {
                         completion(true, nil)

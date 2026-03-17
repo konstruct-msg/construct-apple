@@ -42,6 +42,16 @@ final class SessionCoordinator {
     private let resendCooldown: TimeInterval = 10.0
     private let resendWindow: TimeInterval = 5 * 60 // 5 minutes
 
+    /// Watchdog tasks started after a tie-break WIN.
+    /// If the RESPONDER (loser) does not reply within the timeout, re-sends the session ping
+    /// so they can become RESPONDER even after a brief network outage.
+    private var tieBreakWatchdogs: [String: Task<Void, Never>] = [:]
+    private let tieBreakWatchdogTimeout: TimeInterval = 30.0
+
+    /// Timer that periodically evicts expired entries from cooldown dicts so they don't grow unboundedly.
+    private var cooldownPurgeTimer: Timer?
+    private let cooldownPurgeInterval: TimeInterval = 5 * 60 // every 5 minutes
+
     /// Prevents parallel session-init attempts for the same peer.
     private var usersInitializingSession: Set<String> = []
 
@@ -62,6 +72,7 @@ final class SessionCoordinator {
     func configure(streamManager: MessageStreamManager) {
         self.streamManager = streamManager
         setupMessageRouterCallbacks()
+        startCooldownPurgeTimer()
     }
 
     // MARK: - Public entry points
@@ -209,15 +220,45 @@ final class SessionCoordinator {
         // and prevents the RESPONDER from incorrectly acting as INITIATOR with stale OTPKs.
         messageRouter.onEndSessionReceived = { [weak self] userId in
             guard let self else { return }
-            self.resendUnconfirmedOutgoingMessagesIfNeeded(to: userId)
             let myId = SessionManager.shared.currentUserId ?? ""
-            guard !myId.isEmpty, myId < userId else { return }
+            guard !myId.isEmpty else { return }
+
+            // Only the natural INITIATOR (lower userId) auto-resends and re-prewarms.
+            // If the END_SESSION came from a lower userId it means they are the tie-break
+            // winner and have already restored their INITIATOR session — do NOT re-prewarm
+            // or resend here; doing so would restart the tie-break loop.
+            guard myId < userId else {
+                Log.info("🔇 END_SESSION from natural INITIATOR \(userId.prefix(8))… — waiting as RESPONDER (no resend, no prewarm)", category: "SessionInit")
+                return
+            }
+
+            self.resendUnconfirmedOutgoingMessagesIfNeeded(to: userId)
             Log.info("🔥 END_SESSION received — re-prewarming as natural INITIATOR for \(userId.prefix(8))…", category: "SessionInit")
             Task {
                 // Brief delay so END_SESSION processing (archive, queue clear) finishes first.
                 try? await Task.sleep(nanoseconds: 300_000_000) // 300 ms
                 self.prewarmSessions(for: [userId])
             }
+        }
+
+        // When this device wins the tie-break, notify the loser via END_SESSION and then
+        // send a session establishment ping so the loser can immediately become RESPONDER.
+        messageRouter.onTieBreakWin = { [weak self] userId in
+            guard let self else { return }
+            Task {
+                do {
+                    // Send END_SESSION directly to the network — do NOT call
+                    // SessionCoordinator.sendEndSession because that would archive and clear
+                    // our just-restored INITIATOR session.
+                    let _ = try await MessagingServiceClient.shared.sendEndSession(to: userId, reason: "tie_break_win")
+                    Log.info("📤 SESSION_STATE[tie_break_end_session]: sent to \(userId.prefix(8))…", category: "SessionInit")
+                } catch {
+                    Log.error("❌ SESSION_STATE[tie_break_end_session_fail]: \(error.localizedDescription)", category: "SessionInit")
+                }
+                await self.sendSessionPing(to: userId)
+            }
+            // Start watchdog: if RESPONDER has not replied within timeout, re-send ping.
+            self.startTieBreakWatchdog(for: userId)
         }
     }
 
@@ -252,6 +293,24 @@ final class SessionCoordinator {
                 streamManager?.sendReceipt([message.id], to: userId, status: .delivered)
                 if let context = viewContext {
                     PersistentACKStore.shared.markProcessed(message.id, senderId: userId, in: context)
+                }
+
+                // Notify Rust orchestrator that RESPONDER-side session init completed.
+                // Rust clears its init_lock for this contactId. We ignore returned
+                // SaveSessionToSecureStore actions — the session was already persisted
+                // by initReceivingSession above.
+                if let core = CryptoManager.shared.orchestratorCore,
+                   let sessionJson = try? core.exportSessionJson(contactId: userId) {
+                    let event: [String: Any] = [
+                        "SessionInitCompleted": [
+                            "contact_id": userId,
+                            "session_json": sessionJson
+                        ]
+                    ]
+                    if let eventJson = (try? JSONSerialization.data(withJSONObject: event))
+                            .flatMap({ String(data: $0, encoding: .utf8) }) {
+                        let _ = try? core.handleEventJson(eventJson: eventJson)
+                    }
                 }
 
                 // Replenish OTPKs — Bob consumed one OTPK for this X3DH session init.
@@ -380,6 +439,114 @@ final class SessionCoordinator {
         }
     }
 
+    /// Start a repeating timer that evicts expired entries from cooldown dicts.
+    /// Prevents unbounded growth when contacts are frequently reset (e.g. during testing).
+    private func startCooldownPurgeTimer() {
+        cooldownPurgeTimer?.invalidate()
+        cooldownPurgeTimer = Timer.scheduledTimer(withTimeInterval: cooldownPurgeInterval, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.purgeStaleCooldowns()
+            }
+        }
+    }
+
+    private func purgeStaleCooldowns() {
+        let now = Date()
+        // Cooldown entries older than 2× their window are safe to remove
+        let endSessionTTL = endSessionCooldown * 2
+        let resendTTL = resendCooldown * 2
+
+        let beforeES = endSessionSentAt.count
+        endSessionSentAt = endSessionSentAt.filter { now.timeIntervalSince($0.value) < endSessionTTL }
+        let beforeRA = resendAttemptedAt.count
+        resendAttemptedAt = resendAttemptedAt.filter { now.timeIntervalSince($0.value) < resendTTL }
+
+        let removedES = beforeES - endSessionSentAt.count
+        let removedRA = beforeRA - resendAttemptedAt.count
+        if removedES + removedRA > 0 {
+            Log.debug("🧹 Purged \(removedES) endSession + \(removedRA) resend cooldown entries", category: "SessionInit")
+        }
+    }
+
+    // MARK: - Tie-break session establishment ping
+
+    /// Encrypt and send an invisible session establishment ping to `userId`.
+    /// Called after a tie-break WIN so the loser (higher userId) can immediately
+    /// call `initReceivingSession` and become RESPONDER without waiting for user action.
+    /// The receiver's `saveMessage` filters out the ping content so it is never shown in chat.
+    /// Retries up to `pingMaxAttempts` times with exponential back-off on network failure.
+    private let pingMaxAttempts = 3
+    private let pingRetryBaseDelay: UInt64 = 1_000_000_000 // 1 s
+
+    private func sendSessionPing(to userId: String) async {
+        guard CryptoManager.shared.hasSession(for: userId) else {
+            Log.info("⚠️ SESSION_STATE[tie_break_ping_skip]: no INITIATOR session for \(userId.prefix(8))…", category: "SessionInit")
+            return
+        }
+        guard let myId = SessionManager.shared.currentUserId, !myId.isEmpty else { return }
+
+        for attempt in 1...pingMaxAttempts {
+            do {
+                let pingContent = "__session_ping_\(UUID().uuidString)__"
+                let pingId = UUID()
+                let plan = ChunkedMessageSender.shared.buildPlan(plaintext: pingContent, messageId: pingId)
+                guard let firstPayload = plan.payloads.first else { return }
+                let components = try CryptoManager.shared.encryptMessage(firstPayload, for: userId)
+                let kemCiphertext = components.messageNumber == 0 ? sessionInitService.consumeKemCiphertext(for: userId) : nil
+                let kyberOtpkId = components.messageNumber == 0 ? sessionInitService.consumeKyberOtpkId(for: userId) : 0
+                let _ = try await ChunkedMessageSender.shared.sendChunks(
+                    plan: plan,
+                    senderId: myId,
+                    recipientId: userId,
+                    conversationId: ConversationId.direct(myUserId: myId, theirUserId: userId),
+                    timestamp: UInt64(Date().timeIntervalSince1970),
+                    preEncryptedFirst: components,
+                    kemCiphertext: kemCiphertext,
+                    kyberOtpkId: kyberOtpkId
+                )
+                Log.info("🏓 SESSION_STATE[tie_break_ping]: sent to \(userId.prefix(8))… (attempt \(attempt)) — loser can now init as RESPONDER", category: "SessionInit")
+                return
+            } catch {
+                Log.error("❌ SESSION_STATE[tie_break_ping_fail]: attempt \(attempt)/\(pingMaxAttempts): \(error.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
+                if attempt < pingMaxAttempts {
+                    // Exponential back-off: 1s, 2s
+                    try? await Task.sleep(nanoseconds: pingRetryBaseDelay * UInt64(attempt))
+                } else {
+                    Log.error("❌ SESSION_STATE[tie_break_ping_exhausted]: loser \(userId.prefix(8))… must re-initiate manually", category: "SessionInit")
+                }
+            }
+        }
+    }
+
+    // MARK: - Tie-break watchdog
+
+    /// Start a watchdog Task that re-sends the session ping if the RESPONDER has not
+    /// replied within `tieBreakWatchdogTimeout` seconds.  Cancels any prior watchdog
+    /// for the same peer so multiple tie-breaks don't stack up.
+    private func startTieBreakWatchdog(for userId: String) {
+        tieBreakWatchdogs[userId]?.cancel()
+        tieBreakWatchdogs[userId] = Task { [weak self] in
+            guard let self else { return }
+            do {
+                try await Task.sleep(nanoseconds: UInt64(self.tieBreakWatchdogTimeout * 1_000_000_000))
+            } catch {
+                return // Task was cancelled — RESPONDER replied in time
+            }
+            guard !Task.isCancelled else { return }
+            // If we still hold an INITIATOR session, the RESPONDER has not yet
+            // completed their init — re-send the ping to unblock them.
+            guard CryptoManager.shared.hasSession(for: userId) else { return }
+            Log.info("⏰ SESSION_STATE[tie_break_watchdog]: timeout — re-sending ping to \(userId.prefix(8))…", category: "SessionInit")
+            await self.sendSessionPing(to: userId)
+        }
+    }
+
+    /// Cancel the tie-break watchdog for `userId` once communication is confirmed.
+    func cancelTieBreakWatchdog(for userId: String) {
+        tieBreakWatchdogs[userId]?.cancel()
+        tieBreakWatchdogs.removeValue(forKey: userId)
+    }
+
     // MARK: - Message persistence (session-init path only)
 
     private func saveMessage(for chat: Chat, with messageData: ChatMessage, decryptedContent: String) {
@@ -396,6 +563,16 @@ final class SessionCoordinator {
         case .invalid(let reason):
             Log.error("❌ Session-init message envelope invalid: \(reason) — saving raw", category: "SessionCoordinator")
             plaintext = decryptedContent
+        }
+
+        // Silently discard session establishment pings — they are sent after a tie-break win
+        // purely to trigger RESPONDER session init on the peer and must not appear in chat.
+        // Format: "__session_ping_<UUID>__" (legacy: "__session_ping__").
+        if plaintext.hasPrefix("__session_ping") && plaintext.hasSuffix("__") {
+            Log.info("🏓 SESSION_STATE[ping_received]: session established as RESPONDER (ping discarded)", category: "SessionCoordinator")
+            // Cancel any watchdog for this peer — they proved they have an active session.
+            cancelTieBreakWatchdog(for: messageData.from)
+            return
         }
 
         let fetchRequest = Message.fetchRequest()

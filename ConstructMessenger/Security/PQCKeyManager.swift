@@ -32,6 +32,9 @@ final class PQCKeyManager {
     // Applied only after msg0 is encrypted with classic state.
     private let rustContributions = RustPqContributions()
 
+    // Keychain key for the bundled CFE snapshot of all deferred contributions.
+    private static let kyberSessionStateCFEKey = "construct.kyber_session_state"
+
     // MARK: - Keychain Keys
 
     private let kyberSPKPublicKey = "construct.kyber.spk.public"
@@ -276,25 +279,83 @@ final class PQCKeyManager {
     /// The actual `applyPqContribution` is deferred until after msg0 is encrypted,
     /// so that msg0 uses classic-only DR state (matching the receiver expectation).
     ///
+    /// The shared secret is kept in the Rust in-memory cache AND persisted to Keychain
+    /// so it survives app crashes between encapsulation and application.
+    ///
     /// Call `applyDeferredPQContribution` after msg0 has been encrypted.
-    func encapsulateAndDefer(kyberSPKPublic: Data, contactId: String) throws -> Data {
+    func encapsulateAndDefer(kyberSPKPublic: Data, contactId: String, core: OrchestratorCore? = nil) throws -> Data {
         let encapsulation = try mlkem768Encapsulate(publicKey: [UInt8](kyberSPKPublic))
         rustContributions.storeDeferred(contactId: contactId, sharedSecret: encapsulation.sharedSecret)
-        Log.info("🔐 PQC: PQXDH encapsulated for \(contactId.prefix(8))..., ct=\(encapsulation.ciphertext.count)B (deferred)", category: "PQC")
+        // Register with OrchestratorCore's PQContributionManager (single source of truth for CFE).
+        if let core = core {
+            _ = core.registerPqDeferred(
+                contactId: contactId,
+                otpkId: 0,   // otpk_id not tracked at this layer; 0 = unknown
+                sharedSecret: encapsulation.sharedSecret
+            )
+            PQCKeyManager.saveCFESnapshot(to: core)
+        } else {
+            // Fallback: per-entry Keychain backup when core is unavailable.
+            _ = KeychainManager.shared.saveData(
+                Data(encapsulation.sharedSecret),
+                forKey: "construct.pq_deferred.\(contactId)"
+            )
+        }
+        Log.info("🔐 PQC: PQXDH encapsulated for \(contactId.prefix(8))..., ct=\(encapsulation.ciphertext.count)B (deferred + persisted)", category: "PQC")
         return Data(encapsulation.ciphertext)
     }
 
     /// Apply the deferred Kyber shared secret to the DR session.
     /// Must be called after msg0 is encrypted, before msg1 is encrypted.
+    /// Recovers from Keychain if the in-memory cache was lost (e.g., after a crash).
     func applyDeferredPQContribution(contactId: String, core: OrchestratorCore) throws {
-        guard let ss = rustContributions.takeDeferred(contactId: contactId) else { return }
-        try core.applyPqContribution(contactId: contactId, kemSharedSecret: ss)
+        let key = "construct.pq_deferred.\(contactId)"
+        // Prefer in-memory cache; fall back to Keychain if cache was lost (e.g., after a crash).
+        var ss = rustContributions.takeDeferred(contactId: contactId)
+        if ss == nil, let persisted = KeychainManager.shared.loadData(forKey: key) {
+            ss = [UInt8](persisted)
+            Log.info("🔐 PQC: Deferred PQXDH recovered from Keychain for \(contactId.prefix(8))…", category: "PQC")
+        }
+        guard let sharedSecret = ss else { return }
+        // Delete per-entry Keychain backup regardless — contribution is consumed exactly once.
+        KeychainManager.shared.deleteData(forKey: key)
+        try core.applyPqContribution(contactId: contactId, kemSharedSecret: sharedSecret)
+        // Remove from OrchestratorCore's manager and persist updated CFE snapshot.
+        PQCKeyManager.saveCFESnapshot(to: core)
         Log.info("🔐 PQC: Deferred PQXDH applied for \(contactId.prefix(8))...", category: "PQC")
     }
 
     /// Discard any pending PQ contribution (e.g., when kem cannot be included in the message).
-    func clearPendingContribution(for contactId: String) {
+    func clearPendingContribution(for contactId: String, core: OrchestratorCore? = nil) {
         rustContributions.clear(contactId: contactId)
+        KeychainManager.shared.deleteData(forKey: "construct.pq_deferred.\(contactId)")
+        if let core = core { PQCKeyManager.saveCFESnapshot(to: core) }
+    }
+
+    // MARK: - CFE Snapshot Persistence
+
+    /// Save the full Kyber session state as a single CFE blob in Keychain.
+    /// Called after any contribution is registered or consumed.
+    static func saveCFESnapshot(to core: OrchestratorCore) {
+        guard let blob = try? core.exportKyberSessionState(),
+              !blob.isEmpty else { return }
+        _ = KeychainManager.shared.saveData(
+            Data(blob),
+            forKey: kyberSessionStateCFEKey
+        )
+    }
+
+    /// Restore the Kyber session state from a previously saved CFE blob.
+    /// Call at app startup, before any session crypto.
+    static func loadCFESnapshot(into core: OrchestratorCore) {
+        guard let data = KeychainManager.shared.loadData(forKey: kyberSessionStateCFEKey),
+              !data.isEmpty else { return }
+        do {
+            try core.importKyberSessionState(data: [UInt8](data))
+            Log.info("🔐 PQC: Kyber session state restored from CFE snapshot (\(data.count)B)", category: "PQC")
+        } catch {
+            Log.error("⚠️ PQC: Failed to restore Kyber session state: \(error)", category: "PQC")
+        }
     }
 
     // MARK: - PQXDH Receiver: Decapsulate + Strengthen Session

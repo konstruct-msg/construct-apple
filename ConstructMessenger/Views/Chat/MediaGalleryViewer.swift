@@ -37,10 +37,12 @@ func parseMediaContent(from content: String?) -> MediaMessageContent? {
           let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
           let type = json["type"] as? String,
           type == "media",
-          let mediaArray = json["media"] as? [[String: Any]],
-          let firstMedia = mediaArray.first else {
+          let mediaArray = json["media"] as? [[String: Any]] else {
         return nil
     }
+    // `mediaArray` may be empty only for upload placeholders (which carry `_placeholder: true`
+    // as the sole entry).  Regular sent messages always have at least one real item.
+    let firstMedia = mediaArray.first ?? [:]
     return MediaMessageContent(
         caption: json["caption"] as? String ?? "",
         media: firstMedia

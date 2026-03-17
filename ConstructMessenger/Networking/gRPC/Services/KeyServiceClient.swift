@@ -68,7 +68,13 @@ final class KeyServiceClient: Sendable {
                 kyberPreKeyId: kyberPKId,
                 kyberPreKeySignature: kyberSig,
                 kyberOneTimePreKeyPublic: kyberOtpkPK,
-                kyberOneTimePreKeyId: kyberOtpkId
+                kyberOneTimePreKeyId: kyberOtpkId,
+                spkUploadedAt: bundle.spkUploadedAt > 0
+                    ? UInt64(bundle.spkUploadedAt)
+                    : (bundle.generatedAt > 0 ? UInt64(bundle.generatedAt) : 0),
+                spkRotationEpoch: bundle.spkRotationEpoch,
+                kyberSpkUploadedAt: bundle.hasKyberSpkUploadedAt ? UInt64(bundle.kyberSpkUploadedAt) : 0,
+                kyberSpkRotationEpoch: bundle.hasKyberSpkRotationEpoch ? bundle.kyberSpkRotationEpoch : 0
             )
         }
     }

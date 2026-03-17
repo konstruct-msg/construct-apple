@@ -61,8 +61,9 @@ final class ErrorRouter: ObservableObject {
         recoveryHandler = recovery
         errorToken += 1
 
-        // Auto-dismiss info/warning after a delay; leave critical until user acts
-        if error.severity != .critical {
+        // Auto-dismiss info/warning after a delay only when there is no recovery action —
+        // if there IS a retry/reconnect handler, keep the toast visible until the user acts.
+        if error.severity != .critical && recovery == nil {
             scheduleDismiss()
         }
     }

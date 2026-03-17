@@ -248,6 +248,20 @@ class KeychainManager {
         delete(forKey: "crypto_private_keys_json")
     }
 
+    // CFE binary variants — use the SAME Keychain key for transparent migration.
+    // Rust's importPrivateKeys() handles both CFE binary and legacy JSON automatically.
+
+    /// Save private keys in CFE binary format.
+    @discardableResult
+    func savePrivateKeys(_ data: Data) -> Bool {
+        return save(data, forKey: "crypto_private_keys_json", accessible: kSecAttrAccessibleWhenUnlockedThisDeviceOnly)
+    }
+
+    /// Load raw private key bytes (CFE or legacy JSON) — format detection done in Rust.
+    func loadPrivateKeysData() -> Data? {
+        return load(forKey: "crypto_private_keys_json")
+    }
+
     // MARK: - One-Time Prekeys (OTPK) persistence
 
     /// Persist the OTPK set (JSON from Rust exportOneTimePrekeysJson) so it survives app restarts.
@@ -266,6 +280,19 @@ class KeychainManager {
     /// Delete the OTPK set (call when replacing all keys on server).
     func deleteOtpksJson() {
         delete(forKey: "crypto_otpks_json")
+    }
+
+    // CFE binary variants — same Keychain key, format detection in Rust.
+
+    /// Save OTPKs in CFE binary format.
+    @discardableResult
+    func saveOtpks(_ data: Data) -> Bool {
+        return save(data, forKey: "crypto_otpks_json", accessible: kSecAttrAccessibleWhenUnlockedThisDeviceOnly)
+    }
+
+    /// Load raw OTPK bytes (CFE or legacy JSON).
+    func loadOtpksData() -> Data? {
+        return load(forKey: "crypto_otpks_json")
     }
     func saveCustomServerURL(_ url: String) {
         guard let data = url.data(using: .utf8) else { return }
@@ -373,6 +400,19 @@ class KeychainManager {
         let key = "session_\(contactId)"
         guard let data = load(forKey: key) else { return nil }
         return String(data: data, encoding: .utf8)
+    }
+
+    /// Save session in CFE binary format (same Keychain key — format detection in Rust).
+    @discardableResult
+    func saveSessionData(_ data: Data, for contactId: String) -> Bool {
+        let key = "session_\(contactId)"
+        return save(data, forKey: key, accessible: kSecAttrAccessibleWhenUnlockedThisDeviceOnly)
+    }
+
+    /// Load raw session bytes (CFE or legacy JSON).
+    func loadSessionData(for contactId: String) -> Data? {
+        let key = "session_\(contactId)"
+        return load(forKey: key)
     }
 
     /// Delete a session for a specific contact

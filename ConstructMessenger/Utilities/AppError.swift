@@ -182,6 +182,7 @@ extension AppError {
                  .invalidCiphertext:           return .decryptionFailed
             case .encryptionFailed,
                  .invalidKeyData:              return .keyOperationFailed(e.localizedDescription)
+            case .pqxdhOtpkMissing:            return .sessionInitFailed(contactId: "")
             }
         case let e as RPCError:
             switch e.code {

@@ -115,6 +115,11 @@ struct PublicKeyBundleData: Codable {
     var kyberPreKeySignature: Data?   // Ed25519 signature over kyber_pre_key
     var kyberOneTimePreKeyPublic: Data?   // ML-KEM-768 OTPK public key (1184 bytes)
     var kyberOneTimePreKeyId: UInt32?     // Kyber OTPK key ID
+    // SPK freshness fields (populated from server; 0 = legacy server, skip validation)
+    var spkUploadedAt: UInt64         // Unix timestamp when SPK was uploaded
+    var spkRotationEpoch: UInt32      // Monotonic counter for SPK rotations
+    var kyberSpkUploadedAt: UInt64    // Same for Kyber SPK (0 = not provided)
+    var kyberSpkRotationEpoch: UInt32 // Same for Kyber SPK (0 = not provided)
 }
 
 struct EncryptedMessageV3: Codable {

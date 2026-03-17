@@ -62,6 +62,7 @@ final class MessageCryptoService {
             let ephemeralPreview = rustComponents.ephemeralPublicKey.prefix(16).map { String(format: "%02x", $0) }.joined()
             Log.debug("   ephemeralPublicKey preview: \(ephemeralPreview)...", category: "CryptoManager")
             Log.debug("   messageNumber: \(rustComponents.messageNumber)", category: "CryptoManager")
+            Log.debug("   oneTimePrekeyId: \(rustComponents.oneTimePrekeyId)", category: "CryptoManager")
             Log.debug("   content (before padding): \(rustComponents.content.count) chars", category: "CryptoManager")
             Log.debug("   content preview: \(rustComponents.content.prefix(32))...", category: "CryptoManager")
             #endif

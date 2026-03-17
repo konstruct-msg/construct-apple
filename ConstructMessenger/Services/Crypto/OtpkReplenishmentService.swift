@@ -62,9 +62,9 @@ enum OtpkReplenishmentService {
     /// Export all OTPKs from the Rust core and save to Keychain.
     static func persistOtpks(core: OrchestratorCore) {
         do {
-            let json = try core.exportOneTimePrekeysJson()
-            KeychainManager.shared.saveOtpksJson(json)
-            Log.debug("💾 Persisted \(core.oneTimePrekeyCount()) OTPKs to Keychain", category: "OTPK")
+            let data = Data(try core.exportOneTimePrekeys())
+            KeychainManager.shared.saveOtpks(data)
+            Log.debug("💾 Persisted \(core.oneTimePrekeyCount()) OTPKs (CFE) to Keychain", category: "OTPK")
         } catch {
             Log.error("⚠️ Failed to persist OTPKs to Keychain: \(error)", category: "OTPK")
         }
