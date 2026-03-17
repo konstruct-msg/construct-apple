@@ -347,6 +347,23 @@ final class IceProxyManager: ObservableObject {
         startWithRelayFallback(cert: freshCert)
     }
 
+    /// Auto-start ICE when DPI blocking is detected on a direct connection.
+    /// Called by `GRPCChannelManager.performRPC` after a network failure on the direct path.
+    /// Does NOT require the user to have `isEnabled = true`; ICE runs temporarily for the session.
+    /// If start succeeds, subsequent `performRPC` calls automatically route through ICE until
+    /// the proxy is stopped (app restart or user disables ICE in settings).
+    func startOnDemandIfNeeded() async {
+        guard !isRunning else { return }
+        Log.info("🧊 Auto-starting ICE proxy (DPI auto-detection)", category: "ICE")
+        let cert = await getIceBridgeCert()
+        if startWithRelayFallback(cert: cert) {
+            Task { await IceCertFetcher.shared.fetchAndCacheRelayList() }
+            Log.info("🧊 ICE auto-started via DPI detection", category: "ICE")
+        } else {
+            Log.error("🧊 ICE auto-start failed on all endpoints", category: "ICE")
+        }
+    }
+
     // MARK: - Server-provided configuration
 
     /// Called after login/register/recovery with the cert from `AuthTokensResponse`.

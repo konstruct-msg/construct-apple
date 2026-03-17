@@ -156,8 +156,23 @@ final class GRPCChannelManager: Sendable {
             return true
         }
 
+        /// Network-level errors that suggest DPI interference — worth retrying through ICE.
+        func shouldTryICEFallback(_ error: Error) -> Bool {
+            if error is CancellationError { return false }
+            if let rpc = error as? RPCError {
+                switch rpc.code {
+                case .unavailable, .deadlineExceeded:
+                    return true
+                default:
+                    return false
+                }
+            }
+            // Raw connection failure (NIO transport error) — not an RPC-level response
+            return true
+        }
+
         var lastError: Error?
-        for attempt in 0..<2 {
+        for attempt in 0..<3 {
             let usingICE = iceProxyPort() != nil
             let client = try makeClient()
 
@@ -232,6 +247,18 @@ final class GRPCChannelManager: Sendable {
                 if usingICE, shouldRecordIceFailure(error) {
                     recordICEFailure()
                 }
+
+                // DPI auto-fallback: when direct connection fails with a network error on the
+                // first attempt, try starting ICE proxy and retrying through the obfs4 relay.
+                if !usingICE, attempt == 0, shouldTryICEFallback(error) {
+                    Log.info("🧊 Direct connection failed — auto-starting ICE (DPI detected)", category: "GRPCChannel")
+                    await IceProxyManager.shared.startOnDemandIfNeeded()
+                    if iceProxyPort() != nil {
+                        Log.info("🧊 ICE proxy started — retrying RPC through relay", category: "GRPCChannel")
+                        continue
+                    }
+                }
+
                 throw error
             }
         }

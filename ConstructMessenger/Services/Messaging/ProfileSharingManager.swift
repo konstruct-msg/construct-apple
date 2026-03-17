@@ -87,26 +87,29 @@ class ProfileSharingManager {
            let avatarMediaUrl = profileData.avatarMediaUrl,
            let avatarMediaKey = profileData.avatarMediaKey {
             // New format: download and decrypt media from Media Upload API
-            // Capture objectID to safely re-fetch after async boundary
+            // Capture objectID to safely re-fetch after async boundary.
+            // Use viewContext for the save — the passed `context` may be a short-lived
+            // background context that's deallocated before the download completes.
             let userObjectID = user.objectID
             Task {
                 do {
                     Log.info("📥 Downloading avatar from Media Upload API: \(avatarMediaId)", category: "ProfileSharingManager")
-                    
+
                     let decryptedData = try await MediaManager.shared.downloadAndDecryptAvatar(
                         mediaId: avatarMediaId,
                         mediaUrl: avatarMediaUrl,
                         mediaKeyBase64: avatarMediaKey
                     )
-                    
+
                     await MainActor.run {
-                        guard let liveUser = context.object(with: userObjectID) as? User else { return }
+                        let viewContext = PersistenceController.shared.container.viewContext
+                        guard let liveUser = viewContext.object(with: userObjectID) as? User else { return }
                         liveUser.avatarData = decryptedData
                         liveUser.isSharingWithMe = true
                         liveUser.sharedWithMeAt = Date()
-                        
+
                         do {
-                            try context.save()
+                            try viewContext.save()
                             Log.info("✅ Avatar downloaded and saved for user \(userId)", category: "ProfileSharingManager")
                         } catch {
                             Log.error("❌ Failed to save avatar: \(error)", category: "ProfileSharingManager")
