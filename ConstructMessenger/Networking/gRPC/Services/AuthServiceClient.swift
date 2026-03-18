@@ -348,4 +348,30 @@ final class AuthServiceClient: Sendable {
             )
         }
     }
+
+    // MARK: - Device Join Request (new device initiates; existing device approves)
+
+    /// Called by the existing device (phone) when it scans the new device's (laptop) "link-to-me" QR.
+    /// The server stores the approved credentials keyed by `pendingId`; the new device polls for them.
+    ///
+    /// - TODO: Backend — implement `ApproveDeviceJoinRequest` RPC in DeviceLinkService.
+    func approveDeviceJoinRequest(
+        pendingId: String,
+        newDeviceId: String,
+        newDevicePublicKey: String,
+        newDeviceName: String,
+        newDevicePlatform: String
+    ) async throws {
+        // TODO: Wire to gRPC when backend implements ApproveDeviceJoinRequest
+        throw DeviceLinkError.joinRequestNotImplemented
+    }
+
+    /// Called by the new device (laptop) to poll for credentials approved by the existing device.
+    /// Returns `nil` while still pending; returns `ConfirmLinkResult` when approved.
+    ///
+    /// - TODO: Backend — implement `CheckDeviceLinkStatus` RPC in DeviceLinkService.
+    func checkDeviceLinkStatus(pendingId: String) async throws -> ConfirmLinkResult? {
+        // TODO: Wire to gRPC when backend implements CheckDeviceLinkStatus
+        throw DeviceLinkError.joinRequestNotImplemented
+    }
 }

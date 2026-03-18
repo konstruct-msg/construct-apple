@@ -560,3 +560,30 @@
 "linked_devices" = "Linked Devices";
 "linked_devices_hint" = "Scan the QR code on a new device during onboarding to link it to your account.";
 "link_new_device" = "Link New Device";
+
+// MARK: - Device Join Request (Desktop onboarding)
+"device_link_request_title" = "Link to Existing Account";
+"device_link_request_instruction" = "Scan with your iPhone";
+"device_link_request_steps" = "Open Construct on your iPhone → Settings → Linked Devices → tap 'Link New Device' — or just scan this code if you have Construct open.";
+"device_link_waiting_approval" = "Waiting for approval on your iPhone…";
+"device_link_scan_on_phone" = "Scan this code with Construct on your iPhone";
+"device_link_request_timeout" = "Link request timed out — please try again";
+"device_link_feature_unavailable" = "This feature requires a server update. Please try again later.";
+"device_link_invalid_qr" = "Invalid QR code — make sure you are scanning a Construct link code.";
+"device_link_approve_title" = "Link \"%@\" to your account?";
+"device_link_approve_title_fallback" = "Link new device to your account?";
+"device_link_approve" = "Link Device";
+"device_link_approve_message" = "This device will have full access to your Construct account.";
+"device_link_approved_title" = "Device Linked";
+"device_link_approved_message" = "The device has been linked to your account successfully.";
+
+// MARK: - Session Management
+"session_management" = "Session Management";
+"sign_out_this_device" = "Sign Out This Device";
+"sign_out_this_device_message" = "You will be signed out on this device only. Other linked devices remain active.";
+"sign_out_all_devices" = "Sign Out All Devices";
+"sign_out_all_devices_message" = "You will be signed out on ALL devices simultaneously. Use this if a device was lost or compromised.";
+"sign_out_all_hint" = "Signing out of all devices invalidates all sessions immediately. You will need to re-authenticate on every device.";
+"sign_out" = "Sign Out";
+"device_scan_to_approve" = "Scan to Approve New Device";
+"device_revoke_confirm_message" = "Sign out \"%@\" remotely? This device will be disconnected from your account.";

@@ -562,3 +562,30 @@
 "linked_devices" = "Привязанные устройства";
 "linked_devices_hint" = "Отсканируйте QR-код на новом устройстве при первом входе, чтобы привязать его к аккаунту.";
 "link_new_device" = "Привязать новое устройство";
+
+// MARK: - Device Join Request (Desktop onboarding)
+"device_link_request_title" = "Привязать к существующему аккаунту";
+"device_link_request_instruction" = "Отсканируйте с iPhone";
+"device_link_request_steps" = "Откройте Construct на iPhone → Настройки → Устройства → нажмите «Привязать новое устройство» — или просто отсканируйте этот код, если Construct уже открыт.";
+"device_link_waiting_approval" = "Ожидание подтверждения на iPhone…";
+"device_link_scan_on_phone" = "Отсканируйте этот код через Construct на iPhone";
+"device_link_request_timeout" = "Время ожидания истекло — попробуйте снова";
+"device_link_feature_unavailable" = "Функция требует обновления сервера. Попробуйте позже.";
+"device_link_invalid_qr" = "Неверный QR-код — убедитесь, что сканируете код Construct.";
+"device_link_approve_title" = "Привязать «%@» к аккаунту?";
+"device_link_approve_title_fallback" = "Привязать новое устройство к аккаунту?";
+"device_link_approve" = "Привязать устройство";
+"device_link_approve_message" = "Это устройство получит полный доступ к вашему аккаунту Construct.";
+"device_link_approved_title" = "Устройство привязано";
+"device_link_approved_message" = "Устройство успешно привязано к вашему аккаунту.";
+
+// MARK: - Session Management
+"session_management" = "Управление сессиями";
+"sign_out_this_device" = "Выйти с этого устройства";
+"sign_out_this_device_message" = "Вы выйдете только с этого устройства. Другие привязанные устройства останутся активными.";
+"sign_out_all_devices" = "Выйти со всех устройств";
+"sign_out_all_devices_message" = "Вы выйдете ОДНОВРЕМЕННО со всех устройств. Используйте, если устройство было утеряно или скомпрометировано.";
+"sign_out_all_hint" = "Выход со всех устройств немедленно аннулирует все сессии. Потребуется повторная аутентификация на каждом устройстве.";
+"sign_out" = "Выйти";
+"device_scan_to_approve" = "Сканировать для одобрения";
+"device_revoke_confirm_message" = "Удалённо выйти с устройства «%@»? Оно будет отключено от вашего аккаунта.";

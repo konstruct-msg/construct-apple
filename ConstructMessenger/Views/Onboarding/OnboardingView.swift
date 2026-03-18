@@ -132,7 +132,11 @@ struct OnboardingView: View {
                     .environment(recoveryVM)
             }
             .sheet(isPresented: $showingDeviceLink) {
+                #if os(iOS)
                 DeviceLinkScanView()
+                #else
+                DesktopLinkRequestView()
+                #endif
             }
             .sheet(isPresented: $showingNetworkSettings) {
                 NavigationStack {
