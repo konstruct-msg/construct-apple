@@ -23,7 +23,10 @@ final class MessagingServiceClient: Sendable {
         senderId: String,
         conversationId: String,
         encryptedPayload: Data,
-        timestamp: UInt64
+        timestamp: UInt64,
+        senderDeviceId: String? = nil,
+        recipientDeviceId: String? = nil,
+        contentType: Shared_Proto_Core_V1_ContentType = .e2EeSignal
     ) async throws -> SendMessageResponse {
         try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.sendMessage) { grpcClient in
             let msgClient = Shared_Proto_Services_V1_MessagingService.Client(wrapping: grpcClient)
@@ -39,9 +42,20 @@ final class MessagingServiceClient: Sendable {
             envelope.sender = sender
             envelope.recipient = recipient
             envelope.conversationID = conversationId
-            envelope.contentType = .e2EeSignal
+            envelope.contentType = contentType
             envelope.encryptedPayload = encryptedPayload
             envelope.timestamp = Int64(timestamp)
+
+            if let senderDeviceId, !senderDeviceId.isEmpty {
+                var senderDevice = Shared_Proto_Core_V1_DeviceId()
+                senderDevice.deviceID = senderDeviceId
+                envelope.senderDevice = senderDevice
+            }
+            if let recipientDeviceId, !recipientDeviceId.isEmpty {
+                var recipientDevice = Shared_Proto_Core_V1_DeviceId()
+                recipientDevice.deviceID = recipientDeviceId
+                envelope.recipientDevice = recipientDevice
+            }
 
             var request = Shared_Proto_Services_V1_SendMessageRequest()
             request.message = envelope

@@ -114,196 +114,155 @@ public struct Shared_Proto_Services_V1_GetPreKeyBundleRequest: Sendable {
   fileprivate var _preferredSuite: String? = nil
 }
 
-public struct Shared_Proto_Services_V1_GetPreKeyBundleResponse: Sendable {
+public struct Shared_Proto_Services_V1_GetPreKeyBundleResponse: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   /// Pre-key bundle
   public var bundle: Shared_Proto_Services_V1_PreKeyBundle {
-    get {_bundle ?? Shared_Proto_Services_V1_PreKeyBundle()}
-    set {_bundle = newValue}
+    get {_storage._bundle ?? Shared_Proto_Services_V1_PreKeyBundle()}
+    set {_uniqueStorage()._bundle = newValue}
   }
   /// Returns true if `bundle` has been explicitly set.
-  public var hasBundle: Bool {self._bundle != nil}
+  public var hasBundle: Bool {_storage._bundle != nil}
   /// Clears the value of `bundle`. Subsequent reads from it will return its default value.
-  public mutating func clearBundle() {self._bundle = nil}
+  public mutating func clearBundle() {_uniqueStorage()._bundle = nil}
 
   /// Bundle device ID
-  public var deviceID: String = String()
+  public var deviceID: String {
+    get {_storage._deviceID}
+    set {_uniqueStorage()._deviceID = newValue}
+  }
 
   /// Was one-time pre-key included?
   /// If false, only signed pre-key available (less forward secrecy)
-  public var hasOneTimeKey_p: Bool = false
+  public var hasOneTimeKey_p: Bool {
+    get {_storage._hasOneTimeKey_p}
+    set {_uniqueStorage()._hasOneTimeKey_p = newValue}
+  }
 
   /// Ed25519 public key for verifying device signatures
-  public var verifyingKey: Data = Data()
-
-  public var unknownFields = SwiftProtobuf.UnknownStorage()
-
-  public init() {}
-
-  fileprivate var _bundle: Shared_Proto_Services_V1_PreKeyBundle? = nil
-}
-
-/// Pre-key bundle for X3DH key agreement
-public struct Shared_Proto_Services_V1_PreKeyBundle: @unchecked Sendable {
-  // SwiftProtobuf.Message conformance is added in an extension below. See the
-  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
-  // methods supported on all messages.
-
-  /// Registration ID (for Signal protocol compatibility)
-  public var registrationID: UInt32 {
-    get {_storage._registrationID}
-    set {_uniqueStorage()._registrationID = newValue}
+  public var verifyingKey: Data {
+    get {_storage._verifyingKey}
+    set {_uniqueStorage()._verifyingKey = newValue}
   }
-
-  /// Identity key (long-term, Ed25519 -> X25519 or native X25519)
-  public var identityKey: Data {
-    get {_storage._identityKey}
-    set {_uniqueStorage()._identityKey = newValue}
-  }
-
-  /// Signed pre-key (rotated monthly)
-  public var signedPreKey: Data {
-    get {_storage._signedPreKey}
-    set {_uniqueStorage()._signedPreKey = newValue}
-  }
-
-  /// Signed pre-key ID
-  public var signedPreKeyID: UInt32 {
-    get {_storage._signedPreKeyID}
-    set {_uniqueStorage()._signedPreKeyID = newValue}
-  }
-
-  /// Signed pre-key signature (Ed25519 signature over signed_pre_key)
-  public var signedPreKeySignature: Data {
-    get {_storage._signedPreKeySignature}
-    set {_uniqueStorage()._signedPreKeySignature = newValue}
-  }
-
-  /// One-time pre-key (single use, may be null if exhausted)
-  public var oneTimePreKey: Data {
-    get {_storage._oneTimePreKey ?? Data()}
-    set {_uniqueStorage()._oneTimePreKey = newValue}
-  }
-  /// Returns true if `oneTimePreKey` has been explicitly set.
-  public var hasOneTimePreKey: Bool {_storage._oneTimePreKey != nil}
-  /// Clears the value of `oneTimePreKey`. Subsequent reads from it will return its default value.
-  public mutating func clearOneTimePreKey() {_uniqueStorage()._oneTimePreKey = nil}
-
-  /// One-time pre-key ID (if provided)
-  public var oneTimePreKeyID: UInt32 {
-    get {_storage._oneTimePreKeyID ?? 0}
-    set {_uniqueStorage()._oneTimePreKeyID = newValue}
-  }
-  /// Returns true if `oneTimePreKeyID` has been explicitly set.
-  public var hasOneTimePreKeyID: Bool {_storage._oneTimePreKeyID != nil}
-  /// Clears the value of `oneTimePreKeyID`. Subsequent reads from it will return its default value.
-  public mutating func clearOneTimePreKeyID() {_uniqueStorage()._oneTimePreKeyID = nil}
-
-  /// Crypto suite used
-  public var cryptoSuite: String {
-    get {_storage._cryptoSuite}
-    set {_uniqueStorage()._cryptoSuite = newValue}
-  }
-
-  /// Key generation timestamp (for staleness detection)
-  public var generatedAt: Int64 {
-    get {_storage._generatedAt}
-    set {_uniqueStorage()._generatedAt = newValue}
-  }
-
-  /// Kyber signed pre-key public key (ML-KEM-1024, exactly 1184 bytes)
-  public var kyberPreKey: Data {
-    get {_storage._kyberPreKey ?? Data()}
-    set {_uniqueStorage()._kyberPreKey = newValue}
-  }
-  /// Returns true if `kyberPreKey` has been explicitly set.
-  public var hasKyberPreKey: Bool {_storage._kyberPreKey != nil}
-  /// Clears the value of `kyberPreKey`. Subsequent reads from it will return its default value.
-  public mutating func clearKyberPreKey() {_uniqueStorage()._kyberPreKey = nil}
-
-  /// Kyber signed pre-key ID
-  public var kyberPreKeyID: UInt32 {
-    get {_storage._kyberPreKeyID ?? 0}
-    set {_uniqueStorage()._kyberPreKeyID = newValue}
-  }
-  /// Returns true if `kyberPreKeyID` has been explicitly set.
-  public var hasKyberPreKeyID: Bool {_storage._kyberPreKeyID != nil}
-  /// Clears the value of `kyberPreKeyID`. Subsequent reads from it will return its default value.
-  public mutating func clearKyberPreKeyID() {_uniqueStorage()._kyberPreKeyID = nil}
-
-  /// Ed25519 signature over kyber_pre_key (64 bytes)
-  public var kyberPreKeySignature: Data {
-    get {_storage._kyberPreKeySignature ?? Data()}
-    set {_uniqueStorage()._kyberPreKeySignature = newValue}
-  }
-  /// Returns true if `kyberPreKeySignature` has been explicitly set.
-  public var hasKyberPreKeySignature: Bool {_storage._kyberPreKeySignature != nil}
-  /// Clears the value of `kyberPreKeySignature`. Subsequent reads from it will return its default value.
-  public mutating func clearKyberPreKeySignature() {_uniqueStorage()._kyberPreKeySignature = nil}
-
-  /// Kyber one-time pre-key (ML-KEM-1024, exactly 1184 bytes; single use)
-  public var kyberOneTimePreKey: Data {
-    get {_storage._kyberOneTimePreKey ?? Data()}
-    set {_uniqueStorage()._kyberOneTimePreKey = newValue}
-  }
-  /// Returns true if `kyberOneTimePreKey` has been explicitly set.
-  public var hasKyberOneTimePreKey: Bool {_storage._kyberOneTimePreKey != nil}
-  /// Clears the value of `kyberOneTimePreKey`. Subsequent reads from it will return its default value.
-  public mutating func clearKyberOneTimePreKey() {_uniqueStorage()._kyberOneTimePreKey = nil}
-
-  /// Kyber one-time pre-key ID
-  public var kyberOneTimePreKeyID: UInt32 {
-    get {_storage._kyberOneTimePreKeyID ?? 0}
-    set {_uniqueStorage()._kyberOneTimePreKeyID = newValue}
-  }
-  /// Returns true if `kyberOneTimePreKeyID` has been explicitly set.
-  public var hasKyberOneTimePreKeyID: Bool {_storage._kyberOneTimePreKeyID != nil}
-  /// Clears the value of `kyberOneTimePreKeyID`. Subsequent reads from it will return its default value.
-  public mutating func clearKyberOneTimePreKeyID() {_uniqueStorage()._kyberOneTimePreKeyID = nil}
-
-  /// Unix timestamp (seconds) when the current signed_pre_key was uploaded to the server.
-  /// Zero means legacy device (no server-recorded timestamp); client falls back to generated_at.
-  public var spkUploadedAt: Int64 {
-    get {_storage._spkUploadedAt}
-    set {_uniqueStorage()._spkUploadedAt = newValue}
-  }
-
-  /// Monotonically increasing counter for classic SPK rotations on this device.
-  /// Client caches this per-contact and rejects bundles where epoch has not increased (replay).
-  public var spkRotationEpoch: UInt32 {
-    get {_storage._spkRotationEpoch}
-    set {_uniqueStorage()._spkRotationEpoch = newValue}
-  }
-
-  /// Unix timestamp (seconds) when the current Kyber SPK was uploaded. Absent when device
-  /// has no Kyber keys.
-  public var kyberSpkUploadedAt: Int64 {
-    get {_storage._kyberSpkUploadedAt ?? 0}
-    set {_uniqueStorage()._kyberSpkUploadedAt = newValue}
-  }
-  /// Returns true if `kyberSpkUploadedAt` has been explicitly set.
-  public var hasKyberSpkUploadedAt: Bool {_storage._kyberSpkUploadedAt != nil}
-  /// Clears the value of `kyberSpkUploadedAt`. Subsequent reads from it will return its default value.
-  public mutating func clearKyberSpkUploadedAt() {_uniqueStorage()._kyberSpkUploadedAt = nil}
-
-  /// Monotonically increasing counter for Kyber SPK rotations.
-  public var kyberSpkRotationEpoch: UInt32 {
-    get {_storage._kyberSpkRotationEpoch ?? 0}
-    set {_uniqueStorage()._kyberSpkRotationEpoch = newValue}
-  }
-  /// Returns true if `kyberSpkRotationEpoch` has been explicitly set.
-  public var hasKyberSpkRotationEpoch: Bool {_storage._kyberSpkRotationEpoch != nil}
-  /// Clears the value of `kyberSpkRotationEpoch`. Subsequent reads from it will return its default value.
-  public mutating func clearKyberSpkRotationEpoch() {_uniqueStorage()._kyberSpkRotationEpoch = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
   fileprivate var _storage = _StorageClass.defaultInstance
+}
+
+/// Pre-key bundle for X3DH key agreement
+public struct Shared_Proto_Services_V1_PreKeyBundle: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// Registration ID (for Signal protocol compatibility)
+  public var registrationID: UInt32 = 0
+
+  /// Identity key (long-term, Ed25519 -> X25519 or native X25519)
+  public var identityKey: Data = Data()
+
+  /// Signed pre-key (rotated monthly)
+  public var signedPreKey: Data = Data()
+
+  /// Signed pre-key ID
+  public var signedPreKeyID: UInt32 = 0
+
+  /// Signed pre-key signature (Ed25519 signature over signed_pre_key)
+  public var signedPreKeySignature: Data = Data()
+
+  /// One-time pre-key (single use, may be null if exhausted)
+  public var oneTimePreKey: Data {
+    get {_oneTimePreKey ?? Data()}
+    set {_oneTimePreKey = newValue}
+  }
+  /// Returns true if `oneTimePreKey` has been explicitly set.
+  public var hasOneTimePreKey: Bool {self._oneTimePreKey != nil}
+  /// Clears the value of `oneTimePreKey`. Subsequent reads from it will return its default value.
+  public mutating func clearOneTimePreKey() {self._oneTimePreKey = nil}
+
+  /// One-time pre-key ID (if provided)
+  public var oneTimePreKeyID: UInt32 {
+    get {_oneTimePreKeyID ?? 0}
+    set {_oneTimePreKeyID = newValue}
+  }
+  /// Returns true if `oneTimePreKeyID` has been explicitly set.
+  public var hasOneTimePreKeyID: Bool {self._oneTimePreKeyID != nil}
+  /// Clears the value of `oneTimePreKeyID`. Subsequent reads from it will return its default value.
+  public mutating func clearOneTimePreKeyID() {self._oneTimePreKeyID = nil}
+
+  /// Crypto suite used
+  public var cryptoSuite: String = String()
+
+  /// Key generation timestamp (for staleness detection)
+  public var generatedAt: Int64 = 0
+
+  /// Kyber signed pre-key public key (ML-KEM-1024, exactly 1184 bytes)
+  public var kyberPreKey: Data {
+    get {_kyberPreKey ?? Data()}
+    set {_kyberPreKey = newValue}
+  }
+  /// Returns true if `kyberPreKey` has been explicitly set.
+  public var hasKyberPreKey: Bool {self._kyberPreKey != nil}
+  /// Clears the value of `kyberPreKey`. Subsequent reads from it will return its default value.
+  public mutating func clearKyberPreKey() {self._kyberPreKey = nil}
+
+  /// Kyber signed pre-key ID
+  public var kyberPreKeyID: UInt32 {
+    get {_kyberPreKeyID ?? 0}
+    set {_kyberPreKeyID = newValue}
+  }
+  /// Returns true if `kyberPreKeyID` has been explicitly set.
+  public var hasKyberPreKeyID: Bool {self._kyberPreKeyID != nil}
+  /// Clears the value of `kyberPreKeyID`. Subsequent reads from it will return its default value.
+  public mutating func clearKyberPreKeyID() {self._kyberPreKeyID = nil}
+
+  /// Ed25519 signature over kyber_pre_key (64 bytes)
+  public var kyberPreKeySignature: Data {
+    get {_kyberPreKeySignature ?? Data()}
+    set {_kyberPreKeySignature = newValue}
+  }
+  /// Returns true if `kyberPreKeySignature` has been explicitly set.
+  public var hasKyberPreKeySignature: Bool {self._kyberPreKeySignature != nil}
+  /// Clears the value of `kyberPreKeySignature`. Subsequent reads from it will return its default value.
+  public mutating func clearKyberPreKeySignature() {self._kyberPreKeySignature = nil}
+
+  /// Kyber one-time pre-key (ML-KEM-1024, exactly 1184 bytes; single use)
+  public var kyberOneTimePreKey: Data {
+    get {_kyberOneTimePreKey ?? Data()}
+    set {_kyberOneTimePreKey = newValue}
+  }
+  /// Returns true if `kyberOneTimePreKey` has been explicitly set.
+  public var hasKyberOneTimePreKey: Bool {self._kyberOneTimePreKey != nil}
+  /// Clears the value of `kyberOneTimePreKey`. Subsequent reads from it will return its default value.
+  public mutating func clearKyberOneTimePreKey() {self._kyberOneTimePreKey = nil}
+
+  /// Kyber one-time pre-key ID
+  public var kyberOneTimePreKeyID: UInt32 {
+    get {_kyberOneTimePreKeyID ?? 0}
+    set {_kyberOneTimePreKeyID = newValue}
+  }
+  /// Returns true if `kyberOneTimePreKeyID` has been explicitly set.
+  public var hasKyberOneTimePreKeyID: Bool {self._kyberOneTimePreKeyID != nil}
+  /// Clears the value of `kyberOneTimePreKeyID`. Subsequent reads from it will return its default value.
+  public mutating func clearKyberOneTimePreKeyID() {self._kyberOneTimePreKeyID = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _oneTimePreKey: Data? = nil
+  fileprivate var _oneTimePreKeyID: UInt32? = nil
+  fileprivate var _kyberPreKey: Data? = nil
+  fileprivate var _kyberPreKeyID: UInt32? = nil
+  fileprivate var _kyberPreKeySignature: Data? = nil
+  fileprivate var _kyberOneTimePreKey: Data? = nil
+  fileprivate var _kyberOneTimePreKeyID: UInt32? = nil
 }
 
 public struct Shared_Proto_Services_V1_GetPreKeyBundlesRequest: Sendable {
@@ -577,24 +536,11 @@ public struct Shared_Proto_Services_V1_RotateSignedPreKeyRequest: Sendable {
   /// Reason for rotation (for audit log)
   public var reason: Shared_Proto_Services_V1_SignedPreKeyRotationReason = .unspecified
 
-  /// Optional: also rotate the Kyber signed pre-key atomically.
-  /// When present, the server MUST update both keys in a single transaction
-  /// so they cannot desynchronize. If absent, only the classic SPK is rotated.
-  public var newKyberSignedPreKey: Shared_Proto_Services_V1_KyberSignedPreKeyUpload {
-    get {_newKyberSignedPreKey ?? Shared_Proto_Services_V1_KyberSignedPreKeyUpload()}
-    set {_newKyberSignedPreKey = newValue}
-  }
-  /// Returns true if `newKyberSignedPreKey` has been explicitly set.
-  public var hasNewKyberSignedPreKey: Bool {self._newKyberSignedPreKey != nil}
-  /// Clears the value of `newKyberSignedPreKey`. Subsequent reads from it will return its default value.
-  public mutating func clearNewKyberSignedPreKey() {self._newKyberSignedPreKey = nil}
-
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
   fileprivate var _newSignedPreKey: Shared_Proto_Services_V1_SignedPreKeyUpload? = nil
-  fileprivate var _newKyberSignedPreKey: Shared_Proto_Services_V1_KyberSignedPreKeyUpload? = nil
 }
 
 public struct Shared_Proto_Services_V1_RotateSignedPreKeyResponse: Sendable {
@@ -614,35 +560,9 @@ public struct Shared_Proto_Services_V1_RotateSignedPreKeyResponse: Sendable {
   /// Rotation timestamp
   public var rotatedAt: Int64 = 0
 
-  /// Echo of the new Kyber signed pre-key ID (when new_kyber_signed_pre_key was provided)
-  public var newKyberKeyID: UInt32 {
-    get {_newKyberKeyID ?? 0}
-    set {_newKyberKeyID = newValue}
-  }
-  /// Returns true if `newKyberKeyID` has been explicitly set.
-  public var hasNewKyberKeyID: Bool {self._newKyberKeyID != nil}
-  /// Clears the value of `newKyberKeyID`. Subsequent reads from it will return its default value.
-  public mutating func clearNewKyberKeyID() {self._newKyberKeyID = nil}
-
-  /// New SPK rotation epoch after this rotation (incremented atomically by server).
-  public var newSpkRotationEpoch: UInt32 = 0
-
-  /// New Kyber SPK rotation epoch (when new_kyber_signed_pre_key was provided).
-  public var newKyberSpkRotationEpoch: UInt32 {
-    get {_newKyberSpkRotationEpoch ?? 0}
-    set {_newKyberSpkRotationEpoch = newValue}
-  }
-  /// Returns true if `newKyberSpkRotationEpoch` has been explicitly set.
-  public var hasNewKyberSpkRotationEpoch: Bool {self._newKyberSpkRotationEpoch != nil}
-  /// Clears the value of `newKyberSpkRotationEpoch`. Subsequent reads from it will return its default value.
-  public mutating func clearNewKyberSpkRotationEpoch() {self._newKyberSpkRotationEpoch = nil}
-
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
-
-  fileprivate var _newKyberKeyID: UInt32? = nil
-  fileprivate var _newKyberSpkRotationEpoch: UInt32? = nil
 }
 
 public struct Shared_Proto_Services_V1_GetSignedPreKeyAgeRequest: Sendable {
@@ -836,74 +756,11 @@ extension Shared_Proto_Services_V1_GetPreKeyBundleResponse: SwiftProtobuf.Messag
   public static let protoMessageName: String = _protobuf_package + ".GetPreKeyBundleResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}bundle\0\u{3}device_id\0\u{3}has_one_time_key\0\u{4}\u{8}verifying_key\0\u{c}\u{4}\u{7}")
 
-  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularMessageField(value: &self._bundle) }()
-      case 2: try { try decoder.decodeSingularStringField(value: &self.deviceID) }()
-      case 3: try { try decoder.decodeSingularBoolField(value: &self.hasOneTimeKey_p) }()
-      case 11: try { try decoder.decodeSingularBytesField(value: &self.verifyingKey) }()
-      default: break
-      }
-    }
-  }
-
-  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    // The use of inline closures is to circumvent an issue where the compiler
-    // allocates stack space for every if/case branch local when no optimizations
-    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
-    // https://github.com/apple/swift-protobuf/issues/1182
-    try { if let v = self._bundle {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
-    } }()
-    if !self.deviceID.isEmpty {
-      try visitor.visitSingularStringField(value: self.deviceID, fieldNumber: 2)
-    }
-    if self.hasOneTimeKey_p != false {
-      try visitor.visitSingularBoolField(value: self.hasOneTimeKey_p, fieldNumber: 3)
-    }
-    if !self.verifyingKey.isEmpty {
-      try visitor.visitSingularBytesField(value: self.verifyingKey, fieldNumber: 11)
-    }
-    try unknownFields.traverse(visitor: &visitor)
-  }
-
-  public static func ==(lhs: Shared_Proto_Services_V1_GetPreKeyBundleResponse, rhs: Shared_Proto_Services_V1_GetPreKeyBundleResponse) -> Bool {
-    if lhs._bundle != rhs._bundle {return false}
-    if lhs.deviceID != rhs.deviceID {return false}
-    if lhs.hasOneTimeKey_p != rhs.hasOneTimeKey_p {return false}
-    if lhs.verifyingKey != rhs.verifyingKey {return false}
-    if lhs.unknownFields != rhs.unknownFields {return false}
-    return true
-  }
-}
-
-extension Shared_Proto_Services_V1_PreKeyBundle: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".PreKeyBundle"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}registration_id\0\u{3}identity_key\0\u{3}signed_pre_key\0\u{3}signed_pre_key_id\0\u{3}signed_pre_key_signature\0\u{3}one_time_pre_key\0\u{3}one_time_pre_key_id\0\u{3}crypto_suite\0\u{3}generated_at\0\u{3}kyber_pre_key\0\u{3}kyber_pre_key_id\0\u{3}kyber_pre_key_signature\0\u{3}kyber_one_time_pre_key\0\u{3}kyber_one_time_pre_key_id\0\u{3}spk_uploaded_at\0\u{3}spk_rotation_epoch\0\u{3}kyber_spk_uploaded_at\0\u{3}kyber_spk_rotation_epoch\0")
-
   fileprivate class _StorageClass {
-    var _registrationID: UInt32 = 0
-    var _identityKey: Data = Data()
-    var _signedPreKey: Data = Data()
-    var _signedPreKeyID: UInt32 = 0
-    var _signedPreKeySignature: Data = Data()
-    var _oneTimePreKey: Data? = nil
-    var _oneTimePreKeyID: UInt32? = nil
-    var _cryptoSuite: String = String()
-    var _generatedAt: Int64 = 0
-    var _kyberPreKey: Data? = nil
-    var _kyberPreKeyID: UInt32? = nil
-    var _kyberPreKeySignature: Data? = nil
-    var _kyberOneTimePreKey: Data? = nil
-    var _kyberOneTimePreKeyID: UInt32? = nil
-    var _spkUploadedAt: Int64 = 0
-    var _spkRotationEpoch: UInt32 = 0
-    var _kyberSpkUploadedAt: Int64? = nil
-    var _kyberSpkRotationEpoch: UInt32? = nil
+    var _bundle: Shared_Proto_Services_V1_PreKeyBundle? = nil
+    var _deviceID: String = String()
+    var _hasOneTimeKey_p: Bool = false
+    var _verifyingKey: Data = Data()
 
       // This property is used as the initial default value for new instances of the type.
       // The type itself is protecting the reference to its storage via CoW semantics.
@@ -914,24 +771,10 @@ extension Shared_Proto_Services_V1_PreKeyBundle: SwiftProtobuf.Message, SwiftPro
     private init() {}
 
     init(copying source: _StorageClass) {
-      _registrationID = source._registrationID
-      _identityKey = source._identityKey
-      _signedPreKey = source._signedPreKey
-      _signedPreKeyID = source._signedPreKeyID
-      _signedPreKeySignature = source._signedPreKeySignature
-      _oneTimePreKey = source._oneTimePreKey
-      _oneTimePreKeyID = source._oneTimePreKeyID
-      _cryptoSuite = source._cryptoSuite
-      _generatedAt = source._generatedAt
-      _kyberPreKey = source._kyberPreKey
-      _kyberPreKeyID = source._kyberPreKeyID
-      _kyberPreKeySignature = source._kyberPreKeySignature
-      _kyberOneTimePreKey = source._kyberOneTimePreKey
-      _kyberOneTimePreKeyID = source._kyberOneTimePreKeyID
-      _spkUploadedAt = source._spkUploadedAt
-      _spkRotationEpoch = source._spkRotationEpoch
-      _kyberSpkUploadedAt = source._kyberSpkUploadedAt
-      _kyberSpkRotationEpoch = source._kyberSpkRotationEpoch
+      _bundle = source._bundle
+      _deviceID = source._deviceID
+      _hasOneTimeKey_p = source._hasOneTimeKey_p
+      _verifyingKey = source._verifyingKey
     }
   }
 
@@ -950,24 +793,10 @@ extension Shared_Proto_Services_V1_PreKeyBundle: SwiftProtobuf.Message, SwiftPro
         // allocates stack space for every case branch when no optimizations are
         // enabled. https://github.com/apple/swift-protobuf/issues/1034
         switch fieldNumber {
-        case 1: try { try decoder.decodeSingularUInt32Field(value: &_storage._registrationID) }()
-        case 2: try { try decoder.decodeSingularBytesField(value: &_storage._identityKey) }()
-        case 3: try { try decoder.decodeSingularBytesField(value: &_storage._signedPreKey) }()
-        case 4: try { try decoder.decodeSingularUInt32Field(value: &_storage._signedPreKeyID) }()
-        case 5: try { try decoder.decodeSingularBytesField(value: &_storage._signedPreKeySignature) }()
-        case 6: try { try decoder.decodeSingularBytesField(value: &_storage._oneTimePreKey) }()
-        case 7: try { try decoder.decodeSingularUInt32Field(value: &_storage._oneTimePreKeyID) }()
-        case 8: try { try decoder.decodeSingularStringField(value: &_storage._cryptoSuite) }()
-        case 9: try { try decoder.decodeSingularInt64Field(value: &_storage._generatedAt) }()
-        case 10: try { try decoder.decodeSingularBytesField(value: &_storage._kyberPreKey) }()
-        case 11: try { try decoder.decodeSingularUInt32Field(value: &_storage._kyberPreKeyID) }()
-        case 12: try { try decoder.decodeSingularBytesField(value: &_storage._kyberPreKeySignature) }()
-        case 13: try { try decoder.decodeSingularBytesField(value: &_storage._kyberOneTimePreKey) }()
-        case 14: try { try decoder.decodeSingularUInt32Field(value: &_storage._kyberOneTimePreKeyID) }()
-        case 15: try { try decoder.decodeSingularInt64Field(value: &_storage._spkUploadedAt) }()
-        case 16: try { try decoder.decodeSingularUInt32Field(value: &_storage._spkRotationEpoch) }()
-        case 17: try { try decoder.decodeSingularInt64Field(value: &_storage._kyberSpkUploadedAt) }()
-        case 18: try { try decoder.decodeSingularUInt32Field(value: &_storage._kyberSpkRotationEpoch) }()
+        case 1: try { try decoder.decodeSingularMessageField(value: &_storage._bundle) }()
+        case 2: try { try decoder.decodeSingularStringField(value: &_storage._deviceID) }()
+        case 3: try { try decoder.decodeSingularBoolField(value: &_storage._hasOneTimeKey_p) }()
+        case 11: try { try decoder.decodeSingularBytesField(value: &_storage._verifyingKey) }()
         default: break
         }
       }
@@ -980,91 +809,134 @@ extension Shared_Proto_Services_V1_PreKeyBundle: SwiftProtobuf.Message, SwiftPro
       // allocates stack space for every if/case branch local when no optimizations
       // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
       // https://github.com/apple/swift-protobuf/issues/1182
-      if _storage._registrationID != 0 {
-        try visitor.visitSingularUInt32Field(value: _storage._registrationID, fieldNumber: 1)
-      }
-      if !_storage._identityKey.isEmpty {
-        try visitor.visitSingularBytesField(value: _storage._identityKey, fieldNumber: 2)
-      }
-      if !_storage._signedPreKey.isEmpty {
-        try visitor.visitSingularBytesField(value: _storage._signedPreKey, fieldNumber: 3)
-      }
-      if _storage._signedPreKeyID != 0 {
-        try visitor.visitSingularUInt32Field(value: _storage._signedPreKeyID, fieldNumber: 4)
-      }
-      if !_storage._signedPreKeySignature.isEmpty {
-        try visitor.visitSingularBytesField(value: _storage._signedPreKeySignature, fieldNumber: 5)
-      }
-      try { if let v = _storage._oneTimePreKey {
-        try visitor.visitSingularBytesField(value: v, fieldNumber: 6)
+      try { if let v = _storage._bundle {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
       } }()
-      try { if let v = _storage._oneTimePreKeyID {
-        try visitor.visitSingularUInt32Field(value: v, fieldNumber: 7)
-      } }()
-      if !_storage._cryptoSuite.isEmpty {
-        try visitor.visitSingularStringField(value: _storage._cryptoSuite, fieldNumber: 8)
+      if !_storage._deviceID.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._deviceID, fieldNumber: 2)
       }
-      if _storage._generatedAt != 0 {
-        try visitor.visitSingularInt64Field(value: _storage._generatedAt, fieldNumber: 9)
+      if _storage._hasOneTimeKey_p != false {
+        try visitor.visitSingularBoolField(value: _storage._hasOneTimeKey_p, fieldNumber: 3)
       }
-      try { if let v = _storage._kyberPreKey {
-        try visitor.visitSingularBytesField(value: v, fieldNumber: 10)
-      } }()
-      try { if let v = _storage._kyberPreKeyID {
-        try visitor.visitSingularUInt32Field(value: v, fieldNumber: 11)
-      } }()
-      try { if let v = _storage._kyberPreKeySignature {
-        try visitor.visitSingularBytesField(value: v, fieldNumber: 12)
-      } }()
-      try { if let v = _storage._kyberOneTimePreKey {
-        try visitor.visitSingularBytesField(value: v, fieldNumber: 13)
-      } }()
-      try { if let v = _storage._kyberOneTimePreKeyID {
-        try visitor.visitSingularUInt32Field(value: v, fieldNumber: 14)
-      } }()
-      if _storage._spkUploadedAt != 0 {
-        try visitor.visitSingularInt64Field(value: _storage._spkUploadedAt, fieldNumber: 15)
+      if !_storage._verifyingKey.isEmpty {
+        try visitor.visitSingularBytesField(value: _storage._verifyingKey, fieldNumber: 11)
       }
-      if _storage._spkRotationEpoch != 0 {
-        try visitor.visitSingularUInt32Field(value: _storage._spkRotationEpoch, fieldNumber: 16)
-      }
-      try { if let v = _storage._kyberSpkUploadedAt {
-        try visitor.visitSingularInt64Field(value: v, fieldNumber: 17)
-      } }()
-      try { if let v = _storage._kyberSpkRotationEpoch {
-        try visitor.visitSingularUInt32Field(value: v, fieldNumber: 18)
-      } }()
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Shared_Proto_Services_V1_PreKeyBundle, rhs: Shared_Proto_Services_V1_PreKeyBundle) -> Bool {
+  public static func ==(lhs: Shared_Proto_Services_V1_GetPreKeyBundleResponse, rhs: Shared_Proto_Services_V1_GetPreKeyBundleResponse) -> Bool {
     if lhs._storage !== rhs._storage {
       let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
         let _storage = _args.0
         let rhs_storage = _args.1
-        if _storage._registrationID != rhs_storage._registrationID {return false}
-        if _storage._identityKey != rhs_storage._identityKey {return false}
-        if _storage._signedPreKey != rhs_storage._signedPreKey {return false}
-        if _storage._signedPreKeyID != rhs_storage._signedPreKeyID {return false}
-        if _storage._signedPreKeySignature != rhs_storage._signedPreKeySignature {return false}
-        if _storage._oneTimePreKey != rhs_storage._oneTimePreKey {return false}
-        if _storage._oneTimePreKeyID != rhs_storage._oneTimePreKeyID {return false}
-        if _storage._cryptoSuite != rhs_storage._cryptoSuite {return false}
-        if _storage._generatedAt != rhs_storage._generatedAt {return false}
-        if _storage._kyberPreKey != rhs_storage._kyberPreKey {return false}
-        if _storage._kyberPreKeyID != rhs_storage._kyberPreKeyID {return false}
-        if _storage._kyberPreKeySignature != rhs_storage._kyberPreKeySignature {return false}
-        if _storage._kyberOneTimePreKey != rhs_storage._kyberOneTimePreKey {return false}
-        if _storage._kyberOneTimePreKeyID != rhs_storage._kyberOneTimePreKeyID {return false}
-        if _storage._spkUploadedAt != rhs_storage._spkUploadedAt {return false}
-        if _storage._spkRotationEpoch != rhs_storage._spkRotationEpoch {return false}
-        if _storage._kyberSpkUploadedAt != rhs_storage._kyberSpkUploadedAt {return false}
-        if _storage._kyberSpkRotationEpoch != rhs_storage._kyberSpkRotationEpoch {return false}
+        if _storage._bundle != rhs_storage._bundle {return false}
+        if _storage._deviceID != rhs_storage._deviceID {return false}
+        if _storage._hasOneTimeKey_p != rhs_storage._hasOneTimeKey_p {return false}
+        if _storage._verifyingKey != rhs_storage._verifyingKey {return false}
         return true
       }
       if !storagesAreEqual {return false}
     }
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Shared_Proto_Services_V1_PreKeyBundle: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".PreKeyBundle"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}registration_id\0\u{3}identity_key\0\u{3}signed_pre_key\0\u{3}signed_pre_key_id\0\u{3}signed_pre_key_signature\0\u{3}one_time_pre_key\0\u{3}one_time_pre_key_id\0\u{3}crypto_suite\0\u{3}generated_at\0\u{3}kyber_pre_key\0\u{3}kyber_pre_key_id\0\u{3}kyber_pre_key_signature\0\u{3}kyber_one_time_pre_key\0\u{3}kyber_one_time_pre_key_id\0\u{c}\u{f}\u{1}")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularUInt32Field(value: &self.registrationID) }()
+      case 2: try { try decoder.decodeSingularBytesField(value: &self.identityKey) }()
+      case 3: try { try decoder.decodeSingularBytesField(value: &self.signedPreKey) }()
+      case 4: try { try decoder.decodeSingularUInt32Field(value: &self.signedPreKeyID) }()
+      case 5: try { try decoder.decodeSingularBytesField(value: &self.signedPreKeySignature) }()
+      case 6: try { try decoder.decodeSingularBytesField(value: &self._oneTimePreKey) }()
+      case 7: try { try decoder.decodeSingularUInt32Field(value: &self._oneTimePreKeyID) }()
+      case 8: try { try decoder.decodeSingularStringField(value: &self.cryptoSuite) }()
+      case 9: try { try decoder.decodeSingularInt64Field(value: &self.generatedAt) }()
+      case 10: try { try decoder.decodeSingularBytesField(value: &self._kyberPreKey) }()
+      case 11: try { try decoder.decodeSingularUInt32Field(value: &self._kyberPreKeyID) }()
+      case 12: try { try decoder.decodeSingularBytesField(value: &self._kyberPreKeySignature) }()
+      case 13: try { try decoder.decodeSingularBytesField(value: &self._kyberOneTimePreKey) }()
+      case 14: try { try decoder.decodeSingularUInt32Field(value: &self._kyberOneTimePreKeyID) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    if self.registrationID != 0 {
+      try visitor.visitSingularUInt32Field(value: self.registrationID, fieldNumber: 1)
+    }
+    if !self.identityKey.isEmpty {
+      try visitor.visitSingularBytesField(value: self.identityKey, fieldNumber: 2)
+    }
+    if !self.signedPreKey.isEmpty {
+      try visitor.visitSingularBytesField(value: self.signedPreKey, fieldNumber: 3)
+    }
+    if self.signedPreKeyID != 0 {
+      try visitor.visitSingularUInt32Field(value: self.signedPreKeyID, fieldNumber: 4)
+    }
+    if !self.signedPreKeySignature.isEmpty {
+      try visitor.visitSingularBytesField(value: self.signedPreKeySignature, fieldNumber: 5)
+    }
+    try { if let v = self._oneTimePreKey {
+      try visitor.visitSingularBytesField(value: v, fieldNumber: 6)
+    } }()
+    try { if let v = self._oneTimePreKeyID {
+      try visitor.visitSingularUInt32Field(value: v, fieldNumber: 7)
+    } }()
+    if !self.cryptoSuite.isEmpty {
+      try visitor.visitSingularStringField(value: self.cryptoSuite, fieldNumber: 8)
+    }
+    if self.generatedAt != 0 {
+      try visitor.visitSingularInt64Field(value: self.generatedAt, fieldNumber: 9)
+    }
+    try { if let v = self._kyberPreKey {
+      try visitor.visitSingularBytesField(value: v, fieldNumber: 10)
+    } }()
+    try { if let v = self._kyberPreKeyID {
+      try visitor.visitSingularUInt32Field(value: v, fieldNumber: 11)
+    } }()
+    try { if let v = self._kyberPreKeySignature {
+      try visitor.visitSingularBytesField(value: v, fieldNumber: 12)
+    } }()
+    try { if let v = self._kyberOneTimePreKey {
+      try visitor.visitSingularBytesField(value: v, fieldNumber: 13)
+    } }()
+    try { if let v = self._kyberOneTimePreKeyID {
+      try visitor.visitSingularUInt32Field(value: v, fieldNumber: 14)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Services_V1_PreKeyBundle, rhs: Shared_Proto_Services_V1_PreKeyBundle) -> Bool {
+    if lhs.registrationID != rhs.registrationID {return false}
+    if lhs.identityKey != rhs.identityKey {return false}
+    if lhs.signedPreKey != rhs.signedPreKey {return false}
+    if lhs.signedPreKeyID != rhs.signedPreKeyID {return false}
+    if lhs.signedPreKeySignature != rhs.signedPreKeySignature {return false}
+    if lhs._oneTimePreKey != rhs._oneTimePreKey {return false}
+    if lhs._oneTimePreKeyID != rhs._oneTimePreKeyID {return false}
+    if lhs.cryptoSuite != rhs.cryptoSuite {return false}
+    if lhs.generatedAt != rhs.generatedAt {return false}
+    if lhs._kyberPreKey != rhs._kyberPreKey {return false}
+    if lhs._kyberPreKeyID != rhs._kyberPreKeyID {return false}
+    if lhs._kyberPreKeySignature != rhs._kyberPreKeySignature {return false}
+    if lhs._kyberOneTimePreKey != rhs._kyberOneTimePreKey {return false}
+    if lhs._kyberOneTimePreKeyID != rhs._kyberOneTimePreKeyID {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -1524,7 +1396,7 @@ extension Shared_Proto_Services_V1_GetPreKeyCountResponse: SwiftProtobuf.Message
 
 extension Shared_Proto_Services_V1_RotateSignedPreKeyRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".RotateSignedPreKeyRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0\u{3}new_signed_pre_key\0\u{1}reason\0\u{3}new_kyber_signed_pre_key\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0\u{3}new_signed_pre_key\0\u{1}reason\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1535,7 +1407,6 @@ extension Shared_Proto_Services_V1_RotateSignedPreKeyRequest: SwiftProtobuf.Mess
       case 1: try { try decoder.decodeSingularStringField(value: &self.deviceID) }()
       case 2: try { try decoder.decodeSingularMessageField(value: &self._newSignedPreKey) }()
       case 3: try { try decoder.decodeSingularEnumField(value: &self.reason) }()
-      case 4: try { try decoder.decodeSingularMessageField(value: &self._newKyberSignedPreKey) }()
       default: break
       }
     }
@@ -1555,9 +1426,6 @@ extension Shared_Proto_Services_V1_RotateSignedPreKeyRequest: SwiftProtobuf.Mess
     if self.reason != .unspecified {
       try visitor.visitSingularEnumField(value: self.reason, fieldNumber: 3)
     }
-    try { if let v = self._newKyberSignedPreKey {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
-    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1565,7 +1433,6 @@ extension Shared_Proto_Services_V1_RotateSignedPreKeyRequest: SwiftProtobuf.Mess
     if lhs.deviceID != rhs.deviceID {return false}
     if lhs._newSignedPreKey != rhs._newSignedPreKey {return false}
     if lhs.reason != rhs.reason {return false}
-    if lhs._newKyberSignedPreKey != rhs._newKyberSignedPreKey {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -1573,7 +1440,7 @@ extension Shared_Proto_Services_V1_RotateSignedPreKeyRequest: SwiftProtobuf.Mess
 
 extension Shared_Proto_Services_V1_RotateSignedPreKeyResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".RotateSignedPreKeyResponse"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0\u{3}new_key_id\0\u{3}old_key_valid_until\0\u{3}rotated_at\0\u{3}new_kyber_key_id\0\u{3}new_spk_rotation_epoch\0\u{3}new_kyber_spk_rotation_epoch\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0\u{3}new_key_id\0\u{3}old_key_valid_until\0\u{3}rotated_at\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1585,19 +1452,12 @@ extension Shared_Proto_Services_V1_RotateSignedPreKeyResponse: SwiftProtobuf.Mes
       case 2: try { try decoder.decodeSingularUInt32Field(value: &self.newKeyID) }()
       case 3: try { try decoder.decodeSingularInt64Field(value: &self.oldKeyValidUntil) }()
       case 4: try { try decoder.decodeSingularInt64Field(value: &self.rotatedAt) }()
-      case 5: try { try decoder.decodeSingularUInt32Field(value: &self._newKyberKeyID) }()
-      case 6: try { try decoder.decodeSingularUInt32Field(value: &self.newSpkRotationEpoch) }()
-      case 7: try { try decoder.decodeSingularUInt32Field(value: &self._newKyberSpkRotationEpoch) }()
       default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    // The use of inline closures is to circumvent an issue where the compiler
-    // allocates stack space for every if/case branch local when no optimizations
-    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
-    // https://github.com/apple/swift-protobuf/issues/1182
     if self.success != false {
       try visitor.visitSingularBoolField(value: self.success, fieldNumber: 1)
     }
@@ -1610,15 +1470,6 @@ extension Shared_Proto_Services_V1_RotateSignedPreKeyResponse: SwiftProtobuf.Mes
     if self.rotatedAt != 0 {
       try visitor.visitSingularInt64Field(value: self.rotatedAt, fieldNumber: 4)
     }
-    try { if let v = self._newKyberKeyID {
-      try visitor.visitSingularUInt32Field(value: v, fieldNumber: 5)
-    } }()
-    if self.newSpkRotationEpoch != 0 {
-      try visitor.visitSingularUInt32Field(value: self.newSpkRotationEpoch, fieldNumber: 6)
-    }
-    try { if let v = self._newKyberSpkRotationEpoch {
-      try visitor.visitSingularUInt32Field(value: v, fieldNumber: 7)
-    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1627,9 +1478,6 @@ extension Shared_Proto_Services_V1_RotateSignedPreKeyResponse: SwiftProtobuf.Mes
     if lhs.newKeyID != rhs.newKeyID {return false}
     if lhs.oldKeyValidUntil != rhs.oldKeyValidUntil {return false}
     if lhs.rotatedAt != rhs.rotatedAt {return false}
-    if lhs._newKyberKeyID != rhs._newKyberKeyID {return false}
-    if lhs.newSpkRotationEpoch != rhs.newSpkRotationEpoch {return false}
-    if lhs._newKyberSpkRotationEpoch != rhs._newKyberSpkRotationEpoch {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

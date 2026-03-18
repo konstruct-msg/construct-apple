@@ -778,6 +778,25 @@ class ChatViewModel: NSObject {
 
                     TrafficProtectionService.shared.recordRealMessageSent()
 
+                    // SenderSync: fire-and-forget copy to own other devices.
+                    // Fan-out to other recipient devices is handled in the coordinator.
+                    if let myDeviceId = SessionManager.shared.currentDeviceId, !myDeviceId.isEmpty {
+                        Task {
+                            await MultiDeviceSendCoordinator.shared.sendSenderSync(
+                                plaintext: text,
+                                messageId: messageId,
+                                originalRecipientUserId: recipientId,
+                                senderUserId: currentUserId,
+                                senderDeviceId: myDeviceId,
+                                conversationId: ConversationId.direct(
+                                    myUserId: currentUserId,
+                                    theirUserId: recipientId
+                                ),
+                                timestamp: message.timestamp
+                            )
+                        }
+                    }
+
                     await MainActor.run {
                         let deliveryStatus: DeliveryStatus
                         switch response.status.lowercased() {

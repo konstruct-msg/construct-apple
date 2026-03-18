@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import GRPCCore
 
 // MARK: - Message
 struct ChatMessage: Codable, Identifiable {
@@ -120,6 +121,14 @@ struct PublicKeyBundleData: Codable {
     var spkRotationEpoch: UInt32      // Monotonic counter for SPK rotations
     var kyberSpkUploadedAt: UInt64    // Same for Kyber SPK (0 = not provided)
     var kyberSpkRotationEpoch: UInt32 // Same for Kyber SPK (0 = not provided)
+}
+
+/// Bundle for a single device of a user — returned by GetPreKeyBundles (multi-device).
+struct DeviceBundleData {
+    let deviceId: String
+    let bundle: PublicKeyBundleData
+    /// Platform of the remote device (ios / android / desktop / unspecified).
+    let platform: Shared_Proto_Core_V1_DevicePlatform
 }
 
 struct EncryptedMessageV3: Codable {

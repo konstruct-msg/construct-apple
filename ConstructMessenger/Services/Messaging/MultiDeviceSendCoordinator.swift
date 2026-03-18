@@ -1,0 +1,223 @@
+//
+//  MultiDeviceSendCoordinator.swift
+//  Construct Messenger
+//
+//  Handles multi-device message fan-out and SenderSync.
+//
+//  Overview
+//  ────────
+//  After the primary message send (handled by ChunkedMessageSender), this coordinator:
+//  1. Fan-out  — sends to all OTHER recipient devices (if they have bundles on the server).
+//  2. SenderSync — sends a copy to the sender's own other devices so conversation history
+//     stays in sync. The server-side content type is SENDER_SYNC (= 23), which the
+//     receiving device displays as an outgoing bubble in the same conversation.
+//
+//  Session key convention
+//  ──────────────────────
+//  Primary (legacy, single-device) sessions use plain `userId` as the contactId in the
+//  Rust OrchestratorCore. Per-device sessions use `userId:deviceId` (colon-separated).
+//  UserIds are hex/UUID strings that cannot contain a colon, so there is no collision risk.
+//
+//  Threading
+//  ─────────
+//  @MainActor — CryptoManager and SessionInitializationService both require main-actor
+//  access. Fire-and-forget via a detached Task where callers are already on MainActor.
+//
+
+import Foundation
+
+@MainActor
+final class MultiDeviceSendCoordinator {
+
+    static let shared = MultiDeviceSendCoordinator()
+    private init() {}
+
+    // MARK: - Own-device bundle cache
+
+    private struct DeviceCache {
+        var bundles: [DeviceBundleData]
+        var fetchedAt: Date
+    }
+    private var ownDeviceCache: DeviceCache?
+    private let cacheTTL: TimeInterval = 3600 // 1 hour
+
+    /// Invalidate the own-device cache (call after linking or revoking a device).
+    func invalidateOwnDeviceCache() {
+        ownDeviceCache = nil
+    }
+
+    // MARK: - Public API
+
+    /// Derive the session contactId for a specific device (non-primary sessions).
+    static func sessionKey(userId: String, deviceId: String) -> String {
+        "\(userId):\(deviceId)"
+    }
+
+    /// Fan-out: send `plaintext` to ALL of the recipient's devices.
+    ///
+    /// Intended for use after the primary send (which already covers the recipient's
+    /// default device via the plain `userId` session). Each device gets its own
+    /// E2EE session keyed by `recipientUserId:deviceId`.
+    ///
+    /// Errors per-device are logged and skipped; the function never throws.
+    func fanOutToRecipientDevices(
+        plaintext: String,
+        messageId: String,
+        recipientUserId: String,
+        senderUserId: String,
+        senderDeviceId: String,
+        conversationId: String,
+        timestamp: UInt64
+    ) async {
+        guard !senderDeviceId.isEmpty else { return }
+        do {
+            let bundles = try await KeyServiceClient.shared.getPreKeyBundles(userId: recipientUserId)
+            guard !bundles.isEmpty else { return }
+
+            for device in bundles {
+                let contactId = Self.sessionKey(userId: recipientUserId, deviceId: device.deviceId)
+                await sendToDevice(
+                    plaintext: plaintext,
+                    messageId: "\(messageId)-fd-\(device.deviceId.prefix(8))",
+                    networkRecipientUserId: recipientUserId,
+                    contactId: contactId,
+                    bundle: device.bundle,
+                    senderUserId: senderUserId,
+                    senderDeviceId: senderDeviceId,
+                    recipientDeviceId: device.deviceId,
+                    conversationId: conversationId,
+                    timestamp: timestamp,
+                    contentType: .e2EeSignal
+                )
+            }
+        } catch {
+            Log.info(
+                "⚠️ MultiDevice fan-out: bundle fetch failed for \(recipientUserId.prefix(8))…: \(error)",
+                category: "MultiDevice"
+            )
+        }
+    }
+
+    /// SenderSync: send a copy of an outgoing message to all of the sender's OWN
+    /// other devices, encrypted with per-device sessions, content type = senderSync.
+    ///
+    /// Receiving devices show this as an outgoing bubble (sent by the local user)
+    /// in the conversation with `originalRecipientUserId`.
+    ///
+    /// Errors are logged and swallowed — SenderSync is best-effort.
+    func sendSenderSync(
+        plaintext: String,
+        messageId: String,
+        originalRecipientUserId: String,
+        senderUserId: String,
+        senderDeviceId: String,
+        conversationId: String,
+        timestamp: UInt64
+    ) async {
+        guard !senderDeviceId.isEmpty else { return }
+        do {
+            let otherDevices = try await fetchOwnOtherDevices(
+                myUserId: senderUserId,
+                myDeviceId: senderDeviceId
+            )
+            guard !otherDevices.isEmpty else { return }
+
+            for device in otherDevices {
+                let contactId = Self.sessionKey(userId: senderUserId, deviceId: device.deviceId)
+                await sendToDevice(
+                    plaintext: plaintext,
+                    messageId: "\(messageId)-ss-\(device.deviceId.prefix(8))",
+                    networkRecipientUserId: senderUserId,
+                    contactId: contactId,
+                    bundle: device.bundle,
+                    senderUserId: senderUserId,
+                    senderDeviceId: senderDeviceId,
+                    recipientDeviceId: device.deviceId,
+                    conversationId: conversationId,
+                    timestamp: timestamp,
+                    contentType: .senderSync
+                )
+            }
+        } catch {
+            Log.info(
+                "⚠️ SenderSync: own-device fetch failed for \(senderUserId.prefix(8))…: \(error)",
+                category: "MultiDevice"
+            )
+        }
+    }
+
+    // MARK: - Private helpers
+
+    private func fetchOwnOtherDevices(myUserId: String, myDeviceId: String) async throws -> [DeviceBundleData] {
+        if let cache = ownDeviceCache,
+           Date().timeIntervalSince(cache.fetchedAt) < cacheTTL {
+            return cache.bundles.filter { $0.deviceId != myDeviceId }
+        }
+        let all = try await KeyServiceClient.shared.getPreKeyBundles(userId: myUserId)
+        ownDeviceCache = DeviceCache(bundles: all, fetchedAt: Date())
+        return all.filter { $0.deviceId != myDeviceId }
+    }
+
+    /// Core per-device send: ensures session exists, encrypts, sends. Swallows errors.
+    private func sendToDevice(
+        plaintext: String,
+        messageId: String,
+        networkRecipientUserId: String,
+        contactId: String,
+        bundle: PublicKeyBundleData,
+        senderUserId: String,
+        senderDeviceId: String,
+        recipientDeviceId: String,
+        conversationId: String,
+        timestamp: UInt64,
+        contentType: Shared_Proto_Core_V1_ContentType
+    ) async {
+        do {
+            // Ensure a session exists for this contactId; never clobber an existing one.
+            if !CryptoManager.shared.hasSession(for: contactId) {
+                _ = try SessionInitializationService.shared.initializeSession(
+                    userId: contactId,
+                    bundle: bundle,
+                    deleteExisting: false
+                )
+            }
+
+            let components = try CryptoManager.shared.encryptMessage(plaintext, for: contactId)
+
+            // Attach PQXDH KEM ciphertext on session-opening message (messageNumber == 0).
+            let kemCiphertext = components.messageNumber == 0
+                ? SessionInitializationService.shared.consumeKemCiphertext(for: contactId) : nil
+            let kyberOtpkId = components.messageNumber == 0
+                ? SessionInitializationService.shared.consumeKyberOtpkId(for: contactId) : 0
+
+            let encPayload = try WirePayloadCoder.encode(
+                components,
+                kemCiphertext: kemCiphertext,
+                kyberOtpkId: kyberOtpkId
+            )
+
+            _ = try await MessagingServiceClient.shared.sendMessage(
+                messageId: messageId,
+                recipientId: networkRecipientUserId,
+                senderId: senderUserId,
+                conversationId: conversationId,
+                encryptedPayload: encPayload,
+                timestamp: timestamp,
+                senderDeviceId: senderDeviceId,
+                recipientDeviceId: recipientDeviceId,
+                contentType: contentType
+            )
+
+            CryptoManager.shared.saveSessionToKeychainPublic(for: contactId)
+            Log.info(
+                "✅ MultiDevice[\(contentType == .senderSync ? "sync" : "fanout")]: sent to \(contactId.prefix(20))…",
+                category: "MultiDevice"
+            )
+        } catch {
+            Log.info(
+                "⚠️ MultiDevice: failed to send to \(contactId.prefix(20))…: \(error)",
+                category: "MultiDevice"
+            )
+        }
+    }
+}

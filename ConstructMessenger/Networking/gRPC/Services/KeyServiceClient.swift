@@ -15,6 +15,61 @@ final class KeyServiceClient: Sendable {
 
     private init() {}
 
+    // MARK: - Get Pre-Key Bundles (multi-device)
+
+    /// Fetch pre-key bundles for ALL active devices of a user (or specific device IDs).
+    /// Returns one bundle per device — caller must encrypt separately for each.
+    func getPreKeyBundles(userId: String, deviceIds: [String] = []) async throws -> [DeviceBundleData] {
+        try await GRPCChannelManager.shared.performRPC { grpcClient in
+            let keyClient = Shared_Proto_Services_V1_KeyService.Client(wrapping: grpcClient)
+
+            var request = Shared_Proto_Services_V1_GetPreKeyBundlesRequest()
+            request.userID = userId
+            if !deviceIds.isEmpty {
+                request.deviceIds = deviceIds
+            }
+
+            let response = try await keyClient.getPreKeyBundles(
+                request: .init(message: request)
+            )
+
+            return response.bundles.compactMap { deviceBundle in
+                let b = deviceBundle.bundle
+                guard !b.identityKey.isEmpty else { return nil }
+
+                let otpkPublic = b.oneTimePreKey.isEmpty ? nil : b.oneTimePreKey.base64EncodedString()
+                let otpkId: UInt32? = b.oneTimePreKeyID > 0 ? b.oneTimePreKeyID : nil
+                let kyberPK: Data? = b.hasKyberPreKey && !b.kyberPreKey.isEmpty ? b.kyberPreKey : nil
+                let kyberPKId: UInt32? = b.hasKyberPreKeyID && b.kyberPreKeyID > 0 ? b.kyberPreKeyID : nil
+                let kyberSig: Data? = b.hasKyberPreKeySignature && !b.kyberPreKeySignature.isEmpty ? b.kyberPreKeySignature : nil
+                let kyberOtpkPK: Data? = b.hasKyberOneTimePreKey && !b.kyberOneTimePreKey.isEmpty ? b.kyberOneTimePreKey : nil
+                let kyberOtpkId: UInt32? = b.hasKyberOneTimePreKeyID && b.kyberOneTimePreKeyID > 0 ? b.kyberOneTimePreKeyID : nil
+
+                let bundle = PublicKeyBundleData(
+                    userId: userId,
+                    username: "",
+                    identityPublic: b.identityKey.base64EncodedString(),
+                    signedPrekeyPublic: b.signedPreKey.base64EncodedString(),
+                    signature: b.signedPreKeySignature.base64EncodedString(),
+                    verifyingKey: "",
+                    suiteId: Self.parseSuiteId(b.cryptoSuite),
+                    oneTimePreKeyPublic: otpkPublic,
+                    oneTimePreKeyId: otpkId,
+                    kyberPreKeyPublic: kyberPK,
+                    kyberPreKeyId: kyberPKId,
+                    kyberPreKeySignature: kyberSig,
+                    kyberOneTimePreKeyPublic: kyberOtpkPK,
+                    kyberOneTimePreKeyId: kyberOtpkId,
+                    spkUploadedAt: b.generatedAt > 0 ? UInt64(b.generatedAt) : 0,
+                    spkRotationEpoch: 0,
+                    kyberSpkUploadedAt: 0,
+                    kyberSpkRotationEpoch: 0
+                )
+                return DeviceBundleData(deviceId: deviceBundle.deviceID, bundle: bundle, platform: deviceBundle.platform)
+            }
+        }
+    }
+
     // MARK: - Get Pre-Key Bundle (replaces CryptoAPI.getPublicKey)
 
     /// Fetch a user's pre-key bundle for establishing an E2EE session.
@@ -69,12 +124,10 @@ final class KeyServiceClient: Sendable {
                 kyberPreKeySignature: kyberSig,
                 kyberOneTimePreKeyPublic: kyberOtpkPK,
                 kyberOneTimePreKeyId: kyberOtpkId,
-                spkUploadedAt: bundle.spkUploadedAt > 0
-                    ? UInt64(bundle.spkUploadedAt)
-                    : (bundle.generatedAt > 0 ? UInt64(bundle.generatedAt) : 0),
-                spkRotationEpoch: bundle.spkRotationEpoch,
-                kyberSpkUploadedAt: bundle.hasKyberSpkUploadedAt ? UInt64(bundle.kyberSpkUploadedAt) : 0,
-                kyberSpkRotationEpoch: bundle.hasKyberSpkRotationEpoch ? bundle.kyberSpkRotationEpoch : 0
+                spkUploadedAt: bundle.generatedAt > 0 ? UInt64(bundle.generatedAt) : 0,
+                spkRotationEpoch: 0,
+                kyberSpkUploadedAt: 0,
+                kyberSpkRotationEpoch: 0
             )
         }
     }
@@ -196,14 +249,6 @@ final class KeyServiceClient: Sendable {
             request.deviceID = deviceId
             request.newSignedPreKey = signed
             request.reason = reason
-
-            if let kyber = newKyberKey {
-                var kyberUpload = Shared_Proto_Services_V1_KyberSignedPreKeyUpload()
-                kyberUpload.keyID = kyber.keyId
-                kyberUpload.publicKey = kyber.publicKey
-                kyberUpload.signature = kyber.signature
-                request.newKyberSignedPreKey = kyberUpload
-            }
 
             return try await keyClient.rotateSignedPreKey(
                 request: .init(message: request)
