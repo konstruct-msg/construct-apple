@@ -147,6 +147,11 @@ final class IceProxyManager: ObservableObject {
     @Published private(set) var proxyPort: UInt16 = 0
     @Published private(set) var activeRelay: IceRelay?
     @Published private(set) var lastError: String?
+    /// True while ICE is in cooldown after a relay failure. Drives the UI directly —
+    /// changes to this property cause the Network settings view to re-render.
+    @Published private(set) var isOnCooldown: Bool = false
+
+    private var cooldownTask: Task<Void, Never>?
 
     // MARK: - Persistence keys
 
@@ -170,13 +175,39 @@ final class IceProxyManager: ObservableObject {
         guard isRunning, let relay = activeRelay else {
             return .iceConnecting
         }
-        if GRPCChannelManager.shared.isICEOnCooldown {
+        if isOnCooldown {
             return .iceCooldown
         }
         if relay.tlsServerName != nil {
             return .icePrimary(host: relay.address)
         }
         return .iceRelay(address: relay.address)
+    }
+
+    // MARK: - Cooldown management
+
+    /// Enter cooldown mode: UI switches to "ICE recovering", then auto-clears after `duration` seconds.
+    /// Called by GRPCChannelManager when a relay failure is detected.
+    func enterCooldown(duration: TimeInterval) {
+        guard !isOnCooldown else { return }
+        isOnCooldown = true
+        Log.info("🧊 ICE cooldown started (\(Int(duration))s) — routing via direct gRPC", category: "ICE")
+        cooldownTask?.cancel()
+        cooldownTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(duration))
+            guard !Task.isCancelled else { return }
+            self?.isOnCooldown = false
+            Log.info("🧊 ICE cooldown expired — ICE routing resumes on next connection", category: "ICE")
+        }
+    }
+
+    /// Manually clear the cooldown (e.g. user taps "Retry ICE" in settings).
+    func clearCooldown() {
+        cooldownTask?.cancel()
+        cooldownTask = nil
+        isOnCooldown = false
+        UserDefaults.standard.removeObject(forKey: GRPCChannelManager.iceFailedAtKey)
+        Log.info("🧊 ICE cooldown cleared by user", category: "ICE")
     }
 
     /// Whether a bridge cert is available (from Keychain or hardcoded fallback).
@@ -333,6 +364,15 @@ final class IceProxyManager: ObservableObject {
     /// Tries primary TLS → relay fallback → fresh cert → retry, in that order.
     func startIfEnabled() async {
         guard isEnabled else { return }
+
+        // Restore cooldown state from previous session (persisted in UserDefaults by GRPCChannelManager).
+        let stored = UserDefaults.standard.double(forKey: "iceRelayLastFailedAt")
+        if stored > 0 {
+            let remaining = GRPCChannelManager.iceCooldownDuration - (Date().timeIntervalSinceReferenceDate - stored)
+            if remaining > 0 {
+                enterCooldown(duration: remaining)
+            }
+        }
 
         let cert = await getIceBridgeCert()
         if startWithRelayFallback(cert: cert) {

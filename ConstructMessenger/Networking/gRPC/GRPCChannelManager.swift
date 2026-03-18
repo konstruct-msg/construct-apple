@@ -13,8 +13,10 @@ final class GRPCChannelManager: Sendable {
 
     // ICE relay health tracking: avoid routing through a dead relay.
     // Stores the Date.timeIntervalSinceReferenceDate of the last relay failure.
-    private static let iceFailedAtKey = "iceRelayLastFailedAt"
+    static let iceFailedAtKey = "iceRelayLastFailedAt"
     private static let iceCooldown: TimeInterval = 60.0
+    /// Exposed for IceProxyManager to restore cooldown on app launch.
+    static let iceCooldownDuration: TimeInterval = iceCooldown
 
     private static let defaultHost: String = {
         Bundle.main.object(forInfoDictionaryKey: "GRPC_HOST") as? String ?? "ams.konstruct.cc"
@@ -53,9 +55,11 @@ final class GRPCChannelManager: Sendable {
     func recordICEFailure() {
         UserDefaults.standard.set(Date().timeIntervalSinceReferenceDate, forKey: Self.iceFailedAtKey)
         Log.info("⚠️ ICE relay failure recorded — bypassing ICE for \(Int(Self.iceCooldown))s", category: "gRPC")
-        // Try to recover by switching endpoints (cert refresh + relay fallback).
-        // If MSK relay is up while primary is blocked, we'll reconnect through it.
         Task { @MainActor in
+            // Notify IceProxyManager so the UI reflects cooldown state immediately
+            // and auto-clears after the cooldown period (drives NetworkSettingsView re-render).
+            IceProxyManager.shared.enterCooldown(duration: Self.iceCooldown)
+            // Try to recover by switching endpoints (cert refresh + relay fallback).
             await IceProxyManager.shared.refreshCertAndRestart()
         }
     }

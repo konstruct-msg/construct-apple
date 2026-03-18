@@ -174,6 +174,18 @@ struct NetworkSettingsView: View {
                         }
                     }
 
+                    // Retry button: shown when the proxy is up but stuck on cooldown
+                    if iceManager.isRunning && iceManager.isOnCooldown {
+                        Button {
+                            iceManager.clearCooldown()
+                        } label: {
+                            Label(NSLocalizedString("ice_retry", comment: "Retry ICE connection"),
+                                  systemImage: "arrow.clockwise")
+                                .font(.subheadline.weight(.medium))
+                                .foregroundColor(.accentColor)
+                        }
+                    }
+
                     if iceManager.isRunning, let relay = iceManager.activeRelay {
                         HStack {
                             Text("endpoint")

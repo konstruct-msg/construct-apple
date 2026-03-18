@@ -458,6 +458,7 @@
 "ice_subtitle" = "Obfuscated connection";
 "ice_footer" = "ICE masks your traffic to make it indistinguishable from regular HTTPS. The configuration is provided automatically by the server.";
 "ice_unavailable" = "Not available on this server";
+"ice_retry" = "Retry ICE connection";
 
 // Data & Storage
 "data_and_storage" = "Data & Storage";
