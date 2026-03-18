@@ -99,11 +99,15 @@ class ChatViewModel: NSObject {
         
         // Listen for queued messages processing
         setupMessageQueueListener()
+
+        // Suppress in-app banners while this chat is open
+        InAppNotificationService.shared.activeChatId = chat.id
     }
 
     isolated deinit {
         publicKeyFetchTimer?.invalidate()
         observationTasks.forEach { $0.cancel() }
+        InAppNotificationService.shared.activeChatId = nil
         Log.debug("🔧 ChatViewModel deinitialized", category: "ChatViewModel")
     }
 

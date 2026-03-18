@@ -817,15 +817,17 @@ class MessageRouter {
         
         do {
             try context.save()
-            // Show a local notification if the app is in the background
-            // (server only sends silent content-available pushes; we must notify manually)
-            DispatchQueue.main.async {
-                #if canImport(UIKit)
-                if UIApplication.shared.applicationState != .active {
-                    LocalNotificationManager.shared.showNewMessageNotification()
-                }
-                #endif
-            }
+            // In-app banner for messages arriving in a non-active chat
+            let chatId = chat.id ?? ""
+            let isMuted = chat.isMuted
+            let senderName = chat.otherUser?.displayName.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let preview = Chat.formatPreviewText(decryptedContent)
+            InAppNotificationService.shared.handle(
+                chatId: chatId,
+                isMuted: isMuted,
+                senderName: senderName.isEmpty ? chat.otherUser?.username ?? "Unknown" : senderName,
+                preview: preview
+            )
         } catch {
             Log.error("❌ Failed to save message: \(error)", category: "MessageRouter")
         }

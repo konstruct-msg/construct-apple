@@ -121,11 +121,6 @@ final class DeviceLinkViewModel {
             // 4. Upload OTPKs (required — senders get "no prekeys" without this)
             await uploadPreKeysAfterLink(deviceId: deviceId)
 
-            // 5. Register push token if available
-            if let token = PushNotificationManager.shared.deviceToken {
-                try? await NotificationServiceClient.shared.registerDeviceToken(token: token)
-            }
-
             linkCompleted = true
 
         } catch {

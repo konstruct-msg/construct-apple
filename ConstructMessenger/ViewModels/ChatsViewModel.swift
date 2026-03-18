@@ -376,6 +376,14 @@ class ChatsViewModel {
         chatManagementService.deleteChat(chat)
     }
 
+    /// Toggle mute for a chat. Muted chats suppress in-app notification banners.
+    func toggleMute(chat: Chat) {
+        guard let context = viewContext else { return }
+        chat.isMuted.toggle()
+        context.saveAndLog()
+        Log.info("🔔 Chat \(chat.id ?? "") isMuted=\(chat.isMuted)", category: "ChatsViewModel")
+    }
+
     /// Send END_SESSION to peer, then delete the chat locally.
     func deleteChatWithEndSession(chat: Chat) async {
         if let userId = chat.otherUser?.id {
