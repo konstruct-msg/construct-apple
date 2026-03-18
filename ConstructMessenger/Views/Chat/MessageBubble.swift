@@ -9,7 +9,9 @@ import SwiftUI
 import QuickLook
 
 struct MessageBubble: View {
-    let message: Message
+    /// Observed so the view re-renders when deliveryStatusRaw (or any @NSManaged property) changes.
+    /// NSManagedObject conforms to ObservableObject via KVO, so SwiftUI subscribes automatically.
+    @ObservedObject var message: Message
     let isLastInGroup: Bool
     let isSelected: Bool
     let isEditMode: Bool
@@ -139,33 +141,47 @@ struct MessageBubble: View {
                             )
                     }
                 } else {
-                    // Flat text message — no bubble background
+                    // Text message bubble
                     VStack(alignment: .leading, spacing: 0) {
-                        // Reply/Quote preview
                         replyIndicatorView
 
-                        // Main message content
-                        if message.decryptedContent == nil {
-                            // Irrecoverable: message was saved when the session was unavailable
-                            // or decryption failed. Display a clear unavailable indicator.
-                            HStack(spacing: 5) {
-                                Image(systemName: "lock.trianglebadge.exclamationmark")
-                                    .font(.caption)
-                                Text(NSLocalizedString("message_unavailable", comment: ""))
-                                    .italic()
+                        VStack(alignment: .leading, spacing: 4) {
+                            // Main message content
+                            if message.decryptedContent == nil {
+                                // Irrecoverable: message was saved when the session was unavailable
+                                // or decryption failed. Display a clear unavailable indicator.
+                                HStack(spacing: 5) {
+                                    Image(systemName: "lock.trianglebadge.exclamationmark")
+                                        .font(.caption)
+                                    Text(NSLocalizedString("message_unavailable", comment: ""))
+                                        .italic()
+                                }
+                                .font(.callout)
+                                .foregroundColor(.secondary)
+                            } else {
+                                LinkDetectingText(
+                                    message.decryptedContent!,
+                                    color: message.isSentByMe ? .white : .primary
+                                )
                             }
-                            .font(.callout)
-                            .foregroundColor(.secondary)
-                        } else {
-                            LinkDetectingText(
-                                message.decryptedContent!,
-                                color: .primary
-                            )
                         }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        #if canImport(UIKit)
+                        .background(
+                            isSelected
+                                ? (message.isSentByMe ? Color.accentColor.opacity(0.75) : Color.accentColor.opacity(0.15))
+                                : (message.isSentByMe ? Color.accentColor : Color(uiColor: .systemGray5))
+                        )
+                        #else
+                        .background(
+                            isSelected
+                                ? (message.isSentByMe ? Color.accentColor.opacity(0.75) : Color.accentColor.opacity(0.15))
+                                : (message.isSentByMe ? Color.accentColor : Color(nsColor: .controlBackgroundColor))
+                        )
+                        #endif
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
                     }
-                    .padding(.vertical, 2)
-                    .background(isSelected ? Color.accentColor.opacity(0.12) : Color.clear)
-                    .cornerRadius(8)
                 }
 
                 if isLastInGroup {
