@@ -143,9 +143,7 @@ private struct DesktopNotificationsSettingsTab: View {
 
 private struct DesktopNetworkSettingsTab: View {
     var body: some View {
-        Text("Network settings (ICE proxy) coming soon")
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .foregroundStyle(.secondary)
+        NetworkSettingsView()
     }
 }
 

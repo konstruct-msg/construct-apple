@@ -9,6 +9,10 @@ import SwiftUI
 
 struct OnboardingView: View {
     @Environment(AccountRecoveryViewModel.self) private var recoveryVM
+    #if os(macOS)
+    @Environment(\.openSettings) private var openSettings
+    #endif
+
     @State private var username: String = ""
     @State private var usernameErrorKey: String? = nil
     @State private var isCheckingUsername = false
@@ -27,22 +31,23 @@ struct OnboardingView: View {
                     Image("KonstructLogo")
                         .resizable()
                         .aspectRatio(contentMode: .fit)
-                        .frame(width: 130, height: 130)
-                    
+                        .frame(width: 120, height: 120)
+
                     Image("MainTitle")
-                        .padding(.top, 16)
-                    
+                        .padding(.top, 12)
+
                     Text("onboarding_tagline")
                         .font(.subheadline)
-                        .padding(.vertical, 8)
+                        .foregroundStyle(.secondary)
+                        .padding(.vertical, 6)
                 }
-                .padding(.top, 24)
-                
+                .padding(.top, 32)
+
                 Spacer()
                 
                 // Username input (optional)
-                VStack(alignment: .leading, spacing: 8) {
-                    
+                VStack(alignment: .center, spacing: 8) {
+
                     TextField("onboarding_username_placeholder", text: $username)
                         .multilineTextAlignment(.center)
                         .font(.system(size: 14, weight: .regular, design: .monospaced))
@@ -50,6 +55,9 @@ struct OnboardingView: View {
                         .padding(12)
                         .background(Color.secondary.opacity(0.12))
                         .cornerRadius(8)
+                        #if os(macOS)
+                        .textFieldStyle(.plain)
+                        #endif
                         .onChange(of: username) { oldValue, newValue in
                             let lowered = newValue.lowercased()
                             if newValue != lowered {
@@ -75,12 +83,11 @@ struct OnboardingView: View {
                     }
                     
                 }
-                .frame(maxWidth: 420)
-                .padding(.horizontal, 32)
-                
-                
+                .frame(maxWidth: 360)
+                .padding(.horizontal, 24)
+
                 // Primary actions
-                VStack(spacing: 16) {
+                VStack(spacing: 12) {
                     Button {
                         showingRegistration = true
                     } label: {
@@ -88,21 +95,22 @@ struct OnboardingView: View {
                             .font(.headline)
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(canProceed ? Color.AppBrand.button : Color.gray)
-                            .cornerRadius(8)
+                            .frame(height: 44)
+                            .background(canProceed ? Color.AppBrand.button : Color.gray.opacity(0.5))
+                            .cornerRadius(10)
                     }
-                    .padding(.vertical, 8)
+                    .buttonStyle(.plain)
                     .disabled(!canProceed)
-                                        
+
                     Button {
                         showingRecovery = true
                     } label: {
                         Text("onboarding_restore")
                             .font(.subheadline)
                             .foregroundColor(Color.blue)
+                            .padding(.vertical, 6)
                     }
-                    .padding(.vertical, 8)
+                    .buttonStyle(.plain)
 
                     Button {
                         showingDeviceLink = true
@@ -110,12 +118,13 @@ struct OnboardingView: View {
                         Text("onboarding_link_device")
                             .font(.subheadline)
                             .foregroundColor(Color.secondary)
+                            .padding(.vertical, 4)
                     }
-                    .padding(.vertical, 4)
+                    .buttonStyle(.plain)
                 }
-                .frame(maxWidth: 420)
-                .padding(.horizontal, 32)
-                .padding(.bottom, 32)
+                .frame(maxWidth: 360)
+                .padding(.horizontal, 24)
+                .padding(.bottom, 40)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 //            .background {
@@ -141,12 +150,23 @@ struct OnboardingView: View {
             .sheet(isPresented: $showingNetworkSettings) {
                 NavigationStack {
                     NetworkSettingsView()
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button(LocalizedStringKey("done")) {
+                                    showingNetworkSettings = false
+                                }
+                            }
+                        }
                 }
             }
             .toolbar {
                 ToolbarItem(placement: .automatic) {
                     Button {
+                        #if os(macOS)
+                        openSettings()
+                        #else
                         showingNetworkSettings = true
+                        #endif
                     } label: {
                         Image(systemName: "network")
                     }
