@@ -32,6 +32,26 @@ final class InAppNotificationService {
     /// Set by ChatViewModel to suppress banners for the currently open conversation.
     var activeChatId: String? = nil
 
+    /// Instance ID of the ChatViewModel that last registered as active.
+    /// Prevents a SwiftUI-diffing copy of ChatViewModel from clearing the
+    /// activeChatId that was set by the "real" retained ViewModel.
+    private var activeChatOwnerID: UUID? = nil
+
+    /// Register the current chat as active. Only the most recently registered
+    /// instance (by ownerID) may later clear it.
+    func registerActiveChat(_ chatId: String, ownerID: UUID) {
+        activeChatId = chatId
+        activeChatOwnerID = ownerID
+    }
+
+    /// Deregister the active chat. No-op if `ownerID` is not the current owner
+    /// (i.e., a stale SwiftUI-diffing copy tried to clear it).
+    func unregisterActiveChat(ownerID: UUID) {
+        guard activeChatOwnerID == ownerID else { return }
+        activeChatId = nil
+        activeChatOwnerID = nil
+    }
+
     // MARK: - Incoming message
 
     /// Called from MessageRouter after saving an incoming message.

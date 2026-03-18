@@ -81,6 +81,9 @@ class ChatViewModel: NSObject {
     }
     private var pendingMediaUploads: [String: MediaUploadPayload] = [:]
 
+    /// Unique per-instance ID used to guard InAppNotificationService ownership.
+    private let instanceID = UUID()
+
     init(chat: Chat, context: NSManagedObjectContext) {
         self.chat = chat
         self.viewContext = context
@@ -100,14 +103,15 @@ class ChatViewModel: NSObject {
         // Listen for queued messages processing
         setupMessageQueueListener()
 
-        // Suppress in-app banners while this chat is open
-        InAppNotificationService.shared.activeChatId = chat.id
+        // Suppress in-app banners while this chat is open.
+        // Uses instanceID so a discarded SwiftUI-diffing copy's deinit can't clear it.
+        InAppNotificationService.shared.registerActiveChat(chat.id, ownerID: instanceID)
     }
 
     isolated deinit {
         publicKeyFetchTimer?.invalidate()
         observationTasks.forEach { $0.cancel() }
-        InAppNotificationService.shared.activeChatId = nil
+        InAppNotificationService.shared.unregisterActiveChat(ownerID: instanceID)
         Log.debug("🔧 ChatViewModel deinitialized", category: "ChatViewModel")
     }
 
@@ -212,8 +216,10 @@ class ChatViewModel: NSObject {
             return
         }
 
-        // Don't fetch if session already exists
-        if isSessionReady {
+        // Don't fetch if session already exists AND we already know the display name.
+        // Username might be empty for contacts restored from cache — always fetch in that case.
+        let hasUsername = !(chat.otherUser?.username ?? "").isEmpty
+        if isSessionReady && hasUsername {
             return
         }
 

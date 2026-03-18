@@ -114,8 +114,15 @@ class MessageRetryManager {
         context: NSManagedObjectContext
     ) {
         let fetchRequest = Message.fetchRequest()
-        let chatPredicate = NSPredicate(format: "chat == %@ AND deliveryStatusRaw == %d", chat, DeliveryStatus.queued.rawValue)
-        fetchRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [chatPredicate])
+        // Also retry failed messages that haven't exceeded the retry cap (e.g. dropped during ICE startup window)
+        let queuedPredicate = NSPredicate(format: "chat == %@ AND deliveryStatusRaw == %d", chat, DeliveryStatus.queued.rawValue)
+        let retryableFailed = NSPredicate(
+            format: "chat == %@ AND deliveryStatusRaw == %d AND retryCount < %d",
+            chat,
+            DeliveryStatus.failed.rawValue,
+            FeatureFlags.maxMessageRetryAttempts
+        )
+        fetchRequest.predicate = NSCompoundPredicate(orPredicateWithSubpredicates: [queuedPredicate, retryableFailed])
         fetchRequest.sortDescriptors = [NSSortDescriptor(key: "timestamp", ascending: true)]
 
         guard let queuedMessages = try? context.fetch(fetchRequest) else {

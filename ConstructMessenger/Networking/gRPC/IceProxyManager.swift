@@ -153,6 +153,10 @@ final class IceProxyManager: ObservableObject {
     private let enabledKey = "ice_enabled"
     private let relayKey   = "iceActiveRelay"
 
+    /// Prevents duplicate concurrent on-demand start attempts (e.g. when several
+    /// RPC calls all fail at the same moment and each tries to start ICE).
+    private var isStartingOnDemand = false
+
     /// Whether the user has enabled ICE obfuscation. Persists across launches.
     var isEnabled: Bool {
         get { UserDefaults.standard.bool(forKey: enabledKey) }
@@ -353,7 +357,9 @@ final class IceProxyManager: ObservableObject {
     /// If start succeeds, subsequent `performRPC` calls automatically route through ICE until
     /// the proxy is stopped (app restart or user disables ICE in settings).
     func startOnDemandIfNeeded() async {
-        guard !isRunning else { return }
+        guard !isRunning, !isStartingOnDemand else { return }
+        isStartingOnDemand = true
+        defer { isStartingOnDemand = false }
         Log.info("🧊 Auto-starting ICE proxy (DPI auto-detection)", category: "ICE")
         let cert = await getIceBridgeCert()
         if startWithRelayFallback(cert: cert) {
