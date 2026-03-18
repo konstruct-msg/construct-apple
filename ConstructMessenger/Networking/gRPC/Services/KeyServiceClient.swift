@@ -250,6 +250,14 @@ final class KeyServiceClient: Sendable {
             request.newSignedPreKey = signed
             request.reason = reason
 
+            if let kyberSpk = newKyberKey {
+                var kSigned = Shared_Proto_Services_V1_KyberSignedPreKeyUpload()
+                kSigned.keyID = kyberSpk.keyId
+                kSigned.publicKey = kyberSpk.publicKey
+                kSigned.signature = kyberSpk.signature
+                request.kyberSignedPreKey = kSigned
+            }
+
             return try await keyClient.rotateSignedPreKey(
                 request: .init(message: request)
             )

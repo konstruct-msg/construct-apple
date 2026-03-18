@@ -536,11 +536,23 @@ public struct Shared_Proto_Services_V1_RotateSignedPreKeyRequest: Sendable {
   /// Reason for rotation (for audit log)
   public var reason: Shared_Proto_Services_V1_SignedPreKeyRotationReason = .unspecified
 
+  /// Optional: simultaneously rotate Kyber signed pre-key (ML-KEM-1024).
+  /// When present, both classic and Kyber SPK are replaced atomically.
+  public var kyberSignedPreKey: Shared_Proto_Services_V1_KyberSignedPreKeyUpload {
+    get {_kyberSignedPreKey ?? Shared_Proto_Services_V1_KyberSignedPreKeyUpload()}
+    set {_kyberSignedPreKey = newValue}
+  }
+  /// Returns true if `kyberSignedPreKey` has been explicitly set.
+  public var hasKyberSignedPreKey: Bool {self._kyberSignedPreKey != nil}
+  /// Clears the value of `kyberSignedPreKey`. Subsequent reads from it will return its default value.
+  public mutating func clearKyberSignedPreKey() {self._kyberSignedPreKey = nil}
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
   fileprivate var _newSignedPreKey: Shared_Proto_Services_V1_SignedPreKeyUpload? = nil
+  fileprivate var _kyberSignedPreKey: Shared_Proto_Services_V1_KyberSignedPreKeyUpload? = nil
 }
 
 public struct Shared_Proto_Services_V1_RotateSignedPreKeyResponse: Sendable {
@@ -560,9 +572,21 @@ public struct Shared_Proto_Services_V1_RotateSignedPreKeyResponse: Sendable {
   /// Rotation timestamp
   public var rotatedAt: Int64 = 0
 
+  /// New Kyber signed pre-key ID (present when kyber_signed_pre_key was supplied in request)
+  public var newKyberKeyID: UInt32 {
+    get {_newKyberKeyID ?? 0}
+    set {_newKyberKeyID = newValue}
+  }
+  /// Returns true if `newKyberKeyID` has been explicitly set.
+  public var hasNewKyberKeyID: Bool {self._newKyberKeyID != nil}
+  /// Clears the value of `newKyberKeyID`. Subsequent reads from it will return its default value.
+  public mutating func clearNewKyberKeyID() {self._newKyberKeyID = nil}
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
+
+  fileprivate var _newKyberKeyID: UInt32? = nil
 }
 
 public struct Shared_Proto_Services_V1_GetSignedPreKeyAgeRequest: Sendable {
@@ -1396,7 +1420,7 @@ extension Shared_Proto_Services_V1_GetPreKeyCountResponse: SwiftProtobuf.Message
 
 extension Shared_Proto_Services_V1_RotateSignedPreKeyRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".RotateSignedPreKeyRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0\u{3}new_signed_pre_key\0\u{1}reason\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0\u{3}new_signed_pre_key\0\u{1}reason\0\u{3}kyber_signed_pre_key\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1407,6 +1431,7 @@ extension Shared_Proto_Services_V1_RotateSignedPreKeyRequest: SwiftProtobuf.Mess
       case 1: try { try decoder.decodeSingularStringField(value: &self.deviceID) }()
       case 2: try { try decoder.decodeSingularMessageField(value: &self._newSignedPreKey) }()
       case 3: try { try decoder.decodeSingularEnumField(value: &self.reason) }()
+      case 4: try { try decoder.decodeSingularMessageField(value: &self._kyberSignedPreKey) }()
       default: break
       }
     }
@@ -1426,6 +1451,9 @@ extension Shared_Proto_Services_V1_RotateSignedPreKeyRequest: SwiftProtobuf.Mess
     if self.reason != .unspecified {
       try visitor.visitSingularEnumField(value: self.reason, fieldNumber: 3)
     }
+    try { if let v = self._kyberSignedPreKey {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1433,6 +1461,7 @@ extension Shared_Proto_Services_V1_RotateSignedPreKeyRequest: SwiftProtobuf.Mess
     if lhs.deviceID != rhs.deviceID {return false}
     if lhs._newSignedPreKey != rhs._newSignedPreKey {return false}
     if lhs.reason != rhs.reason {return false}
+    if lhs._kyberSignedPreKey != rhs._kyberSignedPreKey {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -1440,7 +1469,7 @@ extension Shared_Proto_Services_V1_RotateSignedPreKeyRequest: SwiftProtobuf.Mess
 
 extension Shared_Proto_Services_V1_RotateSignedPreKeyResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".RotateSignedPreKeyResponse"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0\u{3}new_key_id\0\u{3}old_key_valid_until\0\u{3}rotated_at\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0\u{3}new_key_id\0\u{3}old_key_valid_until\0\u{3}rotated_at\0\u{3}new_kyber_key_id\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1452,12 +1481,17 @@ extension Shared_Proto_Services_V1_RotateSignedPreKeyResponse: SwiftProtobuf.Mes
       case 2: try { try decoder.decodeSingularUInt32Field(value: &self.newKeyID) }()
       case 3: try { try decoder.decodeSingularInt64Field(value: &self.oldKeyValidUntil) }()
       case 4: try { try decoder.decodeSingularInt64Field(value: &self.rotatedAt) }()
+      case 5: try { try decoder.decodeSingularUInt32Field(value: &self._newKyberKeyID) }()
       default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
     if self.success != false {
       try visitor.visitSingularBoolField(value: self.success, fieldNumber: 1)
     }
@@ -1470,6 +1504,9 @@ extension Shared_Proto_Services_V1_RotateSignedPreKeyResponse: SwiftProtobuf.Mes
     if self.rotatedAt != 0 {
       try visitor.visitSingularInt64Field(value: self.rotatedAt, fieldNumber: 4)
     }
+    try { if let v = self._newKyberKeyID {
+      try visitor.visitSingularUInt32Field(value: v, fieldNumber: 5)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1478,6 +1515,7 @@ extension Shared_Proto_Services_V1_RotateSignedPreKeyResponse: SwiftProtobuf.Mes
     if lhs.newKeyID != rhs.newKeyID {return false}
     if lhs.oldKeyValidUntil != rhs.oldKeyValidUntil {return false}
     if lhs.rotatedAt != rhs.rotatedAt {return false}
+    if lhs._newKyberKeyID != rhs._newKyberKeyID {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

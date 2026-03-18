@@ -98,8 +98,9 @@ final class PreKeyRotationService {
 
         // ── Phase 2: single atomic RPC ───────────────────────────────────────
 
+        let response: Shared_Proto_Services_V1_RotateSignedPreKeyResponse
         do {
-            _ = try await KeyServiceClient.shared.rotateSignedPreKey(
+            response = try await KeyServiceClient.shared.rotateSignedPreKey(
                 deviceId: deviceId,
                 newClassicKey: classicKey,
                 newKyberKey: kyberKey,
@@ -126,7 +127,8 @@ final class PreKeyRotationService {
         CryptoManager.shared.persistCoreState()
 
         recordRotation()
-        Log.info("✅ SPK rotation complete: classic keyId=\(classicKey.keyId), kyber keyId=\(kyberKey.keyId)", category: "SPKRotation")
+        let serverKyberKeyId = response.hasNewKyberKeyID ? response.newKyberKeyID : kyberKey.keyId
+        Log.info("✅ SPK rotation complete: classic keyId=\(classicKey.keyId) (server: \(response.newKeyID)), kyber keyId=\(serverKyberKeyId)", category: "SPKRotation")
     }
 
     // MARK: - Schedule Helpers
