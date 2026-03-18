@@ -273,6 +273,9 @@ class ChatsViewModel {
 
                 // Check if SPK rotation is due (runs monthly; no-op otherwise)
                 await PreKeyRotationService.shared.rotateIfNeeded(deviceId: deviceId)
+
+                // Retry any avatar downloads that failed while offline (e.g. during ICE startup)
+                AvatarRetryService.shared.retryPendingAvatarsIfNeeded()
             }
         }
 
