@@ -11,21 +11,21 @@ import UniformTypeIdentifiers
 
 struct MessageInputView: View {
     @Binding var text: String
-    @Binding var droppedImages: [UIImage]  // Images pushed from ChatView drop zone
+    @Binding var droppedImages: [PlatformImage]  // Images pushed from ChatView drop zone
     let isSending: Bool
     let replyingTo: Message?
     /// Optional override for the quoted text shown in the reply bar.
     /// When set (partial quote), this is displayed instead of replyingTo.decryptedContent.
     let quoteOverride: String?
     let editingMessage: Message?
-    let onSend: ([UIImage], [URL]) -> Void  // images + file URLs
+    let onSend: ([PlatformImage], [URL]) -> Void  // images + file URLs
     let onCancelReply: () -> Void
     let onCancelEdit: () -> Void
 
     // Photo attachment state
     @FocusState private var isTextFieldFocused: Bool
     @State private var selectedPhotos: [PhotosPickerItem] = []
-    @State private var selectedImages: [UIImage] = []
+    @State private var selectedImages: [PlatformImage] = []
     @State private var optimizedMedia: [OptimizedMedia] = []  // Optimized photos ready to send
     @State private var selectedFileURLs: [URL] = []           // Document attachments
     @State private var showAttachmentMenu = false
@@ -70,7 +70,11 @@ struct MessageInputView: View {
                 .padding(.horizontal)
                 .padding(.vertical, 8)
                 .frame(maxHeight: 50)
+                #if canImport(UIKit)
                 .background(Color(uiColor: .systemGray6))
+                #else
+                .background(Color(nsColor: .windowBackgroundColor))
+                #endif
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
@@ -106,7 +110,11 @@ struct MessageInputView: View {
                 .padding(.horizontal)
                 .padding(.vertical, 8)
                 .frame(maxHeight: 50)
+                #if canImport(UIKit)
                 .background(Color(uiColor: .systemGray6))
+                #else
+                .background(Color(nsColor: .windowBackgroundColor))
+                #endif
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
             if !selectedImages.isEmpty {
@@ -141,7 +149,7 @@ struct MessageInputView: View {
                         .foregroundColor(Color.blue)
 #endif
                 }
-#if !targetEnvironment(macCatalyst)
+#if os(iOS)
                 .confirmationDialog(LocalizedStringKey("attach"), isPresented: $showAttachmentMenu) {
                     Button {
                         showPhotoPicker = true
@@ -220,7 +228,11 @@ struct MessageInputView: View {
                         .transition(.scale.combined(with: .opacity))
                     }
                 }
+                #if canImport(UIKit)
                 .background(Color(uiColor: .systemGray6))
+                #else
+                .background(Color(nsColor: .windowBackgroundColor))
+                #endif
 #if targetEnvironment(macCatalyst)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
 #else
@@ -285,7 +297,7 @@ struct MessageInputView: View {
             HStack(spacing: 8) {
                 ForEach(Array(selectedImages.enumerated()), id: \.offset) { index, image in
                     ZStack(alignment: .topTrailing) {
-                        Image(uiImage: image)
+                        Image(platformImage: image)
                             .resizable()
                             .scaledToFill()
                             .frame(width: 80, height: 80)
@@ -306,7 +318,11 @@ struct MessageInputView: View {
             .padding(.horizontal)
             .padding(.vertical, 8)
         }
+        #if canImport(UIKit)
         .background(Color(uiColor: .systemGray6))
+        #else
+        .background(Color(nsColor: .windowBackgroundColor))
+        #endif
     }
 
     // MARK: - File Preview
@@ -339,13 +355,21 @@ struct MessageInputView: View {
                     }
                     .padding(.horizontal, 8)
                     .padding(.vertical, 6)
+                    #if canImport(UIKit)
                     .background(Color(uiColor: .systemGray5), in: RoundedRectangle(cornerRadius: 8))
+                    #else
+                    .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
+                    #endif
                 }
             }
             .padding(.horizontal)
             .padding(.vertical, 8)
         }
+        #if canImport(UIKit)
         .background(Color(uiColor: .systemGray6))
+        #else
+        .background(Color(nsColor: .windowBackgroundColor))
+        #endif
     }
 
     private func fileIcon(for ext: String) -> String {
@@ -372,12 +396,12 @@ struct MessageInputView: View {
 
         for item in selectedPhotos {
             guard let data = try? await item.loadTransferable(type: Data.self),
-                  let image = UIImage(data: data) else {
+                  let image = PlatformImage(data: data) else {
                 continue
             }
 
             // Validate size
-            if let imageData = image.jpegData(compressionQuality: 0.8) {
+            if let imageData = image.platformJPEGData(quality: 0.8) {
                 let sizeInBytes = Int64(imageData.count)
                 if sizeInBytes > MessageSizeLimits.maxImageBytes {
                     // TODO: Show error to user
@@ -403,8 +427,8 @@ struct MessageInputView: View {
             guard url.startAccessingSecurityScopedResource() else { continue }
             defer { url.stopAccessingSecurityScopedResource() }
             guard let data = try? Data(contentsOf: url),
-                  let image = UIImage(data: data) else { continue }
-            if let jpeg = image.jpegData(compressionQuality: 0.8),
+                  let image = PlatformImage(data: data) else { continue }
+            if let jpeg = image.platformJPEGData(quality: 0.8),
                Int64(jpeg.count) > MessageSizeLimits.maxImageBytes {
                 Log.error("Photo too large: \(url.lastPathComponent)", category: "MessageInput")
                 continue

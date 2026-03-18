@@ -30,7 +30,7 @@ struct ChatView: View {
     @State private var galleryStartItem: GalleryStartItem?  // media gallery presenter
 
     // Drop target for drag-and-drop from Finder (macOS) over the whole chat area
-    @State private var chatDropImages: [UIImage] = []
+    @State private var chatDropImages: [PlatformImage] = []
     @State private var isChatDropTargeted = false
     
     // ✅ Swipe-to-dismiss gesture state (not scroll-related)
@@ -219,10 +219,12 @@ struct ChatView: View {
             
             messageInputView
         }
+        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .tabBar)
-        .toolbarBackground(.visible, for: .navigationBar)  // ✅ FIX: Make navbar opaque
-        .toolbarBackground(Color.AppBackground.primary, for: .navigationBar)  // ✅ FIX: Set background color
+        .toolbarBackground(.visible, for: .navigationBar)
+        .toolbarBackground(Color.AppBackground.primary, for: .navigationBar)
+        #endif
         .toolbar(content: toolbarContent)
         .gesture(
             DragGesture(minimumDistance: 10)
@@ -287,6 +289,7 @@ struct ChatView: View {
         .onAppear {
             markChatAsRead()
         }
+        #if os(iOS)
         .fullScreenCover(item: $galleryStartItem) { item in
             MediaGalleryViewer(
                 messages: mediaMessages,
@@ -297,6 +300,18 @@ struct ChatView: View {
                 )
             )
         }
+        #else
+        .sheet(item: $galleryStartItem) { item in
+            MediaGalleryViewer(
+                messages: mediaMessages,
+                initialMessageId: item.id,
+                isPresented: Binding(
+                    get: { galleryStartItem != nil },
+                    set: { if !$0 { galleryStartItem = nil } }
+                )
+            )
+        }
+        #endif
     }
     
     // MARK: - View Components
@@ -320,7 +335,7 @@ struct ChatView: View {
                     .foregroundColor(.secondary)
             }
             .padding()
-            .background(Color(.systemGray6))
+            .background(Color.secondary.opacity(0.12))
         }
     }
     
@@ -432,7 +447,7 @@ struct ChatView: View {
 
         // Split into separate ToolbarItems to avoid NSToolbarItemGroup selectionMode warnings on macOS
         if !isEditMode {
-            ToolbarItem(placement: .navigationBarTrailing) {
+            ToolbarItem(placement: .automatic) {
                 Button {
                     withAnimation {
                         isSearchActive.toggle()
@@ -443,7 +458,7 @@ struct ChatView: View {
                 }
             }
         } else {
-            ToolbarItem(placement: .navigationBarTrailing) {
+            ToolbarItem(placement: .automatic) {
                 Button {
                     withAnimation {
                         isSearchActive.toggle()
@@ -453,7 +468,7 @@ struct ChatView: View {
                     Image(systemName: isSearchActive ? "xmark.circle.fill" : "magnifyingglass")
                 }
             }
-            ToolbarItem(placement: .navigationBarTrailing) {
+            ToolbarItem(placement: .automatic) {
                 Button {
                     withAnimation {
                         isEditMode = false
@@ -488,9 +503,11 @@ struct ChatView: View {
                 HStack(spacing: 12) {
                     TextField("search_messages", text: $searchText)
                         .textFieldStyle(.roundedBorder)
+                        #if os(iOS)
                         .autocapitalization(.none)
-                        .autocorrectionDisabled()
                         .submitLabel(.search)
+                        #endif
+                        .autocorrectionDisabled()
                     Button {
                         withAnimation {
                             isSearchActive = false
@@ -566,7 +583,11 @@ struct ChatView: View {
     
     /// Hide keyboard
     private func hideKeyboard() {
+        #if canImport(UIKit)
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        #else
+        NSApp.keyWindow?.makeFirstResponder(nil)
+        #endif
     }
 
     // MARK: - Drag & Drop (macOS)
@@ -576,7 +597,7 @@ struct ChatView: View {
         for provider in providers {
             if provider.hasItemConformingToTypeIdentifier(UTType.image.identifier) {
                 provider.loadDataRepresentation(forTypeIdentifier: UTType.image.identifier) { data, _ in
-                    guard let data, let image = UIImage(data: data) else { return }
+                    guard let data, let image = PlatformImage(data: data) else { return }
                     DispatchQueue.main.async { chatDropImages.append(image) }
                 }
                 handled = true
@@ -587,7 +608,7 @@ struct ChatView: View {
                           url.startAccessingSecurityScopedResource() else { return }
                     defer { url.stopAccessingSecurityScopedResource() }
                     guard let imgData = try? Data(contentsOf: url),
-                          let image = UIImage(data: imgData) else { return }
+                          let image = PlatformImage(data: imgData) else { return }
                     DispatchQueue.main.async { chatDropImages.append(image) }
                 }
                 handled = true

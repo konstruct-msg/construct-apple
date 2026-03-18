@@ -31,11 +31,13 @@ struct UserProfileView: View {
                     actionsSection
                 }
             }
-            .background(Color(uiColor: .systemGroupedBackground))
+            .background(Color.secondary.opacity(0.08))
             .navigationTitle(LocalizedStringKey("profile"))
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .automatic) {
                     Button(LocalizedStringKey("done")) { dismiss() }
                 }
             }
@@ -79,11 +81,19 @@ struct UserProfileView: View {
         VStack(spacing: 10) {
             if let avatarData = user.avatarData,
                let avatarImage = ImageHelper.imageFromData(avatarData) {
+                #if canImport(UIKit)
                 Image(uiImage: avatarImage)
                     .resizable()
                     .scaledToFill()
                     .frame(width: 88, height: 88)
                     .clipShape(AvatarStyle.squircle(AvatarStyle.accountSize))
+                #else
+                Image(nsImage: avatarImage)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 88, height: 88)
+                    .clipShape(AvatarStyle.squircle(AvatarStyle.accountSize))
+                #endif
             } else {
                 AvatarStyle.squircle(AvatarStyle.accountSize)
                     .fill(Color.blue.opacity(0.15))
@@ -110,7 +120,7 @@ struct UserProfileView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 24)
-        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .background(Color.secondary.opacity(0.12))
     }
 
     // MARK: - Sharing Status
@@ -135,7 +145,7 @@ struct UserProfileView: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
-            .background(Color(uiColor: .secondarySystemGroupedBackground))
+            .background(Color.secondary.opacity(0.12))
 
             sectionFooter(LocalizedStringKey("profile_sharing_info_footer"))
         }
@@ -187,7 +197,7 @@ struct UserProfileView: View {
                         .foregroundColor(.red)
                 } action: { showResetSessionConfirm = true }
             }
-            .background(Color(uiColor: .secondarySystemGroupedBackground))
+            .background(Color.secondary.opacity(0.12))
 
             if user.isBlocked {
                 sectionFooter(LocalizedStringKey("user_is_blocked_footer"), color: .red)

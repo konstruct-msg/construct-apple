@@ -16,7 +16,7 @@ struct ChatRowView: View {
             Group {
                 if let avatarData = chat.otherUser?.avatarData,
                    let avatarImage = ImageHelper.imageFromData(avatarData) {
-                    Image(uiImage: avatarImage)
+                    Image(platformImage: avatarImage)
                         .resizable()
                         .scaledToFill()
                         .frame(width: AvatarStyle.chatSize, height: AvatarStyle.chatSize)

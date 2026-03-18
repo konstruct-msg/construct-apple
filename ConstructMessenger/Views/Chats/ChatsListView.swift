@@ -61,7 +61,9 @@ struct ChatsListView: View {
                 }
             }
             .refreshable {
+                #if os(iOS)
                 await BackgroundFetchManager.shared.fetchPendingMessages()
+                #endif
             }
             .navigationDestination(for: String.self) { chatId in
                 if let chat = chats.first(where: { $0.id == chatId }) {
@@ -73,7 +75,7 @@ struct ChatsListView: View {
                     ConnectionStatusIndicator()
                 }
 
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .automatic) {
                     Button {
                         showingQRScanner = true
                     } label: {

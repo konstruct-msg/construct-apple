@@ -28,7 +28,9 @@ struct RecoveryEntryView: View {
                 }
             }
             .navigationTitle(NSLocalizedString("onboarding_restore", comment: ""))
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     if case .recovering = vm.recoverStep { EmptyView() }
@@ -66,9 +68,11 @@ struct RecoveryEntryView: View {
                     TextField(NSLocalizedString("recovery_identifier_placeholder", comment: ""),
                               text: $vm.recoverIdentifier)
                         .autocorrectionDisabled()
+                        #if os(iOS)
                         .textInputAutocapitalization(.never)
+                        #endif
                         .padding(10)
-                        .background(Color(.secondarySystemBackground))
+                        .background(Color.secondary.opacity(0.1))
                         .cornerRadius(8)
                 }
                 .padding(.horizontal)
@@ -120,10 +124,12 @@ struct RecoveryEntryView: View {
                 .frame(width: 20, alignment: .trailing)
             TextField("", text: $vm.enteredWords[index])
                 .autocorrectionDisabled()
+                #if os(iOS)
                 .textInputAutocapitalization(.never)
+                .submitLabel(index < 11 ? .next : .done)
+                #endif
                 .font(.system(.body, design: .monospaced))
                 .focused($focusedField, equals: index)
-                .submitLabel(index < 11 ? .next : .done)
                 .onSubmit {
                     if index < 11 { focusedField = index + 1 }
                     else { focusedField = nil }
@@ -131,7 +137,7 @@ struct RecoveryEntryView: View {
         }
         .padding(.vertical, 6)
         .padding(.horizontal, 8)
-        .background(Color(.secondarySystemBackground))
+        .background(Color.secondary.opacity(0.1))
         .cornerRadius(8)
     }
 

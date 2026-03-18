@@ -5,6 +5,7 @@
 //  Created by Maxim Eliseyev on 30.12.2025.
 //
 
+#if os(iOS)
 import SwiftUI
 import AVFoundation
 import Observation
@@ -485,3 +486,29 @@ struct QRCodeScannerViewRepresentable: UIViewRepresentable {
         print("Scanned: \(code)")
     }
 }
+
+#else
+import SwiftUI
+
+// macOS stub: QR scanning via camera is not available on macOS.
+// Contacts can be added manually or via drag-and-drop of QR code images.
+struct QRScannerView: View {
+    let onCodeScanned: (String) -> Void
+
+    var body: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "qrcode.viewfinder")
+                .font(.system(size: 64, weight: .ultraLight))
+                .foregroundStyle(.secondary)
+            Text("QR scanning not available on macOS")
+                .font(.headline)
+                .foregroundStyle(.secondary)
+            Text("Ask your contact to share their invite link instead.")
+                .font(.subheadline)
+                .foregroundStyle(.tertiary)
+                .multilineTextAlignment(.center)
+        }
+        .padding(40)
+    }
+}
+#endif

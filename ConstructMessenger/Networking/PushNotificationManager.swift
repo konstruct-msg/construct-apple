@@ -6,6 +6,7 @@
 //  Handles device token registration and push notification permissions
 //
 
+#if os(iOS)
 import Foundation
 import UserNotifications
 import UIKit
@@ -328,3 +329,23 @@ extension UNAuthorizationStatus {
         }
     }
 }
+
+#else
+// macOS native app uses different push delivery mechanism (or polling via stream).
+// PushNotificationManager is a no-op on macOS.
+import Foundation
+
+final class PushNotificationManager {
+    static let shared = PushNotificationManager()
+    private init() {}
+    func registerIfNeeded() {}
+    func updateToken(_ token: Data) {}
+    func signalSilentPush() {}
+    func ensureTokenRegistered() async {}
+    func registerDeviceToken(_ tokenData: Data) async {}
+    func unregisterDeviceToken() async {}
+    func handleRegistrationError(_ error: Error) {}
+    func requestPermission() async -> Bool { return false }
+    func checkAuthorizationStatus() async {}
+}
+#endif

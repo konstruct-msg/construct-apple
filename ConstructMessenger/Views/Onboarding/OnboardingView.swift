@@ -47,7 +47,7 @@ struct OnboardingView: View {
                         .font(.system(size: 14, weight: .regular, design: .monospaced))
                         .frame(height: 30)
                         .padding(12)
-                        .background(Color(.systemGray6))
+                        .background(Color.secondary.opacity(0.12))
                         .cornerRadius(8)
                         .onChange(of: username) { oldValue, newValue in
                             let lowered = newValue.lowercased()
@@ -127,7 +127,7 @@ struct OnboardingView: View {
                 }
             }
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .automatic) {
                     Button {
                         showingNetworkSettings = true
                     } label: {

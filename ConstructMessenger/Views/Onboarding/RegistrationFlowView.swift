@@ -105,7 +105,7 @@ struct RegistrationStageView: View {
                 
             }
             .padding()
-            .background(Color(.systemGray6))
+            .background(Color.secondary.opacity(0.12))
             .cornerRadius(12)
         }
     }
@@ -300,7 +300,9 @@ struct RegistrationFlowView: View {
             Log.info("✅ Registration successful! userId=\(registerData.userId)", category: "Registration")
             
             // Step 5: Complete
+            #if canImport(UIKit)
             UINotificationFeedbackGenerator().notificationOccurred(.success)
+            #endif
             currentStep = .complete
             
             // ========================================

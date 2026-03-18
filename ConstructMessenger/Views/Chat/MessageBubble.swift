@@ -84,7 +84,7 @@ struct MessageBubble: View {
                 .foregroundColor(.secondary)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
-                .background(Color(.systemGray6))
+                .background(Color.secondary.opacity(0.12))
                 .cornerRadius(12)
             Spacer()
         }
@@ -205,7 +205,9 @@ struct MessageBubble: View {
             }
             .frame(maxWidth: containerWidth * 0.7, alignment: message.isSentByMe ? .trailing : .leading)
             .contentShape(.interaction, Rectangle())
+            #if os(iOS)
             .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 8))
+            #endif
             .onTapGesture {
                 if isEditMode {
                     onSelect?(message)
@@ -292,7 +294,9 @@ struct MessageBubble: View {
                     .onEnded { _ in
                         if swipeOffset >= 40 {
                             onReply?(message)
+                            #if canImport(UIKit)
                             UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                            #endif
                         }
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                             swipeOffset = 0

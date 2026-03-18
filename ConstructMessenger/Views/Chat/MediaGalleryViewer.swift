@@ -4,7 +4,11 @@
 //
 
 import SwiftUI
+#if os(iOS)
 import Photos
+#else
+import UniformTypeIdentifiers
+#endif
 
 // MARK: - Shared Image Cache
 
@@ -15,13 +19,13 @@ final class MediaImageCache {
     static let shared = MediaImageCache()
     private init() {}
 
-    private(set) var images: [String: UIImage] = [:]
+    private(set) var images: [String: PlatformImage] = [:]
 
-    func store(_ image: UIImage, for messageId: String) {
+    func store(_ image: PlatformImage, for messageId: String) {
         images[messageId] = image
     }
 
-    func image(for messageId: String) -> UIImage? {
+    func image(for messageId: String) -> PlatformImage? {
         images[messageId]
     }
 }
@@ -70,7 +74,9 @@ struct MediaGalleryViewer: View {
                         .tag(message.id)
                 }
             }
+            #if os(iOS)
             .tabViewStyle(.page(indexDisplayMode: .never))
+            #endif
             .ignoresSafeArea()
 
             // Top chrome: close / counter / save
@@ -123,7 +129,11 @@ struct MediaGalleryViewer: View {
                 .onEnded { value in
                     if dismissOffset > 100 {
                         withAnimation(.easeOut(duration: 0.22)) {
+                            #if canImport(UIKit)
                             dismissOffset = UIScreen.main.bounds.height
+                            #else
+                            dismissOffset = NSScreen.main?.frame.height ?? 600
+                            #endif
                         }
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
                             isPresented = false
@@ -158,6 +168,7 @@ struct MediaGalleryViewer: View {
         guard let image = MediaImageCache.shared.image(for: currentId) else { return }
         saveStatus = .saving
 
+        #if os(iOS)
         PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
             DispatchQueue.main.async {
                 guard status == .authorized || status == .limited else {
@@ -170,6 +181,24 @@ struct MediaGalleryViewer: View {
                 resetSaveStatus()
             }
         }
+        #else
+        if let tiffData = image.tiffRepresentation,
+           let bitmapRep = NSBitmapImageRep(data: tiffData),
+           let pngData = bitmapRep.representation(using: .png, properties: [:]) {
+            let panel = NSSavePanel()
+            panel.allowedContentTypes = [.png]
+            panel.nameFieldStringValue = "image.png"
+            if panel.runModal() == .OK, let url = panel.url {
+                try? pngData.write(to: url)
+                saveStatus = .saved
+            } else {
+                saveStatus = .failed
+            }
+        } else {
+            saveStatus = .failed
+        }
+        resetSaveStatus()
+        #endif
     }
 
     private func resetSaveStatus() {
@@ -184,7 +213,7 @@ struct MediaGalleryViewer: View {
 struct MediaGalleryPage: View {
     let message: Message
 
-    @State private var image: UIImage?
+    @State private var image: PlatformImage?
     @State private var isLoading = false
 
     @State private var scale: CGFloat = 1.0
@@ -201,7 +230,7 @@ struct MediaGalleryPage: View {
                 Color.black
 
                 if let img = image {
-                    Image(uiImage: img)
+                    Image(platformImage: img)
                         .resizable()
                         .scaledToFit()
                         .frame(width: geo.size.width, height: geo.size.height)
@@ -287,7 +316,7 @@ struct MediaGalleryPage: View {
         // Sent by me — retrieve from local storage (already full-res)
         if message.isSentByMe {
             if let data = MediaManager.shared.retrieveThumbnail(for: message.id),
-               let img = UIImage(data: data) {
+               let img = PlatformImage(data: data) {
                 MediaImageCache.shared.store(img, for: message.id)
                 image = img
             }
@@ -311,7 +340,7 @@ struct MediaGalleryPage: View {
                     mediaUrl: mediaUrl,
                     mediaKeyBase64: mediaKeyBase64
                 )
-                if let img = UIImage(data: data) {
+                if let img = PlatformImage(data: data) {
                     await MainActor.run {
                         MediaImageCache.shared.store(img, for: message.id)
                         image = img

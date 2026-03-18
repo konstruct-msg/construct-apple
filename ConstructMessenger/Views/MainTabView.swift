@@ -30,10 +30,12 @@ struct MainTabView: View {
                         Label("chats", systemImage: "message")
                     }
 
+                #if os(iOS)
                 SettingsView()
                     .tabItem {
                         Label("settings", systemImage: "gear")
                     }
+                #endif
             }
         }
     }

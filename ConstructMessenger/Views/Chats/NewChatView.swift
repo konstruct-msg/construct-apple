@@ -33,7 +33,9 @@ struct NewChatView: View {
                 
             }
             .navigationTitle("new_contact")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("cancel") {

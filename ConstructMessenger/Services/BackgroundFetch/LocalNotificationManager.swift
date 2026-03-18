@@ -4,9 +4,12 @@
 //
 //
 
+import Combine
 import Foundation
 import UserNotifications
+#if canImport(UIKit)
 import UIKit
+#endif
 
 /// Manages local notifications for background message delivery
 /// Shows user-friendly notifications when messages arrive in background
@@ -177,7 +180,9 @@ class LocalNotificationManager: NSObject {
             if #available(iOS 16.0, *) {
                 try? await UNUserNotificationCenter.current().setBadgeCount(count)
             } else {
+                #if canImport(UIKit)
                 UIApplication.shared.applicationIconBadgeNumber = count
+                #endif
             }
             Log.debug("📛 Badge updated to \(count)", category: "LocalNotifications")
         }
@@ -189,7 +194,9 @@ class LocalNotificationManager: NSObject {
             if #available(iOS 16.0, *) {
                 try? await UNUserNotificationCenter.current().setBadgeCount(0)
             } else {
+                #if canImport(UIKit)
                 UIApplication.shared.applicationIconBadgeNumber = 0
+                #endif
             }
             Log.debug("📛 Badge cleared", category: "LocalNotifications")
         }
