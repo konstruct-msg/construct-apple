@@ -501,3 +501,38 @@
 "photo" = "Фото";
 "video" = "Видео";
 "file_attachment" = "Файл";
+
+// MARK: - Attachments
+"attach" = "Прикрепить";
+"camera" = "Камера";
+"files" = "Файлы";
+"photos" = "Фото";
+"drop_to_attach" = "Перетащите для прикрепления";
+
+// MARK: - Message States
+"uploading" = "Загрузка…";
+"loading" = "Загрузка...";
+"failed_to_load" = "Не удалось загрузить";
+"shared_profile" = "Профиль отправлен";
+
+// MARK: - Drafts
+"save_draft" = "Сохранить черновик";
+"drafts" = "Черновики";
+"drafts_stored_locally" = "Черновики хранятся локально на этом устройстве.";
+
+// MARK: - QR Code
+"code_expired" = "Код устарел";
+"generate_new_code" = "Создать новый код";
+"expires_in" = "Истекает через %@";
+
+// MARK: - Settings & Diagnostics
+"diagnostics" = "Диагностика";
+"construct_logs" = "Журнал Construct";
+"exported_log_archive" = "Архив журнала";
+"diagnostics_and_logs" = "Диагностика и журналы";
+"tls" = "TLS";
+"build_debug" = "Отладка";
+"build_release" = "Релиз";
+"reset_to_default" = "Сбросить до стандартного";
+"interval" = "Интервал";
+"preview" = "Предпросмотр";

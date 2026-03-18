@@ -556,7 +556,7 @@ struct ProfileShareBubbleView: View {
                         .font(.headline)
                         .foregroundColor(.primary)
                     
-                    Text("Shared profile")
+                    Text(LocalizedStringKey("shared_profile"))
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -602,7 +602,7 @@ struct MediaMessageView: View {
                                 ProgressView()
                                     .scaleEffect(0.75)
                                     .tint(.white)
-                                Text("Uploading…")
+                                Text(LocalizedStringKey("uploading"))
                                     .font(.caption2.weight(.medium))
                                     .foregroundColor(.white)
                             }
@@ -636,7 +636,7 @@ struct MediaMessageView: View {
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                             } else {
-                                Text("Loading...")
+                                Text(LocalizedStringKey("loading"))
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                             }
@@ -653,7 +653,7 @@ struct MediaMessageView: View {
                                 .font(.system(size: 40))
                                 .foregroundColor(.orange)
                             
-                            Text("Failed to load")
+                            Text(LocalizedStringKey("failed_to_load"))
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                             
@@ -662,7 +662,7 @@ struct MediaMessageView: View {
                             } label: {
                                 HStack(spacing: 4) {
                                     Image(systemName: "arrow.clockwise")
-                                    Text("Retry")
+                                    Text(LocalizedStringKey("retry"))
                                 }
                                 .font(.caption)
                                 .foregroundColor(Color.blue)

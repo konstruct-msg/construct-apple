@@ -199,7 +199,7 @@ struct SettingsView: View {
                         settingsSection(header: "Developer") {
                             NavigationLink(destination: DiagnosticsView()) {
                                 HStack {
-                                    Text("Diagnostics & Logs").foregroundStyle(.orange)
+                                    Text(LocalizedStringKey("diagnostics_and_logs")).foregroundStyle(.orange)
                                     Spacer()
                                     Image(systemName: "chevron.right")
                                         .font(.system(size: 13, weight: .semibold))

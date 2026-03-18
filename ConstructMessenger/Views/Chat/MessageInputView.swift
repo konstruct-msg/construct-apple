@@ -142,22 +142,22 @@ struct MessageInputView: View {
 #endif
                 }
 #if !targetEnvironment(macCatalyst)
-                .confirmationDialog("Attach", isPresented: $showAttachmentMenu) {
+                .confirmationDialog(LocalizedStringKey("attach"), isPresented: $showAttachmentMenu) {
                     Button {
                         showPhotoPicker = true
                     } label: {
-                        Label("Photos", systemImage: "photo.on.rectangle")
+                        Label(LocalizedStringKey("photos"), systemImage: "photo.on.rectangle")
                     }
 
-                    Button("Camera") {
+                    Button(LocalizedStringKey("camera")) {
                         // TODO: Implement camera
                     }
 
-                    Button("Files") {
+                    Button(LocalizedStringKey("files")) {
                         showFilePicker = true
                     }
 
-                    Button("Cancel", role: .cancel) {}
+                    Button(LocalizedStringKey("cancel"), role: .cancel) {}
                 }
                 // PhotosPicker as sheet (the correct way)
                 .photosPicker(

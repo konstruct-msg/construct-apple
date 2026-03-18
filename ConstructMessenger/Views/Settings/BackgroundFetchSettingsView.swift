@@ -120,7 +120,7 @@ struct BackgroundFetchSettingsView: View {
             in: Double(BackgroundFetchConfig.minIntervalMinutes)...Double(BackgroundFetchConfig.maxIntervalMinutes),
             step: 5
         ) {
-            Text("Interval")
+            Text(LocalizedStringKey("interval"))
         } minimumValueLabel: {
             Text("\(BackgroundFetchConfig.minIntervalMinutes) min")
                 .font(.caption)

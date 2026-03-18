@@ -258,7 +258,7 @@ struct ChatView: View {
                     .strokeBorder(Color.accentColor, lineWidth: 3)
                     .background(Color.accentColor.opacity(0.06).clipShape(RoundedRectangle(cornerRadius: 12)))
                     .overlay(
-                        Label("Drop to attach", systemImage: "photo.badge.plus")
+                        Label(LocalizedStringKey("drop_to_attach"), systemImage: "photo.badge.plus")
                             .font(.title3.weight(.semibold))
                             .foregroundColor(.accentColor)
                             .padding(16)

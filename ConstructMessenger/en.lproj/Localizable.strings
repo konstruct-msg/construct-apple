@@ -499,3 +499,38 @@
 "photo" = "Photo";
 "video" = "Video";
 "file_attachment" = "File";
+
+// MARK: - Attachments
+"attach" = "Attach";
+"camera" = "Camera";
+"files" = "Files";
+"photos" = "Photos";
+"drop_to_attach" = "Drop to attach";
+
+// MARK: - Message States
+"uploading" = "Uploading…";
+"loading" = "Loading...";
+"failed_to_load" = "Failed to load";
+"shared_profile" = "Shared profile";
+
+// MARK: - Drafts
+"save_draft" = "Save Draft";
+"drafts" = "Drafts";
+"drafts_stored_locally" = "Drafts are stored locally on this device.";
+
+// MARK: - QR Code
+"code_expired" = "Code expired";
+"generate_new_code" = "Generate New Code";
+"expires_in" = "Expires in %@";
+
+// MARK: - Settings & Diagnostics
+"diagnostics" = "Diagnostics";
+"construct_logs" = "Construct Logs";
+"exported_log_archive" = "Exported log archive";
+"diagnostics_and_logs" = "Diagnostics & Logs";
+"tls" = "TLS";
+"build_debug" = "Debug";
+"build_release" = "Release";
+"reset_to_default" = "Reset to default";
+"interval" = "Interval";
+"preview" = "Preview";

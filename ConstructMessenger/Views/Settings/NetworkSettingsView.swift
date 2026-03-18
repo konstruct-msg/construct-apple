@@ -211,7 +211,7 @@ struct NetworkSettingsView: View {
                         Text(GRPCChannelManager.shared.currentHost)
                             .font(.system(size: 13, design: .monospaced))
                             .foregroundColor(.primary)
-                        Text("TLS")
+                        Text(LocalizedStringKey("tls"))
                             .font(.caption2.weight(.semibold))
                             .foregroundColor(Color.AppStatus.success)
                             .padding(.horizontal, 5)
@@ -235,7 +235,7 @@ struct NetworkSettingsView: View {
                     Text("build_configuration")
                         .foregroundColor(.secondary)
                     Spacer()
-                    Text(BuildConfiguration.current == .debug ? "Debug" : "Release")
+                    Text(BuildConfiguration.current == .debug ? LocalizedStringKey("build_debug") : LocalizedStringKey("build_release"))
                         .fontWeight(.medium)
                         .foregroundColor(BuildConfiguration.current == .debug ? .orange : Color.AppStatus.success)
                 }
@@ -266,7 +266,7 @@ struct NetworkSettingsView: View {
                             customHost = GRPCChannelManager.shared.currentHost
                             customPort = "\(GRPCChannelManager.shared.currentPort)"
                         } label: {
-                            Text("Reset to default")
+                            Text(LocalizedStringKey("reset_to_default"))
                         }
                         .buttonStyle(.bordered)
 

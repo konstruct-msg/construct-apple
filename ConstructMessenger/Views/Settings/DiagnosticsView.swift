@@ -81,11 +81,11 @@ struct DiagnosticsView: View {
                 }
             }
         }
-        .navigationTitle("Diagnostics")
+        .navigationTitle(LocalizedStringKey("diagnostics"))
         .onAppear { refresh() }
         .sheet(isPresented: $isSharing) {
             if let url = archiveURL {
-                ShareLink(item: url, subject: Text("Construct Logs"), message: Text("Exported log archive"))
+                ShareLink(item: url, subject: Text(LocalizedStringKey("construct_logs")), message: Text(LocalizedStringKey("exported_log_archive")))
             }
         }
     }

@@ -75,12 +75,12 @@ struct ContactQRCodeView: View {
                         HStack(spacing: 4) {
                             Image(systemName: "clock")
                                 .font(.caption)
-                            Text("Expires in \(formatTime(timeRemaining))")
+                                    Text(String(format: NSLocalizedString("expires_in", comment: "QR code expiry countdown"), formatTime(timeRemaining)))
                                 .font(.caption)
                         }
                         .foregroundColor(timeRemaining < InviteConfig.qrWarningThresholdSeconds ? .orange : .secondary)
                     } else {
-                        Text("Code expired")
+                        Text(LocalizedStringKey("code_expired"))
                             .font(.caption)
                             .foregroundColor(.red)
                     }
@@ -97,7 +97,7 @@ struct ContactQRCodeView: View {
                     Button {
                         regenerateQRCode()
                     } label: {
-                        Label("Generate New Code", systemImage: "arrow.clockwise")
+                        Label(LocalizedStringKey("generate_new_code"), systemImage: "arrow.clockwise")
                             .padding()
                             .frame(maxWidth: .infinity)
                             .background(Color.accentColor)
