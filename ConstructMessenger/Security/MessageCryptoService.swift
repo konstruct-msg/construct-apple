@@ -89,6 +89,7 @@ final class MessageCryptoService {
 
     func decryptMessage(
         _ message: ChatMessage,
+        contactIdOverride: String? = nil,
         core: OrchestratorCore?,
         restoreSession: (String) -> Bool,
         saveSession: (String) -> Void,
@@ -99,31 +100,33 @@ final class MessageCryptoService {
             throw CryptoManagerError.coreNotInitialized
         }
 
-        if !core.hasSession(contactId: message.from) {
-            if !restoreSession(message.from) {
+        let contactId = contactIdOverride ?? message.from
+
+        if !core.hasSession(contactId: contactId) {
+            if !restoreSession(contactId) {
                 throw CryptoManagerError.sessionNotFound
             }
         }
 
-        guard core.hasSession(contactId: message.from) else {
+        guard core.hasSession(contactId: contactId) else {
             throw CryptoManagerError.sessionNotFound
         }
 
         do {
             let contentForDecrypt = MessagePadding.unpadCiphertextBase64(message.content)
             let plaintext = try core.decryptMessage(
-                contactId: message.from,
+                contactId: contactId,
                 ephemeralPublicKey: [UInt8](message.ephemeralPublicKey),
                 messageNumber: message.messageNumber,
                 content: contentForDecrypt
             )
-            saveSession(message.from)
+            saveSession(contactId)
             return plaintext
         } catch {
             if let plaintext = try? tryDecryptWithArchived(message) {
                 return plaintext
             }
-            archiveSession(message.from, .decryptionFailed)
+            archiveSession(contactId, .decryptionFailed)
             throw CryptoManagerError.decryptionFailed
         }
     }

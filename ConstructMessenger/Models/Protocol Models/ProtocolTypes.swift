@@ -40,12 +40,26 @@ struct ChatMessage: Codable, Identifiable {
     /// Kyber OTPK key ID used by sender (0 = Kyber SPK was used, >0 = Kyber OTPK ID).
     /// Only meaningful when messageNumber == 0 and kemCiphertext is non-empty.
     var kyberOtpkId: UInt32 = 0
+
+    /// Device ID of the sending device (populated from envelope.senderDevice.deviceID).
+    /// Used for per-device session key derivation (contactId = userId:deviceId).
+    var senderDeviceId: String = ""
+
+    /// Canonical conversation ID from the envelope (e.g. "direct:{a}:{b}").
+    /// Required for SENDER_SYNC routing — identifies the original conversation
+    /// even when `from` and `to` are both the current user.
+    var conversationId: String = ""
     
     /// Check if this is an END_SESSION control message
     var isEndSession: Bool {
         messageType == "CONTROL_MESSAGE" && content == "END_SESSION"
     }
-    
+
+    /// Check if this is a SENDER_SYNC message (copy of own outgoing message for other devices).
+    var isSenderSync: Bool {
+        messageType == "SENDER_SYNC"
+    }
+
     /// Check if this is a regular encrypted message
     var isRegularMessage: Bool {
         messageType == "DIRECT_MESSAGE" || messageType == nil  // nil for legacy messages
@@ -57,6 +71,7 @@ extension ChatMessage {
     private enum CodingKeys: String, CodingKey {
         case id, from, to, messageType, ephemeralPublicKey, messageNumber, content, suiteId
         case timestamp, oneTimePreKeyId, editsMessageId, kemCiphertext, kyberOtpkId
+        case senderDeviceId, conversationId
     }
 
     init(from decoder: Decoder) throws {
@@ -74,6 +89,8 @@ extension ChatMessage {
         editsMessageId = (try? c.decodeIfPresent(String.self, forKey: .editsMessageId)) ?? ""
         kemCiphertext = (try? c.decodeIfPresent(Data.self, forKey: .kemCiphertext)) ?? Data()
         kyberOtpkId = (try? c.decodeIfPresent(UInt32.self, forKey: .kyberOtpkId)) ?? 0
+        senderDeviceId = (try? c.decodeIfPresent(String.self, forKey: .senderDeviceId)) ?? ""
+        conversationId = (try? c.decodeIfPresent(String.self, forKey: .conversationId)) ?? ""
     }
 }
 

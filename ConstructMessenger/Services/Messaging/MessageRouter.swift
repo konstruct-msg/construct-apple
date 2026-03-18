@@ -99,7 +99,17 @@ class MessageRouter {
             return
         }
 
-        // 2. Check if this is an END_SESSION control message
+        // 2. SENDER_SYNC — copy of own outgoing message from another device.
+        //    Route separately: decrypt with per-device session, save as outgoing in the
+        //    conversation with the original partner (extracted from conversationId).
+        if message.isSenderSync {
+            PersistentACKStore.shared.markProcessed(message.id, senderId: message.from, in: context)
+            handleSenderSync(message, in: context)
+            onReceiptNeeded?([message.id], message.from, .delivered)
+            return
+        }
+
+        // 3. Check if this is an END_SESSION control message
         if message.isEndSession {
             PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
             Log.info("🛑 Received END_SESSION from \(otherUserId)", category: "MessageRouter")
@@ -818,6 +828,139 @@ class MessageRouter {
             }
         } catch {
             Log.error("❌ Failed to save message: \(error)", category: "MessageRouter")
+        }
+    }
+
+    // MARK: - SENDER_SYNC Handling
+
+    /// Handle an incoming SENDER_SYNC message — a copy of an outgoing message sent by
+    /// the user's own other device. Decrypts using the per-device session and saves
+    /// the message as an outgoing bubble in the correct conversation.
+    private func handleSenderSync(_ message: ChatMessage, in context: NSManagedObjectContext) {
+        guard let currentUserId = SessionManager.shared.currentUserId else { return }
+
+        let partnerUserId = extractPartnerUserId(from: message.conversationId, myUserId: currentUserId)
+        guard !partnerUserId.isEmpty else {
+            Log.error("❌ SENDER_SYNC: cannot extract partner from conversationId='\(message.conversationId)'", category: "MessageRouter")
+            return
+        }
+
+        let contactId = message.senderDeviceId.isEmpty
+            ? message.from
+            : MultiDeviceSendCoordinator.sessionKey(userId: message.from, deviceId: message.senderDeviceId)
+
+        let hasSession = CryptoManager.shared.hasSession(for: contactId)
+
+        if hasSession {
+            guard let decrypted = try? CryptoManager.shared.decryptMessage(message, contactIdOverride: contactId) else {
+                Log.error("❌ SENDER_SYNC: decryption failed for contactId=\(contactId.prefix(20))…", category: "MessageRouter")
+                return
+            }
+            saveSenderSyncMessage(decrypted, original: message, partnerUserId: partnerUserId, in: context)
+        } else if message.messageNumber == 0 {
+            // New device: init receiving session async, then save
+            guard !message.senderDeviceId.isEmpty else {
+                Log.error("❌ SENDER_SYNC: no senderDeviceId for first message — cannot init session", category: "MessageRouter")
+                return
+            }
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                await self.initAndDecryptSenderSync(
+                    message: message,
+                    contactId: contactId,
+                    partnerUserId: partnerUserId,
+                    in: context
+                )
+            }
+        } else {
+            Log.error("❌ SENDER_SYNC: no session for \(contactId.prefix(20))… and messageNumber=\(message.messageNumber) > 0 — dropping", category: "MessageRouter")
+        }
+    }
+
+    /// Extract the OTHER user's ID from a direct conversation ID.
+    /// Format: "direct:{sorted_user1}:{sorted_user2}"
+    private func extractPartnerUserId(from conversationId: String, myUserId: String) -> String {
+        let parts = conversationId.split(separator: ":", maxSplits: 2, omittingEmptySubsequences: false)
+        guard parts.count == 3, parts[0] == "direct" else { return "" }
+        let a = String(parts[1]), b = String(parts[2])
+        if a == myUserId { return b }
+        if b == myUserId { return a }
+        return ""
+    }
+
+    /// Save a decrypted SENDER_SYNC message as an outgoing bubble.
+    private func saveSenderSyncMessage(
+        _ decrypted: String,
+        original: ChatMessage,
+        partnerUserId: String,
+        in context: NSManagedObjectContext
+    ) {
+        let (chat, _) = findOrCreateChat(for: partnerUserId, in: context)
+
+        let fetch = Message.fetchRequest()
+        fetch.predicate = NSPredicate(format: "id == %@", original.id)
+        fetch.fetchLimit = 1
+        if (try? context.fetch(fetch))?.first != nil {
+            return // already saved (duplicate delivery)
+        }
+
+        let msg = Message(context: context)
+        msg.id = original.id
+        msg.fromUserId = original.from
+        msg.toUserId = partnerUserId
+        msg.encryptedContent = original.content
+        msg.decryptedContent = decrypted
+        msg.timestamp = Date(timeIntervalSince1970: TimeInterval(original.timestamp))
+        msg.isSentByMe = true
+        msg.deliveryStatus = .sent
+        msg.retryCount = 0
+        msg.chat = chat
+
+        chat.lastMessageText = Chat.formatPreviewText(decrypted)
+        chat.lastMessageTime = msg.timestamp
+        context.saveAndLog()
+
+        if !original.senderDeviceId.isEmpty {
+            CryptoManager.shared.saveSessionToKeychainPublic(
+                for: MultiDeviceSendCoordinator.sessionKey(userId: original.from, deviceId: original.senderDeviceId)
+            )
+        }
+        Log.info("✅ SENDER_SYNC: saved outgoing message in conversation with \(partnerUserId.prefix(8))…", category: "MessageRouter")
+    }
+
+    /// Async helper: fetch sender device bundle, init receiving session, then save.
+    private func initAndDecryptSenderSync(
+        message: ChatMessage,
+        contactId: String,
+        partnerUserId: String,
+        in context: NSManagedObjectContext
+    ) async {
+        do {
+            let bundle = try await KeyServiceClient.shared.getPreKeyBundle(
+                userId: message.from,
+                deviceId: message.senderDeviceId
+            )
+            let bundleWithSuite = (
+                identityPublic: bundle.identityPublic,
+                signedPrekeyPublic: bundle.signedPrekeyPublic,
+                signature: bundle.signature,
+                verifyingKey: bundle.verifyingKey,
+                suiteId: "1"
+            )
+            let decrypted = try CryptoManager.shared.initReceivingSession(
+                for: contactId,
+                recipientBundle: bundleWithSuite,
+                firstMessage: message
+            )
+            saveSenderSyncMessage(decrypted, original: message, partnerUserId: partnerUserId, in: context)
+
+            // Replenish any OTPKs consumed during this session init
+            Task {
+                let deviceId = KeychainManager.shared.loadDeviceID() ?? ""
+                await OtpkReplenishmentService.replenishIfNeeded(deviceId: deviceId)
+            }
+        } catch {
+            Log.error("❌ SENDER_SYNC: initReceivingSession failed for \(contactId.prefix(20))…: \(error)", category: "MessageRouter")
         }
     }
 }

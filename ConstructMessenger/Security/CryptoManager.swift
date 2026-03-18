@@ -771,7 +771,12 @@ class CryptoManager {
     /// Uses clean API - Rust handles all MessagePack internally
     /// Now with Session Archive fallback support
     func decryptMessage(_ message: ChatMessage) throws -> String {
-        Log.debug("🔓 Decrypting message \(message.id.prefix(8))... from \(message.from.prefix(8))...", category: "CryptoManager")
+        try decryptMessage(message, contactIdOverride: nil)
+    }
+
+    func decryptMessage(_ message: ChatMessage, contactIdOverride: String?) throws -> String {
+        let logContactId = contactIdOverride ?? message.from
+        Log.debug("🔓 Decrypting message \(message.id.prefix(8))... contactId=\(logContactId.prefix(16))...", category: "CryptoManager")
         Log.debug("   messageNumber: \(message.messageNumber)", category: "CryptoManager")
         Log.debug("   ephemeralPublicKey: \(message.ephemeralPublicKey.count) bytes", category: "CryptoManager")
         Log.debug("   content length: \(message.content.count) chars", category: "CryptoManager")
@@ -780,6 +785,7 @@ class CryptoManager {
         do {
             plaintext = try messageCrypto.decryptMessage(
                 message,
+                contactIdOverride: contactIdOverride,
                 core: orchestratorCore,
                 restoreSession: { [weak self] userId in
                     Log.info("🔄 Session not in memory, attempting restore: \(userId)", category: "CryptoManager")

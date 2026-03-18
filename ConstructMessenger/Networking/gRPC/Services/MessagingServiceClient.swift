@@ -192,6 +192,33 @@ final class MessagingServiceClient: Sendable {
                     kyberOtpkId: 0
                 )
             }
+            // SENDER_SYNC: copy of own outgoing message — decrypt with per-device session.
+            // Note: PendingMessage proto does not yet carry senderDevice/conversationID;
+            // those fields are only available in the live stream Envelope.
+            // Leave them empty here — handleSenderSync will ACK and skip if unable to route.
+            if msg.contentType == .senderSync {
+                guard let decoded = try? WirePayloadCoder.decode(msg.encryptedPayload) else {
+                    Log.debug("⚠️ Failed to decode SENDER_SYNC payload \(msg.messageID) — queuing failed ACK", category: "MessagingServiceClient")
+                    failed.append(FailedMessage(id: msg.messageID, senderId: msg.senderID))
+                    return nil
+                }
+                return ChatMessage(
+                    id: msg.messageID,
+                    from: msg.senderID,
+                    to: "",
+                    messageType: "SENDER_SYNC",
+                    ephemeralPublicKey: Data(decoded.ephemeralPublicKey),
+                    messageNumber: decoded.messageNumber,
+                    content: decoded.content,
+                    suiteId: 1,
+                    timestamp: UInt64(msg.timestamp),
+                    oneTimePreKeyId: decoded.oneTimePreKeyId,
+                    kemCiphertext: decoded.kemCiphertext ?? Data(),
+                    kyberOtpkId: decoded.kyberOtpkId,
+                    senderDeviceId: "",
+                    conversationId: ""
+                )
+            }
             // Unpack wire payload blob into crypto components
             guard let decoded = try? WirePayloadCoder.decode(msg.encryptedPayload) else {
                 Log.debug("⚠️ Failed to decode encrypted_payload for message \(msg.messageID) — queuing failed ACK", category: "MessagingServiceClient")
@@ -210,7 +237,9 @@ final class MessagingServiceClient: Sendable {
                 timestamp: UInt64(msg.timestamp),
                 oneTimePreKeyId: decoded.oneTimePreKeyId,
                 kemCiphertext: decoded.kemCiphertext ?? Data(),
-                kyberOtpkId: decoded.kyberOtpkId
+                kyberOtpkId: decoded.kyberOtpkId,
+                senderDeviceId: "",
+                conversationId: ""
             )
         }
 

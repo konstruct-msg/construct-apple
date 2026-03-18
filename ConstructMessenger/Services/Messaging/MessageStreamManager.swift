@@ -637,6 +637,30 @@ final class MessageStreamManager {
                     kyberOtpkId: 0
                 ))
             }
+            // SENDER_SYNC: copy of own outgoing message — decrypt with per-device session
+            if envelope.contentType == .senderSync {
+                guard let decoded = try? WirePayloadCoder.decode(envelope.encryptedPayload) else {
+                    Log.info("⚠️ Failed to decode SENDER_SYNC payload for message \(envelope.messageID)", category: "MessageStream")
+                    return nil
+                }
+                Log.info("🔄 SENDER_SYNC from device \(envelope.senderDevice.deviceID.prefix(8))… id=\(envelope.messageID.prefix(8))…", category: "MessageStream")
+                return .message(ChatMessage(
+                    id: envelope.messageID,
+                    from: envelope.sender.userID,
+                    to: envelope.recipient.userID,
+                    messageType: "SENDER_SYNC",
+                    ephemeralPublicKey: Data(decoded.ephemeralPublicKey),
+                    messageNumber: decoded.messageNumber,
+                    content: decoded.content,
+                    suiteId: 1,
+                    timestamp: UInt64(envelope.timestamp),
+                    oneTimePreKeyId: decoded.oneTimePreKeyId,
+                    kemCiphertext: decoded.kemCiphertext ?? Data(),
+                    kyberOtpkId: decoded.kyberOtpkId,
+                    senderDeviceId: envelope.senderDevice.deviceID,
+                    conversationId: envelope.conversationID
+                ))
+            }
             // Unpack wire payload blob into crypto components
             guard let decoded = try? WirePayloadCoder.decode(envelope.encryptedPayload) else {
                 Log.info("⚠️ Failed to decode encrypted_payload for message \(envelope.messageID)", category: "MessageStream")
@@ -655,7 +679,9 @@ final class MessageStreamManager {
                 oneTimePreKeyId: decoded.oneTimePreKeyId,
                 editsMessageId: envelope.editsMessageID,
                 kemCiphertext: decoded.kemCiphertext ?? Data(),
-                kyberOtpkId: decoded.kyberOtpkId
+                kyberOtpkId: decoded.kyberOtpkId,
+                senderDeviceId: envelope.senderDevice.deviceID,
+                conversationId: envelope.conversationID
             ))
         case .receipt(let receipt):
             // Deliver receipt: extract confirmed message IDs and propagate
