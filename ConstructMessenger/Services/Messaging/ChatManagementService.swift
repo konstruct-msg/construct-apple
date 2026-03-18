@@ -74,9 +74,18 @@ class ChatManagementService {
         
         let dbUser: User
         if let existingUser = try? context.fetch(userFetchRequest).first {
-            // Use existing user - update username and displayName if they changed
+            // Update raw server username always
             existingUser.username = normalizedUsername(from: user.username)
-            existingUser.displayName = displayName(for: user)
+            // Only overwrite displayName if:
+            //   a) the server provides a real (non-empty) username, OR
+            //   b) the contact has NOT shared their profile with us yet
+            // This prevents resetting a profile-shared name back to the generated one
+            // when the server returns an empty/UUID username after app restart.
+            let serverName = displayName(for: user)
+            let serverHasRealName = !normalizedUsername(from: user.username).isEmpty
+            if serverHasRealName || !existingUser.isSharingWithMe {
+                existingUser.displayName = serverName
+            }
             dbUser = existingUser
             Log.debug("Using existing user: id=\(user.id), username=\(user.username), displayName=\(existingUser.displayName)", category: "ChatManagementService")
         } else {

@@ -91,7 +91,12 @@ class PublicKeyBundleHandler {
            let user = existingChat.otherUser {
             let oldUsername = user.username
             user.username = data.username
-            user.displayName = data.username
+            // Preserve profile-shared name; server username may be empty/UUID
+            if !data.username.isEmpty, UUID(uuidString: data.username) == nil, data.username.lowercased() != "anonymous" {
+                user.displayName = data.username
+            } else if !user.isSharingWithMe {
+                user.displayName = DisplayNameGenerator.generate(from: data.userId)
+            }
             do {
                 try context.save()
                 Log.info("✅ Updated username: \(oldUsername) → \(data.username)", category: "PublicKeyBundleHandler")
@@ -143,7 +148,10 @@ class PublicKeyBundleHandler {
                 user.displayName = normalized
             } else {
                 user.username = ""
-                user.displayName = DisplayNameGenerator.generate(from: data.userId)
+                // Preserve profile-shared name if the contact shared their profile with us
+                if !user.isSharingWithMe {
+                    user.displayName = DisplayNameGenerator.generate(from: data.userId)
+                }
             }
             context.saveAndLog()
             Log.info("Updated username for user: \(data.username)", category: "PublicKeyBundleHandler")

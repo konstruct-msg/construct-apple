@@ -273,7 +273,10 @@ class ChatViewModel: NSObject {
                 user.displayName = normalized
             } else {
                 user.username = ""
-                user.displayName = DisplayNameGenerator.generate(from: data.userId)
+                // Preserve profile-shared name if the contact shared their profile with us
+                if !user.isSharingWithMe {
+                    user.displayName = DisplayNameGenerator.generate(from: data.userId)
+                }
             }
             viewContext.saveAndLog()
             Log.info("Updated username for user: \(data.username)", category: "ChatViewModel")
