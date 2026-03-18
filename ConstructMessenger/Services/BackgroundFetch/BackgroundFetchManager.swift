@@ -379,7 +379,7 @@ class BackgroundFetchManager: NSObject {
 
                     // Update chat's last message
                     if let lastMessage = chatMessages.last {
-                        chat.lastMessageText = Chat.formatPreviewText(decryptedContent ?? "[Encrypted]")
+                        chat.lastMessageText = Chat.formatPreviewText(decryptedContent ?? NSLocalizedString("message_unavailable", comment: ""))
                         chat.lastMessageTime = Date(timeIntervalSince1970: TimeInterval(lastMessage.timestamp))
                     }
                 }

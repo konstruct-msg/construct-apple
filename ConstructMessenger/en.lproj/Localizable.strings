@@ -47,6 +47,7 @@
 "status_encrypting" = "Encrypting...";
 "chat" = "Chat";
 "encrypted" = "Encrypted";
+"message_unavailable" = "Message not available";
 "reply" = "Reply";
 "copy" = "Copy";
 "info" = "Info";

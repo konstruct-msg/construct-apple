@@ -145,10 +145,23 @@ struct MessageBubble: View {
                         replyIndicatorView
 
                         // Main message content
-                        LinkDetectingText(
-                            message.decryptedContent ?? NSLocalizedString("encrypted", comment: "Fallback for encrypted content"),
-                            color: .primary
-                        )
+                        if message.decryptedContent == nil {
+                            // Irrecoverable: message was saved when the session was unavailable
+                            // or decryption failed. Display a clear unavailable indicator.
+                            HStack(spacing: 5) {
+                                Image(systemName: "lock.trianglebadge.exclamationmark")
+                                    .font(.caption)
+                                Text(NSLocalizedString("message_unavailable", comment: ""))
+                                    .italic()
+                            }
+                            .font(.callout)
+                            .foregroundColor(.secondary)
+                        } else {
+                            LinkDetectingText(
+                                message.decryptedContent!,
+                                color: .primary
+                            )
+                        }
                     }
                     .padding(.vertical, 2)
                     .background(isSelected ? Color.accentColor.opacity(0.12) : Color.clear)
@@ -431,7 +444,11 @@ struct FileAttachmentBubbleView: View {
             }
         }
         .padding(12)
+        #if canImport(UIKit)
         .background(isSentByMe ? Color.accentColor : Color(uiColor: .systemGray5))
+        #else
+        .background(isSentByMe ? Color.accentColor : Color(nsColor: .controlBackgroundColor))
+        #endif
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .quickLookPreview($previewURL)
     }
@@ -534,8 +551,8 @@ struct ProfileShareBubbleView: View {
                 // Avatar placeholder or image
                 if let avatarData = profileData.avatarData,
                    let imageData = Data(base64Encoded: avatarData),
-                   let uiImage = UIImage(data: imageData) {
-                    Image(uiImage: uiImage)
+                   let uiImage = PlatformImage(data: imageData) {
+                    Image(platformImage: uiImage)
                         .resizable()
                         .scaledToFill()
                         .frame(width: 60, height: 60)
@@ -577,7 +594,7 @@ struct MediaMessageView: View {
     let isSelected: Bool
     let onTapFullScreen: (() -> Void)?
 
-    @State private var thumbnailImage: UIImage?
+    @State private var thumbnailImage: PlatformImage?
     @State private var isLoading = false
     @State private var loadError: String?
     @State private var downloadProgress: Double = 0
@@ -591,7 +608,7 @@ struct MediaMessageView: View {
             // Thumbnail — preserves natural aspect ratio, max 250×250
             if let thumbnail = thumbnailImage {
                 let isUploading = isPlaceholder && message.deliveryStatus == .sending
-                Image(uiImage: thumbnail)
+                Image(platformImage: thumbnail)
                     .resizable()
                     .scaledToFit()
                     .frame(maxWidth: 250, maxHeight: 250)
@@ -714,7 +731,7 @@ struct MediaMessageView: View {
         if message.isSentByMe {
             Log.debug("📱 Loading local media for sent message", category: "MediaMessage")
             if let thumbnailData = MediaManager.shared.retrieveThumbnail(for: message.id),
-               let image = UIImage(data: thumbnailData) {
+               let image = PlatformImage(data: thumbnailData) {
                 thumbnailImage = image
                 MediaImageCache.shared.store(image, for: message.id)
                 Log.debug("✅ Loaded local thumbnail", category: "MediaMessage")
@@ -755,7 +772,7 @@ struct MediaMessageView: View {
                     downloadProgress = 0.9
                 }
                 
-                guard let image = UIImage(data: imageData) else {
+                guard let image = PlatformImage(data: imageData) else {
                     Log.error("❌ Failed to decode image data", category: "MediaMessage")
                     await MainActor.run {
                         isLoading = false
