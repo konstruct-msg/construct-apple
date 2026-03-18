@@ -360,6 +360,16 @@ class BackgroundFetchManager: NSObject {
                         Log.info("⚠️ No session for user \(otherUserId), message will be decrypted later", category: "BackgroundFetch")
                         // Message will be decrypted when user opens chat and session is initialized
                     }
+
+                    // If decryption succeeded, mark the message as processed in PersistentACKStore.
+                    // This prevents the real-time stream (MessageRouter) from re-processing it when
+                    // it reconnects — which would advance the Double Ratchet a second time and cause
+                    // an AEAD failure, triggering an unnecessary heal loop.
+                    // If decryption FAILED (decryptedContent == nil), we intentionally do NOT mark it
+                    // as processed so the stream can retry with the live session.
+                    if decryptedContent != nil {
+                        PersistentACKStore.shared.markProcessed(messageData.id, senderId: messageData.from, in: backgroundContext)
+                    }
                     
                     // Save message
                     let message = Message(context: backgroundContext)
