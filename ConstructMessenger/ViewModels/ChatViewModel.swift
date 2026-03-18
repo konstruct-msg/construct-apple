@@ -267,17 +267,7 @@ class ChatViewModel: NSObject {
 
         // Update username if we have the user in Core Data
         if let user = chat.otherUser {
-            let normalized = data.username.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !normalized.isEmpty, normalized.lowercased() != "anonymous", UUID(uuidString: normalized) == nil {
-                user.username = normalized
-                user.displayName = normalized
-            } else {
-                user.username = ""
-                // Preserve profile-shared name if the contact shared their profile with us
-                if !user.isSharingWithMe {
-                    user.displayName = DisplayNameGenerator.generate(from: data.userId)
-                }
-            }
+            user.applyServerUsername(data.username, userId: data.userId)
             viewContext.saveAndLog()
             Log.info("Updated username for user: \(data.username)", category: "ChatViewModel")
         }

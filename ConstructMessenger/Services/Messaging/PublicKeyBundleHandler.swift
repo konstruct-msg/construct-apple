@@ -90,13 +90,7 @@ class PublicKeyBundleHandler {
         if let existingChat = try? context.fetch(chatFetch).first,
            let user = existingChat.otherUser {
             let oldUsername = user.username
-            user.username = data.username
-            // Preserve profile-shared name; server username may be empty/UUID
-            if !data.username.isEmpty, UUID(uuidString: data.username) == nil, data.username.lowercased() != "anonymous" {
-                user.displayName = data.username
-            } else if !user.isSharingWithMe {
-                user.displayName = DisplayNameGenerator.generate(from: data.userId)
-            }
+            user.applyServerUsername(data.username, userId: data.userId)
             do {
                 try context.save()
                 Log.info("✅ Updated username: \(oldUsername) → \(data.username)", category: "PublicKeyBundleHandler")
@@ -142,17 +136,7 @@ class PublicKeyBundleHandler {
         userFetchRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: predicates)
         
         if let user = try? context.fetch(userFetchRequest).first {
-            let normalized = data.username.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !normalized.isEmpty, normalized.lowercased() != "anonymous", UUID(uuidString: normalized) == nil {
-                user.username = normalized
-                user.displayName = normalized
-            } else {
-                user.username = ""
-                // Preserve profile-shared name if the contact shared their profile with us
-                if !user.isSharingWithMe {
-                    user.displayName = DisplayNameGenerator.generate(from: data.userId)
-                }
-            }
+            user.applyServerUsername(data.username, userId: data.userId)
             context.saveAndLog()
             Log.info("Updated username for user: \(data.username)", category: "PublicKeyBundleHandler")
         }

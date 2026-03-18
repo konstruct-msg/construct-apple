@@ -74,30 +74,18 @@ class ChatManagementService {
         
         let dbUser: User
         if let existingUser = try? context.fetch(userFetchRequest).first {
-            // Update raw server username always
-            existingUser.username = normalizedUsername(from: user.username)
-            // Only overwrite displayName if:
-            //   a) the server provides a real (non-empty) username, OR
-            //   b) the contact has NOT shared their profile with us yet
-            // This prevents resetting a profile-shared name back to the generated one
-            // when the server returns an empty/UUID username after app restart.
-            let serverName = displayName(for: user)
-            let serverHasRealName = !normalizedUsername(from: user.username).isEmpty
-            if serverHasRealName || !existingUser.isSharingWithMe {
-                existingUser.displayName = serverName
-            }
+            existingUser.applyServerUsername(user.username, userId: user.id)
             dbUser = existingUser
             Log.debug("Using existing user: id=\(user.id), username=\(user.username), displayName=\(existingUser.displayName)", category: "ChatManagementService")
         } else {
             // Create new user
             dbUser = User(context: context)
             dbUser.id = user.id
-            dbUser.username = normalizedUsername(from: user.username)
-            dbUser.displayName = displayName(for: user)
             dbUser.isSharingWithMe = false
             dbUser.isBlocked = false
             dbUser.amISharingWith = false
-            Log.debug("Created new user: id=\(user.id), username=\(user.username), displayName=\(user.username)", category: "ChatManagementService")
+            dbUser.applyServerUsername(user.username, userId: user.id)
+            Log.debug("Created new user: id=\(user.id), username=\(user.username), displayName=\(dbUser.displayName)", category: "ChatManagementService")
         }
         
         // Create new chat
@@ -123,27 +111,8 @@ class ChatManagementService {
         }
     }
 
-    private func displayName(for user: PublicUserInfo) -> String {
-        let normalized = normalizedUsername(from: user.username)
-        if !normalized.isEmpty {
-            return normalized
-        }
-        return DisplayNameGenerator.generate(from: user.id)
-    }
-
-    private func normalizedUsername(from value: String?) -> String {
-        guard let value, !value.isEmpty else { return "" }
-        if value.lowercased() == "anonymous" {
-            return ""
-        }
-        if UUID(uuidString: value) != nil {
-            return ""
-        }
-        return value
-    }
-    
     // MARK: - Chat Deletion
-    
+
     /// Delete a chat and clean up all associated data
     /// - Parameter chat: Chat to delete
     /// - Note: Deletes messages, archives crypto sessions, clears shared secrets
