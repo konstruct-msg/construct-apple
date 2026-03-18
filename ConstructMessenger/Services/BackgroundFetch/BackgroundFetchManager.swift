@@ -284,8 +284,12 @@ class BackgroundFetchManager: NSObject {
                 return
             }
             
-            // Group messages by chat
+            // Group messages by chat (skip control messages — they are not user-visible)
             for message in messages {
+                guard message.messageType != "CONTROL_MESSAGE" && message.messageType != "SENDER_SYNC" else {
+                    Log.debug("⏭️ Skipping control message \(message.id) (\(message.messageType ?? "nil")) in grouping phase", category: "BackgroundFetch")
+                    continue
+                }
                 let otherUserId = message.from == currentUserId ? message.to : message.from
                 
                 // Find or create chat
@@ -325,7 +329,17 @@ class BackgroundFetchManager: NSObject {
                     if (try? backgroundContext.fetch(messageFetch).first) != nil {
                         continue // Already exists
                     }
-                    
+
+                    // Skip control messages (END_SESSION, SENDER_SYNC): these are session
+                    // management signals, not user-visible messages. Attempting to decrypt
+                    // "END_SESSION" as AEAD ciphertext corrupts the live session — causing
+                    // subsequent messages to show as "Encrypted" in the UI. The real-time
+                    // stream handles all control messages when the app comes to foreground.
+                    if messageData.messageType == "CONTROL_MESSAGE" || messageData.messageType == "SENDER_SYNC" {
+                        Log.debug("⏭️ Skipping control message \(messageData.id) (\(messageData.messageType ?? "nil")) in background fetch", category: "BackgroundFetch")
+                        continue
+                    }
+
                     // Try to decrypt message.
                     // CryptoManager is not thread-safe: all crypto calls must run on MainActor.
                     // Use DispatchQueue.main.sync to serialize with foreground session state.
