@@ -16,6 +16,7 @@ struct OnboardingView: View {
     @State private var showingRegistration = false
     @State private var showingRecovery = false
     @State private var showingNetworkSettings = false
+    @State private var showingDeviceLink = false
     @State private var availabilityTask: Task<Void, Never>? = nil
     
     var body: some View {
@@ -102,6 +103,15 @@ struct OnboardingView: View {
                             .foregroundColor(Color.blue)
                     }
                     .padding(.vertical, 8)
+
+                    Button {
+                        showingDeviceLink = true
+                    } label: {
+                        Text("onboarding_link_device")
+                            .font(.subheadline)
+                            .foregroundColor(Color.secondary)
+                    }
+                    .padding(.vertical, 4)
                 }
                 .frame(maxWidth: 420)
                 .padding(.horizontal, 32)
@@ -120,6 +130,9 @@ struct OnboardingView: View {
             .sheet(isPresented: $showingRecovery) {
                 RecoveryEntryView()
                     .environment(recoveryVM)
+            }
+            .sheet(isPresented: $showingDeviceLink) {
+                DeviceLinkScanView()
             }
             .sheet(isPresented: $showingNetworkSettings) {
                 NavigationStack {

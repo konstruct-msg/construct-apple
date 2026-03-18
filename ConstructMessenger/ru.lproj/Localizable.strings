@@ -538,3 +538,27 @@
 "reset_to_default" = "Сбросить до стандартного";
 "interval" = "Интервал";
 "preview" = "Предпросмотр";
+
+// MARK: - Device Linking
+"onboarding_link_device" = "Привязать существующий аккаунт";
+"device_link_scan_title" = "Сканировать для привязки";
+"device_link_scan_instructions" = "Откройте существующее устройство → Настройки → Устройства → Привязать новое устройство, затем отсканируйте QR-код.";
+"device_link_linking" = "Привязка устройства…";
+"device_link_success" = "Устройство успешно привязано";
+"device_link_qr_title" = "Привязать новое устройство";
+"device_link_qr_instructions" = "На новом устройстве выберите «Привязать существующий аккаунт» при входе и отсканируйте этот код.";
+"device_link_expires_in" = "Истекает через %@";
+"device_link_expired" = "Код устарел — нажмите для обновления";
+"device_link_refresh" = "Создать новый код";
+"device_link_confirm" = "Привязать устройство";
+"device_link_token_placeholder" = "Вставьте токен привязки…";
+"device_link_macos_instructions" = "На существующем устройстве откройте Настройки → Устройства → Привязать новое устройство, затем вставьте отображаемый токен.";
+"device_link_confirm_title" = "Привязать устройство?";
+"device_revoke" = "Удалить устройство";
+"device_revoke_confirm_title" = "Удалить устройство";
+"device_revoke_confirm" = "Это устройство будет удалено из вашего аккаунта.";
+"device_last_seen" = "Последний раз: %@";
+"device_current" = "Это устройство";
+"linked_devices" = "Привязанные устройства";
+"linked_devices_hint" = "Отсканируйте QR-код на новом устройстве при первом входе, чтобы привязать его к аккаунту.";
+"link_new_device" = "Привязать новое устройство";

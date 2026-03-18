@@ -536,3 +536,27 @@
 "reset_to_default" = "Reset to default";
 "interval" = "Interval";
 "preview" = "Preview";
+
+// MARK: - Device Linking
+"onboarding_link_device" = "Link Existing Account";
+"device_link_scan_title" = "Scan to Link";
+"device_link_scan_instructions" = "Open your existing device → Settings → Linked Devices → Link New Device, then scan the QR code.";
+"device_link_linking" = "Linking device…";
+"device_link_success" = "Device linked successfully";
+"device_link_qr_title" = "Link New Device";
+"device_link_qr_instructions" = "On your new device, choose 'Link Existing Account' during onboarding and scan this code.";
+"device_link_expires_in" = "Expires in %@";
+"device_link_expired" = "Code expired — tap to refresh";
+"device_link_refresh" = "Generate New Code";
+"device_link_confirm" = "Link Device";
+"device_link_token_placeholder" = "Paste link token…";
+"device_link_macos_instructions" = "On your existing device, open Settings → Linked Devices → Link New Device, then paste the token shown on screen.";
+"device_link_confirm_title" = "Link this device?";
+"device_revoke" = "Remove Device";
+"device_revoke_confirm_title" = "Remove Device";
+"device_revoke_confirm" = "This device will be removed from your account.";
+"device_last_seen" = "Last seen %@";
+"device_current" = "This device";
+"linked_devices" = "Linked Devices";
+"linked_devices_hint" = "Scan the QR code on a new device during onboarding to link it to your account.";
+"link_new_device" = "Link New Device";
