@@ -15,6 +15,7 @@ struct Construct_DesktopApp: App {
     @State private var authViewModel = AuthViewModel(context: PersistenceController.shared.container.viewContext)
     @State private var chatsViewModel = ChatsViewModel()
     @State private var securityViewModel = SecurityViewModel()
+    @State private var recoveryViewModel = AccountRecoveryViewModel()
 
     var body: some Scene {
         // MARK: - Main window
@@ -24,6 +25,7 @@ struct Construct_DesktopApp: App {
                 .environment(authViewModel)
                 .environment(chatsViewModel)
                 .environment(securityViewModel)
+                .environment(recoveryViewModel)
                 .task {
                     chatsViewModel.setContext(PersistenceController.shared.container.viewContext)
                     await IceProxyManager.shared.startIfEnabled()
@@ -42,6 +44,9 @@ struct Construct_DesktopApp: App {
         Settings {
             DesktopSettingsView()
                 .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
+                .environment(authViewModel)
+                .environment(securityViewModel)
+                .environment(recoveryViewModel)
         }
     }
 }
