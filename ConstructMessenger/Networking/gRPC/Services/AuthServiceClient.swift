@@ -245,4 +245,107 @@ final class AuthServiceClient: Sendable {
             )
         }
     }
+
+    // MARK: - Device Linking (Device A: initiator, requires JWT)
+
+    struct DeviceLinkToken {
+        let token: String
+        let expiresAt: Int64
+    }
+
+    /// Device A calls this to get a link token to display as QR.
+    /// Requires an authenticated JWT. Rate-limited to 1/day/device.
+    func initiateDeviceLink() async throws -> DeviceLinkToken {
+        return try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.initiateDeviceLink) { grpcClient in
+            let deviceClient = Shared_Proto_Services_V1_DeviceService.Client(wrapping: grpcClient)
+            let response = try await deviceClient.initiateDeviceLink(
+                request: .init(message: Shared_Proto_Services_V1_InitiateDeviceLinkRequest())
+            )
+            return DeviceLinkToken(token: response.linkToken, expiresAt: response.expiresAt)
+        }
+    }
+
+    // MARK: - Device Linking (Device B: new device, no JWT required)
+
+    struct ConfirmLinkResult {
+        let userId: String
+        let accessToken: String
+        let refreshToken: String
+        let expiresAt: Int64
+        let iceBridgeCert: String?
+    }
+
+    /// Device B calls this after scanning the QR code.
+    /// Sends the new device's public keys; receives JWT for the new device.
+    /// Does NOT require an existing JWT (`allowAuthRetry: false`).
+    func confirmDeviceLink(linkToken: String, deviceId: String, publicKeys: Shared_Proto_Services_V1_DevicePublicKeys) async throws -> ConfirmLinkResult {
+        return try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.confirmDeviceLink, allowAuthRetry: false) { grpcClient in
+            let linkClient = Shared_Proto_Services_V1_DeviceLinkService.Client(wrapping: grpcClient)
+
+            var request = Shared_Proto_Services_V1_ConfirmDeviceLinkRequest()
+            request.linkToken = linkToken
+            request.deviceID = deviceId
+            request.publicKeys = publicKeys
+
+            let response = try await linkClient.confirmDeviceLink(
+                request: .init(message: request)
+            )
+            return ConfirmLinkResult(
+                userId: response.userID,
+                accessToken: response.accessToken,
+                refreshToken: response.refreshToken,
+                expiresAt: response.expiresAt,
+                iceBridgeCert: response.hasIceBridgeCert ? response.iceBridgeCert : nil
+            )
+        }
+    }
+
+    // MARK: - Device Management
+
+    struct LinkedDevice: Identifiable, Sendable {
+        let id: String          // deviceId
+        let name: String
+        let platform: Shared_Proto_Core_V1_DevicePlatform
+        let lastSeen: Date
+        let createdAt: Date
+        let isCurrent: Bool
+    }
+
+    /// Returns the list of devices linked to the current account.
+    /// Server-side streaming — collects all items before returning.
+    func listDevices() async throws -> [LinkedDevice] {
+        return try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.listDevices) { grpcClient in
+            let deviceClient = Shared_Proto_Services_V1_DeviceService.Client(wrapping: grpcClient)
+            return try await deviceClient.listDevices(
+                request: .init(message: Shared_Proto_Services_V1_ListDevicesRequest())
+            ) { response in
+                var devices: [LinkedDevice] = []
+                for try await info in response.messages {
+                    devices.append(LinkedDevice(
+                        id: info.device.deviceID,
+                        name: info.deviceName,
+                        platform: info.platform,
+                        lastSeen: Date(timeIntervalSince1970: TimeInterval(info.lastSeen)),
+                        createdAt: Date(timeIntervalSince1970: TimeInterval(info.createdAt)),
+                        isCurrent: info.isCurrent
+                    ))
+                }
+                return devices
+            }
+        }
+    }
+
+    /// Revoke (remotely log out) a device. Cannot revoke the current device.
+    func revokeDevice(deviceId: String) async throws {
+        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.revokeDevice) { grpcClient in
+            let deviceClient = Shared_Proto_Services_V1_DeviceService.Client(wrapping: grpcClient)
+
+            var request = Shared_Proto_Services_V1_RevokeDeviceRequest()
+            request.deviceID = deviceId
+
+            _ = try await deviceClient.revokeDevice(
+                request: .init(message: request)
+            )
+        }
+    }
 }
