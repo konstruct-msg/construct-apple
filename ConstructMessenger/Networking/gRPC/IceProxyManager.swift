@@ -326,7 +326,7 @@ final class IceProxyManager: ObservableObject {
     /// Start the ICE proxy trying the primary TLS endpoint first, then each relay (plain obfs4).
     ///
     /// Connection order:
-    ///   1. Primary: `ice.<grpcHost>:443` (TLS + obfs4)
+    ///   1. Primary: `ice.<grpcHost>:443` (TLS + obfs4) — tried twice before relay fallback
     ///   2. Relay 1…N from `cachedRelayAddresses()` — plain obfs4, no TLS wrapper
     ///
     /// Returns `true` if any endpoint started successfully.
@@ -335,11 +335,23 @@ final class IceProxyManager: ObservableObject {
         let host = GRPCChannelManager.shared.currentHost
         let iceHost = "ice.\(host)"
         let primary = IceRelay(address: "\(iceHost):443", bridgeCert: cert, iatMode: .none, tlsServerName: iceHost)
+
+        // Attempt 1 — immediate
         if start(relay: primary) != nil {
             saveRelay(primary)
             Log.info("🧊 ICE started via primary: \(iceHost):443", category: "ICE")
             return true
         }
+
+        // Attempt 2 — one retry after a brief pause (network may be settling after background)
+        Log.debug("🧊 ICE primary attempt 1 failed — retrying in 600 ms", category: "ICE")
+        Thread.sleep(forTimeInterval: 0.6)
+        if start(relay: primary) != nil {
+            saveRelay(primary)
+            Log.info("🧊 ICE started via primary (retry): \(iceHost):443", category: "ICE")
+            return true
+        }
+
         Log.info("🧊 ICE primary failed — trying relay endpoints", category: "ICE")
 
         for relayAddress in cachedRelayAddresses() {
@@ -462,10 +474,14 @@ final class IceProxyManager: ObservableObject {
         // Ask the Rust side — if it disagrees with our Swift state, the process died in background.
         if ice_proxy_is_running() == 0 {
             Log.info("🧊 ICE proxy found dead on foreground — restarting", category: "ICE")
+            // Always call stop() to flush any leftover Rust state even when the proxy died.
+            ice_proxy_stop()
             isRunning = false
             proxyPort = 0
             activeRelay = nil
             clearCooldown()
+            // Brief pause to let the OS release the socket before we re-bind.
+            try? await Task.sleep(nanoseconds: 200_000_000) // 200 ms
             let cert = await getIceBridgeCert()
             startWithRelayFallback(cert: cert)
         }

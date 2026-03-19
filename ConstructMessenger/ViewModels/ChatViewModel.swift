@@ -281,9 +281,15 @@ class ChatViewModel: NSObject {
 
         // If a RECEIVER session was already created by ChatsViewModel (incoming message arrived
         // while we were fetching the bundle), mark as ready so the UI reflects that.
+        // Bundle is ready — cancel the fetch timer regardless of whether a session exists yet.
+        // For RESPONDER-role contacts the session is created on first send; the bundle cache
+        // is sufficient to enable sending, so mark the channel as ready now.
+        publicKeyFetchTimer?.invalidate()
+        publicKeyFetchTimer = nil
+        isSessionReady = true
+
         if CryptoManager.shared.hasSession(for: data.userId) {
             Log.info("✅ SESSION_STATE[bundle_fetched_session_exists]: session already established for \(data.userId.prefix(8))…", category: "ChatViewModel")
-            isSessionReady = true
         } else {
             Log.info("📦 SESSION_STATE[bundle_cached]: bundle ready for \(data.userId.prefix(8))…, session will be created on first send", category: "ChatViewModel")
         }
