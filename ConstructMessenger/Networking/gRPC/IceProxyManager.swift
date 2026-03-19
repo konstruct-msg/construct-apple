@@ -410,6 +410,67 @@ final class IceProxyManager: ObservableObject {
         }
     }
 
+    /// Called when `performRPC` gets ECONNREFUSED on 127.0.0.1 — the Rust proxy process died
+    /// while the Swift side still thinks it's running. Force-resets all state and restarts.
+    /// Does NOT enter cooldown (cooldown is for relay/cert failures, not local process death).
+    func restartAfterCrash() async {
+        Log.info("🧊 ICE proxy crashed (ECONNREFUSED on local port) — force-restarting", category: "ICE")
+        // Force-stop even if isRunning=true; the Rust side is dead.
+        ice_proxy_stop()
+        isRunning = false
+        proxyPort = 0
+        activeRelay = nil
+        // Clear any cooldown that was set due to this crash; we want to retry immediately.
+        clearCooldown()
+        isStartingOnDemand = false
+        let cert = await getIceBridgeCert()
+        if startWithRelayFallback(cert: cert) {
+            Task { await IceCertFetcher.shared.fetchAndCacheRelayList() }
+            Log.info("🧊 ICE proxy restarted after crash", category: "ICE")
+        } else {
+            Log.error("🧊 ICE proxy restart failed after crash", category: "ICE")
+        }
+    }
+
+    /// Called when DNS resolution fails on the direct TLS path (VPN intercepting DNS).
+    /// Clears any cooldown and force-restarts the proxy so gRPC can bypass DNS via ICE.
+    /// If the proxy is already running (just on cooldown), skips the restart.
+    func forceStartIgnoringCooldown() async {
+        clearCooldown()
+        if isRunning {
+            // Proxy is alive — clearing cooldown is enough; next makeClient() will use ICE.
+            Log.info("🧊 ICE cooldown force-cleared (VPN DNS failure)", category: "ICE")
+            return
+        }
+        // Proxy not running — start it now.
+        guard !isStartingOnDemand else { return }
+        isStartingOnDemand = true
+        defer { isStartingOnDemand = false }
+        Log.info("🧊 Force-starting ICE proxy (VPN DNS failure)", category: "ICE")
+        let cert = await getIceBridgeCert()
+        if startWithRelayFallback(cert: cert) {
+            Task { await IceCertFetcher.shared.fetchAndCacheRelayList() }
+        } else {
+            Log.error("🧊 ICE force-start failed (VPN DNS failure)", category: "ICE")
+        }
+    }
+
+    /// Called on app foreground to verify the ICE proxy process is actually alive.
+    /// iOS may kill background threads; `isRunning` may be stale. Restarts if dead.
+    func verifyAliveOrRestart() async {
+        guard isRunning else { return }
+        // Ask the Rust side — if it disagrees with our Swift state, the process died in background.
+        if ice_proxy_is_running() == 0 {
+            Log.info("🧊 ICE proxy found dead on foreground — restarting", category: "ICE")
+            isRunning = false
+            proxyPort = 0
+            activeRelay = nil
+            clearCooldown()
+            let cert = await getIceBridgeCert()
+            startWithRelayFallback(cert: cert)
+        }
+    }
+
     // MARK: - Server-provided configuration
 
     /// Called after login/register/recovery with the cert from `AuthTokensResponse`.

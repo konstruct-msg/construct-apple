@@ -183,6 +183,8 @@ class ChatsViewModel {
         let activeTask = Task { [weak self] in
             for await _ in NotificationCenter.default.notifications(named: .appDidBecomeActive) {
                 Log.info("📱 App became active — force reconnecting stream", category: "ChatsViewModel")
+                // Verify ICE proxy is still alive — it may have been killed during background suspension.
+                await IceProxyManager.shared.verifyAliveOrRestart()
                 self?.forceReconnectStream()
             }
         }
@@ -195,6 +197,8 @@ class ChatsViewModel {
                 Log.info("🌐 Network interface changed — restarting stream and ICE proxy", category: "ChatsViewModel")
                 // Restart ICE proxy: its relay connection was bound to the old interface.
                 Task { @MainActor in
+                    // First verify (and stop) any stale proxy, then start fresh on the new interface.
+                    await IceProxyManager.shared.verifyAliveOrRestart()
                     await IceProxyManager.shared.startIfEnabled()
                 }
                 self?.forceReconnectStream()

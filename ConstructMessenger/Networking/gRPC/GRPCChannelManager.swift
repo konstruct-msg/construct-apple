@@ -175,6 +175,23 @@ final class GRPCChannelManager: Sendable {
             return true
         }
 
+        /// True when the error is ECONNREFUSED on the local ICE proxy port (127.0.0.1).
+        /// This means the Rust proxy process died but Swift state was not updated.
+        /// Distinct from a relay failure — no cooldown should be entered, just restart the process.
+        func isStaleLocalProxy(_ error: Error) -> Bool {
+            guard let rpc = error as? RPCError, rpc.code == .unavailable else { return false }
+            return rpc.message.contains("127.0.0.1")
+        }
+
+        /// True when the error is a DNS resolution failure on the direct TLS path.
+        /// Typically occurs when VPN routes all traffic through a DNS server that
+        /// doesn't know about the Construct server hostname.
+        func isDNSResolutionFailure(_ error: Error) -> Bool {
+            guard let rpc = error as? RPCError, rpc.code == .unavailable else { return false }
+            let msg = rpc.message
+            return msg.contains("Failed to resolve") || msg.contains("nodename nor servname")
+        }
+
         var lastError: Error?
         for attempt in 0..<3 {
             let usingICE = iceProxyPort() != nil
@@ -248,8 +265,29 @@ final class GRPCChannelManager: Sendable {
 
                 // If the call failed while routing through ICE, record relay failure only for
                 // network-ish failures. Don't disable ICE due to auth/validation errors.
-                if usingICE, shouldRecordIceFailure(error) {
+                if usingICE, isStaleLocalProxy(error) {
+                    // ECONNREFUSED on 127.0.0.1 — local proxy died in background.
+                    // Restart immediately; do NOT enter cooldown (this is a process crash, not relay failure).
+                    Log.info("🧊 ICE proxy port dead (ECONNREFUSED) — restarting proxy", category: "gRPC")
+                    await IceProxyManager.shared.restartAfterCrash()
+                    if iceProxyPort() != nil {
+                        continue
+                    }
+                } else if usingICE, shouldRecordIceFailure(error) {
                     recordICEFailure()
+                }
+
+                // VPN DNS failure: when direct TLS can't resolve the server name, try routing through
+                // ICE which bypasses DNS entirely (connects to 127.0.0.1 locally, relay resolves upstream).
+                if !usingICE, isDNSResolutionFailure(error) {
+                    let hasCert = await IceProxyManager.shared.hasCert
+                    if hasCert {
+                        Log.info("🧊 DNS failure on direct path — forcing ICE routing (VPN?)", category: "gRPC")
+                        await IceProxyManager.shared.forceStartIgnoringCooldown()
+                        if iceProxyPort() != nil {
+                            continue
+                        }
+                    }
                 }
 
                 // DPI auto-fallback: when direct connection fails with a network error on the
