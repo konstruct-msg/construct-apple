@@ -14,9 +14,10 @@ struct DesktopSettingsView: View {
                 .tabItem { Label("General", systemImage: "gearshape") }
                 .tag("general")
 
-            DesktopDevicesSettingsTab()
-                .tabItem { Label("Devices", systemImage: "laptopcomputer.and.iphone") }
-                .tag("devices")
+            // Devices tab — hidden until multi-device backend is ready
+            // DesktopDevicesSettingsTab()
+            //     .tabItem { Label("Devices", systemImage: "laptopcomputer.and.iphone") }
+            //     .tag("devices")
 
             DesktopSecuritySettingsTab()
                 .tabItem { Label("Security", systemImage: "lock.shield") }

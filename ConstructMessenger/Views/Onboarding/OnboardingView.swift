@@ -112,15 +112,16 @@ struct OnboardingView: View {
                     }
                     .buttonStyle(.plain)
 
-                    Button {
-                        showingDeviceLink = true
-                    } label: {
-                        Text("onboarding_link_device")
-                            .font(.subheadline)
-                            .foregroundColor(Color.secondary)
-                            .padding(.vertical, 4)
-                    }
-                    .buttonStyle(.plain)
+                    // Device linking — hidden until backend is ready
+                    // Button {
+                    //     showingDeviceLink = true
+                    // } label: {
+                    //     Text("onboarding_link_device")
+                    //         .font(.subheadline)
+                    //         .foregroundColor(Color.secondary)
+                    //         .padding(.vertical, 4)
+                    // }
+                    // .buttonStyle(.plain)
                 }
                 .frame(maxWidth: 360)
                 .padding(.horizontal, 24)
@@ -140,13 +141,14 @@ struct OnboardingView: View {
                 RecoveryEntryView()
                     .environment(recoveryVM)
             }
-            .sheet(isPresented: $showingDeviceLink) {
-                #if os(iOS)
-                DeviceLinkScanView()
-                #else
-                DesktopLinkRequestView()
-                #endif
-            }
+            // Device linking sheet — hidden until backend is ready
+            // .sheet(isPresented: $showingDeviceLink) {
+            //     #if os(iOS)
+            //     DeviceLinkScanView()
+            //     #else
+            //     DesktopLinkRequestView()
+            //     #endif
+            // }
             .sheet(isPresented: $showingNetworkSettings) {
                 NavigationStack {
                     NetworkSettingsView()

@@ -123,8 +123,9 @@ struct SettingsView: View {
                         settingsSection {
                             settingsNavRow(icon: "lock", text: "Security", destination: SecurityView())
                             settingsDivider()
-                            settingsNavRow(icon: "laptopcomputer", text: "Devices", destination: DevicesView())
-                            settingsDivider()
+                            // Devices (multi-device) — hidden until backend is ready
+                            // settingsNavRow(icon: "laptopcomputer", text: "Devices", destination: DevicesView())
+                            // settingsDivider()
                             settingsNavRow(icon: "internaldrive", text: "data_and_storage", destination: DataStorageSettingsView())
                             settingsDivider()
                             settingsNavRow(icon: "paintbrush", text: "appearance", destination: AppearanceSettingsView())
