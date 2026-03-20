@@ -89,6 +89,9 @@ class MessageRouter {
         Log.debug("   content (padded): \(message.content.count) chars", category: "MessageRouter")
         Log.debug("   content preview: \(message.content.prefix(32))...", category: "MessageRouter")
         Log.debug("   isEndSession: \(message.isEndSession)", category: "MessageRouter")
+        if !message.editsMessageId.isEmpty {
+            Log.debug("   editsMessageId: \(message.editsMessageId)", category: "MessageRouter")
+        }
         #endif
         
         // 1. Skip if already processed — applies to ALL messages including END_SESSION.
@@ -300,6 +303,11 @@ class MessageRouter {
 
             case "NotifyNewMessage":
                 break // Notification triggered by saveMessage inside handleResolvedMessage
+
+            case "PersistMessage":
+                // ACK store persistence — Swift already calls PersistentACKStore.markProcessed
+                // in handleResolvedMessage, so this Rust action is a no-op here.
+                break
 
             case "NotifyError":
                 let code = dict["code"] as? String ?? "unknown"
