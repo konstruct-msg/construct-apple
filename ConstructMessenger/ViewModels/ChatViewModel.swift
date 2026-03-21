@@ -95,7 +95,11 @@ class ChatViewModel: NSObject {
         setupFetchedResultsController()  // ✅ Setup FRC - loads initial messages automatically
         setupSubscribers()
         checkExistingSession()  // ✅ FIXED: Check if session already exists
-        fetchRecipientPublicKey()
+        // fetchRecipientPublicKey() is intentionally NOT called here.
+        // ChatView.init (and therefore this init) is invoked on every SwiftUI parent re-render
+        // due to the @State(wrappedValue:) pattern — hundreds of times per session.
+        // The gRPC bundle fetch is deferred to onViewAppear() which fires only once per
+        // actual view appearance, eliminating spurious gRPC channel creation.
 
         // ❌ REMOVED: loadMessages() - FRC already loaded messages in setupFetchedResultsController()
         Log.debug("🔧 ChatViewModel initialized with viewContext", category: "ChatViewModel")
@@ -196,6 +200,11 @@ class ChatViewModel: NSObject {
         } else {
             Log.debug("No session yet for user: \(userId)", category: "ChatViewModel")
         }
+    }
+
+    // Called by ChatView.onAppear — deferred from init to avoid hundreds of gRPC calls.
+    func onViewAppear() {
+        fetchRecipientPublicKey()
     }
 
     private func fetchRecipientPublicKey() {

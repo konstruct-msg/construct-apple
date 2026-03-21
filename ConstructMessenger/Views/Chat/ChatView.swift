@@ -288,6 +288,7 @@ struct ChatView: View {
         }
         .onAppear {
             markChatAsRead()
+            viewModel.onViewAppear()
         }
         #if os(iOS)
         .fullScreenCover(item: $galleryStartItem) { item in
