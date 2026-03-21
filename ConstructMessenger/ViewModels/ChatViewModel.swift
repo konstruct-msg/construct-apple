@@ -63,6 +63,11 @@ class ChatViewModel: NSObject {
 
     // ✅ FIX: Use NSFetchedResultsController for automatic Core Data updates
     private var fetchedResultsController: NSFetchedResultsController<Message>?
+    /// Pending debounce task for FRC updates. Multiple rapid Core Data saves (e.g. after
+    /// sending a message: insert + updateChatMetadata + status update) fire
+    /// controllerDidChangeContent many times in quick succession. We coalesce them into
+    /// a single UI refresh after a short idle window to avoid dozens of SwiftUI redraws.
+    private var frcDebounceTask: Task<Void, Never>?
     
     // ✅ REFACTOR: Extracted services
     private let sessionInitService = SessionInitializationService.shared
@@ -943,10 +948,26 @@ class ChatViewModel: NSObject {
 // MARK: - NSFetchedResultsControllerDelegate
 
 extension ChatViewModel: NSFetchedResultsControllerDelegate {
-    /// Called when FRC finishes processing changes to Core Data
+    /// Called when FRC finishes processing changes to Core Data.
+    /// Multiple rapid Core Data saves (insert → updateChatMetadata → status update) each
+    /// fire this delegate. We cancel any pending debounce and schedule a fresh one so that
+    /// the UI refresh happens only ONCE after the last save in a burst, instead of 10-20×.
     nonisolated func controllerDidChangeContent(_ controller: NSFetchedResultsController<NSFetchRequestResult>) {
         Task { @MainActor [weak self] in
             guard let self else { return }
+            self.frcDebounceTask?.cancel()
+            self.frcDebounceTask = Task { @MainActor [weak self] in
+                // 40 ms idle window — short enough to feel instant, long enough to collapse
+                // the typical burst of 5-20 saves that follows a single send/receive event.
+                try? await Task.sleep(for: .milliseconds(40))
+                guard !Task.isCancelled, let self else { return }
+                self.applyFRCSnapshot(controller)
+            }
+        }
+    }
+
+    @MainActor
+    private func applyFRCSnapshot(_ controller: NSFetchedResultsController<NSFetchRequestResult>) {
             // If the parent chat was deleted, clear messages and stop — accessing
             // properties on deleted Core Data objects crashes with EXC_BREAKPOINT.
             guard !self.chat.isDeleted, self.chat.managedObjectContext != nil else {
@@ -983,6 +1004,5 @@ extension ChatViewModel: NSFetchedResultsControllerDelegate {
             self.allLoadedMessageIds = Set(self.messages.compactMap {
                 isValid($0) ? $0.id : nil
             })
-        }
     }
 }
