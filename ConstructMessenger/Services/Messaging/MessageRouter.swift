@@ -582,7 +582,16 @@ class MessageRouter {
             Log.error("❌ Failed to decrypt incoming message \(message.id)", category: "MessageRouter")
             Log.error("🔐 SESSION_STATE[decrypt_failed]: userId=\(userId.prefix(8))..., messageId=\(message.id.prefix(8))..., messageNumber=\(message.messageNumber)", category: "SessionInit")
 
-            if SessionHealingService.shared.canHeal(message) {
+            // A genuine X3DH re-init must have at least one of:
+            //   kemCiphertext.count > 0  → PQXDH (Kyber ciphertext is included)
+            //   oneTimePreKeyId > 0      → classic X3DH with a one-time prekey
+            // msgNum=0 alone is insufficient: it also occurs at DR ratchet epoch boundaries
+            // (new DH ratchet step resets the sending chain counter to 0). Attempting
+            // initReceivingSession in that case derives a completely wrong root key and
+            // deepens the divergence. When neither signal is present we fall through to
+            // heal_impossible, which sends END_SESSION and forces a clean re-handshake.
+            let isLikelyX3DHInit = message.kemCiphertext.count > 0 || message.oneTimePreKeyId > 0
+            if SessionHealingService.shared.canHeal(message) && isLikelyX3DHInit {
                 // messageNumber == 0 → X3DH re-init from sender (classic or PQXDH).
                 // Session was already archived by decryptMessage (reason: decryptionFailed).
                 //
@@ -617,10 +626,11 @@ class MessageRouter {
                     onSessionHealNeeded?(userId, message)
                 }
             } else {
-                // messageNumber > 0 → DR ratchet diverged, healing is impossible.
+                // DR ratchet diverged (messageNumber > 0), OR msgNum=0 with no X3DH init signals
+                // (kemCiphertext=0 + oneTimePreKeyId=0 → ambiguous, treated as diverged DR epoch).
                 // Send FAILED receipt: server automatically relays SESSION_RESET to sender (server-side item 12).
                 // Also send explicit END_SESSION message for defense-in-depth (sender handles both idempotently).
-                Log.info("🔄 SESSION_STATE[heal_impossible]: messageNumber=\(message.messageNumber) — ratchet diverged, requesting END_SESSION", category: "SessionInit")
+                Log.info("🔄 SESSION_STATE[heal_impossible]: messageNumber=\(message.messageNumber), kemCt=\(message.kemCiphertext.count)b, otpkId=\(message.oneTimePreKeyId) — ratchet diverged, requesting END_SESSION", category: "SessionInit")
                 onReceiptNeeded?([message.id], userId, .failed)
                 pendingMessages.removeValue(forKey: userId)
                 SessionHealingService.shared.clearQueue(for: userId, in: context)
