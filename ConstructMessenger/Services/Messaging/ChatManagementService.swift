@@ -88,10 +88,11 @@ class ChatManagementService {
             Log.debug("Created new user: id=\(user.id), username=\(user.username), displayName=\(dbUser.displayName)", category: "ChatManagementService")
         }
         
-        // Create new chat
+        // Create new chat — set lastMessageTime so it sorts to the top of the list immediately
         let chat = Chat(context: context)
         chat.id = UUID().uuidString
         chat.otherUser = dbUser
+        chat.lastMessageTime = Date()
         
         do {
             try context.save()

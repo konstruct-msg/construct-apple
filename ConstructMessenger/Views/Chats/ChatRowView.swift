@@ -23,7 +23,7 @@ struct ChatRowView: View {
                         .clipShape(AvatarStyle.squircle(AvatarStyle.chatSize))
                 } else {
                     AvatarStyle.squircle(AvatarStyle.chatSize)
-                        .fill(Color.blue)
+                        .fill(Color.hexagonAccent(for: chat.otherUser?.id ?? ""))
                         .frame(width: AvatarStyle.chatSize, height: AvatarStyle.chatSize)
                         .overlay {
                             Text(initials)

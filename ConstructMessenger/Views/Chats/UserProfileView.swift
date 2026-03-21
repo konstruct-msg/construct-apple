@@ -96,12 +96,12 @@ struct UserProfileView: View {
                 #endif
             } else {
                 AvatarStyle.squircle(AvatarStyle.accountSize)
-                    .fill(Color.blue.opacity(0.15))
+                    .fill(Color.hexagonAccent(for: user.id ?? "").opacity(0.15))
                     .frame(width: 88, height: 88)
                     .overlay {
                         Text(initials)
                             .font(.system(size: 34, weight: .semibold))
-                            .foregroundColor(.blue)
+                            .foregroundColor(Color.hexagonAccent(for: user.id ?? ""))
                     }
             }
 
