@@ -14,10 +14,13 @@ extension User {
     /// The best available display name for this contact.
     ///
     /// Priority:
-    /// 1. `displayName` if non-empty (profile-shared or server username)
-    /// 2. Generated deterministic name from `id` (always non-nil fallback)
+    /// 1. `displayName` if non-empty (profile-shared real name or server username)
+    /// 2. `username` if non-empty (server-assigned handle, shown without @)
+    /// 3. Generated deterministic name from `id` (always non-nil fallback)
     var resolvedDisplayName: String {
-        displayName.isEmpty ? DisplayNameGenerator.generate(from: id) : displayName
+        if !displayName.isEmpty { return displayName }
+        if !username.isEmpty { return username }
+        return DisplayNameGenerator.generate(from: id)
     }
 
     // MARK: - Write

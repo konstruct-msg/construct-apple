@@ -485,7 +485,7 @@ struct ChatView: View {
                 showingUserProfile = true
             } label: {
                 VStack(spacing: 1) {
-                    Text(viewModel.chat.otherUser?.displayName ?? NSLocalizedString("chat", comment: "Default chat title"))
+                    Text(viewModel.chat.otherUser?.resolvedDisplayName ?? NSLocalizedString("chat", comment: "Default chat title"))
                         .font(.headline)
                         .foregroundColor(.primary)
                     if let subtitle = navigationStatusSubtitle {

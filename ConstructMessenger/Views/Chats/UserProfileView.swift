@@ -105,15 +105,11 @@ struct UserProfileView: View {
                     }
             }
 
-            Text(user.displayName)
+            Text(user.resolvedDisplayName)
                 .font(.title3.weight(.semibold))
 
-            if !user.username.isEmpty {
+            if !user.username.isEmpty && user.username != user.resolvedDisplayName {
                 Text("@\(user.username)")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-            } else {
-                Text(DisplayNameGenerator.generate(from: user.id))
                     .font(.subheadline)
                     .foregroundColor(.secondary)
             }
