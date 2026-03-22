@@ -32,6 +32,9 @@ struct ChatView: View {
     // Drop target for drag-and-drop from Finder (macOS) over the whole chat area
     @State private var chatDropImages: [PlatformImage] = []
     @State private var isChatDropTargeted = false
+
+    // Flood guard observer — updates when IncomingFloodGuard suppresses this chat's sender
+    @State private var floodGuard = IncomingFloodGuard.shared
     
     // ✅ Swipe-to-dismiss gesture state (not scroll-related)
     @GestureState private var dragState: CGFloat = 0
@@ -51,6 +54,9 @@ struct ChatView: View {
     var body: some View {
         VStack(spacing: 0) {
             // ❌ REMOVED: statusBanner (moved to overlay)
+
+            // Flood-burst banner — shown when this chat's sender is burst-suppressed
+            floodBurstBanner
             
             ScrollViewReader { proxy in
                 ScrollView {
@@ -316,7 +322,54 @@ struct ChatView: View {
     }
     
     // MARK: - View Components
-    
+
+    /// Flood-burst warning banner — visible at the top of the chat when the sender
+    /// is suppressed by IncomingFloodGuard.
+    @ViewBuilder
+    private var floodBurstBanner: some View {
+        let senderId = viewModel.chat.otherUser?.id ?? ""
+        if floodGuard.suppressedSenders.contains(senderId) {
+            HStack(spacing: 10) {
+                Image(systemName: "exclamationmark.shield.fill")
+                    .foregroundStyle(.orange)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(LocalizedStringKey("flood_banner_title"))
+                        .font(.footnote.weight(.semibold))
+                    Text(LocalizedStringKey("flood_banner_subtitle"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Button(LocalizedStringKey("allow")) {
+                    IncomingFloodGuard.shared.unsuppress(senderId: senderId)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.mini)
+                .tint(.green)
+
+                Button(LocalizedStringKey("block")) {
+                    // Delegate to existing block flow
+                    if let user = viewModel.chat.otherUser {
+                        user.isBlocked = true
+                        try? user.managedObjectContext?.save()
+                    }
+                    IncomingFloodGuard.shared.unsuppress(senderId: senderId)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.mini)
+                .tint(.red)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(Color.orange.opacity(0.08))
+            .overlay(Rectangle().frame(height: 1).foregroundStyle(.orange.opacity(0.3)), alignment: .bottom)
+            .transition(.move(edge: .top).combined(with: .opacity))
+        }
+    }
+
     @ViewBuilder
     private var deleteButtonBar: some View {
         if isEditMode && !selectedMessages.isEmpty {

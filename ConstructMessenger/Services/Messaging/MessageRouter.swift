@@ -835,17 +835,54 @@ class MessageRouter {
         
         do {
             try context.save()
-            // In-app banner for messages arriving in a non-active chat
-            let chatId = chat.id ?? ""
-            let isMuted = chat.isMuted
-            let senderName = chat.otherUser?.displayName.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            let preview = Chat.formatPreviewText(decryptedContent)
-            InAppNotificationService.shared.handle(
-                chatId: chatId,
-                isMuted: isMuted,
-                senderName: senderName.isEmpty ? chat.otherUser?.username ?? "Unknown" : senderName,
-                preview: preview
-            )
+
+            let senderId = messageData.from
+
+            // ── Incoming flood check ────────────────────────────────────────────
+            let floodResult = IncomingFloodGuard.shared.check(senderId: senderId)
+
+            // ── Lockdown check ──────────────────────────────────────────────────
+            let lockdownSuppressed = LockdownManager.shared.shouldSuppress(senderId: senderId)
+
+            // Decide whether to show notification
+            let chatId    = chat.id ?? ""
+            let isMuted   = chat.isMuted
+            let senderName = (chat.otherUser?.displayName.trimmingCharacters(in: .whitespacesAndNewlines))
+                                .flatMap { $0.isEmpty ? nil : $0 }
+                            ?? chat.otherUser?.username
+                            ?? "Unknown"
+            let preview   = Chat.formatPreviewText(decryptedContent)
+
+            switch floodResult {
+            case .burstDetected(let count):
+                // First burst event — post a single special system notification instead
+                // of the regular message preview. Subsequent messages are silently dropped
+                // from notifications until the user reviews.
+                Log.info("🚨 Burst detected: \(count) msgs/30s from \(senderId.prefix(8))…", category: "FloodGuard")
+                if !isMuted {
+                    InAppNotificationService.shared.handleFloodAlert(
+                        chatId: chatId,
+                        senderName: senderName,
+                        messageCount: count
+                    )
+                }
+
+            case .alreadySuppressed:
+                // Silently save; no notification
+                Log.debug("🔇 Suppressed notification from flooder \(senderId.prefix(8))…", category: "FloodGuard")
+
+            case .normal:
+                if lockdownSuppressed {
+                    Log.debug("🔒 Lockdown: suppressed notification from new sender \(senderId.prefix(8))…", category: "LockdownManager")
+                } else if !isMuted {
+                    InAppNotificationService.shared.handle(
+                        chatId: chatId,
+                        isMuted: false,
+                        senderName: senderName,
+                        preview: preview
+                    )
+                }
+            }
         } catch {
             Log.error("❌ Failed to save message: \(error)", category: "MessageRouter")
         }

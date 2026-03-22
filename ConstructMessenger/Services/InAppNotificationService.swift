@@ -84,4 +84,33 @@ final class InAppNotificationService {
             }
         }
     }
+
+    // MARK: - Flood alert
+
+    /// Called when the burst detector fires for the first time for a sender.
+    /// Posts a single special banner instead of the individual message preview.
+    func handleFloodAlert(chatId: String, senderName: String, messageCount: Int) {
+        guard chatId != activeChatId else { return }
+
+        #if canImport(UIKit)
+        guard UIApplication.shared.applicationState == .active else { return }
+        #endif
+
+        let content = UNMutableNotificationContent()
+        content.title = "⚠️ \(senderName)"
+        content.body  = String(format: NSLocalizedString("flood_alert_body", comment: ""), messageCount)
+        content.sound = .defaultCritical
+        content.userInfo = ["chatID": chatId, "floodAlert": true]
+
+        let request = UNNotificationRequest(
+            identifier: "flood-\(chatId)",   // stable ID → replaces previous flood alert for same chat
+            content: content,
+            trigger: nil
+        )
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error {
+                Log.error("❌ InAppNotification: flood alert failed — \(error)", category: "Notifications")
+            }
+        }
+    }
 }

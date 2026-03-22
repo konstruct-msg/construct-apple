@@ -587,3 +587,12 @@
 "sign_out" = "Sign Out";
 "device_scan_to_approve" = "Scan to Approve New Device";
 "device_revoke_confirm_message" = "Sign out \"%@\" remotely? This device will be disconnected from your account.";
+
+// MARK: - Flood guard & Lockdown
+"flood_alert_body" = "Sent %d messages in a short time. Notifications suppressed.";
+"flood_banner_title" = "Too many messages";
+"flood_banner_subtitle" = "Notifications from this contact are paused. Review and decide.";
+"lockdown_mode" = "Lockdown Mode";
+"lockdown_active_since" = "Active since %@";
+"lockdown_mode_hint" = "Only contacts added before activation receive notifications. New senders are silently saved — you can review them anytime.";
+"allow" = "Allow";
