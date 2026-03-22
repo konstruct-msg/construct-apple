@@ -298,6 +298,7 @@
 "username_unavailable" = "Имя пользователя уже занято.";
 "username_check_failed" = "Не удалось проверить имя пользователя. Попробуйте ещё раз.";
 "new_messages" = "Новые сообщения";
+"scroll_to_bottom" = "К последнему";
 
 // Network Settings
 "last_contact" = "Последний контакт";

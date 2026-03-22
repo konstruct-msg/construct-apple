@@ -328,6 +328,7 @@
 "username_unavailable" = "Username is already taken.";
 "username_check_failed" = "Could not verify username right now. Try again.";
 "new_messages" = "New Messages";
+"scroll_to_bottom" = "Back to Latest";
 
 // Network Settings
 "last_contact" = "Last contact";

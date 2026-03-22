@@ -165,10 +165,13 @@ struct ChatView: View {
                         print("ChatView: messages count changed to \(count)")
                     }
 
-                    // ✅ Auto-scroll when new messages arrive
+                    // Auto-scroll when new messages arrive — only if user is at the bottom.
+                    // `shouldScrollToBottom` is automatically managed by ChatScrollManager
+                    // based on scroll position, so this won't fight the user reading history.
                     if scrollManager.shouldScrollToBottom && !isSearchActive && !viewModel.messages.isEmpty {
-                        // ✅ Longer delay for media messages to render
-                        DispatchQueue.main.asyncAfter(deadline: .now() + ChatViewConstants.MessageDelay.mediaRender) {
+                        let delay = ChatViewConstants.MessageDelay.mediaRender
+                        Task { @MainActor in
+                            try? await Task.sleep(for: .seconds(delay))
                             if let lastMessage = filteredMessages.last {
                                 scrollManager.scrollToBottom(messageId: lastMessage.id)
                             }
@@ -178,7 +181,9 @@ struct ChatView: View {
                 .onChange(of: searchText) { _, newValue in
                     // ✅ Scroll to first search result
                     if !newValue.isEmpty, !filteredMessages.isEmpty, let firstMatch = filteredMessages.first {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + ChatViewConstants.SearchDelay.scrollToResult) {
+                        let delay = ChatViewConstants.SearchDelay.scrollToResult
+                        Task { @MainActor in
+                            try? await Task.sleep(for: .seconds(delay))
                             scrollManager.scrollTo(messageId: firstMatch.id, anchor: .center)
                         }
                     } else if newValue.isEmpty {
@@ -420,8 +425,10 @@ struct ChatView: View {
                     // ✅ Enable auto-scroll for new message
                     scrollManager.shouldScrollToBottom = true
 
-                    // ✅ FIX: Scroll to bottom after sending (longer delay for media)
-                    DispatchQueue.main.asyncAfter(deadline: .now() + ChatViewConstants.MessageDelay.scrollAfterSend) {
+                    // Scroll to bottom after sending (longer delay for media)
+                    let sendDelay = ChatViewConstants.MessageDelay.scrollAfterSend
+                    Task { @MainActor in
+                        try? await Task.sleep(for: .seconds(sendDelay))
                         if let lastMessage = filteredMessages.last {
                             scrollManager.scrollToBottom(messageId: lastMessage.id)
                         }
@@ -452,7 +459,9 @@ struct ChatView: View {
                     HStack(spacing: 6) {
                         Image(systemName: "arrow.down.circle.fill")
                             .font(.system(size: 16, weight: .semibold))
-                        Text(NSLocalizedString("new_messages", comment: "Scroll to new messages"))
+                        Text(viewModel.chat.unreadCount > 0
+                             ? NSLocalizedString("new_messages", comment: "New messages below")
+                             : NSLocalizedString("scroll_to_bottom", comment: "Scroll back to latest messages"))
                             .font(.system(size: 14, weight: .medium))
                     }
                     .foregroundColor(Color.AppBackground.primary)

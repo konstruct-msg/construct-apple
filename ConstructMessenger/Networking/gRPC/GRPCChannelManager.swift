@@ -41,12 +41,14 @@ final class GRPCChannelManager: Sendable {
     func setCustomServer(host: String, port: Int) {
         UserDefaults.standard.set(host, forKey: Self.customHostKey)
         UserDefaults.standard.set(port, forKey: Self.customPortKey)
+        invalidatePersistentClient()
         NotificationCenter.default.post(name: .grpcServerChanged, object: nil)
     }
 
     func resetToDefaultServer() {
         UserDefaults.standard.removeObject(forKey: Self.customHostKey)
         UserDefaults.standard.removeObject(forKey: Self.customPortKey)
+        invalidatePersistentClient()
         NotificationCenter.default.post(name: .grpcServerChanged, object: nil)
     }
 
@@ -54,6 +56,7 @@ final class GRPCChannelManager: Sendable {
     /// Also triggers a background reconnect attempt: fresh cert fetch → primary → relay fallback.
     func recordICEFailure() {
         UserDefaults.standard.set(Date().timeIntervalSinceReferenceDate, forKey: Self.iceFailedAtKey)
+        invalidatePersistentClient()  // routing will change (ICE → direct)
         Log.info("⚠️ ICE relay failure recorded — bypassing ICE for \(Int(Self.iceCooldown))s", category: "gRPC")
         Task { @MainActor in
             // Notify IceProxyManager so the UI reflects cooldown state immediately
@@ -86,6 +89,74 @@ final class GRPCChannelManager: Sendable {
     }
 
     private init() {}
+
+    // MARK: - Persistent Connection
+    //
+    // grpc-swift v2 opens a new TLS/HTTP-2 connection for every `makeClient()` call.
+    // Handshake + TCP round-trips add 100–500 ms per message on a good network.
+    // We solve this by keeping a single `GRPCClient` alive whose `runConnections()`
+    // task runs in the background.  Subsequent RPCs reuse the established connection
+    // with zero handshake overhead.
+    //
+    // The persistent connection is invalidated (and recreated on the next RPC) when:
+    //   • the routing config changes  (ICE enabled/disabled, custom server, etc.)
+    //   • the underlying transport throws a fatal error
+
+    private struct PersistentConn: @unchecked Sendable {
+        let client: GRPCClient<HTTP2ClientTransport.Posix>
+        let task:   Task<Void, Never>
+        let key:    String   // routing identity — "ice:<port>" or "direct:<host>:<port>"
+    }
+
+    // nonisolated(unsafe) is correct here: all mutations are serialised through _connLock.
+    private nonisolated(unsafe) var _conn: PersistentConn?
+    private let _connLock = NSLock()
+
+    private func routingKey() -> String {
+        if let icePort = iceProxyPort() { return "ice:\(icePort)" }
+        return "direct:\(currentHost):\(currentPort)"
+    }
+
+    /// Returns a reusable persistent client, creating/replacing it when routing changes.
+    private func acquirePersistentClient() throws -> GRPCClient<HTTP2ClientTransport.Posix> {
+        _connLock.lock()
+        defer { _connLock.unlock() }
+
+        let key = routingKey()
+        if let conn = _conn, conn.key == key, !conn.task.isCancelled {
+            return conn.client
+        }
+
+        // Tear down stale connection gracefully.
+        _conn?.task.cancel()
+        _conn?.client.beginGracefulShutdown()
+        _conn = nil
+
+        let client = try makeClient()
+        let task = Task.detached { [weak self] in
+            do {
+                try await client.runConnections()
+            } catch is CancellationError {
+                // Normal shutdown.
+            } catch {
+                Log.error("⚠️ Persistent gRPC connection closed: \(error)", category: "GRPCChannel")
+                self?.invalidatePersistentClient()
+            }
+        }
+        _conn = PersistentConn(client: client, task: task, key: key)
+        Log.debug("🔌 Persistent gRPC connection created (key=\(key))", category: "GRPCChannel")
+        return client
+    }
+
+    /// Invalidates the persistent connection so the next RPC gets a fresh one.
+    func invalidatePersistentClient() {
+        _connLock.lock()
+        defer { _connLock.unlock() }
+        _conn?.task.cancel()
+        _conn?.client.beginGracefulShutdown()
+        _conn = nil
+        Log.debug("🔌 Persistent gRPC connection invalidated", category: "GRPCChannel")
+    }
 
     /// Creates a new `GRPCClient` with TLS transport.
     /// Caller is responsible for running the client via `runConnections()` in a Task.
@@ -195,57 +266,99 @@ final class GRPCChannelManager: Sendable {
         var lastError: Error?
         for attempt in 0..<3 {
             let usingICE = iceProxyPort() != nil
-            let client = try makeClient()
+
+            // ------------------------------------------------------------------
+            // Prefer the persistent connection (no TLS handshake on hot path).
+            // Fall back to a per-call client only when persistence isn't available.
+            // ------------------------------------------------------------------
+            let usingPersistent: Bool
+            let client: GRPCClient<HTTP2ClientTransport.Posix>
+            if let pc = try? acquirePersistentClient() {
+                client = pc
+                usingPersistent = true
+            } else {
+                client = try makeClient()
+                usingPersistent = false
+            }
 
             do {
-                return try await withThrowingTaskGroup(of: Result?.self) { group in
-                    group.addTask {
-                        do {
-                            try await client.runConnections()
-                            return nil
-                        } catch is CancellationError {
-                            // Expected: cancelled after operation completes
-                            return nil
-                        } catch {
-                            // If the transport dies before the RPC completes, don't hang forever.
-                            // Propagate the error to fail the RPC promptly.
-                            Log.error("⚠️ gRPC transport error: \(error)", category: "GRPCChannel")
-                            throw error
-                        }
-                    }
+                let result: Result
 
-                    group.addTask {
-                        let result: Result
-                        if let timeout {
-                            result = try await withThrowingTaskGroup(of: Result.self) { inner in
-                                inner.addTask { try await operation(client) }
-                                inner.addTask {
-                                    try await Task.sleep(for: .seconds(timeout))
-                                    throw RPCError(code: .deadlineExceeded, message: "Request timed out")
-                                }
-                                let first = try await inner.next()!
-                                inner.cancelAll()
-                                return first
+                if usingPersistent {
+                    // runConnections() is already running in a background task.
+                    // Execute the operation directly; timeout is still enforced.
+                    if let timeout {
+                        result = try await withThrowingTaskGroup(of: Result.self) { inner in
+                            inner.addTask { try await operation(client) }
+                            inner.addTask {
+                                try await Task.sleep(for: .seconds(timeout))
+                                throw RPCError(code: .deadlineExceeded, message: "Request timed out")
                             }
-                        } else {
-                            result = try await operation(client)
+                            let first = try await inner.next()!
+                            inner.cancelAll()
+                            return first
                         }
-                        client.beginGracefulShutdown()
-                        return result
+                    } else {
+                        result = try await operation(client)
                     }
+                } else {
+                    // Per-call client: co-run with runConnections() so a transport
+                    // failure fails the RPC promptly instead of hanging.
+                    result = try await withThrowingTaskGroup(of: Result?.self) { group in
+                        group.addTask {
+                            do {
+                                try await client.runConnections()
+                                return nil
+                            } catch is CancellationError {
+                                return nil
+                            } catch {
+                                Log.error("⚠️ gRPC transport error: \(error)", category: "GRPCChannel")
+                                throw error
+                            }
+                        }
 
-                    while let next = try await group.next() {
-                        if let result = next {
-                            group.cancelAll()
-                            return result
+                        group.addTask {
+                            let r: Result
+                            if let timeout {
+                                r = try await withThrowingTaskGroup(of: Result.self) { inner in
+                                    inner.addTask { try await operation(client) }
+                                    inner.addTask {
+                                        try await Task.sleep(for: .seconds(timeout))
+                                        throw RPCError(code: .deadlineExceeded, message: "Request timed out")
+                                    }
+                                    let first = try await inner.next()!
+                                    inner.cancelAll()
+                                    return first
+                                }
+                            } else {
+                                r = try await operation(client)
+                            }
+                            client.beginGracefulShutdown()
+                            return r
                         }
+
+                        while let next = try await group.next() {
+                            if let r = next {
+                                group.cancelAll()
+                                return r
+                            }
+                        }
+                        group.cancelAll()
+                        throw NetworkError.connectionFailed
                     }
-                    group.cancelAll()
-                    throw NetworkError.connectionFailed
                 }
+
+                return result
+
             } catch {
                 lastError = error
-                client.beginGracefulShutdown()
+
+                if usingPersistent {
+                    // Persistent connection failed — invalidate so next attempt gets a fresh one.
+                    invalidatePersistentClient()
+                } else {
+                    client.beginGracefulShutdown()
+                }
 
                 if let rpc = error as? RPCError,
                    rpc.code == .unauthenticated,
