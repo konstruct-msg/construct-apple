@@ -170,22 +170,38 @@ class ChatsViewModel {
     // MARK: - App Lifecycle
     
     private func setupAppLifecycleObservers() {
-        // Pause stream when app goes to background
-        let resignTask = Task { [weak self] in
-            for await _ in NotificationCenter.default.notifications(named: .appWillResignActive) {
-                Log.info("📱 App going to background - pausing messaging", category: "ChatsViewModel")
+        // Pause stream only when the app fully enters the background.
+        // Using `didEnterBackground` (not `willResignActive`) ensures brief app-switches
+        // — copying a link from Safari, opening Control Center, system alerts — do NOT
+        // tear down the stream and force an expensive reconnect on return.
+        let backgroundTask = Task { [weak self] in
+            for await _ in NotificationCenter.default.notifications(named: .appDidEnterBackground) {
+                Log.info("📱 App entered background — pausing stream", category: "ChatsViewModel")
                 self?.streamManager.pause()
+                // Invalidate the persistent gRPC channel so the next RPC gets a
+                // fresh connection (OS may have closed the TCP socket during suspension).
+                GRPCChannelManager.shared.invalidatePersistentClient()
             }
         }
-        observationTasks.append(resignTask)
-        
-        // Force reconnect when app becomes active
+        observationTasks.append(backgroundTask)
+
+        // On foreground: reconnect only if the stream actually went down.
+        // If the app was only briefly inactive (app-switch, alert) the stream
+        // may still be alive — calling forceReconnect would kill it unnecessarily.
         let activeTask = Task { [weak self] in
             for await _ in NotificationCenter.default.notifications(named: .appDidBecomeActive) {
-                Log.info("📱 App became active — force reconnecting stream", category: "ChatsViewModel")
+                guard let self else { continue }
                 // Verify ICE proxy is still alive — it may have been killed during background suspension.
                 await IceProxyManager.shared.verifyAliveOrRestart()
-                self?.forceReconnectStream()
+
+                if self.streamManager.isConnected {
+                    // Stream survived the switch — no work needed.
+                    Log.info("📱 App became active — stream still alive, skipping reconnect", category: "ChatsViewModel")
+                } else {
+                    // Stream went down (app was truly backgrounded, or the OS killed the socket).
+                    Log.info("📱 App became active — stream is down, reconnecting", category: "ChatsViewModel")
+                    self.forceReconnectStream()
+                }
             }
         }
         observationTasks.append(activeTask)
@@ -388,7 +404,7 @@ class ChatsViewModel {
         guard let context = viewContext else { return }
         chat.isMuted.toggle()
         context.saveAndLog()
-        Log.info("🔔 Chat \(chat.id ?? "") isMuted=\(chat.isMuted)", category: "ChatsViewModel")
+        Log.info("🔔 Chat \(chat.id) isMuted=\(chat.isMuted)", category: "ChatsViewModel")
     }
 
     /// Send END_SESSION to peer, then delete the chat locally.
