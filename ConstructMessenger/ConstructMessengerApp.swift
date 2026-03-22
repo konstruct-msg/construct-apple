@@ -26,6 +26,7 @@ struct Construct_MessengerApp: App {
                     .environment(appDelegate.deepLinkHandler)
             }
             .environment(securityViewModel)
+            .environment(authViewModel)   // PinLockView needs AuthViewModel for duress wipe
             .environment(recoveryViewModel)
             .task {
                 MediaManager.shared.evictOldFiles()
