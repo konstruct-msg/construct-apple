@@ -705,7 +705,7 @@ final class SessionCoordinator {
                         preEncryptedFirst: firstComponents,
                         kemCiphertext: kemCiphertext,
                         kyberOtpkId: kyberOtpkId,
-                        replyToMessageId: msg.replyToMessageId.isEmpty ? nil : msg.replyToMessageId
+                        replyToMessageId: msg.replyToMessageId.map { $0.isEmpty ? nil : $0 } ?? nil
                     )
 
                     let response = responses.first ?? SendMessageResponse(messageId: msg.id, status: "sent")

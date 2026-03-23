@@ -47,11 +47,11 @@ class MessagePersistenceService {
             // Recover a previously undecryptable message: if the sender re-sent the same
             // message (same UUID) after a session heal, update the content so the "unavailable"
             // bubble is replaced with the actual text.
-            if existing.decryptedContent == nil, let recovered = decryptedContent, !recovered.isEmpty {
-                existing.decryptedContent = recovered
+            if existing.decryptedContent == nil, !decryptedContent.isEmpty {
+                existing.decryptedContent = decryptedContent
                 Log.info("✅ Recovered undecryptable message \(message.id.prefix(8))… — content now available", category: "MessagePersistence")
                 // Update chat preview if this was the last message showing "unavailable"
-                try? updateChatMetadata(chat: chat, lastMessageText: recovered, lastMessageTime: existing.timestamp, in: context)
+                try? updateChatMetadata(chat: chat, lastMessageText: decryptedContent, lastMessageTime: existing.timestamp, in: context)
             }
             isNewMessage = false
         } else {
