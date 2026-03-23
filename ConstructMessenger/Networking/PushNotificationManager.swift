@@ -10,6 +10,7 @@
 import Foundation
 import UserNotifications
 import UIKit
+import GRPCCore
 
 /// Manages Apple Push Notifications (APNs) integration
 /// 

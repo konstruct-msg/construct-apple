@@ -16,6 +16,7 @@
 //
 
 import Foundation
+import GRPCCore
 
 /// Manages the ML-KEM-768 keypair used in PQXDH (post-quantum X3DH).
 ///
