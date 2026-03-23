@@ -68,16 +68,19 @@ struct MediaGalleryViewer: View {
 
     @State private var dismissOffset: CGFloat = 0
 
-    /// Expand each message into per-item entries for multi-image messages
+    /// Expand each message into per-item entries, skipping non-image media (video etc.)
     private var entries: [GalleryEntry] {
         messages.flatMap { msg -> [GalleryEntry] in
             guard let mc = parseMediaContent(from: msg.decryptedContent), !mc.mediaItems.isEmpty else {
                 return [GalleryEntry(id: "\(msg.id)_0", message: msg, itemIndex: 0, mediaItem: [:])]
             }
-            return mc.mediaItems.enumerated().map { idx, item in
-                GalleryEntry(id: "\(msg.id)_\(idx)", message: msg, itemIndex: idx, mediaItem: item)
+            return mc.mediaItems.enumerated().compactMap { idx, item in
+                // Skip video/audio items — gallery shows images only
+                if let mimeType = item["mediaType"] as? String,
+                   !mimeType.hasPrefix("image/") { return nil }
+                return GalleryEntry(id: "\(msg.id)_\(idx)", message: msg, itemIndex: idx, mediaItem: item)
             }
-        }
+        }.filter { !$0.mediaItem.isEmpty || parseMediaContent(from: $0.message.decryptedContent) == nil }
     }
 
     init(messages: [Message], initialMessageId: String, isPresented: Binding<Bool>) {
