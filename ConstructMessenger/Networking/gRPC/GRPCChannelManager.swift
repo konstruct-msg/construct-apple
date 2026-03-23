@@ -196,7 +196,9 @@ final class GRPCChannelManager: Sendable {
                     keepalive: .init(
                         time: .seconds(30),
                         timeout: .seconds(10),
-                        allowWithoutCalls: false
+                        // true: send keepalive pings even between calls so the TCP connection
+                        // (used by the long-lived message stream) stays alive through NAT tables.
+                        allowWithoutCalls: true
                     )
                 )
             }
