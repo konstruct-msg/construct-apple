@@ -166,8 +166,8 @@ private struct SynapsRow: View {
 
     private var avatarView: some View {
         ZStack {
-            if let data = user.avatarData, let img = UIImage(data: data) {
-                Image(uiImage: img)
+            if let data = user.avatarData, let img = PlatformImage(data: data) {
+                Image(platformImage: img)
                     .resizable()
                     .scaledToFill()
             } else {

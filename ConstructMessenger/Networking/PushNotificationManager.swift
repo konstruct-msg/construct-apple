@@ -345,6 +345,7 @@ extension UNAuthorizationStatus {
 // macOS native app uses different push delivery mechanism (or polling via stream).
 // PushNotificationManager is a no-op on macOS.
 import Foundation
+import UserNotifications
 
 final class PushNotificationManager {
     static let shared = PushNotificationManager()
@@ -352,6 +353,8 @@ final class PushNotificationManager {
     // On macOS, push is delivered via persistent gRPC MessageStream — no APNs needed.
     var isPushEnabled: Bool { true }
     var lastSilentPushDate: Date? { nil }
+    var authorizationStatus: UNAuthorizationStatus { .authorized }
+    var deviceToken: String? { nil }
     func registerIfNeeded() {}
     func updateToken(_ token: Data) {}
     func signalSilentPush() {}
