@@ -5,6 +5,7 @@
 
 #if canImport(UIKit)
 import UIKit
+import SwiftUI
 
 struct ImageHelper {
     // MARK: - Avatar Processing
