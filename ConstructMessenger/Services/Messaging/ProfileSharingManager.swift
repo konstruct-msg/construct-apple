@@ -131,14 +131,6 @@ class ProfileSharingManager {
             user.sharedWithMeAt = Date()
         }
         
-        // Add system message to chat
-        addSystemMessageToChat(
-            userId: userId,
-            displayName: profileData.displayName,
-            hasAvatar: profileData.avatarMediaId != nil || profileData.avatarData != nil,
-            in: context
-        )
-        
         do {
             try context.save()
             Log.info("✅ Profile data updated for user \(userId): displayName=\(profileData.displayName)", category: "ProfileSharingManager")
@@ -147,57 +139,4 @@ class ProfileSharingManager {
         }
     }
     
-    // MARK: - System Messages
-    
-    /// Add system message to chat when profile is shared
-    /// - Parameters:
-    ///   - userId: User ID who shared profile
-    ///   - displayName: Display name from profile
-    ///   - hasAvatar: Whether profile includes avatar
-    ///   - context: Core Data context
-    func addSystemMessageToChat(
-        userId: String,
-        displayName: String,
-        hasAvatar: Bool,
-        in context: NSManagedObjectContext
-    ) {
-        // Find or create chat
-        let chatFetchRequest = Chat.fetchRequest()
-        // Combine with additional predicate
-        let otherUserPredicate = NSPredicate(format: "otherUser.id == %@", userId)
-        chatFetchRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [otherUserPredicate])
-        
-        guard let chat = try? context.fetch(chatFetchRequest).first else {
-            Log.error("❌ Chat not found for user \(userId)", category: "ProfileSharingManager")
-            return
-        }
-        
-        // Create system message
-        let message = Message(context: context)
-        message.id = UUID().uuidString
-        message.timestamp = Date()
-        message.chat = chat
-        message.fromUserId = userId
-        message.toUserId = SessionManager.shared.currentUserId ?? ""
-        message.isSentByMe = false
-        message.encryptedContent = ""  // System messages don't need encryption
-        
-        // Use special prefix to mark as system message
-        let icon = hasAvatar ? "📸" : "👤"
-        message.decryptedContent = "[SYSTEM]\(icon) \(displayName) shared their profile"
-        
-        message.deliveryStatus = .delivered
-        
-        // Update chat's last message
-        let systemMessageText = message.decryptedContent?.replacingOccurrences(of: "[SYSTEM]", with: "") ?? ""
-        chat.lastMessageText = Chat.formatPreviewText(systemMessageText)
-        chat.lastMessageTime = message.timestamp
-        
-        do {
-            try context.save()
-            Log.info("✅ Added system message for profile share from \(userId)", category: "ProfileSharingManager")
-        } catch {
-            Log.error("❌ Failed to save system message: \(error)", category: "ProfileSharingManager")
-        }
-    }
 }
