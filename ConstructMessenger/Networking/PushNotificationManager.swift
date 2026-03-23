@@ -243,13 +243,23 @@ class PushNotificationManager: NSObject {
             Log.info("⏸️ Device token registration deferred — no session yet", category: "Push")
             return
         }
-        do {
-            Log.info("📡 Registering device token with server", category: "Push")
-            let response = try await NotificationServiceClient.shared.registerDeviceToken(token: token)
-            isRegisteredWithServer = true
-            Log.info("✅ Device token registered with server: success=\(response.success)", category: "Push")
-        } catch {
-            Log.error("❌ Failed to register device token with server: \(error)", category: "Push")
+        for attempt in 0..<3 {
+            do {
+                Log.info("📡 Registering device token with server", category: "Push")
+                let response = try await NotificationServiceClient.shared.registerDeviceToken(token: token)
+                isRegisteredWithServer = true
+                Log.info("✅ Device token registered with server: success=\(response.success)", category: "Push")
+                return
+            } catch {
+                if let rpcError = error as? RPCError, rpcError.code == .unavailable, attempt < 2 {
+                    let delay = Double(attempt + 1) * 2.0
+                    Log.info("🔄 Push token registration unavailable (attempt \(attempt + 1)/3), retrying in \(Int(delay))s", category: "Push")
+                    try? await Task.sleep(for: .seconds(delay))
+                } else {
+                    Log.error("❌ Failed to register device token with server: \(error)", category: "Push")
+                    return
+                }
+            }
         }
     }
     

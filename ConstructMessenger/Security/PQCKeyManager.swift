@@ -138,6 +138,7 @@ final class PQCKeyManager {
     static func migrateIfNeeded(deviceId: String) async {
         guard !UserDefaults.standard.bool(forKey: migrationDoneKey) else { return }
 
+        // Attempt 0: generate key in Keychain + upload
         do {
             guard let core = CryptoManager.shared.orchestratorCore else { return }
             let spkId = shared.kyberSPKId()
@@ -150,8 +151,29 @@ final class PQCKeyManager {
             )
             UserDefaults.standard.set(true, forKey: migrationDoneKey)
             Log.info("✅ PQC: Kyber SPK migration complete", category: "PQC")
+            return
         } catch {
-            Log.error("⚠️ PQC: Kyber SPK migration failed (will retry): \(error)", category: "PQC")
+            guard let rpcError = error as? RPCError, rpcError.code == .unavailable else {
+                Log.error("⚠️ PQC: Kyber SPK migration failed (will retry next launch): \(error)", category: "PQC")
+                return
+            }
+            Log.info("⚠️ PQC: Kyber SPK upload unavailable — will retry (key already in Keychain)", category: "PQC")
+        }
+
+        // Attempts 1-2: key is already stored, just retry the upload
+        for attempt in 1...2 {
+            let delay = Double(attempt) * 2.0
+            try? await Task.sleep(for: .seconds(delay))
+            do {
+                try await uploadKyberSPK(deviceId: deviceId)
+                UserDefaults.standard.set(true, forKey: migrationDoneKey)
+                Log.info("✅ PQC: Kyber SPK migration complete (retry \(attempt))", category: "PQC")
+                return
+            } catch {
+                if attempt == 2 {
+                    Log.error("⚠️ PQC: Kyber SPK migration failed after retries (will retry next launch): \(error)", category: "PQC")
+                }
+            }
         }
     }
 

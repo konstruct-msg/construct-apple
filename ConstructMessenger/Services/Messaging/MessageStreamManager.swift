@@ -261,7 +261,7 @@ final class MessageStreamManager {
             await withTaskGroup(of: Void.self) { group in
                 group.addTask { await self.fetchMissedMessages() }
                 group.addTask {
-                    try? await Task.sleep(for: .seconds(12))
+                    try? await Task.sleep(for: .seconds(3))
                     Log.debug("⏰ fetchMissedMessages wall-clock cap reached — proceeding to stream", category: "MessageStream")
                 }
                 _ = await group.next()
