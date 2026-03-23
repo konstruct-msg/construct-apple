@@ -328,19 +328,6 @@ extension PushNotificationManager: UNUserNotificationCenterDelegate {
 
 // MARK: - UNAuthorizationStatus Extension
 
-extension UNAuthorizationStatus {
-    var description: String {
-        switch self {
-        case .notDetermined: return "notDetermined"
-        case .denied: return "denied"
-        case .authorized: return "authorized"
-        case .provisional: return "provisional"
-        case .ephemeral: return "ephemeral"
-        @unknown default: return "unknown"
-        }
-    }
-}
-
 #else
 // macOS native app uses different push delivery mechanism (or polling via stream).
 // PushNotificationManager is a no-op on macOS.
@@ -355,6 +342,7 @@ final class PushNotificationManager {
     var lastSilentPushDate: Date? { nil }
     var authorizationStatus: UNAuthorizationStatus { .authorized }
     var deviceToken: String? { nil }
+    var isRegisteredWithServer: Bool { true }
     func registerIfNeeded() {}
     func updateToken(_ token: Data) {}
     func signalSilentPush() {}
@@ -366,3 +354,16 @@ final class PushNotificationManager {
     func checkAuthorizationStatus() async {}
 }
 #endif
+
+extension UNAuthorizationStatus {
+    var description: String {
+        switch self {
+        case .notDetermined: return "notDetermined"
+        case .denied: return "denied"
+        case .authorized: return "authorized"
+        case .provisional: return "provisional"
+        case .ephemeral: return "ephemeral"
+        @unknown default: return "unknown"
+        }
+    }
+}
