@@ -11,12 +11,14 @@ struct SecurityView: View {
     @Environment(SecurityViewModel.self) private var securityViewModel
     @Environment(AccountRecoveryViewModel.self) private var recoveryVM
     @Environment(AuthViewModel.self) private var authVM
+    @Environment(\.managedObjectContext) private var viewContext
 
     @State private var showingPinSetup = false
     @State private var showingDisablePinSheet = false
     @State private var showingRecoverySetup = false
     @State private var showingDuressPinSetup = false
     @State private var showingDisableDuressAlert = false
+    @State private var lockdown = LockdownManager.shared
     
     var body: some View {
         @Bindable var securityViewModel = securityViewModel
@@ -136,6 +138,42 @@ struct SecurityView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
+
+            // MARK: - Lockdown mode
+            Section {
+                Toggle(isOn: Binding(
+                    get: { lockdown.isActive },
+                    set: { enabled in
+                        if enabled {
+                            let approvedIds = fetchCurrentContactIds()
+                            lockdown.enable(approvedIds: approvedIds)
+                        } else {
+                            lockdown.disable()
+                        }
+                    }
+                )) {
+                    Label {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(LocalizedStringKey("lockdown_mode"))
+                                .foregroundColor(.primary)
+                            if lockdown.isActive, let since = lockdown.activatedAt {
+                                Text(String(format: NSLocalizedString("lockdown_active_since", comment: ""),
+                                            since.formatted(date: .abbreviated, time: .shortened)))
+                                    .font(.caption)
+                                    .foregroundColor(.orange)
+                            }
+                        }
+                    } icon: {
+                        Image(systemName: lockdown.isActive ? "lock.shield.fill" : "lock.shield")
+                            .foregroundColor(lockdown.isActive ? .orange : .gray)
+                    }
+                }
+                .tint(.orange)
+            } footer: {
+                Text(LocalizedStringKey("lockdown_mode_hint"))
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
         }
         .sheet(isPresented: $showingPinSetup) {
             PinSetupView(isChanging: securityViewModel.isPinEnabled)
@@ -167,5 +205,14 @@ struct SecurityView: View {
         }
         .task { await recoveryVM.loadStatus() }
         .onAppear { securityViewModel.refreshPinState() }
+    }
+
+    // MARK: - Helpers
+
+    /// Fetch IDs of all current chat partners from Core Data (snapshot for lockdown).
+    private func fetchCurrentContactIds() -> Set<String> {
+        let req = Chat.fetchRequest()
+        let chats = (try? viewContext.fetch(req)) ?? []
+        return Set(chats.compactMap { $0.otherUser?.id })
     }
 }

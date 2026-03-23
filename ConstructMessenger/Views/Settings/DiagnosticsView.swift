@@ -6,16 +6,41 @@
 //
 
 import SwiftUI
+import UIKit
 
 struct DiagnosticsView: View {
     @State private var logText: String = ""
-    @State private var isSharing = false
-    @State private var archiveURL: URL?
     @State private var logSize: String = ""
-    @State private var isClearing = false
+    private var push = PushNotificationManager.shared
 
     var body: some View {
         List {
+            // MARK: - Push Notifications
+            Section {
+                diagRow(
+                    label: "Permission",
+                    value: push.authorizationStatus.description,
+                    ok: push.authorizationStatus == .authorized || push.authorizationStatus == .provisional
+                )
+                diagRow(
+                    label: "APNs Token",
+                    value: push.deviceToken != nil ? "received (\(push.deviceToken!.prefix(8))…)" : "missing",
+                    ok: push.deviceToken != nil
+                )
+                diagRow(
+                    label: "Registered with server",
+                    value: push.isRegisteredWithServer ? "yes" : "no — notifications won't arrive",
+                    ok: push.isRegisteredWithServer
+                )
+            } header: {
+                Text("Push Notifications")
+            } footer: {
+                if !push.isRegisteredWithServer {
+                    Text("Token not on server. Go back to chats — registration retries automatically on foreground.")
+                        .foregroundStyle(.orange)
+                }
+            }
+
             // MARK: - Status
             Section {
                 HStack {
@@ -81,13 +106,8 @@ struct DiagnosticsView: View {
                 }
             }
         }
-        .navigationTitle("Diagnostics")
+        .navigationTitle(LocalizedStringKey("diagnostics"))
         .onAppear { refresh() }
-        .sheet(isPresented: $isSharing) {
-            if let url = archiveURL {
-                ShareLink(item: url, subject: Text("Construct Logs"), message: Text("Exported log archive"))
-            }
-        }
     }
 
     // MARK: - Helpers
@@ -110,17 +130,36 @@ struct DiagnosticsView: View {
     }
 
     private func shareArchive() {
-        do {
-            archiveURL = try LogCollector.shared.createLogArchive()
-            isSharing = true
-        } catch {
-            Log.error("Failed to create log archive: \(error)", category: "Diagnostics")
+        guard let url = try? LogCollector.shared.createLogArchive() else {
+            Log.error("Failed to create log archive", category: "Diagnostics")
+            return
+        }
+        let av = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+        if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let root = scene.windows.first(where: { $0.isKeyWindow })?.rootViewController {
+            root.present(av, animated: true)
         }
     }
 
     private func clearLogs() {
         LogCollector.shared.clearLogs()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { refresh() }
+    }
+
+    private func diagRow(label: String, value: String, ok: Bool) -> some View {
+        HStack {
+            Text(label)
+                .foregroundStyle(.secondary)
+            Spacer()
+            HStack(spacing: 5) {
+                Circle()
+                    .fill(ok ? Color.AppStatus.success : Color.red)
+                    .frame(width: 7, height: 7)
+                Text(value)
+                    .font(.footnote)
+                    .foregroundStyle(ok ? Color.primary : Color.red)
+            }
+        }
     }
 
     #if DEBUG

@@ -254,9 +254,19 @@ final class MessageStreamManager {
 
         while !Task.isCancelled {
             // Fetch any messages that arrived while we were disconnected.
-            // Done at the top of the loop so it always runs from the current
-            // (non-cancelled) task, before each connection attempt.
-            await fetchMissedMessages()
+            // Capped at 12 s so openStream() is always reached quickly even when
+            // the server's getPendingMessages RPC is slow or unresponsive after a
+            // server update.  fetchMissedMessages() is cancellation-safe; any
+            // messages it didn't retrieve will arrive via the live stream.
+            await withTaskGroup(of: Void.self) { group in
+                group.addTask { await self.fetchMissedMessages() }
+                group.addTask {
+                    try? await Task.sleep(for: .seconds(3))
+                    Log.debug("⏰ fetchMissedMessages wall-clock cap reached — proceeding to stream", category: "MessageStream")
+                }
+                _ = await group.next()
+                group.cancelAll()
+            }
 
             guard !Task.isCancelled else { break }
 
@@ -637,6 +647,30 @@ final class MessageStreamManager {
                     kyberOtpkId: 0
                 ))
             }
+            // SENDER_SYNC: copy of own outgoing message — decrypt with per-device session
+            if envelope.contentType == .senderSync {
+                guard let decoded = try? WirePayloadCoder.decode(envelope.encryptedPayload) else {
+                    Log.info("⚠️ Failed to decode SENDER_SYNC payload for message \(envelope.messageID)", category: "MessageStream")
+                    return nil
+                }
+                Log.info("🔄 SENDER_SYNC from device \(envelope.senderDevice.deviceID.prefix(8))… id=\(envelope.messageID.prefix(8))…", category: "MessageStream")
+                return .message(ChatMessage(
+                    id: envelope.messageID,
+                    from: envelope.sender.userID,
+                    to: envelope.recipient.userID,
+                    messageType: "SENDER_SYNC",
+                    ephemeralPublicKey: Data(decoded.ephemeralPublicKey),
+                    messageNumber: decoded.messageNumber,
+                    content: decoded.content,
+                    suiteId: 1,
+                    timestamp: UInt64(envelope.timestamp),
+                    oneTimePreKeyId: decoded.oneTimePreKeyId,
+                    kemCiphertext: decoded.kemCiphertext ?? Data(),
+                    kyberOtpkId: decoded.kyberOtpkId,
+                    senderDeviceId: envelope.senderDevice.deviceID,
+                    conversationId: envelope.conversationID
+                ))
+            }
             // Unpack wire payload blob into crypto components
             guard let decoded = try? WirePayloadCoder.decode(envelope.encryptedPayload) else {
                 Log.info("⚠️ Failed to decode encrypted_payload for message \(envelope.messageID)", category: "MessageStream")
@@ -655,7 +689,10 @@ final class MessageStreamManager {
                 oneTimePreKeyId: decoded.oneTimePreKeyId,
                 editsMessageId: envelope.editsMessageID,
                 kemCiphertext: decoded.kemCiphertext ?? Data(),
-                kyberOtpkId: decoded.kyberOtpkId
+                kyberOtpkId: decoded.kyberOtpkId,
+                senderDeviceId: envelope.senderDevice.deviceID,
+                conversationId: envelope.conversationID,
+                replyToMessageId: envelope.replyToMessageID
             ))
         case .receipt(let receipt):
             // Deliver receipt: extract confirmed message IDs and propagate

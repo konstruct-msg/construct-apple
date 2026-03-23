@@ -12,6 +12,12 @@ enum GRPCTimeouts {
     static let logout: TimeInterval = 20
     static let recovery: TimeInterval = 30
 
+    // Device linking
+    static let initiateDeviceLink: TimeInterval = 15
+    static let confirmDeviceLink: TimeInterval = 30
+    static let listDevices: TimeInterval = 20
+    static let revokeDevice: TimeInterval = 15
+
     // Messaging (interactive)
     static let sendMessage: TimeInterval = 20
     static let editMessage: TimeInterval = 20

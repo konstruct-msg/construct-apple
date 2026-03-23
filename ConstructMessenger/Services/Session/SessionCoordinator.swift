@@ -134,6 +134,25 @@ final class SessionCoordinator {
             for contactId in toPrewarm {
                 guard !CryptoManager.shared.hasSession(for: contactId),
                       !usersInitializingSession.contains(contactId) else { continue }
+
+                // Before re-establishing a fresh session, notify the peer that our session is
+                // missing. This handles ratchet divergence: if we lost our Keychain session
+                // (e.g. after iOS Keychain wipe or app reinstall) but the peer's ratchet is
+                // already advanced (e.g. at msgNum=3), any new message they send will be
+                // encrypted at the wrong ratchet position and will be undecryptable.
+                //
+                // Sending END_SESSION first tells the peer to archive their stale session so
+                // they will start fresh when our X3DH init message (from initializeSessionProactively)
+                // arrives. This is safe even if the peer has no session — END_SESSION on a
+                // non-existent session is a no-op for them.
+                do {
+                    try await sendEndSession(to: contactId, reason: "session_missing_restart")
+                    endSessionSentAt[contactId] = Date()
+                    Log.info("🔥 Prewarm: notified \(contactId.prefix(8))… of missing session before fresh init", category: "SessionInit")
+                } catch {
+                    Log.error("⚠️ Prewarm: END_SESSION to \(contactId.prefix(8))… failed (proceeding with prewarm): \(error.localizedDescription)", category: "SessionInit")
+                }
+
                 await sessionInitService.initializeSessionProactively(
                     userId: contactId,
                     onSuccess: { Log.info("🔥 Prewarm ✅ \(contactId.prefix(8))…", category: "SessionInit") },
@@ -621,9 +640,13 @@ final class SessionCoordinator {
         resendAttemptedAt[userId] = now
 
         let cutoff = now.addingTimeInterval(-resendWindow) as NSDate
+        // Include .failed in addition to .sending/.sent: when the receiver sends a "failed" receipt
+        // (decryption failure), the sender marks the message as .failed. Without this, those
+        // messages would be silently excluded from auto-resend after the session heals.
         let statusPredicate = NSCompoundPredicate(orPredicateWithSubpredicates: [
             NSPredicate(format: "deliveryStatusRaw == %d", DeliveryStatus.sending.rawValue),
-            NSPredicate(format: "deliveryStatusRaw == %d", DeliveryStatus.sent.rawValue)
+            NSPredicate(format: "deliveryStatusRaw == %d", DeliveryStatus.sent.rawValue),
+            NSPredicate(format: "deliveryStatusRaw == %d", DeliveryStatus.failed.rawValue)
         ])
 
         let fetch = Message.fetchRequest()
@@ -681,7 +704,8 @@ final class SessionCoordinator {
                         timestamp: UInt64(msg.timestamp.timeIntervalSince1970),
                         preEncryptedFirst: firstComponents,
                         kemCiphertext: kemCiphertext,
-                        kyberOtpkId: kyberOtpkId
+                        kyberOtpkId: kyberOtpkId,
+                        replyToMessageId: msg.replyToMessageId.map { $0.isEmpty ? nil : $0 } ?? nil
                     )
 
                     let response = responses.first ?? SendMessageResponse(messageId: msg.id, status: "sent")

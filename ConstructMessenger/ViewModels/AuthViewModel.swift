@@ -360,6 +360,31 @@ class AuthViewModel {
             }
         }
     }
+
+    /// Signs out of ALL devices simultaneously (invalidates all refresh tokens server-side),
+    /// then performs local logout. Use when a device may have been compromised.
+    func logoutAllDevices() {
+        Task {
+            await SessionCoordinator().sendEndSessionToAllContacts(reason: "logout")
+            if SessionManager.shared.sessionToken != nil {
+                do {
+                    try await AuthServiceClient.shared.logout(allDevices: true)
+                    Log.info("✅ Signed out of all devices", category: "Auth")
+                } catch {
+                    Log.error("logoutAllDevices API call failed: \(error.localizedDescription)", category: "Auth")
+                }
+            }
+            await MainActor.run {
+                cancelTimeouts()
+                SessionManager.shared.clearSession()
+                UserDefaults.standard.removeObject(forKey: "recovery_is_setup")
+                UserDefaults.standard.removeObject(forKey: "recovery_banner_dismissed")
+                isAuthenticated = false
+                currentUserId = nil
+                currentUser = nil
+            }
+        }
+    }
     
     func deleteAccount() {
         self.isLoading = true

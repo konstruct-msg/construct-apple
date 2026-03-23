@@ -45,6 +45,7 @@ struct ChatsSplitView: View {
             }
             .navigationTitle("chats")
             .toolbar {
+                #if os(iOS)
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
                         showingQRScanner = true
@@ -52,6 +53,15 @@ struct ChatsSplitView: View {
                         Image(systemName: "qrcode.viewfinder")
                     }
                 }
+                #else
+                ToolbarItem(placement: .automatic) {
+                    Button {
+                        showingQRScanner = true
+                    } label: {
+                        Image(systemName: "qrcode.viewfinder")
+                    }
+                }
+                #endif
                 ToolbarItem(placement: .principal) {
                     ConnectionStatusIndicator()
                 }
@@ -175,7 +185,9 @@ struct ChatsSplitView: View {
             .onDelete(perform: deleteChatsAtOffsets)
         }
         .refreshable {
+            #if os(iOS)
             await BackgroundFetchManager.shared.fetchPendingMessages()
+            #endif
         }
     }
 
@@ -184,7 +196,11 @@ struct ChatsSplitView: View {
     @ViewBuilder
     private var detailContent: some View {
         if activeTab == .settings && selectedChatId == nil {
+            #if os(iOS)
             SettingsView()
+            #else
+            DesktopSettingsView()
+            #endif
         } else if let chatId = selectedChatId,
            let chat = chats.first(where: { $0.id == chatId }) {
             ChatView(chat: chat, context: viewContext)

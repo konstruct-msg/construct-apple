@@ -23,7 +23,11 @@ final class MessagingServiceClient: Sendable {
         senderId: String,
         conversationId: String,
         encryptedPayload: Data,
-        timestamp: UInt64
+        timestamp: UInt64,
+        senderDeviceId: String? = nil,
+        recipientDeviceId: String? = nil,
+        contentType: Shared_Proto_Core_V1_ContentType = .e2EeSignal,
+        replyToMessageId: String? = nil
     ) async throws -> SendMessageResponse {
         try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.sendMessage) { grpcClient in
             let msgClient = Shared_Proto_Services_V1_MessagingService.Client(wrapping: grpcClient)
@@ -39,9 +43,24 @@ final class MessagingServiceClient: Sendable {
             envelope.sender = sender
             envelope.recipient = recipient
             envelope.conversationID = conversationId
-            envelope.contentType = .e2EeSignal
+            envelope.contentType = contentType
             envelope.encryptedPayload = encryptedPayload
             envelope.timestamp = Int64(timestamp)
+
+            if let replyId = replyToMessageId, !replyId.isEmpty {
+                envelope.replyToMessageID = replyId
+            }
+
+            if let senderDeviceId, !senderDeviceId.isEmpty {
+                var senderDevice = Shared_Proto_Core_V1_DeviceId()
+                senderDevice.deviceID = senderDeviceId
+                envelope.senderDevice = senderDevice
+            }
+            if let recipientDeviceId, !recipientDeviceId.isEmpty {
+                var recipientDevice = Shared_Proto_Core_V1_DeviceId()
+                recipientDevice.deviceID = recipientDeviceId
+                envelope.recipientDevice = recipientDevice
+            }
 
             var request = Shared_Proto_Services_V1_SendMessageRequest()
             request.message = envelope
@@ -178,6 +197,33 @@ final class MessagingServiceClient: Sendable {
                     kyberOtpkId: 0
                 )
             }
+            // SENDER_SYNC: copy of own outgoing message — decrypt with per-device session.
+            // Note: PendingMessage proto does not yet carry senderDevice/conversationID;
+            // those fields are only available in the live stream Envelope.
+            // Leave them empty here — handleSenderSync will ACK and skip if unable to route.
+            if msg.contentType == .senderSync {
+                guard let decoded = try? WirePayloadCoder.decode(msg.encryptedPayload) else {
+                    Log.debug("⚠️ Failed to decode SENDER_SYNC payload \(msg.messageID) — queuing failed ACK", category: "MessagingServiceClient")
+                    failed.append(FailedMessage(id: msg.messageID, senderId: msg.senderID))
+                    return nil
+                }
+                return ChatMessage(
+                    id: msg.messageID,
+                    from: msg.senderID,
+                    to: "",
+                    messageType: "SENDER_SYNC",
+                    ephemeralPublicKey: Data(decoded.ephemeralPublicKey),
+                    messageNumber: decoded.messageNumber,
+                    content: decoded.content,
+                    suiteId: 1,
+                    timestamp: UInt64(msg.timestamp),
+                    oneTimePreKeyId: decoded.oneTimePreKeyId,
+                    kemCiphertext: decoded.kemCiphertext ?? Data(),
+                    kyberOtpkId: decoded.kyberOtpkId,
+                    senderDeviceId: "",
+                    conversationId: ""
+                )
+            }
             // Unpack wire payload blob into crypto components
             guard let decoded = try? WirePayloadCoder.decode(msg.encryptedPayload) else {
                 Log.debug("⚠️ Failed to decode encrypted_payload for message \(msg.messageID) — queuing failed ACK", category: "MessagingServiceClient")
@@ -196,7 +242,9 @@ final class MessagingServiceClient: Sendable {
                 timestamp: UInt64(msg.timestamp),
                 oneTimePreKeyId: decoded.oneTimePreKeyId,
                 kemCiphertext: decoded.kemCiphertext ?? Data(),
-                kyberOtpkId: decoded.kyberOtpkId
+                kyberOtpkId: decoded.kyberOtpkId,
+                senderDeviceId: "",
+                conversationId: ""
             )
         }
 

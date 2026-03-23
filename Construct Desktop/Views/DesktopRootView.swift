@@ -2,39 +2,66 @@
 //  DesktopRootView.swift
 //  Construct Desktop
 //
-//  Root NavigationSplitView for macOS.
-//  Sidebar = chats list, Detail = active chat or placeholder.
-//
-//  Once the shared ViewModels are added to this target via Target Membership,
-//  replace the placeholder columns with the real iOS views — they already
-//  work on macOS since they use only SwiftUI APIs.
+//  Root view for the macOS app.
+//  Mirrors ContentView.swift (iOS) — routes between onboarding and main UI
+//  based on AuthViewModel.hasRegisteredDeviceKeys.
 //
 
 import SwiftUI
 import CoreData
 
 struct DesktopRootView: View {
+    @Environment(AuthViewModel.self) private var authViewModel
+    @Environment(ChatsViewModel.self) private var chatsViewModel
     @Environment(\.managedObjectContext) private var viewContext
-
-    /// Tracks which chat is selected in the sidebar. Will be wired to ChatsViewModel.
-    @State private var selectedChatID: NSManagedObjectID?
+    @AppStorage("appTheme") private var appTheme: AppTheme = .automatic
 
     var body: some View {
+        Group {
+            if authViewModel.hasRegisteredDeviceKeys == nil {
+                ProgressView("Loading…")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if authViewModel.hasRegisteredDeviceKeys == true {
+                mainContent
+            } else {
+                OnboardingView()
+                    .environment(authViewModel)
+                    .onDisappear {
+                        authViewModel.refreshDeviceKeyState()
+                    }
+            }
+        }
+        .preferredColorScheme(appTheme.colorScheme)
+        .onAppear {
+            authViewModel.refreshDeviceKeyState()
+        }
+    }
+
+    // MARK: - Main split view (authenticated)
+
+    private var mainContent: some View {
         NavigationSplitView(columnVisibility: .constant(.all)) {
-            // MARK: - Sidebar: chats list
-            DesktopChatsListPlaceholder(selectedChatID: $selectedChatID)
+            // Sidebar: chats list
+            ChatsListView()
+                .environment(chatsViewModel)
                 .navigationSplitViewColumnWidth(min: 260, ideal: 300, max: 360)
         } detail: {
-            // MARK: - Detail: active chat
-            if selectedChatID != nil {
-                Text("Chat view — coming soon")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .foregroundStyle(.secondary)
+            // Detail: active chat or placeholder
+            if let chatId = chatsViewModel.chatToOpen,
+               let chat = fetchChat(id: chatId) {
+                ChatView(chat: chat, context: viewContext)
             } else {
                 DesktopEmptyDetailView()
             }
         }
         .frame(minWidth: 800, minHeight: 500)
+    }
+
+    private func fetchChat(id: String) -> Chat? {
+        let req = Chat.fetchRequest()
+        req.predicate = NSPredicate(format: "id == %@", id)
+        req.fetchLimit = 1
+        return try? viewContext.fetch(req).first
     }
 }
 
@@ -49,7 +76,7 @@ private struct DesktopEmptyDetailView: View {
             Text("Select a conversation")
                 .font(.title3)
                 .foregroundStyle(.secondary)
-            Text("or start a new one with ⌘N")
+            Text("or scan a QR code with ⌘N")
                 .font(.subheadline)
                 .foregroundStyle(.tertiary)
         }
@@ -57,7 +84,3 @@ private struct DesktopEmptyDetailView: View {
     }
 }
 
-#Preview {
-    DesktopRootView()
-        .environment(\.managedObjectContext, PersistenceController(inMemory: true).container.viewContext)
-}

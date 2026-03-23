@@ -10,6 +10,8 @@ import CoreData
 
 struct UserProfileView: View {
     @ObservedObject var user: User
+    var onOpenChat: (() -> Void)? = nil
+
     @Environment(\.managedObjectContext) private var viewContext
     @Environment(\.dismiss) private var dismiss
 
@@ -31,11 +33,13 @@ struct UserProfileView: View {
                     actionsSection
                 }
             }
-            .background(Color(uiColor: .systemGroupedBackground))
+            .background(Color.secondary.opacity(0.08))
             .navigationTitle(LocalizedStringKey("profile"))
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .automatic) {
                     Button(LocalizedStringKey("done")) { dismiss() }
                 }
             }
@@ -79,38 +83,42 @@ struct UserProfileView: View {
         VStack(spacing: 10) {
             if let avatarData = user.avatarData,
                let avatarImage = ImageHelper.imageFromData(avatarData) {
+                #if canImport(UIKit)
                 Image(uiImage: avatarImage)
                     .resizable()
                     .scaledToFill()
                     .frame(width: 88, height: 88)
-                    .clipShape(AvatarStyle.squircle(AvatarStyle.accountSize))
+                    .clipShape(AvatarStyle.avatarShape())
+                #else
+                Image(nsImage: avatarImage)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 88, height: 88)
+                    .clipShape(AvatarStyle.avatarShape())
+                #endif
             } else {
-                AvatarStyle.squircle(AvatarStyle.accountSize)
-                    .fill(Color.blue.opacity(0.15))
+                Circle()
+                    .fill(Color.hexagonAccent(for: user.id).opacity(0.15))
                     .frame(width: 88, height: 88)
                     .overlay {
                         Text(initials)
                             .font(.system(size: 34, weight: .semibold))
-                            .foregroundColor(.blue)
+                            .foregroundColor(Color.hexagonAccent(for: user.id))
                     }
             }
 
-            Text(user.displayName)
+            Text(user.resolvedDisplayName)
                 .font(.title3.weight(.semibold))
 
-            if !user.username.isEmpty {
+            if !user.username.isEmpty && user.username != user.resolvedDisplayName {
                 Text("@\(user.username)")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-            } else {
-                Text(DisplayNameGenerator.generate(from: user.id))
                     .font(.subheadline)
                     .foregroundColor(.secondary)
             }
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 24)
-        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .background(Color.secondary.opacity(0.12))
     }
 
     // MARK: - Sharing Status
@@ -135,7 +143,7 @@ struct UserProfileView: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
-            .background(Color(uiColor: .secondarySystemGroupedBackground))
+            .background(Color.secondary.opacity(0.12))
 
             sectionFooter(LocalizedStringKey("profile_sharing_info_footer"))
         }
@@ -147,6 +155,17 @@ struct UserProfileView: View {
         VStack(alignment: .leading, spacing: 0) {
             sectionHeader(LocalizedStringKey("actions"))
             VStack(spacing: 0) {
+                // Open chat (only shown from Synaps context)
+                if let openChat = onOpenChat {
+                    actionRow {
+                        Label(LocalizedStringKey("synaps_open_chat"), systemImage: "message")
+                    } action: {
+                        openChat()          // switches tab + sets chatToOpen
+                        dismiss()           // closes sheet after triggering navigation
+                    }
+                    Divider().padding(.leading, 16)
+                }
+
                 // Share / stop sharing
                 if user.amISharingWith {
                     actionRow {
@@ -187,7 +206,7 @@ struct UserProfileView: View {
                         .foregroundColor(.red)
                 } action: { showResetSessionConfirm = true }
             }
-            .background(Color(uiColor: .secondarySystemGroupedBackground))
+            .background(Color.secondary.opacity(0.12))
 
             if user.isBlocked {
                 sectionFooter(LocalizedStringKey("user_is_blocked_footer"), color: .red)

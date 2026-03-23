@@ -622,6 +622,17 @@ class CryptoManager {
             let count = archiveManager.loadArchives(for: userId)?.count ?? 0
             Log.info("✅ Session archived (\(count) total for user)", category: "CryptoManager")
         } catch {
+            // If the session is already gone from Rust (SessionNotFound) and we already have
+            // an archive (e.g. Rust archived it when we received END_SESSION first), treat
+            // this as a successful archive-by-other-means and just clean up.
+            let existingCount = archiveManager.loadArchives(for: userId)?.count ?? 0
+            if existingCount > 0 {
+                Log.info("ℹ️ archiveSession: session already archived via Rust for \(userId.prefix(8))… (reason: \(reason.rawValue)), cleaning up", category: "CryptoManager")
+                UserDefaults.standard.removeObject(forKey: "construct.session.suite.\(userId)")
+                _ = orchestratorCore?.removeSession(contactId: userId)
+                KeychainManager.shared.deleteSession(for: userId)
+                return
+            }
             Log.error("❌ Failed to export session for archiving — session NOT deleted to prevent data loss: \(error)", category: "CryptoManager")
             // Do not proceed with deletion: losing the session without an archive
             // would permanently break communication with this contact.
@@ -771,7 +782,12 @@ class CryptoManager {
     /// Uses clean API - Rust handles all MessagePack internally
     /// Now with Session Archive fallback support
     func decryptMessage(_ message: ChatMessage) throws -> String {
-        Log.debug("🔓 Decrypting message \(message.id.prefix(8))... from \(message.from.prefix(8))...", category: "CryptoManager")
+        try decryptMessage(message, contactIdOverride: nil)
+    }
+
+    func decryptMessage(_ message: ChatMessage, contactIdOverride: String?) throws -> String {
+        let logContactId = contactIdOverride ?? message.from
+        Log.debug("🔓 Decrypting message \(message.id.prefix(8))... contactId=\(logContactId.prefix(16))...", category: "CryptoManager")
         Log.debug("   messageNumber: \(message.messageNumber)", category: "CryptoManager")
         Log.debug("   ephemeralPublicKey: \(message.ephemeralPublicKey.count) bytes", category: "CryptoManager")
         Log.debug("   content length: \(message.content.count) chars", category: "CryptoManager")
@@ -780,6 +796,7 @@ class CryptoManager {
         do {
             plaintext = try messageCrypto.decryptMessage(
                 message,
+                contactIdOverride: contactIdOverride,
                 core: orchestratorCore,
                 restoreSession: { [weak self] userId in
                     Log.info("🔄 Session not in memory, attempting restore: \(userId)", category: "CryptoManager")

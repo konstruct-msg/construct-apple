@@ -5,6 +5,7 @@
 
 #if canImport(UIKit)
 import UIKit
+import SwiftUI
 
 struct ImageHelper {
     // MARK: - Avatar Processing
@@ -108,3 +109,34 @@ struct ImageHelper {
     }
 }
 #endif
+
+// MARK: - Rotated SF Symbol
+
+/// Renders an SF Symbol to a SwiftUI Image with an arbitrary rotation applied.
+///
+/// Required for .tabItem icons: SwiftUI strips .rotationEffect() when converting
+/// tab content to UITabBarItem images via UIKit. This pre-rotates the UIImage
+/// using Core Graphics so the result is baked into the bitmap.
+///
+/// - Parameters:
+///   - name: SF Symbol name.
+///   - degrees: Clockwise rotation in degrees.
+///   - pointSize: Symbol point size (default 22 matches tab bar).
+func rotatedSFSymbol(_ name: String, degrees: Double, pointSize: CGFloat = 22) -> Image {
+    let config = UIImage.SymbolConfiguration(pointSize: pointSize, weight: .regular)
+    guard let source = UIImage(systemName: name, withConfiguration: config) else {
+        return Image(systemName: name)
+    }
+    let radians = CGFloat(degrees * .pi / 180)
+    let diagonal = ceil(sqrt(source.size.width * source.size.width +
+                              source.size.height * source.size.height))
+    let size = CGSize(width: diagonal, height: diagonal)
+    let rotated = UIGraphicsImageRenderer(size: size).image { ctx in
+        let c = ctx.cgContext
+        c.translateBy(x: size.width / 2, y: size.height / 2)
+        c.rotate(by: radians)
+        source.draw(in: CGRect(x: -source.size.width / 2, y: -source.size.height / 2,
+                               width: source.size.width, height: source.size.height))
+    }
+    return Image(uiImage: rotated.withRenderingMode(.alwaysTemplate))
+}

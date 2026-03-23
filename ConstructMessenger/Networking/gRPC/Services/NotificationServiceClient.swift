@@ -39,6 +39,7 @@ final class NotificationServiceClient: Sendable {
             request.deviceID = deviceId
             request.provider = .apns
             request.environment = environment
+            request.notificationFilter = .visibleAll
 
             let response = try await client.registerDeviceToken(
                 request: .init(message: request)

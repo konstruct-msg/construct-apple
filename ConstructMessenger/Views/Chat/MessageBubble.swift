@@ -7,9 +7,12 @@
 
 import SwiftUI
 import QuickLook
+import AVKit
 
 struct MessageBubble: View {
-    let message: Message
+    /// Observed so the view re-renders when deliveryStatusRaw (or any @NSManaged property) changes.
+    /// NSManagedObject conforms to ObservableObject via KVO, so SwiftUI subscribes automatically.
+    @ObservedObject var message: Message
     let isLastInGroup: Bool
     let isSelected: Bool
     let isEditMode: Bool
@@ -82,7 +85,7 @@ struct MessageBubble: View {
                 .foregroundColor(.secondary)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
-                .background(Color(.systemGray6))
+                .background(Color.secondary.opacity(0.12))
                 .cornerRadius(12)
             Spacer()
         }
@@ -139,20 +142,51 @@ struct MessageBubble: View {
                             )
                     }
                 } else {
-                    // Flat text message — no bubble background
+                    // Text message bubble: reply indicator lives INSIDE the bubble background
+                    // so the quote block and the message text share one visual container.
                     VStack(alignment: .leading, spacing: 0) {
-                        // Reply/Quote preview
+                        // Reply quote at the top of the bubble (if present)
                         replyIndicatorView
 
-                        // Main message content
-                        LinkDetectingText(
-                            message.decryptedContent ?? NSLocalizedString("encrypted", comment: "Fallback for encrypted content"),
-                            color: .primary
-                        )
+                        VStack(alignment: .leading, spacing: 4) {
+                            // Main message content
+                            if message.decryptedContent == nil {
+                                // Irrecoverable: message was saved when the session was unavailable
+                                // or decryption failed. Display a clear unavailable indicator.
+                                HStack(spacing: 5) {
+                                    Image(systemName: "lock.trianglebadge.exclamationmark")
+                                        .font(.caption)
+                                    Text(NSLocalizedString("message_unavailable", comment: ""))
+                                        .italic()
+                                }
+                                .font(.callout)
+                                .foregroundColor(.secondary)
+                            } else {
+                                LinkDetectingText(
+                                    message.decryptedContent!,
+                                    color: message.isSentByMe ? .white : .primary
+                                )
+                            }
+                        }
+                        .padding(.horizontal, 12)
+                        // Reduce top padding when reply bar is shown — it already provides spacing.
+                        .padding(.top, message.replyToContent != nil ? 4 : 8)
+                        .padding(.bottom, 8)
                     }
-                    .padding(.vertical, 2)
-                    .background(isSelected ? Color.accentColor.opacity(0.12) : Color.clear)
-                    .cornerRadius(8)
+                    #if canImport(UIKit)
+                    .background(
+                        isSelected
+                            ? (message.isSentByMe ? Color.accentColor.opacity(0.75) : Color.accentColor.opacity(0.15))
+                            : (message.isSentByMe ? Color.accentColor : Color(uiColor: .systemGray5))
+                    )
+                    #else
+                    .background(
+                        isSelected
+                            ? (message.isSentByMe ? Color.accentColor.opacity(0.75) : Color.accentColor.opacity(0.15))
+                            : (message.isSentByMe ? Color.accentColor : Color(nsColor: .controlBackgroundColor))
+                    )
+                    #endif
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
                 }
 
                 if isLastInGroup {
@@ -176,7 +210,9 @@ struct MessageBubble: View {
             }
             .frame(maxWidth: containerWidth * 0.7, alignment: message.isSentByMe ? .trailing : .leading)
             .contentShape(.interaction, Rectangle())
+            #if os(iOS)
             .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 8))
+            #endif
             .onTapGesture {
                 if isEditMode {
                     onSelect?(message)
@@ -263,7 +299,9 @@ struct MessageBubble: View {
                     .onEnded { _ in
                         if swipeOffset >= 40 {
                             onReply?(message)
+                            #if canImport(UIKit)
                             UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                            #endif
                         }
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                             swipeOffset = 0
@@ -384,7 +422,7 @@ struct MessageBubble: View {
         return json
     }
 
-    /// Reply context bar shown above media, file, and text message content.
+    /// Reply context bar shown above message content, rendered INSIDE the bubble background.
     @ViewBuilder
     private var replyIndicatorView: some View {
         if let replyContent = message.replyToContent {
@@ -400,9 +438,11 @@ struct MessageBubble: View {
                     lineLimit: 2
                 )
                 .padding(.vertical, 4)
-                .padding(.trailing, 8)
+                .padding(.trailing, 4)
             }
-            .padding(.leading, 4)
+            // Match the bubble's horizontal padding so the accent bar aligns with the message text.
+            .padding(.horizontal, 12)
+            .padding(.top, 8)
             .padding(.bottom, 4)
         }
     }
@@ -417,11 +457,17 @@ struct FileAttachmentBubbleView: View {
     @State private var downloadedURLs: [String: URL] = [:]   // mediaId → temp file URL
     @State private var downloading: Set<String> = []
     @State private var previewURL: URL?
+    @State private var videoPlayerURL: URL?          // drives full-screen video player
+    @State private var videoThumbnails: [String: PlatformImage] = [:]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             ForEach(fileContent.files, id: \.mediaId) { file in
-                fileRow(file)
+                if isVideoFile(file.filename) {
+                    videoRow(file)
+                } else {
+                    fileRow(file)
+                }
             }
             if !fileContent.caption.isEmpty {
                 Text(fileContent.caption)
@@ -431,9 +477,79 @@ struct FileAttachmentBubbleView: View {
             }
         }
         .padding(12)
+        #if canImport(UIKit)
         .background(isSentByMe ? Color.accentColor : Color(uiColor: .systemGray5))
+        #else
+        .background(isSentByMe ? Color.accentColor : Color(nsColor: .controlBackgroundColor))
+        #endif
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .quickLookPreview($previewURL)
+        #if canImport(UIKit)
+        .fullScreenCover(item: Binding(
+            get: { videoPlayerURL.map { VideoPlayerItem(url: $0) } },
+            set: { if $0 == nil { videoPlayerURL = nil } }
+        )) { item in
+            VideoPlayerView(url: item.url)
+                .ignoresSafeArea()
+        }
+        #endif
+    }
+
+    // MARK: - Video Row
+
+    @ViewBuilder
+    private func videoRow(_ file: FileMessageContent.FileEntry) -> some View {
+        Button { openOrDownloadVideo(file) } label: {
+            ZStack(alignment: .center) {
+                // Thumbnail or placeholder
+                Group {
+                    if let thumb = videoThumbnails[file.mediaId] {
+                        Image(platformImage: thumb)
+                            .resizable()
+                            .scaledToFill()
+                    } else {
+                        Rectangle()
+                            .fill(Color.black.opacity(0.6))
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: 180)
+                .clipped()
+                .cornerRadius(10)
+
+                // Play / Download overlay
+                ZStack {
+                    Circle()
+                        .fill(Color.black.opacity(0.55))
+                        .frame(width: 54, height: 54)
+                    if downloading.contains(file.mediaId) {
+                        ProgressView().tint(.white).scaleEffect(1.2)
+                    } else {
+                        Image(systemName: downloadedURLs[file.mediaId] != nil ? "play.fill" : "arrow.down.circle.fill")
+                            .font(.system(size: 24, weight: .semibold))
+                            .foregroundColor(.white)
+                    }
+                }
+
+                // Duration / size badge
+                VStack {
+                    Spacer()
+                    HStack {
+                        Spacer()
+                        Text(ByteCountFormatter.string(fromByteCount: Int64(file.size), countStyle: .file))
+                            .font(.caption2.weight(.medium))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 6).padding(.vertical, 3)
+                            .background(Color.black.opacity(0.5))
+                            .cornerRadius(6)
+                            .padding(6)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: 180)
+            }
+        }
+        .buttonStyle(.plain)
     }
 
     @ViewBuilder
@@ -485,19 +601,11 @@ struct FileAttachmentBubbleView: View {
 
         Task {
             do {
-                let data = try await MediaManager.shared.downloadAndDecryptFile(
-                    mediaId: file.mediaId,
-                    mediaUrl: file.mediaUrl,
-                    mediaKeyBase64: file.mediaKey,
-                    compressed: file.compressed
-                )
-                let tmpURL = FileManager.default.temporaryDirectory
-                    .appendingPathComponent(file.filename)
-                try data.write(to: tmpURL)
+                let url = try await downloadFile(file)
                 await MainActor.run {
-                    downloadedURLs[file.mediaId] = tmpURL
+                    downloadedURLs[file.mediaId] = url
                     downloading.remove(file.mediaId)
-                    previewURL = tmpURL
+                    previewURL = url
                 }
             } catch {
                 await MainActor.run {
@@ -508,6 +616,68 @@ struct FileAttachmentBubbleView: View {
         }
     }
 
+    private func openOrDownloadVideo(_ file: FileMessageContent.FileEntry) {
+        if let url = downloadedURLs[file.mediaId] {
+            videoPlayerURL = url
+            return
+        }
+        guard !downloading.contains(file.mediaId) else { return }
+        downloading.insert(file.mediaId)
+
+        Task {
+            do {
+                let url = try await downloadFile(file)
+                await MainActor.run {
+                    downloadedURLs[file.mediaId] = url
+                    downloading.remove(file.mediaId)
+                    videoPlayerURL = url
+                }
+                // Generate thumbnail in background after download
+                await generateVideoThumbnail(for: file.mediaId, url: url)
+            } catch {
+                await MainActor.run {
+                    downloading.remove(file.mediaId)
+                    Log.error("❌ Video download failed: \(error)", category: "FileAttachment")
+                }
+            }
+        }
+    }
+
+    /// Shared download helper — saves decrypted data to a stable temp file.
+    private func downloadFile(_ file: FileMessageContent.FileEntry) async throws -> URL {
+        let data = try await MediaManager.shared.downloadAndDecryptFile(
+            mediaId: file.mediaId,
+            mediaUrl: file.mediaUrl,
+            mediaKeyBase64: file.mediaKey,
+            compressed: file.compressed
+        )
+        let tmpURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(file.filename)
+        try data.write(to: tmpURL)
+        return tmpURL
+    }
+
+    #if canImport(UIKit)
+    private func generateVideoThumbnail(for mediaId: String, url: URL) async {
+        let asset = AVURLAsset(url: url)
+        let gen = AVAssetImageGenerator(asset: asset)
+        gen.appliesPreferredTrackTransform = true
+        gen.maximumSize = CGSize(width: 600, height: 600)
+        do {
+            let (cgImage, _) = try await gen.image(at: .zero)
+            let thumb = UIImage(cgImage: cgImage)
+            await MainActor.run { videoThumbnails[mediaId] = thumb }
+        } catch {
+            Log.debug("⚠️ Video thumbnail failed: \(error)", category: "FileAttachment")
+        }
+    }
+    #endif
+
+    private func isVideoFile(_ filename: String) -> Bool {
+        let ext = (filename as NSString).pathExtension.lowercased()
+        return ["mp4", "mov", "m4v", "avi", "mkv"].contains(ext)
+    }
+
     private func iconName(for filename: String) -> String {
         let ext = (filename as NSString).pathExtension.lowercased()
         switch ext {
@@ -516,13 +686,35 @@ struct FileAttachmentBubbleView: View {
         case "txt": return "doc.plaintext"
         case "zip", "gz", "tar", "7z": return "archivebox"
         case "mp3", "aac", "m4a", "wav": return "music.note"
-        case "mp4", "mov": return "video"
+        case "mp4", "mov", "m4v": return "video"
         case "xlsx", "xls": return "tablecells"
         case "docx", "doc": return "doc.richtext"
         default: return "doc"
         }
     }
 }
+
+// MARK: - Video Player Support
+
+private struct VideoPlayerItem: Identifiable {
+    let id = UUID()
+    let url: URL
+}
+
+#if canImport(UIKit)
+private struct VideoPlayerView: UIViewControllerRepresentable {
+    let url: URL
+
+    func makeUIViewController(context: Context) -> AVPlayerViewController {
+        let vc = AVPlayerViewController()
+        vc.player = AVPlayer(url: url)
+        vc.player?.play()
+        return vc
+    }
+
+    func updateUIViewController(_ uiViewController: AVPlayerViewController, context: Context) {}
+}
+#endif
 
 // MARK: - Profile Share Bubble View
 struct ProfileShareBubbleView: View {
@@ -534,8 +726,8 @@ struct ProfileShareBubbleView: View {
                 // Avatar placeholder or image
                 if let avatarData = profileData.avatarData,
                    let imageData = Data(base64Encoded: avatarData),
-                   let uiImage = UIImage(data: imageData) {
-                    Image(uiImage: uiImage)
+                   let uiImage = PlatformImage(data: imageData) {
+                    Image(platformImage: uiImage)
                         .resizable()
                         .scaledToFill()
                         .frame(width: 60, height: 60)
@@ -556,7 +748,7 @@ struct ProfileShareBubbleView: View {
                         .font(.headline)
                         .foregroundColor(.primary)
                     
-                    Text("Shared profile")
+                    Text(LocalizedStringKey("shared_profile"))
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -577,216 +769,290 @@ struct MediaMessageView: View {
     let isSelected: Bool
     let onTapFullScreen: (() -> Void)?
 
-    @State private var thumbnailImage: UIImage?
-    @State private var isLoading = false
-    @State private var loadError: String?
-    @State private var downloadProgress: Double = 0
-
     /// True when this message is a local upload placeholder (not yet sent to server).
     private var isPlaceholder: Bool {
         (mediaContent.media["_placeholder"] as? Bool) == true
     }
+
+    private var itemCount: Int { mediaContent.mediaItems.count }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // Thumbnail — preserves natural aspect ratio, max 250×250
-            if let thumbnail = thumbnailImage {
-                let isUploading = isPlaceholder && message.deliveryStatus == .sending
-                Image(uiImage: thumbnail)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(maxWidth: 250, maxHeight: 250)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .overlay(alignment: .bottom) {
-                        if isUploading {
-                            HStack(spacing: 5) {
-                                ProgressView()
-                                    .scaleEffect(0.75)
-                                    .tint(.white)
-                                Text("Uploading…")
-                                    .font(.caption2.weight(.medium))
-                                    .foregroundColor(.white)
-                            }
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(.black.opacity(0.55))
-                            .clipShape(Capsule())
-                            .padding(.bottom, 8)
-                        }
-                    }
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2)
-                    )
-                    .onTapGesture {
-                        if !isPlaceholder { onTapFullScreen?() }
-                    }
-            } else if isLoading {
-                // ✅ Loading state with progress indicator
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.gray.opacity(0.2))
-                    .frame(width: 200, height: 200)
-                    .overlay {
-                        VStack(spacing: 12) {
-                            ProgressView()
-                                .scaleEffect(1.5)
-                                .tint(Color.blue)
-                            
-                            if downloadProgress > 0 && downloadProgress < 1 {
-                                Text("\(Int(downloadProgress * 100))%")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            } else {
-                                Text("Loading...")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                    }
-            } else if loadError != nil {
-                // ✅ Error state with retry button
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.gray.opacity(0.2))
-                    .frame(width: 200, height: 200)
-                    .overlay {
-                        VStack(spacing: 12) {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                                .font(.system(size: 40))
-                                .foregroundColor(.orange)
-                            
-                            Text("Failed to load")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                            
-                            Button {
-                                loadThumbnail()
-                            } label: {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "arrow.clockwise")
-                                    Text("Retry")
-                                }
-                                .font(.caption)
-                                .foregroundColor(Color.blue)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 6)
-                                .background(Color.blue.opacity(0.1))
-                                .cornerRadius(8)
-                            }
-                        }
-                    }
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2)
-                    )
+        VStack(alignment: .leading, spacing: 6) {
+            if itemCount <= 1 {
+                SingleMediaCell(
+                    mediaContent: mediaContent,
+                    message: message,
+                    itemIndex: 0,
+                    isPlaceholder: isPlaceholder,
+                    isSelected: isSelected,
+                    onTap: { if !isPlaceholder { onTapFullScreen?() } }
+                )
             } else {
-                // Placeholder - initial state
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.gray.opacity(0.2))
-                    .frame(width: 200, height: 200)
-                    .overlay {
-                        Image(systemName: "photo")
-                            .font(.system(size: 40))
-                            .foregroundColor(.gray)
-                    }
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2)
-                    )
+                MediaGridView(
+                    mediaContent: mediaContent,
+                    message: message,
+                    isPlaceholder: isPlaceholder,
+                    isSelected: isSelected,
+                    onTapItem: { _ in if !isPlaceholder { onTapFullScreen?() } }
+                )
             }
-            
-            // Caption if present - displayed below image without bubble
+
             if !mediaContent.caption.isEmpty {
                 Text(mediaContent.caption)
                     .font(.body)
                     .foregroundColor(.primary)
-                    .padding(.top, 4)
+                    .padding(.top, 2)
             }
-        }
-        .onAppear {
-            loadThumbnail()
         }
     }
-    
+}
+
+// MARK: - Single image cell
+
+private struct SingleMediaCell: View {
+    let mediaContent: MediaMessageContent
+    let message: Message
+    let itemIndex: Int
+    let isPlaceholder: Bool
+    let isSelected: Bool
+    let onTap: () -> Void
+
+    @State private var thumbnailImage: PlatformImage?
+    @State private var isLoading = false
+    @State private var loadError: String?
+    @State private var downloadProgress: Double = 0
+
+    private var itemDict: [String: Any] {
+        mediaContent.mediaItems.indices.contains(itemIndex)
+            ? mediaContent.mediaItems[itemIndex]
+            : mediaContent.media
+    }
+
+    var body: some View {
+        Group {
+            if let thumbnail = thumbnailImage {
+                let isUploading = isPlaceholder && message.deliveryStatus == .sending
+                Image(platformImage: thumbnail)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: 260, maxHeight: 320)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .overlay(alignment: .bottom) {
+                        if isUploading { uploadingBadge }
+                    }
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2)
+                    )
+                    .onTapGesture { onTap() }
+            } else if isLoading {
+                loadingPlaceholder
+            } else if loadError != nil {
+                errorPlaceholder
+            } else {
+                emptyPlaceholder
+            }
+        }
+        .onAppear { loadThumbnail() }
+    }
+
+    // MARK: Placeholder views
+
+    private var uploadingBadge: some View {
+        HStack(spacing: 5) {
+            ProgressView().scaleEffect(0.75).tint(.white)
+            Text(LocalizedStringKey("uploading"))
+                .font(.caption2.weight(.medium)).foregroundColor(.white)
+        }
+        .padding(.horizontal, 8).padding(.vertical, 4)
+        .background(.black.opacity(0.55)).clipShape(Capsule())
+        .padding(.bottom, 8)
+    }
+
+    private var loadingPlaceholder: some View {
+        RoundedRectangle(cornerRadius: 12)
+            .fill(Color.gray.opacity(0.2)).frame(width: 200, height: 200)
+            .overlay {
+                VStack(spacing: 12) {
+                    ProgressView().scaleEffect(1.5).tint(Color.blue)
+                    if downloadProgress > 0 && downloadProgress < 1 {
+                        Text("\(Int(downloadProgress * 100))%").font(.caption).foregroundColor(.secondary)
+                    } else {
+                        Text(LocalizedStringKey("loading")).font(.caption).foregroundColor(.secondary)
+                    }
+                }
+            }
+    }
+
+    private var errorPlaceholder: some View {
+        RoundedRectangle(cornerRadius: 12)
+            .fill(Color.gray.opacity(0.2)).frame(width: 200, height: 200)
+            .overlay {
+                VStack(spacing: 12) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 40)).foregroundColor(.orange)
+                    Text(LocalizedStringKey("failed_to_load")).font(.caption).foregroundColor(.secondary)
+                    Button { loadThumbnail() } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "arrow.clockwise")
+                            Text(LocalizedStringKey("retry"))
+                        }
+                        .font(.caption).foregroundColor(.blue)
+                        .padding(.horizontal, 12).padding(.vertical, 6)
+                        .background(Color.blue.opacity(0.1)).cornerRadius(8)
+                    }
+                }
+            }
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2))
+    }
+
+    private var emptyPlaceholder: some View {
+        RoundedRectangle(cornerRadius: 12)
+            .fill(Color.gray.opacity(0.2)).frame(width: 200, height: 200)
+            .overlay { Image(systemName: "photo").font(.system(size: 40)).foregroundColor(.gray) }
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2))
+    }
+
+    // MARK: Load logic
+
     private func loadThumbnail() {
-        // Reset error state
         loadError = nil
-        
-        // For sender: try to load from local storage via MediaManager
         if message.isSentByMe {
-            Log.debug("📱 Loading local media for sent message", category: "MediaMessage")
-            if let thumbnailData = MediaManager.shared.retrieveThumbnail(for: message.id),
-               let image = UIImage(data: thumbnailData) {
-                thumbnailImage = image
-                MediaImageCache.shared.store(image, for: message.id)
-                Log.debug("✅ Loaded local thumbnail", category: "MediaMessage")
+            if let data = MediaManager.shared.retrieveThumbnail(for: message.id, at: itemIndex),
+               let img = PlatformImage(data: data) {
+                thumbnailImage = img
+                MediaImageCache.shared.store(img, for: message.id, at: itemIndex)
                 return
             }
-            Log.debug("⚠️ No local thumbnail found", category: "MediaMessage")
         }
-        
-        // For receiver: download and decrypt media (using camelCase format)
-        Log.debug("📋 Media dict keys: \(Array(mediaContent.media.keys).sorted())", category: "MediaMessage")
-        
-        guard let mediaId = mediaContent.media["mediaId"] as? String,
-              let mediaUrl = mediaContent.media["mediaUrl"] as? String,
-              let mediaKeyBase64 = mediaContent.media["mediaKey"] as? String else {
-            Log.error("❌ Missing media info in message. Available keys: \(mediaContent.media.keys)", category: "MediaMessage")
+        guard let mediaId = itemDict["mediaId"] as? String,
+              let mediaUrl = itemDict["mediaUrl"] as? String,
+              let mediaKeyBase64 = itemDict["mediaKey"] as? String else {
             loadError = "Missing media info"
-            isLoading = false
             return
         }
-        
-        Log.debug("📥 Media info - ID: \(mediaId.prefix(8))..., URL: \(mediaUrl), Key length: \(mediaKeyBase64.count)", category: "MediaMessage")
-        
         isLoading = true
         downloadProgress = 0.1
-        
         Task {
             do {
-                Log.info("📥 Downloading media: \(mediaId)", category: "MediaMessage")
-                
-                // Download and decrypt via MediaManager
                 let imageData = try await MediaManager.shared.downloadAndDecryptMedia(
-                    mediaId: mediaId,
-                    mediaUrl: mediaUrl,
-                    mediaKeyBase64: mediaKeyBase64
-                )
-                
-                await MainActor.run {
-                    downloadProgress = 0.9
-                }
-                
-                guard let image = UIImage(data: imageData) else {
-                    Log.error("❌ Failed to decode image data", category: "MediaMessage")
-                    await MainActor.run {
-                        isLoading = false
-                        loadError = "Invalid image data"
-                        downloadProgress = 0
-                    }
+                    mediaId: mediaId, mediaUrl: mediaUrl, mediaKeyBase64: mediaKeyBase64)
+                await MainActor.run { downloadProgress = 0.9 }
+                guard let image = PlatformImage(data: imageData) else {
+                    await MainActor.run { isLoading = false; loadError = "Invalid image data"; downloadProgress = 0 }
                     return
                 }
-                
-                // Generate thumbnail via MediaManager
-                let thumbnail = MediaManager.shared.generateThumbnailImage(from: image, maxSize: 250)
-                
+                let thumbnail = MediaManager.shared.generateThumbnailImage(from: image, maxSize: 320)
                 await MainActor.run {
-                    MediaImageCache.shared.store(image, for: message.id)
+                    MediaImageCache.shared.store(image, for: message.id, at: itemIndex)
                     thumbnailImage = thumbnail
                     isLoading = false
                     downloadProgress = 1.0
-                    Log.info("✅ Media loaded successfully", category: "MediaMessage")
                 }
-                
             } catch {
-                Log.error("❌ Failed to load media: \(error)", category: "MediaMessage")
-                Log.error("   Error type: \(type(of: error))", category: "MediaMessage")
-                if let mediaError = error as? MediaManagerError {
-                    Log.error("   MediaManagerError: \(mediaError)", category: "MediaMessage")
-                }
-                await MainActor.run {
-                    isLoading = false
-                    loadError = error.localizedDescription
-                    downloadProgress = 0
-                }
+                await MainActor.run { isLoading = false; loadError = error.localizedDescription; downloadProgress = 0 }
+            }
+        }
+    }
+}
+
+// MARK: - Multi-image grid (2+ photos)
+
+private struct MediaGridView: View {
+    let mediaContent: MediaMessageContent
+    let message: Message
+    let isPlaceholder: Bool
+    let isSelected: Bool
+    let onTapItem: (Int) -> Void
+
+    private let gridSize: CGFloat = 120
+    private let spacing: CGFloat = 3
+    private let maxVisible = 4
+
+    private var itemCount: Int { mediaContent.mediaItems.count }
+    private var visibleCount: Int { min(itemCount, maxVisible) }
+
+    var body: some View {
+        let columns = [GridItem(.fixed(gridSize), spacing: spacing),
+                       GridItem(.fixed(gridSize), spacing: spacing)]
+        LazyVGrid(columns: columns, spacing: spacing) {
+            ForEach(0..<visibleCount, id: \.self) { index in
+                GridCell(
+                    mediaContent: mediaContent,
+                    message: message,
+                    itemIndex: index,
+                    isPlaceholder: isPlaceholder,
+                    extraCount: index == maxVisible - 1 ? max(0, itemCount - maxVisible) : 0,
+                    onTap: { onTapItem(index) }
+                )
+                .frame(width: gridSize, height: gridSize)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+        }
+        .frame(width: gridSize * 2 + spacing)
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2))
+    }
+}
+
+private struct GridCell: View {
+    let mediaContent: MediaMessageContent
+    let message: Message
+    let itemIndex: Int
+    let isPlaceholder: Bool
+    let extraCount: Int
+    let onTap: () -> Void
+
+    @State private var thumbnailImage: PlatformImage?
+
+    private var itemDict: [String: Any] {
+        mediaContent.mediaItems.indices.contains(itemIndex) ? mediaContent.mediaItems[itemIndex] : [:]
+    }
+
+    var body: some View {
+        ZStack {
+            if let img = thumbnailImage {
+                Image(platformImage: img).resizable().scaledToFill()
+            } else {
+                Color.gray.opacity(0.2)
+                Image(systemName: "photo").foregroundColor(.gray)
+            }
+
+            if extraCount > 0 {
+                Color.black.opacity(0.5)
+                Text("+\(extraCount)")
+                    .font(.title2.weight(.semibold)).foregroundColor(.white)
+            }
+
+            if isPlaceholder && message.deliveryStatus == .sending {
+                Color.black.opacity(0.3)
+                ProgressView().tint(.white)
+            }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture { if !isPlaceholder { onTap() } }
+        .onAppear { loadThumbnail() }
+    }
+
+    private func loadThumbnail() {
+        if message.isSentByMe {
+            if let data = MediaManager.shared.retrieveThumbnail(for: message.id, at: itemIndex),
+               let img = PlatformImage(data: data) {
+                thumbnailImage = img
+                MediaImageCache.shared.store(img, for: message.id, at: itemIndex)
+                return
+            }
+        }
+        guard let mediaId = itemDict["mediaId"] as? String,
+              let mediaUrl = itemDict["mediaUrl"] as? String,
+              let mediaKeyBase64 = itemDict["mediaKey"] as? String else { return }
+        Task {
+            guard let imageData = try? await MediaManager.shared.downloadAndDecryptMedia(
+                mediaId: mediaId, mediaUrl: mediaUrl, mediaKeyBase64: mediaKeyBase64),
+                  let image = PlatformImage(data: imageData) else { return }
+            let thumb = MediaManager.shared.generateThumbnailImage(from: image, maxSize: 200)
+            await MainActor.run {
+                MediaImageCache.shared.store(image, for: message.id, at: itemIndex)
+                thumbnailImage = thumb
             }
         }
     }

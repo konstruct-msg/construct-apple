@@ -1,7 +1,7 @@
 import Foundation
 import GRPCCore
 
-/// Injects Bearer token and x-user-id into gRPC metadata for every RPC call.
+/// Injects Bearer token, x-user-id, and x-device-id into gRPC metadata for every RPC call.
 /// Skips auth for unauthenticated RPCs (challenge, register, authenticate).
 
 struct AuthInterceptor: ClientInterceptor {
@@ -26,8 +26,11 @@ struct AuthInterceptor: ClientInterceptor {
         var request = request
 
         if !Self.unauthenticatedMethods.contains(methodName) {
-            let (token, userId, isValid) = await MainActor.run {
-                (SessionManager.shared.sessionToken, SessionManager.shared.currentUserId, SessionManager.shared.isSessionValid)
+            let (token, userId, deviceId, isValid) = await MainActor.run {
+                (SessionManager.shared.sessionToken,
+                 SessionManager.shared.currentUserId,
+                 SessionManager.shared.currentDeviceId,
+                 SessionManager.shared.isSessionValid)
             }
             guard let token, isValid else {
                 throw RPCError(code: .unauthenticated, message: "Session token expired — please log in")
@@ -35,6 +38,9 @@ struct AuthInterceptor: ClientInterceptor {
             request.metadata.addString("Bearer \(token)", forKey: "authorization")
             if let userId {
                 request.metadata.addString(userId, forKey: "x-user-id")
+            }
+            if let deviceId {
+                request.metadata.addString(deviceId, forKey: "x-device-id")
             }
         }
 

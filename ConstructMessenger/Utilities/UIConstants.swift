@@ -283,6 +283,140 @@ extension View {
     }
 }
 
+// MARK: - Construct Visual Language — Design Tokens
+//
+// Implements the Construct design concept: dark-first, engineering aesthetic.
+// Use these tokens everywhere instead of hardcoded hex values.
+
+extension Color {
+
+    /// Construct background palette
+    struct Construct {
+        // Backgrounds
+        static let bg      = Color(hex: 0x0a0a0b)   // main background
+        static let bg2     = Color(hex: 0x111113)   // sidebar, panels
+        static let bg3     = Color(hex: 0x171719)   // cards, incoming bubbles
+
+        // Borders & dividers
+        static let dim     = Color(hex: 0x2a2a2d)   // separators, borders
+        static let line    = Color(hex: 0x1e1e22)   // thin separators
+
+        // Text
+        static let text        = Color(hex: 0xc8c4b8)  // main text (warm white)
+        static let textDim     = Color(hex: 0x5a5855)  // metadata, timestamps
+        static let textBright  = Color(hex: 0xe8e4d8)  // headings, important
+
+        // Accent — one, orange-red
+        static let accent      = Color(hex: 0xe8521a)
+        static let accentDim   = Color(hex: 0xc73d0a)  // hover state
+
+        // Status — green = "system OK"
+        static let green       = Color(hex: 0x3d8a4a)
+        static let greenDim    = Color(hex: 0x1a3d20)  // badge background
+    }
+}
+
+extension Color {
+    /// Initialise from a 24-bit RGB hex literal, e.g. `Color(hex: 0xff5500)`.
+    init(hex: UInt32) {
+        self.init(
+            red:   Double((hex >> 16) & 0xff) / 255,
+            green: Double((hex >>  8) & 0xff) / 255,
+            blue:  Double( hex        & 0xff) / 255
+        )
+    }
+}
+
+// MARK: - Construct Typography
+
+/// Font helpers for the Construct visual language.
+/// Falls back to system monospaced/sans when custom fonts aren't loaded.
+struct ConstructFont {
+    /// Monospace — timestamps, fingerprints, status labels, crypto badges.
+    /// Target: JetBrains Mono (supports Cyrillic). Fallback: system monospaced.
+    static func mono(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
+        if let _ = fontExists("JetBrainsMono-Regular") {
+            let name: String
+            switch weight {
+            case .medium:  name = "JetBrainsMono-Medium"
+            case .bold:    name = "JetBrainsMono-Bold"
+            default:       name = "JetBrainsMono-Regular"
+            }
+            return .custom(name, size: size)
+        }
+        return .system(size: size, weight: weight, design: .monospaced)
+    }
+
+    /// Display — contact names, headers, buttons.
+    /// Target: Exo 2 (supports Cyrillic, geometric character). Fallback: system rounded.
+    static func display(_ size: CGFloat, weight: Font.Weight = .medium) -> Font {
+        if let _ = fontExists("Exo2-Medium") {
+            let name: String
+            switch weight {
+            case .semibold: name = "Exo2-SemiBold"
+            case .bold:     name = "Exo2-Bold"
+            case .light:    name = "Exo2-Light"
+            default:        name = "Exo2-Medium"
+            }
+            return .custom(name, size: size)
+        }
+        return .system(size: size, weight: weight, design: .rounded)
+    }
+
+    private static func fontExists(_ name: String) -> String? {
+        #if canImport(UIKit)
+        return UIFont(name: name, size: 12) != nil ? name : nil
+        #else
+        return NSFont(name: name, size: 12) != nil ? name : nil
+        #endif
+    }
+}
+
+// MARK: - Construct Geometry
+
+struct ConstructGeometry {
+    /// Message bubble clip — incoming: cut top-left, outgoing: cut top-right.
+    enum BubbleCut { case topLeft, topRight }
+
+    static func bubblePath(in rect: CGRect, cut: BubbleCut, cutSize: CGFloat = 8) -> Path {
+        var path = Path()
+        let (w, h) = (rect.width, rect.height)
+        switch cut {
+        case .topLeft:
+            // Cut top-left corner
+            path.move(to: CGPoint(x: cutSize, y: 0))
+            path.addLine(to: CGPoint(x: w, y: 0))
+            path.addLine(to: CGPoint(x: w, y: h))
+            path.addLine(to: CGPoint(x: 0, y: h))
+            path.addLine(to: CGPoint(x: 0, y: cutSize))
+        case .topRight:
+            // Cut top-right corner
+            path.move(to: CGPoint(x: 0, y: 0))
+            path.addLine(to: CGPoint(x: w - cutSize, y: 0))
+            path.addLine(to: CGPoint(x: w, y: cutSize))
+            path.addLine(to: CGPoint(x: w, y: h))
+            path.addLine(to: CGPoint(x: 0, y: h))
+        }
+        path.closeSubpath()
+        return path
+    }
+}
+
+/// SwiftUI Shape wrappers for message bubbles.
+struct IncomingBubbleShape: Shape {
+    var cutSize: CGFloat = 8
+    func path(in rect: CGRect) -> Path {
+        ConstructGeometry.bubblePath(in: rect, cut: .topLeft, cutSize: cutSize)
+    }
+}
+
+struct OutgoingBubbleShape: Shape {
+    var cutSize: CGFloat = 8
+    func path(in rect: CGRect) -> Path {
+        ConstructGeometry.bubblePath(in: rect, cut: .topRight, cutSize: cutSize)
+    }
+}
+
 // MARK: - QR Code Constants
 
 struct QRCodeSize {

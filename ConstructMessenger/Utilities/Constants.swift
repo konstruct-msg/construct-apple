@@ -34,10 +34,15 @@ struct AvatarStyle {
     static let bubbleSize: CGFloat = 60
     static let accountSize: CGFloat = 100
 
-    /// iOS superellipse (squircle) shape — same proportions as iOS App Icons.
-    static func squircle(_ size: CGFloat) -> RoundedRectangle {
-        RoundedRectangle(cornerRadius: size * 0.225, style: .continuous)
+    /// Current avatar clip shape. Change here to update all avatars app-wide.
+    /// Future: swap to HexagonShape() when the visual language is ready.
+    static func avatarShape(_ size: CGFloat = 0) -> Circle {
+        Circle()
     }
+
+    /// Legacy alias — kept so existing call sites compile without changes.
+    @available(*, deprecated, renamed: "avatarShape")
+    static func squircle(_ size: CGFloat) -> Circle { avatarShape(size) }
 }
 
 // MARK: - Server Configuration

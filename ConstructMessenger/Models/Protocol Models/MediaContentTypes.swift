@@ -12,7 +12,14 @@ import Foundation
 
 struct MediaMessageContent {
     let caption: String
-    let media: [String: Any]
+    let media: [String: Any]      // first item — kept for backward compat with single-image callers
+    let mediaItems: [[String: Any]]  // all items (1 or more)
+
+    init(caption: String, mediaItems: [[String: Any]]) {
+        self.caption = caption
+        self.mediaItems = mediaItems
+        self.media = mediaItems.first ?? [:]
+    }
 }
 
 /// Parses a message's `decryptedContent` string into `MediaMessageContent`.
@@ -23,13 +30,13 @@ func parseMediaContent(from content: String?) -> MediaMessageContent? {
           let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
           let type = json["type"] as? String,
           type == "media",
-          let mediaArray = json["media"] as? [[String: Any]] else {
+          let mediaArray = json["media"] as? [[String: Any]],
+          !mediaArray.isEmpty else {
         return nil
     }
-    let firstMedia = mediaArray.first ?? [:]
     return MediaMessageContent(
         caption: json["caption"] as? String ?? "",
-        media: firstMedia
+        mediaItems: mediaArray
     )
 }
 

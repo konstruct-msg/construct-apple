@@ -16,6 +16,7 @@ import CoreGraphics
 #endif
 import CryptoKit
 import UniformTypeIdentifiers
+import GRPCCore
 
 /// Unified manager for all media operations
 @MainActor
@@ -144,21 +145,13 @@ class MediaManager {
     func uploadImage(_ image: PlatformImage, for recipientId: String) async throws -> MediaMessageData {
         Log.info("📤 Uploading image for recipient: \(recipientId)", category: "MediaManager")
         
-        // Optimize before upload (resize + compress + strip metadata)
         let optimized = try MediaOptimizer.optimizeImage(image)
         
-        // Upload optimized data
-        let uploadResult = try await MediaServiceClient.shared.uploadData(
-                optimized.data,
-                mimeType: optimized.metadata.mimeType
-            )
+        // Upload with 1 automatic retry on stream failure
+        let uploadResult = try await Self.uploadWithRetry(data: optimized.data, mimeType: optimized.metadata.mimeType)
         Log.info("✅ Image uploaded: \(uploadResult.mediaId)", category: "MediaManager")
         
-        // ✅ Use raw base64 key - entire message will be encrypted via Double Ratchet
-        // No need for double encryption of the media key
         let mediaKeyBase64 = uploadResult.encryptionKey.base64EncodedString()
-        
-        // Extract image dimensions
         let width = optimized.metadata.width
         let height = optimized.metadata.height
         let thumbnailBase64 = optimized.thumbnail?.base64EncodedString()
@@ -177,6 +170,17 @@ class MediaManager {
             filename: nil,
             compressed: false
         )
+    }
+
+    /// Uploads data with one automatic retry on transient gRPC stream failures.
+    private static func uploadWithRetry(data: Data, mimeType: String) async throws -> MediaServiceClient.UploadedMedia {
+        do {
+            return try await MediaServiceClient.shared.uploadData(data, mimeType: mimeType)
+        } catch let error as GRPCCore.RPCError where error.code == .unavailable {
+            Log.info("🔄 Upload stream dropped — retrying once (code=\(error.code))", category: "MediaManager")
+            try await Task.sleep(nanoseconds: 1_500_000_000) // 1.5s backoff
+            return try await MediaServiceClient.shared.uploadData(data, mimeType: mimeType)
+        }
     }
 
     /// Upload a file (document, PDF, etc.) for a chat message.
@@ -479,21 +483,41 @@ class MediaManager {
     /// - Parameters:
     ///   - thumbnailData: Thumbnail image data
     ///   - messageId: Message ID to associate with
-    func storeThumbnail(_ thumbnailData: Data, for messageId: String) {
-        UserDefaults.standard.set(thumbnailData, forKey: "message_thumbnail_\(messageId)")
-        Log.debug("💾 Stored thumbnail for message: \(messageId)", category: "MediaManager")
+    func storeThumbnail(_ thumbnailData: Data, for messageId: String, at index: Int = 0) {
+        UserDefaults.standard.set(thumbnailData, forKey: "message_thumbnail_\(messageId)_\(index)")
+        // Keep legacy key for index 0 — backward compat with existing thumbnails
+        if index == 0 {
+            UserDefaults.standard.set(thumbnailData, forKey: "message_thumbnail_\(messageId)")
+        }
+        Log.debug("💾 Stored thumbnail[\(index)] for message: \(messageId)", category: "MediaManager")
     }
     
     /// Retrieve stored thumbnail for message
     /// - Parameter messageId: Message ID
     /// - Returns: Thumbnail data if exists
+    func retrieveThumbnail(for messageId: String, at index: Int = 0) -> Data? {
+        // Try indexed key first
+        if let data = UserDefaults.standard.data(forKey: "message_thumbnail_\(messageId)_\(index)") {
+            return data
+        }
+        // Fall back to legacy unindexed key for index 0
+        if index == 0 {
+            return UserDefaults.standard.data(forKey: "message_thumbnail_\(messageId)")
+        }
+        return nil
+    }
+
     func retrieveThumbnail(for messageId: String) -> Data? {
-        return UserDefaults.standard.data(forKey: "message_thumbnail_\(messageId)")
+        retrieveThumbnail(for: messageId, at: 0)
     }
     
     /// Remove stored thumbnail for message
     /// - Parameter messageId: Message ID
     func removeThumbnail(for messageId: String) {
+        // Remove indexed keys (up to 10) + legacy key
+        for i in 0..<10 {
+            UserDefaults.standard.removeObject(forKey: "message_thumbnail_\(messageId)_\(i)")
+        }
         UserDefaults.standard.removeObject(forKey: "message_thumbnail_\(messageId)")
     }
 }

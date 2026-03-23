@@ -47,6 +47,7 @@
 "status_encrypting" = "Шифрование...";
 "chat" = "Чат";
 "encrypted" = "Зашифровано";
+"message_unavailable" = "Сообщение недоступно";
 "reply" = "Ответить";
 "copy" = "Копировать";
 "info" = "Информация";
@@ -297,6 +298,7 @@
 "username_unavailable" = "Имя пользователя уже занято.";
 "username_check_failed" = "Не удалось проверить имя пользователя. Попробуйте ещё раз.";
 "new_messages" = "Новые сообщения";
+"scroll_to_bottom" = "К последнему";
 
 // Network Settings
 "last_contact" = "Последний контакт";
@@ -455,10 +457,13 @@
 
 // ICE — маскировка трафика
 "ice_section_header" = "Противодействие блокировкам";
-"ice_title" = "ICE";
-"ice_subtitle" = "Обфусцированное соединение";
-"ice_footer" = "ICE маскирует трафик мессенджера, делая его неотличимым от обычного HTTPS. Конфигурация предоставляется сервером автоматически.";
+"ice_title" = "Лёд";
+"ice_subtitle" = "Максировка соединения";
+"ice_footer" = "Лёд защищает трафик, делая его неотличимым от обычного HTTPS. Конфигурация предоставляется сервером автоматически.";
+"ice_retry" = "Повторить подключение";
 "ice_unavailable" = "Недоступно на этом сервере";
+"traffic_protection" = "Защита трафика";
+"ice_footer_short" = "Лёд маскирует трафик под обычный HTTPS. Конфигурация предоставляется автоматически.";
 
 // Data & Storage
 "data_and_storage" = "Данные и память";
@@ -501,3 +506,111 @@
 "photo" = "Фото";
 "video" = "Видео";
 "file_attachment" = "Файл";
+
+// MARK: - Attachments
+"attach" = "Прикрепить";
+"camera" = "Камера";
+"files" = "Файлы";
+"photos" = "Фото";
+"drop_to_attach" = "Перетащите для прикрепления";
+
+// MARK: - Message States
+"uploading" = "Загрузка…";
+"loading" = "Загрузка...";
+"failed_to_load" = "Не удалось загрузить";
+"shared_profile" = "Профиль отправлен";
+
+// MARK: - Drafts
+"save_draft" = "Сохранить черновик";
+"drafts" = "Черновики";
+"drafts_stored_locally" = "Черновики хранятся локально на этом устройстве.";
+
+// MARK: - QR Code
+"code_expired" = "Код устарел";
+"generate_new_code" = "Создать новый код";
+"expires_in" = "Истекает через %@";
+
+// MARK: - Settings & Diagnostics
+"diagnostics" = "Диагностика";
+"construct_logs" = "Журнал Construct";
+"exported_log_archive" = "Архив журнала";
+"diagnostics_and_logs" = "Диагностика и журналы";
+"tls" = "TLS";
+"build_debug" = "Отладка";
+"build_release" = "Релиз";
+"reset_to_default" = "Сбросить до стандартного";
+"interval" = "Интервал";
+"preview" = "Предпросмотр";
+
+// MARK: - Device Linking
+"onboarding_link_device" = "Привязать существующий аккаунт";
+"device_link_scan_title" = "Сканировать для привязки";
+"device_link_scan_instructions" = "Откройте существующее устройство → Настройки → Устройства → Привязать новое устройство, затем отсканируйте QR-код.";
+"device_link_linking" = "Привязка устройства…";
+"device_link_success" = "Устройство успешно привязано";
+"device_link_qr_title" = "Привязать новое устройство";
+"device_link_qr_instructions" = "На новом устройстве выберите «Привязать существующий аккаунт» при входе и отсканируйте этот код.";
+"device_link_expires_in" = "Истекает через %@";
+"device_link_expired" = "Код устарел — нажмите для обновления";
+"device_link_refresh" = "Создать новый код";
+"device_link_confirm" = "Привязать устройство";
+"device_link_token_placeholder" = "Вставьте токен привязки…";
+"device_link_macos_instructions" = "На существующем устройстве откройте Настройки → Устройства → Привязать новое устройство, затем вставьте отображаемый токен.";
+"device_link_confirm_title" = "Привязать устройство?";
+"device_revoke" = "Удалить устройство";
+"device_revoke_confirm_title" = "Удалить устройство";
+"device_revoke_confirm" = "Это устройство будет удалено из вашего аккаунта.";
+"device_last_seen" = "Последний раз: %@";
+"device_current" = "Это устройство";
+"linked_devices" = "Привязанные устройства";
+"linked_devices_hint" = "Отсканируйте QR-код на новом устройстве при первом входе, чтобы привязать его к аккаунту.";
+"link_new_device" = "Привязать новое устройство";
+
+// MARK: - Device Join Request (Desktop onboarding)
+"device_link_request_title" = "Привязать к существующему аккаунту";
+"device_link_request_instruction" = "Отсканируйте с iPhone";
+"device_link_request_steps" = "Откройте Construct на iPhone → Настройки → Устройства → нажмите «Привязать новое устройство» — или просто отсканируйте этот код, если Construct уже открыт.";
+"device_link_waiting_approval" = "Ожидание подтверждения на iPhone…";
+"device_link_scan_on_phone" = "Отсканируйте этот код через Construct на iPhone";
+"device_link_request_timeout" = "Время ожидания истекло — попробуйте снова";
+"device_link_feature_unavailable" = "Функция требует обновления сервера. Попробуйте позже.";
+"device_link_invalid_qr" = "Неверный QR-код — убедитесь, что сканируете код Construct.";
+"device_link_approve_title" = "Привязать «%@» к аккаунту?";
+"device_link_approve_title_fallback" = "Привязать новое устройство к аккаунту?";
+"device_link_approve" = "Привязать устройство";
+"device_link_approve_message" = "Это устройство получит полный доступ к вашему аккаунту Construct.";
+"device_link_approved_title" = "Устройство привязано";
+"device_link_approved_message" = "Устройство успешно привязано к вашему аккаунту.";
+
+// MARK: - Session Management
+"session_management" = "Управление сессиями";
+"sign_out_this_device" = "Выйти с этого устройства";
+"sign_out_this_device_message" = "Вы выйдете только с этого устройства. Другие привязанные устройства останутся активными.";
+"sign_out_all_devices" = "Выйти со всех устройств";
+"sign_out_all_devices_message" = "Вы выйдете ОДНОВРЕМЕННО со всех устройств. Используйте, если устройство было утеряно или скомпрометировано.";
+"sign_out_all_hint" = "Выход со всех устройств немедленно аннулирует все сессии. Потребуется повторная аутентификация на каждом устройстве.";
+"sign_out" = "Выйти";
+"device_scan_to_approve" = "Сканировать для одобрения";
+"device_revoke_confirm_message" = "Удалённо выйти с устройства «%@»? Оно будет отключено от вашего аккаунта.";
+
+// MARK: - Flood guard & Lockdown
+"flood_alert_body" = "Отправил %d сообщений за короткое время. Уведомления приостановлены.";
+"flood_banner_title" = "Слишком много сообщений";
+"flood_banner_subtitle" = "Уведомления от этого контакта приостановлены. Просмотрите и решите.";
+"lockdown_mode" = "Режим защиты";
+"lockdown_active_since" = "Активен с %@";
+"lockdown_mode_hint" = "Только контакты добавленные до активации получают уведомления. Новые отправители сохраняются без уведомлений — вы можете просмотреть их в любой момент.";
+"allow" = "Разрешить";
+
+// MARK: - Image Crop
+"crop_use_photo" = "Выбрать фото";
+
+// MARK: - Synaps
+"synaps" = "Синапсы";
+"synaps_search_prompt" = "Поиск";
+"synaps_empty_title" = "Пока нет связей";
+"synaps_empty_subtitle" = "Люди с которыми вы общаетесь будут здесь, даже если вы удалили переписку.";
+"synaps_open_chat" = "Открыть чат";
+"synaps_prune_title" = "Отрезать синапс?";
+"synaps_prune_action" = "Отрезать";
+"synaps_prune_message" = "Это навсегда удалит %@ из ваших синапсов и удалит переписку.";

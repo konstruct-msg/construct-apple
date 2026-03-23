@@ -40,6 +40,11 @@ class SessionManager {
         return nil
     }
 
+    // ✅ Get deviceId from Keychain (stable for lifetime of the Keychain)
+    var currentDeviceId: String? {
+        KeychainManager.shared.loadDeviceID()
+    }
+
     // ✅ Get session expiration timestamp
     var sessionExpires: Date? {
         guard let timestamp = UserDefaults.standard.object(forKey: UserDefaultsKey.sessionExpires.key) as? TimeInterval else {

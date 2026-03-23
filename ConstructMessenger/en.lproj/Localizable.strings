@@ -47,6 +47,7 @@
 "status_encrypting" = "Encrypting...";
 "chat" = "Chat";
 "encrypted" = "Encrypted";
+"message_unavailable" = "Message not available";
 "reply" = "Reply";
 "copy" = "Copy";
 "info" = "Info";
@@ -327,6 +328,7 @@
 "username_unavailable" = "Username is already taken.";
 "username_check_failed" = "Could not verify username right now. Try again.";
 "new_messages" = "New Messages";
+"scroll_to_bottom" = "Back to Latest";
 
 // Network Settings
 "last_contact" = "Last contact";
@@ -457,6 +459,9 @@
 "ice_subtitle" = "Obfuscated connection";
 "ice_footer" = "ICE masks your traffic to make it indistinguishable from regular HTTPS. The configuration is provided automatically by the server.";
 "ice_unavailable" = "Not available on this server";
+"ice_retry" = "Retry ICE connection";
+"traffic_protection" = "Traffic Protection";
+"ice_footer_short" = "ICE masks traffic as standard HTTPS. Configuration is provided automatically.";
 
 // Data & Storage
 "data_and_storage" = "Data & Storage";
@@ -499,3 +504,111 @@
 "photo" = "Photo";
 "video" = "Video";
 "file_attachment" = "File";
+
+// MARK: - Attachments
+"attach" = "Attach";
+"camera" = "Camera";
+"files" = "Files";
+"photos" = "Photos";
+"drop_to_attach" = "Drop to attach";
+
+// MARK: - Message States
+"uploading" = "Uploading…";
+"loading" = "Loading...";
+"failed_to_load" = "Failed to load";
+"shared_profile" = "Shared profile";
+
+// MARK: - Drafts
+"save_draft" = "Save Draft";
+"drafts" = "Drafts";
+"drafts_stored_locally" = "Drafts are stored locally on this device.";
+
+// MARK: - QR Code
+"code_expired" = "Code expired";
+"generate_new_code" = "Generate New Code";
+"expires_in" = "Expires in %@";
+
+// MARK: - Settings & Diagnostics
+"diagnostics" = "Diagnostics";
+"construct_logs" = "Construct Logs";
+"exported_log_archive" = "Exported log archive";
+"diagnostics_and_logs" = "Diagnostics & Logs";
+"tls" = "TLS";
+"build_debug" = "Debug";
+"build_release" = "Release";
+"reset_to_default" = "Reset to default";
+"interval" = "Interval";
+"preview" = "Preview";
+
+// MARK: - Device Linking
+"onboarding_link_device" = "Link Existing Account";
+"device_link_scan_title" = "Scan to Link";
+"device_link_scan_instructions" = "Open your existing device → Settings → Linked Devices → Link New Device, then scan the QR code.";
+"device_link_linking" = "Linking device…";
+"device_link_success" = "Device linked successfully";
+"device_link_qr_title" = "Link New Device";
+"device_link_qr_instructions" = "On your new device, choose 'Link Existing Account' during onboarding and scan this code.";
+"device_link_expires_in" = "Expires in %@";
+"device_link_expired" = "Code expired — tap to refresh";
+"device_link_refresh" = "Generate New Code";
+"device_link_confirm" = "Link Device";
+"device_link_token_placeholder" = "Paste link token…";
+"device_link_macos_instructions" = "On your existing device, open Settings → Linked Devices → Link New Device, then paste the token shown on screen.";
+"device_link_confirm_title" = "Link this device?";
+"device_revoke" = "Remove Device";
+"device_revoke_confirm_title" = "Remove Device";
+"device_revoke_confirm" = "This device will be removed from your account.";
+"device_last_seen" = "Last seen %@";
+"device_current" = "This device";
+"linked_devices" = "Linked Devices";
+"linked_devices_hint" = "Scan the QR code on a new device during onboarding to link it to your account.";
+"link_new_device" = "Link New Device";
+
+// MARK: - Device Join Request (Desktop onboarding)
+"device_link_request_title" = "Link to Existing Account";
+"device_link_request_instruction" = "Scan with your iPhone";
+"device_link_request_steps" = "Open Construct on your iPhone → Settings → Linked Devices → tap 'Link New Device' — or just scan this code if you have Construct open.";
+"device_link_waiting_approval" = "Waiting for approval on your iPhone…";
+"device_link_scan_on_phone" = "Scan this code with Construct on your iPhone";
+"device_link_request_timeout" = "Link request timed out — please try again";
+"device_link_feature_unavailable" = "This feature requires a server update. Please try again later.";
+"device_link_invalid_qr" = "Invalid QR code — make sure you are scanning a Construct link code.";
+"device_link_approve_title" = "Link \"%@\" to your account?";
+"device_link_approve_title_fallback" = "Link new device to your account?";
+"device_link_approve" = "Link Device";
+"device_link_approve_message" = "This device will have full access to your Construct account.";
+"device_link_approved_title" = "Device Linked";
+"device_link_approved_message" = "The device has been linked to your account successfully.";
+
+// MARK: - Session Management
+"session_management" = "Session Management";
+"sign_out_this_device" = "Sign Out This Device";
+"sign_out_this_device_message" = "You will be signed out on this device only. Other linked devices remain active.";
+"sign_out_all_devices" = "Sign Out All Devices";
+"sign_out_all_devices_message" = "You will be signed out on ALL devices simultaneously. Use this if a device was lost or compromised.";
+"sign_out_all_hint" = "Signing out of all devices invalidates all sessions immediately. You will need to re-authenticate on every device.";
+"sign_out" = "Sign Out";
+"device_scan_to_approve" = "Scan to Approve New Device";
+"device_revoke_confirm_message" = "Sign out \"%@\" remotely? This device will be disconnected from your account.";
+
+// MARK: - Flood guard & Lockdown
+"flood_alert_body" = "Sent %d messages in a short time. Notifications suppressed.";
+"flood_banner_title" = "Too many messages";
+"flood_banner_subtitle" = "Notifications from this contact are paused. Review and decide.";
+"lockdown_mode" = "Lockdown Mode";
+"lockdown_active_since" = "Active since %@";
+"lockdown_mode_hint" = "Only contacts added before activation receive notifications. New senders are silently saved — you can review them anytime.";
+"allow" = "Allow";
+
+// MARK: - Image Crop
+"crop_use_photo" = "Use Photo";
+
+// MARK: - Synaps
+"synaps" = "Synaps";
+"synaps_search_prompt" = "Search";
+"synaps_empty_title" = "No connections yet";
+"synaps_empty_subtitle" = "People you connect with will appear here, even after you clear a conversation.";
+"synaps_open_chat" = "Open Chat";
+"synaps_prune_title" = "Cut this synapse?";
+"synaps_prune_action" = "Cut";
+"synaps_prune_message" = "This will permanently remove %@ from your Synaps and delete the conversation.";

@@ -89,6 +89,9 @@ class MessageRouter {
         Log.debug("   content (padded): \(message.content.count) chars", category: "MessageRouter")
         Log.debug("   content preview: \(message.content.prefix(32))...", category: "MessageRouter")
         Log.debug("   isEndSession: \(message.isEndSession)", category: "MessageRouter")
+        if !message.editsMessageId.isEmpty {
+            Log.debug("   editsMessageId: \(message.editsMessageId)", category: "MessageRouter")
+        }
         #endif
         
         // 1. Skip if already processed — applies to ALL messages including END_SESSION.
@@ -99,7 +102,17 @@ class MessageRouter {
             return
         }
 
-        // 2. Check if this is an END_SESSION control message
+        // 2. SENDER_SYNC — copy of own outgoing message from another device.
+        //    Route separately: decrypt with per-device session, save as outgoing in the
+        //    conversation with the original partner (extracted from conversationId).
+        if message.isSenderSync {
+            PersistentACKStore.shared.markProcessed(message.id, senderId: message.from, in: context)
+            handleSenderSync(message, in: context)
+            onReceiptNeeded?([message.id], message.from, .delivered)
+            return
+        }
+
+        // 3. Check if this is an END_SESSION control message
         if message.isEndSession {
             PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
             Log.info("🛑 Received END_SESSION from \(otherUserId)", category: "MessageRouter")
@@ -291,6 +304,11 @@ class MessageRouter {
             case "NotifyNewMessage":
                 break // Notification triggered by saveMessage inside handleResolvedMessage
 
+            case "PersistMessage":
+                // ACK store persistence — Swift already calls PersistentACKStore.markProcessed
+                // in handleResolvedMessage, so this Rust action is a no-op here.
+                break
+
             case "NotifyError":
                 let code = dict["code"] as? String ?? "unknown"
                 let msg = dict["message"] as? String ?? ""
@@ -366,6 +384,15 @@ class MessageRouter {
         chat: Chat,
         in context: NSManagedObjectContext
     ) {
+        // Silently discard session establishment pings received on the normal message path.
+        // These are sent after a tie-break win to trigger RESPONDER init on the peer.
+        if decryptedContent.hasPrefix("__session_ping") && decryptedContent.hasSuffix("__") {
+            Log.info("🏓 SESSION_STATE[ping_received_normal_path]: discarding session ping", category: "MessageRouter")
+            PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
+            onReceiptNeeded?([message.id], otherUserId, .delivered)
+            return
+        }
+
         // 4. Check for special message types (profile sharing, etc.)
         if let specialMessageHandled = handleSpecialMessage(
             decryptedContent,
@@ -469,6 +496,8 @@ class MessageRouter {
         newUser.isSharingWithMe = false
         newUser.isBlocked = false
         newUser.amISharingWith = false
+        newUser.isContact = true
+        newUser.addedAt = Date()
         
         Log.debug("Created new user: id=\(userId)", category: "MessageRouter")
         return newUser
@@ -501,10 +530,12 @@ class MessageRouter {
         if message.messageNumber > 0 && isFirstForUser {
             Log.info("⚠️ No session for \(userId.prefix(8)) but messageNumber=\(message.messageNumber) — requesting END_SESSION so sender restarts", category: "MessageRouter")
             // Mark as processed + send failed receipt so server removes it from pending queue.
-            // Without this the same message is re-fetched on every reconnect, inserting a
-            // duplicate system message each time.
             PersistentACKStore.shared.markProcessed(message.id, senderId: userId, in: context)
             onReceiptNeeded?([message.id], userId, .failed)
+            // Initialize the pending queue so subsequent out-of-sync messages from the same
+            // user don't each spawn a new system message (isFirstForUser would stay true
+            // otherwise since we return early without ever adding to pendingMessages).
+            pendingMessages[userId] = []
             addSystemMessage(
                 "Encrypted session out of sync. Asking contact to restart...",
                 toUserId: userId,
@@ -564,7 +595,16 @@ class MessageRouter {
             Log.error("❌ Failed to decrypt incoming message \(message.id)", category: "MessageRouter")
             Log.error("🔐 SESSION_STATE[decrypt_failed]: userId=\(userId.prefix(8))..., messageId=\(message.id.prefix(8))..., messageNumber=\(message.messageNumber)", category: "SessionInit")
 
-            if SessionHealingService.shared.canHeal(message) {
+            // A genuine X3DH re-init must have at least one of:
+            //   kemCiphertext.count > 0  → PQXDH (Kyber ciphertext is included)
+            //   oneTimePreKeyId > 0      → classic X3DH with a one-time prekey
+            // msgNum=0 alone is insufficient: it also occurs at DR ratchet epoch boundaries
+            // (new DH ratchet step resets the sending chain counter to 0). Attempting
+            // initReceivingSession in that case derives a completely wrong root key and
+            // deepens the divergence. When neither signal is present we fall through to
+            // heal_impossible, which sends END_SESSION and forces a clean re-handshake.
+            let isLikelyX3DHInit = message.kemCiphertext.count > 0 || message.oneTimePreKeyId > 0
+            if SessionHealingService.shared.canHeal(message) && isLikelyX3DHInit {
                 // messageNumber == 0 → X3DH re-init from sender (classic or PQXDH).
                 // Session was already archived by decryptMessage (reason: decryptionFailed).
                 //
@@ -599,10 +639,11 @@ class MessageRouter {
                     onSessionHealNeeded?(userId, message)
                 }
             } else {
-                // messageNumber > 0 → DR ratchet diverged, healing is impossible.
+                // DR ratchet diverged (messageNumber > 0), OR msgNum=0 with no X3DH init signals
+                // (kemCiphertext=0 + oneTimePreKeyId=0 → ambiguous, treated as diverged DR epoch).
                 // Send FAILED receipt: server automatically relays SESSION_RESET to sender (server-side item 12).
                 // Also send explicit END_SESSION message for defense-in-depth (sender handles both idempotently).
-                Log.info("🔄 SESSION_STATE[heal_impossible]: messageNumber=\(message.messageNumber) — ratchet diverged, requesting END_SESSION", category: "SessionInit")
+                Log.info("🔄 SESSION_STATE[heal_impossible]: messageNumber=\(message.messageNumber), kemCt=\(message.kemCiphertext.count)b, otpkId=\(message.oneTimePreKeyId) — ratchet diverged, requesting END_SESSION", category: "SessionInit")
                 onReceiptNeeded?([message.id], userId, .failed)
                 pendingMessages.removeValue(forKey: userId)
                 SessionHealingService.shared.clearQueue(for: userId, in: context)
@@ -804,20 +845,204 @@ class MessageRouter {
         message.deliveryStatus = .delivered
         message.retryCount = 0
         message.chat = chat
+
+        // Restore reply-to context so the receiver sees the same reply bubble as the sender.
+        if !messageData.replyToMessageId.isEmpty {
+            message.replyToMessageId = messageData.replyToMessageId
+            // Look up the replied-to message locally to populate the preview snippet.
+            let replyFetch = Message.fetchRequest()
+            replyFetch.predicate = NSPredicate(format: "id == %@", messageData.replyToMessageId)
+            replyFetch.fetchLimit = 1
+            if let replyMsg = (try? context.fetch(replyFetch))?.first {
+                message.replyToContent = replyMsg.decryptedContent
+            }
+        }
         
         do {
             try context.save()
-            // Show a local notification if the app is in the background
-            // (server only sends silent content-available pushes; we must notify manually)
-            DispatchQueue.main.async {
-                #if canImport(UIKit)
-                if UIApplication.shared.applicationState != .active {
-                    LocalNotificationManager.shared.showNewMessageNotification()
+
+            let senderId = messageData.from
+
+            // ── Incoming flood check ────────────────────────────────────────────
+            let floodResult = IncomingFloodGuard.shared.check(senderId: senderId)
+
+            // ── Lockdown check ──────────────────────────────────────────────────
+            let lockdownSuppressed = LockdownManager.shared.shouldSuppress(senderId: senderId)
+
+            // Decide whether to show notification
+            let chatId    = chat.id
+            let isMuted   = chat.isMuted
+            let senderName = (chat.otherUser?.displayName.trimmingCharacters(in: .whitespacesAndNewlines))
+                                .flatMap { $0.isEmpty ? nil : $0 }
+                            ?? chat.otherUser?.username
+                            ?? "Unknown"
+            let preview   = Chat.formatPreviewText(decryptedContent)
+
+            switch floodResult {
+            case .burstDetected(let count):
+                // First burst event — post a single special system notification instead
+                // of the regular message preview. Subsequent messages are silently dropped
+                // from notifications until the user reviews.
+                Log.info("🚨 Burst detected: \(count) msgs/30s from \(senderId.prefix(8))…", category: "FloodGuard")
+                if !isMuted {
+                    InAppNotificationService.shared.handleFloodAlert(
+                        chatId: chatId,
+                        senderName: senderName,
+                        messageCount: count
+                    )
                 }
-                #endif
+
+            case .alreadySuppressed:
+                // Silently save; no notification
+                Log.debug("🔇 Suppressed notification from flooder \(senderId.prefix(8))…", category: "FloodGuard")
+
+            case .normal:
+                if lockdownSuppressed {
+                    Log.debug("🔒 Lockdown: suppressed notification from new sender \(senderId.prefix(8))…", category: "LockdownManager")
+                } else if !isMuted {
+                    InAppNotificationService.shared.handle(
+                        chatId: chatId,
+                        isMuted: false,
+                        senderName: senderName,
+                        preview: preview
+                    )
+                }
             }
         } catch {
             Log.error("❌ Failed to save message: \(error)", category: "MessageRouter")
+        }
+    }
+
+    // MARK: - SENDER_SYNC Handling
+
+    /// Handle an incoming SENDER_SYNC message — a copy of an outgoing message sent by
+    /// the user's own other device. Decrypts using the per-device session and saves
+    /// the message as an outgoing bubble in the correct conversation.
+    private func handleSenderSync(_ message: ChatMessage, in context: NSManagedObjectContext) {
+        guard let currentUserId = SessionManager.shared.currentUserId else { return }
+
+        let partnerUserId = extractPartnerUserId(from: message.conversationId, myUserId: currentUserId)
+        guard !partnerUserId.isEmpty else {
+            Log.error("❌ SENDER_SYNC: cannot extract partner from conversationId='\(message.conversationId)'", category: "MessageRouter")
+            return
+        }
+
+        let contactId = message.senderDeviceId.isEmpty
+            ? message.from
+            : MultiDeviceSendCoordinator.sessionKey(userId: message.from, deviceId: message.senderDeviceId)
+
+        let hasSession = CryptoManager.shared.hasSession(for: contactId)
+
+        if hasSession {
+            guard let decrypted = try? CryptoManager.shared.decryptMessage(message, contactIdOverride: contactId) else {
+                Log.error("❌ SENDER_SYNC: decryption failed for contactId=\(contactId.prefix(20))…", category: "MessageRouter")
+                return
+            }
+            saveSenderSyncMessage(decrypted, original: message, partnerUserId: partnerUserId, in: context)
+        } else if message.messageNumber == 0 {
+            // New device: init receiving session async, then save
+            guard !message.senderDeviceId.isEmpty else {
+                Log.error("❌ SENDER_SYNC: no senderDeviceId for first message — cannot init session", category: "MessageRouter")
+                return
+            }
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                await self.initAndDecryptSenderSync(
+                    message: message,
+                    contactId: contactId,
+                    partnerUserId: partnerUserId,
+                    in: context
+                )
+            }
+        } else {
+            Log.error("❌ SENDER_SYNC: no session for \(contactId.prefix(20))… and messageNumber=\(message.messageNumber) > 0 — dropping", category: "MessageRouter")
+        }
+    }
+
+    /// Extract the OTHER user's ID from a direct conversation ID.
+    /// Format: "direct:{sorted_user1}:{sorted_user2}"
+    private func extractPartnerUserId(from conversationId: String, myUserId: String) -> String {
+        let parts = conversationId.split(separator: ":", maxSplits: 2, omittingEmptySubsequences: false)
+        guard parts.count == 3, parts[0] == "direct" else { return "" }
+        let a = String(parts[1]), b = String(parts[2])
+        if a == myUserId { return b }
+        if b == myUserId { return a }
+        return ""
+    }
+
+    /// Save a decrypted SENDER_SYNC message as an outgoing bubble.
+    private func saveSenderSyncMessage(
+        _ decrypted: String,
+        original: ChatMessage,
+        partnerUserId: String,
+        in context: NSManagedObjectContext
+    ) {
+        let (chat, _) = findOrCreateChat(for: partnerUserId, in: context)
+
+        let fetch = Message.fetchRequest()
+        fetch.predicate = NSPredicate(format: "id == %@", original.id)
+        fetch.fetchLimit = 1
+        if (try? context.fetch(fetch))?.first != nil {
+            return // already saved (duplicate delivery)
+        }
+
+        let msg = Message(context: context)
+        msg.id = original.id
+        msg.fromUserId = original.from
+        msg.toUserId = partnerUserId
+        msg.encryptedContent = original.content
+        msg.decryptedContent = decrypted
+        msg.timestamp = Date(timeIntervalSince1970: TimeInterval(original.timestamp))
+        msg.isSentByMe = true
+        msg.deliveryStatus = .sent
+        msg.retryCount = 0
+        msg.chat = chat
+
+        chat.lastMessageText = Chat.formatPreviewText(decrypted)
+        chat.lastMessageTime = msg.timestamp
+        context.saveAndLog()
+
+        if !original.senderDeviceId.isEmpty {
+            CryptoManager.shared.saveSessionToKeychainPublic(
+                for: MultiDeviceSendCoordinator.sessionKey(userId: original.from, deviceId: original.senderDeviceId)
+            )
+        }
+        Log.info("✅ SENDER_SYNC: saved outgoing message in conversation with \(partnerUserId.prefix(8))…", category: "MessageRouter")
+    }
+
+    /// Async helper: fetch sender device bundle, init receiving session, then save.
+    private func initAndDecryptSenderSync(
+        message: ChatMessage,
+        contactId: String,
+        partnerUserId: String,
+        in context: NSManagedObjectContext
+    ) async {
+        do {
+            let bundle = try await KeyServiceClient.shared.getPreKeyBundle(
+                userId: message.from,
+                deviceId: message.senderDeviceId
+            )
+            let bundleWithSuite = (
+                identityPublic: bundle.identityPublic,
+                signedPrekeyPublic: bundle.signedPrekeyPublic,
+                signature: bundle.signature,
+                verifyingKey: bundle.verifyingKey,
+                suiteId: "1"
+            )
+            let decrypted = try CryptoManager.shared.initReceivingSession(
+                for: contactId,
+                recipientBundle: bundleWithSuite,
+                firstMessage: message
+            )
+            saveSenderSyncMessage(decrypted, original: message, partnerUserId: partnerUserId, in: context)
+
+            // Replenish any OTPKs consumed during this session init
+            Task {
+                let deviceId = KeychainManager.shared.loadDeviceID() ?? ""
+                await OtpkReplenishmentService.replenishIfNeeded(deviceId: deviceId)
+            }
+        } catch {
+            Log.error("❌ SENDER_SYNC: initReceivingSession failed for \(contactId.prefix(20))…: \(error)", category: "MessageRouter")
         }
     }
 }

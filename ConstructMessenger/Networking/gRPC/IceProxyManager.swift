@@ -147,11 +147,20 @@ final class IceProxyManager: ObservableObject {
     @Published private(set) var proxyPort: UInt16 = 0
     @Published private(set) var activeRelay: IceRelay?
     @Published private(set) var lastError: String?
+    /// True while ICE is in cooldown after a relay failure. Drives the UI directly —
+    /// changes to this property cause the Network settings view to re-render.
+    @Published private(set) var isOnCooldown: Bool = false
+
+    private var cooldownTask: Task<Void, Never>?
 
     // MARK: - Persistence keys
 
     private let enabledKey = "ice_enabled"
     private let relayKey   = "iceActiveRelay"
+
+    /// Prevents duplicate concurrent on-demand start attempts (e.g. when several
+    /// RPC calls all fail at the same moment and each tries to start ICE).
+    private var isStartingOnDemand = false
 
     /// Whether the user has enabled ICE obfuscation. Persists across launches.
     var isEnabled: Bool {
@@ -166,13 +175,39 @@ final class IceProxyManager: ObservableObject {
         guard isRunning, let relay = activeRelay else {
             return .iceConnecting
         }
-        if GRPCChannelManager.shared.isICEOnCooldown {
+        if isOnCooldown {
             return .iceCooldown
         }
         if relay.tlsServerName != nil {
             return .icePrimary(host: relay.address)
         }
         return .iceRelay(address: relay.address)
+    }
+
+    // MARK: - Cooldown management
+
+    /// Enter cooldown mode: UI switches to "ICE recovering", then auto-clears after `duration` seconds.
+    /// Called by GRPCChannelManager when a relay failure is detected.
+    func enterCooldown(duration: TimeInterval) {
+        guard !isOnCooldown else { return }
+        isOnCooldown = true
+        Log.info("🧊 ICE cooldown started (\(Int(duration))s) — routing via direct gRPC", category: "ICE")
+        cooldownTask?.cancel()
+        cooldownTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(duration))
+            guard !Task.isCancelled else { return }
+            self?.isOnCooldown = false
+            Log.info("🧊 ICE cooldown expired — ICE routing resumes on next connection", category: "ICE")
+        }
+    }
+
+    /// Manually clear the cooldown (e.g. user taps "Retry ICE" in settings).
+    func clearCooldown() {
+        cooldownTask?.cancel()
+        cooldownTask = nil
+        isOnCooldown = false
+        UserDefaults.standard.removeObject(forKey: GRPCChannelManager.iceFailedAtKey)
+        Log.info("🧊 ICE cooldown cleared by user", category: "ICE")
     }
 
     /// Whether a bridge cert is available (from Keychain or hardcoded fallback).
@@ -291,7 +326,7 @@ final class IceProxyManager: ObservableObject {
     /// Start the ICE proxy trying the primary TLS endpoint first, then each relay (plain obfs4).
     ///
     /// Connection order:
-    ///   1. Primary: `ice.<grpcHost>:443` (TLS + obfs4)
+    ///   1. Primary: `ice.<grpcHost>:443` (TLS + obfs4) — tried twice before relay fallback
     ///   2. Relay 1…N from `cachedRelayAddresses()` — plain obfs4, no TLS wrapper
     ///
     /// Returns `true` if any endpoint started successfully.
@@ -300,11 +335,23 @@ final class IceProxyManager: ObservableObject {
         let host = GRPCChannelManager.shared.currentHost
         let iceHost = "ice.\(host)"
         let primary = IceRelay(address: "\(iceHost):443", bridgeCert: cert, iatMode: .none, tlsServerName: iceHost)
+
+        // Attempt 1 — immediate
         if start(relay: primary) != nil {
             saveRelay(primary)
             Log.info("🧊 ICE started via primary: \(iceHost):443", category: "ICE")
             return true
         }
+
+        // Attempt 2 — one retry after a brief pause (network may be settling after background)
+        Log.debug("🧊 ICE primary attempt 1 failed — retrying in 600 ms", category: "ICE")
+        Thread.sleep(forTimeInterval: 0.6)
+        if start(relay: primary) != nil {
+            saveRelay(primary)
+            Log.info("🧊 ICE started via primary (retry): \(iceHost):443", category: "ICE")
+            return true
+        }
+
         Log.info("🧊 ICE primary failed — trying relay endpoints", category: "ICE")
 
         for relayAddress in cachedRelayAddresses() {
@@ -330,6 +377,15 @@ final class IceProxyManager: ObservableObject {
     func startIfEnabled() async {
         guard isEnabled else { return }
 
+        // Restore cooldown state from previous session (persisted in UserDefaults by GRPCChannelManager).
+        let stored = UserDefaults.standard.double(forKey: "iceRelayLastFailedAt")
+        if stored > 0 {
+            let remaining = GRPCChannelManager.iceCooldownDuration - (Date().timeIntervalSinceReferenceDate - stored)
+            if remaining > 0 {
+                enterCooldown(duration: remaining)
+            }
+        }
+
         let cert = await getIceBridgeCert()
         if startWithRelayFallback(cert: cert) {
             // Background: refresh relay list so it's up-to-date for next time.
@@ -353,7 +409,9 @@ final class IceProxyManager: ObservableObject {
     /// If start succeeds, subsequent `performRPC` calls automatically route through ICE until
     /// the proxy is stopped (app restart or user disables ICE in settings).
     func startOnDemandIfNeeded() async {
-        guard !isRunning else { return }
+        guard !isRunning, !isStartingOnDemand else { return }
+        isStartingOnDemand = true
+        defer { isStartingOnDemand = false }
         Log.info("🧊 Auto-starting ICE proxy (DPI auto-detection)", category: "ICE")
         let cert = await getIceBridgeCert()
         if startWithRelayFallback(cert: cert) {
@@ -361,6 +419,71 @@ final class IceProxyManager: ObservableObject {
             Log.info("🧊 ICE auto-started via DPI detection", category: "ICE")
         } else {
             Log.error("🧊 ICE auto-start failed on all endpoints", category: "ICE")
+        }
+    }
+
+    /// Called when `performRPC` gets ECONNREFUSED on 127.0.0.1 — the Rust proxy process died
+    /// while the Swift side still thinks it's running. Force-resets all state and restarts.
+    /// Does NOT enter cooldown (cooldown is for relay/cert failures, not local process death).
+    func restartAfterCrash() async {
+        Log.info("🧊 ICE proxy crashed (ECONNREFUSED on local port) — force-restarting", category: "ICE")
+        // Force-stop even if isRunning=true; the Rust side is dead.
+        ice_proxy_stop()
+        isRunning = false
+        proxyPort = 0
+        activeRelay = nil
+        // Clear any cooldown that was set due to this crash; we want to retry immediately.
+        clearCooldown()
+        isStartingOnDemand = false
+        let cert = await getIceBridgeCert()
+        if startWithRelayFallback(cert: cert) {
+            Task { await IceCertFetcher.shared.fetchAndCacheRelayList() }
+            Log.info("🧊 ICE proxy restarted after crash", category: "ICE")
+        } else {
+            Log.error("🧊 ICE proxy restart failed after crash", category: "ICE")
+        }
+    }
+
+    /// Called when DNS resolution fails on the direct TLS path (VPN intercepting DNS).
+    /// Clears any cooldown and force-restarts the proxy so gRPC can bypass DNS via ICE.
+    /// If the proxy is already running (just on cooldown), skips the restart.
+    func forceStartIgnoringCooldown() async {
+        clearCooldown()
+        if isRunning {
+            // Proxy is alive — clearing cooldown is enough; next makeClient() will use ICE.
+            Log.info("🧊 ICE cooldown force-cleared (VPN DNS failure)", category: "ICE")
+            return
+        }
+        // Proxy not running — start it now.
+        guard !isStartingOnDemand else { return }
+        isStartingOnDemand = true
+        defer { isStartingOnDemand = false }
+        Log.info("🧊 Force-starting ICE proxy (VPN DNS failure)", category: "ICE")
+        let cert = await getIceBridgeCert()
+        if startWithRelayFallback(cert: cert) {
+            Task { await IceCertFetcher.shared.fetchAndCacheRelayList() }
+        } else {
+            Log.error("🧊 ICE force-start failed (VPN DNS failure)", category: "ICE")
+        }
+    }
+
+    /// Called on app foreground to verify the ICE proxy process is actually alive.
+    /// iOS may kill background threads; `isRunning` may be stale. Restarts if dead.
+    func verifyAliveOrRestart() async {
+        guard isRunning else { return }
+        // Ask the Rust side — if it disagrees with our Swift state, the process died in background.
+        if ice_proxy_is_running() == 0 {
+            Log.info("🧊 ICE proxy found dead on foreground — restarting", category: "ICE")
+            // Always call stop() to flush any leftover Rust state even when the proxy died.
+            ice_proxy_stop()
+            isRunning = false
+            proxyPort = 0
+            activeRelay = nil
+            clearCooldown()
+            // Brief pause to let the OS release the socket before we re-bind.
+            try? await Task.sleep(nanoseconds: 200_000_000) // 200 ms
+            let cert = await getIceBridgeCert()
+            startWithRelayFallback(cert: cert)
         }
     }
 

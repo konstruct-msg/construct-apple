@@ -284,8 +284,12 @@ class BackgroundFetchManager: NSObject {
                 return
             }
             
-            // Group messages by chat
+            // Group messages by chat (skip control messages — they are not user-visible)
             for message in messages {
+                guard message.messageType != "CONTROL_MESSAGE" && message.messageType != "SENDER_SYNC" else {
+                    Log.debug("⏭️ Skipping control message \(message.id) (\(message.messageType ?? "nil")) in grouping phase", category: "BackgroundFetch")
+                    continue
+                }
                 let otherUserId = message.from == currentUserId ? message.to : message.from
                 
                 // Find or create chat
@@ -325,7 +329,17 @@ class BackgroundFetchManager: NSObject {
                     if (try? backgroundContext.fetch(messageFetch).first) != nil {
                         continue // Already exists
                     }
-                    
+
+                    // Skip control messages (END_SESSION, SENDER_SYNC): these are session
+                    // management signals, not user-visible messages. Attempting to decrypt
+                    // "END_SESSION" as AEAD ciphertext corrupts the live session — causing
+                    // subsequent messages to show as "Encrypted" in the UI. The real-time
+                    // stream handles all control messages when the app comes to foreground.
+                    if messageData.messageType == "CONTROL_MESSAGE" || messageData.messageType == "SENDER_SYNC" {
+                        Log.debug("⏭️ Skipping control message \(messageData.id) (\(messageData.messageType ?? "nil")) in background fetch", category: "BackgroundFetch")
+                        continue
+                    }
+
                     // Try to decrypt message.
                     // CryptoManager is not thread-safe: all crypto calls must run on MainActor.
                     // Use DispatchQueue.main.sync to serialize with foreground session state.
@@ -346,6 +360,16 @@ class BackgroundFetchManager: NSObject {
                         Log.info("⚠️ No session for user \(otherUserId), message will be decrypted later", category: "BackgroundFetch")
                         // Message will be decrypted when user opens chat and session is initialized
                     }
+
+                    // If decryption succeeded, mark the message as processed in PersistentACKStore.
+                    // This prevents the real-time stream (MessageRouter) from re-processing it when
+                    // it reconnects — which would advance the Double Ratchet a second time and cause
+                    // an AEAD failure, triggering an unnecessary heal loop.
+                    // If decryption FAILED (decryptedContent == nil), we intentionally do NOT mark it
+                    // as processed so the stream can retry with the live session.
+                    if decryptedContent != nil {
+                        PersistentACKStore.shared.markProcessed(messageData.id, senderId: messageData.from, in: backgroundContext)
+                    }
                     
                     // Save message
                     let message = Message(context: backgroundContext)
@@ -365,7 +389,7 @@ class BackgroundFetchManager: NSObject {
 
                     // Update chat's last message
                     if let lastMessage = chatMessages.last {
-                        chat.lastMessageText = Chat.formatPreviewText(decryptedContent ?? "[Encrypted]")
+                        chat.lastMessageText = Chat.formatPreviewText(decryptedContent ?? NSLocalizedString("message_unavailable", comment: ""))
                         chat.lastMessageTime = Date(timeIntervalSince1970: TimeInterval(lastMessage.timestamp))
                     }
                 }
@@ -431,6 +455,8 @@ class BackgroundFetchManager: NSObject {
             newUser.isSharingWithMe = false
             newUser.isBlocked = false
             newUser.amISharingWith = false
+            newUser.isContact = true
+            newUser.addedAt = Date()
             dbUser = newUser
             Log.debug("Created new user in BackgroundFetch: id=\(userId), username will be updated from publicKeyBundle", category: "BackgroundFetch")
         }

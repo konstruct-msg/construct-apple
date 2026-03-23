@@ -18,14 +18,20 @@ import SwiftUI
 struct LinkDetectingText: View {
     let text: String
     let color: Color
+    /// Color applied to tappable links. Defaults to `.blue` on light backgrounds;
+    /// pass a lighter shade (e.g. `.white.opacity(0.85)` + underline) for dark backgrounds.
+    let linkColor: Color
     let deepLinkHandler: DeepLinkHandler?
     
     @Environment(\.openURL) private var openURL
     @State private var tappedURL: URL?
     
-    init(_ text: String, color: Color = .primary, deepLinkHandler: DeepLinkHandler? = nil) {
+    init(_ text: String, color: Color = .primary, linkColor: Color? = nil, deepLinkHandler: DeepLinkHandler? = nil) {
         self.text = text
         self.color = color
+        // If no explicit link color given, derive one: on white/light text use blue; on dark bg use
+        // a high-contrast light color so links remain readable.
+        self.linkColor = linkColor ?? (color == .white ? Color(white: 1.0, opacity: 0.9) : .blue)
         self.deepLinkHandler = deepLinkHandler
     }
     
@@ -106,7 +112,7 @@ struct LinkDetectingText: View {
                    let attributedRange = Range(match.range, in: result) {
                     // Only apply if no link is already set (markdown may have set one)
                     if result[attributedRange].link == nil {
-                        result[attributedRange].foregroundColor = .blue
+                        result[attributedRange].foregroundColor = linkColor
                         result[attributedRange].underlineStyle = .single
                         result[attributedRange].link = url
                     }
@@ -114,10 +120,16 @@ struct LinkDetectingText: View {
             }
         }
 
-        // Set base color for non-link text (preserve markdown-parsed link colors)
-        for run in result.runs where run.link == nil {
+        // Set colors: linkColor for links, base color for plain text.
+        // This also overrides the system-default blue that AttributedString assigns to
+        // markdown-parsed [text](url) links — ensuring links stay readable on dark bubbles.
+        for run in result.runs {
             let rangeInResult = run.range
-            result[rangeInResult].foregroundColor = color
+            if run.link != nil {
+                result[rangeInResult].foregroundColor = linkColor
+            } else {
+                result[rangeInResult].foregroundColor = color
+            }
         }
 
         return result

@@ -170,6 +170,8 @@ class ConnectionStatusManager {
         connectionStatus = .connected
         if old != .connected {
             Log.info("🟢 Stream connected → status: Connected", category: "ConnectionStatus")
+            // Retry any avatars that failed to download while we were offline.
+            AvatarRetryService.shared.retryPendingAvatarsIfNeeded()
         }
     }
 

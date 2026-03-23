@@ -9,6 +9,8 @@ import AppKit
 
 extension Notification.Name {
     /// Posted when the app is about to resign active (go to background).
+    /// NOTE: This fires for many transient events (alerts, Control Center, brief app switches).
+    /// For stream management prefer `appDidEnterBackground` to avoid unnecessary disconnects.
     static var appWillResignActive: Notification.Name {
         #if canImport(UIKit)
         return UIApplication.willResignActiveNotification
@@ -32,6 +34,27 @@ extension Notification.Name {
         return UIApplication.willTerminateNotification
         #else
         return NSApplication.willTerminateNotification
+        #endif
+    }
+
+    /// Posted when the app has fully entered the background (user switched away and the
+    /// system suspended execution).  Use this — not `appWillResignActive` — to pause the
+    /// messaging stream, so brief app-switches (copying a link, opening Control Center,
+    /// system alerts) do NOT kill the connection.
+    static var appDidEnterBackground: Notification.Name {
+        #if canImport(UIKit)
+        return UIApplication.didEnterBackgroundNotification
+        #else
+        return NSApplication.didResignActiveNotification
+        #endif
+    }
+
+    /// Posted just before the app returns to the foreground from the background.
+    static var appWillEnterForeground: Notification.Name {
+        #if canImport(UIKit)
+        return UIApplication.willEnterForegroundNotification
+        #else
+        return NSApplication.willBecomeActiveNotification
         #endif
     }
 }

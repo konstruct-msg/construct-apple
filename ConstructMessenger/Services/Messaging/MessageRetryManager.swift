@@ -114,56 +114,75 @@ class MessageRetryManager {
         context: NSManagedObjectContext
     ) {
         let fetchRequest = Message.fetchRequest()
-        let chatPredicate = NSPredicate(format: "chat == %@ AND deliveryStatusRaw == %d", chat, DeliveryStatus.queued.rawValue)
-        fetchRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [chatPredicate])
+        // Also retry failed messages that haven't exceeded the retry cap (e.g. dropped during ICE startup window)
+        let queuedPredicate = NSPredicate(format: "chat == %@ AND deliveryStatusRaw == %d", chat, DeliveryStatus.queued.rawValue)
+        let retryableFailed = NSPredicate(
+            format: "chat == %@ AND deliveryStatusRaw == %d AND retryCount < %d",
+            chat,
+            DeliveryStatus.failed.rawValue,
+            FeatureFlags.maxMessageRetryAttempts
+        )
+        fetchRequest.predicate = NSCompoundPredicate(orPredicateWithSubpredicates: [queuedPredicate, retryableFailed])
         fetchRequest.sortDescriptors = [NSSortDescriptor(key: "timestamp", ascending: true)]
 
         guard let queuedMessages = try? context.fetch(fetchRequest) else {
             return
         }
 
-        Log.info("📤 Sending \(queuedMessages.count) queued messages", category: "MessageRetryManager")
+        Log.info("📤 Sending \(queuedMessages.count) queued messages (sequential to preserve ratchet state)", category: "MessageRetryManager")
 
-        for message in queuedMessages {
-            // Re-encrypt and send
-            guard let decryptedText = message.decryptedContent else {
-                continue
-            }
-            let capturedId = message.id
+        // Capture IDs and plans before the Task to avoid managed object threading issues
+        let pendingItems: [(id: String, plan: ChunkedMessagePlan)] = queuedMessages.compactMap { message in
+            guard let decryptedText = message.decryptedContent else { return nil }
+            let plan = ChunkedMessageSender.shared.buildPlan(
+                plaintext: decryptedText,
+                messageId: UUID(uuidString: message.id) ?? UUID()
+            )
+            return (id: message.id, plan: plan)
+        }
 
-            let plan = ChunkedMessageSender.shared.buildPlan(plaintext: decryptedText, messageId: UUID(uuidString: message.id) ?? UUID())
-
+        // Mark all as sending synchronously before the async work starts
+        for message in queuedMessages where message.decryptedContent != nil {
             message.deliveryStatus = .sending
             message.retryCount += 1
-            context.saveAndLog()
+            messageQueueManager.markMessageAsSending(message.id)
+        }
+        context.saveAndLog()
 
-            Task {
+        // Send SEQUENTIALLY inside a single Task — Double Ratchet encryption must not run
+        // concurrently for the same recipient to prevent ratchet state divergence and
+        // concurrent Keychain write failures.
+        Task {
+            for item in pendingItems {
                 do {
                     let _ = try await ChunkedMessageSender.shared.sendChunks(
-                        plan: plan,
+                        plan: item.plan,
                         senderId: currentUserId,
                         recipientId: recipientId,
                         conversationId: ConversationId.direct(myUserId: currentUserId, theirUserId: recipientId),
                         timestamp: UInt64(Date().timeIntervalSince1970)
                     )
                     await MainActor.run {
-                        let fr = Message.fetchRequest(); fr.predicate = NSPredicate(format: "id == %@", capturedId); fr.fetchLimit = 1
+                        let fr = Message.fetchRequest()
+                        fr.predicate = NSPredicate(format: "id == %@", item.id)
+                        fr.fetchLimit = 1
                         guard let liveMsg = try? context.fetch(fr).first else { return }
                         liveMsg.deliveryStatus = .sent
                         context.saveAndLog()
-                        Log.debug("📮 Re-sent queued message via gRPC: \(capturedId) (attempt \(liveMsg.retryCount))", category: "MessageRetryManager")
+                        Log.debug("📮 Re-sent queued message via gRPC: \(item.id) (attempt \(liveMsg.retryCount))", category: "MessageRetryManager")
                     }
                 } catch {
                     await MainActor.run {
-                        Log.error("Failed to re-send queued message: \(error)", category: "MessageRetryManager")
-                        let fr = Message.fetchRequest(); fr.predicate = NSPredicate(format: "id == %@", capturedId); fr.fetchLimit = 1
+                        Log.error("Failed to re-send queued message \(item.id): \(error)", category: "MessageRetryManager")
+                        let fr = Message.fetchRequest()
+                        fr.predicate = NSPredicate(format: "id == %@", item.id)
+                        fr.fetchLimit = 1
                         guard let liveMsg = try? context.fetch(fr).first else { return }
                         liveMsg.deliveryStatus = .failed
                         context.saveAndLog()
                     }
                 }
             }
-            messageQueueManager.markMessageAsSending(capturedId)
         }
     }
 }

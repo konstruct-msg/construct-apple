@@ -97,6 +97,7 @@ struct SettingsView: View {
                                 }
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 14)
+                                .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
                         }
@@ -121,10 +122,11 @@ struct SettingsView: View {
 
                         // MARK: - App Settings Section
                         settingsSection {
-                            settingsNavRow(icon: "lock", text: "Security", destination: SecurityView())
+                            settingsNavRow(icon: "lock", text: "security", destination: SecurityView())
                             settingsDivider()
-                            settingsNavRow(icon: "laptopcomputer", text: "Devices", destination: DevicesView())
-                            settingsDivider()
+                            // Devices (multi-device) — hidden until backend is ready
+                            // settingsNavRow(icon: "laptopcomputer", text: "Devices", destination: DevicesView())
+                            // settingsDivider()
                             settingsNavRow(icon: "internaldrive", text: "data_and_storage", destination: DataStorageSettingsView())
                             settingsDivider()
                             settingsNavRow(icon: "paintbrush", text: "appearance", destination: AppearanceSettingsView())
@@ -179,7 +181,7 @@ struct SettingsView: View {
                             }
                             .buttonStyle(.plain)
                             settingsDivider()
-                            settingsNavRow(icon: "folder", text: "Drafts", destination: DraftsView())
+                            settingsNavRow(icon: "folder", text: "drafts", destination: DraftsView())
                         }
 
                         // MARK: - About Section
@@ -199,7 +201,7 @@ struct SettingsView: View {
                         settingsSection(header: "Developer") {
                             NavigationLink(destination: DiagnosticsView()) {
                                 HStack {
-                                    Text("Diagnostics & Logs").foregroundStyle(.orange)
+                                    Text(LocalizedStringKey("diagnostics_and_logs")).foregroundStyle(.orange)
                                     Spacer()
                                     Image(systemName: "chevron.right")
                                         .font(.system(size: 13, weight: .semibold))

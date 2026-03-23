@@ -104,10 +104,21 @@ class ChatScrollManager {
         Log.debug("📜 Scrolled to message: \(messageId)", category: "ChatScrollManager")
     }
     
-    /// Update scroll offset (called from GeometryReader)
-    /// - Parameter offset: Current scroll offset
+    /// Update scroll offset (called from onScrollGeometryChange).
+    /// `offset` ≈ 0 when at the bottom; large negative means scrolled far up.
+    /// Automatically maintains `shouldScrollToBottom` so auto-scroll on new
+    /// messages doesn't fight the user when they deliberately scroll up.
     func updateScrollOffset(_ offset: CGFloat) {
         scrollOffset = offset
+
+        if offset >= -60 {
+            // User is at (or very near) the bottom — re-enable auto-scroll.
+            shouldScrollToBottom = true
+        } else if offset < -160 {
+            // User has scrolled far enough up that they're reading history —
+            // disable auto-scroll so new arrivals don't yank them back down.
+            shouldScrollToBottom = false
+        }
     }
     
     /// Update drag offset for pull-to-refresh

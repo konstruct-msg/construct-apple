@@ -24,8 +24,11 @@ class ChatsViewModel {
     // 🔑 OTPK replenishment: check server count once per app session on stream connect
     private var hasPerformedStartupOtpkCheck = false
 
-    // ✅ Chat ID to open programmatically (e.g., from deep link)
+    // ✅ Chat ID to open programmatically (e.g., from deep link or Synaps)
     var chatToOpen: String?
+
+    // ✅ Selected tab index — used to switch tabs programmatically (e.g., open chat from Synaps)
+    var selectedTab: Int = 0
 
     // ✅ Message stream (gRPC bidirectional)
     private let streamManager = MessageStreamManager.shared
@@ -170,20 +173,38 @@ class ChatsViewModel {
     // MARK: - App Lifecycle
     
     private func setupAppLifecycleObservers() {
-        // Pause stream when app goes to background
-        let resignTask = Task { [weak self] in
-            for await _ in NotificationCenter.default.notifications(named: .appWillResignActive) {
-                Log.info("📱 App going to background - pausing messaging", category: "ChatsViewModel")
+        // Pause stream only when the app fully enters the background.
+        // Using `didEnterBackground` (not `willResignActive`) ensures brief app-switches
+        // — copying a link from Safari, opening Control Center, system alerts — do NOT
+        // tear down the stream and force an expensive reconnect on return.
+        let backgroundTask = Task { [weak self] in
+            for await _ in NotificationCenter.default.notifications(named: .appDidEnterBackground) {
+                Log.info("📱 App entered background — pausing stream", category: "ChatsViewModel")
                 self?.streamManager.pause()
+                // Invalidate the persistent gRPC channel so the next RPC gets a
+                // fresh connection (OS may have closed the TCP socket during suspension).
+                GRPCChannelManager.shared.invalidatePersistentClient()
             }
         }
-        observationTasks.append(resignTask)
-        
-        // Force reconnect when app becomes active
+        observationTasks.append(backgroundTask)
+
+        // On foreground: reconnect only if the stream actually went down.
+        // If the app was only briefly inactive (app-switch, alert) the stream
+        // may still be alive — calling forceReconnect would kill it unnecessarily.
         let activeTask = Task { [weak self] in
             for await _ in NotificationCenter.default.notifications(named: .appDidBecomeActive) {
-                Log.info("📱 App became active — force reconnecting stream", category: "ChatsViewModel")
-                self?.forceReconnectStream()
+                guard let self else { continue }
+                // Verify ICE proxy is still alive — it may have been killed during background suspension.
+                await IceProxyManager.shared.verifyAliveOrRestart()
+
+                if self.streamManager.isConnected {
+                    // Stream survived the switch — no work needed.
+                    Log.info("📱 App became active — stream still alive, skipping reconnect", category: "ChatsViewModel")
+                } else {
+                    // Stream went down (app was truly backgrounded, or the OS killed the socket).
+                    Log.info("📱 App became active — stream is down, reconnecting", category: "ChatsViewModel")
+                    self.forceReconnectStream()
+                }
             }
         }
         observationTasks.append(activeTask)
@@ -195,6 +216,8 @@ class ChatsViewModel {
                 Log.info("🌐 Network interface changed — restarting stream and ICE proxy", category: "ChatsViewModel")
                 // Restart ICE proxy: its relay connection was bound to the old interface.
                 Task { @MainActor in
+                    // First verify (and stop) any stale proxy, then start fresh on the new interface.
+                    await IceProxyManager.shared.verifyAliveOrRestart()
                     await IceProxyManager.shared.startIfEnabled()
                 }
                 self?.forceReconnectStream()
@@ -273,6 +296,9 @@ class ChatsViewModel {
 
                 // Check if SPK rotation is due (runs monthly; no-op otherwise)
                 await PreKeyRotationService.shared.rotateIfNeeded(deviceId: deviceId)
+
+                // Retry any avatar downloads that failed while offline (e.g. during ICE startup)
+                AvatarRetryService.shared.retryPendingAvatarsIfNeeded()
             }
         }
 
@@ -374,6 +400,43 @@ class ChatsViewModel {
 
     func deleteChat(chat: Chat) {
         chatManagementService.deleteChat(chat)
+    }
+
+    /// Fully remove a contact (prune synapse): deletes User, Chat+Messages, session.
+    func pruneContact(userId: String) {
+        chatManagementService.pruneContact(userId: userId)
+        forceReconnectStream()
+    }
+
+    /// Open the existing chat with a User, or create one if none exists yet.
+    func openOrCreateChat(with user: User) {
+        // Switch to Chats tab first
+        selectedTab = 0
+        // If a chat already exists, navigate to it
+        if let existingChat = (user.chats as? Set<Chat>)?.first {
+            chatToOpen = existingChat.id
+            return
+        }
+        // No chat yet — create one (contact already exists, no need for PublicUserInfo)
+        guard let context = viewContext else { return }
+        let chat = Chat(context: context)
+        chat.id = UUID().uuidString
+        chat.otherUser = user
+        chat.lastMessageTime = Date()
+        do {
+            try context.save()
+            chatToOpen = chat.id
+        } catch {
+            Log.error("❌ openOrCreateChat: failed to save: \(error)", category: "ChatsViewModel")
+        }
+    }
+
+    /// Toggle mute for a chat. Muted chats suppress in-app notification banners.
+    func toggleMute(chat: Chat) {
+        guard let context = viewContext else { return }
+        chat.isMuted.toggle()
+        context.saveAndLog()
+        Log.info("🔔 Chat \(chat.id) isMuted=\(chat.isMuted)", category: "ChatsViewModel")
     }
 
     /// Send END_SESSION to peer, then delete the chat locally.

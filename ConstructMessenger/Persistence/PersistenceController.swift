@@ -49,6 +49,40 @@ struct PersistenceController {
 
         container.viewContext.automaticallyMergesChangesFromParent = true
         container.viewContext.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
+
+        migrateExistingContactsToSynaps()
+    }
+
+    /// One-time migration: marks all existing Users who have chats as isContact=true.
+    /// Guarded by a UserDefaults flag so it only runs once after the update.
+    private func migrateExistingContactsToSynaps() {
+        let migrationKey = "synaps_contact_migration_v1"
+        guard !UserDefaults.standard.bool(forKey: migrationKey) else { return }
+
+        let context = container.viewContext
+        let fetch = User.fetchRequest()
+        fetch.predicate = NSPredicate(format: "isContact == NO AND chats.@count > 0")
+
+        guard let users = try? context.fetch(fetch), !users.isEmpty else {
+            UserDefaults.standard.set(true, forKey: migrationKey)
+            return
+        }
+
+        for user in users {
+            user.isContact = true
+            if user.addedAt == nil {
+                let oldestChat = (user.chats as? Set<Chat>)?.compactMap(\.lastMessageTime).min()
+                user.addedAt = oldestChat ?? Date()
+            }
+        }
+
+        do {
+            try context.save()
+            UserDefaults.standard.set(true, forKey: migrationKey)
+            print("✅ Synaps migration: \(users.count) existing contact(s) moved to Synaps")
+        } catch {
+            print("❌ Synaps migration failed: \(error)")
+        }
     }
 
     /// Creates a fresh background context for off-main-thread writes.

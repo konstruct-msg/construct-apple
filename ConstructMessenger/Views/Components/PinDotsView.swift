@@ -37,8 +37,10 @@ struct PinDotsView: View {
 
             // Hidden text field to capture keyboard
             TextField("", text: $pin)
+                #if canImport(UIKit)
                 .keyboardType(.numberPad)
                 .textContentType(.oneTimeCode)
+                #endif
                 .focused($isFocused)
                 .frame(width: 1, height: 1)
                 .opacity(0.01)

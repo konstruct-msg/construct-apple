@@ -8,8 +8,8 @@
 import SwiftUI
 
 struct ImageCropView: View {
-    let image: UIImage
-    let onConfirm: (UIImage) -> Void
+    let image: PlatformImage
+    let onConfirm: (PlatformImage) -> Void
     let onCancel: () -> Void
 
     // Current transform state
@@ -23,7 +23,11 @@ struct ImageCropView: View {
     // Minimum scale — set in fitImageInitially() to the fill scale
     @State private var minScale: CGFloat = 1.0
 
+    #if canImport(UIKit)
     private let cropSize: CGFloat = min(UIScreen.main.bounds.width, UIScreen.main.bounds.height) * 0.82
+    #else
+    private let cropSize: CGFloat = min(NSScreen.main?.frame.width ?? 600, NSScreen.main?.frame.height ?? 600) * 0.82
+    #endif
 
     var body: some View {
         ZStack {
@@ -33,7 +37,7 @@ struct ImageCropView: View {
             GeometryReader { geo in
                 let imageSize = fittedImageSize(in: CGSize(width: cropSize, height: cropSize))
 
-                Image(uiImage: image)
+                Image(platformImage: image)
                     .resizable()
                     .scaledToFit()
                     .frame(width: imageSize.width * scale, height: imageSize.height * scale)
@@ -95,10 +99,18 @@ struct ImageCropView: View {
                     } label: {
                         Text("crop_use_photo")
                             .font(.headline)
+                            #if canImport(UIKit)
                             .foregroundColor(Color(uiColor: .label))
+                            #else
+                            .foregroundColor(Color(nsColor: .labelColor))
+                            #endif
                             .frame(maxWidth: .infinity)
                             .frame(height: 50)
+                            #if canImport(UIKit)
                             .background(Color(uiColor: .systemBackground))
+                            #else
+                            .background(Color(nsColor: .windowBackgroundColor))
+                            #endif
                             .cornerRadius(12)
                     }
                 }
@@ -144,8 +156,8 @@ struct ImageCropView: View {
         )
     }
 
-    /// Render the visible crop square into a UIImage
-    private func cropImage() -> UIImage {
+    /// Render the visible crop square into a PlatformImage
+    private func cropImage() -> PlatformImage {
         let imageSize = fittedImageSize(in: CGSize(width: cropSize, height: cropSize))
         let scaledW = imageSize.width * scale
         let scaledH = imageSize.height * scale
@@ -169,11 +181,17 @@ struct ImageCropView: View {
         let imageBounds = CGRect(origin: .zero, size: image.size)
         let safeCrop = cropRect.intersection(imageBounds)
 
-        guard !safeCrop.isNull,
-              let cgImage = image.cgImage?.cropping(to: safeCrop) else {
-            return image
-        }
+        guard !safeCrop.isNull else { return image }
+
+        #if canImport(UIKit)
+        guard let cgImage = image.cgImage?.cropping(to: safeCrop) else { return image }
         return UIImage(cgImage: cgImage, scale: image.scale, orientation: image.imageOrientation)
+        #else
+        var proposedRect = NSRect(origin: .zero, size: image.size)
+        guard let cgImageRef = image.cgImage(forProposedRect: &proposedRect, context: nil, hints: nil),
+              let cgImage = cgImageRef.cropping(to: safeCrop) else { return image }
+        return NSImage(cgImage: cgImage, size: CGSize(width: cgImage.width, height: cgImage.height))
+        #endif
     }
 }
 
@@ -234,9 +252,11 @@ private extension Comparable {
 }
 
 #Preview {
+    #if canImport(UIKit)
     ImageCropView(
         image: UIImage(systemName: "person.crop.circle.fill")!,
         onConfirm: { _ in },
         onCancel: { }
     )
+    #endif
 }

@@ -30,8 +30,11 @@ struct ChatView: View {
     @State private var galleryStartItem: GalleryStartItem?  // media gallery presenter
 
     // Drop target for drag-and-drop from Finder (macOS) over the whole chat area
-    @State private var chatDropImages: [UIImage] = []
+    @State private var chatDropImages: [PlatformImage] = []
     @State private var isChatDropTargeted = false
+
+    // Flood guard observer — updates when IncomingFloodGuard suppresses this chat's sender
+    @State private var floodGuard = IncomingFloodGuard.shared
     
     // ✅ Swipe-to-dismiss gesture state (not scroll-related)
     @GestureState private var dragState: CGFloat = 0
@@ -51,6 +54,9 @@ struct ChatView: View {
     var body: some View {
         VStack(spacing: 0) {
             // ❌ REMOVED: statusBanner (moved to overlay)
+
+            // Flood-burst banner — shown when this chat's sender is burst-suppressed
+            floodBurstBanner
             
             ScrollViewReader { proxy in
                 ScrollView {
@@ -159,10 +165,13 @@ struct ChatView: View {
                         print("ChatView: messages count changed to \(count)")
                     }
 
-                    // ✅ Auto-scroll when new messages arrive
+                    // Auto-scroll when new messages arrive — only if user is at the bottom.
+                    // `shouldScrollToBottom` is automatically managed by ChatScrollManager
+                    // based on scroll position, so this won't fight the user reading history.
                     if scrollManager.shouldScrollToBottom && !isSearchActive && !viewModel.messages.isEmpty {
-                        // ✅ Longer delay for media messages to render
-                        DispatchQueue.main.asyncAfter(deadline: .now() + ChatViewConstants.MessageDelay.mediaRender) {
+                        let delay = ChatViewConstants.MessageDelay.mediaRender
+                        Task { @MainActor in
+                            try? await Task.sleep(for: .seconds(delay))
                             if let lastMessage = filteredMessages.last {
                                 scrollManager.scrollToBottom(messageId: lastMessage.id)
                             }
@@ -172,7 +181,9 @@ struct ChatView: View {
                 .onChange(of: searchText) { _, newValue in
                     // ✅ Scroll to first search result
                     if !newValue.isEmpty, !filteredMessages.isEmpty, let firstMatch = filteredMessages.first {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + ChatViewConstants.SearchDelay.scrollToResult) {
+                        let delay = ChatViewConstants.SearchDelay.scrollToResult
+                        Task { @MainActor in
+                            try? await Task.sleep(for: .seconds(delay))
                             scrollManager.scrollTo(messageId: firstMatch.id, anchor: .center)
                         }
                     } else if newValue.isEmpty {
@@ -210,7 +221,12 @@ struct ChatView: View {
                 }
                 .onChange(of: viewModel.editingMessage) { _, editMsg in
                     if let editMsg {
-                        messageText = editMsg.decryptedContent ?? ""
+                        // For media messages pre-fill with caption, not the raw JSON payload
+                        if let mc = parseMediaContent(from: editMsg.decryptedContent) {
+                            messageText = mc.caption
+                        } else {
+                            messageText = editMsg.decryptedContent ?? ""
+                        }
                     }
                 }
             }
@@ -219,10 +235,12 @@ struct ChatView: View {
             
             messageInputView
         }
+        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .tabBar)
-        .toolbarBackground(.visible, for: .navigationBar)  // ✅ FIX: Make navbar opaque
-        .toolbarBackground(Color.AppBackground.primary, for: .navigationBar)  // ✅ FIX: Set background color
+        .toolbarBackground(.visible, for: .navigationBar)
+        .toolbarBackground(Color.AppBackground.primary, for: .navigationBar)
+        #endif
         .toolbar(content: toolbarContent)
         .gesture(
             DragGesture(minimumDistance: 10)
@@ -258,7 +276,7 @@ struct ChatView: View {
                     .strokeBorder(Color.accentColor, lineWidth: 3)
                     .background(Color.accentColor.opacity(0.06).clipShape(RoundedRectangle(cornerRadius: 12)))
                     .overlay(
-                        Label("Drop to attach", systemImage: "photo.badge.plus")
+                        Label(LocalizedStringKey("drop_to_attach"), systemImage: "photo.badge.plus")
                             .font(.title3.weight(.semibold))
                             .foregroundColor(.accentColor)
                             .padding(16)
@@ -286,7 +304,9 @@ struct ChatView: View {
         }
         .onAppear {
             markChatAsRead()
+            viewModel.onViewAppear()
         }
+        #if os(iOS)
         .fullScreenCover(item: $galleryStartItem) { item in
             MediaGalleryViewer(
                 messages: mediaMessages,
@@ -297,10 +317,69 @@ struct ChatView: View {
                 )
             )
         }
+        #else
+        .sheet(item: $galleryStartItem) { item in
+            MediaGalleryViewer(
+                messages: mediaMessages,
+                initialMessageId: item.id,
+                isPresented: Binding(
+                    get: { galleryStartItem != nil },
+                    set: { if !$0 { galleryStartItem = nil } }
+                )
+            )
+        }
+        #endif
     }
     
     // MARK: - View Components
-    
+
+    /// Flood-burst warning banner — visible at the top of the chat when the sender
+    /// is suppressed by IncomingFloodGuard.
+    @ViewBuilder
+    private var floodBurstBanner: some View {
+        let senderId = viewModel.chat.otherUser?.id ?? ""
+        if floodGuard.suppressedSenders.contains(senderId) {
+            HStack(spacing: 10) {
+                Image(systemName: "exclamationmark.shield.fill")
+                    .foregroundStyle(.orange)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(LocalizedStringKey("flood_banner_title"))
+                        .font(.footnote.weight(.semibold))
+                    Text(LocalizedStringKey("flood_banner_subtitle"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Button(LocalizedStringKey("allow")) {
+                    IncomingFloodGuard.shared.unsuppress(senderId: senderId)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.mini)
+                .tint(.green)
+
+                Button(LocalizedStringKey("block")) {
+                    // Delegate to existing block flow
+                    if let user = viewModel.chat.otherUser {
+                        user.isBlocked = true
+                        try? user.managedObjectContext?.save()
+                    }
+                    IncomingFloodGuard.shared.unsuppress(senderId: senderId)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.mini)
+                .tint(.red)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(Color.orange.opacity(0.08))
+            .overlay(Rectangle().frame(height: 1).foregroundStyle(.orange.opacity(0.3)), alignment: .bottom)
+            .transition(.move(edge: .top).combined(with: .opacity))
+        }
+    }
+
     @ViewBuilder
     private var deleteButtonBar: some View {
         if isEditMode && !selectedMessages.isEmpty {
@@ -320,7 +399,7 @@ struct ChatView: View {
                     .foregroundColor(.secondary)
             }
             .padding()
-            .background(Color(.systemGray6))
+            .background(Color.secondary.opacity(0.12))
         }
     }
     
@@ -351,8 +430,10 @@ struct ChatView: View {
                     // ✅ Enable auto-scroll for new message
                     scrollManager.shouldScrollToBottom = true
 
-                    // ✅ FIX: Scroll to bottom after sending (longer delay for media)
-                    DispatchQueue.main.asyncAfter(deadline: .now() + ChatViewConstants.MessageDelay.scrollAfterSend) {
+                    // Scroll to bottom after sending (longer delay for media)
+                    let sendDelay = ChatViewConstants.MessageDelay.scrollAfterSend
+                    Task { @MainActor in
+                        try? await Task.sleep(for: .seconds(sendDelay))
                         if let lastMessage = filteredMessages.last {
                             scrollManager.scrollToBottom(messageId: lastMessage.id)
                         }
@@ -383,7 +464,9 @@ struct ChatView: View {
                     HStack(spacing: 6) {
                         Image(systemName: "arrow.down.circle.fill")
                             .font(.system(size: 16, weight: .semibold))
-                        Text(NSLocalizedString("new_messages", comment: "Scroll to new messages"))
+                        Text(viewModel.chat.unreadCount > 0
+                             ? NSLocalizedString("new_messages", comment: "New messages below")
+                             : NSLocalizedString("scroll_to_bottom", comment: "Scroll back to latest messages"))
                             .font(.system(size: 14, weight: .medium))
                     }
                     .foregroundColor(Color.AppBackground.primary)
@@ -416,7 +499,7 @@ struct ChatView: View {
                 showingUserProfile = true
             } label: {
                 VStack(spacing: 1) {
-                    Text(viewModel.chat.otherUser?.displayName ?? NSLocalizedString("chat", comment: "Default chat title"))
+                    Text(viewModel.chat.otherUser?.resolvedDisplayName ?? NSLocalizedString("chat", comment: "Default chat title"))
                         .font(.headline)
                         .foregroundColor(.primary)
                     if let subtitle = navigationStatusSubtitle {
@@ -432,7 +515,7 @@ struct ChatView: View {
 
         // Split into separate ToolbarItems to avoid NSToolbarItemGroup selectionMode warnings on macOS
         if !isEditMode {
-            ToolbarItem(placement: .navigationBarTrailing) {
+            ToolbarItem(placement: .automatic) {
                 Button {
                     withAnimation {
                         isSearchActive.toggle()
@@ -443,7 +526,7 @@ struct ChatView: View {
                 }
             }
         } else {
-            ToolbarItem(placement: .navigationBarTrailing) {
+            ToolbarItem(placement: .automatic) {
                 Button {
                     withAnimation {
                         isSearchActive.toggle()
@@ -453,7 +536,7 @@ struct ChatView: View {
                     Image(systemName: isSearchActive ? "xmark.circle.fill" : "magnifyingglass")
                 }
             }
-            ToolbarItem(placement: .navigationBarTrailing) {
+            ToolbarItem(placement: .automatic) {
                 Button {
                     withAnimation {
                         isEditMode = false
@@ -488,9 +571,11 @@ struct ChatView: View {
                 HStack(spacing: 12) {
                     TextField("search_messages", text: $searchText)
                         .textFieldStyle(.roundedBorder)
+                        #if os(iOS)
                         .autocapitalization(.none)
-                        .autocorrectionDisabled()
                         .submitLabel(.search)
+                        #endif
+                        .autocorrectionDisabled()
                     Button {
                         withAnimation {
                             isSearchActive = false
@@ -566,7 +651,11 @@ struct ChatView: View {
     
     /// Hide keyboard
     private func hideKeyboard() {
+        #if canImport(UIKit)
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        #else
+        NSApp.keyWindow?.makeFirstResponder(nil)
+        #endif
     }
 
     // MARK: - Drag & Drop (macOS)
@@ -576,7 +665,7 @@ struct ChatView: View {
         for provider in providers {
             if provider.hasItemConformingToTypeIdentifier(UTType.image.identifier) {
                 provider.loadDataRepresentation(forTypeIdentifier: UTType.image.identifier) { data, _ in
-                    guard let data, let image = UIImage(data: data) else { return }
+                    guard let data, let image = PlatformImage(data: data) else { return }
                     DispatchQueue.main.async { chatDropImages.append(image) }
                 }
                 handled = true
@@ -587,7 +676,7 @@ struct ChatView: View {
                           url.startAccessingSecurityScopedResource() else { return }
                     defer { url.stopAccessingSecurityScopedResource() }
                     guard let imgData = try? Data(contentsOf: url),
-                          let image = UIImage(data: imgData) else { return }
+                          let image = PlatformImage(data: imgData) else { return }
                     DispatchQueue.main.async { chatDropImages.append(image) }
                 }
                 handled = true

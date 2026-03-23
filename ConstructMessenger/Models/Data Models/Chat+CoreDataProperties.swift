@@ -18,6 +18,7 @@ extension Chat {
     @NSManaged public var lastMessageTime: Date?
     @NSManaged public var sessionId: String?
     @NSManaged public var isPinned: Bool
+    @NSManaged public var isMuted: Bool
     @NSManaged public var unreadCount: Int16
     @NSManaged public var otherUser: User?
     @NSManaged public var messages: NSSet?

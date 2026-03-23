@@ -6,9 +6,11 @@
 //  Handles device token registration and push notification permissions
 //
 
+#if os(iOS)
 import Foundation
 import UserNotifications
 import UIKit
+import GRPCCore
 
 /// Manages Apple Push Notifications (APNs) integration
 /// 
@@ -39,7 +41,7 @@ class PushNotificationManager: NSObject {
 
     /// Whether the current token has been successfully registered with the server.
     /// Resets when a new token arrives or when the user logs out.
-    private var isRegisteredWithServer: Bool = false
+    private(set) var isRegisteredWithServer: Bool = false
 
     func signalSilentPush() {
         lastSilentPushDate = Date()
@@ -242,13 +244,23 @@ class PushNotificationManager: NSObject {
             Log.info("⏸️ Device token registration deferred — no session yet", category: "Push")
             return
         }
-        do {
-            Log.info("📡 Registering device token with server", category: "Push")
-            let response = try await NotificationServiceClient.shared.registerDeviceToken(token: token)
-            isRegisteredWithServer = true
-            Log.info("✅ Device token registered with server: success=\(response.success)", category: "Push")
-        } catch {
-            Log.error("❌ Failed to register device token with server: \(error)", category: "Push")
+        for attempt in 0..<3 {
+            do {
+                Log.info("📡 Registering device token with server", category: "Push")
+                let response = try await NotificationServiceClient.shared.registerDeviceToken(token: token)
+                isRegisteredWithServer = true
+                Log.info("✅ Device token registered with server: success=\(response.success)", category: "Push")
+                return
+            } catch {
+                if let rpcError = error as? RPCError, rpcError.code == .unavailable, attempt < 2 {
+                    let delay = Double(attempt + 1) * 2.0
+                    Log.info("🔄 Push token registration unavailable (attempt \(attempt + 1)/3), retrying in \(Int(delay))s", category: "Push")
+                    try? await Task.sleep(for: .seconds(delay))
+                } else {
+                    Log.error("❌ Failed to register device token with server: \(error)", category: "Push")
+                    return
+                }
+            }
         }
     }
     
@@ -328,3 +340,23 @@ extension UNAuthorizationStatus {
         }
     }
 }
+
+#else
+// macOS native app uses different push delivery mechanism (or polling via stream).
+// PushNotificationManager is a no-op on macOS.
+import Foundation
+
+final class PushNotificationManager {
+    static let shared = PushNotificationManager()
+    private init() {}
+    func registerIfNeeded() {}
+    func updateToken(_ token: Data) {}
+    func signalSilentPush() {}
+    func ensureTokenRegistered() async {}
+    func registerDeviceToken(_ tokenData: Data) async {}
+    func unregisterDeviceToken() async {}
+    func handleRegistrationError(_ error: Error) {}
+    func requestPermission() async -> Bool { return false }
+    func checkAuthorizationStatus() async {}
+}
+#endif

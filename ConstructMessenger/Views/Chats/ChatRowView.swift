@@ -16,14 +16,14 @@ struct ChatRowView: View {
             Group {
                 if let avatarData = chat.otherUser?.avatarData,
                    let avatarImage = ImageHelper.imageFromData(avatarData) {
-                    Image(uiImage: avatarImage)
+                    Image(platformImage: avatarImage)
                         .resizable()
                         .scaledToFill()
                         .frame(width: AvatarStyle.chatSize, height: AvatarStyle.chatSize)
                         .clipShape(AvatarStyle.squircle(AvatarStyle.chatSize))
                 } else {
                     AvatarStyle.squircle(AvatarStyle.chatSize)
-                        .fill(Color.blue)
+                        .fill(Color.hexagonAccent(for: chat.otherUser?.id ?? ""))
                         .frame(width: AvatarStyle.chatSize, height: AvatarStyle.chatSize)
                         .overlay {
                             Text(initials)
@@ -34,7 +34,7 @@ struct ChatRowView: View {
             }
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(chat.otherUser?.displayName ?? chat.otherUser?.username ?? NSLocalizedString("unknown", comment: "Unknown user"))
+                Text(chat.otherUser?.resolvedDisplayName ?? NSLocalizedString("unknown", comment: "Unknown user"))
                     .fontWeight(.semibold)
 
                 if let lastMessage = chat.lastMessageText {
@@ -68,7 +68,7 @@ struct ChatRowView: View {
     }
 
     private var initials: String {
-        guard let displayName = chat.otherUser?.displayName ?? chat.otherUser?.username else { return "?" }
+        guard let displayName = chat.otherUser?.resolvedDisplayName else { return "?" }
         let components = displayName.split(separator: " ")
         if components.count >= 2 {
             return String(components[0].prefix(1) + components[1].prefix(1)).uppercased()

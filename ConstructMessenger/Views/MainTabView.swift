@@ -23,17 +23,29 @@ struct MainTabView: View {
                 .environment(chatsViewModel)
         } else {
             // iPhone: classic tab bar navigation
-            TabView {
+            @Bindable var vm = chatsViewModel
+            TabView(selection: $vm.selectedTab) {
                 ChatsListView()
                     .environment(chatsViewModel)
                     .tabItem {
                         Label("chats", systemImage: "message")
                     }
+                    .tag(0)
 
+                SynapsView()
+                    .environment(chatsViewModel)
+                    .tabItem {
+                        Label("synaps", systemImage: "point.3.filled.connected.trianglepath.dotted")
+                    }
+                    .tag(1)
+
+                #if os(iOS)
                 SettingsView()
                     .tabItem {
                         Label("settings", systemImage: "gear")
                     }
+                    .tag(2)
+                #endif
             }
         }
     }

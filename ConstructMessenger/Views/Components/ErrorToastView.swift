@@ -64,6 +64,9 @@ struct ErrorToastView: View {
                     Image(systemName: "xmark")
                         .font(.caption.weight(.semibold))
                         .foregroundColor(.secondary)
+                        // Large tap target so the X is easy to hit on mobile
+                        .frame(width: 36, height: 36)
+                        .contentShape(Rectangle())
                 }
             }
         }
@@ -81,6 +84,15 @@ struct ErrorToastView: View {
         )
         .padding(.horizontal, 16)
         .padding(.top, 8)
+        // Swipe up anywhere on the banner to dismiss
+        .gesture(
+            DragGesture(minimumDistance: 20)
+                .onEnded { value in
+                    if value.translation.height < -20 {
+                        router.dismiss()
+                    }
+                }
+        )
     }
 
     // MARK: - Helpers

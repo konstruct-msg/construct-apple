@@ -44,6 +44,15 @@ class MessagePersistenceService {
         if let existing = try? context.fetch(fetchRequest).first {
             Log.debug("📝 Updating existing message \(message.id)", category: "MessagePersistence")
             existing.deliveryStatus = status
+            // Recover a previously undecryptable message: if the sender re-sent the same
+            // message (same UUID) after a session heal, update the content so the "unavailable"
+            // bubble is replaced with the actual text.
+            if existing.decryptedContent == nil, !decryptedContent.isEmpty {
+                existing.decryptedContent = decryptedContent
+                Log.info("✅ Recovered undecryptable message \(message.id.prefix(8))… — content now available", category: "MessagePersistence")
+                // Update chat preview if this was the last message showing "unavailable"
+                try? updateChatMetadata(chat: chat, lastMessageText: decryptedContent, lastMessageTime: existing.timestamp, in: context)
+            }
             isNewMessage = false
         } else {
             Log.debug("✨ Creating new message \(message.id)", category: "MessagePersistence")
@@ -66,9 +75,9 @@ class MessagePersistenceService {
                 newMessage.replyToContent = replyToContentOverride ?? replyMessage.decryptedContent
             }
             
-            // Store thumbnails locally for media messages
-            if !localThumbnails.isEmpty, let firstThumbnail = localThumbnails.first {
-                MediaManager.shared.storeThumbnail(firstThumbnail, for: message.id)
+            // Store all thumbnails indexed for multi-image messages
+            for (index, thumb) in localThumbnails.enumerated() {
+                MediaManager.shared.storeThumbnail(thumb, for: message.id, at: index)
             }
             
             isNewMessage = true

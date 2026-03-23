@@ -63,6 +63,11 @@ class ChatViewModel: NSObject {
 
     // ✅ FIX: Use NSFetchedResultsController for automatic Core Data updates
     private var fetchedResultsController: NSFetchedResultsController<Message>?
+    /// Pending debounce task for FRC updates. Multiple rapid Core Data saves (e.g. after
+    /// sending a message: insert + updateChatMetadata + status update) fire
+    /// controllerDidChangeContent many times in quick succession. We coalesce them into
+    /// a single UI refresh after a short idle window to avoid dozens of SwiftUI redraws.
+    private var frcDebounceTask: Task<Void, Never>?
     
     // ✅ REFACTOR: Extracted services
     private let sessionInitService = SessionInitializationService.shared
@@ -81,6 +86,9 @@ class ChatViewModel: NSObject {
     }
     private var pendingMediaUploads: [String: MediaUploadPayload] = [:]
 
+    /// Unique per-instance ID used to guard InAppNotificationService ownership.
+    private let instanceID = UUID()
+
     init(chat: Chat, context: NSManagedObjectContext) {
         self.chat = chat
         self.viewContext = context
@@ -92,18 +100,27 @@ class ChatViewModel: NSObject {
         setupFetchedResultsController()  // ✅ Setup FRC - loads initial messages automatically
         setupSubscribers()
         checkExistingSession()  // ✅ FIXED: Check if session already exists
-        fetchRecipientPublicKey()
+        // fetchRecipientPublicKey() is intentionally NOT called here.
+        // ChatView.init (and therefore this init) is invoked on every SwiftUI parent re-render
+        // due to the @State(wrappedValue:) pattern — hundreds of times per session.
+        // The gRPC bundle fetch is deferred to onViewAppear() which fires only once per
+        // actual view appearance, eliminating spurious gRPC channel creation.
 
         // ❌ REMOVED: loadMessages() - FRC already loaded messages in setupFetchedResultsController()
         Log.debug("🔧 ChatViewModel initialized with viewContext", category: "ChatViewModel")
         
         // Listen for queued messages processing
         setupMessageQueueListener()
+
+        // Suppress in-app banners while this chat is open.
+        // Uses instanceID so a discarded SwiftUI-diffing copy's deinit can't clear it.
+        InAppNotificationService.shared.registerActiveChat(chat.id, ownerID: instanceID)
     }
 
     isolated deinit {
         publicKeyFetchTimer?.invalidate()
         observationTasks.forEach { $0.cancel() }
+        InAppNotificationService.shared.unregisterActiveChat(ownerID: instanceID)
         Log.debug("🔧 ChatViewModel deinitialized", category: "ChatViewModel")
     }
 
@@ -190,6 +207,11 @@ class ChatViewModel: NSObject {
         }
     }
 
+    // Called by ChatView.onAppear — deferred from init to avoid hundreds of gRPC calls.
+    func onViewAppear() {
+        fetchRecipientPublicKey()
+    }
+
     private func fetchRecipientPublicKey() {
         guard let userId = chat.otherUser?.id else {
             Log.error("❌ Cannot fetch recipient public key: chat.otherUser?.id is nil", category: "ChatViewModel")
@@ -208,8 +230,10 @@ class ChatViewModel: NSObject {
             return
         }
 
-        // Don't fetch if session already exists
-        if isSessionReady {
+        // Don't fetch if session already exists AND we already know the display name.
+        // Username might be empty for contacts restored from cache — always fetch in that case.
+        let hasUsername = !(chat.otherUser?.username ?? "").isEmpty
+        if isSessionReady && hasUsername {
             return
         }
 
@@ -257,14 +281,7 @@ class ChatViewModel: NSObject {
 
         // Update username if we have the user in Core Data
         if let user = chat.otherUser {
-            let normalized = data.username.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !normalized.isEmpty, normalized.lowercased() != "anonymous", UUID(uuidString: normalized) == nil {
-                user.username = normalized
-                user.displayName = normalized
-            } else {
-                user.username = ""
-                user.displayName = DisplayNameGenerator.generate(from: data.userId)
-            }
+            user.applyServerUsername(data.username, userId: data.userId)
             viewContext.saveAndLog()
             Log.info("Updated username for user: \(data.username)", category: "ChatViewModel")
         }
@@ -278,9 +295,15 @@ class ChatViewModel: NSObject {
 
         // If a RECEIVER session was already created by ChatsViewModel (incoming message arrived
         // while we were fetching the bundle), mark as ready so the UI reflects that.
+        // Bundle is ready — cancel the fetch timer regardless of whether a session exists yet.
+        // For RESPONDER-role contacts the session is created on first send; the bundle cache
+        // is sufficient to enable sending, so mark the channel as ready now.
+        publicKeyFetchTimer?.invalidate()
+        publicKeyFetchTimer = nil
+        isSessionReady = true
+
         if CryptoManager.shared.hasSession(for: data.userId) {
             Log.info("✅ SESSION_STATE[bundle_fetched_session_exists]: session already established for \(data.userId.prefix(8))…", category: "ChatViewModel")
-            isSessionReady = true
         } else {
             Log.info("📦 SESSION_STATE[bundle_cached]: bundle ready for \(data.userId.prefix(8))…, session will be created on first send", category: "ChatViewModel")
         }
@@ -772,11 +795,31 @@ class ChatViewModel: NSObject {
                         timestamp: message.timestamp,
                         preEncryptedFirst: firstComponents,
                         kemCiphertext: kemCiphertext,
-                        kyberOtpkId: kyberOtpkId
+                        kyberOtpkId: kyberOtpkId,
+                        replyToMessageId: replyTo?.id
                     )
                     let response = responses.first ?? SendMessageResponse(messageId: messageId, status: "sent")
 
                     TrafficProtectionService.shared.recordRealMessageSent()
+
+                    // SenderSync: fire-and-forget copy to own other devices.
+                    // Fan-out to other recipient devices is handled in the coordinator.
+                    if let myDeviceId = SessionManager.shared.currentDeviceId, !myDeviceId.isEmpty {
+                        Task {
+                            await MultiDeviceSendCoordinator.shared.sendSenderSync(
+                                plaintext: text,
+                                messageId: messageId,
+                                originalRecipientUserId: recipientId,
+                                senderUserId: currentUserId,
+                                senderDeviceId: myDeviceId,
+                                conversationId: ConversationId.direct(
+                                    myUserId: currentUserId,
+                                    theirUserId: recipientId
+                                ),
+                                timestamp: message.timestamp
+                            )
+                        }
+                    }
 
                     await MainActor.run {
                         let deliveryStatus: DeliveryStatus
@@ -906,10 +949,26 @@ class ChatViewModel: NSObject {
 // MARK: - NSFetchedResultsControllerDelegate
 
 extension ChatViewModel: NSFetchedResultsControllerDelegate {
-    /// Called when FRC finishes processing changes to Core Data
+    /// Called when FRC finishes processing changes to Core Data.
+    /// Multiple rapid Core Data saves (insert → updateChatMetadata → status update) each
+    /// fire this delegate. We cancel any pending debounce and schedule a fresh one so that
+    /// the UI refresh happens only ONCE after the last save in a burst, instead of 10-20×.
     nonisolated func controllerDidChangeContent(_ controller: NSFetchedResultsController<NSFetchRequestResult>) {
         Task { @MainActor [weak self] in
             guard let self else { return }
+            self.frcDebounceTask?.cancel()
+            self.frcDebounceTask = Task { @MainActor [weak self] in
+                // 40 ms idle window — short enough to feel instant, long enough to collapse
+                // the typical burst of 5-20 saves that follows a single send/receive event.
+                try? await Task.sleep(for: .milliseconds(40))
+                guard !Task.isCancelled, let self else { return }
+                self.applyFRCSnapshot(controller)
+            }
+        }
+    }
+
+    @MainActor
+    private func applyFRCSnapshot(_ controller: NSFetchedResultsController<NSFetchRequestResult>) {
             // If the parent chat was deleted, clear messages and stop — accessing
             // properties on deleted Core Data objects crashes with EXC_BREAKPOINT.
             guard !self.chat.isDeleted, self.chat.managedObjectContext != nil else {
@@ -946,6 +1005,5 @@ extension ChatViewModel: NSFetchedResultsControllerDelegate {
             self.allLoadedMessageIds = Set(self.messages.compactMap {
                 isValid($0) ? $0.id : nil
             })
-        }
     }
 }

@@ -35,7 +35,7 @@ struct DraftsView: View {
                     Button {
                         addDraft()
                     } label: {
-                        Label("Save Draft", systemImage: "tray.and.arrow.down")
+                        Label(LocalizedStringKey("save_draft"), systemImage: "tray.and.arrow.down")
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 10)
                     }
@@ -45,7 +45,7 @@ struct DraftsView: View {
 
                 if drafts.isEmpty {
                     Spacer()
-                    Text("Drafts are stored locally on this device.")
+                    Text(LocalizedStringKey("drafts_stored_locally"))
                         .font(.footnote)
                         .foregroundColor(.secondary)
                     Spacer()
@@ -68,7 +68,7 @@ struct DraftsView: View {
                 }
             }
             .padding()
-            .navigationTitle("Drafts")
+            .navigationTitle(LocalizedStringKey("drafts"))
             .onAppear {
                 loadDrafts()
             }
