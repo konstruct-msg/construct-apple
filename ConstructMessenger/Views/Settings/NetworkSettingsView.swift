@@ -6,7 +6,6 @@
 import SwiftUI
 
 struct NetworkSettingsView: View {
-    private var reachabilityManager = NetworkReachabilityManager.shared
     private var connectionManager = ConnectionStatusManager.shared
     private var streamManager = MessageStreamManager.shared
 
@@ -20,20 +19,20 @@ struct NetworkSettingsView: View {
 
     var body: some View {
         List {
-            // MARK: - Connection Route
+            // MARK: - Connection Status
             Section {
                 let path = iceManager.currentTrafficPath
                 HStack(spacing: 12) {
                     ZStack {
                         RoundedRectangle(cornerRadius: 8)
-                            .fill(pathColor(path).opacity(0.15))
+                            .fill(statusColor.opacity(0.12))
                             .frame(width: 36, height: 36)
-                        Image(systemName: path.symbolName)
-                            .foregroundColor(pathColor(path))
-                            .font(.system(size: 16, weight: .semibold))
+                        Image(systemName: connectionStatusSymbol)
+                            .foregroundColor(statusColor)
+                            .font(.system(size: 15, weight: .semibold))
                     }
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(path.displayTitle)
+                        Text(connectionManager.connectionStatus.displayText)
                             .fontWeight(.semibold)
                         Text(path.displayDetail)
                             .font(.caption)
@@ -42,32 +41,10 @@ struct NetworkSettingsView: View {
                     }
                     Spacer()
                     Circle()
-                        .fill(pathColor(path))
-                        .frame(width: 9, height: 9)
+                        .fill(statusColor)
+                        .frame(width: 8, height: 8)
                 }
                 .padding(.vertical, 4)
-            } header: {
-                Text("connection_route")
-            } footer: {
-                Text(connectionRouteFooter(iceManager.currentTrafficPath))
-                    .font(.caption)
-            }
-
-            Section {
-                statusRow(
-                    label: NSLocalizedString("status", comment: ""),
-                    value: connectionManager.connectionStatus.displayText,
-                    color: statusColor
-                )
-
-                HStack {
-                    Text("subscriptions")
-                        .foregroundColor(.secondary)
-                    Spacer()
-                    Text("\(streamManager.subscriptionUserIds.count)")
-                        .fontWeight(.medium)
-                        .monospacedDigit()
-                }
 
                 if let heartbeat = streamManager.lastHeartbeatDate {
                     HStack {
@@ -75,61 +52,23 @@ struct NetworkSettingsView: View {
                             .foregroundColor(.secondary)
                         Spacer()
                         Text(heartbeat, style: .relative)
-                            .fontWeight(.medium)
                             .foregroundColor(.secondary)
+                            .monospacedDigit()
                     }
-                }
-
-                if let lastSuccess = connectionManager.lastSuccessfulRequest {
-                    HStack {
-                        Text("last_contact")
-                            .foregroundColor(.secondary)
-                        Spacer()
-                        Text(lastSuccess, style: .relative)
-                            .fontWeight(.medium)
-                            .foregroundColor(.secondary)
-                    }
+                    .font(.subheadline)
                 }
 
                 if let error = connectionManager.lastError {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("last_error")
-                            .foregroundColor(.secondary)
-                            .font(.caption)
-                        Text(error)
-                            .font(.system(size: 11, design: .monospaced))
-                            .foregroundColor(.red)
-                            .textSelection(.enabled)
-                    }
+                    Text(error)
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(.red)
+                        .textSelection(.enabled)
                 }
             } header: {
-                Text("grpc_stream")
+                Text("status")
             }
 
-            // MARK: - Network
-            Section {
-                statusRow(
-                    label: NSLocalizedString("network_reachability", comment: ""),
-                    value: reachabilityManager.isReachable
-                        ? NSLocalizedString("reachable", comment: "")
-                        : NSLocalizedString("unreachable", comment: ""),
-                    color: reachabilityManager.isReachable ? Color.AppStatus.success : .red
-                )
-
-                if reachabilityManager.isReachable {
-                    HStack {
-                        Text("connection_type")
-                            .foregroundColor(.secondary)
-                        Spacer()
-                        Text(connectionTypeDisplayName)
-                            .fontWeight(.medium)
-                    }
-                }
-            } header: {
-                Text("network")
-            }
-
-            // MARK: - ICE
+            // MARK: - Traffic Protection (ICE)
             Section {
                 Toggle(isOn: Binding(
                     get: { iceEnabled },
@@ -143,116 +82,71 @@ struct NetworkSettingsView: View {
                         }
                     }
                 )) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("ice_title")
-                            .fontWeight(.medium)
-                        Text("ice_subtitle")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
+                    Text("traffic_protection")
+                        .fontWeight(.medium)
                 }
                 .disabled(!iceManager.hasCert)
 
-                if !iceManager.hasCert {
-                    Text("ice_unavailable")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                } else if iceEnabled {
-                    HStack {
-                        Text("status")
-                            .foregroundColor(.secondary)
-                        Spacer()
-                        if iceManager.isRunning {
-                            let path = iceManager.currentTrafficPath
-                            Label(path.displayTitle, systemImage: path.symbolName)
-                                .foregroundColor(pathColor(path))
-                                .font(.caption.weight(.semibold))
-                        } else {
-                            Text(iceManager.lastError ?? "Not connected")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                    }
-
-                    // Retry button: shown when the proxy is up but stuck on cooldown
-                    if iceManager.isRunning && iceManager.isOnCooldown {
+                if iceEnabled && iceManager.hasCert {
+                    if iceManager.isOnCooldown {
                         Button {
                             iceManager.clearCooldown()
                         } label: {
-                            Label(NSLocalizedString("ice_retry", comment: "Retry ICE connection"),
-                                  systemImage: "arrow.clockwise")
+                            Label("ice_retry", systemImage: "arrow.clockwise")
                                 .font(.subheadline.weight(.medium))
-                                .foregroundColor(.accentColor)
                         }
-                    }
-
-                    if iceManager.isRunning, let relay = iceManager.activeRelay {
+                    } else if iceManager.isRunning, let relay = iceManager.activeRelay {
                         HStack {
-                            Text("endpoint")
-                                .foregroundColor(.secondary)
-                            Spacer()
+                            Image(systemName: iceManager.currentTrafficPath.symbolName)
+                                .foregroundColor(pathColor(iceManager.currentTrafficPath))
+                                .frame(width: 16)
                             Text(relay.address)
-                                .font(.system(size: 12, design: .monospaced))
-                                .foregroundColor(.primary)
+                                .font(.system(size: 13, design: .monospaced))
+                                .foregroundColor(.secondary)
                                 .textSelection(.enabled)
-                        }
-                        HStack {
-                            Text("mode")
-                                .foregroundColor(.secondary)
                             Spacer()
-                            Text(relay.tlsServerName != nil ? "TLS + obfs4" : "obfs4 (plain)")
-                                .font(.system(size: 12, design: .monospaced))
+                            Text(relay.tlsServerName != nil ? "TLS·obfs4" : "obfs4")
+                                .font(.caption2.weight(.semibold))
                                 .foregroundColor(.secondary)
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 2)
+                                .background(Color.secondary.opacity(0.1))
+                                .clipShape(Capsule())
                         }
+                    } else if !iceManager.isRunning {
+                        Text(iceManager.lastError ?? NSLocalizedString("ice_unavailable", comment: ""))
+                            .font(.caption)
+                            .foregroundColor(.secondary)
                     }
                 }
             } header: {
                 Text("ice_section_header")
             } footer: {
-                Text("ice_footer")
-                    .font(.caption)
+                if !iceManager.hasCert {
+                    Text("ice_unavailable")
+                } else {
+                    Text("ice_footer_short")
+                }
             }
 
             // MARK: - Server
             Section {
                 HStack {
-                    Text("server")
-                        .foregroundColor(.secondary)
-                    Spacer()
-                    HStack(spacing: 6) {
-                        Text(GRPCChannelManager.shared.currentHost)
-                            .font(.system(size: 13, design: .monospaced))
-                            .foregroundColor(.primary)
-                        Text(LocalizedStringKey("tls"))
-                            .font(.caption2.weight(.semibold))
-                            .foregroundColor(Color.AppStatus.success)
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 2)
-                            .background(Color.AppStatus.success.opacity(0.12))
-                            .clipShape(Capsule())
-                    }
-                    .textSelection(.enabled)
-                }
-
-                HStack {
-                    Text("port")
-                        .foregroundColor(.secondary)
-                    Spacer()
-                    Text("\(GRPCChannelManager.shared.currentPort)")
+                    Text(GRPCChannelManager.shared.currentHost)
                         .font(.system(size: 13, design: .monospaced))
-                        .fontWeight(.medium)
-                }
-
-                HStack {
-                    Text("build_configuration")
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.primary)
+                        .textSelection(.enabled)
                     Spacer()
-                    Text(BuildConfiguration.current == .debug ? LocalizedStringKey("build_debug") : LocalizedStringKey("build_release"))
-                        .fontWeight(.medium)
-                        .foregroundColor(BuildConfiguration.current == .debug ? .orange : Color.AppStatus.success)
+                    Text(LocalizedStringKey("tls"))
+                        .font(.caption2.weight(.semibold))
+                        .foregroundColor(Color.AppStatus.success)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(Color.AppStatus.success.opacity(0.12))
+                        .clipShape(Capsule())
                 }
             } header: {
-                Text("server_configuration")
+                Text("server")
             }
 
             // MARK: - Custom Server (Debug only)
@@ -324,21 +218,6 @@ struct NetworkSettingsView: View {
 
     // MARK: - Helpers
 
-    private func statusRow(label: String, value: String, color: Color) -> some View {
-        HStack {
-            Text(label)
-                .foregroundColor(.secondary)
-            Spacer()
-            HStack(spacing: 5) {
-                Circle()
-                    .fill(color)
-                    .frame(width: 8, height: 8)
-                Text(value)
-                    .fontWeight(.medium)
-            }
-        }
-    }
-
     private var statusColor: Color {
         switch connectionManager.connectionStatus {
         case .connected:    return Color.AppStatus.success
@@ -348,14 +227,12 @@ struct NetworkSettingsView: View {
         }
     }
 
-    private var connectionTypeDisplayName: String {
-        switch reachabilityManager.connectionType {
-        case .wifi:        return "Wi-Fi"
-        case .cellular:    return "Cellular"
-        case .ethernet:    return "Ethernet"
-        case .other:       return "Other"
-        case .unavailable: return "Unavailable"
-        case .unknown:     return "Unknown"
+    private var connectionStatusSymbol: String {
+        switch connectionManager.connectionStatus {
+        case .connected:    return "checkmark.circle.fill"
+        case .disconnected: return "xmark.circle.fill"
+        case .connecting:   return "arrow.triangle.2.circlepath"
+        case .unknown:      return "questionmark.circle"
         }
     }
 
@@ -366,21 +243,6 @@ struct NetworkSettingsView: View {
         case .iceRelay:      return .purple
         case .iceCooldown:   return .orange
         case .iceConnecting: return .orange
-        }
-    }
-
-    private func connectionRouteFooter(_ path: TrafficPath) -> String {
-        switch path {
-        case .direct:
-            return "Traffic goes directly to Construct servers over TLS 1.3. Enable Traffic Protection (ICE) for obfuscation."
-        case .icePrimary:
-            return "Traffic is obfuscated with obfs4 over TLS. Your ISP sees an HTTPS connection to an ICE endpoint."
-        case .iceRelay(let address):
-            return "Traffic is obfuscated with obfs4 and forwarded via a relay (\(address)). Your ISP sees a TCP connection to the relay IP only."
-        case .iceCooldown:
-            return "ICE encountered an error and is temporarily bypassed. Reconnect attempt is in progress."
-        case .iceConnecting:
-            return "Traffic Protection (ICE) is enabled and the obfs4 proxy is starting."
         }
     }
 }
