@@ -384,6 +384,15 @@ class MessageRouter {
         chat: Chat,
         in context: NSManagedObjectContext
     ) {
+        // Silently discard session establishment pings received on the normal message path.
+        // These are sent after a tie-break win to trigger RESPONDER init on the peer.
+        if decryptedContent.hasPrefix("__session_ping") && decryptedContent.hasSuffix("__") {
+            Log.info("🏓 SESSION_STATE[ping_received_normal_path]: discarding session ping", category: "MessageRouter")
+            PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
+            onReceiptNeeded?([message.id], otherUserId, .delivered)
+            return
+        }
+
         // 4. Check for special message types (profile sharing, etc.)
         if let specialMessageHandled = handleSpecialMessage(
             decryptedContent,
@@ -519,10 +528,12 @@ class MessageRouter {
         if message.messageNumber > 0 && isFirstForUser {
             Log.info("⚠️ No session for \(userId.prefix(8)) but messageNumber=\(message.messageNumber) — requesting END_SESSION so sender restarts", category: "MessageRouter")
             // Mark as processed + send failed receipt so server removes it from pending queue.
-            // Without this the same message is re-fetched on every reconnect, inserting a
-            // duplicate system message each time.
             PersistentACKStore.shared.markProcessed(message.id, senderId: userId, in: context)
             onReceiptNeeded?([message.id], userId, .failed)
+            // Initialize the pending queue so subsequent out-of-sync messages from the same
+            // user don't each spawn a new system message (isFirstForUser would stay true
+            // otherwise since we return early without ever adding to pendingMessages).
+            pendingMessages[userId] = []
             addSystemMessage(
                 "Encrypted session out of sync. Asking contact to restart...",
                 toUserId: userId,
