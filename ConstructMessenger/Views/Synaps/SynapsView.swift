@@ -45,7 +45,6 @@ struct SynapsView: View {
                     list
                 }
             }
-            .navigationTitle(LocalizedStringKey("synaps"))
             .searchable(text: $searchText, prompt: LocalizedStringKey("synaps_search_prompt"))
         }
         .confirmationDialog(
@@ -233,4 +232,48 @@ private struct SynapsRow: View {
         let vm = ProfileShareViewModel()
         vm.shareProfile(with: user.id) { _, _ in }
     }
+}
+
+// MARK: - Preview
+
+#Preview("With contacts") {
+    let container = PreviewHelpers.createPreviewContainer()
+    let context = container.viewContext
+
+    let users: [(String, String, String)] = [
+        ("u1", "alice",   "Alice Wonderland"),
+        ("u2", "bob",     "Bob Builder"),
+        ("u3", "charlie", "Charlie Chaplin"),
+    ]
+    for (id, username, name) in users {
+        let user = PreviewHelpers.createSampleUser(context: context, id: id, username: username, displayName: name)
+        user.isContact = true
+        user.addedAt = Date()
+        _ = PreviewHelpers.createSampleChat(context: context, with: user)
+    }
+    // One blocked contact without chat
+    let blocked = PreviewHelpers.createSampleUser(context: context, id: "u4", username: "dave", displayName: "Dave Villain")
+    blocked.isContact = true
+    blocked.isBlocked = true
+    blocked.addedAt = Date()
+
+    try? context.save()
+
+    let chatsVM = ChatsViewModel()
+    chatsVM.setContext(context)
+
+    return SynapsView()
+        .environment(\.managedObjectContext, context)
+        .environment(chatsVM)
+}
+
+#Preview("Empty") {
+    let container = PreviewHelpers.createPreviewContainer()
+    let context = container.viewContext
+    let chatsVM = ChatsViewModel()
+    chatsVM.setContext(context)
+
+    return SynapsView()
+        .environment(\.managedObjectContext, context)
+        .environment(chatsVM)
 }
