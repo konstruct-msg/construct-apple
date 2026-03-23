@@ -24,8 +24,11 @@ class ChatsViewModel {
     // 🔑 OTPK replenishment: check server count once per app session on stream connect
     private var hasPerformedStartupOtpkCheck = false
 
-    // ✅ Chat ID to open programmatically (e.g., from deep link)
+    // ✅ Chat ID to open programmatically (e.g., from deep link or Synaps)
     var chatToOpen: String?
+
+    // ✅ Selected tab index — used to switch tabs programmatically (e.g., open chat from Synaps)
+    var selectedTab: Int = 0
 
     // ✅ Message stream (gRPC bidirectional)
     private let streamManager = MessageStreamManager.shared
@@ -407,6 +410,8 @@ class ChatsViewModel {
 
     /// Open the existing chat with a User, or create one if none exists yet.
     func openOrCreateChat(with user: User) {
+        // Switch to Chats tab first
+        selectedTab = 0
         // If a chat already exists, navigate to it
         if let existingChat = (user.chats as? Set<Chat>)?.first {
             chatToOpen = existingChat.id

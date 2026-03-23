@@ -160,8 +160,8 @@ struct UserProfileView: View {
                     actionRow {
                         Label(LocalizedStringKey("synaps_open_chat"), systemImage: "message")
                     } action: {
-                        dismiss()
-                        openChat()
+                        openChat()          // switches tab + sets chatToOpen
+                        dismiss()           // closes sheet after triggering navigation
                     }
                     Divider().padding(.leading, 16)
                 }
