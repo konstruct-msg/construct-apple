@@ -633,7 +633,9 @@ struct FileAttachmentBubbleView: View {
                     videoPlayerURL = url
                 }
                 // Generate thumbnail in background after download
+                #if canImport(UIKit)
                 await generateVideoThumbnail(for: file.mediaId, url: url)
+                #endif
             } catch {
                 await MainActor.run {
                     downloading.remove(file.mediaId)
