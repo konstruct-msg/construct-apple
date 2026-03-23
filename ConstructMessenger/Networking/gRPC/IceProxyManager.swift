@@ -163,8 +163,16 @@ final class IceProxyManager: ObservableObject {
     private var isStartingOnDemand = false
 
     /// Whether the user has enabled ICE obfuscation. Persists across launches.
+    /// On macOS, defaults to `true` — no battery penalty, sessions are long-lived.
+    /// On iOS, defaults to `false` — opt-in to avoid battery drain on mobile.
     var isEnabled: Bool {
-        get { UserDefaults.standard.bool(forKey: enabledKey) }
+        get {
+            #if os(macOS)
+            // If the user has never explicitly set this key, default to enabled on macOS
+            if UserDefaults.standard.object(forKey: enabledKey) == nil { return true }
+            #endif
+            return UserDefaults.standard.bool(forKey: enabledKey)
+        }
         set { UserDefaults.standard.set(newValue, forKey: enabledKey) }
     }
 

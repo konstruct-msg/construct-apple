@@ -14,7 +14,14 @@ struct NetworkSettingsView: View {
     @State private var customPort = "\(GRPCChannelManager.shared.currentPort)"
     @State private var showingAppliedAlert = false
 
-    @AppStorage(UserDefaultsKey.iceEnabled.key) private var iceEnabled = false
+    // On macOS, ICE is on by default; on iOS, off by default
+    @AppStorage(UserDefaultsKey.iceEnabled.key) private var iceEnabled = {
+        #if os(macOS)
+        return true
+        #else
+        return false
+        #endif
+    }()
     @StateObject private var iceManager = IceProxyManager.shared
 
     var body: some View {
@@ -125,7 +132,11 @@ struct NetworkSettingsView: View {
                 if !iceManager.hasCert {
                     Text("ice_unavailable")
                 } else {
+                    #if os(macOS)
+                    Text("ice_footer_short") + Text(" ") + Text("Enabled by default on macOS.")
+                    #else
                     Text("ice_footer_short")
+                    #endif
                 }
             }
 
