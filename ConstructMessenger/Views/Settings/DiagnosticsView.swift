@@ -157,7 +157,7 @@ struct DiagnosticsView: View {
                     .frame(width: 7, height: 7)
                 Text(value)
                     .font(.footnote)
-                    .foregroundStyle(ok ? .primary : .red)
+                    .foregroundStyle(ok ? Color.primary : Color.red)
             }
         }
     }
