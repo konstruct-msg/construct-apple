@@ -141,8 +141,10 @@ struct MessageBubble: View {
                             )
                     }
                 } else {
-                    // Text message bubble
+                    // Text message bubble: reply indicator lives INSIDE the bubble background
+                    // so the quote block and the message text share one visual container.
                     VStack(alignment: .leading, spacing: 0) {
+                        // Reply quote at the top of the bubble (if present)
                         replyIndicatorView
 
                         VStack(alignment: .leading, spacing: 4) {
@@ -166,22 +168,24 @@ struct MessageBubble: View {
                             }
                         }
                         .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        #if canImport(UIKit)
-                        .background(
-                            isSelected
-                                ? (message.isSentByMe ? Color.accentColor.opacity(0.75) : Color.accentColor.opacity(0.15))
-                                : (message.isSentByMe ? Color.accentColor : Color(uiColor: .systemGray5))
-                        )
-                        #else
-                        .background(
-                            isSelected
-                                ? (message.isSentByMe ? Color.accentColor.opacity(0.75) : Color.accentColor.opacity(0.15))
-                                : (message.isSentByMe ? Color.accentColor : Color(nsColor: .controlBackgroundColor))
-                        )
-                        #endif
-                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                        // Reduce top padding when reply bar is shown — it already provides spacing.
+                        .padding(.top, message.replyToContent != nil ? 4 : 8)
+                        .padding(.bottom, 8)
                     }
+                    #if canImport(UIKit)
+                    .background(
+                        isSelected
+                            ? (message.isSentByMe ? Color.accentColor.opacity(0.75) : Color.accentColor.opacity(0.15))
+                            : (message.isSentByMe ? Color.accentColor : Color(uiColor: .systemGray5))
+                    )
+                    #else
+                    .background(
+                        isSelected
+                            ? (message.isSentByMe ? Color.accentColor.opacity(0.75) : Color.accentColor.opacity(0.15))
+                            : (message.isSentByMe ? Color.accentColor : Color(nsColor: .controlBackgroundColor))
+                    )
+                    #endif
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
                 }
 
                 if isLastInGroup {
@@ -417,7 +421,7 @@ struct MessageBubble: View {
         return json
     }
 
-    /// Reply context bar shown above media, file, and text message content.
+    /// Reply context bar shown above message content, rendered INSIDE the bubble background.
     @ViewBuilder
     private var replyIndicatorView: some View {
         if let replyContent = message.replyToContent {
@@ -433,9 +437,11 @@ struct MessageBubble: View {
                     lineLimit: 2
                 )
                 .padding(.vertical, 4)
-                .padding(.trailing, 8)
+                .padding(.trailing, 4)
             }
-            .padding(.leading, 4)
+            // Match the bubble's horizontal padding so the accent bar aligns with the message text.
+            .padding(.horizontal, 12)
+            .padding(.top, 8)
             .padding(.bottom, 4)
         }
     }
