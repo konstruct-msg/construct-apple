@@ -832,6 +832,18 @@ class MessageRouter {
         message.deliveryStatus = .delivered
         message.retryCount = 0
         message.chat = chat
+
+        // Restore reply-to context so the receiver sees the same reply bubble as the sender.
+        if !messageData.replyToMessageId.isEmpty {
+            message.replyToMessageId = messageData.replyToMessageId
+            // Look up the replied-to message locally to populate the preview snippet.
+            let replyFetch = Message.fetchRequest()
+            replyFetch.predicate = NSPredicate(format: "id == %@", messageData.replyToMessageId)
+            replyFetch.fetchLimit = 1
+            if let replyMsg = (try? context.fetch(replyFetch))?.first {
+                message.replyToContent = replyMsg.decryptedContent
+            }
+        }
         
         do {
             try context.save()
@@ -845,7 +857,7 @@ class MessageRouter {
             let lockdownSuppressed = LockdownManager.shared.shouldSuppress(senderId: senderId)
 
             // Decide whether to show notification
-            let chatId    = chat.id ?? ""
+            let chatId    = chat.id
             let isMuted   = chat.isMuted
             let senderName = (chat.otherUser?.displayName.trimmingCharacters(in: .whitespacesAndNewlines))
                                 .flatMap { $0.isEmpty ? nil : $0 }

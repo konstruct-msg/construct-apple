@@ -49,6 +49,10 @@ struct ChatMessage: Codable, Identifiable {
     /// Required for SENDER_SYNC routing — identifies the original conversation
     /// even when `from` and `to` are both the current user.
     var conversationId: String = ""
+
+    /// If non-empty, this message is a reply to the message with this ID.
+    /// Propagated from `envelope.reply_to_message_id`.
+    var replyToMessageId: String = ""
     
     /// Check if this is an END_SESSION control message
     var isEndSession: Bool {
@@ -71,7 +75,7 @@ extension ChatMessage {
     private enum CodingKeys: String, CodingKey {
         case id, from, to, messageType, ephemeralPublicKey, messageNumber, content, suiteId
         case timestamp, oneTimePreKeyId, editsMessageId, kemCiphertext, kyberOtpkId
-        case senderDeviceId, conversationId
+        case senderDeviceId, conversationId, replyToMessageId
     }
 
     init(from decoder: Decoder) throws {
@@ -91,6 +95,7 @@ extension ChatMessage {
         kyberOtpkId = (try? c.decodeIfPresent(UInt32.self, forKey: .kyberOtpkId)) ?? 0
         senderDeviceId = (try? c.decodeIfPresent(String.self, forKey: .senderDeviceId)) ?? ""
         conversationId = (try? c.decodeIfPresent(String.self, forKey: .conversationId)) ?? ""
+        replyToMessageId = (try? c.decodeIfPresent(String.self, forKey: .replyToMessageId)) ?? ""
     }
 }
 

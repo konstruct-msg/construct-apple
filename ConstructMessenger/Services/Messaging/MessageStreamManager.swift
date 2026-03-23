@@ -691,7 +691,8 @@ final class MessageStreamManager {
                 kemCiphertext: decoded.kemCiphertext ?? Data(),
                 kyberOtpkId: decoded.kyberOtpkId,
                 senderDeviceId: envelope.senderDevice.deviceID,
-                conversationId: envelope.conversationID
+                conversationId: envelope.conversationID,
+                replyToMessageId: envelope.replyToMessageID
             ))
         case .receipt(let receipt):
             // Deliver receipt: extract confirmed message IDs and propagate

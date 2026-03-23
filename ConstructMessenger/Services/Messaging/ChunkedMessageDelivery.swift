@@ -25,7 +25,8 @@ final class ChunkedMessageSender {
         timestamp: UInt64,
         preEncryptedFirst: CryptoManager.EncryptedMessageComponents? = nil,
         kemCiphertext: Data? = nil,
-        kyberOtpkId: UInt32 = 0
+        kyberOtpkId: UInt32 = 0,
+        replyToMessageId: String? = nil
     ) async throws -> [SendMessageResponse] {
         var responses: [SendMessageResponse] = []
 
@@ -54,7 +55,9 @@ final class ChunkedMessageSender {
                 senderId: senderId,
                 conversationId: conversationId,
                 encryptedPayload: encryptedPayload,
-                timestamp: timestamp
+                timestamp: timestamp,
+                // Only the first chunk carries reply metadata
+                replyToMessageId: index == 0 ? replyToMessageId : nil
             )
             responses.append(response)
 

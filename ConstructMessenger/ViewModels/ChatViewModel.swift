@@ -795,7 +795,8 @@ class ChatViewModel: NSObject {
                         timestamp: message.timestamp,
                         preEncryptedFirst: firstComponents,
                         kemCiphertext: kemCiphertext,
-                        kyberOtpkId: kyberOtpkId
+                        kyberOtpkId: kyberOtpkId,
+                        replyToMessageId: replyTo?.id
                     )
                     let response = responses.first ?? SendMessageResponse(messageId: messageId, status: "sent")
 

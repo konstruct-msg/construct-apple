@@ -704,7 +704,8 @@ final class SessionCoordinator {
                         timestamp: UInt64(msg.timestamp.timeIntervalSince1970),
                         preEncryptedFirst: firstComponents,
                         kemCiphertext: kemCiphertext,
-                        kyberOtpkId: kyberOtpkId
+                        kyberOtpkId: kyberOtpkId,
+                        replyToMessageId: msg.replyToMessageId.isEmpty ? nil : msg.replyToMessageId
                     )
 
                     let response = responses.first ?? SendMessageResponse(messageId: msg.id, status: "sent")
