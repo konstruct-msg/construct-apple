@@ -11,9 +11,36 @@ import UIKit
 struct DiagnosticsView: View {
     @State private var logText: String = ""
     @State private var logSize: String = ""
+    private var push = PushNotificationManager.shared
 
     var body: some View {
         List {
+            // MARK: - Push Notifications
+            Section {
+                diagRow(
+                    label: "Permission",
+                    value: push.authorizationStatus.description,
+                    ok: push.authorizationStatus == .authorized || push.authorizationStatus == .provisional
+                )
+                diagRow(
+                    label: "APNs Token",
+                    value: push.deviceToken != nil ? "received (\(push.deviceToken!.prefix(8))…)" : "missing",
+                    ok: push.deviceToken != nil
+                )
+                diagRow(
+                    label: "Registered with server",
+                    value: push.isRegisteredWithServer ? "yes" : "no — notifications won't arrive",
+                    ok: push.isRegisteredWithServer
+                )
+            } header: {
+                Text("Push Notifications")
+            } footer: {
+                if !push.isRegisteredWithServer {
+                    Text("Token not on server. Go back to chats — registration retries automatically on foreground.")
+                        .foregroundStyle(.orange)
+                }
+            }
+
             // MARK: - Status
             Section {
                 HStack {
@@ -117,6 +144,22 @@ struct DiagnosticsView: View {
     private func clearLogs() {
         LogCollector.shared.clearLogs()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { refresh() }
+    }
+
+    private func diagRow(label: String, value: String, ok: Bool) -> some View {
+        HStack {
+            Text(label)
+                .foregroundStyle(.secondary)
+            Spacer()
+            HStack(spacing: 5) {
+                Circle()
+                    .fill(ok ? Color.AppStatus.success : Color.red)
+                    .frame(width: 7, height: 7)
+                Text(value)
+                    .font(.footnote)
+                    .foregroundStyle(ok ? .primary : .red)
+            }
+        }
     }
 
     #if DEBUG

@@ -41,7 +41,7 @@ class PushNotificationManager: NSObject {
 
     /// Whether the current token has been successfully registered with the server.
     /// Resets when a new token arrives or when the user logs out.
-    private var isRegisteredWithServer: Bool = false
+    private(set) var isRegisteredWithServer: Bool = false
 
     func signalSilentPush() {
         lastSilentPushDate = Date()
