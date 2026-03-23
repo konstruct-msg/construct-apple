@@ -640,9 +640,13 @@ final class SessionCoordinator {
         resendAttemptedAt[userId] = now
 
         let cutoff = now.addingTimeInterval(-resendWindow) as NSDate
+        // Include .failed in addition to .sending/.sent: when the receiver sends a "failed" receipt
+        // (decryption failure), the sender marks the message as .failed. Without this, those
+        // messages would be silently excluded from auto-resend after the session heals.
         let statusPredicate = NSCompoundPredicate(orPredicateWithSubpredicates: [
             NSPredicate(format: "deliveryStatusRaw == %d", DeliveryStatus.sending.rawValue),
-            NSPredicate(format: "deliveryStatusRaw == %d", DeliveryStatus.sent.rawValue)
+            NSPredicate(format: "deliveryStatusRaw == %d", DeliveryStatus.sent.rawValue),
+            NSPredicate(format: "deliveryStatusRaw == %d", DeliveryStatus.failed.rawValue)
         ])
 
         let fetch = Message.fetchRequest()
