@@ -221,7 +221,12 @@ struct ChatView: View {
                 }
                 .onChange(of: viewModel.editingMessage) { _, editMsg in
                     if let editMsg {
-                        messageText = editMsg.decryptedContent ?? ""
+                        // For media messages pre-fill with caption, not the raw JSON payload
+                        if let mc = parseMediaContent(from: editMsg.decryptedContent) {
+                            messageText = mc.caption
+                        } else {
+                            messageText = editMsg.decryptedContent ?? ""
+                        }
                     }
                 }
             }

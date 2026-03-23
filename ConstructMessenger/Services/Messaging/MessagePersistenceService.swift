@@ -75,9 +75,9 @@ class MessagePersistenceService {
                 newMessage.replyToContent = replyToContentOverride ?? replyMessage.decryptedContent
             }
             
-            // Store thumbnails locally for media messages
-            if !localThumbnails.isEmpty, let firstThumbnail = localThumbnails.first {
-                MediaManager.shared.storeThumbnail(firstThumbnail, for: message.id)
+            // Store all thumbnails indexed for multi-image messages
+            for (index, thumb) in localThumbnails.enumerated() {
+                MediaManager.shared.storeThumbnail(thumb, for: message.id, at: index)
             }
             
             isNewMessage = true

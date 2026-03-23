@@ -21,13 +21,19 @@ final class MediaImageCache {
 
     private(set) var images: [String: PlatformImage] = [:]
 
-    func store(_ image: PlatformImage, for messageId: String) {
-        images[messageId] = image
+    private static func key(_ messageId: String, _ index: Int) -> String { "\(messageId)_\(index)" }
+
+    func store(_ image: PlatformImage, for messageId: String, at index: Int = 0) {
+        images[Self.key(messageId, index)] = image
     }
 
-    func image(for messageId: String) -> PlatformImage? {
-        images[messageId]
+    func image(for messageId: String, at index: Int = 0) -> PlatformImage? {
+        images[Self.key(messageId, index)]
     }
+
+    // Legacy single-image accessor kept for callers that don't need index
+    func store(_ image: PlatformImage, for messageId: String) { store(image, for: messageId, at: 0) }
+    func image(for messageId: String) -> PlatformImage? { image(for: messageId, at: 0) }
 }
 
 // MARK: - Parse Helper
@@ -39,39 +45,60 @@ struct GalleryStartItem: Identifiable {
     let id: String  // message.id
 }
 
+// MARK: - Flat gallery entry (message + item index)
+
+private struct GalleryEntry: Identifiable {
+    let id: String          // "\(messageId)_\(itemIndex)"
+    let message: Message
+    let itemIndex: Int
+    let mediaItem: [String: Any]
+}
+
 // MARK: - Gallery Viewer
 
 struct MediaGalleryViewer: View {
-    let messages: [Message]          // all media messages for this chat, ordered
+    let messages: [Message]
     let initialMessageId: String
     @Binding var isPresented: Bool
 
-    @State private var currentId: String
+    @State private var currentEntryId: String
     @State private var saveStatus: SaveStatus = .idle
 
     enum SaveStatus { case idle, saving, saved, failed }
 
     @State private var dismissOffset: CGFloat = 0
 
+    /// Expand each message into per-item entries for multi-image messages
+    private var entries: [GalleryEntry] {
+        messages.flatMap { msg -> [GalleryEntry] in
+            guard let mc = parseMediaContent(from: msg.decryptedContent), !mc.mediaItems.isEmpty else {
+                return [GalleryEntry(id: "\(msg.id)_0", message: msg, itemIndex: 0, mediaItem: [:])]
+            }
+            return mc.mediaItems.enumerated().map { idx, item in
+                GalleryEntry(id: "\(msg.id)_\(idx)", message: msg, itemIndex: idx, mediaItem: item)
+            }
+        }
+    }
+
     init(messages: [Message], initialMessageId: String, isPresented: Binding<Bool>) {
         self.messages = messages
         self.initialMessageId = initialMessageId
         self._isPresented = isPresented
-        self._currentId = State(initialValue: initialMessageId)
+        self._currentEntryId = State(initialValue: "\(initialMessageId)_0")
     }
 
-    private var currentIndex: Int {
-        (messages.firstIndex { $0.id == currentId } ?? 0) + 1
+    private var currentPosition: Int {
+        (entries.firstIndex { $0.id == currentEntryId } ?? 0) + 1
     }
 
     var body: some View {
         ZStack(alignment: .top) {
             Color.black.ignoresSafeArea()
 
-            TabView(selection: $currentId) {
-                ForEach(messages, id: \.id) { message in
-                    MediaGalleryPage(message: message)
-                        .tag(message.id)
+            TabView(selection: $currentEntryId) {
+                ForEach(entries) { entry in
+                    MediaGalleryPage(message: entry.message, itemIndex: entry.itemIndex, mediaItem: entry.mediaItem)
+                        .tag(entry.id)
                 }
             }
             #if os(iOS)
@@ -89,8 +116,8 @@ struct MediaGalleryViewer: View {
 
                 Spacer()
 
-                if messages.count > 1 {
-                    Text("\(currentIndex) / \(messages.count)")
+                if entries.count > 1 {
+                    Text("\(currentPosition) / \(entries.count)")
                         .font(.subheadline.weight(.medium))
                         .foregroundColor(.white.opacity(0.8))
                 }
@@ -165,7 +192,8 @@ struct MediaGalleryViewer: View {
     }
 
     private func saveCurrentImage() {
-        guard let image = MediaImageCache.shared.image(for: currentId) else { return }
+        guard let entry = entries.first(where: { $0.id == currentEntryId }),
+              let img = MediaImageCache.shared.image(for: entry.message.id, at: entry.itemIndex) else { return }
         saveStatus = .saving
 
         #if os(iOS)
@@ -176,13 +204,13 @@ struct MediaGalleryViewer: View {
                     resetSaveStatus()
                     return
                 }
-                UIImageWriteToSavedPhotosAlbum(image, nil, nil, nil)
+                UIImageWriteToSavedPhotosAlbum(img, nil, nil, nil)
                 saveStatus = .saved
                 resetSaveStatus()
             }
         }
         #else
-        if let tiffData = image.tiffRepresentation,
+        if let tiffData = img.tiffRepresentation,
            let bitmapRep = NSBitmapImageRep(data: tiffData),
            let pngData = bitmapRep.representation(using: .png, properties: [:]) {
             let panel = NSSavePanel()
@@ -212,6 +240,8 @@ struct MediaGalleryViewer: View {
 
 struct MediaGalleryPage: View {
     let message: Message
+    let itemIndex: Int
+    let mediaItem: [String: Any]
 
     @State private var image: PlatformImage?
     @State private var isLoading = false
@@ -305,30 +335,35 @@ struct MediaGalleryPage: View {
     private func loadImage() {
         guard !message.isDeleted, message.managedObjectContext != nil else { return }
 
-        // Already cached — show immediately
-        if let cached = MediaImageCache.shared.image(for: message.id) {
+        // Already cached
+        if let cached = MediaImageCache.shared.image(for: message.id, at: itemIndex) {
             image = cached
             return
         }
 
         isLoading = true
 
-        // Sent by me — retrieve from local storage (already full-res)
+        // Sent by me — full-res stored locally
         if message.isSentByMe {
-            if let data = MediaManager.shared.retrieveThumbnail(for: message.id),
+            if let data = MediaManager.shared.retrieveThumbnail(for: message.id, at: itemIndex),
                let img = PlatformImage(data: data) {
-                MediaImageCache.shared.store(img, for: message.id)
+                MediaImageCache.shared.store(img, for: message.id, at: itemIndex)
                 image = img
             }
             isLoading = false
             return
         }
 
-        // Received — parse metadata and download
-        guard let mediaContent = parseMediaContent(from: message.decryptedContent),
-              let mediaId = mediaContent.media["mediaId"] as? String,
-              let mediaUrl = mediaContent.media["mediaUrl"] as? String,
-              let mediaKeyBase64 = mediaContent.media["mediaKey"] as? String else {
+        // Received — download using mediaItem dict (already extracted from JSON by caller)
+        let item = mediaItem.isEmpty
+            ? (parseMediaContent(from: message.decryptedContent)?.mediaItems.indices.contains(itemIndex) == true
+               ? parseMediaContent(from: message.decryptedContent)!.mediaItems[itemIndex]
+               : [:])
+            : mediaItem
+
+        guard let mediaId = item["mediaId"] as? String,
+              let mediaUrl = item["mediaUrl"] as? String,
+              let mediaKeyBase64 = item["mediaKey"] as? String else {
             isLoading = false
             return
         }
@@ -336,13 +371,10 @@ struct MediaGalleryPage: View {
         Task {
             do {
                 let data = try await MediaManager.shared.downloadAndDecryptMedia(
-                    mediaId: mediaId,
-                    mediaUrl: mediaUrl,
-                    mediaKeyBase64: mediaKeyBase64
-                )
+                    mediaId: mediaId, mediaUrl: mediaUrl, mediaKeyBase64: mediaKeyBase64)
                 if let img = PlatformImage(data: data) {
                     await MainActor.run {
-                        MediaImageCache.shared.store(img, for: message.id)
+                        MediaImageCache.shared.store(img, for: message.id, at: itemIndex)
                         image = img
                         isLoading = false
                     }

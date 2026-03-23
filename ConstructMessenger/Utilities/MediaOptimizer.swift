@@ -51,7 +51,8 @@ struct MediaOptimizer {
 
     private static let maxImageDimension: CGFloat = 2048
     private static let maxImageBytes: Int = 5 * 1024 * 1024
-    private static let thumbnailSize = CGSize(width: 200, height: 200)
+    private static let thumbnailMaxDimension: CGFloat = 400
+    private static let thumbnailSize = CGSize(width: 200, height: 200)  // kept for legacy callers
     private static let jpegQualitySteps: [CGFloat] = [0.9, 0.8, 0.7, 0.6, 0.5, 0.4]
     private static let thumbnailQuality: CGFloat = 0.7
 
@@ -117,7 +118,11 @@ struct MediaOptimizer {
 
     static func generateThumbnail(from image: PlatformImage) throws -> Data {
         #if canImport(UIKit)
-        let thumbnail = image.resized(to: thumbnailSize, contentMode: .scaleAspectFill)
+        // Preserve aspect ratio — scale longest side to thumbnailMaxDimension
+        let size = image.size
+        let scale = thumbnailMaxDimension / max(size.width, size.height)
+        let targetSize = CGSize(width: size.width * scale, height: size.height * scale)
+        let thumbnail = image.resized(to: targetSize, contentMode: .scaleAspectFit)
         guard let data = thumbnail.jpegData(compressionQuality: thumbnailQuality) else {
             throw MediaOptimizationError.thumbnailGenerationFailed
         }
