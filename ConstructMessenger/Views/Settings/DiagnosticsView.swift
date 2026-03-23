@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UserNotifications
 #if canImport(UIKit)
 import UIKit
 #endif
