@@ -8,6 +8,36 @@
 import SwiftUI
 import CoreData
 
+// MARK: - Rotated SF Symbol helper
+
+/// Renders an SF Symbol to UIImage with an arbitrary rotation applied.
+/// Required because .rotationEffect() is stripped when SwiftUI converts
+/// .tabItem content to UITabBarItem images via UIKit.
+private func rotatedSymbol(_ name: String, degrees: Double, pointSize: CGFloat = 22) -> Image {
+    let config = UIImage.SymbolConfiguration(pointSize: pointSize, weight: .regular)
+    guard let source = UIImage(systemName: name, withConfiguration: config) else {
+        return Image(systemName: name)
+    }
+    let radians = CGFloat(degrees * .pi / 180)
+    // Expand canvas so corners don't clip after rotation
+    let diagonal = ceil(sqrt(source.size.width * source.size.width +
+                              source.size.height * source.size.height))
+    let size = CGSize(width: diagonal, height: diagonal)
+    let renderer = UIGraphicsImageRenderer(size: size)
+    let rotated = renderer.image { ctx in
+        let cgCtx = ctx.cgContext
+        cgCtx.translateBy(x: size.width / 2, y: size.height / 2)
+        cgCtx.rotate(by: radians)
+        source.draw(in: CGRect(
+            x: -source.size.width / 2,
+            y: -source.size.height / 2,
+            width: source.size.width,
+            height: source.size.height
+        ))
+    }
+    return Image(uiImage: rotated.withRenderingMode(.alwaysTemplate))
+}
+
 struct MainTabView: View {
     @Environment(AuthViewModel.self) private var authViewModel
     @Environment(ChatsViewModel.self) private var chatsViewModel
@@ -33,7 +63,11 @@ struct MainTabView: View {
                 SynapsView()
                     .environment(chatsViewModel)
                     .tabItem {
-                        Label("synaps", systemImage: "guidepoint.vertical").rotationEffect(Angle(degrees: 45))
+                        Label {
+                            Text("synaps")
+                        } icon: {
+                            rotatedSymbol("guidepoint.vertical", degrees: 45)
+                        }
                     }
 
                 #if os(iOS)
