@@ -597,3 +597,6 @@
 "lockdown_active_since" = "Active since %@";
 "lockdown_mode_hint" = "Only contacts added before activation receive notifications. New senders are silently saved — you can review them anytime.";
 "allow" = "Allow";
+
+// MARK: - Image Crop
+"crop_use_photo" = "Use Photo";
