@@ -33,11 +33,7 @@ struct MainTabView: View {
                 SynapsView()
                     .environment(chatsViewModel)
                     .tabItem {
-                        Label {
-                            Text("synaps")
-                        } icon: {
-                            rotatedSFSymbol("guidepoint.vertical", degrees: 45)
-                        }
+                        Label("synaps", systemImage: "point.3.filled.connected.trianglepath.dotted")
                     }
 
                 #if os(iOS)
