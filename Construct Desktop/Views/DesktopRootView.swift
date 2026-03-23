@@ -73,8 +73,7 @@ struct DesktopRootView: View {
             get: { chatsViewModel.showNewChat },
             set: { chatsViewModel.showNewChat = $0 }
         )) {
-            NewChatView()
-                .environment(chatsViewModel)
+            NewChatView(chatsViewModel: chatsViewModel)
                 .environment(\.managedObjectContext, viewContext)
                 .frame(minWidth: 400, minHeight: 300)
         }
