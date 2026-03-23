@@ -200,7 +200,7 @@ private struct SynapsRow: View {
         if hasActiveChat {
             Image(systemName: "message.fill")
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.primary)
         }
         if user.isBlocked {
             Image(systemName: "slash.circle")

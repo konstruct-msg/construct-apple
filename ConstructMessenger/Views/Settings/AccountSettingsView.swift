@@ -128,12 +128,6 @@ struct AccountSettingsView: View {
                 .font(.subheadline)
                 .foregroundColor(.secondary)
 
-            Button(LocalizedStringKey("change_avatar")) {
-                if viewModel.profileImage != nil { showingAvatarViewer = true }
-                else { showingImagePicker = true }
-            }
-            .font(.subheadline)
-            .padding(.top, 2)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 24)
@@ -295,7 +289,7 @@ struct DeleteAccountConfirmationView: View {
             Spacer()
 
             // Icon
-            Image(systemName: "person.crop.circle.badge.minus")
+            Image(systemName: "exclamationmark.triangle")
                 .font(.system(size: 52, weight: .light))
                 .foregroundColor(.red.opacity(0.85))
                 .padding(.bottom, 20)

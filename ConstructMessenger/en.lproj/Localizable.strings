@@ -605,7 +605,7 @@
 
 // MARK: - Synaps
 "synaps" = "Synaps";
-"synaps_search_prompt" = "Search Synaps";
+"synaps_search_prompt" = "Search";
 "synaps_empty_title" = "No connections yet";
 "synaps_empty_subtitle" = "People you connect with will appear here, even after you clear a conversation.";
 "synaps_open_chat" = "Open Chat";

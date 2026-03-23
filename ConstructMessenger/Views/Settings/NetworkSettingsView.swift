@@ -82,7 +82,7 @@ struct NetworkSettingsView: View {
                         }
                     }
                 )) {
-                    Text("traffic_protection")
+                    Text("ice_title")
                         .fontWeight(.medium)
                 }
                 .disabled(!iceManager.hasCert)
@@ -120,7 +120,7 @@ struct NetworkSettingsView: View {
                     }
                 }
             } header: {
-                Text("ice_section_header")
+                Text("traffic_protection")
             } footer: {
                 if !iceManager.hasCert {
                     Text("ice_unavailable")
