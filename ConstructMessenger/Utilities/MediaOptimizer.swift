@@ -51,12 +51,10 @@ struct MediaOptimizer {
 
     /// Max pixel dimension on the longest side. 1920px is a good chat quality/size balance.
     private static let maxImageDimension: CGFloat = 1920
-    /// 4 MB per image — generous headroom for high-res photos after proper pixel-space compress
+    /// Budget per image. Binary search maximises quality within this limit.
     private static let maxImageBytes: Int = 4 * 1024 * 1024
     private static let thumbnailMaxDimension: CGFloat = 400
     private static let thumbnailSize = CGSize(width: 200, height: 200)  // kept for legacy callers
-    /// Start at 0.80 — avoids inflating already-compressed JPEGs while keeping good quality
-    private static let jpegQualitySteps: [CGFloat] = [0.80, 0.70, 0.60, 0.50, 0.40]
     private static let thumbnailQuality: CGFloat = 0.70
 
     static func optimizeImage(_ image: PlatformImage) throws -> OptimizedMedia {
@@ -188,33 +186,87 @@ struct MediaOptimizer {
     // MARK: - Private (iOS only)
 
     #if canImport(UIKit)
-    /// Compress to ≤ maxImageBytes, working entirely in pixel space (scale=1.0).
+    /// Maximize JPEG quality within maxImageBytes budget.
+    ///
+    /// Strategy:
+    /// 1. Try full original resolution first (no resize) — best quality
+    /// 2. If over budget even at min quality, resize to maxImageDimension and retry
+    /// 3. If still over budget, step down resolution by 25% per iteration until 1024px min
+    /// Within each resolution tier, binary-search for the highest quality ≤ maxImageBytes.
     /// Returns a UIImage with scale=1.0 so .size == pixel dimensions.
     private static func progressiveCompress(_ image: UIImage) throws -> (UIImage, Data) {
-        // Convert image to pixel-space dimensions
         let pixelW = image.size.width * image.scale
         let pixelH = image.size.height * image.scale
+        let originalMaxPixel = max(pixelW, pixelH)
 
-        var targetMaxPixel = maxImageDimension
-        let minPixel: CGFloat = 1024
-        while true {
-            let resized = resizeToPixels(image, maxPixel: targetMaxPixel)
-            for quality in jpegQualitySteps {
-                if let data = resized.jpegData(compressionQuality: quality),
-                   data.count <= maxImageBytes {
-                    return (resized, data)
-                }
-            }
-            if targetMaxPixel <= minPixel {
-                guard let fallback = resized.jpegData(compressionQuality: jpegQualitySteps.last ?? 0.35) else {
-                    throw MediaOptimizationError.conversionFailed
-                }
-                return (resized, fallback)
-            }
-            targetMaxPixel = max(minPixel, targetMaxPixel * 0.75)
+        // Resolution tiers to try, in order of preference (highest quality first)
+        var tiers: [CGFloat] = []
+        if originalMaxPixel <= maxImageDimension {
+            tiers.append(originalMaxPixel)  // full res — no downscale
         }
-        // unreachable but needed for compiler
-        _ = (pixelW, pixelH)
+        tiers.append(maxImageDimension)
+        var tier = maxImageDimension * 0.75
+        let minPixel: CGFloat = 1024
+        while tier >= minPixel {
+            tiers.append(tier.rounded())
+            tier *= 0.75
+        }
+        tiers.append(minPixel)
+        // Deduplicate while preserving order
+        var seen = Set<CGFloat>()
+        tiers = tiers.filter { seen.insert($0).inserted }
+
+        for maxPixel in tiers {
+            let resized = resizeToPixels(image, maxPixel: maxPixel)
+            if let (quality, data) = binarySearchQuality(for: resized, budget: maxImageBytes) {
+                let pw = Int(resized.size.width), ph = Int(resized.size.height)
+                Log.debug("  → \(pw)×\(ph)px q=\(String(format: "%.2f", quality)) \(data.count/1024)KB",
+                          category: "MediaOptimizer")
+                return (resized, data)
+            }
+        }
+
+        // Absolute fallback — min quality at min resolution
+        let fallbackImg = resizeToPixels(image, maxPixel: minPixel)
+        guard let fallback = fallbackImg.jpegData(compressionQuality: 0.35) else {
+            throw MediaOptimizationError.conversionFailed
+        }
+        return (fallbackImg, fallback)
+    }
+
+    /// Binary search for the highest JPEG quality whose encoded size ≤ budget.
+    /// Returns nil if even minQuality produces a file over budget.
+    private static func binarySearchQuality(for image: UIImage, budget: Int) -> (CGFloat, Data)? {
+        let minQ: CGFloat = 0.35
+        let maxQ: CGFloat = 0.88    // cap at 0.88 — diminishing returns above this
+        let tolerance: CGFloat = 0.03
+
+        // Quick check: if high quality fits, return immediately
+        if let data = image.jpegData(compressionQuality: maxQ), data.count <= budget {
+            return (maxQ, data)
+        }
+        // Quick check: if even min quality is over budget, bail
+        guard let minData = image.jpegData(compressionQuality: minQ),
+              minData.count <= budget else {
+            return nil
+        }
+
+        // Binary search between minQ and maxQ
+        var lo = minQ, hi = maxQ
+        var bestQ = minQ
+        var bestData = minData
+
+        while hi - lo > tolerance {
+            let mid = (lo + hi) / 2
+            if let data = image.jpegData(compressionQuality: mid), data.count <= budget {
+                bestQ = mid
+                bestData = data
+                lo = mid
+            } else {
+                hi = mid
+            }
+        }
+        return (bestQ, bestData)
     }
 
     /// Downscale to fit within maxPixel on the longest side.
