@@ -87,9 +87,10 @@ struct SynapsView: View {
 
     private var emptyState: some View {
         VStack(spacing: 16) {
-            Image(systemName: "point.3.filled.connected.trianglepath")
+            Image(systemName: "guidepoint.vertical")
                 .font(.system(size: 48, weight: .thin))
                 .foregroundStyle(.secondary)
+                .rotationEffect(.degrees(45))
             Text(LocalizedStringKey("synaps_empty_title"))
                 .font(.headline)
             Text(LocalizedStringKey("synaps_empty_subtitle"))

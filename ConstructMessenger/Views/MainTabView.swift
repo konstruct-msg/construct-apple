@@ -33,7 +33,7 @@ struct MainTabView: View {
                 SynapsView()
                     .environment(chatsViewModel)
                     .tabItem {
-                        Label("synaps", systemImage: "point.3.filled.connected.trianglepath")
+                        Label("synaps", systemImage: "guidepoint.vertical").rotationEffect(Angle(degrees: 45))
                     }
 
                 #if os(iOS)
