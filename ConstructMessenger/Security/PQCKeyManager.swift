@@ -161,12 +161,21 @@ final class PQCKeyManager {
             Log.info("⚠️ PQC: Kyber SPK upload unavailable — will retry (key already in Keychain)", category: "PQC")
         }
 
-        // Attempts 1-2: key is already stored, just retry the upload
+        // Attempts 1-2: key is already stored, retry upload with fresh OTPKs
+        // (uploadKyberSPK alone is rejected by server — pre_keys/kyber_pre_keys must not both be empty)
+        guard let core = CryptoManager.shared.orchestratorCore else { return }
         for attempt in 1...2 {
             let delay = Double(attempt) * 2.0
             try? await Task.sleep(for: .seconds(delay))
             do {
-                try await uploadKyberSPK(deviceId: deviceId)
+                let spkId = shared.kyberSPKId()
+                let spkPublicKey = try shared.kyberSPKPublic()
+                let spkSig = try signKyberKey(publicKey: spkPublicKey, core: core)
+                _ = try await generateAndUploadKyberOtpks(
+                    count: 20,
+                    deviceId: deviceId,
+                    kyberSignedPreKey: (keyId: spkId, publicKey: spkPublicKey, signature: spkSig)
+                )
                 UserDefaults.standard.set(true, forKey: migrationDoneKey)
                 Log.info("✅ PQC: Kyber SPK migration complete (retry \(attempt))", category: "PQC")
                 return
