@@ -16,6 +16,7 @@ import CoreGraphics
 #endif
 import CryptoKit
 import UniformTypeIdentifiers
+import GRPCCore
 
 /// Unified manager for all media operations
 @MainActor
@@ -144,21 +145,13 @@ class MediaManager {
     func uploadImage(_ image: PlatformImage, for recipientId: String) async throws -> MediaMessageData {
         Log.info("📤 Uploading image for recipient: \(recipientId)", category: "MediaManager")
         
-        // Optimize before upload (resize + compress + strip metadata)
         let optimized = try MediaOptimizer.optimizeImage(image)
         
-        // Upload optimized data
-        let uploadResult = try await MediaServiceClient.shared.uploadData(
-                optimized.data,
-                mimeType: optimized.metadata.mimeType
-            )
+        // Upload with 1 automatic retry on stream failure
+        let uploadResult = try await Self.uploadWithRetry(data: optimized.data, mimeType: optimized.metadata.mimeType)
         Log.info("✅ Image uploaded: \(uploadResult.mediaId)", category: "MediaManager")
         
-        // ✅ Use raw base64 key - entire message will be encrypted via Double Ratchet
-        // No need for double encryption of the media key
         let mediaKeyBase64 = uploadResult.encryptionKey.base64EncodedString()
-        
-        // Extract image dimensions
         let width = optimized.metadata.width
         let height = optimized.metadata.height
         let thumbnailBase64 = optimized.thumbnail?.base64EncodedString()
@@ -177,6 +170,17 @@ class MediaManager {
             filename: nil,
             compressed: false
         )
+    }
+
+    /// Uploads data with one automatic retry on transient gRPC stream failures.
+    private static func uploadWithRetry(data: Data, mimeType: String) async throws -> MediaServiceClient.UploadedMedia {
+        do {
+            return try await MediaServiceClient.shared.uploadData(data, mimeType: mimeType)
+        } catch let error as GRPCCore.RPCError where error.code == .unavailable {
+            Log.info("🔄 Upload stream dropped — retrying once (code=\(error.code))", category: "MediaManager")
+            try await Task.sleep(nanoseconds: 1_500_000_000) // 1.5s backoff
+            return try await MediaServiceClient.shared.uploadData(data, mimeType: mimeType)
+        }
     }
 
     /// Upload a file (document, PDF, etc.) for a chat message.

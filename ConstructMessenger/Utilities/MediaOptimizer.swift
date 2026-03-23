@@ -50,23 +50,24 @@ struct MediaMetadata {
 struct MediaOptimizer {
 
     private static let maxImageDimension: CGFloat = 2048
-    private static let maxImageBytes: Int = 5 * 1024 * 1024
+    /// Target max size per image — keeps uploads fast and server-friendly
+    private static let maxImageBytes: Int = 2 * 1024 * 1024
     private static let thumbnailMaxDimension: CGFloat = 400
     private static let thumbnailSize = CGSize(width: 200, height: 200)  // kept for legacy callers
-    private static let jpegQualitySteps: [CGFloat] = [0.9, 0.8, 0.7, 0.6, 0.5, 0.4]
+    /// Start at 0.75 to avoid re-inflating already-compressed JPEGs
+    private static let jpegQualitySteps: [CGFloat] = [0.75, 0.65, 0.55, 0.45, 0.35]
     private static let thumbnailQuality: CGFloat = 0.7
 
     static func optimizeImage(_ image: PlatformImage) throws -> OptimizedMedia {
         #if canImport(UIKit)
-        let originalData = image.pngData() ?? Data()
         let (optimizedImage, optimizedData) = try progressiveCompress(image)
         let thumbnail = try generateThumbnail(from: optimizedImage)
         let metadata = MediaMetadata(
-            originalSize: originalData.count, optimizedSize: optimizedData.count,
+            originalSize: optimizedData.count, optimizedSize: optimizedData.count,
             width: Int(optimizedImage.size.width), height: Int(optimizedImage.size.height),
             duration: nil, mimeType: "image/jpeg"
         )
-        Log.info("Image optimized: \(originalData.count) → \(optimizedData.count) bytes", category: "MediaOptimizer")
+        Log.info("Image optimized → \(optimizedData.count) bytes (\(Int(optimizedImage.size.width))×\(Int(optimizedImage.size.height)))", category: "MediaOptimizer")
         return OptimizedMedia(data: optimizedData, thumbnail: thumbnail, metadata: metadata)
         #else
         guard let tiff = image.tiffRepresentation,

@@ -132,22 +132,11 @@ struct MessageInputView: View {
             HStack(spacing: 8) {
                 // Attachment button (+ icon)
                 Button {
-#if targetEnvironment(macCatalyst)
-                    showFilePicker = true
-#else
                     showAttachmentMenu = true
-#endif
                 } label: {
-#if targetEnvironment(macCatalyst)
-                    Image(systemName: "plus")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 28, height: 28)
-#else
                     Image(systemName: "plus.circle.fill")
                         .font(.system(size: 28))
                         .foregroundColor(Color.blue)
-#endif
                 }
 #if os(iOS)
                 .confirmationDialog(LocalizedStringKey("attach"), isPresented: $showAttachmentMenu) {
@@ -171,7 +160,7 @@ struct MessageInputView: View {
                 .photosPicker(
                     isPresented: $showPhotoPicker,
                     selection: $selectedPhotos,
-                    maxSelectionCount: 10,
+                    maxSelectionCount: 4,
                     matching: .images
                 )
 #endif
