@@ -6,7 +6,9 @@
 //
 
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#endif
 
 struct DiagnosticsView: View {
     @State private var logText: String = ""
@@ -134,11 +136,16 @@ struct DiagnosticsView: View {
             Log.error("Failed to create log archive", category: "Diagnostics")
             return
         }
+#if canImport(UIKit)
         let av = UIActivityViewController(activityItems: [url], applicationActivities: nil)
         if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
            let root = scene.windows.first(where: { $0.isKeyWindow })?.rootViewController {
             root.present(av, animated: true)
         }
+#elseif os(macOS)
+        NSSharingServicePicker(items: [url])
+            .show(relativeTo: .zero, of: NSApp.keyWindow?.contentView ?? NSView(), preferredEdge: .minY)
+#endif
     }
 
     private func clearLogs() {

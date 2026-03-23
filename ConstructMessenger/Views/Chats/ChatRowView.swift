@@ -92,6 +92,7 @@ struct ChatRowView: View {
                 Label("Delete Chat", systemImage: "trash")
             }
         }
+    }
 
     private var initials: String {
         guard let displayName = chat.otherUser?.resolvedDisplayName else { return "?" }
