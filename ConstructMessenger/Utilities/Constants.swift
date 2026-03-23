@@ -423,4 +423,5 @@ extension APIConstants {
 // MARK: - Notifications
 extension Notification.Name {
     static let serverURLChanged = Notification.Name("serverURLChanged")
+    static let deleteChat = Notification.Name("constructDeleteChat")
 }

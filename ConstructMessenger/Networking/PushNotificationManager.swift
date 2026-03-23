@@ -349,6 +349,9 @@ import Foundation
 final class PushNotificationManager {
     static let shared = PushNotificationManager()
     private init() {}
+    // On macOS, push is delivered via persistent gRPC MessageStream — no APNs needed.
+    var isPushEnabled: Bool { true }
+    var lastSilentPushDate: Date? { nil }
     func registerIfNeeded() {}
     func updateToken(_ token: Data) {}
     func signalSilentPush() {}
@@ -356,7 +359,7 @@ final class PushNotificationManager {
     func registerDeviceToken(_ tokenData: Data) async {}
     func unregisterDeviceToken() async {}
     func handleRegistrationError(_ error: Error) {}
-    func requestPermission() async -> Bool { return false }
+    func requestPermission() async -> Bool { true }
     func checkAuthorizationStatus() async {}
 }
 #endif

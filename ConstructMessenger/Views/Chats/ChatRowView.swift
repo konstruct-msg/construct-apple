@@ -65,7 +65,33 @@ struct ChatRowView: View {
 
         }
         .padding(.vertical, 4)
-    }
+        // Right-click context menu on macOS
+        .contextMenu {
+            Button {
+                chat.isPinned.toggle()
+                try? chat.managedObjectContext?.save()
+            } label: {
+                Label(chat.isPinned ? "Unpin" : "Pin", systemImage: chat.isPinned ? "pin.slash" : "pin")
+            }
+
+            if chat.unreadCount > 0 {
+                Button {
+                    chat.unreadCount = 0
+                    try? chat.managedObjectContext?.save()
+                } label: {
+                    Label("Mark as Read", systemImage: "envelope.open")
+                }
+            }
+
+            Divider()
+
+            Button(role: .destructive) {
+                // Chat deletion is handled via ChatManagementService; tag it for parent list to process
+                NotificationCenter.default.post(name: .deleteChat, object: chat.id)
+            } label: {
+                Label("Delete Chat", systemImage: "trash")
+            }
+        }
 
     private var initials: String {
         guard let displayName = chat.otherUser?.resolvedDisplayName else { return "?" }

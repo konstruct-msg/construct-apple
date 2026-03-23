@@ -109,6 +109,16 @@ struct ChatsListView: View {
                     }
                 }
             }
+            // macOS: handle right-click delete from ChatRowView context menu
+            .onReceive(NotificationCenter.default.publisher(for: .deleteChat)) { note in
+                guard let chatId = note.object as? String,
+                      let chat = chats.first(where: { $0.id == chatId }) else { return }
+                Task { await chatsViewModel.deleteChatWithEndSession(chat: chat) }
+            }
+            // Keep totalUnreadCount in sync for macOS Dock badge
+            .onChange(of: chats.reduce(0, { $0 + Int($1.unreadCount) })) { _, total in
+                chatsViewModel.totalUnreadCount = total
+            }
         }
     }
 

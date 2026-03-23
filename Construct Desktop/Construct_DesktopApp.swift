@@ -8,6 +8,7 @@
 
 import SwiftUI
 import CoreData
+import UserNotifications
 
 @main
 struct Construct_DesktopApp: App {
@@ -33,11 +34,26 @@ struct Construct_DesktopApp: App {
                        let deviceId = KeychainManager.shared.loadDeviceID() {
                         await PQCKeyManager.migrateIfNeeded(deviceId: deviceId)
                     }
+                    // Request local notification permission for macOS desktop alerts
+                    try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
                 }
         }
         .commands {
-            // Remove "New Window" shortcut — messenger is single-window
-            CommandGroup(replacing: .newItem) {}
+            // Replace default "New Window" with "New Chat" (⌘N)
+            CommandGroup(replacing: .newItem) {
+                Button("New Chat") {
+                    chatsViewModel.showNewChat = true
+                }
+                .keyboardShortcut("n", modifiers: .command)
+            }
+
+            // Add Find in sidebar (⌘F)
+            CommandGroup(after: .sidebar) {
+                Button("Find Chat") {
+                    chatsViewModel.sidebarSearchFocused = true
+                }
+                .keyboardShortcut("f", modifiers: .command)
+            }
         }
 
         // MARK: - macOS Settings window (⌘,)

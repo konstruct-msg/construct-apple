@@ -30,6 +30,19 @@ class ChatsViewModel {
     // ✅ Selected tab index — used to switch tabs programmatically (e.g., open chat from Synaps)
     var selectedTab: Int = 0
 
+    // ✅ macOS Desktop: show new chat sheet
+    var showNewChat: Bool = false
+
+    // ✅ macOS Desktop: focus sidebar search field programmatically
+    var sidebarSearchFocused: Bool = false
+
+    // ✅ macOS Desktop: total unread count for Dock badge
+    var totalUnreadCount: Int = 0
+
+    // ✅ macOS Desktop: pending drag-dropped image/file → forwarded to active ChatView
+    var pendingDroppedImage: PlatformImage? = nil
+    var pendingDroppedFileURL: URL? = nil
+
     // ✅ Message stream (gRPC bidirectional)
     private let streamManager = MessageStreamManager.shared
 

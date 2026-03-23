@@ -163,6 +163,46 @@ struct MessageInputView: View {
                     maxSelectionCount: 10,
                     matching: .images
                 )
+#else
+                // macOS: popover with Photos and Files options
+                .popover(isPresented: $showAttachmentMenu, arrowEdge: .top) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Button {
+                            showAttachmentMenu = false
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                showPhotoPicker = true
+                            }
+                        } label: {
+                            Label(LocalizedStringKey("photos"), systemImage: "photo.on.rectangle")
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 10)
+                        }
+                        .buttonStyle(.plain)
+
+                        Divider()
+
+                        Button {
+                            showAttachmentMenu = false
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                showFilePicker = true
+                            }
+                        } label: {
+                            Label(LocalizedStringKey("files"), systemImage: "paperclip")
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 10)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .frame(width: 180)
+                }
+                .photosPicker(
+                    isPresented: $showPhotoPicker,
+                    selection: $selectedPhotos,
+                    maxSelectionCount: 10,
+                    matching: .images
+                )
 #endif
 
                 HStack(spacing: 0) {
@@ -177,6 +217,21 @@ struct MessageInputView: View {
                     .padding(.leading, 12)
                     .padding(.trailing, canSend ? 8 : 12)
                     .padding(.vertical, 8)
+#elseif os(macOS)
+                    TextField("message_placeholder", text: $text, axis: .vertical)
+                        .lineLimit(1...8)
+                        .padding(.leading, 12)
+                        .padding(.trailing, canSend ? 8 : 12)
+                        .padding(.vertical, 8)
+                        .focused($isTextFieldFocused)
+                        .onKeyPress(keys: [.return], phases: .down) { press in
+                            if press.modifiers.contains(.shift) {
+                                text += "\n"
+                                return .handled
+                            }
+                            if canSend { sendMessage() }
+                            return .handled
+                        }
 #else
                     TextField("message_placeholder", text: $text, axis: .vertical)
                         .lineLimit(1...5)
@@ -206,6 +261,18 @@ struct MessageInputView: View {
                                     .offset(x: 1)
                             }
                             .padding(.trailing, 6)
+#elseif os(macOS)
+                            // macOS: compact send button (Enter also sends)
+                            ZStack {
+                                Circle()
+                                    .fill(Color.accentColor)
+                                    .frame(width: 26, height: 26)
+                                Image(systemName: "arrow.up")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundStyle(.white)
+                            }
+                            .padding(.trailing, 6)
+                            .help("Send (⏎) · New line (⇧⏎)")
 #else
                             Image(systemName: "arrow.up.circle.fill")
                                 .font(.system(size: 32))
