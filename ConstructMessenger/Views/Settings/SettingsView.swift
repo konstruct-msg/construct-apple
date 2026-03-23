@@ -97,6 +97,7 @@ struct SettingsView: View {
                                 }
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 14)
+                                .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
                         }
@@ -121,7 +122,7 @@ struct SettingsView: View {
 
                         // MARK: - App Settings Section
                         settingsSection {
-                            settingsNavRow(icon: "lock", text: "Security", destination: SecurityView())
+                            settingsNavRow(icon: "lock", text: "security", destination: SecurityView())
                             settingsDivider()
                             // Devices (multi-device) — hidden until backend is ready
                             // settingsNavRow(icon: "laptopcomputer", text: "Devices", destination: DevicesView())
@@ -180,7 +181,7 @@ struct SettingsView: View {
                             }
                             .buttonStyle(.plain)
                             settingsDivider()
-                            settingsNavRow(icon: "folder", text: "Drafts", destination: DraftsView())
+                            settingsNavRow(icon: "folder", text: "drafts", destination: DraftsView())
                         }
 
                         // MARK: - About Section
