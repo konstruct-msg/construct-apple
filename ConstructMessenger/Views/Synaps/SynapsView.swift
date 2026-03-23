@@ -117,6 +117,7 @@ private struct SynapsRow: View {
     var onPrune: () -> Void
 
     @Environment(\.managedObjectContext) private var context
+    @State private var showProfile = false
 
     private var hasActiveChat: Bool {
         (user.chats as? Set<Chat>)?.isEmpty == false
@@ -130,7 +131,11 @@ private struct SynapsRow: View {
             statusIcons
         }
         .contentShape(Rectangle())
-        .onTapGesture { onOpenChat() }
+        .onTapGesture { showProfile = true }
+        .sheet(isPresented: $showProfile) {
+            UserProfileView(user: user, onOpenChat: onOpenChat)
+                .environment(\.managedObjectContext, context)
+        }
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             Button(role: .destructive) {
                 onPrune()

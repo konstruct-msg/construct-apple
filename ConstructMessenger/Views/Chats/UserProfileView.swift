@@ -10,6 +10,8 @@ import CoreData
 
 struct UserProfileView: View {
     @ObservedObject var user: User
+    var onOpenChat: (() -> Void)? = nil
+
     @Environment(\.managedObjectContext) private var viewContext
     @Environment(\.dismiss) private var dismiss
 
@@ -86,22 +88,22 @@ struct UserProfileView: View {
                     .resizable()
                     .scaledToFill()
                     .frame(width: 88, height: 88)
-                    .clipShape(AvatarStyle.squircle(AvatarStyle.accountSize))
+                    .clipShape(AvatarStyle.avatarShape())
                 #else
                 Image(nsImage: avatarImage)
                     .resizable()
                     .scaledToFill()
                     .frame(width: 88, height: 88)
-                    .clipShape(AvatarStyle.squircle(AvatarStyle.accountSize))
+                    .clipShape(AvatarStyle.avatarShape())
                 #endif
             } else {
-                AvatarStyle.squircle(AvatarStyle.accountSize)
-                    .fill(Color.hexagonAccent(for: user.id ?? "").opacity(0.15))
+                Circle()
+                    .fill(Color.hexagonAccent(for: user.id).opacity(0.15))
                     .frame(width: 88, height: 88)
                     .overlay {
                         Text(initials)
                             .font(.system(size: 34, weight: .semibold))
-                            .foregroundColor(Color.hexagonAccent(for: user.id ?? ""))
+                            .foregroundColor(Color.hexagonAccent(for: user.id))
                     }
             }
 
@@ -153,6 +155,17 @@ struct UserProfileView: View {
         VStack(alignment: .leading, spacing: 0) {
             sectionHeader(LocalizedStringKey("actions"))
             VStack(spacing: 0) {
+                // Open chat (only shown from Synaps context)
+                if let openChat = onOpenChat {
+                    actionRow {
+                        Label(LocalizedStringKey("synaps_open_chat"), systemImage: "message")
+                    } action: {
+                        dismiss()
+                        openChat()
+                    }
+                    Divider().padding(.leading, 16)
+                }
+
                 // Share / stop sharing
                 if user.amISharingWith {
                     actionRow {
