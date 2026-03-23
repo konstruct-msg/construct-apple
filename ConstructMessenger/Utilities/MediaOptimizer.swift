@@ -49,25 +49,28 @@ struct MediaMetadata {
 // MARK: - Media Optimizer
 struct MediaOptimizer {
 
-    private static let maxImageDimension: CGFloat = 2048
-    /// Target max size per image — keeps uploads fast and server-friendly
-    private static let maxImageBytes: Int = 2 * 1024 * 1024
+    /// Max pixel dimension on the longest side. 1920px is a good chat quality/size balance.
+    private static let maxImageDimension: CGFloat = 1920
+    /// 4 MB per image — generous headroom for high-res photos after proper pixel-space compress
+    private static let maxImageBytes: Int = 4 * 1024 * 1024
     private static let thumbnailMaxDimension: CGFloat = 400
     private static let thumbnailSize = CGSize(width: 200, height: 200)  // kept for legacy callers
-    /// Start at 0.75 to avoid re-inflating already-compressed JPEGs
-    private static let jpegQualitySteps: [CGFloat] = [0.75, 0.65, 0.55, 0.45, 0.35]
-    private static let thumbnailQuality: CGFloat = 0.7
+    /// Start at 0.80 — avoids inflating already-compressed JPEGs while keeping good quality
+    private static let jpegQualitySteps: [CGFloat] = [0.80, 0.70, 0.60, 0.50, 0.40]
+    private static let thumbnailQuality: CGFloat = 0.70
 
     static func optimizeImage(_ image: PlatformImage) throws -> OptimizedMedia {
         #if canImport(UIKit)
         let (optimizedImage, optimizedData) = try progressiveCompress(image)
         let thumbnail = try generateThumbnail(from: optimizedImage)
+        // After compress, optimizedImage has scale=1.0, so .size == pixel dimensions
+        let pw = Int(optimizedImage.size.width), ph = Int(optimizedImage.size.height)
         let metadata = MediaMetadata(
             originalSize: optimizedData.count, optimizedSize: optimizedData.count,
-            width: Int(optimizedImage.size.width), height: Int(optimizedImage.size.height),
+            width: pw, height: ph,
             duration: nil, mimeType: "image/jpeg"
         )
-        Log.info("Image optimized → \(optimizedData.count) bytes (\(Int(optimizedImage.size.width))×\(Int(optimizedImage.size.height)))", category: "MediaOptimizer")
+        Log.info("Image optimized → \(optimizedData.count) bytes (\(pw)×\(ph)px)", category: "MediaOptimizer")
         return OptimizedMedia(data: optimizedData, thumbnail: thumbnail, metadata: metadata)
         #else
         guard let tiff = image.tiffRepresentation,
@@ -119,12 +122,17 @@ struct MediaOptimizer {
 
     static func generateThumbnail(from image: PlatformImage) throws -> Data {
         #if canImport(UIKit)
-        // Preserve aspect ratio — scale longest side to thumbnailMaxDimension
-        let size = image.size
-        let scale = thumbnailMaxDimension / max(size.width, size.height)
-        let targetSize = CGSize(width: size.width * scale, height: size.height * scale)
-        let thumbnail = image.resized(to: targetSize, contentMode: .scaleAspectFit)
-        guard let data = thumbnail.jpegData(compressionQuality: thumbnailQuality) else {
+        // Work in pixel space (scale=1.0 throughout)
+        let pixelW = image.size.width * image.scale
+        let pixelH = image.size.height * image.scale
+        let scale = thumbnailMaxDimension / max(pixelW, pixelH)
+        let targetPixels = CGSize(width: pixelW * scale, height: pixelH * scale)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1.0
+        format.opaque = false
+        let renderer = UIGraphicsImageRenderer(size: targetPixels, format: format)
+        let thumb = renderer.image { _ in image.draw(in: CGRect(origin: .zero, size: targetPixels)) }
+        guard let data = thumb.jpegData(compressionQuality: thumbnailQuality) else {
             throw MediaOptimizationError.thumbnailGenerationFailed
         }
         return data
@@ -180,32 +188,57 @@ struct MediaOptimizer {
     // MARK: - Private (iOS only)
 
     #if canImport(UIKit)
+    /// Compress to ≤ maxImageBytes, working entirely in pixel space (scale=1.0).
+    /// Returns a UIImage with scale=1.0 so .size == pixel dimensions.
     private static func progressiveCompress(_ image: UIImage) throws -> (UIImage, Data) {
-        var targetDimension = maxImageDimension
-        let minDimension: CGFloat = 1024
+        // Convert image to pixel-space dimensions
+        let pixelW = image.size.width * image.scale
+        let pixelH = image.size.height * image.scale
+
+        var targetMaxPixel = maxImageDimension
+        let minPixel: CGFloat = 1024
         while true {
-            let resized = resizeImage(image, maxDimension: targetDimension)
+            let resized = resizeToPixels(image, maxPixel: targetMaxPixel)
             for quality in jpegQualitySteps {
-                if let data = resized.jpegData(compressionQuality: quality), data.count <= maxImageBytes { return (resized, data) }
+                if let data = resized.jpegData(compressionQuality: quality),
+                   data.count <= maxImageBytes {
+                    return (resized, data)
+                }
             }
-            if targetDimension <= minDimension {
-                guard let fallback = resized.jpegData(compressionQuality: jpegQualitySteps.last ?? 0.4) else {
+            if targetMaxPixel <= minPixel {
+                guard let fallback = resized.jpegData(compressionQuality: jpegQualitySteps.last ?? 0.35) else {
                     throw MediaOptimizationError.conversionFailed
                 }
                 return (resized, fallback)
             }
-            targetDimension = max(minDimension, targetDimension * 0.8)
+            targetMaxPixel = max(minPixel, targetMaxPixel * 0.75)
         }
+        // unreachable but needed for compiler
+        _ = (pixelW, pixelH)
     }
 
-    private static func resizeImage(_ image: UIImage, maxDimension: CGFloat) -> UIImage {
-        let size = image.size
-        guard size.width > maxDimension || size.height > maxDimension else { return image }
-        let ratio = size.width / size.height
-        let newSize: CGSize = size.width > size.height
-            ? CGSize(width: maxDimension, height: maxDimension / ratio)
-            : CGSize(width: maxDimension * ratio, height: maxDimension)
-        let renderer = UIGraphicsImageRenderer(size: newSize)
+    /// Downscale to fit within maxPixel on the longest side.
+    /// Always renders at scale=1.0 so the returned UIImage.size equals its pixel dimensions.
+    private static func resizeToPixels(_ image: UIImage, maxPixel: CGFloat) -> UIImage {
+        let pixelW = image.size.width * image.scale
+        let pixelH = image.size.height * image.scale
+        guard pixelW > maxPixel || pixelH > maxPixel else {
+            // Already fits — return 1x copy so all callers work in pixel space
+            if image.scale == 1.0 { return image }
+            let format = UIGraphicsImageRendererFormat()
+            format.scale = 1.0
+            format.opaque = false
+            let renderer = UIGraphicsImageRenderer(size: CGSize(width: pixelW, height: pixelH), format: format)
+            return renderer.image { _ in image.draw(in: CGRect(origin: .zero, size: CGSize(width: pixelW, height: pixelH))) }
+        }
+        let ratio = pixelW / pixelH
+        let newSize: CGSize = pixelW > pixelH
+            ? CGSize(width: maxPixel, height: (maxPixel / ratio).rounded())
+            : CGSize(width: (maxPixel * ratio).rounded(), height: maxPixel)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1.0      // CRITICAL: produce 1x output regardless of device scale
+        format.opaque = false
+        let renderer = UIGraphicsImageRenderer(size: newSize, format: format)
         return renderer.image { _ in image.draw(in: CGRect(origin: .zero, size: newSize)) }
     }
     #endif
@@ -219,11 +252,13 @@ extension UIImage {
         let wRatio = targetSize.width / size.width, hRatio = targetSize.height / size.height
         let ratio = contentMode == .scaleAspectFit ? min(wRatio, hRatio) : max(wRatio, hRatio)
         let newSize = CGSize(width: size.width * ratio, height: size.height * ratio)
-        let renderer = UIGraphicsImageRenderer(size: targetSize)
+        // Always render at scale=1.0 so the returned image.size equals pixel dimensions
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1.0
+        format.opaque = false
+        let renderer = UIGraphicsImageRenderer(size: newSize, format: format)
         return renderer.image { _ in
-            let origin = CGPoint(x: (targetSize.width - newSize.width) / 2,
-                                 y: (targetSize.height - newSize.height) / 2)
-            self.draw(in: CGRect(origin: origin, size: newSize))
+            self.draw(in: CGRect(origin: .zero, size: newSize))
         }
     }
 }

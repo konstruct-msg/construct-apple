@@ -160,7 +160,7 @@ struct MessageInputView: View {
                 .photosPicker(
                     isPresented: $showPhotoPicker,
                     selection: $selectedPhotos,
-                    maxSelectionCount: 4,
+                    maxSelectionCount: 10,
                     matching: .images
                 )
 #endif
