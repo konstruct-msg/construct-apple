@@ -64,7 +64,7 @@ struct DesktopRootView: View {
                         handleDrop(providers: providers, into: chat)
                     }
             } else {
-                DesktopEmptyDetailView()
+                DesktopEmptyStateView()
                     .onDrop(of: [.fileURL], isTargeted: nil) { _ in false }
             }
         }
@@ -113,25 +113,6 @@ struct DesktopRootView: View {
         req.predicate = NSPredicate(format: "id == %@", id)
         req.fetchLimit = 1
         return try? viewContext.fetch(req).first
-    }
-}
-
-// MARK: - Empty detail state
-
-private struct DesktopEmptyDetailView: View {
-    var body: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "bubble.left.and.bubble.right")
-                .font(.system(size: 56, weight: .ultraLight))
-                .foregroundStyle(.tertiary)
-            Text("Select a conversation")
-                .font(.title3)
-                .foregroundStyle(.secondary)
-            Text("Press ⌘N to start a new chat")
-                .font(.subheadline)
-                .foregroundStyle(.tertiary)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
