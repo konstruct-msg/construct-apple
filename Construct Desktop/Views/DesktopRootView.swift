@@ -10,6 +10,7 @@
 import SwiftUI
 import CoreData
 import AppKit
+import UniformTypeIdentifiers
 
 struct DesktopRootView: View {
     @Environment(AuthViewModel.self) private var authViewModel
