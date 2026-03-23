@@ -10,6 +10,8 @@
         <attribute name="isBlocked" optional="YES" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
         <attribute name="sharedWithMeAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="amISharingWith" optional="YES" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="isContact" optional="YES" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="addedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
         <relationship name="chats" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="Chat" inverseName="otherUser" inverseEntity="Chat"/>
         <uniquenessConstraints>
             <uniquenessConstraint>

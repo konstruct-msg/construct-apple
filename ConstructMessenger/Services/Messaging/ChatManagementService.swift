@@ -75,6 +75,10 @@ class ChatManagementService {
         let dbUser: User
         if let existingUser = try? context.fetch(userFetchRequest).first {
             existingUser.applyServerUsername(user.username, userId: user.id)
+            if !existingUser.isContact {
+                existingUser.isContact = true
+                existingUser.addedAt = existingUser.addedAt ?? Date()
+            }
             dbUser = existingUser
             Log.debug("Using existing user: id=\(user.id), username=\(user.username), displayName=\(existingUser.displayName)", category: "ChatManagementService")
         } else {
@@ -84,6 +88,8 @@ class ChatManagementService {
             dbUser.isSharingWithMe = false
             dbUser.isBlocked = false
             dbUser.amISharingWith = false
+            dbUser.isContact = true
+            dbUser.addedAt = Date()
             dbUser.applyServerUsername(user.username, userId: user.id)
             Log.debug("Created new user: id=\(user.id), username=\(user.username), displayName=\(dbUser.displayName)", category: "ChatManagementService")
         }
@@ -114,45 +120,80 @@ class ChatManagementService {
 
     // MARK: - Chat Deletion
 
-    /// Delete a chat and clean up all associated data
-    /// - Parameter chat: Chat to delete
-    /// - Note: Deletes messages, archives crypto sessions, clears shared secrets
+    /// Delete a chat while keeping the contact in Synaps.
+    ///
+    /// Removes Chat + Messages and archives the crypto session.
+    /// The User entity is preserved with isContact=true so the contact
+    /// remains visible in the Synaps list and can be messaged again.
+    /// To fully remove a contact use pruneContact(userId:).
     func deleteChat(_ chat: Chat) {
         guard let context = viewContext else {
             Log.error("❌ ChatManagementService: No viewContext available", category: "ChatManagementService")
             return
         }
-        
+
         let chatId = chat.id
         let otherUser = chat.otherUser
-        
-        // Archive crypto session when deleting chat.
-        // Skip if already cleared (e.g. by END_SESSION sent before this call).
+
+        // Archive crypto session.
         if let userId = otherUser?.id, CryptoManager.shared.hasSession(for: userId) {
             CryptoManager.shared.archiveSession(for: userId, reason: .manualReset)
             Log.info("🗑️ Archived crypto session for user: \(userId)", category: "ChatManagementService")
         }
-        
-        // Delete the chat (Core Data cascade rules will delete associated messages)
+
+        // Delete only the Chat (cascade removes Messages).
+        // User entity is intentionally kept — contact lives in Synaps.
         context.delete(chat)
-        
-        // Also delete the User entity so the stream no longer subscribes to this contact
-        // and findOrCreateChat cannot recreate an empty chat on restart.
-        if let user = otherUser {
-            // Persist the deletion so MessageRouter ignores future messages from this contact
-            DeletedContactsStore.shared.add(user.id)
-            context.delete(user)
-            Log.info("🗑️ Deleted user entity: \(user.id)", category: "ChatManagementService")
-        }
-        
+
         do {
             try context.save()
-            Log.info("✅ Chat deleted successfully: \(chatId)", category: "ChatManagementService")
-            
-            // Notify via callback
+            Log.info("✅ Chat deleted (contact retained): \(chatId)", category: "ChatManagementService")
             onChatDeleted?(chatId)
         } catch {
             Log.error("❌ Failed to delete chat: \(error)", category: "ChatManagementService")
+        }
+    }
+
+    /// Fully remove a contact: delete User, associated Chat + Messages, session, and
+    /// add to DeletedContactsStore so future messages from this person are ignored.
+    ///
+    /// This is the "prune synapse" action — irreversible from within the app.
+    func pruneContact(userId: String) {
+        guard let context = viewContext else {
+            Log.error("❌ ChatManagementService: No viewContext available", category: "ChatManagementService")
+            return
+        }
+
+        let userFetch = User.fetchRequest()
+        userFetch.predicate = NSPredicate(format: "id == %@", userId)
+        guard let user = (try? context.fetch(userFetch))?.first else {
+            Log.info("⚠️ pruneContact: user \(userId.prefix(8)) not found", category: "ChatManagementService")
+            return
+        }
+
+        // Archive crypto session if one exists.
+        if CryptoManager.shared.hasSession(for: userId) {
+            CryptoManager.shared.archiveSession(for: userId, reason: .manualReset)
+        }
+
+        // Delete the associated chat (if any) — cascade removes Messages.
+        if let chats = user.chats as? Set<Chat> {
+            for chat in chats {
+                let chatId = chat.id
+                context.delete(chat)
+                onChatDeleted?(chatId)
+            }
+        }
+
+        // Block future message delivery from this contact.
+        DeletedContactsStore.shared.add(userId)
+        context.delete(user)
+
+        do {
+            try context.save()
+            Log.info("✂️ Synapse pruned: \(userId.prefix(8))…", category: "ChatManagementService")
+        } catch {
+            Log.error("❌ Failed to prune contact: \(error)", category: "ChatManagementService")
         }
     }
 }

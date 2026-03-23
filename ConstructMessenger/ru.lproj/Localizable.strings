@@ -463,7 +463,7 @@
 "ice_retry" = "Повторить подключение";
 "ice_unavailable" = "Недоступно на этом сервере";
 "traffic_protection" = "Защита трафика";
-"ice_footer_short" = "Маскирует трафик под обычный HTTPS. Конфигурация предоставляется сервером автоматически.";
+"ice_footer_short" = "Лёд маскирует трафик под обычный HTTPS. Конфигурация предоставляется автоматически.";
 
 // Data & Storage
 "data_and_storage" = "Данные и память";
@@ -604,3 +604,13 @@
 
 // MARK: - Image Crop
 "crop_use_photo" = "Выбрать фото";
+
+// MARK: - Synaps
+"synaps" = "Синапсы";
+"synaps_search_prompt" = "Поиск по синапсам";
+"synaps_empty_title" = "Пока нет связей";
+"synaps_empty_subtitle" = "Люди с которыми вы общаетесь будут здесь, даже если вы удалили переписку.";
+"synaps_open_chat" = "Открыть чат";
+"synaps_prune_title" = "Отрезать синапс?";
+"synaps_prune_action" = "Отрезать";
+"synaps_prune_message" = "Это навсегда удалит %@ из ваших синапсов и удалит переписку.";

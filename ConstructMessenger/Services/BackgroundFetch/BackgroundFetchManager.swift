@@ -455,6 +455,8 @@ class BackgroundFetchManager: NSObject {
             newUser.isSharingWithMe = false
             newUser.isBlocked = false
             newUser.amISharingWith = false
+            newUser.isContact = true
+            newUser.addedAt = Date()
             dbUser = newUser
             Log.debug("Created new user in BackgroundFetch: id=\(userId), username will be updated from publicKeyBundle", category: "BackgroundFetch")
         }

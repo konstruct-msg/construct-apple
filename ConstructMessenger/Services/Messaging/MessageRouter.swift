@@ -496,6 +496,8 @@ class MessageRouter {
         newUser.isSharingWithMe = false
         newUser.isBlocked = false
         newUser.amISharingWith = false
+        newUser.isContact = true
+        newUser.addedAt = Date()
         
         Log.debug("Created new user: id=\(userId)", category: "MessageRouter")
         return newUser

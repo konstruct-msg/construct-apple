@@ -30,6 +30,12 @@ struct MainTabView: View {
                         Label("chats", systemImage: "message")
                     }
 
+                SynapsView()
+                    .environment(chatsViewModel)
+                    .tabItem {
+                        Label("synaps", systemImage: "point.3.filled.connected.trianglepath")
+                    }
+
                 #if os(iOS)
                 SettingsView()
                     .tabItem {

@@ -461,7 +461,7 @@
 "ice_unavailable" = "Not available on this server";
 "ice_retry" = "Retry ICE connection";
 "traffic_protection" = "Traffic Protection";
-"ice_footer_short" = "Masks traffic as standard HTTPS. Configuration is provided automatically.";
+"ice_footer_short" = "ICE masks traffic as standard HTTPS. Configuration is provided automatically.";
 
 // Data & Storage
 "data_and_storage" = "Data & Storage";
@@ -602,3 +602,13 @@
 
 // MARK: - Image Crop
 "crop_use_photo" = "Use Photo";
+
+// MARK: - Synaps
+"synaps" = "Synaps";
+"synaps_search_prompt" = "Search Synaps";
+"synaps_empty_title" = "No connections yet";
+"synaps_empty_subtitle" = "People you connect with will appear here, even after you clear a conversation.";
+"synaps_open_chat" = "Open Chat";
+"synaps_prune_title" = "Cut this synapse?";
+"synaps_prune_action" = "Cut";
+"synaps_prune_message" = "This will permanently remove %@ from your Synaps and delete the conversation.";

@@ -22,6 +22,11 @@ extension User {
     @NSManaged public var isBlocked: Bool
     @NSManaged public var sharedWithMeAt: Date?
     @NSManaged public var amISharingWith: Bool
+    /// True when the user has been explicitly added as a Synaps contact.
+    /// Persists across chat deletions — use pruneContact() to fully remove.
+    @NSManaged public var isContact: Bool
+    /// When the contact was first added (link, code, or incoming message).
+    @NSManaged public var addedAt: Date?
     @NSManaged public var chats: NSSet?
 }
 

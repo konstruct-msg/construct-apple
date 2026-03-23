@@ -399,6 +399,33 @@ class ChatsViewModel {
         chatManagementService.deleteChat(chat)
     }
 
+    /// Fully remove a contact (prune synapse): deletes User, Chat+Messages, session.
+    func pruneContact(userId: String) {
+        chatManagementService.pruneContact(userId: userId)
+        forceReconnectStream()
+    }
+
+    /// Open the existing chat with a User, or create one if none exists yet.
+    func openOrCreateChat(with user: User) {
+        // If a chat already exists, navigate to it
+        if let existingChat = (user.chats as? Set<Chat>)?.first {
+            chatToOpen = existingChat.id
+            return
+        }
+        // No chat yet — create one (contact already exists, no need for PublicUserInfo)
+        guard let context = viewContext else { return }
+        let chat = Chat(context: context)
+        chat.id = UUID().uuidString
+        chat.otherUser = user
+        chat.lastMessageTime = Date()
+        do {
+            try context.save()
+            chatToOpen = chat.id
+        } catch {
+            Log.error("❌ openOrCreateChat: failed to save: \(error)", category: "ChatsViewModel")
+        }
+    }
+
     /// Toggle mute for a chat. Muted chats suppress in-app notification banners.
     func toggleMute(chat: Chat) {
         guard let context = viewContext else { return }
