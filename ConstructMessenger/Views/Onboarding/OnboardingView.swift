@@ -41,7 +41,7 @@ struct OnboardingView: View {
                         .foregroundStyle(.secondary)
                         .padding(.vertical, 6)
                 }
-                .padding(.top, 32)
+                .padding(.top, 120)
 
                 Spacer()
                 
@@ -107,7 +107,7 @@ struct OnboardingView: View {
                     } label: {
                         Text("onboarding_restore")
                             .font(.subheadline)
-                            .foregroundColor(Color.blue)
+                            .foregroundColor(Color.Construct.accent)
                             .padding(.vertical, 6)
                     }
                     .buttonStyle(.plain)
@@ -172,7 +172,7 @@ struct OnboardingView: View {
                     } label: {
                         Image(systemName: "network")
                     }
-                    .foregroundStyle(Color.blue)
+                    .foregroundStyle(Color.Construct.accent)
                     .accessibilityLabel(Text("onboarding_network_settings"))
                 }
             }

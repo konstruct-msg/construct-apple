@@ -55,21 +55,30 @@ final class InAppNotificationService {
     // MARK: - Incoming message
 
     /// Called from MessageRouter after saving an incoming message.
-    /// Shows a local notification banner only when:
-    ///   - App is foregrounded (backgrounded → APNs covers it)
-    ///   - The message is NOT in the currently visible chat
-    ///   - The chat is NOT muted
+    /// Shows a local notification banner:
+    ///   - Foreground: sender name + preview (for the currently visible UI)
+    ///   - Background: privacy-preserving generic banner (no sender/content)
+    ///   - Skipped if: chat is muted, or the chat is currently open
     func handle(chatId: String, isMuted: Bool, senderName: String, preview: String) {
         guard !isMuted else { return }
         guard chatId != activeChatId else { return }
 
         #if canImport(UIKit)
-        guard UIApplication.shared.applicationState == .active else { return }
+        let appState = UIApplication.shared.applicationState
+
+        if appState != .active {
+            // App is backgrounded — silent push woke us up, now post a local banner.
+            // Use a stable identifier so multiple messages collapse into one notification
+            // rather than flooding the lock screen.
+            LocalNotificationManager.shared.showNewMessageNotification(chatId: chatId)
+            return
+        }
         #endif
 
+        // App is active — show in-app banner with sender name + message preview
         let content = UNMutableNotificationContent()
-        content.title = senderName.isEmpty ? "New Message" : senderName
-        content.body = preview.isEmpty ? "New message" : String(preview.prefix(120))
+        content.title = senderName.isEmpty ? NSLocalizedString("construct_app_name", comment: "") : senderName
+        content.body = preview.isEmpty ? NSLocalizedString("construct_new_message", comment: "") : String(preview.prefix(120))
         content.sound = .default
         content.userInfo = ["chatID": chatId]
 

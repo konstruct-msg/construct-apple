@@ -69,12 +69,13 @@ class LocalNotificationManager: NSObject {
     // MARK: - Show Notifications
 
     /// Show a generic "New Message" notification.
-    /// No sender name or content is included to preserve privacy.
-    func showNewMessageNotification() {
-        guard isAuthorized else {
-            Log.debug("Cannot show notification: not authorized")
-            return
-        }
+    /// No sender name or content is included to preserve E2E privacy.
+    /// - Parameter chatId: Used to collapse repeat notifications for the same chat.
+    ///                     If nil, a unique identifier is generated (no collapsing).
+    func showNewMessageNotification(chatId: String? = nil) {
+        // Do NOT guard on cached isAuthorized — it starts as false and is set
+        // asynchronously, causing race conditions during background wakeup.
+        // UNUserNotificationCenter silently drops the request if not authorized.
 
         let content = UNMutableNotificationContent()
         content.title = NSLocalizedString("construct_app_name", comment: "App name")
@@ -83,18 +84,20 @@ class LocalNotificationManager: NSObject {
         content.badge = NSNumber(value: 1)
         content.userInfo = ["type": "newMessage"]
 
-        let identifier = "message-\(UUID().uuidString)"
+        // Use a stable per-chat identifier so back-to-back messages in the same
+        // conversation collapse to a single banner instead of spamming the lock screen.
+        let identifier = chatId.map { "msg-chat-\($0)" } ?? "msg-\(UUID().uuidString)"
         let request = UNNotificationRequest(
             identifier: identifier,
             content: content,
-            trigger: nil // Show immediately
+            trigger: nil
         )
 
         notificationCenter.add(request) { error in
             if let error = error {
-                Log.error("Failed to show notification: \(error)")
+                Log.error("Failed to show notification: \(error)", category: "LocalNotifications")
             } else {
-                Log.debug("Notification shown: \(identifier)")
+                Log.debug("Notification shown: \(identifier)", category: "LocalNotifications")
             }
         }
     }
@@ -104,9 +107,7 @@ class LocalNotificationManager: NSObject {
     ///   - messageCount: Number of new messages
     ///   - fromContacts: Number of different contacts (optional)
     func showMultipleMessagesNotification(messageCount: Int, fromContacts: Int? = nil) {
-        guard isAuthorized else {
-            return
-        }
+        // No isAuthorized guard — let UNUserNotificationCenter handle authorization
 
         let content = UNMutableNotificationContent()
         content.title = "construct_new_messages".localized // "New Messages"
@@ -144,13 +145,8 @@ class LocalNotificationManager: NSObject {
 
     /// Show notification for background sync completion
     func showSyncCompletedNotification(newMessagesCount: Int) {
-        guard isAuthorized, newMessagesCount > 0 else {
-            return
-        }
-
-        // Only show sync notification if user has enabled it in settings
-        // For privacy-first approach, we default to NOT showing this
-        // User can enable it explicitly if they want
+        guard newMessagesCount > 0 else { return }
+        // No isAuthorized guard — let UNUserNotificationCenter handle authorization
 
         let content = UNMutableNotificationContent()
         content.title = "construct_sync_completed".localized // "Messages Synced"
