@@ -49,26 +49,6 @@ struct SynapsView: View {
                     HoneycombGrid(contacts: filtered, selected: $selectedContact)
                         .padding(.top, 8)
                 }
-
-                // Contact card overlay
-                if let user = selectedContact {
-                    SynapsContactCard(
-                        user: user,
-                        onOpenChat: {
-                            chatsViewModel.openOrCreateChat(with: user)
-                            selectedContact = nil
-                        },
-                        onPrune: {
-                            pruneTarget = user
-                            showPruneConfirm = true
-                            selectedContact = nil
-                        },
-                        onDismiss: { selectedContact = nil }
-                    )
-                    .environment(\.managedObjectContext, context)
-                    .zIndex(10)
-                    .transition(.opacity.combined(with: .scale(scale: 0.96)))
-                }
             }
             .searchable(text: $searchText, prompt: LocalizedStringKey("synaps_search_prompt"))
             .navigationBarTitleDisplayMode(.inline)
@@ -82,6 +62,21 @@ struct SynapsView: View {
                         .foregroundStyle(Color.Construct.textBright)
                         .tracking(3)
                 }
+            }
+            // Unified contact card — same view as from Chat, Message button visible
+            .sheet(item: $selectedContact) { user in
+                UserProfileView(
+                    user: user,
+                    showMessageButton: true,
+                    onOpenChat: { chatsViewModel.openOrCreateChat(with: user) },
+                    onPrune: {
+                        pruneTarget = user
+                        showPruneConfirm = true
+                    }
+                )
+                .environment(\.managedObjectContext, context)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
             }
         }
         .confirmationDialog(
@@ -213,210 +208,6 @@ private struct ContactCircle: View {
             )
         }
         .buttonStyle(.plain)
-    }
-
-    private var accentColor: Color { .hexagonAccent(for: user.id) }
-
-    private var initials: String {
-        let words = user.displayName
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .components(separatedBy: .whitespaces)
-            .filter { !$0.isEmpty }
-        switch words.count {
-        case 0: return "?"
-        case 1: return String(words[0].prefix(2)).uppercased()
-        default: return (String(words[0].prefix(1)) + String(words[1].prefix(1))).uppercased()
-        }
-    }
-}
-
-// MARK: - Contact Card Overlay
-
-/// Full-screen dimmed overlay with a centered contact card.
-/// All contact actions live here — nothing outside the card.
-private struct SynapsContactCard: View {
-
-    @ObservedObject var user: User
-    @Environment(\.managedObjectContext) private var context
-    var onOpenChat: () -> Void
-    var onPrune: () -> Void
-    var onDismiss: () -> Void
-
-    @State private var appeared = false
-
-    var body: some View {
-        ZStack {
-            Color.black.opacity(0.78)
-                .ignoresSafeArea()
-                .onTapGesture { dismiss() }
-
-            VStack(spacing: 0) {
-                // ── Avatar ──
-                avatarView
-                    .padding(.bottom, 14)
-
-                // ── Identity ──
-                Text(user.displayName)
-                    .font(ConstructFont.display(20, weight: .semibold))
-                    .foregroundStyle(Color.Construct.textBright)
-
-                if !user.username.isEmpty {
-                    Text("@\(user.username)")
-                        .font(ConstructFont.mono(12))
-                        .foregroundStyle(Color.Construct.textDim)
-                        .padding(.top, 3)
-                }
-
-                Rectangle()
-                    .fill(Color.Construct.dim)
-                    .frame(height: 1)
-                    .padding(.vertical, 20)
-
-                // ── Actions ──
-                VStack(spacing: 9) {
-                    actionRow(icon: "message.fill",  title: "Message",      role: .primary)   { onOpenChat() }
-                    actionRow(icon: "phone.fill",    title: "Voice call",   role: .disabled)  {}
-                    actionRow(
-                        icon: user.isBlocked ? "checkmark.circle" : "slash.circle",
-                        title: user.isBlocked ? "Unblock" : "Block",
-                        role: .secondary
-                    ) {
-                        user.isBlocked.toggle()
-                        try? context.save()
-                        dismiss()
-                    }
-                    actionRow(icon: "scissors", title: "Remove contact", role: .destructive) { onPrune() }
-                }
-
-                // ── Dismiss hint ──
-                Text("tap outside to close")
-                    .font(ConstructFont.mono(10))
-                    .foregroundStyle(Color.Construct.textDim.opacity(0.5))
-                    .padding(.top, 18)
-            }
-            .padding(.horizontal, 24)
-            .padding(.vertical, 28)
-            .background(
-                RoundedRectangle(cornerRadius: 24)
-                    .fill(Color.Construct.bg2)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 24)
-                            .strokeBorder(Color.Construct.line, lineWidth: 1)
-                    )
-                    .shadow(color: Color.black.opacity(0.5), radius: 40)
-            )
-            .padding(.horizontal, 24)
-            .scaleEffect(appeared ? 1.0 : 0.88)
-            .opacity(appeared ? 1.0 : 0.0)
-        }
-        .onAppear {
-            withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
-                appeared = true
-            }
-        }
-    }
-
-    // MARK: Avatar
-
-    private var avatarView: some View {
-        ZStack {
-            if let data = user.avatarData, let img = PlatformImage(data: data) {
-                Image(platformImage: img)
-                    .resizable()
-                    .scaledToFill()
-            } else {
-                Circle().fill(accentColor.opacity(0.18))
-                Text(initials)
-                    .font(ConstructFont.mono(30, weight: .semibold))
-                    .foregroundStyle(accentColor)
-            }
-        }
-        .frame(width: 90, height: 90)
-        .clipShape(Circle())
-        .overlay(
-            Circle().strokeBorder(
-                user.isBlocked ? Color.red.opacity(0.5) : Color.Construct.dim,
-                lineWidth: 2
-            )
-        )
-    }
-
-    // MARK: Action button
-
-    enum ActionRole { case primary, secondary, destructive, disabled }
-
-    @ViewBuilder
-    private func actionRow(icon: String, title: String, role: ActionRole, action: @escaping () -> Void) -> some View {
-        Button {
-            guard role != .disabled else { return }
-            action()
-        } label: {
-            HStack(spacing: 12) {
-                Image(systemName: icon)
-                    .frame(width: 18, alignment: .center)
-                    .font(.system(size: 15))
-                Text(title)
-                    .font(ConstructFont.display(15))
-                if role == .disabled {
-                    Spacer()
-                    Text("soon")
-                        .font(ConstructFont.mono(10))
-                        .foregroundStyle(Color.Construct.textDim)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(
-                            Capsule().fill(Color.Construct.bg3)
-                        )
-                } else {
-                    Spacer()
-                }
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(rowFill(role))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .strokeBorder(rowBorder(role), lineWidth: 1)
-                    )
-            )
-            .foregroundStyle(rowForeground(role))
-        }
-        .buttonStyle(.plain)
-        .disabled(role == .disabled)
-    }
-
-    private func rowFill(_ role: ActionRole) -> Color {
-        switch role {
-        case .primary:     return Color.Construct.accent.opacity(0.12)
-        case .destructive: return Color.red.opacity(0.10)
-        default:           return Color.Construct.bg3
-        }
-    }
-
-    private func rowBorder(_ role: ActionRole) -> Color {
-        switch role {
-        case .primary:     return Color.Construct.accent.opacity(0.35)
-        case .destructive: return Color.red.opacity(0.30)
-        default:           return Color.Construct.line
-        }
-    }
-
-    private func rowForeground(_ role: ActionRole) -> Color {
-        switch role {
-        case .primary:     return Color.Construct.accent
-        case .destructive: return Color.red
-        case .disabled:    return Color.Construct.textDim
-        case .secondary:   return Color.Construct.text
-        }
-    }
-
-    // MARK: Helpers
-
-    private func dismiss() {
-        withAnimation(.easeOut(duration: 0.18)) { appeared = false }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) { onDismiss() }
     }
 
     private var accentColor: Color { .hexagonAccent(for: user.id) }

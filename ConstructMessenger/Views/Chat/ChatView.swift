@@ -289,9 +289,13 @@ struct ChatView: View {
         .overlay(alignment: .top, content: searchOverlay)
         .sheet(isPresented: $showingUserProfile) {
             if let user = viewModel.chat.otherUser {
-                UserProfileView(user: user)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
+                UserProfileView(
+                    user: user,
+                    showMessageButton: false   // already inside this chat — no loop
+                )
+                .environment(\.managedObjectContext, viewContext)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
             }
         }
         .sheet(item: $quotingMessage) { msg in
