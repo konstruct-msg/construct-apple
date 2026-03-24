@@ -17,6 +17,7 @@ struct Construct_DesktopApp: App {
     @State private var chatsViewModel = ChatsViewModel()
     @State private var securityViewModel = SecurityViewModel()
     @State private var recoveryViewModel = AccountRecoveryViewModel()
+    @State private var deepLinkHandler = DeepLinkHandler()
 
     var body: some Scene {
         // MARK: - Main window
@@ -27,6 +28,7 @@ struct Construct_DesktopApp: App {
                 .environment(chatsViewModel)
                 .environment(securityViewModel)
                 .environment(recoveryViewModel)
+                .environment(deepLinkHandler)
                 .task {
                     // Force dark appearance — NSApp is guaranteed ready here
                     NSApp.appearance = NSAppearance(named: .darkAqua)
@@ -47,6 +49,11 @@ struct Construct_DesktopApp: App {
                     chatsViewModel.showNewChat = true
                 }
                 .keyboardShortcut("n", modifiers: .command)
+
+                Button("Add Contact…") {
+                    NotificationCenter.default.post(name: .desktopShowAddContact, object: nil)
+                }
+                .keyboardShortcut("n", modifiers: [.command, .option])
             }
 
             // Add Find in sidebar (⌘F)

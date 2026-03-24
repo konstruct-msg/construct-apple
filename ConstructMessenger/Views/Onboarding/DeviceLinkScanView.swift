@@ -46,9 +46,11 @@ struct DeviceLinkScanView: View {
                 }
             }
             .navigationTitle(LocalizedStringKey("device_link_scan_title"))
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(.hidden, for: .navigationBar)
             .toolbarColorScheme(.dark, for: .navigationBar)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(LocalizedStringKey("cancel")) { dismiss() }

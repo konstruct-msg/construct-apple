@@ -47,9 +47,11 @@ struct MainTabView: View {
                     .tag(2)
                 #endif
             }
+            #if os(iOS)
             .toolbarBackground(Color.Construct.bg, for: .tabBar)
             .toolbarBackground(.visible, for: .tabBar)
             .toolbarColorScheme(.dark, for: .tabBar)
+            #endif
         }
     }
 }

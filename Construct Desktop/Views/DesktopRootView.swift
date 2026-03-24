@@ -12,14 +12,20 @@ import CoreData
 import AppKit
 import UniformTypeIdentifiers
 
+extension Notification.Name {
+    static let desktopShowAddContact = Notification.Name("desktopShowAddContact")
+}
+
 struct DesktopRootView: View {
     @Environment(AuthViewModel.self) private var authViewModel
     @Environment(ChatsViewModel.self) private var chatsViewModel
+    @Environment(DeepLinkHandler.self) private var deepLinkHandler
     @Environment(\.managedObjectContext) private var viewContext
     @AppStorage("appTheme") private var appTheme: AppTheme = .automatic
 
     // Sidebar column visibility (user can hide sidebar with toggle)
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
+    @State private var showAddContact = false
 
     var body: some View {
         Group {
@@ -39,6 +45,9 @@ struct DesktopRootView: View {
         .preferredColorScheme(appTheme.colorScheme)
         .onAppear {
             authViewModel.refreshDeviceKeyState()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .desktopShowAddContact)) { _ in
+            showAddContact = true
         }
         // Update Dock badge with unread count
         .onChange(of: chatsViewModel.totalUnreadCount) { _, count in
@@ -69,6 +78,12 @@ struct DesktopRootView: View {
             }
         }
         .frame(minWidth: 760, minHeight: 500)
+        // Add Contact sheet (⌘⌥N)
+        .sheet(isPresented: $showAddContact) {
+            DesktopAddContactView()
+                .environment(authViewModel)
+                .environment(deepLinkHandler)
+        }
         // New Chat sheet (⌘N)
         .sheet(isPresented: Binding(
             get: { chatsViewModel.showNewChat },
@@ -77,6 +92,18 @@ struct DesktopRootView: View {
             NewChatView(chatsViewModel: chatsViewModel)
                 .environment(\.managedObjectContext, viewContext)
                 .frame(minWidth: 400, minHeight: 300)
+        }
+        // Toolbar button — sidebar header
+        .toolbar {
+            ToolbarItem(placement: .navigation) {
+                Button {
+                    showAddContact = true
+                } label: {
+                    Label("Add Contact", systemImage: "person.badge.plus")
+                }
+                .help("Add Contact (⌥⌘N)")
+                .keyboardShortcut("n", modifiers: [.command, .option])
+            }
         }
     }
 

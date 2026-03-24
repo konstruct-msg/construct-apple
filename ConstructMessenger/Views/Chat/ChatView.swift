@@ -236,10 +236,12 @@ struct ChatView: View {
             messageInputView
         }
         #if os(iOS)
+        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .tabBar)
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbarBackground(Color.AppBackground.primary, for: .navigationBar)
+        #endif
         #endif
         .toolbar(content: toolbarContent)
         .gesture(

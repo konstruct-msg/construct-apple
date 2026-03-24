@@ -116,7 +116,9 @@ struct ContactQRCodeView: View {
             .padding(.vertical, 24)
             .frame(maxWidth: .infinity)
             .navigationTitle(username.isEmpty ? DisplayNameGenerator.generate(from: userId) : "@\(username)")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("close") { dismiss() }

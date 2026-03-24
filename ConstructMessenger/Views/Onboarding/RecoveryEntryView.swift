@@ -29,7 +29,9 @@ struct RecoveryEntryView: View {
             }
             .navigationTitle(NSLocalizedString("onboarding_restore", comment: ""))
             #if os(iOS)
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

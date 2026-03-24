@@ -47,10 +47,12 @@ struct UserProfileView: View {
                 }
             }
             .navigationTitle("")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(Color.Construct.bg2, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
             .toolbarColorScheme(.dark, for: .navigationBar)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }

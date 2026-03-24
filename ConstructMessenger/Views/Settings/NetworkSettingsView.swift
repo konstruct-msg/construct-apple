@@ -209,7 +209,9 @@ struct NetworkSettingsView: View {
         }
         .navigationTitle("network")
         #if canImport(UIKit)
+        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
+        #endif
         #endif
         .alert("server_applied_title", isPresented: $showingAppliedAlert) {
             Button("ok") { }

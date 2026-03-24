@@ -36,10 +36,12 @@ struct AccountSettingsView: View {
         }
         .background(Color.Construct.bg.ignoresSafeArea())
         .navigationTitle(LocalizedStringKey("account"))
+        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(Color.Construct.bg2, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
+        #endif
         .onAppear {
             viewModel.setContext(viewContext)
             viewModel.loadUserInfo(from: authViewModel)
@@ -388,7 +390,9 @@ struct AvatarViewerSheet: View {
                         .ignoresSafeArea(edges: .bottom)
                 }
             }
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("close") { dismiss() }
@@ -399,9 +403,11 @@ struct AvatarViewerSheet: View {
                         .foregroundColor(.white)
                 }
             }
+            #if os(iOS)
             .toolbarBackground(.black, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
             .toolbarColorScheme(.dark, for: .navigationBar)
+            #endif
         }
     }
 }

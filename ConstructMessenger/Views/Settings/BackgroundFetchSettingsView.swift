@@ -24,7 +24,9 @@ struct BackgroundFetchSettingsView: View {
             lowPowerModeWarningSection
         }
         .navigationTitle("background_fetch")
+        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
+        #endif
         .onAppear {
             loadSettings()
             checkLowPowerMode()

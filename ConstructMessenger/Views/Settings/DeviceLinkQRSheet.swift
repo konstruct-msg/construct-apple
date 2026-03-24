@@ -43,7 +43,9 @@ struct DeviceLinkQRSheet: View {
             .padding()
             .navigationTitle(LocalizedStringKey("device_link_qr_title"))
             #if os(iOS)
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

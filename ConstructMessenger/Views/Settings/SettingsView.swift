@@ -44,6 +44,7 @@ struct SettingsView: View {
                                                 .foregroundColor(.primary)
                                             Text(NSLocalizedString("recovery_banner_subtitle", comment: ""))
                                                 .font(.caption)
+                                                .font(.body.leading(.standard))
                                                 .foregroundColor(.secondary)
                                         }
                                     }
@@ -213,7 +214,7 @@ struct SettingsView: View {
                         // MARK: - Developer Section
                         #if DEBUG
                         settingsSection(header: "Developer") {
-                            ConstructNavRow(icon: "terminal", title: LocalizedStringKey("diagnostics_and_logs"), iconColor: Color.Construct.accent, destination: DiagnosticsView())
+                            ConstructNavRow(icon: "terminal", title: LocalizedStringKey("diagnostics_and_logs"), iconColor: Color(.orange), destination: DiagnosticsView())
                         }
                         #endif
                     }

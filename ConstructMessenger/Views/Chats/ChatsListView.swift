@@ -35,6 +35,7 @@ struct ChatsListView: View {
                     NavigationLink(value: chat.id) {
                         ChatRowView(chat: chat)
                     }
+                    .listRowSeparatorTint(Color.white.opacity(0.05))
                     .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                         Button(role: .destructive) {
                             Task { await chatsViewModel.deleteChatWithEndSession(chat: chat) }
@@ -73,9 +74,12 @@ struct ChatsListView: View {
                     ChatView(chat: chat, context: viewContext)
                 }
             }
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(Color.Construct.bg2, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
             .toolbarColorScheme(.dark, for: .navigationBar)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     ConnectionStatusIndicator()
@@ -93,9 +97,6 @@ struct ChatsListView: View {
                 QRScannerView { contactURL in
                     handleScannedContact(contactURL)
                 }
-            }
-            .sheet(isPresented: $showingDrafts) {
-                DraftsView()
             }
             .onAppear {
                 chatsViewModel.setContext(viewContext)

@@ -55,7 +55,7 @@ private struct DesktopAccountSettingsTab: View {
     var body: some View {
         Form {
             Section("Profile") {
-                AccountSettingsView()
+                DesktopAccountSettingsView()
             }
             Section {
                 Button(role: .destructive) {
@@ -124,7 +124,7 @@ private struct DesktopSecuritySettingsTab: View {
             }
 
             Section("Session Keys") {
-                SecurityView()
+                DesktopSecurityView()
             }
         }
         .formStyle(.grouped)
@@ -165,7 +165,7 @@ private struct DesktopNotificationsSettingsTab: View {
                 } else if authStatus == .notDetermined {
                     Button("Request Permission") {
                         Task {
-                            try? await UNUserNotificationCenter.current()
+                            _ = try? await UNUserNotificationCenter.current()
                                 .requestAuthorization(options: [.alert, .sound, .badge])
                             await refreshStatus()
                         }

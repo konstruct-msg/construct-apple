@@ -31,7 +31,9 @@ struct RecoverySetupView: View {
                 }
             }
             .navigationTitle(NSLocalizedString("account_recovery_seed", comment: ""))
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     cancelButton

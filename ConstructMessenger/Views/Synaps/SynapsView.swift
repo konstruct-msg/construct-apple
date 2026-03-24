@@ -51,10 +51,12 @@ struct SynapsView: View {
                 }
             }
             .searchable(text: $searchText, prompt: LocalizedStringKey("synaps_search_prompt"))
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(Color.Construct.bg2, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
             .toolbarColorScheme(.dark, for: .navigationBar)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     Text("SYNAPSES")

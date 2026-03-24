@@ -60,7 +60,9 @@ struct QRScannerView: View {
                     bottomPanel.padding(.bottom, 60)
                 }
             }
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("cancel") { dismiss() }

@@ -185,7 +185,9 @@ struct NotificationsSettingsView: View {
         }
         .navigationTitle("notifications")
         #if canImport(UIKit)
+        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
+        #endif
         #endif
         .onAppear {
             checkNotificationAuthorization()

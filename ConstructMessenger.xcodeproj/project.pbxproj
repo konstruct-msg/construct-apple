@@ -528,7 +528,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = ConstructMessenger/ConstructMessenger.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 231;
+				CURRENT_PROJECT_VERSION = 235;
 				DEVELOPMENT_TEAM = PK2473XF3P;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -564,7 +564,7 @@
 					"$(PROJECT_DIR)/target/aarch64-apple-ios-macabi/release",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.10.2;
+				MARKETING_VERSION = 0.10.4;
 				PRODUCT_BUNDLE_IDENTIFIER = maximeliseyev.constructmessenger;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -718,7 +718,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = ConstructMessenger/ConstructMessenger.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 231;
+				CURRENT_PROJECT_VERSION = 235;
 				DEVELOPMENT_TEAM = PK2473XF3P;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -754,7 +754,7 @@
 					"$(PROJECT_DIR)/target/aarch64-apple-ios-macabi/release",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.10.2;
+				MARKETING_VERSION = 0.10.4;
 				PRODUCT_BUNDLE_IDENTIFIER = maximeliseyev.constructmessenger;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -779,7 +779,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = ConstructMessenger/ConstructMessenger.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 231;
+				CURRENT_PROJECT_VERSION = 235;
 				DEVELOPMENT_TEAM = PK2473XF3P;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -815,7 +815,7 @@
 					"$(PROJECT_DIR)/target/aarch64-apple-ios-macabi/release",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.10.2;
+				MARKETING_VERSION = 0.10.4;
 				PRODUCT_BUNDLE_IDENTIFIER = maximeliseyev.constructmessenger;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -839,7 +839,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = PK2473XF3P;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -864,7 +864,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.1;
+				MARKETING_VERSION = 0.1.2;
 				PRODUCT_BUNDLE_IDENTIFIER = "maximeliseyev.construct-desktop";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -886,7 +886,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = PK2473XF3P;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -911,7 +911,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.1;
+				MARKETING_VERSION = 0.1.2;
 				PRODUCT_BUNDLE_IDENTIFIER = "maximeliseyev.construct-desktop";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -933,7 +933,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = PK2473XF3P;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -958,7 +958,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.1;
+				MARKETING_VERSION = 0.1.2;
 				PRODUCT_BUNDLE_IDENTIFIER = "maximeliseyev.construct-desktop";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
