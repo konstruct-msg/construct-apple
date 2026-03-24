@@ -74,17 +74,17 @@ struct SettingsView: View {
                                                 .resizable()
                                                 .scaledToFill()
                                         } else {
-                                            AvatarStyle.squircle(AvatarStyle.settingsSize)
-                                                .fill(Color.blue)
+                                            AvatarStyle.avatarShape(AvatarStyle.settingsSize)
+                                                .fill(Color.Construct.accent.opacity(0.18))
                                                 .overlay {
                                                     Text(profileInitials)
-                                                        .foregroundColor(.white)
+                                                        .foregroundColor(Color.Construct.accent)
                                                         .fontWeight(.semibold)
                                                 }
                                         }
                                     }
                                     .frame(width: AvatarStyle.settingsSize, height: AvatarStyle.settingsSize)
-                                    .clipShape(AvatarStyle.squircle(AvatarStyle.settingsSize))
+                                    .clipShape(AvatarStyle.avatarShape(AvatarStyle.settingsSize))
 
                                     VStack(alignment: .leading, spacing: 4) {
                                         Text(profileDisplayName)
@@ -113,7 +113,7 @@ struct SettingsView: View {
                                 settingsRow(
                                     icon: linkCopied ? "checkmark.circle.fill" : "link",
                                     text: linkCopied ? "link_copied" : "copy_contact_link",
-                                    iconColor: linkCopied ? Color.AppStatus.success : .gray
+                                    iconColor: linkCopied ? Color.AppStatus.success : Color.Construct.accent
                                 )
                             }
                             .buttonStyle(.plain)
@@ -129,15 +129,16 @@ struct SettingsView: View {
                             // settingsDivider()
                             settingsNavRow(icon: "internaldrive", text: "data_and_storage", destination: DataStorageSettingsView())
                             settingsDivider()
-                            settingsNavRow(icon: "paintbrush", text: "appearance", destination: AppearanceSettingsView())
-                            settingsDivider()
+//                            settingsNavRow(icon: "paintbrush", text: "appearance", destination: AppearanceSettingsView())
+//                            settingsDivider()
                             settingsNavRow(icon: "bell", text: "notifications", destination: NotificationsSettingsView())
                             settingsDivider()
                             NavigationLink(destination: BackgroundFetchSettingsView()) {
                                 HStack {
-                                    Image(systemName: "arrow.clockwise.circle").foregroundColor(.gray).frame(width: 22)
+                                    Image(systemName: "arrow.clockwise.circle").foregroundColor(Color.Construct.accent).frame(width: 22)
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(LocalizedStringKey("background_fetch"))
+                                            .foregroundStyle(Color.Construct.text)
                                         HStack(spacing: 4) {
                                             Circle()
                                                 .fill(BackgroundFetchConfig.shouldBeEnabled ? Color.AppStatus.success : Color.gray)
@@ -159,9 +160,10 @@ struct SettingsView: View {
                             settingsDivider()
                             NavigationLink(destination: NetworkSettingsView()) {
                                 HStack {
-                                    Image(systemName: "network").foregroundColor(.gray).frame(width: 22)
+                                    Image(systemName: "network").foregroundColor(Color.Construct.accent).frame(width: 22)
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(LocalizedStringKey("network"))
+                                            .foregroundStyle(Color.Construct.text)
                                         HStack(spacing: 4) {
                                             Circle()
                                                 .fill(connectionStatus.isConnected ? Color.AppStatus.success : Color.red)
@@ -189,6 +191,7 @@ struct SettingsView: View {
                             HStack {
                                 Image(systemName: "info.circle").foregroundColor(.gray).frame(width: 22)
                                 Text(LocalizedStringKey("version"))
+                                    .foregroundStyle(Color.Construct.text)
                                 Spacer()
                                 Text("Construct v\(AppConstants.appVersion)").foregroundColor(.secondary)
                             }
