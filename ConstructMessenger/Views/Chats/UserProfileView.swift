@@ -143,30 +143,28 @@ struct UserProfileView: View {
 
     private var actionsList: some View {
         VStack(spacing: 9) {
-            // Message — hidden when viewed from within an active chat
             if showMessageButton, let openChat = onOpenChat {
-                actionRow(icon: "message.fill", title: LocalizedStringKey("synaps_open_chat"), role: .primary) {
+                ConstructActionRow(icon: "message.fill", title: LocalizedStringKey("synaps_open_chat"), role: .primary) {
                     openChat()
                     dismiss()
                 }
             }
 
-            // Voice call (coming soon)
-            actionRow(icon: "phone.fill", title: "Voice call", role: .disabled) {}
+            ConstructActionRow(icon: "phone.fill", title: "Voice call", role: .disabled) {}
 
-            // Share profile toggle
             if user.amISharingWith {
-                actionRow(icon: "person.crop.circle.badge.minus", title: LocalizedStringKey("stop_sharing_profile"), role: .secondary) {
+                ConstructActionRow(icon: "person.crop.circle.badge.minus", title: LocalizedStringKey("stop_sharing_profile"), role: .secondary, isLoading: isSharingInProgress) {
                     handleShareToggle(false)
                 }
             } else {
-                actionRow(icon: "person.crop.circle.badge.checkmark", title: LocalizedStringKey("share_my_profile"), role: .accent) {
+                ConstructActionRow(icon: "person.crop.circle.badge.checkmark", title: LocalizedStringKey("share_my_profile"), role: .accent, isLoading: isSharingInProgress) {
                     handleShareToggle(true)
                 }
             }
 
-            // Block / unblock
-            actionRow(
+            Spacer()
+
+            ConstructActionRow(
                 icon: user.isBlocked ? "checkmark.circle" : "slash.circle",
                 title: LocalizedStringKey(user.isBlocked ? "unblock_user" : "block_user"),
                 role: .secondary
@@ -174,14 +172,12 @@ struct UserProfileView: View {
                 showingBlockConfirmation = true
             }
 
-            // Reset session
-            actionRow(icon: "arrow.counterclockwise", title: LocalizedStringKey("reset_session"), role: .destructive) {
+            ConstructActionRow(icon: "arrow.counterclockwise", title: LocalizedStringKey("reset_session"), role: .destructive) {
                 showResetSessionConfirm = true
             }
 
-            // Remove contact — only shown when prune handler is provided
             if let prune = onPrune {
-                actionRow(icon: "scissors", title: LocalizedStringKey("synaps_prune_action"), role: .destructive) {
+                ConstructActionRow(icon: "scissors", title: LocalizedStringKey("synaps_prune_action"), role: .destructive) {
                     prune()
                     dismiss()
                 }
@@ -208,79 +204,6 @@ struct UserProfileView: View {
                 .padding(.horizontal, 16)
                 .padding(.top, 20)
             }
-        }
-    }
-
-    // MARK: - Action row builder
-
-    enum ActionRole { case primary, accent, secondary, destructive, disabled }
-
-    @ViewBuilder
-    private func actionRow(icon: String, title: LocalizedStringKey, role: ActionRole, action: @escaping () -> Void) -> some View {
-        Button {
-            guard role != .disabled, !isSharingInProgress else { return }
-            action()
-        } label: {
-            HStack(spacing: 12) {
-                Image(systemName: icon)
-                    .frame(width: 20, alignment: .center)
-                    .font(.system(size: 16))
-                Text(title)
-                    .font(ConstructFont.display(16))
-                if role == .disabled {
-                    Spacer()
-                    Text("soon")
-                        .font(ConstructFont.mono(10))
-                        .foregroundStyle(Color.Construct.textDim)
-                        .padding(.horizontal, 6).padding(.vertical, 2)
-                        .background(Capsule().fill(Color.Construct.bg3))
-                } else if role == .accent && isSharingInProgress {
-                    Spacer()
-                    ProgressView().scaleEffect(0.75)
-                } else {
-                    Spacer()
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 13)
-            .background(
-                RoundedRectangle(cornerRadius: 13)
-                    .fill(rowFill(role))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 13)
-                            .strokeBorder(rowBorder(role), lineWidth: 1)
-                    )
-            )
-            .foregroundStyle(rowForeground(role))
-        }
-        .buttonStyle(.plain)
-        .disabled(role == .disabled || isSharingInProgress)
-    }
-
-    private func rowFill(_ role: ActionRole) -> Color {
-        switch role {
-        case .primary:     return Color.Construct.accent.opacity(0.12)
-        case .accent:      return Color.Construct.accent.opacity(0.08)
-        case .destructive: return Color.red.opacity(0.10)
-        default:           return Color.Construct.bg2
-        }
-    }
-
-    private func rowBorder(_ role: ActionRole) -> Color {
-        switch role {
-        case .primary:     return Color.Construct.accent.opacity(0.35)
-        case .accent:      return Color.Construct.accent.opacity(0.25)
-        case .destructive: return Color.red.opacity(0.30)
-        default:           return Color.Construct.line
-        }
-    }
-
-    private func rowForeground(_ role: ActionRole) -> Color {
-        switch role {
-        case .primary, .accent: return Color.Construct.accent
-        case .destructive:      return Color.red
-        case .disabled:         return Color.Construct.textDim
-        case .secondary:        return Color.Construct.text
         }
     }
 
