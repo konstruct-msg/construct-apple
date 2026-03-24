@@ -95,25 +95,23 @@ struct UserProfileView: View {
     // MARK: - Avatar header
 
     private var avatarHeader: some View {
-        let w: CGFloat = 96
-        let h: CGFloat = AvatarStyle.avatarHeight(w)
-        return VStack(spacing: 12) {
+        VStack(spacing: 12) {
             ZStack {
                 if let data = user.avatarData, let img = PlatformImage(data: data) {
                     Image(platformImage: img)
                         .resizable()
                         .scaledToFill()
                 } else {
-                    Ellipse().fill(accentColor.opacity(0.18))
+                    Circle().fill(accentColor.opacity(0.18))
                     Text(initials)
                         .font(ConstructFont.mono(32, weight: .semibold))
                         .foregroundStyle(accentColor)
                 }
             }
-            .frame(width: w, height: h)
-            .clipShape(Ellipse())
+            .frame(width: 96, height: 96)
+            .clipShape(Circle())
             .overlay(
-                Ellipse().strokeBorder(
+                Circle().strokeBorder(
                     user.isBlocked ? Color.red.opacity(0.5) : Color.Construct.dim,
                     lineWidth: 2
                 )

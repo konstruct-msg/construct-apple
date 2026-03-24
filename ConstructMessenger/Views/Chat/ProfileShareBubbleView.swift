@@ -21,12 +21,12 @@ struct ProfileShareBubbleView: View {
                     Image(platformImage: uiImage)
                         .resizable()
                         .scaledToFill()
-                        .frame(width: AvatarStyle.bubbleSize, height: AvatarStyle.avatarHeight(AvatarStyle.bubbleSize))
+                        .frame(width: 60, height: 60)
                         .clipShape(AvatarStyle.avatarShape(AvatarStyle.bubbleSize))
                 } else {
                     AvatarStyle.avatarShape(AvatarStyle.bubbleSize)
                         .fill(Color.blue.opacity(0.2))
-                        .frame(width: AvatarStyle.bubbleSize, height: AvatarStyle.avatarHeight(AvatarStyle.bubbleSize))
+                        .frame(width: 60, height: 60)
                         .overlay(
                             Text(String(profileData.displayName.prefix(1)).uppercased())
                                 .font(.title2)

@@ -187,24 +187,23 @@ private struct ContactCircle: View {
     var onTap: () -> Void
 
     var body: some View {
-        let h = AvatarStyle.avatarHeight(size)
-        return Button(action: onTap) {
+        Button(action: onTap) {
             ZStack {
                 if let data = user.avatarData, let img = PlatformImage(data: data) {
                     Image(platformImage: img)
                         .resizable()
                         .scaledToFill()
                 } else {
-                    Ellipse().fill(accentColor.opacity(0.18))
+                    Circle().fill(accentColor.opacity(0.18))
                     Text(initials)
                         .font(ConstructFont.mono(size * 0.26, weight: .semibold))
                         .foregroundStyle(accentColor)
                 }
             }
-            .frame(width: size, height: h)
-            .clipShape(Ellipse())
+            .frame(width: size, height: size)
+            .clipShape(Circle())
             .overlay(
-                Ellipse().strokeBorder(
+                Circle().strokeBorder(
                     user.isBlocked ? Color.red.opacity(0.55) : Color.Construct.dim,
                     lineWidth: 1.5
                 )
