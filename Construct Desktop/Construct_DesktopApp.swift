@@ -28,6 +28,8 @@ struct Construct_DesktopApp: App {
                 .environment(securityViewModel)
                 .environment(recoveryViewModel)
                 .task {
+                    // Force dark appearance — NSApp is guaranteed ready here
+                    NSApp.appearance = NSAppearance(named: .darkAqua)
                     chatsViewModel.setContext(PersistenceController.shared.container.viewContext)
                     await IceProxyManager.shared.startIfEnabled()
                     if authViewModel.isAuthenticated,
@@ -35,7 +37,7 @@ struct Construct_DesktopApp: App {
                         await PQCKeyManager.migrateIfNeeded(deviceId: deviceId)
                     }
                     // Request local notification permission for macOS desktop alerts
-                    try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
+                    _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
                 }
         }
         .commands {
@@ -66,4 +68,3 @@ struct Construct_DesktopApp: App {
         }
     }
 }
-

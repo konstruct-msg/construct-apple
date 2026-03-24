@@ -42,9 +42,9 @@ struct DesktopEmptyStateView: View {
                         index: 0,
                         label: "TRANSPORT",
                         rows: [
-                            ("Protocol", "gRPC"),
-                            ("Security", "TLS 1.3"),
-                            ("Delivery", "Bidirectional Stream"),
+                            ("PROTOCOL", "gRPC"),
+                            ("SECURITY", "TLS 1.3"),
+                            ("DELIVERY", "BiDi Stream"),
                         ]
                     )
 
@@ -54,9 +54,9 @@ struct DesktopEmptyStateView: View {
                         index: 1,
                         label: "KEY EXCHANGE",
                         rows: [
-                            ("Algorithm", "PQXDH"),
-                            ("Classical", "X25519"),
-                            ("Post-Quantum", "Kyber-1024"),
+                            ("ALGORITHM", "PQXDH"),
+                            ("CLASSICAL", "X25519"),
+                            ("POST-QUANTUM", "Kyber-1024"),
                         ],
                         isCenter: true
                     )
@@ -67,13 +67,13 @@ struct DesktopEmptyStateView: View {
                         index: 2,
                         label: "MESSAGING",
                         rows: [
-                            ("Ratchet", "Double Ratchet"),
-                            ("Cipher", "AES-256-GCM"),
-                            ("Forward Secrecy", "Per-message"),
+                            ("RATCHET", "Double Ratchet"),
+                            ("CIPHER", "AES-256-GCM"),
+                            ("FWD. SECRECY", "Per-message"),
                         ]
                     )
                 }
-                .padding(.horizontal, 40)
+                .padding(.horizontal, 24)
 
                 Spacer()
 
@@ -141,23 +141,24 @@ struct DesktopEmptyStateView: View {
             }
             .padding(.bottom, 10)
 
-            // Rows
-            VStack(alignment: .leading, spacing: 8) {
+            // Rows — vertical: key label above value
+            VStack(alignment: .leading, spacing: 12) {
                 ForEach(rows, id: \.0) { key, value in
-                    HStack(alignment: .firstTextBaseline, spacing: 0) {
+                    VStack(alignment: .leading, spacing: 3) {
                         Text(key)
-                            .font(.system(size: 11, design: .monospaced))
+                            .font(.system(size: 8, weight: .semibold, design: .monospaced))
                             .foregroundStyle(DesktopTheme.textTertiary)
-                            .frame(minWidth: 90, alignment: .leading)
+                            .tracking(1.5)
                         Text(value)
-                            .font(.system(size: 11, weight: .medium, design: .monospaced))
+                            .font(.system(size: 12, weight: .medium, design: .monospaced))
                             .foregroundStyle(isCenter ? DesktopTheme.accent.opacity(0.9) : DesktopTheme.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
             }
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 16)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 18)
         .background(
             RoundedRectangle(cornerRadius: 8)
                 .fill(DesktopTheme.backgroundElevated)
@@ -175,7 +176,7 @@ struct DesktopEmptyStateView: View {
                     radius: 16
                 )
         )
-        .frame(maxWidth: 210)
+        .frame(width: 148)
         .opacity(cardsAppeared ? 1 : 0)
         .offset(y: cardsAppeared ? 0 : 12)
         .animation(.easeOut(duration: 0.4).delay(Double(index) * 0.08), value: cardsAppeared)
@@ -190,8 +191,8 @@ struct DesktopEmptyStateView: View {
                 .frame(height: 1)
                 .frame(maxWidth: .infinity)
         }
-        .padding(.top, 23) // aligns with card header dot
-        .frame(width: 24)
+        .padding(.top, 23)
+        .frame(width: 16)
     }
 
     // MARK: - Keyboard shortcut badge

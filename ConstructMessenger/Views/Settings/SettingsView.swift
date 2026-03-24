@@ -218,7 +218,7 @@ struct SettingsView: View {
                     .padding(.horizontal, 16)
                     .padding(.vertical, 24)
                 }
-                .background(Color(uiColor: .systemGroupedBackground))
+                .background(Color.Construct.bg)
                 .navigationBarHidden(true)
                 .onAppear {
                     viewModel.setContext(viewContext)
@@ -249,28 +249,36 @@ struct SettingsView: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             if let header {
-                Text(header)
-                    .font(.footnote)
-                    .foregroundColor(.secondary)
+                Text(header.uppercased())
+                    .font(ConstructFont.mono(10, weight: .semibold))
+                    .foregroundStyle(Color.Construct.textDim)
+                    .tracking(1.5)
                     .padding(.horizontal, 16)
                     .padding(.bottom, 6)
             }
             VStack(spacing: 0) {
                 content()
             }
-            .background(Color(uiColor: .secondarySystemGroupedBackground))
+            .background(Color.Construct.bg2)
             .clipShape(RoundedRectangle(cornerRadius: sectionCornerRadius, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: sectionCornerRadius, style: .continuous)
+                    .strokeBorder(Color.Construct.line, lineWidth: 1)
+            )
         }
     }
 
     private func settingsRow(
         icon: String,
         text: String,
-        iconColor: Color = .gray
+        iconColor: Color = Color.Construct.accent
     ) -> some View {
         HStack {
-            Image(systemName: icon).foregroundColor(iconColor).frame(width: 22)
+            Image(systemName: icon)
+                .foregroundStyle(iconColor)
+                .frame(width: 22)
             Text(LocalizedStringKey(text))
+                .foregroundStyle(Color.Construct.text)
             Spacer()
         }
         .padding(.horizontal, 16)
@@ -285,12 +293,15 @@ struct SettingsView: View {
     ) -> some View {
         NavigationLink(destination: destination) {
             HStack {
-                Image(systemName: icon).foregroundColor(.gray).frame(width: 22)
+                Image(systemName: icon)
+                    .foregroundStyle(Color.Construct.accent)
+                    .frame(width: 22)
                 Text(LocalizedStringKey(text))
+                    .foregroundStyle(Color.Construct.text)
                 Spacer()
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(Color(.tertiaryLabel))
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color.Construct.textDim)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
@@ -300,7 +311,9 @@ struct SettingsView: View {
     }
 
     private func settingsDivider() -> some View {
-        Divider().padding(.leading, 54)
+        Divider()
+            .overlay(Color.Construct.line)
+            .padding(.leading, 54)
     }
 
     // MARK: - Contact Link

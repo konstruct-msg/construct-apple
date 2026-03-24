@@ -65,11 +65,17 @@ struct ChatsListView: View {
                 await BackgroundFetchManager.shared.fetchPendingMessages()
                 #endif
             }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .background(Color.Construct.bg)
             .navigationDestination(for: String.self) { chatId in
                 if let chat = chats.first(where: { $0.id == chatId }) {
                     ChatView(chat: chat, context: viewContext)
                 }
             }
+            .toolbarBackground(Color.Construct.bg2, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     ConnectionStatusIndicator()

@@ -306,9 +306,9 @@ extension Color {
         static let textDim     = Color(hex: 0x5a5855)  // metadata, timestamps
         static let textBright  = Color(hex: 0xe8e4d8)  // headings, important
 
-        // Accent — one, orange-red
-        static let accent      = Color(hex: 0xe8521a)
-        static let accentDim   = Color(hex: 0xc73d0a)  // hover state
+        // Accent — Electric Blue (matches Desktop brand)
+        static let accent      = Color(hex: 0x00D4FF)
+        static let accentDim   = Color(hex: 0x00A3C4)  // deeper cyan for pressed states
 
         // Status — green = "system OK"
         static let green       = Color(hex: 0x3d8a4a)

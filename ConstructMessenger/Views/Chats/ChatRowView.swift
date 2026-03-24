@@ -20,9 +20,9 @@ struct ChatRowView: View {
                         .resizable()
                         .scaledToFill()
                         .frame(width: AvatarStyle.chatSize, height: AvatarStyle.chatSize)
-                        .clipShape(AvatarStyle.squircle(AvatarStyle.chatSize))
+                        .clipShape(AvatarStyle.avatarShape(AvatarStyle.chatSize))
                 } else {
-                    AvatarStyle.squircle(AvatarStyle.chatSize)
+                    AvatarStyle.avatarShape(AvatarStyle.chatSize)
                         .fill(Color.hexagonAccent(for: chat.otherUser?.id ?? ""))
                         .frame(width: AvatarStyle.chatSize, height: AvatarStyle.chatSize)
                         .overlay {
@@ -35,11 +35,13 @@ struct ChatRowView: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(chat.otherUser?.resolvedDisplayName ?? NSLocalizedString("unknown", comment: "Unknown user"))
-                    .fontWeight(.semibold)
+                    .font(ConstructFont.display(16, weight: .semibold))
+                    .foregroundStyle(Color.Construct.textBright)
 
                 if let lastMessage = chat.lastMessageText {
                     Text(Chat.formatPreviewText(lastMessage))
-                        .foregroundColor(.secondary)
+                        .font(ConstructFont.display(14))
+                        .foregroundStyle(Color.Construct.textDim)
                         .lineLimit(1)
                 }
             }
@@ -50,15 +52,15 @@ struct ChatRowView: View {
                 if chat.isPinned && chat.unreadCount == 0 {
                     Image(systemName: "pin.fill")
                         .font(.caption2)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(Color.Construct.textDim)
                 }
                 if chat.unreadCount > 0 {
                     Text(chat.unreadCount < 100 ? "\(chat.unreadCount)" : "99+")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Color.accentColor, in: Capsule())
+                        .font(ConstructFont.mono(11, weight: .semibold))
+                        .foregroundStyle(Color.Construct.bg)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(Color.Construct.accent, in: Capsule())
                         .animation(.easeInOut(duration: 0.2), value: chat.unreadCount)
                 }
             }

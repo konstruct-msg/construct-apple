@@ -47,6 +47,9 @@ struct MainTabView: View {
                     .tag(2)
                 #endif
             }
+            .toolbarBackground(Color.Construct.bg, for: .tabBar)
+            .toolbarBackground(.visible, for: .tabBar)
+            .toolbarColorScheme(.dark, for: .tabBar)
         }
     }
 }
