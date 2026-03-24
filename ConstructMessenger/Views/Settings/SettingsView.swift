@@ -84,7 +84,7 @@ struct SettingsView: View {
                                                 }
                                         }
                                     }
-                                    .frame(width: AvatarStyle.settingsSize, height: AvatarStyle.settingsSize)
+                                    .frame(width: AvatarStyle.settingsSize, height: AvatarStyle.avatarHeight(AvatarStyle.settingsSize))
                                     .clipShape(AvatarStyle.avatarShape(AvatarStyle.settingsSize))
 
                                     VStack(alignment: .leading, spacing: 4) {

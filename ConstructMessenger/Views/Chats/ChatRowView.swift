@@ -19,12 +19,12 @@ struct ChatRowView: View {
                     Image(platformImage: avatarImage)
                         .resizable()
                         .scaledToFill()
-                        .frame(width: AvatarStyle.chatSize, height: AvatarStyle.chatSize)
+                        .frame(width: AvatarStyle.chatSize, height: AvatarStyle.avatarHeight(AvatarStyle.chatSize))
                         .clipShape(AvatarStyle.avatarShape(AvatarStyle.chatSize))
                 } else {
                     AvatarStyle.avatarShape(AvatarStyle.chatSize)
                         .fill(Color.hexagonAccent(for: chat.otherUser?.id ?? ""))
-                        .frame(width: AvatarStyle.chatSize, height: AvatarStyle.chatSize)
+                        .frame(width: AvatarStyle.chatSize, height: AvatarStyle.avatarHeight(AvatarStyle.chatSize))
                         .overlay {
                             Text(initials)
                                 .foregroundColor(.white)

@@ -101,12 +101,12 @@ struct AccountSettingsView: View {
                         Image(uiImage: image)
                             .resizable()
                             .scaledToFill()
-                            .frame(width: AvatarStyle.accountSize, height: AvatarStyle.accountSize)
+                            .frame(width: AvatarStyle.accountSize, height: AvatarStyle.avatarHeight(AvatarStyle.accountSize))
                             .clipShape(AvatarStyle.avatarShape(AvatarStyle.accountSize))
                     } else {
                         AvatarStyle.avatarShape(AvatarStyle.accountSize)
                             .fill(Color.Construct.accent.opacity(0.15))
-                            .frame(width: AvatarStyle.accountSize, height: AvatarStyle.accountSize)
+                            .frame(width: AvatarStyle.accountSize, height: AvatarStyle.avatarHeight(AvatarStyle.accountSize))
                             .overlay {
                                 Text(viewModel.displayName.prefix(1).uppercased())
                                     .font(.system(size: 40, weight: .semibold))

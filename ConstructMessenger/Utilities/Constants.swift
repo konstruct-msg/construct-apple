@@ -34,15 +34,20 @@ struct AvatarStyle {
     static let bubbleSize: CGFloat = 60
     static let accountSize: CGFloat = 100
 
-    /// Current avatar clip shape. Change here to update all avatars app-wide.
-    /// Future: swap to HexagonShape() when the visual language is ready.
-    static func avatarShape(_ size: CGFloat = 0) -> Circle {
-        Circle()
+    /// Height-to-width ratio. >1 → vertical ellipse.
+    static let aspect: CGFloat = 1.28
+
+    /// Computed height for a given avatar width.
+    static func avatarHeight(_ size: CGFloat) -> CGFloat { (size * aspect).rounded() }
+
+    /// Current avatar clip shape — vertical ellipse.
+    static func avatarShape(_ size: CGFloat = 0) -> Ellipse {
+        Ellipse()
     }
 
     /// Legacy alias — kept so existing call sites compile without changes.
     @available(*, deprecated, renamed: "avatarShape")
-    static func squircle(_ size: CGFloat) -> Circle { avatarShape(size) }
+    static func squircle(_ size: CGFloat) -> Ellipse { avatarShape(size) }
 }
 
 // MARK: - Server Configuration
