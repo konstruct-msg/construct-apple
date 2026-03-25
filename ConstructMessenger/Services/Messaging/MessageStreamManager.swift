@@ -530,6 +530,12 @@ final class MessageStreamManager {
             hbTask.cancel()
             watchdogTask.cancel()
             connectTask.cancel()
+            // Finish the outbound stream BEFORE shutting down the gRPC channel.
+            // The producer closure's `for await msg in outboundStream` loop must exit
+            // cleanly before the writer becomes invalid — otherwise any buffered items
+            // would crash with "Client is closed, cannot send a message" when written
+            // to an already-closed gRPC writer.
+            continuation.finish()
             grpcClient.beginGracefulShutdown()
             // Only tear down shared state if this is still the active stream.
             if self.activeStreamGeneration == generation {
