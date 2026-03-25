@@ -161,7 +161,14 @@ class MessageRouter {
         // 5. Find or create chat
         let (chat, isNewChat) = findOrCreateChat(for: otherUserId, in: context)
         
-        // 6. Check if we have a session for this user
+        // 6. Check if we have a session for this user.
+        // Guard against startup race: the deferred restoreRecentSessions() may not have run yet
+        // if Core Data wasn't ready. Calling restoreSession(for:) here is a targeted, synchronous
+        // Keychain load for exactly this contact — a no-op if already in memory (~1µs), or a fast
+        // import (~5-10ms) if the session key is in Keychain but not yet loaded into the Rust core.
+        // This prevents the false "session out of sync" banner that fires when the gRPC stream
+        // delivers a mid-ratchet message (msgNum > 0) before sessions have been fully restored.
+        CryptoManager.shared.restoreSession(for: otherUserId)
         let hasSession = CryptoManager.shared.hasSession(for: otherUserId)
         Log.info("🔐 SESSION_STATE[incoming_message]: userId=\(otherUserId.prefix(8))..., hasSession=\(hasSession), messageId=\(message.id.prefix(8))...", category: "SessionInit")
         

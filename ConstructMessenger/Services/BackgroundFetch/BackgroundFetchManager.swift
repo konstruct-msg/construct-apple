@@ -347,6 +347,12 @@ class BackgroundFetchManager: NSObject {
                     // not the main queue, so there is no deadlock risk.
                     var decryptedContent: String?
 
+                    // Targeted session restore before the hasSession check.
+                    // Background fetch may run before restoreRecentSessions() has completed
+                    // (e.g., silent push during app launch race). restoreSession(for:) is a
+                    // synchronous Keychain lookup — no-op if session already in memory.
+                    DispatchQueue.main.sync { CryptoManager.shared.restoreSession(for: otherUserId) }
+
                     if CryptoManager.shared.hasSession(for: otherUserId) {
                         DispatchQueue.main.sync {
                             do {
