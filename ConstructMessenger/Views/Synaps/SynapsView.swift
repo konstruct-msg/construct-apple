@@ -311,6 +311,24 @@ private struct HoneycombLayoutEngine {
     }
 }
 
+// MARK: - Contact Metrics
+
+/// Locally-derived activity signals — no server data, no social graph.
+private struct ContactMetrics {
+    /// Normalised message count across all contacts: 0 = fewest/none, 1 = most active.
+    let frequencyScore: CGFloat
+    /// Time-based glow tier.
+    let recency: Recency
+
+    enum Recency {
+        case fresh     // last message < 24 h
+        case recent    // last message < 7 days
+        case none
+    }
+
+    static let zero = ContactMetrics(frequencyScore: 0, recency: .none)
+}
+
 // MARK: - Honeycomb Cloud
 
 private struct HoneycombCloud: View {
@@ -320,9 +338,46 @@ private struct HoneycombCloud: View {
     let canvasOffset: CGSize
     let screenSize:   CGSize
 
+    // MARK: Activity metrics
+
+    /// Message count per contact (raw), used for normalisation.
+    private var rawCounts: [String: Int] {
+        var result: [String: Int] = [:]
+        for user in contacts {
+            let chats = (user.chats?.allObjects as? [Chat]) ?? []
+            let count = chats.map { $0.messages?.count ?? 0 }.max() ?? 0
+            result[user.id] = count
+        }
+        return result
+    }
+
+    private var metricsMap: [String: ContactMetrics] {
+        let counts = rawCounts
+        let maxCount = counts.values.max() ?? 0
+        let now = Date()
+        var map: [String: ContactMetrics] = [:]
+        for user in contacts {
+            let count = counts[user.id] ?? 0
+            let score: CGFloat = maxCount > 0 ? CGFloat(count) / CGFloat(maxCount) : 0
+            let lastMsg = ((user.chats?.allObjects as? [Chat]) ?? [])
+                .compactMap { $0.lastMessageTime }
+                .max()
+            let recency: ContactMetrics.Recency
+            if let t = lastMsg {
+                let age = now.timeIntervalSince(t)
+                recency = age < 86_400 ? .fresh : age < 604_800 ? .recent : .none
+            } else {
+                recency = .none
+            }
+            map[user.id] = ContactMetrics(frequencyScore: score, recency: recency)
+        }
+        return map
+    }
+
     var body: some View {
         GeometryReader { geo in
-            let engine = HoneycombLayoutEngine(contacts: contacts, canvasSize: geo.size)
+            let engine  = HoneycombLayoutEngine(contacts: contacts, canvasSize: geo.size)
+            let metrics = metricsMap
 
             // Canvas is screen-sized; contacts that overflow (large grids when
             // zoomed to 1:1) are clipped by ZoomableCloud and visible when zoomed out.
@@ -332,7 +387,8 @@ private struct HoneycombCloud: View {
                 ForEach(engine.items) { item in
                     ContactCircle(
                         user:         item.user,
-                        size:         engine.cellSize,
+                        cellSize:     engine.cellSize,
+                        metrics:      metrics[item.user.id] ?? .zero,
                         canvasPos:    item.position,
                         canvasScale:  canvasScale,
                         canvasOffset: canvasOffset,
@@ -353,12 +409,24 @@ private struct HoneycombCloud: View {
 
 private struct ContactCircle: View {
     @ObservedObject var user: User
-    let size:         CGFloat
+    /// Base cell size from the layout engine (cellWidth × 0.74).
+    let cellSize:     CGFloat
+    let metrics:      ContactMetrics
     let canvasPos:    CGPoint
     let canvasScale:  CGFloat
     let canvasOffset: CGSize
     let screenSize:   CGSize
     var onTap: () -> Void
+
+    // MARK: Size
+    //
+    // Frequency score drives rendered diameter in the range [0.60 … 0.90] × cellWidth.
+    // The gap feels natural: most-active contact is 1.5× the size of a silent one,
+    // while hex positions stay uniform so the grid never breaks apart.
+    private var effectiveSize: CGFloat {
+        let f = 0.60 + 0.30 * metrics.frequencyScore  // [0.60 … 0.90]
+        return cellSize / 0.74 * f                     // remap: cellSize = cellWidth×0.74
+    }
 
     var body: some View {
         Button(action: onTap) {
@@ -370,17 +438,35 @@ private struct ContactCircle: View {
                 } else {
                     Circle().fill(accentColor.opacity(0.18))
                     Text(initials)
-                        .font(ConstructFont.mono(size * 0.26, weight: .semibold))
+                        .font(ConstructFont.mono(effectiveSize * 0.26, weight: .semibold))
                         .foregroundStyle(accentColor)
                 }
             }
-            .frame(width: size, height: size)
+            .frame(width: effectiveSize, height: effectiveSize)
             .clipShape(Circle())
             .overlay(Circle().strokeBorder(borderColor, lineWidth: 1.5))
+            .shadow(color: glowColor, radius: glowRadius, x: 0, y: 0)
             .scaleEffect(proximityScale)
             .opacity(proximityOpacity)
         }
         .buttonStyle(.plain)
+    }
+
+    // MARK: Recency glow
+
+    private var glowColor: Color {
+        switch metrics.recency {
+        case .fresh:   return accentColor.opacity(0.70)
+        case .recent:  return accentColor.opacity(0.28)
+        case .none:    return .clear
+        }
+    }
+    private var glowRadius: CGFloat {
+        switch metrics.recency {
+        case .fresh:  return 10
+        case .recent: return 6
+        case .none:   return 0
+        }
     }
 
     // MARK: Proximity effect
