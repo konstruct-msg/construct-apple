@@ -362,16 +362,36 @@ class BackgroundFetchManager: NSObject {
                     }
 
                     // Chunk messages: if the decrypted plaintext starts with "KNST1:" it is a
-                    // chunked-message fragment. The background fetch cannot reassemble multi-part
-                    // messages (the stateful reassembler lives in MessageRouter). Saving the raw
-                    // chunk as decryptedContent would display raw ciphertext-looking text in the
-                    // chat bubble (the bug that produces KNST1:… bubbles). Instead, leave the
-                    // message un-ACKed so the real-time stream can reassemble it properly when
-                    // the app returns to foreground.
-                    let chunkPrefix = "KNST1:"
-                    if let dc = decryptedContent, dc.hasPrefix(chunkPrefix) {
-                        Log.debug("⏭️ Skipping chunk fragment \(messageData.id.prefix(8))… — stream will reassemble", category: "BackgroundFetch")
-                        continue
+                    // chunked-message fragment.  The Double Ratchet has already advanced when we
+                    // called decryptMessage above, so we MUST ACK the chunk — otherwise the stream
+                    // will try to decrypt it again and get an AEAD failure ("Message not available").
+                    // Feed the chunk to the shared ChunkedMessageReassembler (same instance used by
+                    // MessageRouter) so multi-chunk messages can still be assembled here.
+                    // • .complete  → replace decryptedContent with the assembled text, fall through to save
+                    // • .incomplete → ACK (ratchet consumed) but skip save; remaining chunks will complete
+                    //                 assembly when they arrive via this path or the live stream
+                    // • .invalid / .legacy → ACK and skip save to avoid garbled bubbles
+                    if let dc = decryptedContent, dc.hasPrefix("KNST1:") {
+                        var assembled: String? = nil
+                        DispatchQueue.main.sync {
+                            switch ChunkedMessageReassembler.shared.process(decryptedText: dc) {
+                            case .complete(let text):
+                                assembled = text
+                            case .legacy(let text):
+                                assembled = text
+                            case .incomplete, .invalid:
+                                break
+                            }
+                        }
+                        // Always ACK — ratchet is past this chunk, stream must not retry.
+                        PersistentACKStore.shared.markProcessed(messageData.id, senderId: messageData.from, in: backgroundContext)
+                        if let text = assembled {
+                            Log.debug("✅ Chunk assembled in background fetch \(messageData.id.prefix(8))", category: "BackgroundFetch")
+                            decryptedContent = text
+                        } else {
+                            Log.debug("⏭️ Chunk fragment \(messageData.id.prefix(8)) ACK'd; waiting for remaining chunks", category: "BackgroundFetch")
+                            continue
+                        }
                     }
 
                     // If decryption succeeded, mark the message as processed in PersistentACKStore.

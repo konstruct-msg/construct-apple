@@ -58,7 +58,7 @@ class MessageRouter {
     /// Provides message IDs, the original sender's user ID (for server routing), and receipt status.
     var onReceiptNeeded: (([String], String, Shared_Proto_Signaling_V1_ReceiptStatus) -> Void)?
 
-    private let chunkReassembler = ChunkedMessageReassembler()
+    private let chunkReassembler = ChunkedMessageReassembler.shared
     
     // MARK: - Message Routing
     
