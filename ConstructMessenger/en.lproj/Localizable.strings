@@ -612,3 +612,12 @@
 "synaps_prune_title" = "Cut this synapse?";
 "synaps_prune_action" = "Cut";
 "synaps_prune_message" = "This will permanently remove %@ from your Synaps and delete the conversation.";
+
+// MARK: - Connection Status Indicator
+"connection_status_secure" = "Secure";
+"connection_status_connecting" = "Connecting...";
+"connection_status_offline" = "Offline";
+
+// MARK: - Contact card crypto section
+"session_crypto_suite" = "Encryption";
+"session_crypto_no_session" = "No active session";

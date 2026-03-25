@@ -17,34 +17,34 @@ struct ConnectionStatusIndicator: View {
             .font(ConstructFont.mono(12, weight: .medium))
             .foregroundStyle(labelColor)
             .opacity(textOpacity)
-            .animation(.easeInOut(duration: 0.3), value: connectionManager.connectionStatus)
+            .animation(.easeInOut(duration: 0.5), value: connectionManager.connectionStatus)
             .onAppear { startPulseIfNeeded() }
             .onChange(of: connectionManager.connectionStatus) { startPulseIfNeeded() }
     }
 
     private var labelText: String {
         switch connectionManager.connectionStatus {
-        case .connected:            return "X25519+Kyber768"
-        case .connecting, .unknown: return "Connecting..."
-        case .disconnected:         return "Offline"
+        case .connected:            return NSLocalizedString("connection_status_secure", comment: "")
+        case .connecting, .unknown: return NSLocalizedString("connection_status_connecting", comment: "")
+        case .disconnected:         return NSLocalizedString("connection_status_offline", comment: "")
         }
     }
 
     private var labelColor: Color {
         switch connectionManager.connectionStatus {
-        case .connected:            return Color.Construct.accent
+        case .connected:            return Color.Construct.accent.opacity(0.75)
         case .connecting, .unknown: return Color.Construct.textDim
-        case .disconnected:         return Color(hex: 0xE05555).opacity(0.85)
+        case .disconnected:         return Color(hex: 0xE05555).opacity(0.75)
         }
     }
 
     private func startPulseIfNeeded() {
         let isConnected = connectionManager.connectionStatus == .connected
         if isConnected {
-            withAnimation(.easeOut(duration: 0.3)) { textOpacity = 1 }
+            withAnimation(.easeOut(duration: 0.5)) { textOpacity = 1 }
         } else {
-            withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) {
-                textOpacity = 0.4
+            withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
+                textOpacity = 0.7
             }
         }
     }

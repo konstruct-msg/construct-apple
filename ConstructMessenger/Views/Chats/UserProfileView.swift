@@ -14,6 +14,15 @@
 import SwiftUI
 import CoreData
 
+/// Maps a numeric suite ID (as stored in UserDefaults) to a human-readable name.
+private func cryptoSuiteName(suiteId: Int) -> String {
+    switch suiteId {
+    case 1: return "X25519 + Kyber768"
+    case 2: return "X25519 + Kyber1024"
+    default: return "Suite \(suiteId)"
+    }
+}
+
 struct UserProfileView: View {
     @ObservedObject var user: User
 
@@ -41,6 +50,7 @@ struct UserProfileView: View {
                     VStack(spacing: 0) {
                         avatarHeader
                         actionsList
+                        cryptoSection
                         sharingStatus
                     }
                     .padding(.bottom, 32)
@@ -187,6 +197,49 @@ struct UserProfileView: View {
         }
         .padding(.horizontal, 16)
         .padding(.top, 20)
+    }
+
+    // MARK: - Crypto section
+
+    private var cryptoSection: some View {
+        let hasSession = CryptoManager.shared.hasSession(for: user.id)
+        let suiteId = UserDefaults.standard.integer(forKey: "construct.session.suite.\(user.id)")
+        let suiteLabel = hasSession && suiteId > 0
+            ? cryptoSuiteName(suiteId: suiteId)
+            : NSLocalizedString("session_crypto_no_session", comment: "")
+
+        return VStack(spacing: 0) {
+            Divider()
+                .background(Color.Construct.dim)
+                .padding(.horizontal, 16)
+
+            HStack(spacing: 10) {
+                Image(systemName: hasSession ? "lock.fill" : "lock.open")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(hasSession ? Color.Construct.accent.opacity(0.8) : Color.Construct.textDim)
+                    .frame(width: 20)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(LocalizedStringKey("session_crypto_suite"))
+                        .font(ConstructFont.mono(11, weight: .medium))
+                        .foregroundStyle(Color.Construct.textDim)
+                    Text(suiteLabel)
+                        .font(ConstructFont.mono(13, weight: .semibold))
+                        .foregroundStyle(hasSession ? Color.Construct.textBright : Color.Construct.textDim)
+                }
+
+                Spacer()
+
+                if hasSession {
+                    Image(systemName: "checkmark.shield.fill")
+                        .font(.system(size: 14))
+                        .foregroundStyle(Color.Construct.accent.opacity(0.7))
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+        }
+        .padding(.top, 12)
     }
 
     // MARK: - Sharing status
