@@ -153,10 +153,11 @@ class PushNotificationManager: NSObject {
 
     private func registerForRemoteNotificationsIfAuthorized() async {
         guard authorizationStatus == .authorized || authorizationStatus == .provisional else { return }
-        guard deviceToken == nil else { return }
-
+        // Apple recommends calling registerForRemoteNotifications() on every launch.
+        // APNs returns the same token if unchanged (no-op), or a new one if rotated
+        // (e.g. after reinstall). In either case registerDeviceToken() will handle it.
         await MainActor.run {
-            Log.info("📱 Registering for remote notifications (authorized, no token yet)", category: "Push")
+            Log.info("📱 Requesting APNs token (re-register on every launch)", category: "Push")
             UIApplication.shared.registerForRemoteNotifications()
         }
     }

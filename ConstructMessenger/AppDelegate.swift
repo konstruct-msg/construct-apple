@@ -170,8 +170,11 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         // Remove all delivered notifications
         LocalNotificationManager.shared.removeAllNotifications()
 
-        // Refresh push authorization state and re-register if needed
-        Task { await PushNotificationManager.shared.checkAuthorizationStatus() }
+        // Re-request APNs token on every foreground transition (Apple-recommended).
+        // If the token is unchanged APNs returns immediately. If it rotated (e.g.
+        // reinstall, OS upgrade) the new token flows through registerDeviceToken()
+        // and is immediately synced with the server — preventing BadDeviceToken errors.
+        application.registerForRemoteNotifications()
         Task { await PushNotificationManager.shared.ensureTokenRegistered() }
     }
 
