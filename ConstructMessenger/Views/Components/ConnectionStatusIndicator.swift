@@ -37,7 +37,9 @@ struct ConnectionStatusIndicator: View {
         .foregroundStyle(labelColor)
         .animation(.easeInOut(duration: 0.6), value: connectionManager.connectionStatus)
         .onAppear { handleStatusChange(connectionManager.connectionStatus) }
-        .onChange(of: connectionManager.connectionStatus, handleStatusChange)
+        .onChange(of: connectionManager.connectionStatus) { _, newStatus in
+                handleStatusChange(newStatus)
+            }
     }
 
     private var labelText: String {
