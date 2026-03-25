@@ -284,24 +284,48 @@ class PushNotificationManager: NSObject {
 
 extension PushNotificationManager: UNUserNotificationCenterDelegate {
     
-    /// Handle notification when app is in foreground
+    /// Handle notification when app is in foreground.
+    ///
+    /// The server sends APNs *alert* pushes whose body contains the raw
+    /// encrypted message payload (KNST1:… format). We must never display
+    /// that raw ciphertext to the user. Instead:
+    ///   - Silent push (content-available only)  → suppress (app handles it)
+    ///   - APNs alert push with encrypted body   → cancel raw push,
+    ///                                             schedule a clean local banner
+    ///   - Local notification (from our own code) → show as-is
     nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
-        Log.debug("📱 Received notification while app in foreground", category: "Push")
-        
-        // For silent pushes (content-available), don't show anything
         let userInfo = notification.request.content.userInfo
+
+        // Silent push — wake the app but don't show a banner; our
+        // didReceiveRemoteNotification handler fetches messages and posts
+        // its own local notification.
         if userInfo["content-available"] as? Int == 1 {
-            Log.debug("📱 Silent push - not showing notification", category: "Push")
+            Log.debug("📱 Silent push received in foreground — suppressed", category: "Push")
             completionHandler([])
             return
         }
-        
-        // For visible pushes, show banner + sound + badge
-        completionHandler([.banner, .sound, .badge])
+
+        // APNs alert push (UNPushNotificationTrigger) — the server body may
+        // contain raw ciphertext. Replace with a privacy-safe local notification.
+        if notification.request.trigger is UNPushNotificationTrigger {
+            Log.debug("📱 APNs alert push in foreground — replacing with local banner", category: "Push")
+            let chatId = userInfo["conversation_id"] as? String
+            LocalNotificationManager.shared.showNewMessageNotification(chatId: chatId)
+            completionHandler([])   // suppress the raw push
+            return
+        }
+
+        // Local notification (scheduled by our own code) — show it.
+        Log.debug("📱 Local notification in foreground — showing", category: "Push")
+        if #available(iOS 14.0, *) {
+            completionHandler([.banner, .sound, .badge])
+        } else {
+            completionHandler([.alert, .sound, .badge])
+        }
     }
     
     /// Handle notification tap
