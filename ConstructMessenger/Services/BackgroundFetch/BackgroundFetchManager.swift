@@ -361,6 +361,19 @@ class BackgroundFetchManager: NSObject {
                         // Message will be decrypted when user opens chat and session is initialized
                     }
 
+                    // Chunk messages: if the decrypted plaintext starts with "KNST1:" it is a
+                    // chunked-message fragment. The background fetch cannot reassemble multi-part
+                    // messages (the stateful reassembler lives in MessageRouter). Saving the raw
+                    // chunk as decryptedContent would display raw ciphertext-looking text in the
+                    // chat bubble (the bug that produces KNST1:… bubbles). Instead, leave the
+                    // message un-ACKed so the real-time stream can reassemble it properly when
+                    // the app returns to foreground.
+                    let chunkPrefix = "KNST1:"
+                    if let dc = decryptedContent, dc.hasPrefix(chunkPrefix) {
+                        Log.debug("⏭️ Skipping chunk fragment \(messageData.id.prefix(8))… — stream will reassemble", category: "BackgroundFetch")
+                        continue
+                    }
+
                     // If decryption succeeded, mark the message as processed in PersistentACKStore.
                     // This prevents the real-time stream (MessageRouter) from re-processing it when
                     // it reconnects — which would advance the Double Ratchet a second time and cause
