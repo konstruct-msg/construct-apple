@@ -12,7 +12,7 @@ struct ChatRowView: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            // Avatar
+            // Avatar — styled like Synaps ContactCircle
             Group {
                 if let avatarData = chat.otherUser?.avatarData,
                    let avatarImage = ImageHelper.imageFromData(avatarData) {
@@ -21,14 +21,23 @@ struct ChatRowView: View {
                         .scaledToFill()
                         .frame(width: AvatarStyle.chatSize, height: AvatarStyle.chatSize)
                         .clipShape(AvatarStyle.avatarShape(AvatarStyle.chatSize))
+                        .overlay {
+                            AvatarStyle.avatarShape(AvatarStyle.chatSize)
+                                .strokeBorder(Color.Construct.dim, lineWidth: 1.5)
+                        }
                 } else {
+                    let accent = Color.hexagonAccent(for: chat.otherUser?.id ?? "")
                     AvatarStyle.avatarShape(AvatarStyle.chatSize)
-                        .fill(Color.hexagonAccent(for: chat.otherUser?.id ?? ""))
+                        .fill(accent.opacity(0.15))
                         .frame(width: AvatarStyle.chatSize, height: AvatarStyle.chatSize)
                         .overlay {
                             Text(initials)
-                                .foregroundColor(.white)
-                                .fontWeight(.semibold)
+                                .font(ConstructFont.mono(16, weight: .semibold))
+                                .foregroundStyle(accent)
+                        }
+                        .overlay {
+                            AvatarStyle.avatarShape(AvatarStyle.chatSize)
+                                .strokeBorder(Color.Construct.dim, lineWidth: 1.5)
                         }
                 }
             }

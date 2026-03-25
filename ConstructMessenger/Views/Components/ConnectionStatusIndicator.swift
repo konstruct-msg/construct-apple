@@ -5,65 +5,75 @@
 
 import SwiftUI
 
-/// Compact connection status dot shown in the chats list navigation bar.
+/// Text-based connection status shown in the chats list navigation bar.
+/// Connected → accent blue label. Other states show explicit status text.
 struct ConnectionStatusIndicator: View {
     var connectionManager = ConnectionStatusManager.shared
-    @State private var isPulsing = false
+    @State private var dotOpacity: Double = 1
 
     var body: some View {
-        ZStack {
-            // Pulsing ring — only shown while connecting
-            if connectionManager.connectionStatus == .connecting {
-                Circle()
-                    .stroke(Color.orange.opacity(0.35), lineWidth: 2)
-                    .frame(width: 18, height: 18)
-                    .scaleEffect(isPulsing ? 1.45 : 1.0)
-                    .animation(
-                        isPulsing
-                            ? .easeInOut(duration: 0.9).repeatForever(autoreverses: true)
-                            : .easeOut(duration: 0.2),
-                        value: isPulsing
-                    )
-            }
-
-            // Status dot — color transitions smoothly
+        HStack(spacing: 5) {
             Circle()
-                .fill(indicatorColor)
-                .frame(width: 10, height: 10)
+                .fill(dotColor)
+                .frame(width: 6, height: 6)
+                .opacity(dotOpacity)
+
+            Text(labelText)
+                .font(ConstructFont.mono(12, weight: .medium))
+                .foregroundStyle(labelColor)
         }
-        .frame(width: 20, height: 20)
-        .onAppear { updatePulse() }
-        .onChange(of: connectionManager.connectionStatus) { updatePulse() }
+        .animation(.easeInOut(duration: 0.3), value: connectionManager.connectionStatus)
+        .onAppear { startPulseIfNeeded() }
+        .onChange(of: connectionManager.connectionStatus) { startPulseIfNeeded() }
     }
 
-    private var indicatorColor: Color {
+    // MARK: - State-driven properties
+
+    private var labelText: String {
         switch connectionManager.connectionStatus {
-        case .connected:    return Color.AppStatus.success
-        case .disconnected: return .red
-        case .connecting:   return .orange
-        case .unknown:      return .gray
+        case .connected:    return "Construct"
+        case .connecting:   return "Connecting..."
+        case .disconnected: return "Offline"
+        case .unknown:      return "Connecting..."
         }
     }
 
-    private func updatePulse() {
-        let shouldPulse = connectionManager.connectionStatus == .connecting
-        guard isPulsing != shouldPulse else { return }
-        if shouldPulse {
-            // Short delay so the ring renders first, then starts expanding
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                isPulsing = true
+    private var labelColor: Color {
+        switch connectionManager.connectionStatus {
+        case .connected:              return Color.Construct.accent
+        case .connecting, .unknown:   return Color.Construct.textDim
+        case .disconnected:           return Color(hex: 0xE05555).opacity(0.85)
+        }
+    }
+
+    private var dotColor: Color {
+        switch connectionManager.connectionStatus {
+        case .connected:              return Color.Construct.accent.opacity(0.8)
+        case .connecting, .unknown:   return Color.Construct.textDim.opacity(0.6)
+        case .disconnected:           return Color(hex: 0xE05555).opacity(0.7)
+        }
+    }
+
+    // MARK: - Pulse animation for non-connected states
+
+    private func startPulseIfNeeded() {
+        let isActive = connectionManager.connectionStatus != .connected
+        if isActive {
+            withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
+                dotOpacity = 0.25
             }
         } else {
-            isPulsing = false
+            withAnimation(.easeOut(duration: 0.3)) {
+                dotOpacity = 1
+            }
         }
     }
 }
 
 #Preview {
-    VStack(spacing: 20) {
-        HStack { Text("Connected:");    ConnectionStatusIndicator() }
-        HStack { Text("Disconnected:"); Circle().fill(.red).frame(width: 10, height: 10) }
-        HStack { Text("Connecting:");   Circle().fill(.orange).frame(width: 10, height: 10) }
+    VStack(spacing: 16) {
+        ConnectionStatusIndicator()
     }
     .padding()
+    .background(Color.Construct.bg)
 }

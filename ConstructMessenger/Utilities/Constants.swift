@@ -29,7 +29,7 @@ struct AccountDeletionConfig {
 
 // MARK: - Avatar Styling
 struct AvatarStyle {
-    static let chatSize: CGFloat = 50
+    static let chatSize: CGFloat = 56
     static let settingsSize: CGFloat = 54
     static let bubbleSize: CGFloat = 60
     static let accountSize: CGFloat = 100
