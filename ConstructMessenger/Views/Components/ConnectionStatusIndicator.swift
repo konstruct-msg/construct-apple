@@ -6,20 +6,38 @@
 import SwiftUI
 
 /// Text-only connection status shown in the chats list navigation bar.
-/// Connected → shows the active crypto suite in accent blue.
-/// Other states → show plain status text in muted colors.
+///
+/// Behaviour:
+/// - Connecting / Offline → always visible (pulses)
+/// - Secure → appears on connection, fades out after 10 s
+///   On reconnect the cycle restarts so the user is notified again.
 struct ConnectionStatusIndicator: View {
     var connectionManager = ConnectionStatusManager.shared
+
     @State private var textOpacity: Double = 1
+    /// Controls whether the "Secure" label is rendered at all.
+    /// We use a separate bool so the view collapses to zero width when hidden
+    /// rather than just being transparent (avoids dead space in nav bar).
+    @State private var secureVisible: Bool = true
+    @State private var hideTask: Task<Void, Never>? = nil
 
     var body: some View {
-        Text(labelText)
-            .font(ConstructFont.mono(12, weight: .medium))
-            .foregroundStyle(labelColor)
-            .opacity(textOpacity)
-            .animation(.easeInOut(duration: 0.5), value: connectionManager.connectionStatus)
-            .onAppear { startPulseIfNeeded() }
-            .onChange(of: connectionManager.connectionStatus) { startPulseIfNeeded() }
+        Group {
+            if connectionManager.connectionStatus == .connected {
+                if secureVisible {
+                    Text(NSLocalizedString("connection_status_secure", comment: ""))
+                        .opacity(textOpacity)
+                }
+            } else {
+                Text(labelText)
+                    .opacity(textOpacity)
+            }
+        }
+        .font(ConstructFont.mono(12, weight: .medium))
+        .foregroundStyle(labelColor)
+        .animation(.easeInOut(duration: 0.6), value: connectionManager.connectionStatus)
+        .onAppear { handleStatusChange(connectionManager.connectionStatus) }
+        .onChange(of: connectionManager.connectionStatus, handleStatusChange)
     }
 
     private var labelText: String {
@@ -38,14 +56,35 @@ struct ConnectionStatusIndicator: View {
         }
     }
 
-    private func startPulseIfNeeded() {
-        let isConnected = connectionManager.connectionStatus == .connected
-        if isConnected {
-            withAnimation(.easeOut(duration: 0.5)) { textOpacity = 1 }
-        } else {
-            withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
-                textOpacity = 0.7
+    private func handleStatusChange(_ status: ConnectionStatusManager.ConnectionStatus) {
+        hideTask?.cancel()
+        hideTask = nil
+
+        switch status {
+        case .connected:
+            // Snap visible, full opacity, then schedule auto-hide.
+            secureVisible = true
+            withAnimation(.easeOut(duration: 0.4)) { textOpacity = 1 }
+            hideTask = Task {
+                try? await Task.sleep(nanoseconds: 10_000_000_000) // 10 s
+                guard !Task.isCancelled else { return }
+                await MainActor.run {
+                    withAnimation(.easeIn(duration: 0.8)) { textOpacity = 0 }
+                }
+                try? await Task.sleep(nanoseconds: 800_000_000) // wait for fade
+                guard !Task.isCancelled else { return }
+                await MainActor.run { secureVisible = false }
             }
+
+        case .connecting, .unknown:
+            secureVisible = true
+            withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
+                textOpacity = 0.65
+            }
+
+        case .disconnected:
+            secureVisible = true
+            withAnimation(.easeOut(duration: 0.3)) { textOpacity = 1 }
         }
     }
 }
