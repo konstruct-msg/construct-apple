@@ -55,6 +55,18 @@ final class PersistentACKStore {
 
     // MARK: - Mark
 
+    /// Immediately marks `messageId` as processed **in the in-memory Rust cache only** (no IO).
+    ///
+    /// Call this on the same thread as `decryptMessage` to close the race window with the
+    /// live gRPC stream.  The stream's `isProcessed` check consults the in-memory cache first
+    /// (`.inCache` → true), so this single call is sufficient to prevent double-decryption.
+    ///
+    /// Always follow up with `markProcessed(_:senderId:in:)` on the background thread to
+    /// persist the ACK to Core Data across app restarts.
+    func preemptACK(_ messageId: String) {
+        _ = rustAck.markProcessed(messageId: messageId)
+    }
+
     /// Marks `messageId` as processed. Idempotent — safe to call multiple times.
     func markProcessed(_ messageId: String, senderId: String, in context: NSManagedObjectContext) {
         _ = rustAck.markProcessed(messageId: messageId)

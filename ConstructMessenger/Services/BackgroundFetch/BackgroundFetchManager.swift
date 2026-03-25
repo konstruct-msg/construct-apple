@@ -352,6 +352,13 @@ class BackgroundFetchManager: NSObject {
                             do {
                                 decryptedContent = try CryptoManager.shared.decryptMessage(messageData)
                                 Log.debug("✅ Decrypted message \(messageData.id)", category: "BackgroundFetch")
+                                // Immediately mark in-memory on the main thread to close the race window
+                                // with the live gRPC stream.  The stream's isProcessed check hits the
+                                // Rust in-memory cache first — if it finds the ID there it skips the
+                                // message entirely, preventing a double-decrypt AEAD failure that would
+                                // trigger heal_impossible → END_SESSION → silent session destruction.
+                                // Core Data persistence follows below on the background thread.
+                                PersistentACKStore.shared.preemptACK(messageData.id)
                             } catch {
                                 Log.error("❌ Failed to decrypt message \(messageData.id): \(error)", category: "BackgroundFetch")
                             }
@@ -362,15 +369,15 @@ class BackgroundFetchManager: NSObject {
                     }
 
                     // Chunk messages: if the decrypted plaintext starts with "KNST1:" it is a
-                    // chunked-message fragment.  The Double Ratchet has already advanced when we
-                    // called decryptMessage above, so we MUST ACK the chunk — otherwise the stream
-                    // will try to decrypt it again and get an AEAD failure ("Message not available").
-                    // Feed the chunk to the shared ChunkedMessageReassembler (same instance used by
-                    // MessageRouter) so multi-chunk messages can still be assembled here.
-                    // • .complete  → replace decryptedContent with the assembled text, fall through to save
-                    // • .incomplete → ACK (ratchet consumed) but skip save; remaining chunks will complete
-                    //                 assembly when they arrive via this path or the live stream
-                    // • .invalid / .legacy → ACK and skip save to avoid garbled bubbles
+                    // chunked-message fragment.  The Double Ratchet advanced above, and the
+                    // in-memory ACK (preemptACK) was already written inside the main.sync block,
+                    // so the stream cannot re-decrypt this chunk.  We still need:
+                    //   1. Core Data ACK persist (markProcessed below) — survives app restart
+                    //   2. Reassembly — feed to shared ChunkedMessageReassembler
+                    // • .complete  → replace decryptedContent with assembled text, fall through to save
+                    // • .incomplete → Core Data ACK + skip save; remaining chunks complete assembly
+                    //                 via subsequent background fetches or the live stream
+                    // • .invalid / .legacy → Core Data ACK + skip save
                     if let dc = decryptedContent, dc.hasPrefix("KNST1:") {
                         var assembled: String? = nil
                         DispatchQueue.main.sync {
@@ -394,12 +401,12 @@ class BackgroundFetchManager: NSObject {
                         }
                     }
 
-                    // If decryption succeeded, mark the message as processed in PersistentACKStore.
-                    // This prevents the real-time stream (MessageRouter) from re-processing it when
-                    // it reconnects — which would advance the Double Ratchet a second time and cause
-                    // an AEAD failure, triggering an unnecessary heal loop.
-                    // If decryption FAILED (decryptedContent == nil), we intentionally do NOT mark it
-                    // as processed so the stream can retry with the live session.
+                    // Persist the ACK to Core Data for non-chunk messages.
+                    // The in-memory cache was already updated by preemptACK inside main.sync,
+                    // which closed the stream race window.  This call durably persists across
+                    // app restarts.  Idempotent — calling markProcessed on an already-cached
+                    // ID is a no-op in Core Data (guarded by fetchLimit:1 check).
+                    // Skip for failed decryptions (nil) so the stream can retry with the live session.
                     if decryptedContent != nil {
                         PersistentACKStore.shared.markProcessed(messageData.id, senderId: messageData.from, in: backgroundContext)
                     }
