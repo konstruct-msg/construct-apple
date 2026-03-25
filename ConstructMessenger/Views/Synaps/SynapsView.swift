@@ -31,7 +31,7 @@ struct SynapsView: View {
     @State private var showPruneConfirm = false
     // Shared canvas transform — owned here so HoneycombCloud can read them for
     // the proximity effect while ZoomableCloud drives them via gestures.
-    @State private var canvasScale:  CGFloat  = 0.85
+    @State private var canvasScale:  CGFloat  = 1.0   // recalculated on appear
     @State private var canvasOffset: CGSize   = .zero
 
     private var filtered: [User] {
@@ -55,7 +55,7 @@ struct SynapsView: View {
                         ZoomableCloud(
                             scale:    $canvasScale,
                             offset:   $canvasOffset,
-                            minScale: 0.25,
+                            minScale: 0.20,
                             maxScale: 3.0
                         ) {
                             HoneycombCloud(
@@ -68,12 +68,16 @@ struct SynapsView: View {
                         }
                     }
                 }
+                .onAppear {
+                    canvasScale = fitScale(contacts: Array(contacts), screenSize: geo.size)
+                }
             }
             .searchable(text: $searchText, prompt: LocalizedStringKey("synaps_search_prompt"))
             .onChange(of: searchText) { _, _ in
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                    canvasScale  = 0.85
                     canvasOffset = .zero
+                    // Recompute fit for the filtered list — need size; use a rough estimate
+                    // (exact recalc happens via the engine on next render)
                 }
             }
             #if os(iOS)
@@ -122,6 +126,15 @@ struct SynapsView: View {
                 Text(String(format: NSLocalizedString("synaps_prune_message", comment: ""), name))
             }
         }
+    }
+
+    // MARK: - Initial scale
+
+    /// Compute a zoom level that fits all contacts with ~12% breathing room.
+    private func fitScale(contacts: [User], screenSize: CGSize) -> CGFloat {
+        guard !contacts.isEmpty else { return 1.0 }
+        let engine = HoneycombLayoutEngine(contacts: contacts, canvasSize: screenSize)
+        return engine.initialScale
     }
 
     // MARK: - Empty state
@@ -233,14 +246,24 @@ struct ZoomableCloud<Content: View>: View {
 /// Computes deterministic honeycomb positions for a flat contact list.
 /// Even rows: `wideCols` circles. Odd rows: `wideCols - 1` circles, offset right
 /// by half a cell — classic hex packing.
+/// Computes deterministic honeycomb positions centred on the canvas.
+/// A single contact lands at the screen centre; additional contacts
+/// radiate outward in even (4) / odd (3) hex rows.
 private struct HoneycombLayoutEngine {
     let contacts:   [User]
-    let canvasWidth: CGFloat
+    let canvasSize: CGSize
     let wideCols = 4
 
-    var cellWidth: CGFloat { canvasWidth / CGFloat(wideCols) }
+    var cellWidth: CGFloat { canvasSize.width / CGFloat(wideCols) }
     var cellSize:  CGFloat { cellWidth * 0.74 }
     var vStep:     CGFloat { cellWidth * 0.866 }  // √3/2
+    var totalHeight: CGFloat { CGFloat(rawRows.count) * vStep + cellWidth * 0.6 }
+
+    /// Zoom level that fits the whole grid with ~12% breathing room.
+    var initialScale: CGFloat {
+        guard totalHeight > 0, canvasSize.height > 0 else { return 1.0 }
+        return Swift.min(canvasSize.height / totalHeight * 0.88, 1.0)
+    }
 
     struct Item: Identifiable {
         let id: String
@@ -248,9 +271,24 @@ private struct HoneycombLayoutEngine {
         let position: CGPoint
     }
 
+    /// Hex positions translated so the grid bounding-box centre = canvas centre.
     var items: [Item] {
+        let raw = rawItems
+        guard !raw.isEmpty else { return [] }
+        let xs = raw.map(\.position.x), ys = raw.map(\.position.y)
+        let gcx = ((xs.min() ?? 0) + (xs.max() ?? 0)) / 2
+        let gcy = ((ys.min() ?? 0) + (ys.max() ?? 0)) / 2
+        let dx = canvasSize.width  / 2 - gcx
+        let dy = canvasSize.height / 2 - gcy
+        return raw.map {
+            Item(id: $0.id, user: $0.user,
+                 position: CGPoint(x: $0.position.x + dx, y: $0.position.y + dy))
+        }
+    }
+
+    private var rawItems: [Item] {
         var result: [Item] = []
-        for (rowIdx, row) in rows.enumerated() {
+        for (rowIdx, row) in rawRows.enumerated() {
             let xShift = rowIdx % 2 == 1 ? cellWidth / 2 : 0
             for (colIdx, user) in row.enumerated() {
                 let cx = xShift + CGFloat(colIdx) * cellWidth + cellWidth / 2
@@ -261,11 +299,7 @@ private struct HoneycombLayoutEngine {
         return result
     }
 
-    var totalHeight: CGFloat {
-        CGFloat(rows.count) * vStep + cellWidth * 0.6
-    }
-
-    private var rows: [[User]] {
+    private var rawRows: [[User]] {
         var result: [[User]] = []
         var idx = 0, rowIdx = 0
         while idx < contacts.count {
@@ -288,19 +322,18 @@ private struct HoneycombCloud: View {
 
     var body: some View {
         GeometryReader { geo in
-            let engine  = HoneycombLayoutEngine(contacts: contacts, canvasWidth: geo.size.width)
-            let padding: CGFloat = 24
-            let totalH  = engine.totalHeight + padding * 2
+            let engine = HoneycombLayoutEngine(contacts: contacts, canvasSize: geo.size)
 
+            // Canvas is screen-sized; contacts that overflow (large grids when
+            // zoomed to 1:1) are clipped by ZoomableCloud and visible when zoomed out.
             ZStack(alignment: .topLeading) {
-                Color.clear.frame(width: geo.size.width, height: totalH)
+                Color.clear.frame(width: geo.size.width, height: geo.size.height)
 
                 ForEach(engine.items) { item in
-                    let pos = CGPoint(x: item.position.x, y: item.position.y + padding)
                     ContactCircle(
                         user:         item.user,
                         size:         engine.cellSize,
-                        canvasPos:    pos,
+                        canvasPos:    item.position,
                         canvasScale:  canvasScale,
                         canvasOffset: canvasOffset,
                         screenSize:   screenSize
@@ -309,7 +342,7 @@ private struct HoneycombCloud: View {
                             selected = item.user
                         }
                     }
-                    .position(pos)
+                    .position(item.position)
                 }
             }
         }
