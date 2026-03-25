@@ -169,8 +169,8 @@ struct ZoomableCloud<Content: View>: View {
     var maxScale: CGFloat = 3.0
     @ViewBuilder var content: () -> Content
 
-    @State private var gestureScale:     CGFloat  = 1
-    @State private var lastTranslation:  CGSize   = .zero
+    @State private var gestureScale:    CGFloat = 1
+    @State private var lastTranslation: CGSize  = .zero
 
     var body: some View {
         GeometryReader { proxy in
@@ -181,7 +181,9 @@ struct ZoomableCloud<Content: View>: View {
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
             .clipped()
-            .simultaneousGesture(magnificationGesture(size: proxy.size))
+            // highPriorityGesture: iOS hands two-finger touches exclusively to the
+            // magnification gesture, so child buttons are never triggered mid-pinch.
+            .highPriorityGesture(magnificationGesture(size: proxy.size))
             .simultaneousGesture(dragGesture(size: proxy.size))
         }
     }
@@ -445,28 +447,10 @@ private struct ContactCircle: View {
             .frame(width: effectiveSize, height: effectiveSize)
             .clipShape(Circle())
             .overlay(Circle().strokeBorder(borderColor, lineWidth: 1.5))
-            .shadow(color: glowColor, radius: glowRadius, x: 0, y: 0)
             .scaleEffect(proximityScale)
             .opacity(proximityOpacity)
         }
         .buttonStyle(.plain)
-    }
-
-    // MARK: Recency glow
-
-    private var glowColor: Color {
-        switch metrics.recency {
-        case .fresh:   return accentColor.opacity(0.70)
-        case .recent:  return accentColor.opacity(0.28)
-        case .none:    return .clear
-        }
-    }
-    private var glowRadius: CGFloat {
-        switch metrics.recency {
-        case .fresh:  return 10
-        case .recent: return 6
-        case .none:   return 0
-        }
     }
 
     // MARK: Proximity effect
