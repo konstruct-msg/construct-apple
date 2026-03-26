@@ -10,7 +10,6 @@ Cargo.lock
 # Never commit — they are large, architecture-specific, and must always
 # match the current construct-core source.
 libconstruct_core.a
-libconstruct_core_catalyst.a
 libconstruct_core_mac.a
 libconstruct_core_sim.a
 ConstructCore.xcframework/**/*.a
