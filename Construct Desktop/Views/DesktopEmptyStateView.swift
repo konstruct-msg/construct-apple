@@ -11,110 +11,93 @@
 import SwiftUI
 
 struct DesktopEmptyStateView: View {
-    @State private var glowPulse = false
-    @State private var cardsAppeared = false
-
     var body: some View {
-        ZStack {
-            // Background matches app background — no contrast
-            DesktopTheme.backgroundPrimary.ignoresSafeArea()
+        VStack(spacing: 0) {
+            Spacer()
 
-            VStack(spacing: 0) {
-                Spacer()
+            // Wordmark
+            VStack(spacing: 6) {
+                Text("CONSTRUCT")
+                    .font(.system(size: 22, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(DesktopTheme.textPrimary)
+                    .tracking(8)
 
-                // Wordmark
-                VStack(spacing: 6) {
-                    Text("CONSTRUCT")
-                        .font(.system(size: 22, weight: .semibold, design: .monospaced))
-                        .foregroundStyle(DesktopTheme.textPrimary)
-                        .tracking(8)
-
-                    Text("post-quantum secure messaging")
-                        .font(.system(size: 11, weight: .regular, design: .monospaced))
-                        .foregroundStyle(DesktopTheme.textTertiary)
-                        .tracking(2)
-                }
-                .padding(.bottom, 44)
-
-                // Protocol stack — three cards connected by lines
-                HStack(alignment: .top, spacing: 0) {
-                    protocolCard(
-                        index: 0,
-                        label: "TRANSPORT",
-                        rows: [
-                            ("PROTOCOL", "gRPC"),
-                            ("SECURITY", "TLS 1.3"),
-                            ("DELIVERY", "BiDi Stream"),
-                        ]
-                    )
-
-                    connectorLine
-
-                    protocolCard(
-                        index: 1,
-                        label: "KEY EXCHANGE",
-                        rows: [
-                            ("ALGORITHM", "PQXDH"),
-                            ("CLASSICAL", "X25519"),
-                            ("POST-QUANTUM", "Kyber-1024"),
-                        ],
-                        isCenter: true
-                    )
-
-                    connectorLine
-
-                    protocolCard(
-                        index: 2,
-                        label: "MESSAGING",
-                        rows: [
-                            ("RATCHET", "Double Ratchet"),
-                            ("CIPHER", "AES-256-GCM"),
-                            ("FWD. SECRECY", "Per-message"),
-                        ]
-                    )
-                }
-
-                Spacer()
-
-                // Bottom hint
-                HStack(spacing: 6) {
-                    shortcutKey("⌘N")
-                    Text("New conversation")
-                        .font(.system(size: 12))
-                        .foregroundStyle(DesktopTheme.textTertiary)
-
-                    Text("·")
-                        .foregroundStyle(DesktopTheme.textTertiary)
-
-                    shortcutKey("⌘F")
-                    Text("Find chat")
-                        .font(.system(size: 12))
-                        .foregroundStyle(DesktopTheme.textTertiary)
-
-                    Text("·")
-                        .foregroundStyle(DesktopTheme.textTertiary)
-
-                    shortcutKey("⌘,")
-                    Text("Settings")
-                        .font(.system(size: 12))
-                        .foregroundStyle(DesktopTheme.textTertiary)
-                }
-                .padding(.bottom, 28)
+                Text("post-quantum secure messaging")
+                    .font(.system(size: 11, weight: .regular, design: .monospaced))
+                    .foregroundStyle(DesktopTheme.textTertiary)
+                    .tracking(2)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-        .onAppear {
-            withAnimation(.easeInOut(duration: 2.4).repeatForever(autoreverses: true)) {
-                glowPulse = true
+            .padding(.bottom, 44)
+
+            // Protocol stack — three cards connected by lines
+            HStack(alignment: .top, spacing: 0) {
+                protocolCard(
+                    label: "TRANSPORT",
+                    rows: [
+                        ("PROTOCOL", "gRPC"),
+                        ("SECURITY", "TLS 1.3"),
+                        ("DELIVERY", "BiDi Stream"),
+                    ]
+                )
+
+                connectorLine
+
+                protocolCard(
+                    label: "KEY EXCHANGE",
+                    rows: [
+                        ("ALGORITHM", "PQXDH"),
+                        ("CLASSICAL", "X25519"),
+                        ("POST-QUANTUM", "Kyber-1024"),
+                    ],
+                    isCenter: true
+                )
+
+                connectorLine
+
+                protocolCard(
+                    label: "MESSAGING",
+                    rows: [
+                        ("RATCHET", "Double Ratchet"),
+                        ("CIPHER", "AES-256-GCM"),
+                        ("FWD. SECRECY", "Per-message"),
+                    ]
+                )
             }
-            cardsAppeared = true
+
+            Spacer()
+
+            // Bottom hint
+            HStack(spacing: 6) {
+                shortcutKey("⌘N")
+                Text("New conversation")
+                    .font(.system(size: 12))
+                    .foregroundStyle(DesktopTheme.textTertiary)
+
+                Text("·")
+                    .foregroundStyle(DesktopTheme.textTertiary)
+
+                shortcutKey("⌘F")
+                Text("Find chat")
+                    .font(.system(size: 12))
+                    .foregroundStyle(DesktopTheme.textTertiary)
+
+                Text("·")
+                    .foregroundStyle(DesktopTheme.textTertiary)
+
+                shortcutKey("⌘,")
+                Text("Settings")
+                    .font(.system(size: 12))
+                    .foregroundStyle(DesktopTheme.textTertiary)
+            }
+            .padding(.bottom, 28)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(DesktopTheme.backgroundPrimary)
     }
 
     // MARK: - Protocol card
 
     private func protocolCard(
-        index: Int,
         label: String,
         rows: [(String, String)],
         isCenter: Bool = false
@@ -126,7 +109,7 @@ struct DesktopEmptyStateView: View {
                     Circle()
                         .fill(DesktopTheme.accent)
                         .frame(width: 6, height: 6)
-                        .shadow(color: DesktopTheme.accent.opacity(glowPulse ? 0.9 : 0.3), radius: glowPulse ? 6 : 3)
+                        .shadow(color: DesktopTheme.accent.opacity(0.5), radius: 4)
                 } else {
                     Circle()
                         .fill(DesktopTheme.textTertiary)
@@ -164,19 +147,17 @@ struct DesktopEmptyStateView: View {
                     RoundedRectangle(cornerRadius: 8)
                         .strokeBorder(
                             isCenter
-                                ? DesktopTheme.accent.opacity(glowPulse ? 0.25 : 0.12)
+                                ? DesktopTheme.accent.opacity(0.2)
                                 : DesktopTheme.separator,
                             lineWidth: 1
                         )
                 )
                 .shadow(
-                    color: isCenter ? DesktopTheme.accent.opacity(glowPulse ? 0.08 : 0.03) : .clear,
+                    color: isCenter ? DesktopTheme.accent.opacity(0.06) : .clear,
                     radius: 16
                 )
         )
         .frame(width: 148)
-        .opacity(cardsAppeared ? 1 : 0)
-        .animation(.easeOut(duration: 0.5).delay(Double(index) * 0.1), value: cardsAppeared)
     }
 
     // MARK: - Connector

@@ -106,11 +106,6 @@ struct DesktopRootView: View {
                 .keyboardShortcut("n", modifiers: [.command, .option])
             }
 
-            // Center: connection status indicator
-            ToolbarItem(placement: .principal) {
-                ConnectionStatusIndicator()
-            }
-
             // Trailing: QR scanner
             ToolbarItem(placement: .primaryAction) {
                 Button {
