@@ -441,6 +441,22 @@ fileprivate struct FfiConverterUInt8: FfiConverterPrimitive {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterUInt16: FfiConverterPrimitive {
+    typealias FfiType = UInt16
+    typealias SwiftType = UInt16
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> UInt16 {
+        return try lift(readInt(&buf))
+    }
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterUInt32: FfiConverterPrimitive {
     typealias FfiType = UInt32
     typealias SwiftType = UInt32
@@ -620,6 +636,21 @@ public protocol ClassicCryptoCoreProtocol: AnyObject, Sendable {
     func generateOneTimePrekeys(count: UInt32) throws  -> [OtpkPair]
     
     func getAllSessionContactIds()  -> [String]
+    
+    /**
+     * Raw identity secret key bytes (32 bytes, X25519).
+     */
+    func getIdentityKeyBytes() throws  -> Data
+    
+    /**
+     * Typed registration bundle fields — replaces JSON parsing.
+     */
+    func getRegistrationBundleFields() throws  -> RegistrationBundleJson
+    
+    /**
+     * Raw Ed25519 signing secret key bytes (64 bytes).
+     */
+    func getSigningKeyBytes() throws  -> Data
     
     func importOneTimePrekeys(data: [UInt8]) throws 
     
@@ -810,6 +841,39 @@ open func generateOneTimePrekeys(count: UInt32)throws  -> [OtpkPair]  {
 open func getAllSessionContactIds() -> [String]  {
     return try!  FfiConverterSequenceString.lift(try! rustCall() {
     uniffi_construct_core_fn_method_classiccryptocore_get_all_session_contact_ids(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * Raw identity secret key bytes (32 bytes, X25519).
+     */
+open func getIdentityKeyBytes()throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_classiccryptocore_get_identity_key_bytes(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * Typed registration bundle fields — replaces JSON parsing.
+     */
+open func getRegistrationBundleFields()throws  -> RegistrationBundleJson  {
+    return try  FfiConverterTypeRegistrationBundleJson_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_classiccryptocore_get_registration_bundle_fields(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * Raw Ed25519 signing secret key bytes (64 bytes).
+     */
+open func getSigningKeyBytes()throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_classiccryptocore_get_signing_key_bytes(
             self.uniffiCloneHandle(),$0
     )
 })
@@ -1051,7 +1115,34 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
     func getAllSessionContactIds()  -> [String]
     
     /**
-     * Unified event handler.
+     * Raw identity secret key bytes (32 bytes, X25519).
+     */
+    func getIdentityKeyBytes() throws  -> Data
+    
+    /**
+     * Typed registration bundle — replaces `export_registration_bundle_json()` parsing.
+     */
+    func getRegistrationBundleFields() throws  -> RegistrationBundleJson
+    
+    /**
+     * Suite ID for the active session with `contact_id`.
+     * Returns 0 if no session exists.
+     */
+    func getSessionSuiteId(contactId: String)  -> UInt16
+    
+    /**
+     * Raw Ed25519 signing secret key bytes (64 bytes).
+     */
+    func getSigningKeyBytes() throws  -> Data
+    
+    /**
+     * Typed event handler — replaces `handle_event_json`.
+     * Accepts a typed `CfeIncomingEvent` and returns typed `CfeAction` list.
+     */
+    func handleEvent(event: CfeIncomingEvent) throws  -> [CfeAction]
+    
+    /**
+     * Unified event handler (legacy JSON interface — kept for fallback).
      *
      * `event_json` — JSON-encoded `IncomingEvent` (see Rust `orchestration::actions`).
      * Returns a JSON array of `Action` objects for the platform to execute.
@@ -1345,7 +1436,66 @@ open func getAllSessionContactIds() -> [String]  {
 }
     
     /**
-     * Unified event handler.
+     * Raw identity secret key bytes (32 bytes, X25519).
+     */
+open func getIdentityKeyBytes()throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_get_identity_key_bytes(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * Typed registration bundle — replaces `export_registration_bundle_json()` parsing.
+     */
+open func getRegistrationBundleFields()throws  -> RegistrationBundleJson  {
+    return try  FfiConverterTypeRegistrationBundleJson_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_get_registration_bundle_fields(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * Suite ID for the active session with `contact_id`.
+     * Returns 0 if no session exists.
+     */
+open func getSessionSuiteId(contactId: String) -> UInt16  {
+    return try!  FfiConverterUInt16.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_orchestratorcore_get_session_suite_id(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(contactId),$0
+    )
+})
+}
+    
+    /**
+     * Raw Ed25519 signing secret key bytes (64 bytes).
+     */
+open func getSigningKeyBytes()throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_get_signing_key_bytes(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * Typed event handler — replaces `handle_event_json`.
+     * Accepts a typed `CfeIncomingEvent` and returns typed `CfeAction` list.
+     */
+open func handleEvent(event: CfeIncomingEvent)throws  -> [CfeAction]  {
+    return try  FfiConverterSequenceTypeCfeAction.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_handle_event(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeCfeIncomingEvent_lower(event),$0
+    )
+})
+}
+    
+    /**
+     * Unified event handler (legacy JSON interface — kept for fallback).
      *
      * `event_json` — JSON-encoded `IncomingEvent` (see Rust `orchestration::actions`).
      * Returns a JSON array of `Action` objects for the platform to execute.
@@ -3581,6 +3731,412 @@ public func FfiConverterTypeAckCheckResult_lower(_ value: AckCheckResult) -> Rus
 }
 
 
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * Typed replacement for `Action` JSON strings.
+ * Platform receives these from `handle_event()` and executes each one.
+ */
+
+public enum CfeAction: Equatable, Hashable {
+    
+    case decryptMessage(contactId: String, ciphertext: Data
+    )
+    case encryptMessage(contactId: String, plaintext: Data
+    )
+    case initSession(contactId: String, bundleJson: String
+    )
+    case applyPqContribution(contactId: String, kemSs: Data
+    )
+    case archiveSession(contactId: String
+    )
+    case messageDecrypted(contactId: String, messageId: String, plaintextUtf8: String
+    )
+    case sessionHealNeeded(contactId: String, role: String
+    )
+    case saveSessionToSecureStore(key: String, data: Data
+    )
+    case loadSessionFromSecureStore(key: String
+    )
+    case persistMessage(messageJson: String
+    )
+    case markMessageDelivered(messageId: String
+    )
+    case fetchPublicKeyBundle(userId: String
+    )
+    case sendEncryptedMessage(to: String, payload: Data
+    )
+    case sendReceipt(messageId: String, status: String
+    )
+    case sendEndSession(contactId: String
+    )
+    case notifyNewMessage(chatId: String, preview: String
+    )
+    case notifySessionCreated(contactId: String
+    )
+    case notifyError(code: String, message: String
+    )
+    case scheduleTimer(timerId: String, delayMs: UInt64
+    )
+    case cancelTimer(timerId: String
+    )
+
+
+
+}
+
+#if compiler(>=6)
+extension CfeAction: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeCfeAction: FfiConverterRustBuffer {
+    typealias SwiftType = CfeAction
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> CfeAction {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .decryptMessage(contactId: try FfiConverterString.read(from: &buf), ciphertext: try FfiConverterData.read(from: &buf)
+        )
+        
+        case 2: return .encryptMessage(contactId: try FfiConverterString.read(from: &buf), plaintext: try FfiConverterData.read(from: &buf)
+        )
+        
+        case 3: return .initSession(contactId: try FfiConverterString.read(from: &buf), bundleJson: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 4: return .applyPqContribution(contactId: try FfiConverterString.read(from: &buf), kemSs: try FfiConverterData.read(from: &buf)
+        )
+        
+        case 5: return .archiveSession(contactId: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 6: return .messageDecrypted(contactId: try FfiConverterString.read(from: &buf), messageId: try FfiConverterString.read(from: &buf), plaintextUtf8: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 7: return .sessionHealNeeded(contactId: try FfiConverterString.read(from: &buf), role: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 8: return .saveSessionToSecureStore(key: try FfiConverterString.read(from: &buf), data: try FfiConverterData.read(from: &buf)
+        )
+        
+        case 9: return .loadSessionFromSecureStore(key: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 10: return .persistMessage(messageJson: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 11: return .markMessageDelivered(messageId: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 12: return .fetchPublicKeyBundle(userId: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 13: return .sendEncryptedMessage(to: try FfiConverterString.read(from: &buf), payload: try FfiConverterData.read(from: &buf)
+        )
+        
+        case 14: return .sendReceipt(messageId: try FfiConverterString.read(from: &buf), status: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 15: return .sendEndSession(contactId: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 16: return .notifyNewMessage(chatId: try FfiConverterString.read(from: &buf), preview: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 17: return .notifySessionCreated(contactId: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 18: return .notifyError(code: try FfiConverterString.read(from: &buf), message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 19: return .scheduleTimer(timerId: try FfiConverterString.read(from: &buf), delayMs: try FfiConverterUInt64.read(from: &buf)
+        )
+        
+        case 20: return .cancelTimer(timerId: try FfiConverterString.read(from: &buf)
+        )
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: CfeAction, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case let .decryptMessage(contactId,ciphertext):
+            writeInt(&buf, Int32(1))
+            FfiConverterString.write(contactId, into: &buf)
+            FfiConverterData.write(ciphertext, into: &buf)
+            
+        
+        case let .encryptMessage(contactId,plaintext):
+            writeInt(&buf, Int32(2))
+            FfiConverterString.write(contactId, into: &buf)
+            FfiConverterData.write(plaintext, into: &buf)
+            
+        
+        case let .initSession(contactId,bundleJson):
+            writeInt(&buf, Int32(3))
+            FfiConverterString.write(contactId, into: &buf)
+            FfiConverterString.write(bundleJson, into: &buf)
+            
+        
+        case let .applyPqContribution(contactId,kemSs):
+            writeInt(&buf, Int32(4))
+            FfiConverterString.write(contactId, into: &buf)
+            FfiConverterData.write(kemSs, into: &buf)
+            
+        
+        case let .archiveSession(contactId):
+            writeInt(&buf, Int32(5))
+            FfiConverterString.write(contactId, into: &buf)
+            
+        
+        case let .messageDecrypted(contactId,messageId,plaintextUtf8):
+            writeInt(&buf, Int32(6))
+            FfiConverterString.write(contactId, into: &buf)
+            FfiConverterString.write(messageId, into: &buf)
+            FfiConverterString.write(plaintextUtf8, into: &buf)
+            
+        
+        case let .sessionHealNeeded(contactId,role):
+            writeInt(&buf, Int32(7))
+            FfiConverterString.write(contactId, into: &buf)
+            FfiConverterString.write(role, into: &buf)
+            
+        
+        case let .saveSessionToSecureStore(key,data):
+            writeInt(&buf, Int32(8))
+            FfiConverterString.write(key, into: &buf)
+            FfiConverterData.write(data, into: &buf)
+            
+        
+        case let .loadSessionFromSecureStore(key):
+            writeInt(&buf, Int32(9))
+            FfiConverterString.write(key, into: &buf)
+            
+        
+        case let .persistMessage(messageJson):
+            writeInt(&buf, Int32(10))
+            FfiConverterString.write(messageJson, into: &buf)
+            
+        
+        case let .markMessageDelivered(messageId):
+            writeInt(&buf, Int32(11))
+            FfiConverterString.write(messageId, into: &buf)
+            
+        
+        case let .fetchPublicKeyBundle(userId):
+            writeInt(&buf, Int32(12))
+            FfiConverterString.write(userId, into: &buf)
+            
+        
+        case let .sendEncryptedMessage(to,payload):
+            writeInt(&buf, Int32(13))
+            FfiConverterString.write(to, into: &buf)
+            FfiConverterData.write(payload, into: &buf)
+            
+        
+        case let .sendReceipt(messageId,status):
+            writeInt(&buf, Int32(14))
+            FfiConverterString.write(messageId, into: &buf)
+            FfiConverterString.write(status, into: &buf)
+            
+        
+        case let .sendEndSession(contactId):
+            writeInt(&buf, Int32(15))
+            FfiConverterString.write(contactId, into: &buf)
+            
+        
+        case let .notifyNewMessage(chatId,preview):
+            writeInt(&buf, Int32(16))
+            FfiConverterString.write(chatId, into: &buf)
+            FfiConverterString.write(preview, into: &buf)
+            
+        
+        case let .notifySessionCreated(contactId):
+            writeInt(&buf, Int32(17))
+            FfiConverterString.write(contactId, into: &buf)
+            
+        
+        case let .notifyError(code,message):
+            writeInt(&buf, Int32(18))
+            FfiConverterString.write(code, into: &buf)
+            FfiConverterString.write(message, into: &buf)
+            
+        
+        case let .scheduleTimer(timerId,delayMs):
+            writeInt(&buf, Int32(19))
+            FfiConverterString.write(timerId, into: &buf)
+            FfiConverterUInt64.write(delayMs, into: &buf)
+            
+        
+        case let .cancelTimer(timerId):
+            writeInt(&buf, Int32(20))
+            FfiConverterString.write(timerId, into: &buf)
+            
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCfeAction_lift(_ buf: RustBuffer) throws -> CfeAction {
+    return try FfiConverterTypeCfeAction.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCfeAction_lower(_ value: CfeAction) -> RustBuffer {
+    return FfiConverterTypeCfeAction.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * Typed replacement for `IncomingEvent` JSON strings.
+ * Platform creates one of these variants and passes to `handle_event()`.
+ */
+
+public enum CfeIncomingEvent: Equatable, Hashable {
+    
+    case messageReceived(messageId: String, from: String, data: Data, msgNum: UInt32, kemCt: Data, otpkId: UInt32, isControl: Bool
+    )
+    case sessionInitCompleted(contactId: String, sessionJson: String
+    )
+    case ackReceived(messageId: String
+    )
+    case sessionLoaded(key: String, data: Data?
+    )
+    case keyBundleFetched(userId: String, bundleJson: String
+    )
+    case networkReconnected
+    case appLaunched
+    case timerFired(timerId: String
+    )
+
+
+
+}
+
+#if compiler(>=6)
+extension CfeIncomingEvent: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeCfeIncomingEvent: FfiConverterRustBuffer {
+    typealias SwiftType = CfeIncomingEvent
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> CfeIncomingEvent {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .messageReceived(messageId: try FfiConverterString.read(from: &buf), from: try FfiConverterString.read(from: &buf), data: try FfiConverterData.read(from: &buf), msgNum: try FfiConverterUInt32.read(from: &buf), kemCt: try FfiConverterData.read(from: &buf), otpkId: try FfiConverterUInt32.read(from: &buf), isControl: try FfiConverterBool.read(from: &buf)
+        )
+        
+        case 2: return .sessionInitCompleted(contactId: try FfiConverterString.read(from: &buf), sessionJson: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 3: return .ackReceived(messageId: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 4: return .sessionLoaded(key: try FfiConverterString.read(from: &buf), data: try FfiConverterOptionData.read(from: &buf)
+        )
+        
+        case 5: return .keyBundleFetched(userId: try FfiConverterString.read(from: &buf), bundleJson: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 6: return .networkReconnected
+        
+        case 7: return .appLaunched
+        
+        case 8: return .timerFired(timerId: try FfiConverterString.read(from: &buf)
+        )
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: CfeIncomingEvent, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case let .messageReceived(messageId,from,data,msgNum,kemCt,otpkId,isControl):
+            writeInt(&buf, Int32(1))
+            FfiConverterString.write(messageId, into: &buf)
+            FfiConverterString.write(from, into: &buf)
+            FfiConverterData.write(data, into: &buf)
+            FfiConverterUInt32.write(msgNum, into: &buf)
+            FfiConverterData.write(kemCt, into: &buf)
+            FfiConverterUInt32.write(otpkId, into: &buf)
+            FfiConverterBool.write(isControl, into: &buf)
+            
+        
+        case let .sessionInitCompleted(contactId,sessionJson):
+            writeInt(&buf, Int32(2))
+            FfiConverterString.write(contactId, into: &buf)
+            FfiConverterString.write(sessionJson, into: &buf)
+            
+        
+        case let .ackReceived(messageId):
+            writeInt(&buf, Int32(3))
+            FfiConverterString.write(messageId, into: &buf)
+            
+        
+        case let .sessionLoaded(key,data):
+            writeInt(&buf, Int32(4))
+            FfiConverterString.write(key, into: &buf)
+            FfiConverterOptionData.write(data, into: &buf)
+            
+        
+        case let .keyBundleFetched(userId,bundleJson):
+            writeInt(&buf, Int32(5))
+            FfiConverterString.write(userId, into: &buf)
+            FfiConverterString.write(bundleJson, into: &buf)
+            
+        
+        case .networkReconnected:
+            writeInt(&buf, Int32(6))
+        
+        
+        case .appLaunched:
+            writeInt(&buf, Int32(7))
+        
+        
+        case let .timerFired(timerId):
+            writeInt(&buf, Int32(8))
+            FfiConverterString.write(timerId, into: &buf)
+            
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCfeIncomingEvent_lift(_ buf: RustBuffer) throws -> CfeIncomingEvent {
+    return try FfiConverterTypeCfeIncomingEvent.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCfeIncomingEvent_lower(_ value: CfeIncomingEvent) -> RustBuffer {
+    return FfiConverterTypeCfeIncomingEvent.lower(value)
+}
+
+
 
 public enum CryptoError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError {
 
@@ -4277,6 +4833,31 @@ fileprivate struct FfiConverterSequenceTypeOtpkPair: FfiConverterRustBuffer {
         return seq
     }
 }
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeCfeAction: FfiConverterRustBuffer {
+    typealias SwiftType = [CfeAction]
+
+    public static func write(_ value: [CfeAction], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeCfeAction.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [CfeAction] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [CfeAction]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeCfeAction.read(from: &buf))
+        }
+        return seq
+    }
+}
 public func batteryAwareJitterMs(baseMs: UInt64, maxJitterMs: UInt64, batteryLevel: Float) -> UInt64  {
     return try!  FfiConverterUInt64.lift(try! rustCall() {
     uniffi_construct_core_fn_func_battery_aware_jitter_ms(
@@ -4667,6 +5248,15 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_classiccryptocore_get_all_session_contact_ids() != 3313) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_method_classiccryptocore_get_identity_key_bytes() != 8726) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_classiccryptocore_get_registration_bundle_fields() != 57911) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_classiccryptocore_get_signing_key_bytes() != 55710) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_method_classiccryptocore_import_one_time_prekeys() != 47991) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -4755,6 +5345,21 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_get_all_session_contact_ids() != 44779) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_get_identity_key_bytes() != 23135) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_get_registration_bundle_fields() != 23586) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_get_session_suite_id() != 15328) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_get_signing_key_bytes() != 12435) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_handle_event() != 2823) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_handle_event_json() != 27506) {

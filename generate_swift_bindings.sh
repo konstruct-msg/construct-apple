@@ -281,13 +281,13 @@ build_for_target() {
         rustup target add "$target"
     fi
 
-    # Build the library — use PIPESTATUS to detect failures when filtering output
+    # Build the library — grep -v exits 1 when nothing matches (already up-to-date),
+    # so use || true to prevent pipefail from treating "no output" as an error.
     if [ "$VERBOSE" = true ]; then
         cargo build --lib --target "$target" --features ios,post-quantum $build_flag
     else
         cargo build --lib --target "$target" --features ios,post-quantum $build_flag 2>&1 \
-            | grep -v "^\s*Compiling\|^\s*Finished\|^\s*Fresh"
-        # pipefail catches cargo exit code through the pipe
+            | grep -v "^\s*Compiling\|^\s*Finished\|^\s*Fresh" || true
     fi
 
     # Patch UniFFI generated files for Rust 1.82+ compatibility
