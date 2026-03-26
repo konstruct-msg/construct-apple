@@ -607,7 +607,12 @@ final class DesktopQRScanner: NSObject {
         guard s.canAddOutput(output) else { return }
         s.addOutput(output)
         output.setMetadataObjectsDelegate(self, queue: .main)
-        output.metadataObjectTypes = [.qr]
+        // Filter requested types by what this platform actually supports.
+        // On macOS, .qr is available but the full iOS set is not —
+        // setting an unsupported type throws NSInvalidArgumentException.
+        let supported = output.availableMetadataObjectTypes
+        let requested: [AVMetadataObject.ObjectType] = [.qr]
+        output.metadataObjectTypes = requested.filter { supported.contains($0) }
 
         self.session = s
         DispatchQueue.global(qos: .userInitiated).async { s.startRunning() }
