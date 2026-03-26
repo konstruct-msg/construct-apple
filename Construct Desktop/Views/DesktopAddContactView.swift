@@ -100,7 +100,8 @@ struct DesktopAddContactView: View {
                     .background(DesktopTheme.backgroundPanel)
             }
         }
-        .frame(width: 440, height: 500)
+        .frame(width: 460)
+        .frame(minHeight: 500)
         .background(DesktopTheme.backgroundPrimary.ignoresSafeArea())
     }
 
@@ -140,9 +141,13 @@ struct DesktopAddContactView: View {
             resultMessage = "❌ Invalid code format"
             return
         }
-        _ = deepLinkHandler.handleURL(url)
-        resultMessage = "✅ Contact invite accepted"
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { dismiss() }
+        let accepted = deepLinkHandler.handleURL(url)
+        if accepted {
+            resultMessage = "✅ Contact invite accepted"
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { dismiss() }
+        } else {
+            resultMessage = "❌ Not a valid Construct invite"
+        }
     }
 
     private func handlePastedLink(_ text: String) {
@@ -155,15 +160,22 @@ struct DesktopAddContactView: View {
             resultMessage = "❌ Not a valid URL"
             return
         }
-        _ = deepLinkHandler.handleURL(url)
-        resultMessage = "✅ Processing invite…"
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { dismiss() }
+        let accepted = deepLinkHandler.handleURL(url)
+        if accepted {
+            resultMessage = "✅ Processing invite…"
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { dismiss() }
+        } else {
+            resultMessage = "❌ Not a valid Construct invite link"
+        }
     }
 
     private func normalizeCode(_ code: String) -> String {
         var v = code.trimmingCharacters(in: .whitespacesAndNewlines)
-        if v.hasPrefix("https://https://") { v = v.replacingOccurrences(of: "https://https://", with: "https://") }
+        // Fix double-scheme that some QR generators produce
+        if v.hasPrefix("https://https://") { v = String(v.dropFirst("https://".count)) }
+        // Bare domain pastes — prepend https
         if v.hasPrefix("konstruct.cc/") { v = "https://\(v)" }
+        if v.hasPrefix("konstrukt.cc/") { v = "https://\(v)" }
         return v
     }
 }
@@ -630,30 +642,45 @@ extension DesktopQRScanner: AVCaptureMetadataOutputObjectsDelegate {
 }
 
 /// NSViewRepresentable wrapping AVCaptureVideoPreviewLayer for macOS.
+/// Uses a custom NSView subclass so the preview layer stays in sync with
+/// the view's bounds even after window resize.
 struct DesktopCameraPreview: NSViewRepresentable {
     let scanner: DesktopQRScanner
 
-    func makeNSView(context: Context) -> NSView {
-        let view = NSView()
+    func makeNSView(context: Context) -> CameraLayerView {
+        let view = CameraLayerView()
         view.wantsLayer = true
         view.layer?.backgroundColor = NSColor.black.cgColor
         return view
     }
 
-    func updateNSView(_ nsView: NSView, context: Context) {
-        guard context.coordinator.previewLayer == nil else { return }
-        Task { @MainActor in
-            if let layer = scanner.makePreviewLayer() {
-                layer.frame = nsView.bounds
-                nsView.layer?.addSublayer(layer)
-                context.coordinator.previewLayer = layer
+    func updateNSView(_ nsView: CameraLayerView, context: Context) {
+        // Attach the preview layer once; after that the CameraLayerView
+        // automatically keeps it in sync via layout().
+        if nsView.previewLayer == nil {
+            Task { @MainActor in
+                if let layer = scanner.makePreviewLayer() {
+                    layer.frame = nsView.bounds
+                    layer.autoresizingMask = [.layerWidthSizable, .layerHeightSizable]
+                    nsView.layer?.addSublayer(layer)
+                    nsView.previewLayer = layer
+                }
             }
         }
     }
 
     func makeCoordinator() -> Coordinator { Coordinator() }
+    class Coordinator {}
 
-    class Coordinator { var previewLayer: AVCaptureVideoPreviewLayer? }
+    // Custom NSView that keeps the preview layer filling the view on every layout pass.
+    final class CameraLayerView: NSView {
+        var previewLayer: AVCaptureVideoPreviewLayer?
+
+        override func layout() {
+            super.layout()
+            previewLayer?.frame = bounds
+        }
+    }
 }
 
 // MARK: - Scanner brackets overlay (shared)
@@ -683,4 +710,42 @@ private struct ScannerBrackets: Shape {
         p.addLine(to: CGPoint(x: r.maxX, y: r.maxY - length))
         return p
     }
+}
+
+// MARK: - Xcode Previews
+
+#Preview("My QR") {
+    DesktopAddContactView()
+        .environment(AuthViewModel(context: PersistenceController.shared.container.viewContext))
+        .environment(DeepLinkHandler())
+}
+
+#Preview("Paste Link") {
+    // Show the Paste Link tab directly for fast layout iteration.
+    PasteTab(onSubmit: { _ in })
+        .frame(width: 460)
+        .frame(minHeight: 300)
+        .background(DesktopTheme.backgroundPrimary)
+}
+
+#Preview("File Drop") {
+    FileTab(onScanned: { _ in })
+        .frame(width: 460, height: 400)
+        .background(DesktopTheme.backgroundPrimary)
+}
+
+#Preview("Scanner Brackets") {
+    // Visual check for the corner-bracket overlay shape.
+    GeometryReader { geo in
+        let side: CGFloat = 180
+        let rect = CGRect(
+            x: (geo.size.width - side) / 2,
+            y: (geo.size.height - side) / 2,
+            width: side, height: side
+        )
+        ScannerBrackets(rect: rect)
+            .stroke(DesktopTheme.accent, lineWidth: 2.5)
+    }
+    .frame(width: 300, height: 300)
+    .background(Color.black)
 }

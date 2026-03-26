@@ -143,4 +143,17 @@ struct DesktopRootView: View {
     }
 }
 
+// MARK: - Xcode Previews
 
+#Preview("Empty state (no chat selected)") {
+    // Shows the detail pane when no conversation is open — quick layout check
+    // without needing to launch the full app.
+    DesktopEmptyStateView()
+        .frame(width: 760, height: 500)
+}
+
+#Preview("Add Contact sheet") {
+    DesktopAddContactView()
+        .environment(AuthViewModel(context: PersistenceController.shared.container.viewContext))
+        .environment(DeepLinkHandler())
+}

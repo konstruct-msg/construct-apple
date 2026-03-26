@@ -73,3 +73,11 @@ struct DesktopAccountSettingsView: View {
         await viewModel.saveUsername(viewModel.username, authViewModel: authViewModel)
     }
 }
+
+#Preview {
+    DesktopAccountSettingsView()
+        .environment(AuthViewModel(context: PersistenceController.shared.container.viewContext))
+        .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
+        .padding()
+        .frame(width: 500)
+}
