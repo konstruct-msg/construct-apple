@@ -46,7 +46,7 @@ for arg in "$@"; do
   case "$arg" in
     --ios)   BUILD_MAC=false; BUILD_SIM=false; BUILD_DIST=false ;;
     --mac)   BUILD_IOS=false; BUILD_SIM=false; BUILD_DIST=false ;;
-    --sim)   BUILD_IOS=false; BUILD_MAC=false; BUILD_DIST=false ;;
+    --sim)   BUILD_IOS=false; BUILD_MAC=false; BUILD_DIST=false; BUILD_SIM=true ;;
     --dist)  BUILD_IOS=false; BUILD_MAC=true;  BUILD_SIM=false; BUILD_DIST=true ;;
     --clean) DO_CLEAN=true ;;
     --debug) BUILD_DIR="debug"; CARGO_FLAGS="" ;;
@@ -131,7 +131,15 @@ if $BUILD_DIST; then
   fi
   build_target "x86_64-apple-darwin"
 fi
-$BUILD_SIM && build_target "aarch64-apple-ios-sim"
+if $BUILD_SIM; then
+  build_target "aarch64-apple-ios-sim"
+  # x86_64 simulator needed for generic/platform=iOS Simulator builds on Intel and CI
+  if ! rustup target list --installed 2>/dev/null | grep -q "x86_64-apple-ios"; then
+    info "Добавление цели x86_64-apple-ios…"
+    rustup target add x86_64-apple-ios
+  fi
+  build_target "x86_64-apple-ios"
+fi
 
 # ── Мёрдж + копирование ───────────────────────────────────────────────────────
 hdr "Мёрдж ICE и копирование"
@@ -149,7 +157,16 @@ if $BUILD_DIST; then
 elif $BUILD_MAC; then
   merge_ice "aarch64-apple-darwin"  "$PROJECT_ROOT/libconstruct_core_mac.a"
 fi
-$BUILD_SIM && merge_ice "aarch64-apple-ios-sim"     "$PROJECT_ROOT/libconstruct_core_sim.a"
+if $BUILD_SIM; then
+  # Fat simulator binary: arm64 (Apple Silicon sim) + x86_64 (Intel sim)
+  TMPDIR_SIM="/tmp/construct_sim"
+  mkdir -p "$TMPDIR_SIM"
+  merge_ice "aarch64-apple-ios-sim" "$TMPDIR_SIM/libconstruct_core_arm64.a"
+  merge_ice "x86_64-apple-ios"      "$TMPDIR_SIM/libconstruct_core_x86_64.a"
+  lipo -create "$TMPDIR_SIM/libconstruct_core_arm64.a" "$TMPDIR_SIM/libconstruct_core_x86_64.a" \
+       -output "$PROJECT_ROOT/libconstruct_core_sim.a"
+  ok "Universal simulator fat binary (arm64 + x86_64) → libconstruct_core_sim.a"
+fi
 
 # ── Верификация пролога ───────────────────────────────────────────────────────
 hdr "Верификация"
@@ -166,7 +183,10 @@ check_prologue() {
 
 $BUILD_IOS && check_prologue "$PROJECT_ROOT/libconstruct_core.a"          "iOS"
 ( $BUILD_MAC || $BUILD_DIST ) && check_prologue "$PROJECT_ROOT/libconstruct_core_mac.a" "macOS"
-$BUILD_SIM && check_prologue "$PROJECT_ROOT/libconstruct_core_sim.a"      "Simulator"
+if $BUILD_SIM; then
+  check_prologue "$PROJECT_ROOT/libconstruct_core_sim.a" "Simulator (arm64)"
+  ok "Simulator fat binary: $(lipo -info $PROJECT_ROOT/libconstruct_core_sim.a 2>/dev/null | sed 's/.*are: //')"
+fi
 
 # ── Обновление ConstructCore.xcframework ─────────────────────────────────────
 XCFW="$PROJECT_ROOT/ConstructCore.xcframework"
@@ -176,13 +196,7 @@ if [ -d "$XCFW" ]; then
   ( $BUILD_MAC || $BUILD_DIST ) && cp "$PROJECT_ROOT/libconstruct_core_mac.a" "$XCFW/macos-arm64/libconstruct_core_mac.a" && ok "macos-arm64 → xcframework"
   if $BUILD_SIM; then
     XCFW_SIM="$XCFW/ios-arm64-simulator/libconstruct_core.a"
-    ICE_SIM=$(find "$CORE_PATH/target/aarch64-apple-ios-sim/release/deps" -name "libconstruct_ice-*.a" 2>/dev/null | head -1)
-    RUST_SIM="$CORE_PATH/target/aarch64-apple-ios-sim/release/libconstruct_core.a"
-    if [ -n "$ICE_SIM" ] && [ -f "$RUST_SIM" ]; then
-      libtool -static -o "$XCFW_SIM" "$RUST_SIM" "$ICE_SIM" && ok "ios-arm64-simulator → xcframework (ICE merged)"
-    else
-      cp "$PROJECT_ROOT/libconstruct_core_sim.a" "$XCFW_SIM" && ok "ios-arm64-simulator → xcframework"
-    fi
+    cp "$PROJECT_ROOT/libconstruct_core_sim.a" "$XCFW_SIM" && ok "ios-arm64-simulator → xcframework (arm64 + x86_64 fat)"
   fi
 fi
 

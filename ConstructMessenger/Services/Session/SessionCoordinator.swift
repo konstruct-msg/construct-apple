@@ -294,6 +294,10 @@ final class SessionCoordinator {
                     Log.error("❌ SESSION_STATE[tie_break_end_session_fail]: peer=\(userId.prefix(8))… error=\(error.localizedDescription)", category: "SessionInit")
                 }
                 await self.sendSessionPing(to: userId)
+                // Phase 1 of two-phase handshake: session is now "unconfirmed" until
+                // RESPONDER sends back __session_ready__. ChatViewModel will buffer any
+                // outgoing messages as .queued until confirmation is received.
+                SessionConfirmationTracker.shared.markPending(userId)
                 let suiteIdAtPing = UserDefaults.standard.integer(forKey: "construct.session.suite.\(userId)")
                 Log.info("🏓 SESSION_STATE[tie_break_seq]: peer=\(userId.prefix(8))… endSession=\(endSessionOk ? "✓" : "✗") ping=sent suiteId=\(suiteIdAtPing)", category: "SessionInit")
             }
@@ -354,6 +358,12 @@ final class SessionCoordinator {
                     await OtpkReplenishmentService.replenishIfNeeded(deviceId: deviceId)
                 }
                 drainPendingQueue(for: userId, skippingFirst: true)
+                // Re-send messages that were re-queued on prior END_SESSION receipt.
+                sendSessionQueuedMessages(for: userId)
+                // Phase 2 of two-phase handshake: notify INITIATOR that RESPONDER
+                // session is established. INITIATOR cancels its watchdog and flushes
+                // any buffered outgoing messages.
+                Task { await self.sendSessionReady(to: userId) }
             } else {
                 // initReceivingSession failed — prekey exhausted or invalid.
                 Log.info("🔄 initReceivingSession failed — clearing queue, sending END_SESSION to \(userId.prefix(8))...", category: "SessionInit")
@@ -458,6 +468,22 @@ final class SessionCoordinator {
         }
     }
 
+    /// Re-sends any outgoing messages that were marked `.queued` by `requeueUndeliveredOutgoing`
+    /// after receiving END_SESSION (i.e. messages encrypted under the now-replaced session).
+    private func sendSessionQueuedMessages(for userId: String) {
+        guard let context = viewContext,
+              let myId = SessionManager.shared.currentUserId, !myId.isEmpty else { return }
+        let chatFetch = Chat.fetchRequest()
+        chatFetch.predicate = NSPredicate(format: "otherUser.id == %@", userId)
+        guard let chat = (try? context.fetch(chatFetch))?.first else { return }
+        MessageRetryManager.shared.sendQueuedMessages(
+            for: chat,
+            recipientId: userId,
+            currentUserId: myId,
+            context: context
+        )
+    }
+
     /// Upload a fresh batch of OTPKs after session-init or heal failure.
     private func uploadFreshOtpks(reason: String) async {
         let deviceId = KeychainManager.shared.loadDeviceID() ?? ""
@@ -553,6 +579,42 @@ final class SessionCoordinator {
         }
     }
 
+    // MARK: - Session ready signal (RESPONDER → INITIATOR, phase 2 of two-phase handshake)
+
+    /// Sent by the RESPONDER after a successful `initReceivingSession`.
+    /// Signals to the INITIATOR that both sides have established matching sessions,
+    /// allowing them to cancel the watchdog and flush any buffered outgoing messages.
+    private func sendSessionReady(to userId: String) async {
+        guard CryptoManager.shared.hasSession(for: userId) else {
+            Log.info("⚠️ SESSION_STATE[session_ready_skip]: no RESPONDER session for \(userId.prefix(8))…", category: "SessionInit")
+            return
+        }
+        guard let myId = SessionManager.shared.currentUserId, !myId.isEmpty else { return }
+
+        do {
+            let readyContent = "__session_ready_\(UUID().uuidString)__"
+            let readyId = UUID()
+            let plan = ChunkedMessageSender.shared.buildPlan(plaintext: readyContent, messageId: readyId)
+            guard let firstPayload = plan.payloads.first else { return }
+            let components = try CryptoManager.shared.encryptMessage(firstPayload, for: userId)
+            let kemCiphertext = components.messageNumber == 0 ? sessionInitService.consumeKemCiphertext(for: userId) : nil
+            let kyberOtpkId = components.messageNumber == 0 ? sessionInitService.consumeKyberOtpkId(for: userId) : 0
+            let _ = try await ChunkedMessageSender.shared.sendChunks(
+                plan: plan,
+                senderId: myId,
+                recipientId: userId,
+                conversationId: ConversationId.direct(myUserId: myId, theirUserId: userId),
+                timestamp: UInt64(Date().timeIntervalSince1970),
+                preEncryptedFirst: components,
+                kemCiphertext: kemCiphertext,
+                kyberOtpkId: kyberOtpkId
+            )
+            Log.info("🤝 SESSION_STATE[session_ready_sent]: RESPONDER notified INITIATOR \(userId.prefix(8))… msgNum=\(components.messageNumber)", category: "SessionInit")
+        } catch {
+            Log.error("❌ SESSION_STATE[session_ready_fail]: \(error.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
+        }
+    }
+
     // MARK: - Tie-break watchdog
 
     /// Start a watchdog Task that re-sends the session ping if the RESPONDER has not
@@ -607,6 +669,21 @@ final class SessionCoordinator {
             Log.info("🏓 SESSION_STATE[ping_received]: session established as RESPONDER (ping discarded)", category: "SessionCoordinator")
             // Cancel any watchdog for this peer — they proved they have an active session.
             cancelTieBreakWatchdog(for: messageData.from)
+            return
+        }
+
+        // Phase 2 of two-phase handshake: RESPONDER sends __session_ready__ after its
+        // initReceivingSession succeeds. We are the INITIATOR receiving confirmation.
+        // Format: "__session_ready_<UUID>__"
+        if plaintext.hasPrefix("__session_ready") && plaintext.hasSuffix("__") {
+            let peerId = messageData.from
+            Log.info("🤝 SESSION_STATE[session_ready_received]: RESPONDER \(peerId.prefix(8))… confirmed — session established both sides", category: "SessionCoordinator")
+            // Cancel watchdog — RESPONDER proved they have a working session.
+            cancelTieBreakWatchdog(for: peerId)
+            // Mark session as confirmed so ChatViewModel stops buffering.
+            SessionConfirmationTracker.shared.markConfirmed(peerId)
+            // Flush any messages that were buffered while session was unconfirmed.
+            sendSessionQueuedMessages(for: peerId)
             return
         }
 

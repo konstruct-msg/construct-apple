@@ -73,7 +73,7 @@ class ChatViewModel: NSObject {
     private let sessionInitService = SessionInitializationService.shared
     private let persistenceService = MessagePersistenceService()
     private let mediaUploadManager = MediaUploadManager()
-    private let retryManager = MessageRetryManager()
+    private let retryManager = MessageRetryManager.shared
 
     // MARK: - Pending media uploads
     // Maps placeholder message-ID → the original payload so retryMessage() can
@@ -498,6 +498,28 @@ class ChatViewModel: NSObject {
             Task {
                 await initializeSessionProactively(userId: recipientId)
             }
+            return
+        }
+
+        // Two-phase handshake: if we are the INITIATOR and haven't received session_ready
+        // from the RESPONDER yet, buffer the message as .queued. SessionCoordinator will
+        // call MessageRetryManager.sendQueuedMessages once session_ready arrives.
+        if SessionConfirmationTracker.shared.isPending(recipientId) {
+            let bufferedId = UUID().uuidString
+            let stub = ChatMessage(
+                id: bufferedId,
+                from: currentUserId,
+                to: recipientId,
+                messageType: nil,
+                ephemeralPublicKey: Data(),
+                messageNumber: 0,
+                content: "",
+                suiteId: 0,
+                timestamp: UInt64(Date().timeIntervalSince1970)
+            )
+            saveMessage(stub, decryptedContent: text, isSentByMe: true, status: .queued,
+                        replyTo: replyTo, replyToContentOverride: replyToContentOverride, suiteId: 0)
+            Log.info("🔒 SESSION_CONFIRM[buffered]: message \(bufferedId.prefix(8))… queued — waiting for RESPONDER session_ready from \(recipientId.prefix(8))…", category: "SessionConfirm")
             return
         }
 

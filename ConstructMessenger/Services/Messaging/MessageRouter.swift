@@ -738,16 +738,54 @@ class MessageRouter {
             Log.debug("✅ END_SESSION: session archived via Swift fallback for \(userId.prefix(8))…", category: "MessageRouter")
         }
 
-        // 2. Remove any pending messages and healing queue for this user
+        // 2. Re-queue any outgoing messages that were sent to the server but not yet
+        //    delivered (no ACK). These were encrypted with the now-archived session keys
+        //    and cannot be decrypted by the peer under the new session — so they must be
+        //    re-encrypted and re-sent once the new session is established.
+        requeueUndeliveredOutgoing(for: userId, in: context)
+
+        // 3. Remove any pending *incoming* messages and healing queue for this user
         pendingMessages.removeValue(forKey: userId)
         SessionHealingService.shared.clearQueue(for: userId, in: context)
 
-        // 3. Notify coordinator so the natural INITIATOR can prewarm immediately.
+        // 4. Notify coordinator so the natural INITIATOR can prewarm immediately.
         onEndSessionReceived?(userId)
 
         Log.info("✅ END_SESSION handled for \(userId)", category: "MessageRouter")
     }
     
+    /// Marks outgoing messages that were sent to the server but never delivered as `.queued`,
+    /// so they can be re-encrypted and re-sent under the fresh session after END_SESSION.
+    /// Only considers messages sent in the past `requeueWindowSeconds` to avoid re-sending stale chat.
+    private func requeueUndeliveredOutgoing(
+        for userId: String,
+        in context: NSManagedObjectContext,
+        requeueWindowSeconds: TimeInterval = 300
+    ) {
+        let chatFetch = Chat.fetchRequest()
+        chatFetch.predicate = NSPredicate(format: "otherUser.id == %@", userId)
+        guard let chat = (try? context.fetch(chatFetch))?.first else { return }
+
+        let since = Date().addingTimeInterval(-requeueWindowSeconds)
+        let msgFetch = Message.fetchRequest()
+        msgFetch.predicate = NSPredicate(
+            format: "chat == %@ AND isSentByMe == YES AND deliveryStatusRaw == %d AND timestamp >= %@",
+            chat,
+            DeliveryStatus.sent.rawValue,
+            since as NSDate
+        )
+        msgFetch.sortDescriptors = [NSSortDescriptor(key: "timestamp", ascending: true)]
+
+        guard let messages = try? context.fetch(msgFetch), !messages.isEmpty else { return }
+
+        for msg in messages {
+            msg.deliveryStatus = .queued
+        }
+        context.saveAndLog()
+
+        Log.info("♻️ END_SESSION: re-queued \(messages.count) sent-but-undelivered message(s) for \(userId.prefix(8))… — will resend under new session", category: "MessageRouter")
+    }
+
     /// Add a system message to chat
     private func addSystemMessage(
         _ text: String,
