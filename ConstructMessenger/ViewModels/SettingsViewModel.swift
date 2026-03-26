@@ -30,6 +30,9 @@ class SettingsViewModel {
 
     private var viewContext: NSManagedObjectContext?
 
+    /// Exposed read-only for platform-specific views (e.g. Desktop avatar removal).
+    var viewContextPublic: NSManagedObjectContext? { viewContext }
+
     func setContext(_ context: NSManagedObjectContext) {
         self.viewContext = context
     }
