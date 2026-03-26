@@ -607,14 +607,14 @@ class CryptoManager {
         
         Log.info("📦 Archiving session for \(userId), reason: \(reason.rawValue)", category: "CryptoManager")
         
-        // 1. Export current session to JSON and store archive.
+        // 1. Export current session to CFE binary format and store archive.
         //    IMPORTANT: only proceed with deletion if export succeeded — otherwise the session
         //    would be permanently lost with no archive to restore from.
         do {
-            let sessionJson = try core.exportSessionJson(contactId: userId)
+            let sessionData = Data(try core.exportSession(contactId: userId))
             
             let archive = SessionArchive(
-                sessionJson: sessionJson,
+                sessionData: sessionData,
                 archivedAt: Date(),
                 reason: reason
             )
@@ -661,12 +661,12 @@ class CryptoManager {
     /// memory, so we must NOT call `exportSessionJson` here — we store the bytes
     /// Rust handed us directly into `SessionArchiveManager`.
     func acceptRustSessionArchive(contactId: String, sessionJsonBytes: [UInt8]) {
-        guard !sessionJsonBytes.isEmpty,
-              let json = String(bytes: sessionJsonBytes, encoding: .utf8) else {
-            Log.error("❌ acceptRustSessionArchive: invalid/empty bytes for \(contactId.prefix(8))…", category: "CryptoManager")
+        guard !sessionJsonBytes.isEmpty else {
+            Log.error("❌ acceptRustSessionArchive: empty bytes for \(contactId.prefix(8))…", category: "CryptoManager")
             return
         }
-        let archive = SessionArchive(sessionJson: json, archivedAt: Date(), reason: .endSessionReceived)
+        // Rust currently sends JSON bytes; store as Data — import_session has a LegacyJson fallback.
+        let archive = SessionArchive(sessionData: Data(sessionJsonBytes), archivedAt: Date(), reason: .endSessionReceived)
         archiveManager.storeArchive(archive, for: contactId)
         let count = archiveManager.loadArchives(for: contactId)?.count ?? 0
         Log.info("📦 acceptRustSessionArchive: archived session for \(contactId.prefix(8))… (\(count) total)", category: "CryptoManager")
@@ -685,20 +685,15 @@ class CryptoManager {
         let latest = archives[idx]
         do {
             let suiteIdBefore = UserDefaults.standard.integer(forKey: "construct.session.suite.\(userId)")
-            _ = try core.importSessionJson(contactId: userId, sessionJson: latest.sessionJson)
-            // Primary: extract suiteId from the archived JSON.
-            // Fallback: if the archived JSON is in an old/unexpected format, re-export from
-            // the now-live session (importSessionJson already succeeded at this point).
-            let extractedSuiteId = Self.extractSuiteId(fromSessionJson: latest.sessionJson)
-                ?? (try? core.exportSessionJson(contactId: userId)).flatMap { Self.extractSuiteId(fromSessionJson: $0) }
-            if let suiteId = extractedSuiteId {
+            // importSession handles both CFE binary (new archives) and legacy JSON (old archives).
+            _ = try core.importSession(contactId: userId, data: [UInt8](latest.sessionData))
+            // Extract suite_id from a fresh re-export of the now-live session — always reliable.
+            if let freshJson = try? core.exportSessionJson(contactId: userId),
+               let suiteId = Self.extractSuiteId(fromSessionJson: freshJson) {
                 UserDefaults.standard.set(suiteId, forKey: "construct.session.suite.\(userId)")
                 Log.info("🔑 SESSION_STATE[restore_suite_id]: peer=\(userId.prefix(8))… suiteId \(suiteIdBefore) → \(suiteId)", category: "SessionInit")
             } else {
-                // suite_id is always serialized by Rust (no skip_serializing_if), so reaching
-                // here means the archive is severely corrupted. The session is still imported
-                // but suiteId will be 0 — the remote side will fail AEAD and send END_SESSION.
-                Log.error("🚨 SESSION_STATE[restore_suite_id_failed]: peer=\(userId.prefix(8))… suiteId_before=\(suiteIdBefore) — could not extract from archive or live session; remote decrypt will likely fail", category: "CryptoManager")
+                Log.error("🚨 SESSION_STATE[restore_suite_id_failed]: peer=\(userId.prefix(8))… suiteId_before=\(suiteIdBefore) — exportSessionJson failed after import; remote decrypt will likely fail", category: "CryptoManager")
             }
             saveSessionToKeychain(for: userId)
             archiveManager.restoreArchiveToCurrent(for: userId, index: idx)
@@ -882,14 +877,15 @@ class CryptoManager {
         Log.info("📦 Trying \(archives.count) archived sessions for \(message.from)", category: "CryptoManager")
 
         // Snapshot the active session so we can restore it if all archives fail.
-        // Without this, each failed importSessionJson permanently overwrites the Rust core state.
-        let activeSessionSnapshot = try? core.exportSessionJson(contactId: message.from)
+        // Without this, each failed import permanently overwrites the Rust core state.
+        let activeSessionSnapshot = try? Data(core.exportSession(contactId: message.from))
 
         // Try each archived session (newest first - already ordered)
         for (index, archive) in archives.enumerated().reversed() {
             do {
-                // Temporarily restore archived session to Rust core
-                _ = try core.importSessionJson(contactId: message.from, sessionJson: archive.sessionJson)
+                // Temporarily restore archived session to Rust core.
+                // importSession handles CFE binary (new) and legacy JSON (old) archives.
+                _ = try core.importSession(contactId: message.from, data: [UInt8](archive.sessionData))
                 
                 // Try to decrypt
                 let plaintext = try core.decryptMessage(
@@ -918,8 +914,8 @@ class CryptoManager {
         }
 
         // All archives failed — restore the original active session into Rust core.
-        if let json = activeSessionSnapshot {
-            _ = try? core.importSessionJson(contactId: message.from, sessionJson: json)
+        if let snap = activeSessionSnapshot {
+            _ = try? core.importSession(contactId: message.from, data: [UInt8](snap))
         }
         
         Log.info("⚠️ All \(archives.count) archived sessions failed to decrypt", category: "CryptoManager")
@@ -977,12 +973,50 @@ enum ArchiveReason: String, Codable {
     case remoteRekeying = "remote_rekeying"
 }
 
-/// Archived session data for fallback decryption
+/// Archived session data for fallback decryption.
+/// Stored in CFE binary format (MessagePack + header). Legacy archives written as
+/// JSON strings are transparently read back via the migration initializer and fed
+/// to `import_session`, which has a built-in `LegacyJson` fallback.
 struct SessionArchive: Codable {
-    let sessionJson: String  // Exported session from Rust
+    let sessionData: Data  // CFE binary (new) or UTF-8 JSON bytes (legacy)
     let archivedAt: Date
     let reason: ArchiveReason
-    
+
+    init(sessionData: Data, archivedAt: Date, reason: ArchiveReason) {
+        self.sessionData = sessionData
+        self.archivedAt = archivedAt
+        self.reason = reason
+    }
+
+    // MARK: Migration — read archives written with the old `sessionJson: String` field
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        archivedAt = try c.decode(Date.self, forKey: .archivedAt)
+        reason    = try c.decode(ArchiveReason.self, forKey: .reason)
+        if let data = try c.decodeIfPresent(Data.self, forKey: .sessionData) {
+            sessionData = data
+        } else if let json = try c.decodeIfPresent(String.self, forKey: .sessionJson) {
+            // Old format: JSON string → store as UTF-8 bytes; importSession handles LegacyJson
+            sessionData = Data(json.utf8)
+        } else {
+            throw DecodingError.dataCorrupted(
+                DecodingError.Context(codingPath: c.codingPath,
+                                      debugDescription: "SessionArchive missing sessionData and sessionJson"))
+        }
+    }
+
+    // Explicit Encodable: always write the new `sessionData` key
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(sessionData,  forKey: .sessionData)
+        try c.encode(archivedAt,   forKey: .archivedAt)
+        try c.encode(reason,       forKey: .reason)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case sessionData, sessionJson, archivedAt, reason
+    }
+
     /// Check if archive is expired (older than retention period)
     func isExpired(retentionDays: Int) -> Bool {
         let expirationDate = Calendar.current.date(byAdding: .day, value: retentionDays, to: archivedAt) ?? Date()
