@@ -684,7 +684,14 @@ class CryptoManager {
         let idx = archives.count - 1
         let latest = archives[idx]
         do {
+            let suiteIdBefore = UserDefaults.standard.integer(forKey: "construct.session.suite.\(userId)")
             _ = try core.importSessionJson(contactId: userId, sessionJson: latest.sessionJson)
+            if let suiteId = Self.extractSuiteId(fromSessionJson: latest.sessionJson) {
+                UserDefaults.standard.set(suiteId, forKey: "construct.session.suite.\(userId)")
+                Log.info("🔑 SESSION_STATE[restore_suite_id]: peer=\(userId.prefix(8))… suiteId \(suiteIdBefore) → \(suiteId)", category: "SessionInit")
+            } else {
+                Log.error("⚠️ restoreLatestArchive: failed to extract suite_id from sessionJson for \(userId.prefix(8))… (suiteId_before=\(suiteIdBefore), will remain 0)", category: "CryptoManager")
+            }
             saveSessionToKeychain(for: userId)
             archiveManager.restoreArchiveToCurrent(for: userId, index: idx)
             Log.info("♻️ Restored INITIATOR session from archive for \(userId.prefix(8))… (tie-break)", category: "CryptoManager")
@@ -693,6 +700,28 @@ class CryptoManager {
             Log.error("❌ restoreLatestArchive failed for \(userId.prefix(8))…: \(error)", category: "CryptoManager")
             return false
         }
+    }
+
+    private static func extractSuiteId(fromSessionJson json: String) -> Int? {
+        guard let data = json.data(using: .utf8),
+              let root = try? JSONSerialization.jsonObject(with: data) else { return nil }
+
+        func search(_ value: Any) -> Int? {
+            if let dict = value as? [String: Any] {
+                if let suite = dict["suite_id"] as? Int { return suite }
+                if let suite = dict["suiteId"] as? Int { return suite }
+                for v in dict.values {
+                    if let found = search(v) { return found }
+                }
+            } else if let arr = value as? [Any] {
+                for v in arr {
+                    if let found = search(v) { return found }
+                }
+            }
+            return nil
+        }
+
+        return search(root)
     }
 
     /// Delete a session (legacy - use archiveSession instead)

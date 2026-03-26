@@ -619,12 +619,16 @@ class MessageRouter {
                 // exactly one side to win. Lower userId = INITIATOR. Higher userId = RESPONDER.
                 // The winner restores its just-archived INITIATOR session; the loser heals.
                 let myUserId = SessionManager.shared.currentUserId ?? ""
+                let suiteIdBeforeTieBreak = UserDefaults.standard.integer(forKey: "construct.session.suite.\(userId)")
+                let tieBreakRole = (!myUserId.isEmpty && myUserId < userId) ? "INITIATOR" : "RESPONDER"
+                Log.info("⚖️ SESSION_STATE[tie_break_decision]: my=\(myUserId.prefix(8))… vs peer=\(userId.prefix(8))… → role=\(tieBreakRole), suiteId_current=\(suiteIdBeforeTieBreak), kemCt=\(message.kemCiphertext.count)b, otpkId=\(message.oneTimePreKeyId)", category: "SessionInit")
                 if !myUserId.isEmpty && myUserId < userId {
                     // We're lower userId → we are the INITIATOR. Try to restore our
                     // just-archived session so we keep the INITIATOR role.
                     let restored = CryptoManager.shared.restoreLatestArchive(for: userId)
                     if restored {
-                        Log.info("🏆 SESSION_STATE[tie_break_win]: kept INITIATOR (lower userId), ACKed X3DH from \(userId.prefix(8))…", category: "SessionInit")
+                        let suiteIdAfterRestore = UserDefaults.standard.integer(forKey: "construct.session.suite.\(userId)")
+                        Log.info("🏆 SESSION_STATE[tie_break_win]: kept INITIATOR (lower userId), ACKed X3DH from \(userId.prefix(8))…, suiteId_restored=\(suiteIdAfterRestore)", category: "SessionInit")
                         PersistentACKStore.shared.markProcessed(message.id, senderId: userId, in: context)
                         onReceiptNeeded?([message.id], userId, .delivered)
                         // Send END_SESSION to stop the loser's invalid message stream, then send a

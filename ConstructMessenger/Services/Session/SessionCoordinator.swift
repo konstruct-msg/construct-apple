@@ -279,17 +279,23 @@ final class SessionCoordinator {
         // send a session establishment ping so the loser can immediately become RESPONDER.
         messageRouter.onTieBreakWin = { [weak self] userId in
             guard let self else { return }
+            let suiteIdAtWin = UserDefaults.standard.integer(forKey: "construct.session.suite.\(userId)")
+            Log.info("🏆 SESSION_STATE[tie_break_outcome]: INITIATOR role confirmed, peer=\(userId.prefix(8))… suiteId=\(suiteIdAtWin), sending END_SESSION+ping", category: "SessionInit")
             Task {
+                var endSessionOk = false
                 do {
                     // Send END_SESSION directly to the network — do NOT call
                     // SessionCoordinator.sendEndSession because that would archive and clear
                     // our just-restored INITIATOR session.
                     let _ = try await MessagingServiceClient.shared.sendEndSession(to: userId, reason: "tie_break_win")
-                    Log.info("📤 SESSION_STATE[tie_break_end_session]: sent to \(userId.prefix(8))…", category: "SessionInit")
+                    endSessionOk = true
+                    Log.info("📤 SESSION_STATE[tie_break_end_session]: sent to \(userId.prefix(8))… suiteId=\(suiteIdAtWin)", category: "SessionInit")
                 } catch {
-                    Log.error("❌ SESSION_STATE[tie_break_end_session_fail]: \(error.localizedDescription)", category: "SessionInit")
+                    Log.error("❌ SESSION_STATE[tie_break_end_session_fail]: peer=\(userId.prefix(8))… error=\(error.localizedDescription)", category: "SessionInit")
                 }
                 await self.sendSessionPing(to: userId)
+                let suiteIdAtPing = UserDefaults.standard.integer(forKey: "construct.session.suite.\(userId)")
+                Log.info("🏓 SESSION_STATE[tie_break_seq]: peer=\(userId.prefix(8))… endSession=\(endSessionOk ? "✓" : "✗") ping=sent suiteId=\(suiteIdAtPing)", category: "SessionInit")
             }
             // Start watchdog: if RESPONDER has not replied within timeout, re-send ping.
             self.startTieBreakWatchdog(for: userId)
@@ -538,7 +544,7 @@ final class SessionCoordinator {
                     kemCiphertext: kemCiphertext,
                     kyberOtpkId: kyberOtpkId
                 )
-                Log.info("🏓 SESSION_STATE[tie_break_ping]: sent to \(userId.prefix(8))… (attempt \(attempt)) — loser can now init as RESPONDER", category: "SessionInit")
+                Log.info("🏓 SESSION_STATE[tie_break_ping]: sent to \(userId.prefix(8))… (attempt \(attempt)) suiteId=\(components.suiteId) msgNum=\(components.messageNumber) — loser can now init as RESPONDER", category: "SessionInit")
                 return
             } catch {
                 Log.error("❌ SESSION_STATE[tie_break_ping_fail]: attempt \(attempt)/\(pingMaxAttempts): \(error.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
