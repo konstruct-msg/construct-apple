@@ -120,7 +120,7 @@ final class SessionCoordinator {
     /// Broadcast END_SESSION to all peers that have an active session (e.g., on logout).
     /// Pre-warm sessions for contacts where we are the natural INITIATOR (lower userId).
     /// Called once per app launch after stream connects. Ensures first messages are instant.
-    func prewarmSessions(for contactIds: [String]) {
+    func prewarmSessions(for contactIds: [String], skipEndSessionNotification: Bool = false) {
         let myId = SessionManager.shared.currentUserId ?? ""
         guard !myId.isEmpty else { return }
 
@@ -132,25 +132,35 @@ final class SessionCoordinator {
         Log.info("🔥 Session prewarm: \(toPrewarm.count) contact(s) need sessions", category: "SessionInit")
         Task {
             for contactId in toPrewarm {
+                // Guard against both a session that appeared since we built toPrewarm
+                // AND against a parallel prewarm Task for the same peer.
+                // We insert into usersInitializingSession here (not inside
+                // initializeSessionProactively) so that a second concurrent Task that
+                // also reaches this point sees the flag and skips — otherwise both tasks
+                // would slip past the guard, race through fetchBundle, and the second
+                // would delete the session just created by the first.
                 guard !CryptoManager.shared.hasSession(for: contactId),
-                      !usersInitializingSession.contains(contactId) else { continue }
+                      !usersInitializingSession.contains(contactId) else {
+                    Log.info("⏸️ Prewarm skipped — session exists or init in progress for \(contactId.prefix(8))…", category: "SessionInit")
+                    continue
+                }
+                usersInitializingSession.insert(contactId)
+                defer { usersInitializingSession.remove(contactId) }
 
-                // Before re-establishing a fresh session, notify the peer that our session is
-                // missing. This handles ratchet divergence: if we lost our Keychain session
-                // (e.g. after iOS Keychain wipe or app reinstall) but the peer's ratchet is
-                // already advanced (e.g. at msgNum=3), any new message they send will be
-                // encrypted at the wrong ratchet position and will be undecryptable.
-                //
-                // Sending END_SESSION first tells the peer to archive their stale session so
-                // they will start fresh when our X3DH init message (from initializeSessionProactively)
-                // arrives. This is safe even if the peer has no session — END_SESSION on a
-                // non-existent session is a no-op for them.
-                do {
-                    try await sendEndSession(to: contactId, reason: "session_missing_restart")
-                    endSessionSentAt[contactId] = Date()
-                    Log.info("🔥 Prewarm: notified \(contactId.prefix(8))… of missing session before fresh init", category: "SessionInit")
-                } catch {
-                    Log.error("⚠️ Prewarm: END_SESSION to \(contactId.prefix(8))… failed (proceeding with prewarm): \(error.localizedDescription)", category: "SessionInit")
+                // Notify the peer that our session is missing ONLY when this prewarm
+                // was triggered proactively (startup / stream-connect). When triggered
+                // by onEndSessionReceived the peer has already sent us END_SESSION —
+                // they already know their session with us needs reset. Sending another
+                // END_SESSION in that path creates a ping-pong loop where each side
+                // continuously triggers the other's END_SESSION handler.
+                if !skipEndSessionNotification {
+                    do {
+                        try await sendEndSession(to: contactId, reason: "session_missing_restart")
+                        endSessionSentAt[contactId] = Date()
+                        Log.info("🔥 Prewarm: notified \(contactId.prefix(8))… of missing session before fresh init", category: "SessionInit")
+                    } catch {
+                        Log.error("⚠️ Prewarm: END_SESSION to \(contactId.prefix(8))… failed (proceeding with prewarm): \(error.localizedDescription)", category: "SessionInit")
+                    }
                 }
 
                 await sessionInitService.initializeSessionProactively(
@@ -256,7 +266,12 @@ final class SessionCoordinator {
             Task {
                 // Brief delay so END_SESSION processing (archive, queue clear) finishes first.
                 try? await Task.sleep(nanoseconds: 300_000_000) // 300 ms
-                self.prewarmSessions(for: [userId])
+                // Do NOT send session_missing_restart here: the peer just sent us END_SESSION,
+                // which means they already know they need to reset. Sending another END_SESSION
+                // in response would cause them to restart their own onEndSessionReceived path,
+                // creating a ping-pong loop. Our X3DH init message implicitly signals the new
+                // session — that's all the peer needs to become RESPONDER.
+                self.prewarmSessions(for: [userId], skipEndSessionNotification: true)
             }
         }
 
