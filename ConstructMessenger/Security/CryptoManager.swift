@@ -686,11 +686,19 @@ class CryptoManager {
         do {
             let suiteIdBefore = UserDefaults.standard.integer(forKey: "construct.session.suite.\(userId)")
             _ = try core.importSessionJson(contactId: userId, sessionJson: latest.sessionJson)
-            if let suiteId = Self.extractSuiteId(fromSessionJson: latest.sessionJson) {
+            // Primary: extract suiteId from the archived JSON.
+            // Fallback: if the archived JSON is in an old/unexpected format, re-export from
+            // the now-live session (importSessionJson already succeeded at this point).
+            let extractedSuiteId = Self.extractSuiteId(fromSessionJson: latest.sessionJson)
+                ?? (try? core.exportSessionJson(contactId: userId)).flatMap { Self.extractSuiteId(fromSessionJson: $0) }
+            if let suiteId = extractedSuiteId {
                 UserDefaults.standard.set(suiteId, forKey: "construct.session.suite.\(userId)")
                 Log.info("🔑 SESSION_STATE[restore_suite_id]: peer=\(userId.prefix(8))… suiteId \(suiteIdBefore) → \(suiteId)", category: "SessionInit")
             } else {
-                Log.error("⚠️ restoreLatestArchive: failed to extract suite_id from sessionJson for \(userId.prefix(8))… (suiteId_before=\(suiteIdBefore), will remain 0)", category: "CryptoManager")
+                // suite_id is always serialized by Rust (no skip_serializing_if), so reaching
+                // here means the archive is severely corrupted. The session is still imported
+                // but suiteId will be 0 — the remote side will fail AEAD and send END_SESSION.
+                Log.error("🚨 SESSION_STATE[restore_suite_id_failed]: peer=\(userId.prefix(8))… suiteId_before=\(suiteIdBefore) — could not extract from archive or live session; remote decrypt will likely fail", category: "CryptoManager")
             }
             saveSessionToKeychain(for: userId)
             archiveManager.restoreArchiveToCurrent(for: userId, index: idx)
