@@ -40,20 +40,23 @@ BUILD_IOS=true
 BUILD_CAT=true
 BUILD_MAC=false
 BUILD_SIM=false
+BUILD_DIST=false
 DO_CLEAN=false
 
 for arg in "$@"; do
   case "$arg" in
-    --ios)   BUILD_CAT=false; BUILD_MAC=false; BUILD_SIM=false ;;
-    --cat)   BUILD_IOS=false; BUILD_MAC=false; BUILD_SIM=false ;;
-    --mac)   BUILD_IOS=false; BUILD_CAT=false; BUILD_MAC=true; BUILD_SIM=false ;;
-    --sim)   BUILD_IOS=false; BUILD_CAT=false; BUILD_MAC=false; BUILD_SIM=true ;;
+    --ios)   BUILD_CAT=false; BUILD_MAC=false; BUILD_SIM=false; BUILD_DIST=false ;;
+    --cat)   BUILD_IOS=false; BUILD_MAC=false; BUILD_SIM=false; BUILD_DIST=false ;;
+    --mac)   BUILD_IOS=false; BUILD_CAT=false; BUILD_SIM=false; BUILD_DIST=false ;;
+    --sim)   BUILD_IOS=false; BUILD_CAT=false; BUILD_MAC=false; BUILD_DIST=false ;;
+    --dist)  BUILD_IOS=false; BUILD_CAT=false; BUILD_MAC=true;  BUILD_SIM=false; BUILD_DIST=true ;;
     --clean) DO_CLEAN=true ;;
     --debug) BUILD_DIR="debug"; CARGO_FLAGS="" ;;
     -h|--help)
-      echo "Использование: $0 [--ios] [--cat] [--mac] [--sim] [--clean] [--debug]"
-      echo "  --mac  Нативный macOS (aarch64-apple-darwin) → libconstruct_core_mac.a"
-      echo "  --sim  iOS Симулятор (aarch64-apple-ios-sim) → target/aarch64-apple-ios-sim/libconstruct_core.a"
+      echo "Использование: $0 [--ios] [--cat] [--mac] [--sim] [--dist] [--clean] [--debug]"
+      echo "  --mac   Нативный macOS arm64 (aarch64-apple-darwin) → libconstruct_core_mac.a"
+      echo "  --sim   iOS Симулятор (aarch64-apple-ios-sim)"
+      echo "  --dist  Universal macOS fat binary (arm64 + x86_64) для DMG/дистрибуции"
       exit 0 ;;
     *) warn "Неизвестный аргумент: $arg" ;;
   esac
@@ -122,6 +125,14 @@ fi
 $BUILD_IOS && build_target "aarch64-apple-ios"
 $BUILD_CAT && build_target "aarch64-apple-ios-macabi"
 $BUILD_MAC && build_target "aarch64-apple-darwin"
+if $BUILD_DIST; then
+  # Intel Mac (Rosetta / distribution universal binary)
+  if ! rustup target list --installed 2>/dev/null | grep -q "x86_64-apple-darwin"; then
+    info "Добавление цели x86_64-apple-darwin…"
+    rustup target add x86_64-apple-darwin
+  fi
+  build_target "x86_64-apple-darwin"
+fi
 $BUILD_SIM && build_target "aarch64-apple-ios-sim"
 
 # ── Мёрдж + копирование ───────────────────────────────────────────────────────
@@ -129,7 +140,18 @@ hdr "Мёрдж ICE и копирование"
 
 $BUILD_IOS && merge_ice "aarch64-apple-ios"        "$PROJECT_ROOT/libconstruct_core.a"
 $BUILD_CAT && merge_ice "aarch64-apple-ios-macabi"  "$PROJECT_ROOT/libconstruct_core_catalyst.a"
-$BUILD_MAC && merge_ice "aarch64-apple-darwin"      "$PROJECT_ROOT/libconstruct_core_mac.a"
+if $BUILD_DIST; then
+  # Universal fat binary: arm64 + x86_64 (for DMG / distribution)
+  TMPDIR_DIST="/tmp/construct_mac_dist"
+  mkdir -p "$TMPDIR_DIST"
+  merge_ice "aarch64-apple-darwin"  "$TMPDIR_DIST/libconstruct_core_arm64.a"
+  merge_ice "x86_64-apple-darwin"   "$TMPDIR_DIST/libconstruct_core_x86_64.a"
+  lipo -create "$TMPDIR_DIST/libconstruct_core_arm64.a" "$TMPDIR_DIST/libconstruct_core_x86_64.a" \
+       -output "$PROJECT_ROOT/libconstruct_core_mac.a"
+  ok "Universal macOS fat binary (arm64 + x86_64) → libconstruct_core_mac.a"
+elif $BUILD_MAC; then
+  merge_ice "aarch64-apple-darwin"  "$PROJECT_ROOT/libconstruct_core_mac.a"
+fi
 $BUILD_SIM && merge_ice "aarch64-apple-ios-sim"     "$PROJECT_ROOT/libconstruct_core_sim.a"
 
 # ── Верификация пролога ───────────────────────────────────────────────────────
@@ -147,7 +169,7 @@ check_prologue() {
 
 $BUILD_IOS && check_prologue "$PROJECT_ROOT/libconstruct_core.a"          "iOS"
 $BUILD_CAT && check_prologue "$PROJECT_ROOT/libconstruct_core_catalyst.a" "Catalyst"
-$BUILD_MAC && check_prologue "$PROJECT_ROOT/libconstruct_core_mac.a"      "macOS"
+( $BUILD_MAC || $BUILD_DIST ) && check_prologue "$PROJECT_ROOT/libconstruct_core_mac.a" "macOS"
 $BUILD_SIM && check_prologue "$PROJECT_ROOT/libconstruct_core_sim.a"      "Simulator"
 
 # ── Обновление ConstructCore.xcframework ─────────────────────────────────────
@@ -156,7 +178,7 @@ if [ -d "$XCFW" ]; then
   hdr "Обновление xcframework"
   $BUILD_IOS && cp "$PROJECT_ROOT/libconstruct_core.a"          "$XCFW/ios-arm64/libconstruct_core.a"          && ok "ios-arm64 → xcframework"
   $BUILD_CAT && cp "$PROJECT_ROOT/libconstruct_core_catalyst.a" "$XCFW/ios-arm64-maccatalyst/libconstruct_core_catalyst.a" && ok "ios-arm64-maccatalyst → xcframework"
-  $BUILD_MAC && cp "$PROJECT_ROOT/libconstruct_core_mac.a"      "$XCFW/macos-arm64/libconstruct_core_mac.a"    && ok "macos-arm64 → xcframework"
+  ( $BUILD_MAC || $BUILD_DIST ) && cp "$PROJECT_ROOT/libconstruct_core_mac.a" "$XCFW/macos-arm64/libconstruct_core_mac.a" && ok "macos-arm64 → xcframework"
   if $BUILD_SIM; then
     XCFW_SIM="$XCFW/ios-arm64-simulator/libconstruct_core.a"
     ICE_SIM=$(find "$CORE_PATH/target/aarch64-apple-ios-sim/release/deps" -name "libconstruct_ice-*.a" 2>/dev/null | head -1)
