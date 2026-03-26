@@ -79,12 +79,10 @@ struct ChatsListView: View {
             .toolbarBackground(Color.Construct.bg2, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
             .toolbarColorScheme(.dark, for: .navigationBar)
-            #endif
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     ConnectionStatusIndicator()
                 }
-
                 ToolbarItem(placement: .automatic) {
                     Button {
                         showingQRScanner = true
@@ -98,6 +96,7 @@ struct ChatsListView: View {
                     handleScannedContact(contactURL)
                 }
             }
+            #endif
             .onAppear {
                 chatsViewModel.setContext(viewContext)
                 // ✅ Clear badge when user opens chats list

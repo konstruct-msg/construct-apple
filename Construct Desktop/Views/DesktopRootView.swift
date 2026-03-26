@@ -95,6 +95,7 @@ struct DesktopRootView: View {
         }
         // Toolbar button — sidebar header
         .toolbar {
+            // Leading: Add Contact (left of sidebar toggle)
             ToolbarItem(placement: .navigation) {
                 Button {
                     showAddContact = true
@@ -103,6 +104,21 @@ struct DesktopRootView: View {
                 }
                 .help("Add Contact (⌥⌘N)")
                 .keyboardShortcut("n", modifiers: [.command, .option])
+            }
+
+            // Center: connection status indicator
+            ToolbarItem(placement: .principal) {
+                ConnectionStatusIndicator()
+            }
+
+            // Trailing: QR scanner
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    showAddContact = true
+                } label: {
+                    Image(systemName: "qrcode.viewfinder")
+                }
+                .help("Scan QR code to add contact")
             }
         }
     }
