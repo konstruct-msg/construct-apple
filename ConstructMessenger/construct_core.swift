@@ -4010,7 +4010,7 @@ public enum CfeIncomingEvent: Equatable, Hashable {
     
     case messageReceived(messageId: String, from: String, data: Data, msgNum: UInt32, kemCt: Data, otpkId: UInt32, isControl: Bool
     )
-    case sessionInitCompleted(contactId: String, sessionJson: String
+    case sessionInitCompleted(contactId: String, sessionData: Data
     )
     case ackReceived(messageId: String
     )
@@ -4044,7 +4044,7 @@ public struct FfiConverterTypeCfeIncomingEvent: FfiConverterRustBuffer {
         case 1: return .messageReceived(messageId: try FfiConverterString.read(from: &buf), from: try FfiConverterString.read(from: &buf), data: try FfiConverterData.read(from: &buf), msgNum: try FfiConverterUInt32.read(from: &buf), kemCt: try FfiConverterData.read(from: &buf), otpkId: try FfiConverterUInt32.read(from: &buf), isControl: try FfiConverterBool.read(from: &buf)
         )
         
-        case 2: return .sessionInitCompleted(contactId: try FfiConverterString.read(from: &buf), sessionJson: try FfiConverterString.read(from: &buf)
+        case 2: return .sessionInitCompleted(contactId: try FfiConverterString.read(from: &buf), sessionData: try FfiConverterData.read(from: &buf)
         )
         
         case 3: return .ackReceived(messageId: try FfiConverterString.read(from: &buf)
@@ -4082,10 +4082,10 @@ public struct FfiConverterTypeCfeIncomingEvent: FfiConverterRustBuffer {
             FfiConverterBool.write(isControl, into: &buf)
             
         
-        case let .sessionInitCompleted(contactId,sessionJson):
+        case let .sessionInitCompleted(contactId,sessionData):
             writeInt(&buf, Int32(2))
             FfiConverterString.write(contactId, into: &buf)
-            FfiConverterString.write(sessionJson, into: &buf)
+            FfiConverterData.write(sessionData, into: &buf)
             
         
         case let .ackReceived(messageId):

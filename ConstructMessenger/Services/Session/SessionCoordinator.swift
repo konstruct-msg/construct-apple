@@ -340,10 +340,10 @@ final class SessionCoordinator {
                 // SaveSessionToSecureStore actions — the session was already persisted
                 // by initReceivingSession above.
                 if let core = CryptoManager.shared.orchestratorCore,
-                   let sessionJson = try? core.exportSessionJson(contactId: userId) {
+                   let sessionBytes = try? core.exportSession(contactId: userId) {
                     let event = CfeIncomingEvent.sessionInitCompleted(
                         contactId: userId,
-                        sessionJson: sessionJson
+                        sessionData: Data(sessionBytes)
                     )
                     let _ = try? core.handleEvent(event: event)
                 }
