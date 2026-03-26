@@ -73,7 +73,6 @@ struct DesktopEmptyStateView: View {
                         ]
                     )
                 }
-                .padding(.horizontal, 24)
 
                 Spacer()
 
@@ -102,14 +101,13 @@ struct DesktopEmptyStateView: View {
                 }
                 .padding(.bottom, 28)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .onAppear {
             withAnimation(.easeInOut(duration: 2.4).repeatForever(autoreverses: true)) {
                 glowPulse = true
             }
-            withAnimation(.easeOut(duration: 0.5)) {
-                cardsAppeared = true
-            }
+            cardsAppeared = true
         }
     }
 
@@ -178,8 +176,7 @@ struct DesktopEmptyStateView: View {
         )
         .frame(width: 148)
         .opacity(cardsAppeared ? 1 : 0)
-        .offset(y: cardsAppeared ? 0 : 12)
-        .animation(.easeOut(duration: 0.4).delay(Double(index) * 0.08), value: cardsAppeared)
+        .animation(.easeOut(duration: 0.5).delay(Double(index) * 0.1), value: cardsAppeared)
     }
 
     // MARK: - Connector
