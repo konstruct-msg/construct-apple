@@ -108,21 +108,18 @@ class CryptoManager {
 
     /// Export signing secret key from current core (for device-signed flows).
     func exportSigningSecretKey() throws -> [UInt8] {
-        let keysJSON: String
+        let keyBytes: Data
         if let oc = orchestratorCore {
-            keysJSON = try oc.exportPrivateKeysJson()
+            keyBytes = try oc.getSigningKeyBytes()
         } else if let bc = _bootstrapCore {
-            keysJSON = try bc.exportPrivateKeysJson()
+            keyBytes = try bc.getSigningKeyBytes()
         } else {
             throw CryptoManagerError.coreNotInitialized
         }
-        guard let data = keysJSON.data(using: .utf8),
-              let keys = try? JSONDecoder().decode(PrivateKeysJSON.self, from: data),
-              let signingSecretData = Data(base64Encoded: keys.signingSecret) else {
-            throw CryptoError.InvalidKeyData(message: "Failed to decode signing secret key")
+        guard !keyBytes.isEmpty else {
+            throw CryptoError.InvalidKeyData(message: "getSigningKeyBytes returned empty")
         }
-
-        return [UInt8](signingSecretData)
+        return [UInt8](keyBytes)
     }
     
     /// Generate a complete registration bundle for device-based authentication
@@ -134,21 +131,15 @@ class CryptoManager {
         // (an old core would carry a signature computed with the previous prologue/suite_id)
         let activeCore = try createCryptoCore()
         self._bootstrapCore = activeCore
-        
-        // Export registration bundle (contains all public keys)
-        let bundleJson = try activeCore.exportRegistrationBundleJson()
-        Log.debug("📦 Registration bundle: \(bundleJson.prefix(200))...", category: "CryptoManager")
-        
-        // Export private keys to extract what we need (JSON for intermediate parsing)
-        let privateKeysJson = try activeCore.exportPrivateKeysJson()
-        self._cachedKeysJson = privateKeysJson
-        Log.debug("🔐 Private keys JSON: \(privateKeysJson.prefix(200))...", category: "CryptoManager")
 
-        // Persist in CFE binary format
+        // Persist in CFE binary format immediately
         let saved: Bool
         if let cfeData = try? Data(activeCore.exportPrivateKeys()) {
             saved = KeychainManager.shared.savePrivateKeys(cfeData)
         } else {
+            // Fallback: JSON path (legacy)
+            let privateKeysJson = try activeCore.exportPrivateKeysJson()
+            self._cachedKeysJson = privateKeysJson
             saved = KeychainManager.shared.savePrivateKeysJson(privateKeysJson)
         }
         if saved {
@@ -156,79 +147,42 @@ class CryptoManager {
         } else {
             Log.error("⚠️ Failed to save registration private keys to Keychain", category: "CryptoManager")
         }
-        
-        // Parse private keys JSON to get signing and identity keys
-        guard let keysData = privateKeysJson.data(using: .utf8) else {
-            Log.error("❌ Failed to convert privateKeysJson to UTF-8 data", category: "CryptoManager")
-            throw CryptoError.InvalidKeyData(message: "Failed to convert private keys JSON to UTF-8")
+
+        // Typed bundle — no JSON round-trip
+        let bundle = try activeCore.getRegistrationBundleFields()
+        Log.debug("📦 Registration bundle: identity=\(bundle.identityPublic.prefix(20))… suiteId=\(bundle.suiteId)", category: "CryptoManager")
+
+        // Signing and identity key bytes — no JSON parsing
+        let signingKeyData = try activeCore.getSigningKeyBytes()
+        let identityKeyData = try activeCore.getIdentityKeyBytes()
+        guard !signingKeyData.isEmpty, !identityKeyData.isEmpty else {
+            throw CryptoError.InvalidKeyData(message: "getSigningKeyBytes or getIdentityKeyBytes returned empty")
         }
-        
-        guard let keysDict = try? JSONSerialization.jsonObject(with: keysData) as? [String: Any] else {
-            Log.error("❌ Failed to parse JSON: \(privateKeysJson)", category: "CryptoManager")
-            throw CryptoError.InvalidKeyData(message: "Failed to deserialize private keys JSON")
+
+        // Derive device_id from identity public key bytes
+        guard let identityPublicBytes = Data(base64Encoded: bundle.identityPublic) else {
+            throw CryptoError.InvalidKeyData(message: "Failed to decode identityPublic base64 from bundle")
         }
-        
-        Log.debug("📋 Keys dict keys: \(keysDict.keys.joined(separator: ", "))", category: "CryptoManager")
-        
-        // ✅ Use snake_case (Rust convention)
-        guard let signingSecret = keysDict["signing_secret"] as? String else {
-            Log.error("❌ Missing 'signing_secret' in keys: \(keysDict.keys)", category: "CryptoManager")
-            throw CryptoError.InvalidKeyData(message: "Missing 'signing_secret' in private keys JSON")
-        }
-        
-        guard let identitySecret = keysDict["identity_secret"] as? String else {
-            Log.error("❌ Missing 'identity_secret' in keys: \(keysDict.keys)", category: "CryptoManager")
-            throw CryptoError.InvalidKeyData(message: "Missing 'identity_secret' in private keys JSON")
-        }
-        
-        // Convert base64 strings to Data (Rust returns base64, not hex)
-        guard let signingKeyData = Data(base64Encoded: signingSecret) else {
-            Log.error("❌ Failed to decode signingSecret base64: \(signingSecret.prefix(20))...", category: "CryptoManager")
-            throw CryptoError.InvalidKeyData(message: "Failed to decode signing key base64 string")
-        }
-        
-        guard let identityKeyData = Data(base64Encoded: identitySecret) else {
-            Log.error("❌ Failed to decode identitySecret base64: \(identitySecret.prefix(20))...", category: "CryptoManager")
-            throw CryptoError.InvalidKeyData(message: "Failed to decode identity key base64 string")
-        }
-        
-        // Derive device_id from identity public key
-        // Parse bundle JSON to get identity public key (base64 from Rust)
-        guard let bundleData = bundleJson.data(using: .utf8),
-              let bundleDict = try? JSONSerialization.jsonObject(with: bundleData) as? [String: Any],
-              let identityPublic = bundleDict["identity_public"] as? String,
-              let identityPublicBytes = Data(base64Encoded: identityPublic) else {
-            Log.error("❌ Failed to parse registration bundle JSON", category: "CryptoManager")
-            throw CryptoError.InvalidKeyData(message: "Failed to parse registration bundle JSON")
-        }
-        
-        // Compute device_id using Rust function
         let deviceId = deriveDeviceId(identityPublicKey: [UInt8](identityPublicBytes))
-        
+
+        // Callers expect bundleJson — build a minimal JSON from typed fields so gRPC callers
+        // can extract individual fields without re-parsing the full JSON blob.
+        // This avoids touching all call sites for now; the real fix is to accept RegistrationBundleJson directly.
+        let bundleDict: [String: Any] = [
+            "identity_public": bundle.identityPublic,
+            "signed_prekey_public": bundle.signedPrekeyPublic,
+            "signature": bundle.signature,
+            "verifying_key": bundle.verifyingKey,
+            "suite_id": bundle.suiteId
+        ]
+        let bundleJson = (try? JSONSerialization.data(withJSONObject: bundleDict))
+            .flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
+
         Log.info("✅ Generated registration bundle: device_id=\(deviceId)", category: "CryptoManager")
-        
+
         return (deviceId, bundleJson, signingKeyData, identityKeyData)
     }
 
-    // MARK: - Private Keys JSON Structure
-
-    /// Matches Rust PrivateKeysJson structure (snake_case)
-    private struct PrivateKeysJSON: Codable {
-        let identitySecret: String
-        let signingSecret: String
-        let signedPrekeySecret: String
-        let prekeySignature: String
-        let suiteId: String
-
-        enum CodingKeys: String, CodingKey {
-            case identitySecret = "identity_secret"
-            case signingSecret = "signing_secret"
-            case signedPrekeySecret = "signed_prekey_secret"
-            case prekeySignature = "prekey_signature"
-            case suiteId = "suite_id"
-        }
-    }
-    
     // MARK: - Prekey ID Tracking
     
     /// Track a prekey ID for a user and detect reinstall
@@ -687,13 +641,13 @@ class CryptoManager {
             let suiteIdBefore = UserDefaults.standard.integer(forKey: "construct.session.suite.\(userId)")
             // importSession handles both CFE binary (new archives) and legacy JSON (old archives).
             _ = try core.importSession(contactId: userId, data: [UInt8](latest.sessionData))
-            // Extract suite_id from a fresh re-export of the now-live session — always reliable.
-            if let freshJson = try? core.exportSessionJson(contactId: userId),
-               let suiteId = Self.extractSuiteId(fromSessionJson: freshJson) {
+            // Use typed accessor — no JSON round-trip needed.
+            let suiteId = Int(core.getSessionSuiteId(contactId: userId))
+            if suiteId > 0 {
                 UserDefaults.standard.set(suiteId, forKey: "construct.session.suite.\(userId)")
                 Log.info("🔑 SESSION_STATE[restore_suite_id]: peer=\(userId.prefix(8))… suiteId \(suiteIdBefore) → \(suiteId)", category: "SessionInit")
             } else {
-                Log.error("🚨 SESSION_STATE[restore_suite_id_failed]: peer=\(userId.prefix(8))… suiteId_before=\(suiteIdBefore) — exportSessionJson failed after import; remote decrypt will likely fail", category: "CryptoManager")
+                Log.error("🚨 SESSION_STATE[restore_suite_id_failed]: peer=\(userId.prefix(8))… suiteId_before=\(suiteIdBefore) — getSessionSuiteId returned 0 after import; remote decrypt will likely fail", category: "CryptoManager")
             }
             saveSessionToKeychain(for: userId)
             archiveManager.restoreArchiveToCurrent(for: userId, index: idx)

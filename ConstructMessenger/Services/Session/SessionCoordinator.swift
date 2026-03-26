@@ -341,16 +341,11 @@ final class SessionCoordinator {
                 // by initReceivingSession above.
                 if let core = CryptoManager.shared.orchestratorCore,
                    let sessionJson = try? core.exportSessionJson(contactId: userId) {
-                    let event: [String: Any] = [
-                        "SessionInitCompleted": [
-                            "contact_id": userId,
-                            "session_json": sessionJson
-                        ]
-                    ]
-                    if let eventJson = (try? JSONSerialization.data(withJSONObject: event))
-                            .flatMap({ String(data: $0, encoding: .utf8) }) {
-                        let _ = try? core.handleEventJson(eventJson: eventJson)
-                    }
+                    let event = CfeIncomingEvent.sessionInitCompleted(
+                        contactId: userId,
+                        sessionJson: sessionJson
+                    )
+                    let _ = try? core.handleEvent(event: event)
                 }
 
                 // Replenish OTPKs — Bob consumed one OTPK for this X3DH session init.

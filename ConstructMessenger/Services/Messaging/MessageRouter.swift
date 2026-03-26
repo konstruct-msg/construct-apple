@@ -187,17 +187,17 @@ class MessageRouter {
         } else {
             // M5: Try routing through Rust orchestrator first
             if let core = CryptoManager.shared.orchestratorCore,
-               let eventJson = buildIncomingEventJson(message: message, otherUserId: otherUserId) {
+               let event = buildIncomingEvent(message: message, otherUserId: otherUserId) {
                 do {
-                    let actions = try core.handleEventJson(eventJson: eventJson)
-                    if actions.contains(where: { $0.contains("\"MessageDecrypted\"") }) {
+                    let actions = try core.handleEvent(event: event)
+                    if actions.contains(where: { if case .messageDecrypted = $0 { return true }; return false }) {
                         executeRustActions(actions, for: message, chat: chat, otherUserId: otherUserId, in: context)
                         return
                     }
                     // No MessageDecrypted — fall through to Swift path (tie-break, heal, archive restore)
-                    Log.debug("⚠️ handleEventJson returned no MessageDecrypted for \(message.id.prefix(8))… — falling back to Swift path", category: "MessageRouter")
+                    Log.debug("⚠️ handleEvent returned no MessageDecrypted for \(message.id.prefix(8))… — falling back to Swift path", category: "MessageRouter")
                 } catch {
-                    Log.error("❌ handleEventJson failed for \(message.id.prefix(8))…: \(error) — falling back to Swift path", category: "MessageRouter")
+                    Log.error("❌ handleEvent failed for \(message.id.prefix(8))…: \(error) — falling back to Swift path", category: "MessageRouter")
                 }
             }
 
@@ -237,63 +237,54 @@ class MessageRouter {
 
     // MARK: - Rust Orchestrator Routing (M5)
 
-    /// Build the JSON payload for `OrchestratorCore.handleEventJson` from a server message.
-    private func buildIncomingEventJson(message: ChatMessage, otherUserId: String) -> String? {
+    /// Build a typed `CfeIncomingEvent.messageReceived` from a server message.
+    private func buildIncomingEvent(message: ChatMessage, otherUserId: String) -> CfeIncomingEvent? {
         let unpaddedContent = MessagePadding.unpadCiphertextBase64(message.content)
         guard let sealedBox = Data(base64Encoded: unpaddedContent), sealedBox.count >= 12 else {
-            Log.error("❌ buildIncomingEventJson: cannot decode content for \(message.id.prefix(8))…", category: "MessageRouter")
+            Log.error("❌ buildIncomingEvent: cannot decode content for \(message.id.prefix(8))…", category: "MessageRouter")
             return nil
         }
 
-        let nonce     = Array(sealedBox.prefix(12)).map { Int($0) }
-        let ciphertext = Array(sealedBox.dropFirst(12)).map { Int($0) }
-        let dhPublicKey = Array(message.ephemeralPublicKey).map { Int($0) }
+        let nonce      = Array(sealedBox.prefix(12))
+        let ciphertext = Array(sealedBox.dropFirst(12))
+        let dhPublicKey = Array(message.ephemeralPublicKey)
 
+        // Wire message encoded as CFE MessagePack by Rust; for now we pass the JSON-encoded
+        // wire bytes as the `data` field — Rust orchestrator deserialises them internally.
         let wireMessage: [String: Any] = [
-            "dh_public_key": dhPublicKey,
+            "dh_public_key": dhPublicKey.map { Int($0) },
             "message_number": Int(message.messageNumber),
-            "ciphertext": ciphertext,
-            "nonce": nonce,
+            "ciphertext": ciphertext.map { Int($0) },
+            "nonce": nonce.map { Int($0) },
             "previous_chain_length": 0,
             "suite_id": 1
         ]
+        guard let wireJsonData = try? JSONSerialization.data(withJSONObject: wireMessage) else { return nil }
+        let wireDataBytes = Array(wireJsonData)
 
-        guard let wireJsonData = try? JSONSerialization.data(withJSONObject: wireMessage),
-              let wireJsonStr = String(data: wireJsonData, encoding: .utf8) else { return nil }
-
-        let wireDataBytes = Array(wireJsonStr.utf8).map { Int($0) }
-        let event: [String: Any] = [
-            "MessageReceived": [
-                "message_id": message.id,
-                "from": otherUserId,
-                "data": wireDataBytes,
-                "msg_num": Int(message.messageNumber),
-                "kem_ct": Array(message.kemCiphertext).map { Int($0) },
-                "otpk_id": Int(message.kyberOtpkId),
-                "is_control": false
-            ]
-        ]
-
-        return (try? JSONSerialization.data(withJSONObject: event))
-            .flatMap { String(data: $0, encoding: .utf8) }
+        return .messageReceived(
+            messageId: message.id,
+            from: otherUserId,
+            data: wireJsonData,
+            msgNum: message.messageNumber,
+            kemCt: message.kemCiphertext,
+            otpkId: message.kyberOtpkId,
+            isControl: false
+        )
     }
 
-    /// Execute actions returned by `OrchestratorCore.handleEventJson`.
+    /// Execute typed actions returned by `OrchestratorCore.handleEvent`.
     private func executeRustActions(
-        _ actions: [String],
+        _ actions: [CfeAction],
         for message: ChatMessage,
         chat: Chat,
         otherUserId: String,
         in context: NSManagedObjectContext
     ) {
-        for actionJson in actions {
-            guard let data = actionJson.data(using: .utf8),
-                  let dict = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
-                  let type = dict["type"] as? String else { continue }
-
-            switch type {
-            case "MessageDecrypted":
-                guard let plaintext = dict["plaintext_utf8"] as? String else { continue }
+        for action in actions {
+            switch action {
+            case .messageDecrypted(let contactId, _, let plaintext):
+                _ = contactId
                 checkUsernameUpdate(for: otherUserId, chat: chat, in: context)
                 switch chunkReassembler.process(decryptedText: plaintext) {
                 case .legacy(let text), .complete(let text):
@@ -305,41 +296,36 @@ class MessageRouter {
                     onReceiptNeeded?([message.id], otherUserId, .delivered)
                 }
 
-            case "SaveSessionToSecureStore":
-                handleStorageAction(dict)
+            case .saveSessionToSecureStore(let key, let data):
+                handleStorageAction(key: key, data: [UInt8](data))
 
-            case "NotifyNewMessage":
+            case .notifyNewMessage:
                 break // Notification triggered by saveMessage inside handleResolvedMessage
 
-            case "PersistMessage":
+            case .persistMessage:
                 // ACK store persistence — Swift already calls PersistentACKStore.markProcessed
                 // in handleResolvedMessage, so this Rust action is a no-op here.
                 break
 
-            case "NotifyError":
-                let code = dict["code"] as? String ?? "unknown"
-                let msg = dict["message"] as? String ?? ""
+            case .notifyError(let code, let msg):
                 Log.error("❌ Rust orchestrator error [\(code)]: \(msg)", category: "MessageRouter")
 
             default:
-                Log.debug("🔷 Unhandled Rust action in M5 path: \(type)", category: "MessageRouter")
+                Log.debug("🔷 Unhandled Rust action in M5 path: \(action)", category: "MessageRouter")
             }
         }
     }
 
-    /// Execute only storage actions from a Rust action list (no ChatMessage context needed).
-    /// Used for control-message paths (e.g., END_SESSION) where we have no ChatMessage.
-    private func executeStorageActions(_ actions: [String]) {
-        for actionJson in actions {
-            guard let data = actionJson.data(using: .utf8),
-                  let dict = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
-                  let type = dict["type"] as? String,
-                  type == "SaveSessionToSecureStore" else { continue }
-            handleStorageAction(dict)
+    /// Execute only storage actions from a typed Rust action list (no ChatMessage context needed).
+    private func executeStorageActions(_ actions: [CfeAction]) {
+        for action in actions {
+            if case .saveSessionToSecureStore(let key, let data) = action {
+                handleStorageAction(key: key, data: [UInt8](data))
+            }
         }
     }
 
-    /// Unified handler for a single `SaveSessionToSecureStore` action dictionary.
+    /// Unified handler for a `SaveSessionToSecureStore` action.
     ///
     /// Key conventions (established by `session_lifecycle.rs`):
     /// - `"session_<contactId>"` + non-empty bytes → save hot session to Keychain
@@ -347,11 +333,7 @@ class MessageRouter {
     /// - `"archive_<contactId>"` + bytes          → accept pre-archived session from Rust
     /// - `"pq_deferred_<contactId>"` + bytes      → persist deferred PQ contribution
     /// - `"pq_deferred_<contactId>"` + empty      → delete stored PQ contribution
-    private func handleStorageAction(_ dict: [String: Any]) {
-        guard let key = dict["key"] as? String else { return }
-        // UniFFI serialises Vec<u8> as JSON array of integers (0–255).
-        let rawBytes = (dict["data"] as? [Any])?.compactMap { ($0 as? Int).map { UInt8(clamping: $0) } } ?? []
-
+    private func handleStorageAction(key: String, data rawBytes: [UInt8]) {
         if key.hasPrefix("session_") {
             let contactId = String(key.dropFirst("session_".count))
             if rawBytes.isEmpty {
@@ -359,11 +341,9 @@ class MessageRouter {
                 KeychainManager.shared.deleteSession(for: contactId)
                 UserDefaults.standard.removeObject(forKey: "construct.session.suite.\(contactId)")
                 Log.debug("🗑️ Deleted hot session for \(contactId.prefix(8))… (Rust archive_session)", category: "MessageRouter")
-                // Persist updated orchestrator state after archive/delete.
                 CryptoManager.shared.saveOrchestratorStateCFE()
             } else {
                 CryptoManager.shared.saveSessionToKeychainPublic(for: contactId)
-                // Persist updated orchestrator state after session save.
                 CryptoManager.shared.saveOrchestratorStateCFE()
             }
         } else if key.hasPrefix("archive_") {
@@ -734,26 +714,22 @@ class MessageRouter {
         // 1. Archive the session — prefer Rust-owned archiving.
         var rustHandled = false
         if let core = CryptoManager.shared.orchestratorCore {
-            let endSessionBytes = Array("__END_SESSION__".utf8).map { Int($0) }
-            let event: [String: Any] = [
-                "MessageReceived": [
-                    "message_id": "end_session_\(userId)_\(Int(Date().timeIntervalSince1970))",
-                    "from": userId,
-                    "data": endSessionBytes,
-                    "msg_num": 0,
-                    "kem_ct": [Int](),
-                    "otpk_id": 0,
-                    "is_control": true
-                ]
-            ]
-            if let eventJson = (try? JSONSerialization.data(withJSONObject: event))
-                    .flatMap({ String(data: $0, encoding: .utf8) }),
-               let actions = try? core.handleEventJson(eventJson: eventJson) {
+            let endSessionData = Data("__END_SESSION__".utf8)
+            let event = CfeIncomingEvent.messageReceived(
+                messageId: "end_session_\(userId)_\(Int(Date().timeIntervalSince1970))",
+                from: userId,
+                data: endSessionData,
+                msgNum: 0,
+                kemCt: Data(),
+                otpkId: 0,
+                isControl: true
+            )
+            if let actions = try? core.handleEvent(event: event) {
                 executeStorageActions(actions)
                 rustHandled = true
                 Log.debug("✅ END_SESSION: session archived via Rust orchestrator for \(userId.prefix(8))…", category: "MessageRouter")
             } else {
-                Log.debug("⚠️ END_SESSION: Rust handleEventJson failed for \(userId.prefix(8))… — falling back to Swift archive", category: "MessageRouter")
+                Log.debug("⚠️ END_SESSION: Rust handleEvent failed for \(userId.prefix(8))… — falling back to Swift archive", category: "MessageRouter")
             }
         }
 
