@@ -68,6 +68,12 @@ extension Message {
     @NSManaged public var editedAt: Date?
     @NSManaged public var chat: Chat?
 
+    /// Safe accessor for `timestamp` — guards against nil NSDate bridging crash
+    /// which can occur when optimistically-inserted messages are not yet fully persisted.
+    var safeTimestamp: Date {
+        (value(forKey: "timestamp") as? Date) ?? Date()
+    }
+
     // Computed property для удобства
     var deliveryStatus: DeliveryStatus {
         get { DeliveryStatus(rawValue: deliveryStatusRaw) ?? .sending }

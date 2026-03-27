@@ -380,6 +380,28 @@ class MessageRouter {
             return
         }
 
+        // Silently discard two-phase handshake confirmation signals.
+        // __session_ready_<UUID>__ is sent by the RESPONDER after initReceivingSession succeeds.
+        // The Rust fast path decrypts it and calls handleResolvedMessage directly, bypassing
+        // the SessionCoordinator.handleMessage filter. We must handle the confirmation logic here.
+        if decryptedContent.hasPrefix("__session_ready") && decryptedContent.hasSuffix("__") {
+            Log.info("🤝 SESSION_STATE[session_ready_rust_path]: RESPONDER \(otherUserId.prefix(8))… confirmed session — discarding control message", category: "MessageRouter")
+            PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
+            onReceiptNeeded?([message.id], otherUserId, .delivered)
+            // Mark session as confirmed so ChatViewModel stops buffering outgoing messages.
+            SessionConfirmationTracker.shared.markConfirmed(otherUserId)
+            // Flush messages that were buffered while waiting for RESPONDER confirmation.
+            if let myId = SessionManager.shared.currentUserId {
+                MessageRetryManager.shared.sendQueuedMessages(
+                    for: chat,
+                    recipientId: otherUserId,
+                    currentUserId: myId,
+                    context: context
+                )
+            }
+            return
+        }
+
         // 4. Check for special message types (profile sharing, etc.)
         if let specialMessageHandled = handleSpecialMessage(
             decryptedContent,
