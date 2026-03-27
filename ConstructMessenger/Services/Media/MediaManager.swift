@@ -174,11 +174,16 @@ class MediaManager {
 
     /// Uploads data with one automatic retry on transient gRPC stream failures.
     private static func uploadWithRetry(data: Data, mimeType: String) async throws -> MediaServiceClient.UploadedMedia {
+        // .cancelled  → in-flight RPC killed when the persistent connection was torn down
+        // .unavailable → server/transport unreachable
+        // .deadlineExceeded → upload timed out (large file on slow link)
+        // In all cases: wait 3s (gives ICE proxy time to start) then retry once.
+        let retryableCodes: Set<RPCError.Code> = [.cancelled, .unavailable, .deadlineExceeded]
         do {
             return try await MediaServiceClient.shared.uploadData(data, mimeType: mimeType)
-        } catch let error as GRPCCore.RPCError where error.code == .unavailable {
-            Log.info("🔄 Upload stream dropped — retrying once (code=\(error.code))", category: "MediaManager")
-            try await Task.sleep(nanoseconds: 1_500_000_000) // 1.5s backoff
+        } catch let error as GRPCCore.RPCError where retryableCodes.contains(error.code) {
+            Log.info("🔄 Upload dropped — retrying in 3s (code=\(error.code))", category: "MediaManager")
+            try await Task.sleep(nanoseconds: 3_000_000_000)
             return try await MediaServiceClient.shared.uploadData(data, mimeType: mimeType)
         }
     }

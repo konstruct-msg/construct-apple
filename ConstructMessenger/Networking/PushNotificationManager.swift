@@ -177,7 +177,12 @@ class PushNotificationManager: NSObject {
         // Register with backend server (may fail if user not authenticated yet)
         await registerWithServer(tokenString)
 
-        await checkAuthorizationStatus()
+        // APNs delivered a token → authorization is confirmed. Set isPushEnabled directly
+        // instead of calling checkAuthorizationStatus(), which would call
+        // registerForRemoteNotifications() again and create an infinite loop:
+        // registerDeviceToken → checkAuthorizationStatus → registerForRemoteNotifications
+        // → APNs callback → registerDeviceToken → …
+        isPushEnabled = true
     }
     
     /// Unregister device token (e.g., on logout)
