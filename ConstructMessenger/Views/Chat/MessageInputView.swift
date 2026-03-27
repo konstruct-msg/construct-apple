@@ -209,7 +209,7 @@ struct MessageInputView: View {
                 )
 #endif
 
-                // Voice recording bar (shown during recording and preview)
+                // Voice recording/preview bars replace the text input entirely on iOS
                 #if os(iOS) && !targetEnvironment(macCatalyst)
                 switch audioRecorder.state {
                 case .recording(let duration, let waveform):
@@ -218,7 +218,7 @@ struct MessageInputView: View {
                     } onCancel: {
                         audioRecorder.cancel()
                     }
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .transition(.opacity.combined(with: .scale(scale: 0.97)))
                 case .recorded(let url, let duration, let waveform):
                     VoicePreviewBar(duration: duration, waveform: waveform) {
                         onSendVoice?(url, duration, waveform)
@@ -226,12 +226,13 @@ struct MessageInputView: View {
                     } onDiscard: {
                         audioRecorder.cancel()
                     }
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .transition(.opacity.combined(with: .scale(scale: 0.97)))
                 case .idle:
                     EmptyView()
                 }
                 #endif
 
+                // Show text input only when not recording/previewing voice
                 HStack(spacing: 0) {
 #if targetEnvironment(macCatalyst)
                     CatalystGrowingTextView(
@@ -357,6 +358,11 @@ struct MessageInputView: View {
 #else
                 .clipShape(RoundedRectangle(cornerRadius: 20))
 #endif
+                #if os(iOS) && !targetEnvironment(macCatalyst)
+                .opacity(isVoiceActive ? 0 : 1)
+                .frame(maxHeight: isVoiceActive ? 0 : nil)
+                .clipped()
+                #endif
             }
             .padding(.horizontal)
             .padding(.vertical, 8)
@@ -403,6 +409,13 @@ struct MessageInputView: View {
             }
         }
     }
+
+    #if os(iOS) && !targetEnvironment(macCatalyst)
+    private var isVoiceActive: Bool {
+        if case .idle = audioRecorder.state { return false }
+        return true
+    }
+    #endif
 
     private var canSend: Bool {
         !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -603,6 +616,9 @@ struct MessageInputView: View {
 // MARK: - Voice Recording Bar
 
 #if os(iOS) && !targetEnvironment(macCatalyst)
+
+// MARK: - Voice Recording Bar (full-width accent pill, replaces text input)
+
 private struct VoiceRecordingBar: View {
     let duration: TimeInterval
     let waveform: [Float]
@@ -610,42 +626,51 @@ private struct VoiceRecordingBar: View {
     let onCancel: () -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
-            // Cancel button
+        HStack(spacing: 0) {
+            // Cancel button — white circle
             Button(action: onCancel) {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 22))
-                    .foregroundStyle(Color.secondary)
-            }
-            .buttonStyle(.plain)
-
-            // Live mini waveform
-            LiveWaveformView(samples: waveform)
-                .frame(maxWidth: .infinity, maxHeight: 28)
-
-            // Timer
-            Text(durationLabel)
-                .font(.caption.monospacedDigit())
-                .foregroundStyle(.primary)
-                .frame(width: 40)
-
-            // Red recording dot + stop button
-            Button(action: onStop) {
                 ZStack {
                     Circle()
-                        .fill(Color.red)
-                        .frame(width: 32, height: 32)
-                    Image(systemName: "stop.fill")
-                        .font(.system(size: 12, weight: .bold))
+                        .fill(Color.white.opacity(0.25))
+                        .frame(width: 44, height: 44)
+                    Image(systemName: "xmark")
+                        .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(.white)
                 }
             }
             .buttonStyle(.plain)
+            .padding(.leading, 8)
+
+            // Live waveform
+            LiveWaveformView(samples: waveform)
+                .frame(maxWidth: .infinity)
+                .frame(height: 44)
+                .padding(.horizontal, 12)
+
+            // Timer
+            Text(durationLabel)
+                .font(.system(size: 15, weight: .medium).monospacedDigit())
+                .foregroundStyle(.white)
+                .frame(minWidth: 42, alignment: .trailing)
+
+            // Stop button — white circle with red square
+            Button(action: onStop) {
+                ZStack {
+                    Circle()
+                        .fill(Color.white)
+                        .frame(width: 44, height: 44)
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Color.red)
+                        .frame(width: 16, height: 16)
+                }
+            }
+            .buttonStyle(.plain)
+            .padding(.leading, 10)
+            .padding(.trailing, 8)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
-        .background(Color(.systemGray6))
-        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .frame(height: 56)
+        .background(Color.accentColor)
+        .clipShape(Capsule())
         .padding(.horizontal)
     }
 
@@ -655,7 +680,7 @@ private struct VoiceRecordingBar: View {
     }
 }
 
-// MARK: - Voice Preview Bar
+// MARK: - Voice Preview Bar (full-width accent pill, replaces text input)
 
 private struct VoicePreviewBar: View {
     let duration: TimeInterval
@@ -663,41 +688,53 @@ private struct VoicePreviewBar: View {
     let onSend: () -> Void
     let onDiscard: () -> Void
 
-    @StateObject private var player = AudioPlayerService.shared
-    @State private var previewData: Data? = nil   // no remote URL — nothing to download in preview
-
     var body: some View {
-        HStack(spacing: 12) {
-            // Discard
+        HStack(spacing: 0) {
+            // Discard button — white circle with trash icon
             Button(action: onDiscard) {
-                Image(systemName: "trash.circle.fill")
-                    .font(.system(size: 22))
-                    .foregroundStyle(Color.red.opacity(0.7))
+                ZStack {
+                    Circle()
+                        .fill(Color.white.opacity(0.25))
+                        .frame(width: 44, height: 44)
+                    Image(systemName: "trash")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(.white)
+                }
             }
             .buttonStyle(.plain)
+            .padding(.leading, 8)
 
-            // Static waveform (not playing back locally in preview)
+            // Static waveform dots
             StaticWaveformView(samples: waveform)
-                .frame(maxWidth: .infinity, maxHeight: 28)
+                .frame(maxWidth: .infinity)
+                .frame(height: 44)
+                .padding(.horizontal, 12)
 
             // Duration
             Text(durationLabel)
-                .font(.caption.monospacedDigit())
-                .foregroundStyle(.secondary)
-                .frame(width: 40)
+                .font(.system(size: 15, weight: .medium).monospacedDigit())
+                .foregroundStyle(.white)
+                .frame(minWidth: 42, alignment: .trailing)
 
-            // Send
+            // Send button — white circle with paper plane
             Button(action: onSend) {
-                Image(systemName: "arrow.up.circle.fill")
-                    .font(.system(size: 32))
-                    .foregroundStyle(Color.accentColor)
+                ZStack {
+                    Circle()
+                        .fill(Color.white)
+                        .frame(width: 44, height: 44)
+                    Image(systemName: "paperplane.fill")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(Color.accentColor)
+                        .offset(x: 1)
+                }
             }
             .buttonStyle(.plain)
+            .padding(.leading, 10)
+            .padding(.trailing, 8)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
-        .background(Color(.systemGray6))
-        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .frame(height: 56)
+        .background(Color.accentColor)
+        .clipShape(Capsule())
         .padding(.horizontal)
     }
 
@@ -707,22 +744,22 @@ private struct VoicePreviewBar: View {
     }
 }
 
-// MARK: - Live Waveform (recording)
+// MARK: - Live Waveform (recording) — bars from the right edge showing latest samples
 
 private struct LiveWaveformView: View {
     let samples: [Float]
-    private let barCount = 30
-    private let barSpacing: CGFloat = 2
+    private let barCount = 36
+    private let barSpacing: CGFloat = 2.5
 
     var body: some View {
         GeometryReader { geo in
             let totalSpacing = barSpacing * CGFloat(barCount - 1)
-            let barWidth = max(1, (geo.size.width - totalSpacing) / CGFloat(barCount))
+            let barWidth = max(1.5, (geo.size.width - totalSpacing) / CGFloat(barCount))
 
             HStack(alignment: .center, spacing: barSpacing) {
                 ForEach(0..<barCount, id: \.self) { i in
                     Capsule()
-                        .fill(Color.red.opacity(0.8))
+                        .fill(Color.white.opacity(barOpacity(for: i)))
                         .frame(width: barWidth, height: barHeight(for: i, total: geo.size.height))
                 }
             }
@@ -731,30 +768,37 @@ private struct LiveWaveformView: View {
 
     private func barHeight(for index: Int, total: CGFloat) -> CGFloat {
         let count = samples.count
-        guard count > 0 else { return 3 }
-        // Map bar index → latest tail of waveform so animation scrolls right
+        guard count > 0 else { return 4 }
         let sampleIndex = max(0, count - barCount + index)
-        guard sampleIndex < count else { return 3 }
-        return max(3, CGFloat(samples[sampleIndex]) * total)
+        guard sampleIndex < count else { return 4 }
+        return max(4, CGFloat(samples[sampleIndex]) * total * 0.9)
+    }
+
+    // Bars fade in from the left as they fill up
+    private func barOpacity(for index: Int) -> Double {
+        let count = samples.count
+        guard count < barCount else { return 1.0 }
+        let startVisible = barCount - count
+        return index >= startVisible ? 1.0 : 0.25
     }
 }
 
-// MARK: - Static Waveform (preview)
+// MARK: - Static Waveform (preview) — evenly downsampled bars
 
 private struct StaticWaveformView: View {
     let samples: [Float]
-    private let barCount = 30
-    private let barSpacing: CGFloat = 2
+    private let barCount = 36
+    private let barSpacing: CGFloat = 2.5
 
     var body: some View {
         GeometryReader { geo in
             let totalSpacing = barSpacing * CGFloat(barCount - 1)
-            let barWidth = max(1, (geo.size.width - totalSpacing) / CGFloat(barCount))
+            let barWidth = max(1.5, (geo.size.width - totalSpacing) / CGFloat(barCount))
 
             HStack(alignment: .center, spacing: barSpacing) {
                 ForEach(0..<barCount, id: \.self) { i in
                     Capsule()
-                        .fill(Color.accentColor.opacity(0.7))
+                        .fill(Color.white.opacity(0.80))
                         .frame(width: barWidth, height: barHeight(for: i, total: geo.size.height))
                 }
             }
@@ -762,13 +806,13 @@ private struct StaticWaveformView: View {
     }
 
     private func barHeight(for index: Int, total: CGFloat) -> CGFloat {
-        guard !samples.isEmpty else { return 3 }
+        guard !samples.isEmpty else { return 5 }
         let step = Float(samples.count) / Float(barCount)
         let si = Int(Float(index) * step)
         let ei = min(Int(Float(index + 1) * step), samples.count)
-        guard si < ei else { return 3 }
+        guard si < ei else { return 5 }
         let avg = samples[si..<ei].reduce(0, +) / Float(ei - si)
-        return max(3, CGFloat(avg) * total)
+        return max(5, CGFloat(avg) * total * 0.85)
     }
 }
 #endif
