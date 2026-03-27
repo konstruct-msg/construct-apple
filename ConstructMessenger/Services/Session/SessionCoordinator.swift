@@ -293,6 +293,19 @@ final class SessionCoordinator {
                 } catch {
                     Log.error("❌ SESSION_STATE[tie_break_end_session_fail]: peer=\(userId.prefix(8))… error=\(error.localizedDescription)", category: "SessionInit")
                 }
+                // The RESPONDER already wiped their session when they sent us the X3DH init
+                // (their healing attempt). The DR-ratchet ping encoded in the restored session
+                // (msgNum > 0) is unreachable by them — they have no matching state.
+                // Re-initialize from scratch: fetch RESPONDER's bundle → new outgoing session
+                // (msgNum=0). The subsequent sendSessionPing then carries a fresh X3DH init
+                // that RESPONDER can accept via initReceivingSession.
+                await self.sessionInitService.initializeSessionProactively(
+                    userId: userId,
+                    onSuccess: { },
+                    onFailure: { err in
+                        Log.error("❌ SESSION_STATE[tie_break_reinit_fail]: \(err.localizedDescription)", category: "SessionInit")
+                    }
+                )
                 await self.sendSessionPing(to: userId)
                 // Phase 1 of two-phase handshake: session is now "unconfirmed" until
                 // RESPONDER sends back __session_ready__. ChatViewModel will buffer any
@@ -630,10 +643,16 @@ final class SessionCoordinator {
                 return // Task was cancelled — RESPONDER replied in time
             }
             guard !Task.isCancelled else { return }
-            // If we still hold an INITIATOR session, the RESPONDER has not yet
-            // completed their init — re-send the ping to unblock them.
-            guard CryptoManager.shared.hasSession(for: userId) else { return }
-            Log.info("⏰ SESSION_STATE[tie_break_watchdog]: timeout — re-sending ping to \(userId.prefix(8))…", category: "SessionInit")
+            // RESPONDER has not replied — reinitialize session so the retry ping
+            // is a fresh X3DH init (msgNum=0) that RESPONDER can accept.
+            Log.info("⏰ SESSION_STATE[tie_break_watchdog]: timeout — re-prewarming for \(userId.prefix(8))…", category: "SessionInit")
+            await self.sessionInitService.initializeSessionProactively(
+                userId: userId,
+                onSuccess: { },
+                onFailure: { err in
+                    Log.error("❌ SESSION_STATE[watchdog_reinit_fail]: \(err.localizedDescription)", category: "SessionInit")
+                }
+            )
             await self.sendSessionPing(to: userId)
         }
     }
