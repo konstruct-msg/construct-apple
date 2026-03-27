@@ -731,7 +731,7 @@ int8_t uniffi_construct_core_fn_method_rusthealingqueue_can_heal(uint64_t ptr, u
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_RUSTHEALINGQUEUE_ENQUEUE
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_RUSTHEALINGQUEUE_ENQUEUE
-RustBuffer uniffi_construct_core_fn_method_rusthealingqueue_enqueue(uint64_t ptr, RustBuffer contact_id, RustBuffer message_json, RustCallStatus *_Nonnull out_status
+void uniffi_construct_core_fn_method_rusthealingqueue_enqueue(uint64_t ptr, RustBuffer contact_id, RustBuffer message_json, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_RUSTHEALINGQUEUE_LEN
@@ -741,7 +741,7 @@ uint64_t uniffi_construct_core_fn_method_rusthealingqueue_len(uint64_t ptr, Rust
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_RUSTHEALINGQUEUE_PRUNE_EXPIRED
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_RUSTHEALINGQUEUE_PRUNE_EXPIRED
-RustBuffer uniffi_construct_core_fn_method_rusthealingqueue_prune_expired(uint64_t ptr, RustCallStatus *_Nonnull out_status
+void uniffi_construct_core_fn_method_rusthealingqueue_prune_expired(uint64_t ptr, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_RUSTHEALINGQUEUE_RECORD_ATTEMPT

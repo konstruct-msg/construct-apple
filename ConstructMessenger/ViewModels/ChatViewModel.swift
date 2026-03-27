@@ -699,7 +699,7 @@ class ChatViewModel: NSObject {
             id: placeholderId,
             fromUserId: currentUserId,
             toUserId: recipientId,
-            caption: "🎙 Voice message",
+            caption: "Voice message",
             thumbnail: nil,
             replyTo: nil,
             replyToContentOverride: nil,

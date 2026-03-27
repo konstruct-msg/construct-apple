@@ -121,7 +121,7 @@ struct MessageInputTextBar: View {
         #if os(iOS)
         if !canSend, let onStartVoice {
             Button(action: onStartVoice) {
-                Image(systemName: "waveform")
+                Image(systemName: "microphone")
                     .font(.system(size: 24))
                     .foregroundStyle(Color.secondary)
                     .padding(.trailing, 6)

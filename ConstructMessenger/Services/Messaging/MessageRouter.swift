@@ -260,7 +260,7 @@ class MessageRouter {
             "suite_id": 1
         ]
         guard let wireJsonData = try? JSONSerialization.data(withJSONObject: wireMessage) else { return nil }
-        let wireDataBytes = Array(wireJsonData)
+        let _ = Array(wireJsonData)
 
         return .messageReceived(
             messageId: message.id,
@@ -303,8 +303,18 @@ class MessageRouter {
                 break // Notification triggered by saveMessage inside handleResolvedMessage
 
             case .persistMessage:
-                // ACK store persistence — Swift already calls PersistentACKStore.markProcessed
-                // in handleResolvedMessage, so this Rust action is a no-op here.
+                // Legacy ACK action — superseded by persistAck. No-op.
+                break
+
+            case .persistAck(let messageId, _):
+                // Rust core signals that this message should be persisted to the ACK store.
+                // Swift-side PersistentACKStore already handles this in handleResolvedMessage,
+                // but we also pre-populate the Rust cache on the M5 path.
+                _ = CryptoManager.shared.orchestratorCore?.ackMarkProcessed(messageId: messageId)
+
+            case .pruneAckStore:
+                // Platform prunes its own ACK store on the gc_sweep timer.
+                // Nothing to do here — Swift handles this via ChatsViewModel.pruneExpired.
                 break
 
             case .notifyError(let code, let msg):
@@ -358,6 +368,16 @@ class MessageRouter {
             } else {
                 _ = KeychainManager.shared.saveData(Data(rawBytes), forKey: storageKey)
                 Log.debug("💾 Persisted PQ deferred for key \(storageKey)", category: "MessageRouter")
+            }
+        } else if key == "construct.orchestrator_state" {
+            // Rust emits this after SessionHealNeeded / NeedSessionInit / EndSessionNeeded
+            // to ensure the healing queue and pending queue survive app crashes.
+            // Save the bytes directly rather than re-exporting (avoids a second FFI call).
+            if rawBytes.isEmpty {
+                Log.debug("⚠️ Orchestrator state save with empty data — ignoring", category: "MessageRouter")
+            } else {
+                _ = KeychainManager.shared.saveData(Data(rawBytes), forKey: "construct.orchestrator_state")
+                Log.debug("💾 Orchestrator state persisted (\(rawBytes.count) bytes) via Rust action", category: "MessageRouter")
             }
         } else {
             Log.debug("🔷 Unhandled storage key: \(key)", category: "MessageRouter")

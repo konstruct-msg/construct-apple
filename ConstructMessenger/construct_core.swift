@@ -1927,9 +1927,9 @@ public protocol RustHealingQueueProtocol: AnyObject, Sendable {
     
     /**
      * Enqueue `message_json` for `contact_id` (idempotent).
-     * Returns JSON-encoded `Action` array for persistence.
+     * Persistence is handled by the orchestrator CFE state export.
      */
-    func enqueue(contactId: String, messageJson: String)  -> String
+    func enqueue(contactId: String, messageJson: String) 
     
     /**
      * Number of pending healing records.
@@ -1937,9 +1937,9 @@ public protocol RustHealingQueueProtocol: AnyObject, Sendable {
     func len()  -> UInt64
     
     /**
-     * Returns JSON-encoded `Action` array to delete expired records.
+     * Remove expired healing records. Persistence handled by orchestrator CFE.
      */
-    func pruneExpired()  -> String
+    func pruneExpired() 
     
     /**
      * Increment attempt counter for `contact_id`.
@@ -2026,16 +2026,15 @@ open func canHeal(msgNumber: UInt32) -> Bool  {
     
     /**
      * Enqueue `message_json` for `contact_id` (idempotent).
-     * Returns JSON-encoded `Action` array for persistence.
+     * Persistence is handled by the orchestrator CFE state export.
      */
-open func enqueue(contactId: String, messageJson: String) -> String  {
-    return try!  FfiConverterString.lift(try! rustCall() {
+open func enqueue(contactId: String, messageJson: String)  {try! rustCall() {
     uniffi_construct_core_fn_method_rusthealingqueue_enqueue(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(contactId),
         FfiConverterString.lower(messageJson),$0
     )
-})
+}
 }
     
     /**
@@ -2050,14 +2049,13 @@ open func len() -> UInt64  {
 }
     
     /**
-     * Returns JSON-encoded `Action` array to delete expired records.
+     * Remove expired healing records. Persistence handled by orchestrator CFE.
      */
-open func pruneExpired() -> String  {
-    return try!  FfiConverterString.lift(try! rustCall() {
+open func pruneExpired()  {try! rustCall() {
     uniffi_construct_core_fn_method_rusthealingqueue_prune_expired(
             self.uniffiCloneHandle(),$0
     )
-})
+}
 }
     
     /**
@@ -3760,6 +3758,10 @@ public enum CfeAction: Equatable, Hashable {
     )
     case persistMessage(messageJson: String
     )
+    case persistAck(messageId: String, timestamp: UInt64
+    )
+    case pruneAckStore(cutoffTs: UInt64
+    )
     case markMessageDelivered(messageId: String
     )
     case fetchPublicKeyBundle(userId: String
@@ -3829,34 +3831,40 @@ public struct FfiConverterTypeCfeAction: FfiConverterRustBuffer {
         case 10: return .persistMessage(messageJson: try FfiConverterString.read(from: &buf)
         )
         
-        case 11: return .markMessageDelivered(messageId: try FfiConverterString.read(from: &buf)
+        case 11: return .persistAck(messageId: try FfiConverterString.read(from: &buf), timestamp: try FfiConverterUInt64.read(from: &buf)
         )
         
-        case 12: return .fetchPublicKeyBundle(userId: try FfiConverterString.read(from: &buf)
+        case 12: return .pruneAckStore(cutoffTs: try FfiConverterUInt64.read(from: &buf)
         )
         
-        case 13: return .sendEncryptedMessage(to: try FfiConverterString.read(from: &buf), payload: try FfiConverterData.read(from: &buf)
+        case 13: return .markMessageDelivered(messageId: try FfiConverterString.read(from: &buf)
         )
         
-        case 14: return .sendReceipt(messageId: try FfiConverterString.read(from: &buf), status: try FfiConverterString.read(from: &buf)
+        case 14: return .fetchPublicKeyBundle(userId: try FfiConverterString.read(from: &buf)
         )
         
-        case 15: return .sendEndSession(contactId: try FfiConverterString.read(from: &buf)
+        case 15: return .sendEncryptedMessage(to: try FfiConverterString.read(from: &buf), payload: try FfiConverterData.read(from: &buf)
         )
         
-        case 16: return .notifyNewMessage(chatId: try FfiConverterString.read(from: &buf), preview: try FfiConverterString.read(from: &buf)
+        case 16: return .sendReceipt(messageId: try FfiConverterString.read(from: &buf), status: try FfiConverterString.read(from: &buf)
         )
         
-        case 17: return .notifySessionCreated(contactId: try FfiConverterString.read(from: &buf)
+        case 17: return .sendEndSession(contactId: try FfiConverterString.read(from: &buf)
         )
         
-        case 18: return .notifyError(code: try FfiConverterString.read(from: &buf), message: try FfiConverterString.read(from: &buf)
+        case 18: return .notifyNewMessage(chatId: try FfiConverterString.read(from: &buf), preview: try FfiConverterString.read(from: &buf)
         )
         
-        case 19: return .scheduleTimer(timerId: try FfiConverterString.read(from: &buf), delayMs: try FfiConverterUInt64.read(from: &buf)
+        case 19: return .notifySessionCreated(contactId: try FfiConverterString.read(from: &buf)
         )
         
-        case 20: return .cancelTimer(timerId: try FfiConverterString.read(from: &buf)
+        case 20: return .notifyError(code: try FfiConverterString.read(from: &buf), message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 21: return .scheduleTimer(timerId: try FfiConverterString.read(from: &buf), delayMs: try FfiConverterUInt64.read(from: &buf)
+        )
+        
+        case 22: return .cancelTimer(timerId: try FfiConverterString.read(from: &buf)
         )
         
         default: throw UniffiInternalError.unexpectedEnumCase
@@ -3925,58 +3933,69 @@ public struct FfiConverterTypeCfeAction: FfiConverterRustBuffer {
             FfiConverterString.write(messageJson, into: &buf)
             
         
-        case let .markMessageDelivered(messageId):
+        case let .persistAck(messageId,timestamp):
             writeInt(&buf, Int32(11))
+            FfiConverterString.write(messageId, into: &buf)
+            FfiConverterUInt64.write(timestamp, into: &buf)
+            
+        
+        case let .pruneAckStore(cutoffTs):
+            writeInt(&buf, Int32(12))
+            FfiConverterUInt64.write(cutoffTs, into: &buf)
+            
+        
+        case let .markMessageDelivered(messageId):
+            writeInt(&buf, Int32(13))
             FfiConverterString.write(messageId, into: &buf)
             
         
         case let .fetchPublicKeyBundle(userId):
-            writeInt(&buf, Int32(12))
+            writeInt(&buf, Int32(14))
             FfiConverterString.write(userId, into: &buf)
             
         
         case let .sendEncryptedMessage(to,payload):
-            writeInt(&buf, Int32(13))
+            writeInt(&buf, Int32(15))
             FfiConverterString.write(to, into: &buf)
             FfiConverterData.write(payload, into: &buf)
             
         
         case let .sendReceipt(messageId,status):
-            writeInt(&buf, Int32(14))
+            writeInt(&buf, Int32(16))
             FfiConverterString.write(messageId, into: &buf)
             FfiConverterString.write(status, into: &buf)
             
         
         case let .sendEndSession(contactId):
-            writeInt(&buf, Int32(15))
+            writeInt(&buf, Int32(17))
             FfiConverterString.write(contactId, into: &buf)
             
         
         case let .notifyNewMessage(chatId,preview):
-            writeInt(&buf, Int32(16))
+            writeInt(&buf, Int32(18))
             FfiConverterString.write(chatId, into: &buf)
             FfiConverterString.write(preview, into: &buf)
             
         
         case let .notifySessionCreated(contactId):
-            writeInt(&buf, Int32(17))
+            writeInt(&buf, Int32(19))
             FfiConverterString.write(contactId, into: &buf)
             
         
         case let .notifyError(code,message):
-            writeInt(&buf, Int32(18))
+            writeInt(&buf, Int32(20))
             FfiConverterString.write(code, into: &buf)
             FfiConverterString.write(message, into: &buf)
             
         
         case let .scheduleTimer(timerId,delayMs):
-            writeInt(&buf, Int32(19))
+            writeInt(&buf, Int32(21))
             FfiConverterString.write(timerId, into: &buf)
             FfiConverterUInt64.write(delayMs, into: &buf)
             
         
         case let .cancelTimer(timerId):
-            writeInt(&buf, Int32(20))
+            writeInt(&buf, Int32(22))
             FfiConverterString.write(timerId, into: &buf)
             
         }
@@ -5431,13 +5450,13 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_rusthealingqueue_can_heal() != 46759) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_rusthealingqueue_enqueue() != 65078) {
+    if (uniffi_construct_core_checksum_method_rusthealingqueue_enqueue() != 5619) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_rusthealingqueue_len() != 8116) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_rusthealingqueue_prune_expired() != 10424) {
+    if (uniffi_construct_core_checksum_method_rusthealingqueue_prune_expired() != 54495) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_rusthealingqueue_record_attempt() != 50030) {
