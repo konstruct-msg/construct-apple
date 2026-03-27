@@ -179,16 +179,9 @@ final class IceProxyManager: ObservableObject {
     /// The current effective routing path for traffic.
     /// Updates automatically because it reads `@Published` properties.
     var currentTrafficPath: TrafficPath {
-        guard isEnabled else { return .direct }
-        guard isRunning, let relay = activeRelay else {
-            return .iceConnecting
-        }
-        if isOnCooldown {
-            return .iceCooldown
-        }
-        if relay.tlsServerName != nil {
-            return .icePrimary(host: relay.address)
-        }
+        guard isRunning, let relay = activeRelay else { return .direct }
+        if isOnCooldown { return .iceCooldown }
+        if relay.tlsServerName != nil { return .icePrimary(host: relay.address) }
         return .iceRelay(address: relay.address)
     }
 
@@ -435,6 +428,9 @@ final class IceProxyManager: ObservableObject {
         Log.info("🧊 Auto-starting ICE proxy (DPI auto-detection)", category: "ICE")
         let cert = await getIceBridgeCert()
         if startWithRelayFallback(cert: cert) {
+            // Persist the enabled state so the UI toggle and traffic-path indicator
+            // reflect reality — the user implicitly wants ICE if DPI is active.
+            isEnabled = true
             Task { await IceCertFetcher.shared.fetchAndCacheRelayList() }
             Log.info("🧊 ICE auto-started via DPI detection", category: "ICE")
         } else {

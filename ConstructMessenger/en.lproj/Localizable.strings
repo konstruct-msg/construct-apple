@@ -623,3 +623,4 @@
 "session_crypto_no_session" = "No active session";
 
 "voice_message" = "Voice message";
+"ice_auto_activated_footer" = "ICE was activated automatically — your network blocks direct connections. You can disable it in settings.";

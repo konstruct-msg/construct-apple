@@ -94,7 +94,9 @@ struct NetworkSettingsView: View {
                 }
                 .disabled(!iceManager.hasCert)
 
-                if iceEnabled && iceManager.hasCert {
+                // Show relay details whenever ICE is actually running (incl. auto-started)
+                // or whenever the toggle is ON (and ICE is available).
+                if (iceEnabled || iceManager.isRunning) && iceManager.hasCert {
                     if iceManager.isOnCooldown {
                         Button {
                             iceManager.clearCooldown()
@@ -131,6 +133,8 @@ struct NetworkSettingsView: View {
             } footer: {
                 if !iceManager.hasCert {
                     Text("ice_unavailable")
+                } else if iceManager.isRunning && !iceEnabled {
+                    Text("ice_auto_activated_footer")
                 } else {
                     #if os(macOS)
                     Text("ice_footer_short") + Text(" ") + Text("Enabled by default on macOS.")
