@@ -128,8 +128,13 @@ final class GRPCChannelManager: Sendable {
         }
 
         // Tear down stale connection gracefully.
-        _conn?.task.cancel()
+        // beginGracefulShutdown() MUST precede task.cancel(): cancelling the Task
+        // force-closes the NIO transport, which puts all HTTP/2 stream state machines
+        // into clientClosed. Any in-flight RPC mid-write then hits the precondition in
+        // GRPCStreamStateMachine and crashes. Graceful shutdown drains first; cancellation
+        // is only a backstop that fires after the shutdown signal has already propagated.
         _conn?.client.beginGracefulShutdown()
+        _conn?.task.cancel()
         _conn = nil
 
         let client = try makeClient()
@@ -152,8 +157,9 @@ final class GRPCChannelManager: Sendable {
     func invalidatePersistentClient() {
         _connLock.lock()
         defer { _connLock.unlock() }
-        _conn?.task.cancel()
+        // beginGracefulShutdown() before task.cancel() — see acquirePersistentClient() for rationale.
         _conn?.client.beginGracefulShutdown()
+        _conn?.task.cancel()
         _conn = nil
         Log.debug("🔌 Persistent gRPC connection invalidated", category: "GRPCChannel")
     }
