@@ -22,7 +22,7 @@ struct PinLockView: View {
     var body: some View {
         ZStack {
             Color.AppBackground.primary.ignoresSafeArea()
-            LatticeBackgroundView().ignoresSafeArea().opacity(0.85)
+            LatticeBackgroundView().ignoresSafeArea().opacity(0.35)
 
             VStack(spacing: 0) {
                 Spacer()

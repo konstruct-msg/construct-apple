@@ -59,11 +59,11 @@ extension Chat {
             case "file":
                 let files = json["files"] as? [[String: Any]] ?? []
                 if files.count == 1, let name = files.first?["filename"] as? String {
-                    return "📎 \(name)"
+                    return name
                 } else if files.count > 1 {
-                    return "📎 \(files.count) " + NSLocalizedString("files", comment: "")
+                    return "\(files.count) " + NSLocalizedString("files", comment: "")
                 }
-                return "📎 File"
+                return "File"
 
             case "media":
                 // Media message

@@ -417,7 +417,19 @@ final class IceProxyManager: ObservableObject {
     /// If start succeeds, subsequent `performRPC` calls automatically route through ICE until
     /// the proxy is stopped (app restart or user disables ICE in settings).
     func startOnDemandIfNeeded() async {
-        guard !isRunning, !isStartingOnDemand else { return }
+        if isRunning { return }
+
+        // Another concurrent RPC already kicked off an ICE start — wait for it rather
+        // than returning immediately with no proxy port.  We poll on the MainActor so
+        // Task.sleep yields to let the active start make progress.
+        if isStartingOnDemand {
+            let deadline = Date().addingTimeInterval(5)
+            while isStartingOnDemand, Date() < deadline {
+                try? await Task.sleep(nanoseconds: 100_000_000) // 100 ms
+            }
+            return
+        }
+
         isStartingOnDemand = true
         defer { isStartingOnDemand = false }
         Log.info("🧊 Auto-starting ICE proxy (DPI auto-detection)", category: "ICE")

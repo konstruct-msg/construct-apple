@@ -272,6 +272,7 @@ final class GRPCChannelManager: Sendable {
         }
 
         var lastError: Error?
+        var iceAutoStartedThisCall = false   // true once we DPI-auto-started ICE in this call
         for attempt in 0..<3 {
             let usingICE = iceProxyPort() != nil
 
@@ -386,6 +387,8 @@ final class GRPCChannelManager: Sendable {
 
                 // If the call failed while routing through ICE, record relay failure only for
                 // network-ish failures. Don't disable ICE due to auth/validation errors.
+                // Also skip cooldown when ICE was just auto-started this call — a warm-up
+                // failure doesn't mean the relay itself is broken.
                 if usingICE, isStaleLocalProxy(error) {
                     // ECONNREFUSED on 127.0.0.1 — local proxy died in background.
                     // Restart immediately; do NOT enter cooldown (this is a process crash, not relay failure).
@@ -394,7 +397,7 @@ final class GRPCChannelManager: Sendable {
                     if iceProxyPort() != nil {
                         continue
                     }
-                } else if usingICE, shouldRecordIceFailure(error) {
+                } else if usingICE, !iceAutoStartedThisCall, shouldRecordIceFailure(error) {
                     recordICEFailure()
                 }
 
@@ -417,6 +420,7 @@ final class GRPCChannelManager: Sendable {
                     Log.info("🧊 Direct connection failed — auto-starting ICE (DPI detected)", category: "GRPCChannel")
                     await IceProxyManager.shared.startOnDemandIfNeeded()
                     if iceProxyPort() != nil {
+                        iceAutoStartedThisCall = true
                         Log.info("🧊 ICE proxy started — retrying RPC through relay", category: "GRPCChannel")
                         continue
                     }

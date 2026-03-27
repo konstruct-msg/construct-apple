@@ -3,7 +3,7 @@
 //  Construct Messenger
 //
 //  The rounded input pill: text field, character counter, send button, voice button.
-//  iOS: voice (🎙) button appears when the field is empty.
+//  iOS: voice button appears when the field is empty.
 //  macOS: TextEditor + send button only (Enter sends, Shift+Enter = new line).
 //
 
