@@ -45,7 +45,7 @@ DO_CLEAN=false
 for arg in "$@"; do
   case "$arg" in
     --ios)   BUILD_MAC=false; BUILD_SIM=false; BUILD_DIST=false ;;
-    --mac)   BUILD_IOS=false; BUILD_SIM=false; BUILD_DIST=false ;;
+    --mac)   BUILD_IOS=false; BUILD_MAC=true;  BUILD_SIM=false; BUILD_DIST=false ;;
     --sim)   BUILD_IOS=false; BUILD_MAC=false; BUILD_DIST=false; BUILD_SIM=true ;;
     --dist)  BUILD_IOS=false; BUILD_MAC=true;  BUILD_SIM=false; BUILD_DIST=true ;;
     --clean) DO_CLEAN=true ;;
