@@ -43,10 +43,10 @@ struct VoiceRecordingBar: View {
             Button(action: onStop) {
                 ZStack {
                     Circle()
-                        .fill(Color.white)
+                        .fill(Color.white.opacity(0.25))
                         .frame(width: 44, height: 44)
                     RoundedRectangle(cornerRadius: 4)
-                        .fill(Color.red)
+                        .fill(Color.red.opacity(0.75))
                         .frame(width: 16, height: 16)
                 }
             }
@@ -89,12 +89,9 @@ struct VoicePreviewBar: View {
             // Send (paper-plane inside white circle)
             Button(action: onSend) {
                 ZStack {
-                    Circle()
-                        .fill(Color.white)
-                        .frame(width: 44, height: 44)
-                    Image(systemName: "paperplane.fill")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(Color.accentColor)
+                    Image(systemName: "arrow.up.circle.fill")
+                        .font(.system(size: 44, weight: .semibold))
+                        .foregroundStyle(Color.white.opacity(0.35))
                         .offset(x: 1)
                 }
             }
@@ -131,7 +128,7 @@ private extension View {
     var accentPill: some View {
         self
             .frame(height: 56)
-            .background(Color.accentColor)
+            .background(Color(.systemGray6))
             .clipShape(Capsule())
             .padding(.horizontal)
     }
@@ -158,6 +155,7 @@ struct LiveWaveformView: View {
                         .frame(width: barWidth, height: height(for: i, total: geo.size.height))
                 }
             }
+            .frame(width: geo.size.width, height: geo.size.height)
         }
     }
 
@@ -195,6 +193,7 @@ struct StaticWaveformView: View {
                         .frame(width: barWidth, height: height(for: i, total: geo.size.height))
                 }
             }
+            .frame(width: geo.size.width, height: geo.size.height)
         }
     }
 

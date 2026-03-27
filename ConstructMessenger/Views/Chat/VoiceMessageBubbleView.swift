@@ -147,6 +147,7 @@ private struct WaveformBarsView: View {
                         .frame(width: barWidth, height: barHeight(for: i, totalHeight: geo.size.height))
                 }
             }
+            .frame(width: geo.size.width, height: geo.size.height)
         }
     }
 
