@@ -235,7 +235,7 @@ private struct WaveformBarsView: View {
             HStack(alignment: .center, spacing: barSpacing) {
                 ForEach(0..<barCount, id: \.self) { i in
                     let fraction = Double(i) / Double(barCount - 1)
-                    let played = fraction <= progress
+                    let played = progress > 0 && fraction <= progress
 
                     Capsule()
                         .fill(played ? playedColor : unplayedColor)

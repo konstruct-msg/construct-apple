@@ -69,19 +69,22 @@ extension Chat {
                 // Media message
                 let caption = json["caption"] as? String ?? ""
                 if caption.isEmpty {
-                    return "📷 Photo"
+                    return "Photo"
                 } else {
-                    return "📷 \(caption)"
+                    return caption
                 }
                 
             case "profile":
                 // Profile share message
                 if let displayName = json["displayName"] as? String {
-                    return "👤 Shared profile: \(displayName)"
+                    return "Shared profile: \(displayName)"
                 } else {
-                    return "👤 Shared profile"
+                    return "Shared profile"
                 }
-                
+
+            case "voice":
+                return NSLocalizedString("voice_message", comment: "")
+
             default:
                 // Unknown JSON type - show first 50 chars
                 return String(content.prefix(50))

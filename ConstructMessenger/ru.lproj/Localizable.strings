@@ -623,3 +623,5 @@
 // MARK: - Contact card crypto section
 "session_crypto_suite" = "Шифрование";
 "session_crypto_no_session" = "Нет активной сессии";
+
+"voice_message" = "Голосовое сообщение";

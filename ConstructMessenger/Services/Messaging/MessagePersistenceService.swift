@@ -214,7 +214,7 @@ class MessagePersistenceService {
 
         context.saveAndLog()
 
-        try? updateChatMetadata(chat: chat, lastMessageText: "🎤 Voice message", lastMessageTime: now, in: context)
+        try? updateChatMetadata(chat: chat, lastMessageText: "Voice message", lastMessageTime: now, in: context)
 
         Log.debug("🎤 Saved voice upload placeholder \(id.prefix(8))…", category: "MessagePersistence")
     }
