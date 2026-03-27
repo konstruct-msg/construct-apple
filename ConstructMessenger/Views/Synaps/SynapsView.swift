@@ -422,11 +422,11 @@ private struct ContactCircle: View {
 
     // MARK: Size
     //
-    // Frequency score drives rendered diameter in the range [0.60 … 0.90] × cellWidth.
-    // The gap feels natural: most-active contact is 1.5× the size of a silent one,
-    // while hex positions stay uniform so the grid never breaks apart.
+    // Frequency score drives rendered diameter in the range [0.55 … 0.75] × cellWidth.
+    // Upper bound kept well below the hex vertical step (cellWidth × 0.866) so that
+    // even with the proximity scale boost circles never visually overlap.
     private var effectiveSize: CGFloat {
-        let f = 0.60 + 0.30 * metrics.frequencyScore  // [0.60 … 0.90]
+        let f = 0.55 + 0.20 * metrics.frequencyScore  // [0.55 … 0.75]
         return cellSize / 0.74 * f                     // remap: cellSize = cellWidth×0.74
     }
 
@@ -477,7 +477,7 @@ private struct ContactCircle: View {
     private var proximityScale: CGFloat {
         let radius = Swift.min(screenSize.width, screenSize.height) * 0.5
         let t = Swift.max(0, 1 - distanceToCenter / radius)
-        return 1.0 + 0.30 * t
+        return 1.0 + 0.10 * t  // max ×1.10 — keeps circles within their hex cells
     }
 
     /// Peripheral contacts fade to 40% opacity.
