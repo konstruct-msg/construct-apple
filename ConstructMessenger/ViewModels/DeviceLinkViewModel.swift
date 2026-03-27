@@ -110,21 +110,13 @@ final class DeviceLinkViewModel {
 
         do {
             // 1. Generate fresh keys for this new device
-            let (deviceId, bundleJson, _, _) = try CryptoManager.shared.generateRegistrationBundle()
-
-            guard let bundleData = bundleJson.data(using: .utf8),
-                  let bundleDict = try? JSONSerialization.jsonObject(with: bundleData) as? [String: Any] else {
-                throw DeviceLinkError.keyGenerationFailed
-            }
-
-            let spkSig = (bundleDict["signed_prekey_signature"] as? String)
-                ?? (bundleDict["signature"] as? String) ?? ""
+            let (deviceId, bundle, _, _) = try CryptoManager.shared.generateRegistrationBundle()
 
             var publicKeys = Shared_Proto_Services_V1_DevicePublicKeys()
-            publicKeys.verifyingKey = bundleDict["verifying_key"] as? String ?? ""
-            publicKeys.identityPublic = bundleDict["identity_public"] as? String ?? ""
-            publicKeys.signedPrekeyPublic = bundleDict["signed_prekey_public"] as? String ?? ""
-            publicKeys.signedPrekeySignature = spkSig
+            publicKeys.verifyingKey = bundle.verifyingKey
+            publicKeys.identityPublic = bundle.identityPublic
+            publicKeys.signedPrekeyPublic = bundle.signedPrekeyPublic
+            publicKeys.signedPrekeySignature = bundle.signature
             publicKeys.cryptoSuite = "Curve25519+Ed25519"
 
             Log.info("🔑 Device B: generated deviceId=\(deviceId) for link confirmation", category: "DeviceLink")
@@ -170,17 +162,12 @@ final class DeviceLinkViewModel {
         joinRequestQRContent = nil
         defer { isGenerating = false }
         do {
-            let (deviceId, bundleJson, _, _) = try CryptoManager.shared.generateRegistrationBundle()
-            guard let bundleData = bundleJson.data(using: .utf8),
-                  let bundleDict = try? JSONSerialization.jsonObject(with: bundleData) as? [String: Any],
-                  let identityPublic = bundleDict["identity_public"] as? String
-            else { throw DeviceLinkError.keyGenerationFailed }
-
+            let (deviceId, bundle, _, _) = try CryptoManager.shared.generateRegistrationBundle()
             joinDeviceId = deviceId
             let name = DeviceInfo.deviceName
             let platform = platformString()
             let encoded = name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? name
-            let url = "konstruct://link-to-me?id=\(deviceId)&pubkey=\(identityPublic)&name=\(encoded)&platform=\(platform)"
+            let url = "konstruct://link-to-me?id=\(deviceId)&pubkey=\(bundle.identityPublic)&name=\(encoded)&platform=\(platform)"
 
             joinRequestQRContent = url
             isWaitingForApproval = true

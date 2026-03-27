@@ -25,7 +25,6 @@ struct MessageBubble: View {
     let onReplyWithQuote: ((Message, String) -> Void)?
 
     @Environment(\.containerWidth) var containerWidth
-    @State var swipeOffset: CGFloat = 0
 
     init(
         message: Message,

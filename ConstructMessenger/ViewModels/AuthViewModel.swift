@@ -143,6 +143,7 @@ class AuthViewModel {
             self.currentUserId = userId
             self.isAuthenticated = true
             scheduleTokenRefresh()
+            CryptoManager.shared.setLocalUserId(userId)
             loadUserFromCoreData(userId: userId)
             return
         }
@@ -172,6 +173,7 @@ class AuthViewModel {
                 self.currentUserId = userId
                 self.isAuthenticated = true
                 scheduleTokenRefresh()
+                CryptoManager.shared.setLocalUserId(userId)
                 loadUserFromCoreData(userId: userId)
                 Log.info("✅ Session refreshed successfully", category: "Auth")
                 return
@@ -221,7 +223,8 @@ class AuthViewModel {
             SessionManager.shared.saveTokens(
                 accessToken: response.accessToken,
                 refreshToken: response.refreshToken,
-                expiresIn: expiresInSeconds
+                expiresIn: expiresInSeconds,
+                userId: response.userId
             )
             
             self.currentUserId = response.userId
@@ -498,7 +501,8 @@ class AuthViewModel {
         SessionManager.shared.saveTokens(
             accessToken: token,
             refreshToken: refreshToken,
-            expiresIn: max(expiresIn, 0)  // Don't clamp negative (already-expired) TTL to 1 hour
+            expiresIn: max(expiresIn, 0),  // Don't clamp negative (already-expired) TTL to 1 hour
+            userId: userId
         )
         
         // ✅ DEBUG: Verify token was saved correctly

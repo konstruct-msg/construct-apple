@@ -19,6 +19,7 @@ struct MessageInputView: View {
     let quoteOverride: String?
     let editingMessage: Message?
     let onSend: ([PlatformImage], [URL]) -> Void  // images + file URLs
+    var onSendVoice: ((URL, TimeInterval, [Float]) -> Void)? = nil
     let onCancelReply: () -> Void
     let onCancelEdit: () -> Void
 
@@ -33,6 +34,9 @@ struct MessageInputView: View {
     @State private var showFilePicker = false   // document file importer
     @State private var validationError: String?
     @State private var isOptimizing = false
+
+    @StateObject private var audioRecorder = AudioRecorderService.shared
+    @State private var showMicPermissionAlert = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -205,6 +209,29 @@ struct MessageInputView: View {
                 )
 #endif
 
+                // Voice recording bar (shown during recording and preview)
+                #if os(iOS) && !targetEnvironment(macCatalyst)
+                switch audioRecorder.state {
+                case .recording(let duration, let waveform):
+                    VoiceRecordingBar(duration: duration, waveform: waveform) {
+                        audioRecorder.stopRecording()
+                    } onCancel: {
+                        audioRecorder.cancel()
+                    }
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                case .recorded(let url, let duration, let waveform):
+                    VoicePreviewBar(duration: duration, waveform: waveform) {
+                        onSendVoice?(url, duration, waveform)
+                        audioRecorder.resetAfterSend()
+                    } onDiscard: {
+                        audioRecorder.cancel()
+                    }
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                case .idle:
+                    EmptyView()
+                }
+                #endif
+
                 HStack(spacing: 0) {
 #if targetEnvironment(macCatalyst)
                     CatalystGrowingTextView(
@@ -218,20 +245,33 @@ struct MessageInputView: View {
                     .padding(.trailing, canSend ? 8 : 12)
                     .padding(.vertical, 8)
 #elseif os(macOS)
-                    TextField("message_placeholder", text: $text, axis: .vertical)
-                        .lineLimit(1...8)
-                        .padding(.leading, 12)
-                        .padding(.trailing, canSend ? 8 : 12)
-                        .padding(.vertical, 8)
-                        .focused($isTextFieldFocused)
-                        .onKeyPress(keys: [.return], phases: .down) { press in
-                            if press.modifiers.contains(.shift) {
-                                text += "\n"
+                    // Use TextEditor on macOS to avoid NSSplitView infinite
+                    // constraint loop caused by TextField(axis:) with lineLimit range.
+                    ZStack(alignment: .topLeading) {
+                        if text.isEmpty {
+                            Text(LocalizedStringKey("message_placeholder"))
+                                .foregroundStyle(.secondary)
+                                .font(.system(size: 13))
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 9)
+                                .allowsHitTesting(false)
+                        }
+                        TextEditor(text: $text)
+                            .font(.system(size: 13))
+                            .scrollContentBackground(.hidden)
+                            .focused($isTextFieldFocused)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 4)
+                            .onKeyPress(keys: [.return], phases: .down) { press in
+                                if press.modifiers.contains(.shift) {
+                                    return .ignored
+                                }
+                                if canSend { sendMessage(); text = "" }
                                 return .handled
                             }
-                            if canSend { sendMessage() }
-                            return .handled
-                        }
+                    }
+                    .frame(minHeight: 36, maxHeight: 120)
+                    .padding(.trailing, canSend ? 8 : 12)
 #else
                     TextField("message_placeholder", text: $text, axis: .vertical)
                         .lineLimit(1...5)
@@ -283,6 +323,29 @@ struct MessageInputView: View {
                         .disabled(!canSend || isSending)
                         .transition(.scale.combined(with: .opacity))
                     }
+
+                    #if os(iOS) && !targetEnvironment(macCatalyst)
+                    if !canSend, case .idle = audioRecorder.state {
+                        Button {
+                            Task {
+                                do {
+                                    try await audioRecorder.startRecording()
+                                } catch AudioRecorderService.RecorderError.permissionDenied {
+                                    showMicPermissionAlert = true
+                                } catch {
+                                    Log.error("❌ Recording failed: \(error)", category: "MessageInput")
+                                }
+                            }
+                        } label: {
+                            Image(systemName: "waveform")
+                                .font(.system(size: 24))
+                                .foregroundStyle(Color.secondary)
+                                .padding(.trailing, 6)
+                        }
+                        .buttonStyle(.plain)
+                        .transition(.scale.combined(with: .opacity))
+                    }
+                    #endif
                 }
                 #if canImport(UIKit)
                 .background(Color(uiColor: .systemGray6))
@@ -303,6 +366,19 @@ struct MessageInputView: View {
         .animation(.easeInOut(duration: 0.2), value: replyingTo != nil)
         .animation(.easeInOut(duration: 0.2), value: editingMessage != nil)
         .animation(.easeInOut(duration: 0.2), value: !selectedImages.isEmpty)
+        .animation(.easeInOut(duration: 0.15), value: audioRecorder.state)
+        .alert("Microphone Access Denied", isPresented: $showMicPermissionAlert) {
+            Button("Cancel", role: .cancel) {}
+            Button("Settings") {
+                #if canImport(UIKit)
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
+                #endif
+            }
+        } message: {
+            Text("Please allow microphone access in Settings to send voice messages.")
+        }
         .onChange(of: selectedPhotos) {
             Task {
                 await loadSelectedPhotos()
@@ -523,3 +599,176 @@ struct MessageInputView: View {
         selectedFileURLs.removeAll()
     }
 }
+
+// MARK: - Voice Recording Bar
+
+#if os(iOS) && !targetEnvironment(macCatalyst)
+private struct VoiceRecordingBar: View {
+    let duration: TimeInterval
+    let waveform: [Float]
+    let onStop: () -> Void
+    let onCancel: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            // Cancel button
+            Button(action: onCancel) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 22))
+                    .foregroundStyle(Color.secondary)
+            }
+            .buttonStyle(.plain)
+
+            // Live mini waveform
+            LiveWaveformView(samples: waveform)
+                .frame(maxWidth: .infinity, maxHeight: 28)
+
+            // Timer
+            Text(durationLabel)
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.primary)
+                .frame(width: 40)
+
+            // Red recording dot + stop button
+            Button(action: onStop) {
+                ZStack {
+                    Circle()
+                        .fill(Color.red)
+                        .frame(width: 32, height: 32)
+                    Image(systemName: "stop.fill")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(.white)
+                }
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(Color(.systemGray6))
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .padding(.horizontal)
+    }
+
+    private var durationLabel: String {
+        let s = Int(duration)
+        return String(format: "%d:%02d", s / 60, s % 60)
+    }
+}
+
+// MARK: - Voice Preview Bar
+
+private struct VoicePreviewBar: View {
+    let duration: TimeInterval
+    let waveform: [Float]
+    let onSend: () -> Void
+    let onDiscard: () -> Void
+
+    @StateObject private var player = AudioPlayerService.shared
+    @State private var previewData: Data? = nil   // no remote URL — nothing to download in preview
+
+    var body: some View {
+        HStack(spacing: 12) {
+            // Discard
+            Button(action: onDiscard) {
+                Image(systemName: "trash.circle.fill")
+                    .font(.system(size: 22))
+                    .foregroundStyle(Color.red.opacity(0.7))
+            }
+            .buttonStyle(.plain)
+
+            // Static waveform (not playing back locally in preview)
+            StaticWaveformView(samples: waveform)
+                .frame(maxWidth: .infinity, maxHeight: 28)
+
+            // Duration
+            Text(durationLabel)
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.secondary)
+                .frame(width: 40)
+
+            // Send
+            Button(action: onSend) {
+                Image(systemName: "arrow.up.circle.fill")
+                    .font(.system(size: 32))
+                    .foregroundStyle(Color.accentColor)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(Color(.systemGray6))
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .padding(.horizontal)
+    }
+
+    private var durationLabel: String {
+        let s = Int(duration)
+        return String(format: "%d:%02d", s / 60, s % 60)
+    }
+}
+
+// MARK: - Live Waveform (recording)
+
+private struct LiveWaveformView: View {
+    let samples: [Float]
+    private let barCount = 30
+    private let barSpacing: CGFloat = 2
+
+    var body: some View {
+        GeometryReader { geo in
+            let totalSpacing = barSpacing * CGFloat(barCount - 1)
+            let barWidth = max(1, (geo.size.width - totalSpacing) / CGFloat(barCount))
+
+            HStack(alignment: .center, spacing: barSpacing) {
+                ForEach(0..<barCount, id: \.self) { i in
+                    Capsule()
+                        .fill(Color.red.opacity(0.8))
+                        .frame(width: barWidth, height: barHeight(for: i, total: geo.size.height))
+                }
+            }
+        }
+    }
+
+    private func barHeight(for index: Int, total: CGFloat) -> CGFloat {
+        let count = samples.count
+        guard count > 0 else { return 3 }
+        // Map bar index → latest tail of waveform so animation scrolls right
+        let sampleIndex = max(0, count - barCount + index)
+        guard sampleIndex < count else { return 3 }
+        return max(3, CGFloat(samples[sampleIndex]) * total)
+    }
+}
+
+// MARK: - Static Waveform (preview)
+
+private struct StaticWaveformView: View {
+    let samples: [Float]
+    private let barCount = 30
+    private let barSpacing: CGFloat = 2
+
+    var body: some View {
+        GeometryReader { geo in
+            let totalSpacing = barSpacing * CGFloat(barCount - 1)
+            let barWidth = max(1, (geo.size.width - totalSpacing) / CGFloat(barCount))
+
+            HStack(alignment: .center, spacing: barSpacing) {
+                ForEach(0..<barCount, id: \.self) { i in
+                    Capsule()
+                        .fill(Color.accentColor.opacity(0.7))
+                        .frame(width: barWidth, height: barHeight(for: i, total: geo.size.height))
+                }
+            }
+        }
+    }
+
+    private func barHeight(for index: Int, total: CGFloat) -> CGFloat {
+        guard !samples.isEmpty else { return 3 }
+        let step = Float(samples.count) / Float(barCount)
+        let si = Int(Float(index) * step)
+        let ei = min(Int(Float(index + 1) * step), samples.count)
+        guard si < ei else { return 3 }
+        let avg = samples[si..<ei].reduce(0, +) / Float(ei - si)
+        return max(3, CGFloat(avg) * total)
+    }
+}
+#endif

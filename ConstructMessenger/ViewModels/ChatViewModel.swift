@@ -687,6 +687,52 @@ class ChatViewModel: NSObject {
         }
     }
 
+    func sendVoiceMessage(url: URL, duration: TimeInterval, waveform: [Float]) {
+        guard let recipientId = chat.otherUser?.id,
+              let currentUserId = SessionManager.shared.currentUserId else {
+            Log.error("❌ No recipient/user ID for voice message", category: "ChatViewModel")
+            return
+        }
+
+        let placeholderId = UUID().uuidString
+        persistenceService.savePlaceholderMessage(
+            id: placeholderId,
+            fromUserId: currentUserId,
+            toUserId: recipientId,
+            caption: "🎙 Voice message",
+            thumbnail: nil,
+            replyTo: nil,
+            replyToContentOverride: nil,
+            chat: chat,
+            in: viewContext
+        )
+
+        isSending = true
+
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                let voiceContent = try await MediaManager.shared.uploadAudio(url, duration: duration, waveform: waveform)
+                let jsonData = try JSONEncoder().encode(voiceContent)
+                guard let json = String(data: jsonData, encoding: .utf8) else {
+                    throw MediaUploadError.uploadFailed("JSON encode failed")
+                }
+                await MainActor.run {
+                    try? FileManager.default.removeItem(at: url)
+                    self.persistenceService.deleteMessage(id: placeholderId, in: self.viewContext, autoSave: false)
+                    self.sendTextMessage(text: json, replyTo: nil)
+                }
+            } catch {
+                await MainActor.run {
+                    Log.error("❌ Voice upload failed: \(error.localizedDescription)", category: "ChatViewModel")
+                    self.updateMessageStatus(messageId: placeholderId, status: .failed)
+                    ErrorRouter.shared.report(AppError.mediaUploadFailed(error.localizedDescription))
+                    self.isSending = false
+                }
+            }
+        }
+    }
+
     private func sendFileMessage(fileURLs: [URL], caption: String, replyTo: Message?, replyToContentOverride: String? = nil) {
         guard let recipientId = chat.otherUser?.id,
               let currentUserId = SessionManager.shared.currentUserId else {

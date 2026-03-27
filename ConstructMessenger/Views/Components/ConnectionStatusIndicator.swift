@@ -68,7 +68,7 @@ struct ConnectionStatusIndicator: View {
             secureVisible = true
             withAnimation(.easeOut(duration: 0.4)) { textOpacity = 1 }
             hideTask = Task {
-                try? await Task.sleep(nanoseconds: 10_000_000_000) // 10 s
+                try? await Task.sleep(nanoseconds: 4_000_000_000) // 4 s
                 guard !Task.isCancelled else { return }
                 await MainActor.run {
                     withAnimation(.easeIn(duration: 0.8)) { textOpacity = 0 }

@@ -79,6 +79,12 @@ struct MessageBubbleRegularView: View {
                                     .stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2)
                             )
                     }
+                } else if let voiceContent = MessageBubbleContentParsing.parseVoiceMessage(message.decryptedContent) {
+                    VoiceMessageBubbleView(voiceContent: voiceContent, isSentByMe: message.isSentByMe)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16)
+                                .stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2)
+                        )
                 } else {
                     VStack(alignment: .leading, spacing: 0) {
                         replyIndicatorView

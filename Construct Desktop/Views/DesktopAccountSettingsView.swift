@@ -145,7 +145,7 @@ struct DesktopAccountSettingsView: View {
 
             settingsRow(label: "Display Name") {
                 @Bindable var vm = viewModel
-                TextField("Display Name", text: $vm.displayName)
+                TextField("", text: $vm.displayName)
                     .textFieldStyle(.plain)
                     .font(.system(size: 13))
                     .foregroundStyle(DesktopTheme.textPrimary)
@@ -159,7 +159,7 @@ struct DesktopAccountSettingsView: View {
             settingsRow(label: "Username") {
                 @Bindable var vm = viewModel
                 HStack(spacing: 8) {
-                    TextField("username", text: $vm.username)
+                    TextField("", text: $vm.username)
                         .textFieldStyle(.plain)
                         .font(DesktopTheme.monoFont(13))
                         .foregroundStyle(DesktopTheme.textPrimary)

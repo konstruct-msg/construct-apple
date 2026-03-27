@@ -616,7 +616,7 @@
 "synaps_prune_message" = "Это навсегда удалит %@ из ваших синапсов и удалит переписку.";
 
 // MARK: - Connection Status Indicator
-"connection_status_secure" = "Защищено";
+"connection_status_secure" = "Соединение установлено";
 "connection_status_connecting" = "Подключение...";
 "connection_status_offline" = "Не в сети";
 

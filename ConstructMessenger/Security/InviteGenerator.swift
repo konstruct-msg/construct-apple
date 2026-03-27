@@ -200,30 +200,15 @@ class InviteGenerator {
     /// - Returns: 32-byte signing secret key
     /// - Throws: InviteGenerationError if key not available
     private func getSigningSecretKey() throws -> [UInt8] {
-        // Get CryptoManager core instance
         guard let core = CryptoManager.shared.orchestratorCore else {
             throw InviteGenerationError.missingIdentityKey
         }
-        
-        // Get private keys JSON from Rust core
-        guard let keysJSON = try? core.exportPrivateKeysJson() else {
-            throw InviteGenerationError.missingIdentityKey
-        }
-        
-        // Parse JSON
-        guard let data = keysJSON.data(using: String.Encoding.utf8),
-              let keys = try? JSONDecoder().decode(PrivateKeysJSON.self, from: data) else {
+        let keyBytes = try core.getSigningKeyBytes()
+        guard !keyBytes.isEmpty else {
             throw InviteGenerationError.keyDecodingFailed
         }
-        
-        // Decode Base64 signing secret
-        guard let signingSecretData = Data(base64Encoded: keys.signingSecret) else {
-            throw InviteGenerationError.keyDecodingFailed
-        }
-        
-        Log.debug("🔐 Using signing secret key for invite signing (\(signingSecretData.count) bytes)", category: "InviteGenerator")
-        
-        return [UInt8](signingSecretData)
+        Log.debug("🔐 Using signing secret key for invite signing (\(keyBytes.count) bytes)", category: "InviteGenerator")
+        return [UInt8](keyBytes)
     }
 
     /// Derive the expected verifying key (Base64) from local signing secret.
@@ -251,22 +236,6 @@ class InviteGenerator {
     
     // MARK: - Private Keys JSON Structure
     
-    /// Matches Rust PrivateKeysJson structure
-    private struct PrivateKeysJSON: Codable {
-        let identitySecret: String      // Base64
-        let signingSecret: String       // Base64
-        let signedPrekeySecret: String  // Base64
-        let prekeySignature: String     // Base64
-        let suiteId: String
-        
-        enum CodingKeys: String, CodingKey {
-            case identitySecret = "identity_secret"
-            case signingSecret = "signing_secret"
-            case signedPrekeySecret = "signed_prekey_secret"
-            case prekeySignature = "prekey_signature"
-            case suiteId = "suite_id"
-        }
-    }
 }
 
 // MARK: - Errors

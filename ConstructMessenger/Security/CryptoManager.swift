@@ -124,63 +124,42 @@ class CryptoManager {
     
     /// Generate a complete registration bundle for device-based authentication
     /// Returns: (deviceId, registrationBundle JSON, signing key bytes, identity key bytes)
-    func generateRegistrationBundle() throws -> (deviceId: String, bundleJson: String, signingKey: Data, identityKey: Data) {
+    func generateRegistrationBundle() throws -> (deviceId: String, bundle: RegistrationBundleJson, signingKey: Data, identityKey: Data) {
         Log.info("🔑 Generating registration bundle...", category: "CryptoManager")
-        
+
         // Always generate fresh keys for registration — never reuse an existing core
         // (an old core would carry a signature computed with the previous prologue/suite_id)
         let activeCore = try createCryptoCore()
         self._bootstrapCore = activeCore
 
-        // Persist in CFE binary format immediately
-        let saved: Bool
-        if let cfeData = try? Data(activeCore.exportPrivateKeys()) {
-            saved = KeychainManager.shared.savePrivateKeys(cfeData)
-        } else {
-            // Fallback: JSON path (legacy)
-            let privateKeysJson = try activeCore.exportPrivateKeysJson()
-            self._cachedKeysJson = privateKeysJson
-            saved = KeychainManager.shared.savePrivateKeysJson(privateKeysJson)
-        }
+        // Persist in CFE binary format immediately (no JSON fallback)
+        let cfeData = try Data(activeCore.exportPrivateKeys())
+        let saved = KeychainManager.shared.savePrivateKeys(cfeData)
         if saved {
             Log.info("✅ Saved registration private keys (CFE) to Keychain", category: "CryptoManager")
         } else {
             Log.error("⚠️ Failed to save registration private keys to Keychain", category: "CryptoManager")
         }
 
-        // Typed bundle — no JSON round-trip
+        // Typed bundle — zero JSON round-trip
         let bundle = try activeCore.getRegistrationBundleFields()
         Log.debug("📦 Registration bundle: identity=\(bundle.identityPublic.prefix(20))… suiteId=\(bundle.suiteId)", category: "CryptoManager")
 
-        // Signing and identity key bytes — no JSON parsing
+        // Key bytes — no JSON parsing
         let signingKeyData = try activeCore.getSigningKeyBytes()
         let identityKeyData = try activeCore.getIdentityKeyBytes()
         guard !signingKeyData.isEmpty, !identityKeyData.isEmpty else {
             throw CryptoError.InvalidKeyData(message: "getSigningKeyBytes or getIdentityKeyBytes returned empty")
         }
 
-        // Derive device_id from identity public key bytes
+        // Derive device_id from identity public key
         guard let identityPublicBytes = Data(base64Encoded: bundle.identityPublic) else {
             throw CryptoError.InvalidKeyData(message: "Failed to decode identityPublic base64 from bundle")
         }
         let deviceId = deriveDeviceId(identityPublicKey: [UInt8](identityPublicBytes))
 
-        // Callers expect bundleJson — build a minimal JSON from typed fields so gRPC callers
-        // can extract individual fields without re-parsing the full JSON blob.
-        // This avoids touching all call sites for now; the real fix is to accept RegistrationBundleJson directly.
-        let bundleDict: [String: Any] = [
-            "identity_public": bundle.identityPublic,
-            "signed_prekey_public": bundle.signedPrekeyPublic,
-            "signature": bundle.signature,
-            "verifying_key": bundle.verifyingKey,
-            "suite_id": bundle.suiteId
-        ]
-        let bundleJson = (try? JSONSerialization.data(withJSONObject: bundleDict))
-            .flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
-
         Log.info("✅ Generated registration bundle: device_id=\(deviceId)", category: "CryptoManager")
-
-        return (deviceId, bundleJson, signingKeyData, identityKeyData)
+        return (deviceId, bundle, signingKeyData, identityKeyData)
     }
 
     // MARK: - Prekey ID Tracking
@@ -657,28 +636,6 @@ class CryptoManager {
             Log.error("❌ restoreLatestArchive failed for \(userId.prefix(8))…: \(error)", category: "CryptoManager")
             return false
         }
-    }
-
-    private static func extractSuiteId(fromSessionJson json: String) -> Int? {
-        guard let data = json.data(using: .utf8),
-              let root = try? JSONSerialization.jsonObject(with: data) else { return nil }
-
-        func search(_ value: Any) -> Int? {
-            if let dict = value as? [String: Any] {
-                if let suite = dict["suite_id"] as? Int { return suite }
-                if let suite = dict["suiteId"] as? Int { return suite }
-                for v in dict.values {
-                    if let found = search(v) { return found }
-                }
-            } else if let arr = value as? [Any] {
-                for v in arr {
-                    if let found = search(v) { return found }
-                }
-            }
-            return nil
-        }
-
-        return search(root)
     }
 
     /// Delete a session (legacy - use archiveSession instead)

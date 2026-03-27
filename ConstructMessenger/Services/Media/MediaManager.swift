@@ -224,6 +224,32 @@ class MediaManager {
         )
     }
 
+    // MARK: - Voice message upload
+
+    /// Upload an AAC/M4A voice recording.
+    /// - Parameters:
+    ///   - url: Local temp file URL (caller is responsible for deleting after this returns)
+    ///   - duration: Recording duration in seconds
+    ///   - waveform: ~100 normalized amplitude samples (0.0–1.0) for waveform display
+    /// - Returns: `VoiceMessageContent` ready to be JSON-encoded as the message payload
+    func uploadAudio(_ url: URL, duration: TimeInterval, waveform: [Float]) async throws -> VoiceMessageContent {
+        Log.info("📤 Uploading voice message (duration \(Int(duration))s)", category: "MediaManager")
+        let data = try Data(contentsOf: url)
+        let uploadResult = try await Self.uploadWithRetry(data: data, mimeType: "audio/m4a")
+        Log.info("✅ Voice uploaded: \(uploadResult.mediaId)", category: "MediaManager")
+        return VoiceMessageContent(
+            type: "voice",
+            mediaId: uploadResult.mediaId,
+            mediaUrl: uploadResult.mediaUrl,
+            mediaKey: uploadResult.encryptionKey.base64EncodedString(),
+            mediaType: "audio/m4a",
+            size: data.count,
+            duration: duration,
+            waveform: waveform,
+            hash: uploadResult.hash
+        )
+    }
+
     // MARK: - Compression Helpers
 
     /// MIME types that are already compressed — re-compressing is wasteful

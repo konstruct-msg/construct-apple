@@ -58,3 +58,29 @@ struct FileMessageContent: Codable {
         let compressed: Bool
     }
 }
+
+// MARK: - Voice message
+
+struct VoiceMessageContent: Codable {
+    let type: String           // always "voice"
+    let mediaId: String
+    let mediaUrl: String
+    let mediaKey: String       // base64 AES-256-GCM key (same encryption as image/file media)
+    let mediaType: String      // "audio/m4a"
+    let size: Int
+    let duration: TimeInterval
+    let waveform: [Float]      // ~100 normalized amplitude samples (0.0–1.0) sampled during recording
+    let hash: String
+}
+
+/// Parses a message's `decryptedContent` into `VoiceMessageContent`.
+/// Returns nil if the content is not a voice-type JSON payload.
+func parseVoiceContent(from content: String?) -> VoiceMessageContent? {
+    guard let content,
+          let data = content.data(using: .utf8),
+          let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+          let type = json["type"] as? String,
+          type == "voice"
+    else { return nil }
+    return try? JSONDecoder().decode(VoiceMessageContent.self, from: data)
+}

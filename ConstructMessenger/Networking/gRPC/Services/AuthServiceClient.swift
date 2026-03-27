@@ -44,27 +44,18 @@ final class AuthServiceClient: Sendable {
     func registerDevice(
         username: String?,
         deviceId: String,
-        registrationBundle: String,
+        registrationBundle: RegistrationBundleJson,
         challenge: String,
         powSolution: PowSolution
     ) async throws -> RegisterSuccessData {
-        // Parse registration bundle JSON
-        guard let bundleData = registrationBundle.data(using: .utf8),
-              let bundleDict = try? JSONSerialization.jsonObject(with: bundleData) as? [String: Any] else {
-            throw NetworkError.decodingFailed
-        }
-
-        let signedPrekeySignature = (bundleDict["signed_prekey_signature"] as? String)
-            ?? (bundleDict["signature"] as? String) ?? ""
-
         return try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.registerDevice, allowAuthRetry: false) { grpcClient in
             let authClient = Shared_Proto_Services_V1_AuthService.Client(wrapping: grpcClient)
 
             var publicKeys = Shared_Proto_Services_V1_DevicePublicKeys()
-            publicKeys.verifyingKey = bundleDict["verifying_key"] as? String ?? ""
-            publicKeys.identityPublic = bundleDict["identity_public"] as? String ?? ""
-            publicKeys.signedPrekeyPublic = bundleDict["signed_prekey_public"] as? String ?? ""
-            publicKeys.signedPrekeySignature = signedPrekeySignature
+            publicKeys.verifyingKey = registrationBundle.verifyingKey
+            publicKeys.identityPublic = registrationBundle.identityPublic
+            publicKeys.signedPrekeyPublic = registrationBundle.signedPrekeyPublic
+            publicKeys.signedPrekeySignature = registrationBundle.signature
             publicKeys.cryptoSuite = "Curve25519+Ed25519"
 
             var pow = Shared_Proto_Services_V1_PowSolution()

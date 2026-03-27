@@ -53,8 +53,6 @@ struct ChatView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // ❌ REMOVED: statusBanner (moved to overlay)
-
             // Flood-burst banner — shown when this chat's sender is burst-suppressed
             floodBurstBanner
             
@@ -235,6 +233,12 @@ struct ChatView: View {
             
             messageInputView
         }
+        // macOS: give the VStack deterministic size so NavigationSplitView's
+        // NSSplitView doesn't enter an infinite constraint-update loop when
+        // the TextField(axis:) resizes inside an NSHostingView.
+        #if os(macOS)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        #endif
         #if os(iOS)
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
@@ -445,6 +449,10 @@ struct ChatView: View {
                         }
                     }
                 }
+            },
+            onSendVoice: { url, duration, waveform in
+                viewModel.sendVoiceMessage(url: url, duration: duration, waveform: waveform)
+                scrollManager.shouldScrollToBottom = true
             },
             onCancelReply: {
                 replyingTo = nil

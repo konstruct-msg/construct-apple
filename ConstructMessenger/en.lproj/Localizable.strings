@@ -614,7 +614,7 @@
 "synaps_prune_message" = "This will permanently remove %@ from your Synaps and delete the conversation.";
 
 // MARK: - Connection Status Indicator
-"connection_status_secure" = "Secure";
+"connection_status_secure" = "Connected securely";
 "connection_status_connecting" = "Connecting...";
 "connection_status_offline" = "Offline";
 
