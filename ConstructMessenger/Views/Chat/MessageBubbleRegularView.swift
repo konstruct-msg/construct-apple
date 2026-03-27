@@ -80,7 +80,12 @@ struct MessageBubbleRegularView: View {
                             )
                     }
                 } else if let voiceContent = MessageBubbleContentParsing.parseVoiceMessage(message.decryptedContent) {
-                    VoiceMessageBubbleView(voiceContent: voiceContent, isSentByMe: message.isSentByMe)
+                    VoiceMessageBubbleView(
+                        voiceContent: voiceContent,
+                        isSentByMe: message.isSentByMe,
+                        deliveryStatus: message.deliveryStatus,
+                        onRetry: onRetry != nil ? { onRetry?(message) } : nil
+                    )
                         .overlay(
                             RoundedRectangle(cornerRadius: 16)
                                 .stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2)

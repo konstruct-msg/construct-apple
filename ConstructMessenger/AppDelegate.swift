@@ -19,6 +19,13 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 
         Log.info("Application did finish launching")
 
+        // Register UserDefaults defaults — only applies when key has never been set.
+        // This makes push notifications and background fetch ON for new installs.
+        UserDefaults.standard.register(defaults: [
+            "pushNotificationsEnabled": true,
+            "backgroundFetchEnabled": true,
+        ])
+
         // CRITICAL: Register background tasks BEFORE app finishes launching
         // This must be done early in the launch process
         BackgroundFetchManager.shared.registerBackgroundTasks()

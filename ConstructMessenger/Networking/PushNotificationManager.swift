@@ -93,13 +93,6 @@ class PushNotificationManager: NSObject {
     /// - Returns: Whether permission was granted
     @discardableResult
     func requestPermission() async -> Bool {
-        #if targetEnvironment(macCatalyst)
-        // Remote push notifications are not supported for Mac Catalyst builds
-        // signed without a macOS push provisioning profile. The gRPC stream
-        // provides real-time delivery on desktop — APNs wake-up is unnecessary.
-        Log.info("📱 Push notifications not available on macOS Catalyst (stream-based delivery)", category: "Push")
-        return false
-        #else
         Log.info("📱 Requesting push notification permission", category: "Push")
         
         do {
@@ -124,16 +117,11 @@ class PushNotificationManager: NSObject {
             Log.error("❌ Failed to request push notification permission: \(error)", category: "Push")
             return false
         }
-        #endif
     }
     
     /// Check current authorization status
     func checkAuthorizationStatus() async {
-        #if targetEnvironment(macCatalyst)
-        // macOS Catalyst: push not available, keep status as .notDetermined
-        isPushEnabled = false
-        return
-        #else
+        
         let settings = await notificationCenter.notificationSettings()
         authorizationStatus = settings.authorizationStatus
         
@@ -148,7 +136,6 @@ class PushNotificationManager: NSObject {
             Log.info("📱 Permission not yet requested but user is authenticated — requesting now", category: "Push")
             await requestPermission()
         }
-        #endif
     }
 
     private func registerForRemoteNotificationsIfAuthorized() async {
@@ -215,9 +202,6 @@ class PushNotificationManager: NSObject {
     /// Call this after login and on every foreground transition so the DB record is
     /// always current even if a previous attempt failed or the server DB was cleared.
     func ensureTokenRegistered() async {
-        #if targetEnvironment(macCatalyst)
-        return
-        #else
         // If we don't have a token yet, ask APNs for one.
         // APNs will call didRegisterForRemoteNotificationsWithDeviceToken which
         // calls registerDeviceToken(_:) → registerWithServer.
@@ -232,7 +216,6 @@ class PushNotificationManager: NSObject {
             Log.info("🔄 ensureTokenRegistered — token exists but not on server, retrying", category: "Push")
             await registerWithServer(token)
         }
-        #endif
     }
 
     /// Retry registering with the server if we have a token but haven't succeeded yet.

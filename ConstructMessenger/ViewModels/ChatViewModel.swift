@@ -695,14 +695,12 @@ class ChatViewModel: NSObject {
         }
 
         let placeholderId = UUID().uuidString
-        persistenceService.savePlaceholderMessage(
+        persistenceService.saveVoicePlaceholderMessage(
             id: placeholderId,
             fromUserId: currentUserId,
             toUserId: recipientId,
-            caption: "Voice message",
-            thumbnail: nil,
-            replyTo: nil,
-            replyToContentOverride: nil,
+            duration: duration,
+            waveform: waveform,
             chat: chat,
             in: viewContext
         )

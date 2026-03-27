@@ -9,7 +9,7 @@ import SwiftUI
 
 struct BackgroundFetchSettingsView: View {
     // MARK: - State
-    @AppStorage("backgroundFetchEnabled") private var isEnabled: Bool = false
+    @AppStorage("backgroundFetchEnabled") private var isEnabled: Bool = true
     @State private var intervalMinutes: Int = BackgroundFetchConfig.defaultIntervalMinutes
     @State private var isLowPowerModeEnabled: Bool = false
     @State private var showingLowPowerModeAlert = false

@@ -182,6 +182,43 @@ class MessagePersistenceService {
         Log.debug("📎 Saved upload placeholder \(id.prefix(8))…", category: "MessagePersistence")
     }
 
+    /// Save a voice-upload placeholder so the voice UI appears immediately while upload is in progress.
+    /// Uses `type: "voice"` JSON so `parseVoiceContent` routes it to `VoiceMessageBubbleView`
+    /// instead of the generic `MediaMessageView` (which shows a broken-image error on failure).
+    func saveVoicePlaceholderMessage(
+        id: String,
+        fromUserId: String,
+        toUserId: String,
+        duration: TimeInterval,
+        waveform: [Float],
+        chat: Chat,
+        in context: NSManagedObjectContext
+    ) {
+        let waveformJson = waveform.map { String(format: "%.4f", $0) }.joined(separator: ",")
+        let placeholderJson = """
+        {"type":"voice","mediaId":"","mediaUrl":"","mediaKey":"","mediaType":"audio/m4a","size":0,"duration":\(duration),"waveform":[\(waveformJson)],"hash":"","_uploading":true}
+        """
+
+        let now = Date()
+        let newMessage = Message(context: context)
+        newMessage.id = id
+        newMessage.fromUserId = fromUserId
+        newMessage.toUserId = toUserId
+        newMessage.encryptedContent = ""
+        newMessage.decryptedContent = placeholderJson
+        newMessage.timestamp = now
+        newMessage.isSentByMe = true
+        newMessage.deliveryStatus = .sending
+        newMessage.retryCount = 0
+        newMessage.chat = chat
+
+        context.saveAndLog()
+
+        try? updateChatMetadata(chat: chat, lastMessageText: "🎤 Voice message", lastMessageTime: now, in: context)
+
+        Log.debug("🎤 Saved voice upload placeholder \(id.prefix(8))…", category: "MessagePersistence")
+    }
+
     /// Delete a placeholder (or any) message by ID — used after upload succeeds so the
     /// real sent message can take its place.
     /// Delete a message by ID.

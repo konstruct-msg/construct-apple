@@ -12,6 +12,8 @@ struct VoiceMessageBubbleView: View {
 
     let voiceContent: VoiceMessageContent
     let isSentByMe: Bool
+    let deliveryStatus: DeliveryStatus
+    let onRetry: (() -> Void)?
 
     @StateObject private var player = AudioPlayerService.shared
 
@@ -20,10 +22,28 @@ struct VoiceMessageBubbleView: View {
     @State private var loadError = false
 
     private var isPlaying: Bool { player.isPlaying(voiceContent.mediaId) }
+    private var isUploading: Bool { deliveryStatus == .sending && voiceContent.mediaUrl.isEmpty }
+    private var uploadFailed: Bool { deliveryStatus == .failed && voiceContent.mediaUrl.isEmpty }
 
     var body: some View {
+        Group {
+            if isUploading {
+                uploadingBody
+            } else if uploadFailed {
+                failedBody
+            } else {
+                playerBody
+            }
+        }
+        .onDisappear {
+            if isPlaying { player.stop() }
+        }
+    }
+
+    // MARK: - Player (normal state)
+
+    private var playerBody: some View {
         HStack(spacing: 10) {
-            // Play / Pause button
             Button {
                 if let data = audioData {
                     player.togglePlay(mediaId: voiceContent.mediaId, data: data)
@@ -45,14 +65,13 @@ struct VoiceMessageBubbleView: View {
                         Image(systemName: isPlaying ? "pause.fill" : "play.fill")
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(isSentByMe ? .white : .accentColor)
-                            .offset(x: isPlaying ? 0 : 1.5)   // optical centering for ▶
+                            .offset(x: isPlaying ? 0 : 1.5)
                     }
                 }
             }
             .buttonStyle(.plain)
             .disabled(isLoading)
 
-            // Waveform + progress
             WaveformBarsView(
                 samples: voiceContent.waveform,
                 progress: isPlaying ? player.progress : 0,
@@ -61,7 +80,6 @@ struct VoiceMessageBubbleView: View {
             .frame(maxWidth: .infinity)
             .frame(height: 36)
 
-            // Duration label
             Text(durationLabel)
                 .font(.caption2.monospacedDigit())
                 .foregroundStyle(isSentByMe ? Color.white.opacity(0.85) : Color.secondary)
@@ -73,9 +91,86 @@ struct VoiceMessageBubbleView: View {
             RoundedRectangle(cornerRadius: 16)
                 .fill(isSentByMe ? Color.accentColor : Color(.systemGray5))
         )
-        .onDisappear {
-            if isPlaying { player.stop() }
+    }
+
+    // MARK: - Uploading state
+
+    private var uploadingBody: some View {
+        HStack(spacing: 10) {
+            ZStack {
+                Circle()
+                    .fill(isSentByMe ? Color.white.opacity(0.25) : Color.accentColor.opacity(0.15))
+                    .frame(width: 36, height: 36)
+                ProgressView()
+                    .progressViewStyle(.circular)
+                    .scaleEffect(0.75)
+                    .tint(isSentByMe ? .white : .accentColor)
+            }
+
+            WaveformBarsView(
+                samples: voiceContent.waveform,
+                progress: 0,
+                isSentByMe: isSentByMe
+            )
+            .frame(maxWidth: .infinity)
+            .frame(height: 36)
+            .opacity(0.5)
+
+            Text(durationLabel)
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(isSentByMe ? Color.white.opacity(0.85) : Color.secondary)
+                .frame(width: 36, alignment: .trailing)
         }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(isSentByMe ? Color.accentColor : Color(.systemGray5))
+        )
+    }
+
+    // MARK: - Failed state
+
+    private var failedBody: some View {
+        HStack(spacing: 10) {
+            Button {
+                onRetry?()
+            } label: {
+                ZStack {
+                    Circle()
+                        .fill(Color.red.opacity(0.15))
+                        .frame(width: 36, height: 36)
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.red)
+                }
+            }
+            .buttonStyle(.plain)
+
+            WaveformBarsView(
+                samples: voiceContent.waveform,
+                progress: 0,
+                isSentByMe: isSentByMe
+            )
+            .frame(maxWidth: .infinity)
+            .frame(height: 36)
+            .opacity(0.4)
+
+            Text(durationLabel)
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(isSentByMe ? Color.white.opacity(0.85) : Color.secondary)
+                .frame(width: 36, alignment: .trailing)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(isSentByMe ? Color.accentColor.opacity(0.7) : Color(.systemGray5))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(Color.red.opacity(0.5), lineWidth: 1)
+                )
+        )
     }
 
     // MARK: - Duration display
@@ -168,7 +263,6 @@ private struct WaveformBarsView: View {
 
     private func downsample(_ array: [Float], to count: Int) -> [Float] {
         guard array.count >= count else {
-            // Pad with zeros if fewer samples than bars
             return array + Array(repeating: 0, count: count - array.count)
         }
         let step = Float(array.count) / Float(count)
@@ -185,34 +279,76 @@ private struct WaveformBarsView: View {
 
 #Preview {
     VStack(spacing: 12) {
+        // Normal sent message
         VoiceMessageBubbleView(
             voiceContent: VoiceMessageContent(
                 type: "voice",
                 mediaId: "test",
-                mediaUrl: "",
-                mediaKey: "",
+                mediaUrl: "https://example.com/voice.m4a",
+                mediaKey: "key",
                 mediaType: "audio/m4a",
                 size: 120_000,
                 duration: 47,
                 waveform: (0..<100).map { _ in Float.random(in: 0.1...1.0) },
                 hash: ""
             ),
-            isSentByMe: true
+            isSentByMe: true,
+            deliveryStatus: .delivered,
+            onRetry: nil
         )
 
+        // Uploading state
+        VoiceMessageBubbleView(
+            voiceContent: VoiceMessageContent(
+                type: "voice",
+                mediaId: "",
+                mediaUrl: "",
+                mediaKey: "",
+                mediaType: "audio/m4a",
+                size: 0,
+                duration: 12,
+                waveform: (0..<100).map { _ in Float.random(in: 0.05...0.8) },
+                hash: ""
+            ),
+            isSentByMe: true,
+            deliveryStatus: .sending,
+            onRetry: nil
+        )
+
+        // Failed state
+        VoiceMessageBubbleView(
+            voiceContent: VoiceMessageContent(
+                type: "voice",
+                mediaId: "",
+                mediaUrl: "",
+                mediaKey: "",
+                mediaType: "audio/m4a",
+                size: 0,
+                duration: 8,
+                waveform: (0..<100).map { _ in Float.random(in: 0.1...0.9) },
+                hash: ""
+            ),
+            isSentByMe: true,
+            deliveryStatus: .failed,
+            onRetry: { print("retry tapped") }
+        )
+
+        // Received message
         VoiceMessageBubbleView(
             voiceContent: VoiceMessageContent(
                 type: "voice",
                 mediaId: "test2",
-                mediaUrl: "",
-                mediaKey: "",
+                mediaUrl: "https://example.com/voice2.m4a",
+                mediaKey: "key2",
                 mediaType: "audio/m4a",
                 size: 80_000,
                 duration: 12,
                 waveform: (0..<100).map { _ in Float.random(in: 0.05...0.8) },
                 hash: ""
             ),
-            isSentByMe: false
+            isSentByMe: false,
+            deliveryStatus: .delivered,
+            onRetry: nil
         )
     }
     .padding()
