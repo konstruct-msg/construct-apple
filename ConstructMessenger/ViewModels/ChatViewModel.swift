@@ -234,6 +234,9 @@ class ChatViewModel: NSObject {
         // Username might be empty for contacts restored from cache — always fetch in that case.
         let hasUsername = !(chat.otherUser?.username ?? "").isEmpty
         if isSessionReady && hasUsername {
+            // Session and username are present — still refresh username silently in background
+            // in case the contact changed their username since last open.
+            refreshUsernameInBackground(userId: userId)
             return
         }
 
@@ -275,6 +278,30 @@ class ChatViewModel: NSObject {
         }
     }
     
+    /// Silently refresh the contact's username from the server in the background.
+    /// Called when a session already exists so the full bundle fetch is skipped,
+    /// but the contact may have changed their username since the last open.
+    private func refreshUsernameInBackground(userId: String) {
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                let profile = try await UserServiceClient.shared.getUserProfile(userId: userId)
+                let serverUsername = profile.username.isEmpty ? nil : profile.username
+                await MainActor.run { [weak self] in
+                    guard let self, let user = self.chat.otherUser else { return }
+                    let before = user.username
+                    user.applyServerUsername(serverUsername, userId: userId)
+                    if user.username != before {
+                        self.viewContext.saveAndLog()
+                        Log.info("🔄 Username refreshed: \(before) → \(user.username)", category: "ChatViewModel")
+                    }
+                }
+            } catch {
+                Log.debug("⚠️ Background username refresh failed (non-fatal): \(error.localizedDescription)", category: "ChatViewModel")
+            }
+        }
+    }
+
     private func handlePublicKeyBundle(_ data: PublicKeyBundleData) {
         Log.debug("📦 Received publicKeyBundle for userId: \(data.userId), chat.otherUser?.id: \(chat.otherUser?.id ?? "nil"), match: \(data.userId == chat.otherUser?.id)", category: "ChatViewModel")
         guard data.userId == chat.otherUser?.id else { return }

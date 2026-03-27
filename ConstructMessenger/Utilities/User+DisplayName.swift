@@ -51,7 +51,11 @@ extension User {
 
         if isReal {
             username = trimmed
-            displayName = trimmed
+            if !isSharingWithMe {
+                // Only overwrite displayName when we don't have a profile-shared name.
+                // isSharingWithMe == true → contact sent us their real name; keep it.
+                displayName = trimmed
+            }
         } else {
             username = ""
             if !isSharingWithMe {

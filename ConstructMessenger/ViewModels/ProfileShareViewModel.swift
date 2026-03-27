@@ -96,7 +96,7 @@ class ProfileShareViewModel {
             
             // Create profile data with media info
             let profileData = ProfileShareData(
-                displayName: currentUser.displayName,
+                displayName: currentUser.resolvedDisplayName,
                 avatarMediaId: avatarMediaId,
                 avatarMediaUrl: avatarMediaUrl,
                 avatarMediaKey: avatarMediaKey,
