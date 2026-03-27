@@ -699,6 +699,10 @@ class CryptoManager {
     /// Encrypts a plaintext message using the session for a specific user
     /// Returns separate components per server ChatMessage format
     func encryptMessage(_ message: String, for userId: String) throws -> EncryptedMessageComponents {
+        // coreLock serializes Rust FFI calls so that a background task and the main
+        // actor cannot advance the DR ratchet concurrently (would corrupt chain state).
+        coreLock.lock()
+        defer { coreLock.unlock() }
         let components = try messageCrypto.encryptMessage(
             message,
             for: userId,
@@ -735,6 +739,10 @@ class CryptoManager {
         Log.debug("   ephemeralPublicKey: \(message.ephemeralPublicKey.count) bytes", category: "CryptoManager")
         Log.debug("   content length: \(message.content.count) chars", category: "CryptoManager")
 
+        // coreLock serializes decrypt alongside encrypt — concurrent decrypts on the same
+        // session advance the DR receive chain non-deterministically.
+        coreLock.lock()
+        defer { coreLock.unlock() }
         let plaintext: String
         do {
             plaintext = try messageCrypto.decryptMessage(

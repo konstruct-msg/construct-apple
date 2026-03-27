@@ -43,7 +43,21 @@ final class MessageCryptoService {
             throw CryptoManagerError.sessionNotFound
         }
 
-        let suiteId = Self.suiteId(for: userId)
+        // Read suiteId from the Rust core (authoritative) — NOT UserDefaults.
+        // UserDefaults can be cleared by app data reset / iCloud restore while the
+        // Keychain session survives, producing suiteId=0 and a protocol mismatch.
+        var suiteId = core.getSessionSuiteId(contactId: userId)
+        if suiteId == 0 {
+            // Rust core doesn't know the suiteId yet (session not fully loaded?) —
+            // fall back to UserDefaults and log so we can investigate.
+            suiteId = Self.suiteId(for: userId)
+            if suiteId > 0 {
+                Log.info("⚠️ ENCRYPT: suiteId from Rust=0, falling back to UserDefaults=\(suiteId) for \(userId.prefix(8))…", category: "CryptoManager")
+            }
+        } else {
+            // Keep UserDefaults in sync so other code that reads it stays correct.
+            UserDefaults.standard.set(Int(suiteId), forKey: "construct.session.suite.\(userId)")
+        }
 
         #if DEBUG
         Log.debug("🔐 ENCRYPT: Preparing to encrypt message", category: "CryptoManager")
