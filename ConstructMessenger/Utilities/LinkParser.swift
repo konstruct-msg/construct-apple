@@ -107,6 +107,9 @@ struct LinkParser {
         if !invite.deviceId.isEmpty {
             inviteToken.deviceID = invite.deviceId
         }
+        if let un = invite.un, !un.isEmpty {
+            inviteToken.un = un
+        }
         
         var acceptRequest = Shared_Proto_Services_V1_AcceptInviteRequest()
         acceptRequest.invite = inviteToken

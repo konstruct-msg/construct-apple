@@ -63,8 +63,8 @@ struct ServerConfig {
 
 // MARK: - Invite Configuration
 struct InviteConfig {
-    static let supportedVersions: Set<Int> = [1, 2]
-    static let currentVersion: Int = 2
+    static let supportedVersions: Set<Int> = [1, 2, 3]
+    static let currentVersion: Int = 3
     static let ttlSeconds: TimeInterval = 300 // 5 minutes
     static let maxFutureSkewSeconds: TimeInterval = 300 // 5 minutes
     static let deviceIdLength = 32
