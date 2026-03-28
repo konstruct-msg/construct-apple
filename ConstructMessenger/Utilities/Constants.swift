@@ -63,8 +63,15 @@ struct ServerConfig {
 
 // MARK: - Invite Configuration
 struct InviteConfig {
+    /// Versions the client can DECODE and accept (forward-compatible with V3).
     static let supportedVersions: Set<Int> = [1, 2, 3]
-    static let currentVersion: Int = 3
+
+    /// Version used when GENERATING new invites.
+    ///
+    /// Currently set to 2 for server compatibility during the V3 rollout.
+    /// The server must support V3 canonical string (`…|ts|un`) before this is bumped.
+    /// Upgrade path: change this single constant to 3 once server is deployed.
+    static let currentVersion: Int = 2
     static let ttlSeconds: TimeInterval = 300 // 5 minutes
     static let maxFutureSkewSeconds: TimeInterval = 300 // 5 minutes
     static let deviceIdLength = 32
