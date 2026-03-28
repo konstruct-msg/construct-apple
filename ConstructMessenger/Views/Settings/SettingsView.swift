@@ -294,6 +294,7 @@ struct SettingsView: View {
             let link = try inviteGenerator.generateDeepLink(
                 userId: userId,
                 deviceId: deviceId,
+                username: viewModel.resolvedDisplayName,
                 server: serverHostname,
                 useHTTPS: true
             )

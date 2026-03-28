@@ -23,6 +23,14 @@ class SettingsViewModel {
     var showResetAllSessionsConfirm = false
     var showDeleteKeysConfirm = false
 
+    /// Best available name for display and invite embedding:
+    /// prefers displayName, falls back to username, falls back to nil.
+    var resolvedDisplayName: String? {
+        if !displayName.isEmpty { return displayName }
+        if !username.isEmpty { return username }
+        return nil
+    }
+
     // Username save state
     var isSavingUsername = false
     var usernameSaveError: String?

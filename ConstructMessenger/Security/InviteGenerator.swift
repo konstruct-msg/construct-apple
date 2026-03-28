@@ -42,12 +42,14 @@ class InviteGenerator {
     /// - Parameters:
     ///   - userId: Sender's user UUID (for chat creation)
     ///   - deviceId: Sender's device ID (for fetching keys)
+    ///   - username: Sender's username or display name (optional, embedded in V3 signature)
     ///   - serverFQDN: Server FQDN (optional, uses default if nil)
     /// - Returns: Signed InviteObject
     /// - Throws: InviteGenerationError
     func generate(
         userId: String,
         deviceId: String,
+        username: String? = nil,
         serverFQDN: String? = nil
     ) throws -> InviteObject {
         // Validate inputs
@@ -80,6 +82,7 @@ class InviteGenerator {
         }
         
         // Step 6: Create unsigned invite
+        let normalizedUsername = username.flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.flatMap { $0.isEmpty ? nil : $0 }
         let unsignedInvite = InviteObject(
             v: InviteConfig.currentVersion,
             jti: jti,
@@ -88,7 +91,8 @@ class InviteGenerator {
             server: server,
             ephKey: ephKeyBase64,
             ts: timestamp,
-            sig: "" // Will be filled after signing
+            sig: "", // Will be filled after signing
+            un: normalizedUsername
         )
         
         // Step 7: Get canonical string for signing
@@ -139,7 +143,8 @@ class InviteGenerator {
             server: server,
             ephKey: ephKeyBase64,
             ts: timestamp,
-            sig: signatureBase64
+            sig: signatureBase64,
+            un: normalizedUsername
         )
         
         // Validate before returning
@@ -163,11 +168,12 @@ class InviteGenerator {
     /// - Parameters:
     ///   - userId: Current user's UUID
     ///   - deviceId: Current device ID
+    ///   - username: Sender's username or display name (optional)
     ///   - server: Server FQDN (optional, uses default)
     /// - Returns: Base64 string ready for QR code
     /// - Throws: InviteGenerationError or EncodingError
-    func generateQRPayload(userId: String, deviceId: String, server: String? = nil) throws -> String {
-        let invite = try generate(userId: userId, deviceId: deviceId, serverFQDN: normalizeServer(server ?? defaultServer))
+    func generateQRPayload(userId: String, deviceId: String, username: String? = nil, server: String? = nil) throws -> String {
+        let invite = try generate(userId: userId, deviceId: deviceId, username: username, serverFQDN: normalizeServer(server ?? defaultServer))
         return try invite.toBase64()
     }
     
@@ -179,13 +185,14 @@ class InviteGenerator {
     /// - Parameters:
     ///   - userId: Current user's UUID
     ///   - deviceId: Current device ID
+    ///   - username: Sender's username or display name (optional)
     ///   - server: Server FQDN (optional, uses default)
     ///   - useHTTPS: Use HTTPS URL instead of custom scheme (default: false)
     /// - Returns: Deep link URL string
     /// - Throws: InviteGenerationError or EncodingError
-    func generateDeepLink(userId: String, deviceId: String, server: String? = nil, useHTTPS: Bool = false) throws -> String {
+    func generateDeepLink(userId: String, deviceId: String, username: String? = nil, server: String? = nil, useHTTPS: Bool = false) throws -> String {
         let normalizedServer = normalizeServer(server ?? defaultServer)
-        let payload = try generateQRPayload(userId: userId, deviceId: deviceId, server: normalizedServer)
+        let payload = try generateQRPayload(userId: userId, deviceId: deviceId, username: username, server: normalizedServer)
         
         if useHTTPS {
             return "https://\(normalizedServer)/add?invite=\(payload)"

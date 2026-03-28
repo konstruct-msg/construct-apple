@@ -175,6 +175,7 @@ struct ContactQRCodeView: View {
             let deepLink = try generator.generateDeepLink(
                 userId: userId,
                 deviceId: deviceId,
+                username: username.isEmpty ? nil : username,
                 server: serverHostname,
                 useHTTPS: false
             )

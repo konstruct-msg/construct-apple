@@ -175,7 +175,8 @@ class InviteVerifier {
                     server: normalizedServer,
                     ephKey: invite.ephKey,
                     ts: invite.ts,
-                    sig: invite.sig
+                    sig: invite.sig,
+                    un: invite.un
                 )
                 
                 let normalizedData = normalizedInvite.canonicalString()

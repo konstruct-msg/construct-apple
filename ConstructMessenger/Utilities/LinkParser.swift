@@ -124,10 +124,15 @@ struct LinkParser {
         
         Log.info("✅ Invite accepted: userId=\(userId.prefix(8))..., deviceId=\(deviceId)", category: "LinkParser")
         
+        // Use the sender's username from the invite payload if present (V3+, cryptographically signed).
+        // Falls back to userId as a placeholder that will be overwritten once the session is live.
+        let trimmedUsername = invite.un?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let resolvedUsername = trimmedUsername.isEmpty ? userId : trimmedUsername
+        
         return ContactInfo(
             userId: userId,
             deviceId: deviceId,
-            username: userId, // Placeholder, will be resolved by ChatsViewModel
+            username: resolvedUsername,
             ephemeralKey: invite.ephKey,
             isDynamic: true
         )
