@@ -255,7 +255,7 @@ final class KeyServiceClient: Sendable {
                 kSigned.keyID = kyberSpk.keyId
                 kSigned.publicKey = kyberSpk.publicKey
                 kSigned.signature = kyberSpk.signature
-                request.kyberSignedPreKey = kSigned
+                request.newKyberSignedPreKey = kSigned
             }
 
             return try await keyClient.rotateSignedPreKey(
