@@ -104,6 +104,42 @@ public enum Shared_Proto_Sentinel_V1_SentinelService: Sendable {
                 method: "AppealRestriction"
             )
         }
+        /// Namespace for "GetAppeals" metadata.
+        public enum GetAppeals: Sendable {
+            /// Request type for "GetAppeals".
+            public typealias Input = Shared_Proto_Sentinel_V1_GetAppealsRequest
+            /// Response type for "GetAppeals".
+            public typealias Output = Shared_Proto_Sentinel_V1_GetAppealsResponse
+            /// Descriptor for "GetAppeals".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.sentinel.v1.SentinelService"),
+                method: "GetAppeals"
+            )
+        }
+        /// Namespace for "SubmitDispute" metadata.
+        public enum SubmitDispute: Sendable {
+            /// Request type for "SubmitDispute".
+            public typealias Input = Shared_Proto_Sentinel_V1_SubmitDisputeRequest
+            /// Response type for "SubmitDispute".
+            public typealias Output = Shared_Proto_Sentinel_V1_SubmitDisputeResponse
+            /// Descriptor for "SubmitDispute".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.sentinel.v1.SentinelService"),
+                method: "SubmitDispute"
+            )
+        }
+        /// Namespace for "GetDisputes" metadata.
+        public enum GetDisputes: Sendable {
+            /// Request type for "GetDisputes".
+            public typealias Input = Shared_Proto_Sentinel_V1_GetDisputesRequest
+            /// Response type for "GetDisputes".
+            public typealias Output = Shared_Proto_Sentinel_V1_GetDisputesResponse
+            /// Descriptor for "GetDisputes".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.sentinel.v1.SentinelService"),
+                method: "GetDisputes"
+            )
+        }
         /// Namespace for "GetProtectionStats" metadata.
         public enum GetProtectionStats: Sendable {
             /// Request type for "GetProtectionStats".
@@ -116,6 +152,42 @@ public enum Shared_Proto_Sentinel_V1_SentinelService: Sendable {
                 method: "GetProtectionStats"
             )
         }
+        /// Namespace for "AdminBanDevice" metadata.
+        public enum AdminBanDevice: Sendable {
+            /// Request type for "AdminBanDevice".
+            public typealias Input = Shared_Proto_Sentinel_V1_AdminBanDeviceRequest
+            /// Response type for "AdminBanDevice".
+            public typealias Output = Shared_Proto_Sentinel_V1_AdminBanDeviceResponse
+            /// Descriptor for "AdminBanDevice".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.sentinel.v1.SentinelService"),
+                method: "AdminBanDevice"
+            )
+        }
+        /// Namespace for "AdminUnbanDevice" metadata.
+        public enum AdminUnbanDevice: Sendable {
+            /// Request type for "AdminUnbanDevice".
+            public typealias Input = Shared_Proto_Sentinel_V1_AdminUnbanDeviceRequest
+            /// Response type for "AdminUnbanDevice".
+            public typealias Output = Shared_Proto_Sentinel_V1_AdminUnbanDeviceResponse
+            /// Descriptor for "AdminUnbanDevice".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.sentinel.v1.SentinelService"),
+                method: "AdminUnbanDevice"
+            )
+        }
+        /// Namespace for "AdminClearFlag" metadata.
+        public enum AdminClearFlag: Sendable {
+            /// Request type for "AdminClearFlag".
+            public typealias Input = Shared_Proto_Sentinel_V1_AdminClearFlagRequest
+            /// Response type for "AdminClearFlag".
+            public typealias Output = Shared_Proto_Sentinel_V1_AdminClearFlagResponse
+            /// Descriptor for "AdminClearFlag".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.sentinel.v1.SentinelService"),
+                method: "AdminClearFlag"
+            )
+        }
         /// Descriptors for all methods in the "shared.proto.sentinel.v1.SentinelService" service.
         public static let descriptors: [GRPCCore.MethodDescriptor] = [
             ReportSpam.descriptor,
@@ -125,7 +197,13 @@ public enum Shared_Proto_Sentinel_V1_SentinelService: Sendable {
             GetTrustStatus.descriptor,
             CheckSendPermission.descriptor,
             AppealRestriction.descriptor,
-            GetProtectionStats.descriptor
+            GetAppeals.descriptor,
+            SubmitDispute.descriptor,
+            GetDisputes.descriptor,
+            GetProtectionStats.descriptor,
+            AdminBanDevice.descriptor,
+            AdminUnbanDevice.descriptor,
+            AdminClearFlag.descriptor
         ]
     }
 }
@@ -144,6 +222,10 @@ extension Shared_Proto_Sentinel_V1_SentinelService {
     ///
     /// You don't need to implement this protocol directly, use the generated
     /// implementation, ``Client``.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > ── Spam reports & blocks ───────────────────────────────────────────────
     public protocol ClientProtocol: Sendable {
         /// Call the "ReportSpam" method.
         ///
@@ -290,7 +372,7 @@ extension Shared_Proto_Sentinel_V1_SentinelService {
         /// > Source IDL Documentation:
         /// >
         /// > Appeal an automatic restriction (rate limit, flag, or ban).
-        /// > Stub — full review workflow to be implemented later.
+        /// > Users can explain why restriction was unjust.
         ///
         /// - Parameters:
         ///   - request: A request containing a single `Shared_Proto_Sentinel_V1_AppealRestrictionRequest` message.
@@ -307,6 +389,76 @@ extension Shared_Proto_Sentinel_V1_SentinelService {
             deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Sentinel_V1_AppealRestrictionResponse>,
             options: GRPCCore.CallOptions,
             onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Sentinel_V1_AppealRestrictionResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "GetAppeals" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > List all appeals filed by the caller.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Sentinel_V1_GetAppealsRequest` message.
+        ///   - serializer: A serializer for `Shared_Proto_Sentinel_V1_GetAppealsRequest` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Sentinel_V1_GetAppealsResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response, the result of which is
+        ///       returned to the caller. Returning from the closure will cancel the RPC if it
+        ///       hasn't already finished.
+        /// - Returns: The result of `handleResponse`.
+        func getAppeals<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Sentinel_V1_GetAppealsRequest>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Sentinel_V1_GetAppealsRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Sentinel_V1_GetAppealsResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Sentinel_V1_GetAppealsResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "SubmitDispute" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > Submit a dispute with evidence that spam reports were from a botnet.
+        /// > System automatically analyzes report patterns and may auto-unban.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Sentinel_V1_SubmitDisputeRequest` message.
+        ///   - serializer: A serializer for `Shared_Proto_Sentinel_V1_SubmitDisputeRequest` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Sentinel_V1_SubmitDisputeResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response, the result of which is
+        ///       returned to the caller. Returning from the closure will cancel the RPC if it
+        ///       hasn't already finished.
+        /// - Returns: The result of `handleResponse`.
+        func submitDispute<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Sentinel_V1_SubmitDisputeRequest>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Sentinel_V1_SubmitDisputeRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Sentinel_V1_SubmitDisputeResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Sentinel_V1_SubmitDisputeResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "GetDisputes" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > List all disputes filed by the caller with auto-collected evidence.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Sentinel_V1_GetDisputesRequest` message.
+        ///   - serializer: A serializer for `Shared_Proto_Sentinel_V1_GetDisputesRequest` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Sentinel_V1_GetDisputesResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response, the result of which is
+        ///       returned to the caller. Returning from the closure will cancel the RPC if it
+        ///       hasn't already finished.
+        /// - Returns: The result of `handleResponse`.
+        func getDisputes<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Sentinel_V1_GetDisputesRequest>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Sentinel_V1_GetDisputesRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Sentinel_V1_GetDisputesResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Sentinel_V1_GetDisputesResponse>) async throws -> Result
         ) async throws -> Result where Result: Sendable
 
         /// Call the "GetProtectionStats" method.
@@ -332,6 +484,75 @@ extension Shared_Proto_Sentinel_V1_SentinelService {
             options: GRPCCore.CallOptions,
             onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Sentinel_V1_GetProtectionStatsResponse>) async throws -> Result
         ) async throws -> Result where Result: Sendable
+
+        /// Call the "AdminBanDevice" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > Manually ban a device (admin only).
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Sentinel_V1_AdminBanDeviceRequest` message.
+        ///   - serializer: A serializer for `Shared_Proto_Sentinel_V1_AdminBanDeviceRequest` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Sentinel_V1_AdminBanDeviceResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response, the result of which is
+        ///       returned to the caller. Returning from the closure will cancel the RPC if it
+        ///       hasn't already finished.
+        /// - Returns: The result of `handleResponse`.
+        func adminBanDevice<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Sentinel_V1_AdminBanDeviceRequest>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Sentinel_V1_AdminBanDeviceRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Sentinel_V1_AdminBanDeviceResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Sentinel_V1_AdminBanDeviceResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "AdminUnbanDevice" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > Manually unban a device (admin only).
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Sentinel_V1_AdminUnbanDeviceRequest` message.
+        ///   - serializer: A serializer for `Shared_Proto_Sentinel_V1_AdminUnbanDeviceRequest` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Sentinel_V1_AdminUnbanDeviceResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response, the result of which is
+        ///       returned to the caller. Returning from the closure will cancel the RPC if it
+        ///       hasn't already finished.
+        /// - Returns: The result of `handleResponse`.
+        func adminUnbanDevice<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Sentinel_V1_AdminUnbanDeviceRequest>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Sentinel_V1_AdminUnbanDeviceRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Sentinel_V1_AdminUnbanDeviceResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Sentinel_V1_AdminUnbanDeviceResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "AdminClearFlag" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > Clear flag from a device (admin only).
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Sentinel_V1_AdminClearFlagRequest` message.
+        ///   - serializer: A serializer for `Shared_Proto_Sentinel_V1_AdminClearFlagRequest` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Sentinel_V1_AdminClearFlagResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response, the result of which is
+        ///       returned to the caller. Returning from the closure will cancel the RPC if it
+        ///       hasn't already finished.
+        /// - Returns: The result of `handleResponse`.
+        func adminClearFlag<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Sentinel_V1_AdminClearFlagRequest>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Sentinel_V1_AdminClearFlagRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Sentinel_V1_AdminClearFlagResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Sentinel_V1_AdminClearFlagResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
     }
 
     /// Generated client for the "shared.proto.sentinel.v1.SentinelService" service.
@@ -339,6 +560,10 @@ extension Shared_Proto_Sentinel_V1_SentinelService {
     /// The ``Client`` provides an implementation of ``ClientProtocol`` which wraps
     /// a `GRPCCore.GRPCCClient`. The underlying `GRPCClient` provides the long-lived
     /// means of communication with the remote peer.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > ── Spam reports & blocks ───────────────────────────────────────────────
     public struct Client<Transport>: ClientProtocol where Transport: GRPCCore.ClientTransport {
         private let client: GRPCCore.GRPCClient<Transport>
 
@@ -561,7 +786,7 @@ extension Shared_Proto_Sentinel_V1_SentinelService {
         /// > Source IDL Documentation:
         /// >
         /// > Appeal an automatic restriction (rate limit, flag, or ban).
-        /// > Stub — full review workflow to be implemented later.
+        /// > Users can explain why restriction was unjust.
         ///
         /// - Parameters:
         ///   - request: A request containing a single `Shared_Proto_Sentinel_V1_AppealRestrictionRequest` message.
@@ -584,6 +809,109 @@ extension Shared_Proto_Sentinel_V1_SentinelService {
             try await self.client.unary(
                 request: request,
                 descriptor: Shared_Proto_Sentinel_V1_SentinelService.Method.AppealRestriction.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "GetAppeals" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > List all appeals filed by the caller.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Sentinel_V1_GetAppealsRequest` message.
+        ///   - serializer: A serializer for `Shared_Proto_Sentinel_V1_GetAppealsRequest` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Sentinel_V1_GetAppealsResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response, the result of which is
+        ///       returned to the caller. Returning from the closure will cancel the RPC if it
+        ///       hasn't already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func getAppeals<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Sentinel_V1_GetAppealsRequest>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Sentinel_V1_GetAppealsRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Sentinel_V1_GetAppealsResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Sentinel_V1_GetAppealsResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Shared_Proto_Sentinel_V1_SentinelService.Method.GetAppeals.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "SubmitDispute" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > Submit a dispute with evidence that spam reports were from a botnet.
+        /// > System automatically analyzes report patterns and may auto-unban.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Sentinel_V1_SubmitDisputeRequest` message.
+        ///   - serializer: A serializer for `Shared_Proto_Sentinel_V1_SubmitDisputeRequest` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Sentinel_V1_SubmitDisputeResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response, the result of which is
+        ///       returned to the caller. Returning from the closure will cancel the RPC if it
+        ///       hasn't already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func submitDispute<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Sentinel_V1_SubmitDisputeRequest>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Sentinel_V1_SubmitDisputeRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Sentinel_V1_SubmitDisputeResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Sentinel_V1_SubmitDisputeResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Shared_Proto_Sentinel_V1_SentinelService.Method.SubmitDispute.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "GetDisputes" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > List all disputes filed by the caller with auto-collected evidence.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Sentinel_V1_GetDisputesRequest` message.
+        ///   - serializer: A serializer for `Shared_Proto_Sentinel_V1_GetDisputesRequest` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Sentinel_V1_GetDisputesResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response, the result of which is
+        ///       returned to the caller. Returning from the closure will cancel the RPC if it
+        ///       hasn't already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func getDisputes<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Sentinel_V1_GetDisputesRequest>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Sentinel_V1_GetDisputesRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Sentinel_V1_GetDisputesResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Sentinel_V1_GetDisputesResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Shared_Proto_Sentinel_V1_SentinelService.Method.GetDisputes.descriptor,
                 serializer: serializer,
                 deserializer: deserializer,
                 options: options,
@@ -619,6 +947,108 @@ extension Shared_Proto_Sentinel_V1_SentinelService {
             try await self.client.unary(
                 request: request,
                 descriptor: Shared_Proto_Sentinel_V1_SentinelService.Method.GetProtectionStats.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "AdminBanDevice" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > Manually ban a device (admin only).
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Sentinel_V1_AdminBanDeviceRequest` message.
+        ///   - serializer: A serializer for `Shared_Proto_Sentinel_V1_AdminBanDeviceRequest` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Sentinel_V1_AdminBanDeviceResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response, the result of which is
+        ///       returned to the caller. Returning from the closure will cancel the RPC if it
+        ///       hasn't already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func adminBanDevice<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Sentinel_V1_AdminBanDeviceRequest>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Sentinel_V1_AdminBanDeviceRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Sentinel_V1_AdminBanDeviceResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Sentinel_V1_AdminBanDeviceResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Shared_Proto_Sentinel_V1_SentinelService.Method.AdminBanDevice.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "AdminUnbanDevice" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > Manually unban a device (admin only).
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Sentinel_V1_AdminUnbanDeviceRequest` message.
+        ///   - serializer: A serializer for `Shared_Proto_Sentinel_V1_AdminUnbanDeviceRequest` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Sentinel_V1_AdminUnbanDeviceResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response, the result of which is
+        ///       returned to the caller. Returning from the closure will cancel the RPC if it
+        ///       hasn't already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func adminUnbanDevice<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Sentinel_V1_AdminUnbanDeviceRequest>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Sentinel_V1_AdminUnbanDeviceRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Sentinel_V1_AdminUnbanDeviceResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Sentinel_V1_AdminUnbanDeviceResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Shared_Proto_Sentinel_V1_SentinelService.Method.AdminUnbanDevice.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "AdminClearFlag" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > Clear flag from a device (admin only).
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Sentinel_V1_AdminClearFlagRequest` message.
+        ///   - serializer: A serializer for `Shared_Proto_Sentinel_V1_AdminClearFlagRequest` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Sentinel_V1_AdminClearFlagResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response, the result of which is
+        ///       returned to the caller. Returning from the closure will cancel the RPC if it
+        ///       hasn't already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func adminClearFlag<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Sentinel_V1_AdminClearFlagRequest>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Sentinel_V1_AdminClearFlagRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Sentinel_V1_AdminClearFlagResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Sentinel_V1_AdminClearFlagResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Shared_Proto_Sentinel_V1_SentinelService.Method.AdminClearFlag.descriptor,
                 serializer: serializer,
                 deserializer: deserializer,
                 options: options,
@@ -812,7 +1242,7 @@ extension Shared_Proto_Sentinel_V1_SentinelService.ClientProtocol {
     /// > Source IDL Documentation:
     /// >
     /// > Appeal an automatic restriction (rate limit, flag, or ban).
-    /// > Stub — full review workflow to be implemented later.
+    /// > Users can explain why restriction was unjust.
     ///
     /// - Parameters:
     ///   - request: A request containing a single `Shared_Proto_Sentinel_V1_AppealRestrictionRequest` message.
@@ -832,6 +1262,94 @@ extension Shared_Proto_Sentinel_V1_SentinelService.ClientProtocol {
             request: request,
             serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Sentinel_V1_AppealRestrictionRequest>(),
             deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Sentinel_V1_AppealRestrictionResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "GetAppeals" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > List all appeals filed by the caller.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Shared_Proto_Sentinel_V1_GetAppealsRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response, the result of which is
+    ///       returned to the caller. Returning from the closure will cancel the RPC if it
+    ///       hasn't already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func getAppeals<Result>(
+        request: GRPCCore.ClientRequest<Shared_Proto_Sentinel_V1_GetAppealsRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Sentinel_V1_GetAppealsResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.getAppeals(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Sentinel_V1_GetAppealsRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Sentinel_V1_GetAppealsResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "SubmitDispute" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > Submit a dispute with evidence that spam reports were from a botnet.
+    /// > System automatically analyzes report patterns and may auto-unban.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Shared_Proto_Sentinel_V1_SubmitDisputeRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response, the result of which is
+    ///       returned to the caller. Returning from the closure will cancel the RPC if it
+    ///       hasn't already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func submitDispute<Result>(
+        request: GRPCCore.ClientRequest<Shared_Proto_Sentinel_V1_SubmitDisputeRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Sentinel_V1_SubmitDisputeResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.submitDispute(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Sentinel_V1_SubmitDisputeRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Sentinel_V1_SubmitDisputeResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "GetDisputes" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > List all disputes filed by the caller with auto-collected evidence.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Shared_Proto_Sentinel_V1_GetDisputesRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response, the result of which is
+    ///       returned to the caller. Returning from the closure will cancel the RPC if it
+    ///       hasn't already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func getDisputes<Result>(
+        request: GRPCCore.ClientRequest<Shared_Proto_Sentinel_V1_GetDisputesRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Sentinel_V1_GetDisputesResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.getDisputes(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Sentinel_V1_GetDisputesRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Sentinel_V1_GetDisputesResponse>(),
             options: options,
             onResponse: handleResponse
         )
@@ -862,6 +1380,93 @@ extension Shared_Proto_Sentinel_V1_SentinelService.ClientProtocol {
             request: request,
             serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Sentinel_V1_GetProtectionStatsRequest>(),
             deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Sentinel_V1_GetProtectionStatsResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "AdminBanDevice" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > Manually ban a device (admin only).
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Shared_Proto_Sentinel_V1_AdminBanDeviceRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response, the result of which is
+    ///       returned to the caller. Returning from the closure will cancel the RPC if it
+    ///       hasn't already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func adminBanDevice<Result>(
+        request: GRPCCore.ClientRequest<Shared_Proto_Sentinel_V1_AdminBanDeviceRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Sentinel_V1_AdminBanDeviceResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.adminBanDevice(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Sentinel_V1_AdminBanDeviceRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Sentinel_V1_AdminBanDeviceResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "AdminUnbanDevice" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > Manually unban a device (admin only).
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Shared_Proto_Sentinel_V1_AdminUnbanDeviceRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response, the result of which is
+    ///       returned to the caller. Returning from the closure will cancel the RPC if it
+    ///       hasn't already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func adminUnbanDevice<Result>(
+        request: GRPCCore.ClientRequest<Shared_Proto_Sentinel_V1_AdminUnbanDeviceRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Sentinel_V1_AdminUnbanDeviceResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.adminUnbanDevice(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Sentinel_V1_AdminUnbanDeviceRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Sentinel_V1_AdminUnbanDeviceResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "AdminClearFlag" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > Clear flag from a device (admin only).
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Shared_Proto_Sentinel_V1_AdminClearFlagRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response, the result of which is
+    ///       returned to the caller. Returning from the closure will cancel the RPC if it
+    ///       hasn't already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func adminClearFlag<Result>(
+        request: GRPCCore.ClientRequest<Shared_Proto_Sentinel_V1_AdminClearFlagRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Sentinel_V1_AdminClearFlagResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.adminClearFlag(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Sentinel_V1_AdminClearFlagRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Sentinel_V1_AdminClearFlagResponse>(),
             options: options,
             onResponse: handleResponse
         )
@@ -1076,7 +1681,7 @@ extension Shared_Proto_Sentinel_V1_SentinelService.ClientProtocol {
     /// > Source IDL Documentation:
     /// >
     /// > Appeal an automatic restriction (rate limit, flag, or ban).
-    /// > Stub — full review workflow to be implemented later.
+    /// > Users can explain why restriction was unjust.
     ///
     /// - Parameters:
     ///   - message: request message to send.
@@ -1099,6 +1704,106 @@ extension Shared_Proto_Sentinel_V1_SentinelService.ClientProtocol {
             metadata: metadata
         )
         return try await self.appealRestriction(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "GetAppeals" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > List all appeals filed by the caller.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response, the result of which is
+    ///       returned to the caller. Returning from the closure will cancel the RPC if it
+    ///       hasn't already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func getAppeals<Result>(
+        _ message: Shared_Proto_Sentinel_V1_GetAppealsRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Sentinel_V1_GetAppealsResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Shared_Proto_Sentinel_V1_GetAppealsRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.getAppeals(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "SubmitDispute" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > Submit a dispute with evidence that spam reports were from a botnet.
+    /// > System automatically analyzes report patterns and may auto-unban.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response, the result of which is
+    ///       returned to the caller. Returning from the closure will cancel the RPC if it
+    ///       hasn't already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func submitDispute<Result>(
+        _ message: Shared_Proto_Sentinel_V1_SubmitDisputeRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Sentinel_V1_SubmitDisputeResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Shared_Proto_Sentinel_V1_SubmitDisputeRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.submitDispute(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "GetDisputes" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > List all disputes filed by the caller with auto-collected evidence.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response, the result of which is
+    ///       returned to the caller. Returning from the closure will cancel the RPC if it
+    ///       hasn't already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func getDisputes<Result>(
+        _ message: Shared_Proto_Sentinel_V1_GetDisputesRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Sentinel_V1_GetDisputesResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Shared_Proto_Sentinel_V1_GetDisputesRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.getDisputes(
             request: request,
             options: options,
             onResponse: handleResponse
@@ -1133,6 +1838,105 @@ extension Shared_Proto_Sentinel_V1_SentinelService.ClientProtocol {
             metadata: metadata
         )
         return try await self.getProtectionStats(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "AdminBanDevice" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > Manually ban a device (admin only).
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response, the result of which is
+    ///       returned to the caller. Returning from the closure will cancel the RPC if it
+    ///       hasn't already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func adminBanDevice<Result>(
+        _ message: Shared_Proto_Sentinel_V1_AdminBanDeviceRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Sentinel_V1_AdminBanDeviceResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Shared_Proto_Sentinel_V1_AdminBanDeviceRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.adminBanDevice(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "AdminUnbanDevice" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > Manually unban a device (admin only).
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response, the result of which is
+    ///       returned to the caller. Returning from the closure will cancel the RPC if it
+    ///       hasn't already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func adminUnbanDevice<Result>(
+        _ message: Shared_Proto_Sentinel_V1_AdminUnbanDeviceRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Sentinel_V1_AdminUnbanDeviceResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Shared_Proto_Sentinel_V1_AdminUnbanDeviceRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.adminUnbanDevice(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "AdminClearFlag" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > Clear flag from a device (admin only).
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response, the result of which is
+    ///       returned to the caller. Returning from the closure will cancel the RPC if it
+    ///       hasn't already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func adminClearFlag<Result>(
+        _ message: Shared_Proto_Sentinel_V1_AdminClearFlagRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Sentinel_V1_AdminClearFlagResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Shared_Proto_Sentinel_V1_AdminClearFlagRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.adminClearFlag(
             request: request,
             options: options,
             onResponse: handleResponse

@@ -153,11 +153,22 @@ public struct Shared_Proto_Services_V1_InviteToken: Sendable {
   /// Ed25519 signature (64 bytes, base64)
   public var sig: String = String()
 
+  /// Username создателя (V3, optional - пустая строка если не установлен)
+  public var un: String {
+    get {_un ?? String()}
+    set {_un = newValue}
+  }
+  /// Returns true if `un` has been explicitly set.
+  public var hasUn: Bool {self._un != nil}
+  /// Clears the value of `un`. Subsequent reads from it will return its default value.
+  public mutating func clearUn() {self._un = nil}
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
   fileprivate var _deviceID: String? = nil
+  fileprivate var _un: String? = nil
 }
 
 /// Ответ после успешного принятия invite
@@ -469,7 +480,7 @@ extension Shared_Proto_Services_V1_AcceptInviteRequest: SwiftProtobuf.Message, S
 
 extension Shared_Proto_Services_V1_InviteToken: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".InviteToken"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}v\0\u{1}jti\0\u{1}uuid\0\u{3}device_id\0\u{1}server\0\u{1}ts\0\u{3}eph_pub\0\u{1}sig\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}v\0\u{1}jti\0\u{1}uuid\0\u{3}device_id\0\u{1}server\0\u{1}ts\0\u{3}eph_pub\0\u{1}sig\0\u{1}un\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -485,6 +496,7 @@ extension Shared_Proto_Services_V1_InviteToken: SwiftProtobuf.Message, SwiftProt
       case 6: try { try decoder.decodeSingularInt64Field(value: &self.ts) }()
       case 7: try { try decoder.decodeSingularStringField(value: &self.ephPub) }()
       case 8: try { try decoder.decodeSingularStringField(value: &self.sig) }()
+      case 9: try { try decoder.decodeSingularStringField(value: &self._un) }()
       default: break
       }
     }
@@ -519,6 +531,9 @@ extension Shared_Proto_Services_V1_InviteToken: SwiftProtobuf.Message, SwiftProt
     if !self.sig.isEmpty {
       try visitor.visitSingularStringField(value: self.sig, fieldNumber: 8)
     }
+    try { if let v = self._un {
+      try visitor.visitSingularStringField(value: v, fieldNumber: 9)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -531,6 +546,7 @@ extension Shared_Proto_Services_V1_InviteToken: SwiftProtobuf.Message, SwiftProt
     if lhs.ts != rhs.ts {return false}
     if lhs.ephPub != rhs.ephPub {return false}
     if lhs.sig != rhs.sig {return false}
+    if lhs._un != rhs._un {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
