@@ -93,3 +93,34 @@ extension NSManagedObjectContext {
         }
     }
 }
+
+// MARK: - Async retry with backoff
+
+/// Retry an async throwing closure up to `maxAttempts` times.
+/// Waits `backoff` seconds after the first failure, `backoff*2` after the second, etc.
+/// Only retries when `retryIf` returns true for the thrown error.
+func withRetry<T>(
+    maxAttempts: Int,
+    backoff: TimeInterval = 1.0,
+    retryIf: (Error) -> Bool = { _ in true },
+    label: String = "operation",
+    operation: () async throws -> T
+) async throws -> T {
+    var lastError: Error?
+    for attempt in 1...max(1, maxAttempts) {
+        do {
+            return try await operation()
+        } catch {
+            lastError = error
+            if attempt < maxAttempts && retryIf(error) {
+                let delay = backoff * pow(2.0, Double(attempt - 1))
+                Log.debug("⏳ \(label) attempt \(attempt) failed (\(error.localizedDescription)), retrying in \(String(format: "%.1f", delay))s", category: "Retry")
+                try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            } else {
+                Log.error("❌ \(label) failed after \(attempt) attempt(s): \(error)", category: "Retry")
+                throw error
+            }
+        }
+    }
+    throw lastError!
+}
