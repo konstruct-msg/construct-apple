@@ -337,7 +337,7 @@ class MediaManager {
         }
         
         let uploadResult = try await Self.uploadWithRetry(
-                avatarData,
+                data: avatarData,
                 mimeType: "image/jpeg"
             )
         Log.info("✅ Avatar uploaded: \(uploadResult.mediaId)", category: "MediaManager")
