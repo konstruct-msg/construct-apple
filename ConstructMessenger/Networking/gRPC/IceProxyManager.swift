@@ -328,21 +328,35 @@ final class IceProxyManager: ObservableObject {
     /// Uses the device timezone offset as a privacy-preserving location signal —
     /// no GPS, no IP lookup, no server call required.
     ///
-    /// Heuristic:
-    ///   UTC+2 … UTC+12  →  Russia / CIS / Asia — prefer MSK relay first
-    ///   Otherwise        →  Europe / Americas   — keep original order (AMS first)
+    /// Rule priority:
+    ///   1. Server-pushed config (`ICEConfig.cachedRelayRegionsKey` in UserDefaults)
+    ///   2. Hardcoded fallback (`ICEConfig.hardcodedRelayRegions`)
+    ///   3. No match → return relays unchanged
+    ///
+    /// The first matching rule (tzOffsetMin ≤ currentOffset ≤ tzOffsetMax) wins.
     private static func sortRelaysByTimezonePreference(_ relays: [String]) -> [String] {
         let offsetHours = TimeZone.current.secondsFromGMT() / 3600
-        let preferMsk = offsetHours >= 2 && offsetHours <= 12
-        guard preferMsk else { return relays }
 
-        // Bubble MSK relay addresses to the front, preserve relative order of the rest.
-        let msk = relays.filter { $0.contains("msk") }
-        let rest = relays.filter { !$0.contains("msk") }
-        if !msk.isEmpty {
-            Log.debug("🧊 Timezone UTC+\(offsetHours): preferring MSK relay(s) first", category: "ICE")
+        // Load server-pushed regions (if available), fall back to hardcoded rules.
+        let regions: [ICERelayRegion]
+        if let data = UserDefaults.standard.data(forKey: ICEConfig.cachedRelayRegionsKey),
+           let decoded = try? JSONDecoder().decode([ICERelayRegion].self, from: data) {
+            regions = decoded
+        } else {
+            regions = ICEConfig.hardcodedRelayRegions
         }
-        return msk + rest
+
+        guard let match = regions.first(where: { offsetHours >= $0.tzOffsetMin && offsetHours <= $0.tzOffsetMax }) else {
+            return relays
+        }
+
+        // Bubble the rule's preferred relays to the front, preserve relative order of the rest.
+        let preferred = relays.filter { match.preferredRelays.contains($0) }
+        let rest      = relays.filter { !match.preferredRelays.contains($0) }
+        if !preferred.isEmpty {
+            Log.debug("🧊 Timezone UTC+\(offsetHours): preferring relay(s) first: \(preferred)", category: "ICE")
+        }
+        return preferred + rest
     }
 
     // MARK: - Multi-endpoint startup
@@ -350,7 +364,7 @@ final class IceProxyManager: ObservableObject {
     /// Start the ICE proxy trying the primary TLS endpoint first, then each relay (plain obfs4).
     ///
     /// Connection order (timezone-aware):
-    ///   UTC+2…+12 (Russia/CIS/Asia):
+    ///   UTC+3 (Russia/Moscow):
     ///     1. MSK relay (plain obfs4) — closest, lowest latency for RU users
     ///     2. Primary: ice.<host>:443 (TLS+obfs4) — if MSK fails
     ///     3. Remaining relays
@@ -366,11 +380,12 @@ final class IceProxyManager: ObservableObject {
         let primary = IceRelay(address: "\(iceHost):443", bridgeCert: cert, iatMode: .none, tlsServerName: iceHost)
 
         // Build the ordered candidate list.
-        // For timezone UTC+2..+12 (Russia/CIS/Asia), prefer relay-first ordering so MSK relay
-        // is tried before Amsterdam primary — lower latency and less DPI exposure.
-        let relayAddresses = cachedRelayAddresses()   // already timezone-sorted: MSK first if RU
-        let offsetHours = TimeZone.current.secondsFromGMT() / 3600
-        let preferRelayFirst = offsetHours >= 2 && offsetHours <= 12 && !relayAddresses.isEmpty
+        // cachedRelayAddresses() already applies timezone-based sorting using server-pushed
+        // or hardcoded ICERelayRegion rules. If the first relay in the sorted list is
+        // different from the default ordering it means a region rule matched — try relay first.
+        let relayAddresses = cachedRelayAddresses()   // timezone-sorted by region rules
+        let defaultRelayAddresses = ICEConfig.hardcodedRelayAddresses + (UserDefaults.standard.stringArray(forKey: ICEConfig.cachedRelayListKey) ?? [])
+        let preferRelayFirst = !relayAddresses.isEmpty && relayAddresses.first != defaultRelayAddresses.first
 
         if preferRelayFirst {
             Log.info("🧊 UTC+\(offsetHours): trying regional relay(s) before Amsterdam primary", category: "ICE")
