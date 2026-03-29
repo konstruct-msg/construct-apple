@@ -416,12 +416,17 @@ final class GRPCChannelManager: Sendable {
 
                 // DPI auto-fallback: when direct connection fails with a network error on the
                 // first attempt, try starting ICE proxy and retrying through the obfs4 relay.
+                // Also fires when ICE is running but on cooldown — startOnDemandIfNeeded() clears
+                // the cooldown in that case, so iceProxyPort() becomes non-nil after the call.
                 if !usingICE, attempt == 0, shouldTryICEFallback(error) {
                     Log.info("🧊 Direct connection failed — auto-starting ICE (DPI detected)", category: "GRPCChannel")
                     await IceProxyManager.shared.startOnDemandIfNeeded()
                     if iceProxyPort() != nil {
+                        // Persistent connection was created on the direct path — invalidate so
+                        // the retry opens a fresh channel through the ICE proxy port.
+                        invalidatePersistentClient()
                         iceAutoStartedThisCall = true
-                        Log.info("🧊 ICE proxy started — retrying RPC through relay", category: "GRPCChannel")
+                        Log.info("🧊 ICE proxy active — retrying RPC through relay", category: "GRPCChannel")
                         continue
                     }
                 }

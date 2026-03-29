@@ -693,8 +693,8 @@ final class SessionCoordinator {
 
         // Phase 2 of two-phase handshake: RESPONDER sends __session_ready__ after its
         // initReceivingSession succeeds. We are the INITIATOR receiving confirmation.
-        // Format: "__session_ready_<UUID>__"
-        if plaintext.hasPrefix("__session_ready") && plaintext.hasSuffix("__") {
+        // Also handle legacy format without __ markers (older client versions).
+        if plaintext.hasPrefix("__session_ready") || plaintext.hasPrefix("session_ready_") {
             let peerId = messageData.from
             Log.info("🤝 SESSION_STATE[session_ready_received]: RESPONDER \(peerId.prefix(8))… confirmed — session established both sides", category: "SessionCoordinator")
             // Cancel watchdog — RESPONDER proved they have a working session.

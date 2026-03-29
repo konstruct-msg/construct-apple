@@ -410,7 +410,17 @@ final class IceProxyManager: ObservableObject {
     /// If start succeeds, subsequent `performRPC` calls automatically route through ICE until
     /// the proxy is stopped (app restart or user disables ICE in settings).
     func startOnDemandIfNeeded() async {
-        if isRunning { return }
+        // If ICE proxy is running but on cooldown, DPI blocking has been confirmed on the direct
+        // path — clear the cooldown so `iceProxyPort()` returns a valid port and the caller
+        // retries the RPC through ICE.  This is the right behaviour: cooldown means "the ICE
+        // relay was recently flaky", but DPI means "the direct path is always broken".
+        if isRunning {
+            if isOnCooldown {
+                clearCooldown()
+                Log.info("🧊 ICE on cooldown but DPI detected — clearing cooldown, routing via ICE", category: "ICE")
+            }
+            return
+        }
 
         // Another concurrent RPC already kicked off an ICE start — wait for it rather
         // than returning immediately with no proxy port.  We poll on the MainActor so

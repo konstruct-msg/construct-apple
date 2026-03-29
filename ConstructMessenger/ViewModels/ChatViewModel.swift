@@ -128,7 +128,10 @@ class ChatViewModel: NSObject {
         let fetchRequest = Message.fetchRequest()
         // Combine with additional predicate
         let chatPredicate = NSPredicate(format: "chat == %@", chat)
-        fetchRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [chatPredicate])
+        // Exclude two-phase handshake control signals that should never appear in the message list.
+        // Covers both current (__session_ready_UUID__) and legacy (session_ready_UUID) formats.
+        let noControlPredicate = NSPredicate(format: "NOT (decryptedContent BEGINSWITH '__session_ready') AND NOT (decryptedContent BEGINSWITH 'session_ready_')")
+        fetchRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [chatPredicate, noControlPredicate])
         
         // ✅ OPTIMIZATION: Fetch newest 30 messages, then reverse to oldest-first
         // This ensures we get RECENT messages, not ancient history

@@ -402,9 +402,8 @@ class MessageRouter {
 
         // Silently discard two-phase handshake confirmation signals.
         // __session_ready_<UUID>__ is sent by the RESPONDER after initReceivingSession succeeds.
-        // The Rust fast path decrypts it and calls handleResolvedMessage directly, bypassing
-        // the SessionCoordinator.handleMessage filter. We must handle the confirmation logic here.
-        if decryptedContent.hasPrefix("__session_ready") && decryptedContent.hasSuffix("__") {
+        // Also handle legacy format without __ markers (older client versions).
+        if decryptedContent.hasPrefix("__session_ready") || decryptedContent.hasPrefix("session_ready_") {
             Log.info("🤝 SESSION_STATE[session_ready_rust_path]: RESPONDER \(otherUserId.prefix(8))… confirmed session — discarding control message", category: "MessageRouter")
             PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
             onReceiptNeeded?([message.id], otherUserId, .delivered)
