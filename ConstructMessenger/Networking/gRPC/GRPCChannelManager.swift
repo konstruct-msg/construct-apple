@@ -128,13 +128,10 @@ final class GRPCChannelManager: Sendable {
         }
 
         // Tear down stale connection gracefully.
-        // beginGracefulShutdown() MUST precede task.cancel(): cancelling the Task
-        // force-closes the NIO transport, which puts all HTTP/2 stream state machines
-        // into clientClosed. Any in-flight RPC mid-write then hits the precondition in
-        // GRPCStreamStateMachine and crashes. Graceful shutdown drains first; cancellation
-        // is only a backstop that fires after the shutdown signal has already propagated.
+        // beginGracefulShutdown() signals "no new RPCs"; runConnections() exits naturally.
+        // Do NOT call task.cancel() — it force-closes NIO streams and causes the fatalError
+        // in GRPCStreamStateMachine when a concurrent in-flight RPC is mid-write.
         _conn?.client.beginGracefulShutdown()
-        _conn?.task.cancel()
         _conn = nil
 
         let client = try makeClient()
@@ -154,12 +151,16 @@ final class GRPCChannelManager: Sendable {
     }
 
     /// Invalidates the persistent connection so the next RPC gets a fresh one.
+    /// Only calls beginGracefulShutdown() — does NOT cancel the task immediately.
+    /// task.cancel() on a live connection triggers the fatalError in GRPCStreamStateMachine
+    /// when a concurrent in-flight RPC tries to write after the shutdown signal.
+    /// Graceful shutdown signals "no new RPCs"; the runConnections() task exits naturally
+    /// once all existing streams drain (typically <100 ms for unary calls).
     func invalidatePersistentClient() {
         _connLock.lock()
         defer { _connLock.unlock() }
-        // beginGracefulShutdown() before task.cancel() — see acquirePersistentClient() for rationale.
         _conn?.client.beginGracefulShutdown()
-        _conn?.task.cancel()
+        // Do NOT call task.cancel() here — let runConnections() exit naturally.
         _conn = nil
         Log.debug("🔌 Persistent gRPC connection invalidated", category: "GRPCChannel")
     }
@@ -422,9 +423,9 @@ final class GRPCChannelManager: Sendable {
                     Log.info("🧊 Direct connection failed — auto-starting ICE (DPI detected)", category: "GRPCChannel")
                     await IceProxyManager.shared.startOnDemandIfNeeded()
                     if iceProxyPort() != nil {
-                        // Persistent connection was created on the direct path — invalidate so
-                        // the retry opens a fresh channel through the ICE proxy port.
-                        invalidatePersistentClient()
+                        // The failed connection was already invalidated at the top of this catch block.
+                        // No extra invalidation needed — just retry; acquirePersistentClient() will
+                        // open a fresh channel routed through the ICE proxy port.
                         iceAutoStartedThisCall = true
                         Log.info("🧊 ICE proxy active — retrying RPC through relay", category: "GRPCChannel")
                         continue
