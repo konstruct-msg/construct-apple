@@ -560,6 +560,7 @@
 "device_revoke_confirm" = "This device will be removed from your account.";
 "device_last_seen" = "Last seen %@";
 "device_current" = "This device";
+"device_added_%@" = "Added %@";
 "linked_devices" = "Linked Devices";
 "linked_devices_hint" = "Scan the QR code on a new device during onboarding to link it to your account.";
 "link_new_device" = "Link New Device";

@@ -235,6 +235,13 @@ private struct DeviceRow: View {
     }
 
     private var lastSeenText: String {
+        // If lastSeen == createdAt the server has never seen activity — show "Added" date instead
+        if abs(device.lastSeen.timeIntervalSince(device.createdAt)) < 5 {
+            let fmt = DateFormatter()
+            fmt.dateStyle = .medium
+            fmt.timeStyle = .none
+            return String(format: NSLocalizedString("device_added_%@", comment: ""), fmt.string(from: device.createdAt))
+        }
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .full
         return formatter.localizedString(for: device.lastSeen, relativeTo: Date())

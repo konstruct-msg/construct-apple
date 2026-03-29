@@ -314,9 +314,13 @@ final class AuthServiceClient: Sendable {
                 for try await info in response.messages {
                     devices.append(LinkedDevice(
                         id: info.device.deviceID,
-                        name: info.deviceName,
+                        name: info.deviceName.isEmpty
+                            ? "Device …\(info.device.deviceID.suffix(8))"
+                            : info.deviceName,
                         platform: info.platform,
-                        lastSeen: Date(timeIntervalSince1970: TimeInterval(info.lastSeen)),
+                        lastSeen: info.lastSeen > 0
+                            ? Date(timeIntervalSince1970: TimeInterval(info.lastSeen))
+                            : Date(timeIntervalSince1970: TimeInterval(info.createdAt)),
                         createdAt: Date(timeIntervalSince1970: TimeInterval(info.createdAt)),
                         isCurrent: info.isCurrent
                     ))
