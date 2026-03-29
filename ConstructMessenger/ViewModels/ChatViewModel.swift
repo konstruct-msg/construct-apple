@@ -53,6 +53,13 @@ class ChatViewModel: NSObject {
     private var oldestLoadedTimestamp: Date?
     private var allLoadedMessageIds: Set<String> = []
 
+    /// Shared predicate that excludes all session-handshake control signals.
+    /// Applied by the FRC, older-message pagination, and hasMoreMessages check
+    /// so control messages never appear anywhere in the conversation view.
+    static let controlMessageFilterPredicate = NSPredicate(
+        format: "NOT (decryptedContent BEGINSWITH '__session_ready') AND NOT (decryptedContent BEGINSWITH 'session_ready_') AND NOT (decryptedContent BEGINSWITH '__session_ping') AND NOT (decryptedContent BEGINSWITH '__END_SESSION')"
+    )
+
     let chat: Chat
     private var recipientBundle: (identityPublic: String, signedPrekeyPublic: String, signature: String, verifyingKey: String)?
 
@@ -128,9 +135,8 @@ class ChatViewModel: NSObject {
         let fetchRequest = Message.fetchRequest()
         // Combine with additional predicate
         let chatPredicate = NSPredicate(format: "chat == %@", chat)
-        // Exclude two-phase handshake control signals that should never appear in the message list.
-        // Covers both current (__session_ready_UUID__) and legacy (session_ready_UUID) formats.
-        let noControlPredicate = NSPredicate(format: "NOT (decryptedContent BEGINSWITH '__session_ready') AND NOT (decryptedContent BEGINSWITH 'session_ready_')")
+        // Exclude session-handshake control signals that should never appear in the message list.
+        let noControlPredicate = ChatViewModel.controlMessageFilterPredicate
         fetchRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [chatPredicate, noControlPredicate])
         
         // ✅ OPTIMIZATION: Fetch newest 30 messages, then reverse to oldest-first
@@ -323,9 +329,9 @@ class ChatViewModel: NSObject {
         Log.debug("📥 Loading more messages before \(oldestTimestamp)", category: "ChatViewModel")
         
         let fetchRequest = Message.fetchRequest()
-        // Combine with additional predicate
         let chatPredicate = NSPredicate(format: "chat == %@ AND timestamp < %@", chat, oldestTimestamp as NSDate)
-        fetchRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [chatPredicate])
+        let noControlPredicate = ChatViewModel.controlMessageFilterPredicate
+        fetchRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [chatPredicate, noControlPredicate])
         // ✅ Sort ascending (oldest first) to match main array order
         fetchRequest.sortDescriptors = [NSSortDescriptor(key: "timestamp", ascending: true)]
         fetchRequest.fetchLimit = loadMoreBatchSize  // ✅ Use batch size for pagination
@@ -364,9 +370,9 @@ class ChatViewModel: NSObject {
         }
         
         let fetchRequest = Message.fetchRequest()
-        // Combine with additional predicate
         let chatPredicate = NSPredicate(format: "chat == %@ AND timestamp < %@", chat, oldestTimestamp as NSDate)
-        fetchRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [chatPredicate])
+        let noControlPredicate = ChatViewModel.controlMessageFilterPredicate
+        fetchRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [chatPredicate, noControlPredicate])
         fetchRequest.fetchLimit = 1
         
         hasMoreMessages = (try? viewContext.fetch(fetchRequest).first) != nil

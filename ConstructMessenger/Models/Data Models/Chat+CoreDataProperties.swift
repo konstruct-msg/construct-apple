@@ -50,6 +50,12 @@ extension Chat {
     static func formatPreviewText(_ content: String?) -> String {
         guard let content = content else { return "" }
         
+        // Never show session-handshake control signals as chat preview text.
+        if content.hasPrefix("__session_ready") || content.hasPrefix("session_ready_") ||
+           content.hasPrefix("__session_ping") || content.hasPrefix("__END_SESSION") {
+            return ""
+        }
+        
         // Check if it's JSON (media or profile message)
         if let data = content.data(using: .utf8),
            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
