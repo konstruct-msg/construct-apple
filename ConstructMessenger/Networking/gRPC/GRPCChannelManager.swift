@@ -244,17 +244,28 @@ final class GRPCChannelManager: Sendable {
         _ operation: @Sendable @escaping (GRPCClient<HTTP2ClientTransport.Posix>) async throws -> Result
     ) async throws -> Result {
         func shouldRecordIceFailure(_ error: Error) -> Bool {
+            if error is CancellationError { return false }
             if let rpc = error as? RPCError {
                 switch rpc.code {
-                case .unavailable, .deadlineExceeded:
-                    return true
-                case .unauthenticated, .permissionDenied, .invalidArgument:
+                // These are application-level errors — the relay delivered the response fine.
+                case .unauthenticated, .permissionDenied, .invalidArgument, .notFound,
+                     .alreadyExists, .resourceExhausted, .unimplemented, .cancelled:
                     return false
+                case .unavailable, .deadlineExceeded, .unknown:
+                    // Distinguish relay failures (TCP/TLS errors) from non-relay failures
+                    // (server-side closes or our own connection invalidation).
+                    // "Stream unexpectedly closed" / "channel is closed" / "CancellationError"
+                    // all indicate the relay itself was not the problem.
+                    let msg = rpc.message.lowercased()
+                    if msg.contains("stream") && msg.contains("closed") { return false }
+                    if msg.contains("channel is closed")                 { return false }
+                    if msg.contains("cancellation")                      { return false }
+                    if msg.contains("cancelled")                         { return false }
+                    return true
                 default:
                     return true
                 }
             }
-            if error is CancellationError { return false }
             return true
         }
 

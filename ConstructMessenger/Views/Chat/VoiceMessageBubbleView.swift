@@ -24,6 +24,11 @@ struct VoiceMessageBubbleView: View {
     private var isPlaying: Bool { player.isPlaying(voiceContent.mediaId) }
     private var isUploading: Bool { deliveryStatus == .sending && voiceContent.mediaUrl.isEmpty }
     private var uploadFailed: Bool { deliveryStatus == .failed && voiceContent.mediaUrl.isEmpty }
+    /// True when the message was sent but no media was ever uploaded (upload failed mid-send).
+    /// The mediaKey/mediaId are empty — the audio cannot be recovered.
+    private var isMediaUnavailable: Bool {
+        voiceContent.mediaId.isEmpty || voiceContent.mediaKey.isEmpty
+    }
 
     var body: some View {
         Group {
@@ -31,6 +36,8 @@ struct VoiceMessageBubbleView: View {
                 uploadingBody
             } else if uploadFailed {
                 failedBody
+            } else if isMediaUnavailable {
+                unavailableBody
             } else {
                 playerBody
             }
@@ -170,6 +177,41 @@ struct VoiceMessageBubbleView: View {
                     RoundedRectangle(cornerRadius: 16)
                         .stroke(Color.red.opacity(0.5), lineWidth: 1)
                 )
+        )
+    }
+
+    // MARK: - Unavailable state (empty mediaKey — media was never successfully uploaded)
+
+    private var unavailableBody: some View {
+        HStack(spacing: 10) {
+            ZStack {
+                Circle()
+                    .fill(Color.secondary.opacity(0.12))
+                    .frame(width: 36, height: 36)
+                Image(systemName: "waveform.slash")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Color.secondary)
+            }
+
+            WaveformBarsView(
+                samples: voiceContent.waveform,
+                progress: 0,
+                isSentByMe: isSentByMe
+            )
+            .frame(maxWidth: .infinity)
+            .frame(height: 36)
+            .opacity(0.25)
+
+            Text(durationLabel)
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(Color.secondary)
+                .frame(width: 36, alignment: .trailing)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(isSentByMe ? Color.accentColor.opacity(0.4) : Color(.systemGray5))
         )
     }
 
