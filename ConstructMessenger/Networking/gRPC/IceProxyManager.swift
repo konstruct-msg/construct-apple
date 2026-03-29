@@ -315,20 +315,48 @@ final class IceProxyManager: ObservableObject {
 
     /// Returns the relay address list: server-cached list first, then hardcoded fallback.
     /// Deduplicates while preserving order (server list takes priority).
+    /// The list is then reordered to prefer relays closer to the user's timezone.
     func cachedRelayAddresses() -> [String] {
         let server   = UserDefaults.standard.stringArray(forKey: ICEConfig.cachedRelayListKey) ?? []
         let fallback = ICEConfig.hardcodedRelayAddresses
         var seen = Set<String>()
-        return (server + fallback).filter { seen.insert($0).inserted }
+        let deduped = (server + fallback).filter { seen.insert($0).inserted }
+        return Self.sortRelaysByTimezonePreference(deduped)
+    }
+
+    /// Reorders relay addresses so that geographically closer relays are tried first.
+    /// Uses the device timezone offset as a privacy-preserving location signal —
+    /// no GPS, no IP lookup, no server call required.
+    ///
+    /// Heuristic:
+    ///   UTC+2 … UTC+12  →  Russia / CIS / Asia — prefer MSK relay first
+    ///   Otherwise        →  Europe / Americas   — keep original order (AMS first)
+    private static func sortRelaysByTimezonePreference(_ relays: [String]) -> [String] {
+        let offsetHours = TimeZone.current.secondsFromGMT() / 3600
+        let preferMsk = offsetHours >= 2 && offsetHours <= 12
+        guard preferMsk else { return relays }
+
+        // Bubble MSK relay addresses to the front, preserve relative order of the rest.
+        let msk = relays.filter { $0.contains("msk") }
+        let rest = relays.filter { !$0.contains("msk") }
+        if !msk.isEmpty {
+            Log.debug("🧊 Timezone UTC+\(offsetHours): preferring MSK relay(s) first", category: "ICE")
+        }
+        return msk + rest
     }
 
     // MARK: - Multi-endpoint startup
 
     /// Start the ICE proxy trying the primary TLS endpoint first, then each relay (plain obfs4).
     ///
-    /// Connection order:
-    ///   1. Primary: `ice.<grpcHost>:443` (TLS + obfs4) — tried twice before relay fallback
-    ///   2. Relay 1…N from `cachedRelayAddresses()` — plain obfs4, no TLS wrapper
+    /// Connection order (timezone-aware):
+    ///   UTC+2…+12 (Russia/CIS/Asia):
+    ///     1. MSK relay (plain obfs4) — closest, lowest latency for RU users
+    ///     2. Primary: ice.<host>:443 (TLS+obfs4) — if MSK fails
+    ///     3. Remaining relays
+    ///   Other timezones:
+    ///     1. Primary: ice.<host>:443 (TLS+obfs4) — tried twice
+    ///     2. Relay 1…N from cachedRelayAddresses()
     ///
     /// Returns `true` if any endpoint started successfully.
     @discardableResult
@@ -337,14 +365,34 @@ final class IceProxyManager: ObservableObject {
         let iceHost = "ice.\(host)"
         let primary = IceRelay(address: "\(iceHost):443", bridgeCert: cert, iatMode: .none, tlsServerName: iceHost)
 
-        // Attempt 1 — immediate
+        // Build the ordered candidate list.
+        // For timezone UTC+2..+12 (Russia/CIS/Asia), prefer relay-first ordering so MSK relay
+        // is tried before Amsterdam primary — lower latency and less DPI exposure.
+        let relayAddresses = cachedRelayAddresses()   // already timezone-sorted: MSK first if RU
+        let offsetHours = TimeZone.current.secondsFromGMT() / 3600
+        let preferRelayFirst = offsetHours >= 2 && offsetHours <= 12 && !relayAddresses.isEmpty
+
+        if preferRelayFirst {
+            Log.info("🧊 UTC+\(offsetHours): trying regional relay(s) before Amsterdam primary", category: "ICE")
+
+            // Try the timezone-preferred relay(s) first (normally just MSK).
+            for relayAddress in relayAddresses {
+                let relayConfig = IceRelay(address: relayAddress, bridgeCert: cert, iatMode: .none, tlsServerName: nil)
+                if start(relay: relayConfig) != nil {
+                    saveRelay(relayConfig)
+                    Log.info("🧊 ICE started via regional relay: \(relayAddress)", category: "ICE")
+                    return true
+                }
+                Log.info("🧊 ICE regional relay \(relayAddress) failed — trying primary", category: "ICE")
+            }
+        }
+
+        // Primary: TLS-wrapped obfs4 (Amsterdam).  Two attempts — network may be settling.
         if start(relay: primary) != nil {
             saveRelay(primary)
             Log.info("🧊 ICE started via primary: \(iceHost):443", category: "ICE")
             return true
         }
-
-        // Attempt 2 — one retry after a brief pause (network may be settling after background)
         Log.debug("🧊 ICE primary attempt 1 failed — retrying in 600 ms", category: "ICE")
         Thread.sleep(forTimeInterval: 0.6)
         if start(relay: primary) != nil {
@@ -353,21 +401,21 @@ final class IceProxyManager: ObservableObject {
             return true
         }
 
-        Log.info("🧊 ICE primary failed — trying relay endpoints", category: "ICE")
-
-        for relayAddress in cachedRelayAddresses() {
-            // Plain obfs4 (no TLS wrapper) — relay is a transparent TCP passthrough.
-            // The obfs4 handshake targets Amsterdam's cert; the relay just forwards bytes.
-            let relayConfig = IceRelay(address: relayAddress, bridgeCert: cert, iatMode: .none, tlsServerName: nil)
-            if start(relay: relayConfig) != nil {
-                saveRelay(relayConfig)
-                Log.info("🧊 ICE started via relay: \(relayAddress)", category: "ICE")
-                return true
+        if !preferRelayFirst {
+            // Non-CIS path: primary failed, fall through to relay list.
+            Log.info("🧊 ICE primary failed — trying relay endpoints", category: "ICE")
+            for relayAddress in relayAddresses {
+                let relayConfig = IceRelay(address: relayAddress, bridgeCert: cert, iatMode: .none, tlsServerName: nil)
+                if start(relay: relayConfig) != nil {
+                    saveRelay(relayConfig)
+                    Log.info("🧊 ICE started via relay: \(relayAddress)", category: "ICE")
+                    return true
+                }
+                Log.info("🧊 ICE relay \(relayAddress) failed", category: "ICE")
             }
-            Log.info("🧊 ICE relay \(relayAddress) failed", category: "ICE")
         }
 
-        Log.error("🧊 ICE start failed on all endpoints (1 primary + \(cachedRelayAddresses().count) relay(s))", category: "ICE")
+        Log.error("🧊 ICE start failed on all endpoints (1 primary + \(relayAddresses.count) relay(s))", category: "ICE")
         return false
     }
 
