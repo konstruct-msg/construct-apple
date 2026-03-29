@@ -496,8 +496,8 @@ class BackgroundFetchManager: NSObject {
         } else {
             let newUser = User(context: context)
             newUser.id = userId
-            newUser.username = userId // Temporary, will be updated when public key bundle is received
-            newUser.displayName = userId
+            newUser.username = ""
+            newUser.displayName = DisplayNameGenerator.generate(from: userId)
             newUser.isSharingWithMe = false
             newUser.isBlocked = false
             newUser.amISharingWith = false

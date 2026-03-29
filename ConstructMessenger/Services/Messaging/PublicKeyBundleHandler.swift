@@ -68,43 +68,9 @@ class PublicKeyBundleHandler {
         throw lastError ?? NetworkError.connectionFailed
     }
     
-    // MARK: - Bundle Handling
-    
-    /// Handle public key bundle without pending message (username update)
-    /// - Parameters:
-    ///   - data: Public key bundle data
-    /// - Returns: True if username was updated
+    /// Handle public key bundle without pending message
     func handlePublicKeyBundle(_ data: PublicKeyBundleData) -> Bool {
         Log.debug("📦 PublicKeyBundleHandler: Received publicKeyBundle for userId: \(data.userId)", category: "PublicKeyBundleHandler")
-        
-        guard let context = viewContext else { 
-            Log.error("❌ PublicKeyBundleHandler: No viewContext available", category: "PublicKeyBundleHandler")
-            return false 
-        }
-        
-        // Find user in any chat
-        let chatFetch = Chat.fetchRequest()
-        let otherUserPredicate = NSPredicate(format: "otherUser.id == %@", data.userId)
-        chatFetch.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [otherUserPredicate])
-        
-        if let existingChat = try? context.fetch(chatFetch).first,
-           let user = existingChat.otherUser {
-            let oldUsername = user.username
-            user.applyServerUsername(data.username, userId: data.userId)
-            do {
-                try context.save()
-                Log.info("✅ Updated username: \(oldUsername) → \(data.username)", category: "PublicKeyBundleHandler")
-                
-                // Notify via callback
-                onUsernameUpdate?(data.userId, data.username)
-                return true
-            } catch {
-                Log.error("❌ Failed to save username update: \(error.localizedDescription)", category: "PublicKeyBundleHandler")
-                return false
-            }
-        }
-        
-        Log.debug("ℹ️ No existing chat found for userId: \(data.userId)", category: "PublicKeyBundleHandler")
         return false
     }
     
@@ -136,9 +102,9 @@ class PublicKeyBundleHandler {
         userFetchRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: predicates)
         
         if let user = try? context.fetch(userFetchRequest).first {
-            user.applyServerUsername(data.username, userId: data.userId)
-            context.saveAndLog()
-            Log.info("Updated username for user: \(data.username)", category: "PublicKeyBundleHandler")
+            // Username comes from invite payload or profile sharing — do not overwrite from bundle.
+            _ = user
+            Log.debug("📦 PublicKeyBundleHandler: user found for \(data.userId.prefix(8))…", category: "PublicKeyBundleHandler")
         }
         
         // Track prekey ID and detect reinstall
