@@ -388,7 +388,7 @@ final class IceProxyManager: ObservableObject {
         let preferRelayFirst = !relayAddresses.isEmpty && relayAddresses.first != defaultRelayAddresses.first
 
         if preferRelayFirst {
-            Log.info("🧊 UTC+\(offsetHours): trying regional relay(s) before Amsterdam primary", category: "ICE")
+            Log.info("🧊 UTC+\(TimeZone.current.secondsFromGMT() / 3600): trying regional relay(s) before Amsterdam primary", category: "ICE")
 
             // Try the timezone-preferred relay(s) first (normally just MSK).
             for relayAddress in relayAddresses {
