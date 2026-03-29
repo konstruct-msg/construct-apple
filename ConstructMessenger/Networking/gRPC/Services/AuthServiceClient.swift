@@ -312,17 +312,19 @@ final class AuthServiceClient: Sendable {
             ) { response in
                 var devices: [LinkedDevice] = []
                 for try await info in response.messages {
+                    let di = info.device           // DeviceInfo
+                    let deviceId = di.device.deviceID
                     devices.append(LinkedDevice(
-                        id: info.device.deviceID,
-                        name: info.deviceName.isEmpty
-                            ? "Device …\(info.device.deviceID.suffix(8))"
-                            : info.deviceName,
-                        platform: info.platform,
-                        lastSeen: info.lastSeen > 0
-                            ? Date(timeIntervalSince1970: TimeInterval(info.lastSeen))
-                            : Date(timeIntervalSince1970: TimeInterval(info.createdAt)),
-                        createdAt: Date(timeIntervalSince1970: TimeInterval(info.createdAt)),
-                        isCurrent: info.isCurrent
+                        id: deviceId,
+                        name: di.deviceName.isEmpty
+                            ? "Device …\(deviceId.suffix(8))"
+                            : di.deviceName,
+                        platform: di.platform,
+                        lastSeen: di.lastSeen > 0
+                            ? Date(timeIntervalSince1970: TimeInterval(di.lastSeen))
+                            : Date(timeIntervalSince1970: TimeInterval(di.createdAt)),
+                        createdAt: Date(timeIntervalSince1970: TimeInterval(di.createdAt)),
+                        isCurrent: di.isCurrent
                     ))
                 }
                 return devices
@@ -356,7 +358,7 @@ final class AuthServiceClient: Sendable {
         newDeviceName: String,
         newDevicePlatform: String
     ) async throws {
-        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.auth) { grpcClient in
+        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.authenticateDevice) { grpcClient in
             let authClient = Shared_Proto_Services_V1_AuthService.Client(wrapping: grpcClient)
 
             var request = Shared_Proto_Services_V1_ApproveJoinRequestRequest()
@@ -371,7 +373,7 @@ final class AuthServiceClient: Sendable {
     /// Returns `nil` while still pending; returns `ConfirmLinkResult` when approved.
     /// Throws on network errors; caller should continue polling on transient failures.
     func checkDeviceLinkStatus(pendingId: String) async throws -> ConfirmLinkResult? {
-        return try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.auth, allowAuthRetry: false) { grpcClient in
+        return try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.confirmDeviceLink, allowAuthRetry: false) { grpcClient in
             let linkClient = Shared_Proto_Services_V1_DeviceLinkService.Client(wrapping: grpcClient)
 
             var request = Shared_Proto_Services_V1_CheckJoinRequestStatusRequest()
