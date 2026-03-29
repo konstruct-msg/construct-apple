@@ -342,10 +342,9 @@ final class AuthServiceClient: Sendable {
 
     // MARK: - Device Join Request (new device initiates; existing device approves)
 
-    /// Called by the existing device (phone) when it scans the new device's (laptop) "link-to-me" QR.
-    /// The server stores the approved credentials keyed by `pendingId`; the new device polls for them.
-    ///
-    /// - TODO: Backend — implement `ApproveDeviceJoinRequest` RPC in DeviceLinkService.
+    /// Called by the phone when it scans the TUI's "link-to-me" QR and the user confirms.
+    /// Sends `ApproveJoinRequest` to the server; the server issues tokens and stores them
+    /// keyed by `pendingId` for the TUI to poll via `checkDeviceLinkStatus`.
     func approveDeviceJoinRequest(
         pendingId: String,
         newDeviceId: String,
@@ -353,16 +352,47 @@ final class AuthServiceClient: Sendable {
         newDeviceName: String,
         newDevicePlatform: String
     ) async throws {
-        // TODO: Wire to gRPC when backend implements ApproveDeviceJoinRequest
-        throw DeviceLinkError.joinRequestNotImplemented
+        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.auth) { grpcClient in
+            let authClient = Shared_Proto_Services_V1_AuthService.Client(wrapping: grpcClient)
+
+            var request = Shared_Proto_Services_V1_ApproveJoinRequestRequest()
+            request.pendingDeviceID = pendingId
+            request.cryptoSuite = "Curve25519+Ed25519"
+
+            _ = try await authClient.approveJoinRequest(request: .init(message: request))
+        }
     }
 
-    /// Called by the new device (laptop) to poll for credentials approved by the existing device.
+    /// Called by the new device (TUI) to poll for credentials approved by the phone.
     /// Returns `nil` while still pending; returns `ConfirmLinkResult` when approved.
-    ///
-    /// - TODO: Backend — implement `CheckDeviceLinkStatus` RPC in DeviceLinkService.
+    /// Throws on network errors; caller should continue polling on transient failures.
     func checkDeviceLinkStatus(pendingId: String) async throws -> ConfirmLinkResult? {
-        // TODO: Wire to gRPC when backend implements CheckDeviceLinkStatus
-        throw DeviceLinkError.joinRequestNotImplemented
+        return try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.auth, allowAuthRetry: false) { grpcClient in
+            let linkClient = Shared_Proto_Services_V1_DeviceLinkService.Client(wrapping: grpcClient)
+
+            var request = Shared_Proto_Services_V1_CheckJoinRequestStatusRequest()
+            request.pendingDeviceID = pendingId
+
+            let response = try await linkClient.checkJoinRequestStatus(request: .init(message: request))
+
+            switch response.status {
+            case .approved:
+                guard response.hasTokens else { return nil }
+                let t = response.tokens
+                return ConfirmLinkResult(
+                    userId: t.userID,
+                    accessToken: t.accessToken,
+                    refreshToken: t.refreshToken,
+                    expiresAt: t.expiresAt,
+                    iceBridgeCert: t.hasIceBridgeCert ? t.iceBridgeCert : nil
+                )
+            case .rejected:
+                throw DeviceLinkError.rejected
+            case .expired:
+                throw DeviceLinkError.expired
+            default:
+                return nil // .pending
+            }
+        }
     }
 }

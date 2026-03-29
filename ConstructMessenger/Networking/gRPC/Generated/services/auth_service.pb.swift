@@ -313,6 +313,7 @@ public struct Shared_Proto_Services_V1_AuthenticateDeviceRequest: Sendable {
   public init() {}
 }
 
+/// AuthTokensResponse - returned for all device auth/linking operations
 public struct Shared_Proto_Services_V1_AuthTokensResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -328,7 +329,6 @@ public struct Shared_Proto_Services_V1_AuthTokensResponse: Sendable {
 
   /// ICE (obfs4) bridge cert for transport obfuscation.
   /// Populated only when the server has ICE_ENABLED=true.
-  /// Client passes this to ClientConfig::from_bridge_cert() to connect via obfs4.
   public var iceBridgeCert: String {
     get {_iceBridgeCert ?? String()}
     set {_iceBridgeCert = newValue}
@@ -552,6 +552,28 @@ public struct Shared_Proto_Services_V1_DeviceInfo: Sendable {
 
   fileprivate var _device: Shared_Proto_Core_V1_DeviceId? = nil
   fileprivate var _pushProvider: Shared_Proto_Services_V1_PushProvider? = nil
+}
+
+/// ListDevicesResponse - wraps a single device in the stream
+public struct Shared_Proto_Services_V1_ListDevicesResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var device: Shared_Proto_Services_V1_DeviceInfo {
+    get {_device ?? Shared_Proto_Services_V1_DeviceInfo()}
+    set {_device = newValue}
+  }
+  /// Returns true if `device` has been explicitly set.
+  public var hasDevice: Bool {self._device != nil}
+  /// Clears the value of `device`. Subsequent reads from it will return its default value.
+  public mutating func clearDevice() {self._device = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _device: Shared_Proto_Services_V1_DeviceInfo? = nil
 }
 
 /// RevokeDeviceRequest - Revoke device
@@ -1069,6 +1091,157 @@ public struct Shared_Proto_Services_V1_ConfirmDeviceLinkRequest: Sendable {
   public init() {}
 
   fileprivate var _publicKeys: Shared_Proto_Services_V1_DevicePublicKeys? = nil
+}
+
+/// JoinRequestPayload - TUI device submits its keys and metadata
+public struct Shared_Proto_Services_V1_JoinRequestPayload: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// New device identifier (derived from identity key)
+  public var pendingDeviceID: String = String()
+
+  /// X25519 identity key (base64)
+  public var identityPublicB64: String = String()
+
+  /// Ed25519 verifying key (base64)
+  public var verifyingKeyB64: String = String()
+
+  /// Signed prekey public (base64)
+  public var signedPrekeyPublicB64: String = String()
+
+  /// Ed25519 signature of (prologue || spk_pub), 64 bytes (base64)
+  public var signedPrekeySignatureB64: String = String()
+
+  /// Human-readable device name (e.g., "MacBook Pro")
+  public var deviceName: String = String()
+
+  /// Platform identifier (e.g., "macos", "linux", "windows")
+  public var platform: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// JoinRequestAck - Server acknowledges the join request was stored
+public struct Shared_Proto_Services_V1_JoinRequestAck: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// The pending_device_id that was accepted
+  public var pendingDeviceID: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// CheckJoinRequestStatusRequest - TUI polls with its pending_device_id
+public struct Shared_Proto_Services_V1_CheckJoinRequestStatusRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var pendingDeviceID: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// CheckJoinRequestStatusResponse - Current status of the join request
+public struct Shared_Proto_Services_V1_CheckJoinRequestStatusResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var status: Shared_Proto_Services_V1_CheckJoinRequestStatusResponse.Status = .pending
+
+  /// Populated only when status == APPROVED
+  public var tokens: Shared_Proto_Services_V1_AuthTokensResponse {
+    get {_tokens ?? Shared_Proto_Services_V1_AuthTokensResponse()}
+    set {_tokens = newValue}
+  }
+  /// Returns true if `tokens` has been explicitly set.
+  public var hasTokens: Bool {self._tokens != nil}
+  /// Clears the value of `tokens`. Subsequent reads from it will return its default value.
+  public mutating func clearTokens() {self._tokens = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public enum Status: SwiftProtobuf.Enum, Swift.CaseIterable {
+    public typealias RawValue = Int
+
+    /// Still waiting for phone approval
+    case pending // = 0
+
+    /// Phone approved — tokens included
+    case approved // = 1
+
+    /// Phone rejected
+    case rejected // = 2
+
+    /// TTL expired before approval
+    case expired // = 3
+    case UNRECOGNIZED(Int)
+
+    public init() {
+      self = .pending
+    }
+
+    public init?(rawValue: Int) {
+      switch rawValue {
+      case 0: self = .pending
+      case 1: self = .approved
+      case 2: self = .rejected
+      case 3: self = .expired
+      default: self = .UNRECOGNIZED(rawValue)
+      }
+    }
+
+    public var rawValue: Int {
+      switch self {
+      case .pending: return 0
+      case .approved: return 1
+      case .rejected: return 2
+      case .expired: return 3
+      case .UNRECOGNIZED(let i): return i
+      }
+    }
+
+    // The compiler won't synthesize support with the UNRECOGNIZED case.
+    public static let allCases: [Shared_Proto_Services_V1_CheckJoinRequestStatusResponse.Status] = [
+      .pending,
+      .approved,
+      .rejected,
+      .expired,
+    ]
+
+  }
+
+  public init() {}
+
+  fileprivate var _tokens: Shared_Proto_Services_V1_AuthTokensResponse? = nil
+}
+
+/// ApproveJoinRequestRequest - Phone approves the TUI device
+public struct Shared_Proto_Services_V1_ApproveJoinRequestRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// The pending_device_id of the TUI device to approve
+  public var pendingDeviceID: String = String()
+
+  /// Crypto suite to assign (e.g., "Curve25519+Ed25519")
+  public var cryptoSuite: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -1700,6 +1873,40 @@ extension Shared_Proto_Services_V1_DeviceInfo: SwiftProtobuf.Message, SwiftProto
     if lhs._pushProvider != rhs._pushProvider {return false}
     if lhs.isCurrent != rhs.isCurrent {return false}
     if lhs.capabilities != rhs.capabilities {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Shared_Proto_Services_V1_ListDevicesResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ListDevicesResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}device\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._device) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._device {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Services_V1_ListDevicesResponse, rhs: Shared_Proto_Services_V1_ListDevicesResponse) -> Bool {
+    if lhs._device != rhs._device {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -2571,6 +2778,204 @@ extension Shared_Proto_Services_V1_ConfirmDeviceLinkRequest: SwiftProtobuf.Messa
     if lhs.linkToken != rhs.linkToken {return false}
     if lhs.deviceID != rhs.deviceID {return false}
     if lhs._publicKeys != rhs._publicKeys {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Shared_Proto_Services_V1_JoinRequestPayload: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".JoinRequestPayload"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}pending_device_id\0\u{3}identity_public_b64\0\u{3}verifying_key_b64\0\u{3}signed_prekey_public_b64\0\u{3}signed_prekey_signature_b64\0\u{3}device_name\0\u{1}platform\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.pendingDeviceID) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.identityPublicB64) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.verifyingKeyB64) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.signedPrekeyPublicB64) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.signedPrekeySignatureB64) }()
+      case 6: try { try decoder.decodeSingularStringField(value: &self.deviceName) }()
+      case 7: try { try decoder.decodeSingularStringField(value: &self.platform) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.pendingDeviceID.isEmpty {
+      try visitor.visitSingularStringField(value: self.pendingDeviceID, fieldNumber: 1)
+    }
+    if !self.identityPublicB64.isEmpty {
+      try visitor.visitSingularStringField(value: self.identityPublicB64, fieldNumber: 2)
+    }
+    if !self.verifyingKeyB64.isEmpty {
+      try visitor.visitSingularStringField(value: self.verifyingKeyB64, fieldNumber: 3)
+    }
+    if !self.signedPrekeyPublicB64.isEmpty {
+      try visitor.visitSingularStringField(value: self.signedPrekeyPublicB64, fieldNumber: 4)
+    }
+    if !self.signedPrekeySignatureB64.isEmpty {
+      try visitor.visitSingularStringField(value: self.signedPrekeySignatureB64, fieldNumber: 5)
+    }
+    if !self.deviceName.isEmpty {
+      try visitor.visitSingularStringField(value: self.deviceName, fieldNumber: 6)
+    }
+    if !self.platform.isEmpty {
+      try visitor.visitSingularStringField(value: self.platform, fieldNumber: 7)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Services_V1_JoinRequestPayload, rhs: Shared_Proto_Services_V1_JoinRequestPayload) -> Bool {
+    if lhs.pendingDeviceID != rhs.pendingDeviceID {return false}
+    if lhs.identityPublicB64 != rhs.identityPublicB64 {return false}
+    if lhs.verifyingKeyB64 != rhs.verifyingKeyB64 {return false}
+    if lhs.signedPrekeyPublicB64 != rhs.signedPrekeyPublicB64 {return false}
+    if lhs.signedPrekeySignatureB64 != rhs.signedPrekeySignatureB64 {return false}
+    if lhs.deviceName != rhs.deviceName {return false}
+    if lhs.platform != rhs.platform {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Shared_Proto_Services_V1_JoinRequestAck: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".JoinRequestAck"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}pending_device_id\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.pendingDeviceID) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.pendingDeviceID.isEmpty {
+      try visitor.visitSingularStringField(value: self.pendingDeviceID, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Services_V1_JoinRequestAck, rhs: Shared_Proto_Services_V1_JoinRequestAck) -> Bool {
+    if lhs.pendingDeviceID != rhs.pendingDeviceID {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Shared_Proto_Services_V1_CheckJoinRequestStatusRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".CheckJoinRequestStatusRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}pending_device_id\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.pendingDeviceID) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.pendingDeviceID.isEmpty {
+      try visitor.visitSingularStringField(value: self.pendingDeviceID, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Services_V1_CheckJoinRequestStatusRequest, rhs: Shared_Proto_Services_V1_CheckJoinRequestStatusRequest) -> Bool {
+    if lhs.pendingDeviceID != rhs.pendingDeviceID {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Shared_Proto_Services_V1_CheckJoinRequestStatusResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".CheckJoinRequestStatusResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}status\0\u{1}tokens\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularEnumField(value: &self.status) }()
+      case 2: try { try decoder.decodeSingularMessageField(value: &self._tokens) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    if self.status != .pending {
+      try visitor.visitSingularEnumField(value: self.status, fieldNumber: 1)
+    }
+    try { if let v = self._tokens {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Services_V1_CheckJoinRequestStatusResponse, rhs: Shared_Proto_Services_V1_CheckJoinRequestStatusResponse) -> Bool {
+    if lhs.status != rhs.status {return false}
+    if lhs._tokens != rhs._tokens {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Shared_Proto_Services_V1_CheckJoinRequestStatusResponse.Status: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0PENDING\0\u{1}APPROVED\0\u{1}REJECTED\0\u{1}EXPIRED\0")
+}
+
+extension Shared_Proto_Services_V1_ApproveJoinRequestRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ApproveJoinRequestRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}pending_device_id\0\u{3}crypto_suite\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.pendingDeviceID) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.cryptoSuite) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.pendingDeviceID.isEmpty {
+      try visitor.visitSingularStringField(value: self.pendingDeviceID, fieldNumber: 1)
+    }
+    if !self.cryptoSuite.isEmpty {
+      try visitor.visitSingularStringField(value: self.cryptoSuite, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Services_V1_ApproveJoinRequestRequest, rhs: Shared_Proto_Services_V1_ApproveJoinRequestRequest) -> Bool {
+    if lhs.pendingDeviceID != rhs.pendingDeviceID {return false}
+    if lhs.cryptoSuite != rhs.cryptoSuite {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
