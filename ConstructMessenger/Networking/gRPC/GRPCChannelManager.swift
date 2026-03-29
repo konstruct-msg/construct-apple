@@ -88,6 +88,24 @@ final class GRPCChannelManager: Sendable {
         return port > 0 ? port : nil
     }
 
+    /// Polls `ice_proxy_is_running()` and `ice_proxy_port()` until the Rust goroutine signals
+    /// it is fully ready, or the timeout elapses.
+    ///
+    /// `ice_proxy_start_tls()` binds the TCP port synchronously and returns, but the Rust goroutine
+    /// that sets the "is_running" flag runs asynchronously. Without this wait, the immediate
+    /// `iceProxyPort()` check after startOnDemandIfNeeded() / restartAfterCrash() sees 0 and
+    /// falls back to a direct channel — defeating ICE entirely.
+    ///
+    /// In practice the Rust goroutine initializes in <50 ms; the 2-second timeout is generous.
+    private func waitForProxyReady(timeout: TimeInterval = 2.0) async {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if ice_proxy_is_running() != 0, ice_proxy_port() > 0 { return }
+            try? await Task.sleep(nanoseconds: 50_000_000) // 50 ms
+        }
+        Log.debug("🧊 waitForProxyReady: timed out after \(Int(timeout * 1000)) ms", category: "gRPC")
+    }
+
     private init() {}
 
     // MARK: - Persistent Connection
@@ -395,6 +413,7 @@ final class GRPCChannelManager: Sendable {
                     // Restart immediately; do NOT enter cooldown (this is a process crash, not relay failure).
                     Log.info("🧊 ICE proxy port dead (ECONNREFUSED) — restarting proxy", category: "gRPC")
                     await IceProxyManager.shared.restartAfterCrash()
+                    await waitForProxyReady()
                     if iceProxyPort() != nil {
                         continue
                     }
@@ -409,6 +428,7 @@ final class GRPCChannelManager: Sendable {
                     if hasCert {
                         Log.info("🧊 DNS failure on direct path — forcing ICE routing (VPN?)", category: "gRPC")
                         await IceProxyManager.shared.forceStartIgnoringCooldown()
+                        await waitForProxyReady()
                         if iceProxyPort() != nil {
                             continue
                         }
@@ -422,6 +442,7 @@ final class GRPCChannelManager: Sendable {
                 if !usingICE, attempt == 0, shouldTryICEFallback(error) {
                     Log.info("🧊 Direct connection failed — auto-starting ICE (DPI detected)", category: "GRPCChannel")
                     await IceProxyManager.shared.startOnDemandIfNeeded()
+                    await waitForProxyReady()
                     if iceProxyPort() != nil {
                         // The failed connection was already invalidated at the top of this catch block.
                         // No extra invalidation needed — just retry; acquirePersistentClient() will
