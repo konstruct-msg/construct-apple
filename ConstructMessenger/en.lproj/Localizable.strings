@@ -585,12 +585,18 @@
 "session_management" = "Session Management";
 "sign_out_this_device" = "Sign Out This Device";
 "sign_out_this_device_message" = "You will be signed out on this device only. Other linked devices remain active.";
+"sign_out_other_devices" = "Sign Out Other Devices";
+"sign_out_other_devices_message" = "All other linked devices will be signed out. This device stays active.";
 "sign_out_all_devices" = "Sign Out All Devices";
 "sign_out_all_devices_message" = "You will be signed out on ALL devices simultaneously. Use this if a device was lost or compromised.";
 "sign_out_all_hint" = "Signing out of all devices invalidates all sessions immediately. You will need to re-authenticate on every device.";
 "sign_out" = "Sign Out";
 "device_scan_to_approve" = "Scan to Approve New Device";
 "device_revoke_confirm_message" = "Sign out \"%@\" remotely? This device will be disconnected from your account.";
+"this_device" = "This Device";
+"other_devices" = "Other Devices";
+"other_devices_hint" = "Tap − to remove a device from your account.";
+"device_active_now" = "Active now";
 
 // MARK: - Flood guard & Lockdown
 "flood_alert_body" = "Sent %d messages in a short time. Notifications suppressed.";
