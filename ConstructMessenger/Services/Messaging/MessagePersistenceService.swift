@@ -71,7 +71,7 @@ class MessagePersistenceService {
             
             // Set reply information
             if let replyMessage = replyTo {
-                newMessage.replyToMessageId = replyMessage.id?.lowercased()
+                newMessage.replyToMessageId = replyMessage.id.lowercased()
                 newMessage.replyToContent = replyToContentOverride ?? replyMessage.decryptedContent
             }
             
@@ -165,7 +165,7 @@ class MessagePersistenceService {
         newMessage.chat = chat
 
         if let replyMessage = replyTo {
-            newMessage.replyToMessageId = replyMessage.id?.lowercased()
+            newMessage.replyToMessageId = replyMessage.id.lowercased()
             newMessage.replyToContent = replyToContentOverride ?? replyMessage.decryptedContent
         }
 
