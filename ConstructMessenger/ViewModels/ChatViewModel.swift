@@ -818,7 +818,7 @@ class ChatViewModel: NSObject {
         isSending = true
 
         do {
-            let messageId = UUID().uuidString
+            let messageId = UUID().uuidString.lowercased()
             let plan = ChunkedMessageSender.shared.buildPlan(plaintext: text, messageId: UUID(uuidString: messageId) ?? UUID())
             guard !plan.payloads.isEmpty else {
                 Log.error("❌ Message too large to send", category: "ChatViewModel")

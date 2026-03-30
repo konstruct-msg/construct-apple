@@ -879,7 +879,7 @@ class MessageRouter {
         in context: NSManagedObjectContext
     ) {
         let fetchRequest = Message.fetchRequest()
-        let messagePredicate = NSPredicate(format: "id == %@", messageData.id)
+        let messagePredicate = NSPredicate(format: "id ==[c] %@", messageData.id)
         fetchRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [messagePredicate])
         
         // Check if message already exists (from background fetch)
@@ -901,7 +901,7 @@ class MessageRouter {
         
         // Create new message
         let message = Message(context: context)
-        message.id = messageData.id
+        message.id = messageData.id.lowercased()
         message.fromUserId = messageData.from
         message.toUserId = messageData.to
         message.encryptedContent = messageData.content
@@ -914,10 +914,10 @@ class MessageRouter {
 
         // Restore reply-to context so the receiver sees the same reply bubble as the sender.
         if !messageData.replyToMessageId.isEmpty {
-            message.replyToMessageId = messageData.replyToMessageId
+            message.replyToMessageId = messageData.replyToMessageId.lowercased()
             // Look up the replied-to message locally to populate the preview snippet.
             let replyFetch = Message.fetchRequest()
-            replyFetch.predicate = NSPredicate(format: "id == %@", messageData.replyToMessageId)
+            replyFetch.predicate = NSPredicate(format: "id ==[c] %@", messageData.replyToMessageId)
             replyFetch.fetchLimit = 1
             if let replyMsg = (try? context.fetch(replyFetch))?.first {
                 message.replyToContent = replyMsg.decryptedContent

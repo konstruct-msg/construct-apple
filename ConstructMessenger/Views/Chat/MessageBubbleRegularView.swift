@@ -284,20 +284,29 @@ struct MessageBubbleRegularView: View {
 
     @ViewBuilder
     private var replyIndicatorView: some View {
-        if let replyContent = message.replyToContent {
+        let hasReply = message.replyToMessageId != nil && !(message.replyToMessageId ?? "").isEmpty
+        if hasReply {
             HStack(spacing: 4) {
                 Rectangle()
                     .fill(Color.accentColor.opacity(0.6))
                     .frame(width: 3)
 
-                ReplyPreviewContent(
-                    content: replyContent,
-                    messageId: message.replyToMessageId,
-                    thumbnailSize: 40,
-                    lineLimit: 2
-                )
-                .padding(.vertical, 4)
-                .padding(.trailing, 4)
+                if let replyContent = message.replyToContent {
+                    ReplyPreviewContent(
+                        content: replyContent,
+                        messageId: message.replyToMessageId,
+                        thumbnailSize: 40,
+                        lineLimit: 2
+                    )
+                    .padding(.vertical, 4)
+                    .padding(.trailing, 4)
+                } else {
+                    Text("Original message")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .padding(.vertical, 4)
+                        .padding(.trailing, 4)
+                }
             }
             .padding(.horizontal, 12)
             .padding(.top, 8)
