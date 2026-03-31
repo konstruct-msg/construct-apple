@@ -1,10 +1,6 @@
 import Foundation
 
 enum CallsFeature {
-    static let enabledKey = "callsEnabled"
-
-    static var isEnabled: Bool {
-        UserDefaults.standard.bool(forKey: enabledKey)
-    }
+    static var isEnabled: Bool { true }
 }
 
