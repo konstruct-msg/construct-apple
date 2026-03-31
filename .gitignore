@@ -81,3 +81,11 @@ Thumbs.db
 *.o
 *.rcgu.o
 __.SYMDEF
+
+# Python
+test_*.py
+*.pyc
+__pycache__/
+venv/
+*.egg-info/
+.mypy_cache/
