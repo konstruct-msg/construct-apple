@@ -644,3 +644,16 @@
 "call_incoming_audio" = "Входящий аудиозвонок";
 "call_answer" = "Ответить";
 "call_decline" = "Отклонить";
+
+// MARK: - Call History
+"calls_tab" = "Звонки";
+"calls_recents" = "Недавние";
+"calls_clear" = "Очистить";
+"calls_clear_confirm" = "Очистить историю звонков?";
+"calls_empty" = "Нет недавних звонков";
+"call_outgoing" = "Исходящий";
+"call_incoming" = "Входящий";
+"call_missed" = "Пропущенный";
+"call_declined" = "Отклонённый";
+"call_failed" = "Не состоялся";
+"call_call_back" = "Перезвонить";

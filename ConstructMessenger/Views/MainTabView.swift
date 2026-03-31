@@ -62,11 +62,19 @@ struct MainTabView: View {
                     .tag(1)
 
                 #if os(iOS)
+                if CallsFeature.isEnabled {
+                    CallHistoryView()
+                        .tabItem {
+                            Label(NSLocalizedString("calls_tab", comment: ""), systemImage: "phone")
+                        }
+                        .tag(2)
+                }
+
                 SettingsView()
                     .tabItem {
                         Label("settings", systemImage: "gear")
                     }
-                    .tag(2)
+                    .tag(CallsFeature.isEnabled ? 3 : 2)
                 #endif
             }
             #if os(iOS)

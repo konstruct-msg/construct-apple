@@ -49,6 +49,8 @@ final class CallManager {
         var webrtc: (any WebRTCSessionProtocol)?
         var keepaliveTask: Task<Void, Never>?
         var receiveTask: Task<Void, Never>?
+        let startedAt: Date = Date()
+        var answeredAt: Date? = nil
 
         init(session: CallSession) {
             self.session = session
@@ -349,9 +351,34 @@ final class CallManager {
     private func endActiveCall(reason: EndReason, reportToCallKit: Bool = true) {
         guard let active else { return }
         let session = active.session
+        let startedAt = active.startedAt
+        let answeredAt = active.answeredAt
+
+        // Determine call status for history
+        let historyStatus: CallRecord.Status
+        switch reason {
+        case .hangup(let r):
+            switch r {
+            case .declined: historyStatus = session.direction == .incoming ? .declined : .missed
+            case .busy:     historyStatus = .missed
+            default:        historyStatus = answeredAt != nil ? .completed : .missed
+            }
+        case .error, .local:
+            historyStatus = answeredAt != nil ? .completed : .failed
+        }
+
+        let duration: Int32 = answeredAt.map { Int32(Date().timeIntervalSince($0)) } ?? 0
+
         active.close()
         self.active = nil
         state = .ended(session, reason)
+
+        CallHistoryService.shared.record(
+            session: session,
+            status: historyStatus,
+            startedAt: startedAt,
+            durationSeconds: duration
+        )
 
         #if os(iOS)
         if reportToCallKit {
@@ -404,6 +431,7 @@ final class CallManager {
             try await active.webrtc?.setRemoteOffer(sdp: offer.sdp)
             let answerSdp = try await active.webrtc?.createAnswer() ?? ""
             sendAnswer(sdp: answerSdp)
+            active.answeredAt = Date()
             state = .active(session)
         } catch {
             Log.error("📞 Failed to handle offer: \(error)", category: "Calls")
@@ -416,6 +444,7 @@ final class CallManager {
         do {
             try ensureWebRTC(role: .caller)
             try await active.webrtc?.setRemoteAnswer(sdp: answer.sdp)
+            active.answeredAt = Date()
             state = .active(session)
             #if os(iOS)
             CallKitProvider.shared.reportOutgoingCallConnected(uuid: session.uuid)

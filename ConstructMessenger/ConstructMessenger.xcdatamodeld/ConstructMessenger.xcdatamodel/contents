@@ -67,6 +67,21 @@
             </uniquenessConstraint>
         </uniquenessConstraints>
     </entity>
+    <entity name="CallRecord" representedClassName="CallRecord" syncable="YES">
+        <attribute name="id" attributeType="String"/>
+        <attribute name="peerUserId" attributeType="String"/>
+        <attribute name="peerName" attributeType="String"/>
+        <attribute name="directionRaw" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="statusRaw" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="startedAt" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="endedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="durationSeconds" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <uniquenessConstraints>
+            <uniquenessConstraint>
+                <constraint value="id"/>
+            </uniquenessConstraint>
+        </uniquenessConstraints>
+    </entity>
     <entity name="HealingMessage" representedClassName="HealingMessage" syncable="YES">
         <attribute name="messageId" attributeType="String"/>
         <attribute name="senderId" attributeType="String"/>

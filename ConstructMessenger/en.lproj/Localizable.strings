@@ -642,3 +642,16 @@
 "call_incoming_audio" = "Incoming audio call";
 "call_answer" = "Answer";
 "call_decline" = "Decline";
+
+// MARK: - Call History
+"calls_tab" = "Calls";
+"calls_recents" = "Recents";
+"calls_clear" = "Clear";
+"calls_clear_confirm" = "Clear all recent calls?";
+"calls_empty" = "No recent calls";
+"call_outgoing" = "Outgoing";
+"call_incoming" = "Incoming";
+"call_missed" = "Missed";
+"call_declined" = "Declined";
+"call_failed" = "Failed";
+"call_call_back" = "Call Back";
