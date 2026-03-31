@@ -214,11 +214,11 @@ struct SettingsView: View {
                         }
 
                         // MARK: - Developer Section
-                        #if DEBUG
+//                        #if DEBUG
                         settingsSection(header: "Developer") {
                             ConstructNavRow(icon: "terminal", title: LocalizedStringKey("diagnostics_and_logs"), iconColor: Color(.orange), destination: DiagnosticsView())
                         }
-                        #endif
+//                        #endif
                     }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 24)

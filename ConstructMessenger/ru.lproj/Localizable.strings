@@ -633,3 +633,14 @@
 
 "voice_message" = "Голосовое сообщение";
 "ice_auto_activated_footer" = "Лёд активирован автоматически — ваша сеть блокирует прямые подключения. Вы можете отключить его в настройках.";
+
+// MARK: - Calls
+"call_start" = "Аудиозвонок";
+"call_mute" = "Выкл. микрофон";
+"call_unmute" = "Вкл. микрофон";
+"call_speaker" = "Динамик";
+"call_end" = "Завершить";
+"call_connecting" = "Соединение…";
+"call_incoming_audio" = "Входящий аудиозвонок";
+"call_answer" = "Ответить";
+"call_decline" = "Отклонить";

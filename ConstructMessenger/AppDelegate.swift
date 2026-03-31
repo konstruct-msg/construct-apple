@@ -24,6 +24,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         UserDefaults.standard.register(defaults: [
             "pushNotificationsEnabled": true,
             "backgroundFetchEnabled": true,
+            CallsFeature.enabledKey: false,
         ])
 
         // CRITICAL: Register background tasks BEFORE app finishes launching
@@ -46,6 +47,11 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         // ✅ NEW: Initialize push notification manager
         // This sets up the UNUserNotificationCenter delegate
         _ = PushNotificationManager.shared
+
+        // ✅ Calls base: start PushKit VoIP registry (feature-flagged).
+        _ = VoIPPushManager.shared
+        VoIPPushManager.shared.startIfEnabled()
+        _ = CallManager.shared
 
         // NOTE: NetworkReachabilityManager and MessageQueueManager will be initialized
         // lazily when first accessed. This avoids potential circular dependencies
@@ -183,6 +189,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         // and is immediately synced with the server — preventing BadDeviceToken errors.
         application.registerForRemoteNotifications()
         Task { await PushNotificationManager.shared.ensureTokenRegistered() }
+        Task { await VoIPPushManager.shared.ensureTokenRegistered() }
     }
 
     func applicationDidEnterBackground(_ application: UIApplication) {

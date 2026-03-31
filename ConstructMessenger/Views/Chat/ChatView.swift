@@ -22,6 +22,7 @@ struct ChatView: View {
     /// Message opened for "Quote & Reply" selection sheet.
     @State private var quotingMessage: Message? = nil
     @State private var showingUserProfile = false
+    @State private var callManager = CallManager.shared
 
     @State private var searchText = ""
     @State private var isSearchActive = false
@@ -529,6 +530,24 @@ struct ChatView: View {
 
         // Split into separate ToolbarItems to avoid NSToolbarItemGroup selectionMode warnings on macOS
         if !isEditMode {
+            // Call button — only for 1-on-1 chats when calls are enabled
+            if CallsFeature.isEnabled, let otherUser = viewModel.chat.otherUser, case .idle = callManager.state {
+                ToolbarItem(placement: .automatic) {
+                    Button {
+                        Task {
+                            await callManager.startOutgoingCall(
+                                to: otherUser.id ?? "",
+                                displayName: otherUser.resolvedDisplayName,
+                                hasVideo: false
+                            )
+                        }
+                    } label: {
+                        Image(systemName: "phone")
+                    }
+                    .accessibilityLabel(NSLocalizedString("call_start", comment: ""))
+                }
+            }
+
             ToolbarItem(placement: .automatic) {
                 Button {
                     withAnimation {

@@ -1,0 +1,108 @@
+//
+//  CallKitProvider.swift
+//  Construct Messenger
+//
+
+#if os(iOS)
+import Foundation
+import CallKit
+
+final class CallKitProvider: NSObject, CXProviderDelegate {
+    static let shared = CallKitProvider()
+
+    private let provider: CXProvider
+    private let callController = CXCallController()
+    var onAnswer: (@Sendable (UUID) -> Void)?
+    var onEnd: (@Sendable (UUID) -> Void)?
+
+    private override init() {
+        let config = CXProviderConfiguration(localizedName: "Construct")
+        config.supportsVideo = true
+        config.maximumCallsPerCallGroup = 1
+        config.maximumCallGroups = 1
+        config.supportedHandleTypes = [.generic]
+        self.provider = CXProvider(configuration: config)
+        super.init()
+        provider.setDelegate(self, queue: nil)
+    }
+
+    @MainActor
+    func reportIncomingCall(callId: String, callerId: String, callerName: String, hasVideo: Bool) -> UUID {
+        let uuid = UUID(uuidString: callId) ?? UUID()
+        let update = CXCallUpdate()
+        update.remoteHandle = CXHandle(type: .generic, value: callerId)
+        update.localizedCallerName = callerName
+        update.hasVideo = hasVideo
+
+        provider.reportNewIncomingCall(with: uuid, update: update) { error in
+            if let error {
+                Log.error("📞 CallKit reportNewIncomingCall failed: \(error)", category: "Calls")
+            } else {
+                Log.info("📞 CallKit incoming call reported (uuid=\(uuid.uuidString.prefix(8))…)", category: "Calls")
+            }
+        }
+        return uuid
+    }
+
+    @MainActor
+    func requestEndCall(uuid: UUID) async {
+        let action = CXEndCallAction(call: uuid)
+        let transaction = CXTransaction(action: action)
+        do {
+            try await callController.request(transaction)
+        } catch {
+            Log.error("📞 CallKit end-call transaction failed: \(error)", category: "Calls")
+        }
+    }
+
+    @MainActor
+    func requestStartCall(uuid: UUID, calleeId: String, calleeName: String, hasVideo: Bool) async {
+        let handle = CXHandle(type: .generic, value: calleeId)
+        let action = CXStartCallAction(call: uuid, handle: handle)
+        action.isVideo = hasVideo
+        action.contactIdentifier = calleeId
+        // Callee display name is set via app UI; CallKit uses the handle value.
+
+        let transaction = CXTransaction(action: action)
+        do {
+            try await callController.request(transaction)
+            provider.reportOutgoingCall(with: uuid, startedConnectingAt: nil)
+            Log.info("📞 CallKit start-call transaction ok (uuid=\(uuid.uuidString.prefix(8))…)", category: "Calls")
+        } catch {
+            Log.error("📞 CallKit start-call transaction failed: \(error)", category: "Calls")
+        }
+    }
+
+    @MainActor
+    func reportOutgoingCallConnected(uuid: UUID) {
+        provider.reportOutgoingCall(with: uuid, connectedAt: Date())
+    }
+
+    @MainActor
+    func reportCallEnded(uuid: UUID) {
+        provider.reportCall(with: uuid, endedAt: Date(), reason: .remoteEnded)
+    }
+
+    // MARK: - CXProviderDelegate (minimal)
+
+    nonisolated func providerDidReset(_ provider: CXProvider) {}
+
+    nonisolated func provider(_ provider: CXProvider, perform action: CXStartCallAction) {
+        Log.info("📞 CallKit start (uuid=\(action.callUUID.uuidString.prefix(8))…)", category: "Calls")
+        action.fulfill()
+    }
+
+    nonisolated func provider(_ provider: CXProvider, perform action: CXAnswerCallAction) {
+        Log.info("📞 CallKit answer (uuid=\(action.callUUID.uuidString.prefix(8))…)", category: "Calls")
+        onAnswer?(action.callUUID)
+        action.fulfill()
+    }
+
+    nonisolated func provider(_ provider: CXProvider, perform action: CXEndCallAction) {
+        Log.info("📞 CallKit end (uuid=\(action.callUUID.uuidString.prefix(8))…)", category: "Calls")
+        onEnd?(action.callUUID)
+        action.fulfill()
+    }
+}
+
+#endif

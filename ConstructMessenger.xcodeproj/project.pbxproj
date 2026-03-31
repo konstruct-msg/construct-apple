@@ -14,6 +14,7 @@
 		BF3DE8782F62C2000058C1AA /* SwiftProtobuf in Frameworks */ = {isa = PBXBuildFile; productRef = BF3DE8772F62C2000058C1AA /* SwiftProtobuf */; };
 		BF7098D12F01D3C400CC6F04 /* ConstructCore.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = BF7098D02F01D3C400CC6F04 /* ConstructCore.xcframework */; };
 		BF7098D22F01D3C400CC6F04 /* ConstructCore.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = BF7098D02F01D3C400CC6F04 /* ConstructCore.xcframework */; };
+		BFCB6D932F7C4C4800C59B83 /* WebRTC in Frameworks */ = {isa = PBXBuildFile; productRef = BFCB6D922F7C4C4800C59B83 /* WebRTC */; };
 		BFF6FC9D2F4C3E1F00A31F36 /* GRPCCore in Frameworks */ = {isa = PBXBuildFile; productRef = BFF6FC9C2F4C3E1F00A31F36 /* GRPCCore */; };
 		BFF6FCF42F4C4CCA00A31F36 /* GRPCProtobuf in Frameworks */ = {isa = PBXBuildFile; productRef = BFF6FCF32F4C4CCA00A31F36 /* GRPCProtobuf */; };
 		BFF6FCF92F4C4D6600A31F36 /* GRPCNIOTransportHTTP2 in Frameworks */ = {isa = PBXBuildFile; productRef = BFF6FCF82F4C4D6600A31F36 /* GRPCNIOTransportHTTP2 */; };
@@ -129,6 +130,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				BFF6FC9D2F4C3E1F00A31F36 /* GRPCCore in Frameworks */,
+				BFCB6D932F7C4C4800C59B83 /* WebRTC in Frameworks */,
 				BFF6FD002F4C4E5300A31F36 /* SwiftProtobuf in Frameworks */,
 				BFF6FCF92F4C4D6600A31F36 /* GRPCNIOTransportHTTP2 in Frameworks */,
 				BF7098D12F01D3C400CC6F04 /* ConstructCore.xcframework in Frameworks */,
@@ -231,6 +233,7 @@
 				BFF6FCF32F4C4CCA00A31F36 /* GRPCProtobuf */,
 				BFF6FCF82F4C4D6600A31F36 /* GRPCNIOTransportHTTP2 */,
 				BFF6FCFF2F4C4E5300A31F36 /* SwiftProtobuf */,
+				BFCB6D922F7C4C4800C59B83 /* WebRTC */,
 			);
 			productName = "Construct Messenger";
 			productReference = BF103A6F2EED889800324CEA /* Construct Messenger.app */;
@@ -377,6 +380,7 @@
 				BFF6FCF22F4C4CCA00A31F36 /* XCRemoteSwiftPackageReference "grpc-swift-protobuf" */,
 				BFF6FCF72F4C4D6600A31F36 /* XCRemoteSwiftPackageReference "grpc-swift-nio-transport" */,
 				BFF6FCFE2F4C4E5300A31F36 /* XCRemoteSwiftPackageReference "swift-protobuf" */,
+				BFCB6D912F7C4C4800C59B83 /* XCRemoteSwiftPackageReference "WebRTC" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = BF103A702EED889800324CEA /* Products */;
@@ -528,7 +532,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = ConstructMessenger/ConstructMessenger.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 259;
+				CURRENT_PROJECT_VERSION = 260;
 				DEVELOPMENT_TEAM = PK2473XF3P;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -564,7 +568,7 @@
 					"$(PROJECT_DIR)/target/aarch64-apple-ios-macabi/release",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.11.1;
+				MARKETING_VERSION = 0.11.2;
 				PRODUCT_BUNDLE_IDENTIFIER = maximeliseyev.constructmessenger;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -718,7 +722,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = ConstructMessenger/ConstructMessenger.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 259;
+				CURRENT_PROJECT_VERSION = 260;
 				DEVELOPMENT_TEAM = PK2473XF3P;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -754,7 +758,7 @@
 					"$(PROJECT_DIR)/target/aarch64-apple-ios-macabi/release",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.11.1;
+				MARKETING_VERSION = 0.11.2;
 				PRODUCT_BUNDLE_IDENTIFIER = maximeliseyev.constructmessenger;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -779,7 +783,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = ConstructMessenger/ConstructMessenger.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 259;
+				CURRENT_PROJECT_VERSION = 260;
 				DEVELOPMENT_TEAM = PK2473XF3P;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -815,7 +819,7 @@
 					"$(PROJECT_DIR)/target/aarch64-apple-ios-macabi/release",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.11.1;
+				MARKETING_VERSION = 0.11.2;
 				PRODUCT_BUNDLE_IDENTIFIER = maximeliseyev.constructmessenger;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -1295,6 +1299,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		BFCB6D912F7C4C4800C59B83 /* XCRemoteSwiftPackageReference "WebRTC" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/stasel/WebRTC.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 146.0.0;
+			};
+		};
 		BFF6FCF22F4C4CCA00A31F36 /* XCRemoteSwiftPackageReference "grpc-swift-protobuf" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/grpc/grpc-swift-protobuf";
@@ -1349,6 +1361,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = BFF6FCFE2F4C4E5300A31F36 /* XCRemoteSwiftPackageReference "swift-protobuf" */;
 			productName = SwiftProtobuf;
+		};
+		BFCB6D922F7C4C4800C59B83 /* WebRTC */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BFCB6D912F7C4C4800C59B83 /* XCRemoteSwiftPackageReference "WebRTC" */;
+			productName = WebRTC;
 		};
 		BFF6FC9C2F4C3E1F00A31F36 /* GRPCCore */ = {
 			isa = XCSwiftPackageProductDependency;

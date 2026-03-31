@@ -16,6 +16,14 @@ final class NotificationServiceClient: Sendable {
 
     private init() {}
 
+    private var pushEnvironment: Shared_Proto_Services_V1_PushEnvironment {
+        #if DEBUG
+        return .pushEnvSandbox
+        #else
+        return .pushEnvProduction
+        #endif
+    }
+
     // MARK: - Register / Update Device Token
 
     /// Registers (or updates) the APNs push token with the server.
@@ -23,11 +31,7 @@ final class NotificationServiceClient: Sendable {
     func registerDeviceToken(token: String) async throws -> DeviceTokenResponse {
         let deviceId = KeychainManager.shared.loadDeviceID() ?? ""
 
-        #if DEBUG
-        let environment = Shared_Proto_Services_V1_PushEnvironment.pushEnvSandbox
-        #else
-        let environment = Shared_Proto_Services_V1_PushEnvironment.pushEnvProduction
-        #endif
+        let environment = pushEnvironment
 
         Log.info("📲 Registering APNs token — environment: \(environment.rawValue) (\(environment == .pushEnvProduction ? "production" : "sandbox"))", category: "Notifications")
 
@@ -49,6 +53,39 @@ final class NotificationServiceClient: Sendable {
                 success: response.success,
                 message: nil
             )
+        }
+    }
+
+    // MARK: - VoIP Token (CallKit)
+
+    /// Registers (or updates) the APNs VoIP token (PushKit) used for incoming calls.
+    func registerVoipToken(voipToken: String) async throws -> Bool {
+        let deviceId = KeychainManager.shared.loadDeviceID() ?? ""
+        let environment = pushEnvironment
+
+        return try await GRPCChannelManager.shared.performRPC { grpcClient in
+            let client = Shared_Proto_Services_V1_NotificationService.Client(wrapping: grpcClient)
+
+            var request = Shared_Proto_Services_V1_RegisterVoipTokenRequest()
+            request.voipToken = voipToken
+            request.deviceID = deviceId
+            request.platform = "ios"
+            request.environment = environment
+
+            let response = try await client.registerVoipToken(request: .init(message: request))
+            return response.success
+        }
+    }
+
+    /// Removes the VoIP token (typically on logout or PushKit token invalidation).
+    func unregisterVoipToken() async throws {
+        let deviceId = KeychainManager.shared.loadDeviceID() ?? ""
+
+        try await GRPCChannelManager.shared.performRPC { grpcClient in
+            let client = Shared_Proto_Services_V1_NotificationService.Client(wrapping: grpcClient)
+            var request = Shared_Proto_Services_V1_UnregisterVoipTokenRequest()
+            request.deviceID = deviceId
+            _ = try await client.unregisterVoipToken(request: .init(message: request))
         }
     }
 
