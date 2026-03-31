@@ -84,6 +84,7 @@ __.SYMDEF
 
 # Python
 test_*.py
+!tests/**/*.py
 *.pyc
 __pycache__/
 venv/
