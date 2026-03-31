@@ -753,7 +753,7 @@ public struct Shared_Proto_Services_V1_PendingMessage: Sendable {
   /// Content type — required for control messages (SESSION_RESET = 21, KEY_SYNC = 22).
   /// Clients MUST check this before attempting to decrypt encrypted_payload.
   /// For regular E2EE messages this will be CONTENT_TYPE_E2EE_SIGNAL (= 11).
-  public var contentType: Shared_Proto_Core_V1_ContentType = .unspecitied
+  public var contentType: Shared_Proto_Core_V1_ContentType = .unspecified
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -1818,7 +1818,7 @@ extension Shared_Proto_Services_V1_PendingMessage: SwiftProtobuf.Message, SwiftP
     if self.timestamp != 0 {
       try visitor.visitSingularInt64Field(value: self.timestamp, fieldNumber: 8)
     }
-    if self.contentType != .unspecitied {
+    if self.contentType != .unspecified {
       try visitor.visitSingularEnumField(value: self.contentType, fieldNumber: 9)
     }
     try unknownFields.traverse(visitor: &visitor)

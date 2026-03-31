@@ -261,12 +261,6 @@ struct DeleteAccountConfirmationView: View {
 
             Spacer()
 
-            // Icon
-            Image(systemName: "exclamationmark.triangle")
-                .font(.system(size: 52, weight: .light))
-                .foregroundColor(.red.opacity(0.85))
-                .padding(.bottom, 20)
-
             Text("delete_my_account")
                 .font(.title2).fontWeight(.semibold)
                 .padding(.bottom, 8)

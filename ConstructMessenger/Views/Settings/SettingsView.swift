@@ -121,6 +121,8 @@ struct SettingsView: View {
 
                         // MARK: - App Settings Section
                         settingsSection {
+                            ConstructNavRow(icon: "laptopcomputer", title: LocalizedStringKey("linked_devices"), destination: DevicesView())
+                            ConstructRowDivider()
                             ConstructNavRow(icon: "lock", title: LocalizedStringKey("security"), destination: SecurityView())
                             ConstructRowDivider()
                             ConstructNavRow(icon: "internaldrive", title: LocalizedStringKey("data_and_storage"), destination: DataStorageSettingsView())

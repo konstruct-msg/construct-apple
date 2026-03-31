@@ -33,7 +33,7 @@ struct VoiceRecordingBar: View {
             // Live waveform
             LiveWaveformView(samples: waveform)
                 .frame(maxWidth: .infinity)
-                .frame(height: 44)
+                .frame(height: 32)
                 .padding(.horizontal, 12)
 
             // Timer
@@ -44,10 +44,10 @@ struct VoiceRecordingBar: View {
                 ZStack {
                     Circle()
                         .fill(Color.white.opacity(0.25))
-                        .frame(width: 44, height: 44)
+                        .frame(width: 32, height: 32)
                     RoundedRectangle(cornerRadius: 4)
                         .fill(Color.red.opacity(0.75))
-                        .frame(width: 16, height: 16)
+                        .frame(width: 12, height: 12)
                 }
             }
             .buttonStyle(.plain)
@@ -80,7 +80,7 @@ struct VoicePreviewBar: View {
             // Static waveform
             StaticWaveformView(samples: waveform)
                 .frame(maxWidth: .infinity)
-                .frame(height: 44)
+                .frame(height: 32)
                 .padding(.horizontal, 12)
 
             // Duration
@@ -90,7 +90,7 @@ struct VoicePreviewBar: View {
             Button(action: onSend) {
                 ZStack {
                     Image(systemName: "arrow.up.circle.fill")
-                        .font(.system(size: 44, weight: .semibold))
+                        .font(.system(size: 32, weight: .semibold))
                         .foregroundStyle(Color.white.opacity(0.35))
                         .offset(x: 1)
                 }
@@ -109,7 +109,7 @@ private func circleButton(symbol: String, tint: Color, icon: Color) -> some View
     ZStack {
         Circle()
             .fill(tint)
-            .frame(width: 44, height: 44)
+            .frame(width: 32, height: 32)
         Image(systemName: symbol)
             .font(.system(size: 15, weight: .semibold))
             .foregroundStyle(icon)
