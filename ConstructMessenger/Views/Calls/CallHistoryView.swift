@@ -126,11 +126,7 @@ private struct CallHistoryRow: View {
     var body: some View {
         HStack(spacing: 12) {
             // Avatar
-            HexagonAvatarView(
-                userId: record.peerUserId,
-                displayName: record.peerName,
-                size: 44
-            )
+            CallAvatarView(userId: record.peerUserId, displayName: record.peerName, size: 44)
 
             // Name + direction/status
             VStack(alignment: .leading, spacing: 3) {

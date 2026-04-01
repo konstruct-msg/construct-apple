@@ -25,11 +25,7 @@ struct IncomingCallView: View {
 
                 // Avatar + caller info
                 VStack(spacing: 12) {
-                    HexagonAvatarView(
-                        userId: session.peerUserId,
-                        displayName: session.peerName,
-                        size: 72
-                    )
+                    CallAvatarView(userId: session.peerUserId, displayName: session.peerName, size: 72)
 
                     Text(session.peerName)
                         .font(.title3.weight(.semibold))

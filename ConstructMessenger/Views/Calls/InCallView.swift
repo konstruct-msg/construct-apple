@@ -28,14 +28,10 @@ struct InCallView: View {
 
                 // Avatar + name
                 VStack(spacing: 16) {
-                    HexagonAvatarView(
-                        userId: session.peerUserId,
-                        displayName: session.peerName,
-                        size: 96
-                    )
-                    .overlay {
+                    ZStack {
+                        CallAvatarView(userId: session.peerUserId, displayName: session.peerName, size: 96)
                         if isConnecting {
-                            PulseRingView()
+                            PulseRingView(size: 96)
                         }
                     }
 
@@ -122,6 +118,7 @@ struct InCallView: View {
 // MARK: - Pulse ring animation
 
 private struct PulseRingView: View {
+    let size: CGFloat
     @State private var scale: CGFloat = 1
     @State private var opacity: Double = 0.5
 
@@ -129,7 +126,7 @@ private struct PulseRingView: View {
         Circle()
             .stroke(Color.Construct.accent.opacity(opacity), lineWidth: 2)
             .scaleEffect(scale)
-            .frame(width: 96, height: 96)
+            .frame(width: size, height: size)
             .onAppear {
                 withAnimation(.easeOut(duration: 1.4).repeatForever(autoreverses: false)) {
                     scale = 1.5
@@ -176,3 +173,4 @@ private struct CallControlButton: View {
     InCallView(session: session, isConnecting: false)
 }
 #endif
+
