@@ -50,7 +50,7 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
 
     private var localAudioTrack: RTCAudioTrack?
 
-    init(role: WebRTCSessionRole, turn: Shared_Proto_Signaling_V1_TurnCredentials) throws {
+    init(role: WebRTCSessionRole, turn: Shared_Proto_Signaling_V1_TurnCredentials?) throws {
         self.role = role
 
         RTCInitializeSSL()
@@ -182,11 +182,26 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
         }
     }
 
-    private static func buildIceServers(turn: Shared_Proto_Signaling_V1_TurnCredentials) -> [RTCIceServer] {
+    // Static TURN URL fallback used when GetTurnCredentials RPC is not yet implemented.
+    // Once the server implements the RPC, dynamic credentials from `turn` will take priority.
+    private static let staticTurnURLs: [String] = [
+        "turn:turn.ams.konstruct.cc:3478?transport=udp",
+        "turn:turn.ams.konstruct.cc:3478?transport=tcp",
+        "turns:turn.ams.konstruct.cc:5349?transport=tcp",
+        "turn:turn.msk.konstruct.cc:3478?transport=udp",
+        "turn:turn.msk.konstruct.cc:3478?transport=tcp",
+        "turns:turn.msk.konstruct.cc:5349?transport=tcp",
+    ]
+
+    private static func buildIceServers(turn: Shared_Proto_Signaling_V1_TurnCredentials?) -> [RTCIceServer] {
         var servers: [RTCIceServer] = []
         servers.append(RTCIceServer(urlStrings: ["stun:stun.l.google.com:19302"]))
-        if !turn.urls.isEmpty {
+        if let turn, !turn.urls.isEmpty {
+            // Dynamic credentials from server — use them exclusively.
             servers.append(RTCIceServer(urlStrings: turn.urls, username: turn.username, credential: turn.credential))
+        } else {
+            // Static fallback: known TURN hosts without credentials (requires open relay config on server).
+            servers.append(RTCIceServer(urlStrings: staticTurnURLs))
         }
         return servers
     }
@@ -233,7 +248,7 @@ extension WebRTCSession: RTCPeerConnectionDelegate {
 final class WebRTCSession: WebRTCSessionProtocol {
     var onLocalIceCandidate: (@Sendable (WebRTCIceCandidate) -> Void)?
 
-    init(role: WebRTCSessionRole, turn: Shared_Proto_Signaling_V1_TurnCredentials) throws {
+    init(role: WebRTCSessionRole, turn: Shared_Proto_Signaling_V1_TurnCredentials?) throws {
         throw WebRTCSessionError.webRTCLibraryMissing
     }
 

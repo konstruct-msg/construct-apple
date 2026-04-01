@@ -111,17 +111,21 @@ final class CallManager {
             )
             #endif
 
-            let turn = try await SignalingServiceClient.shared.getTurnCredentials(callId: callId)
-            active?.turn = turn
-            Log.info("📞 TURN credentials ready for outgoing call (call_id=\(callId.prefix(8))…)", category: "Calls")
+            let turn = try? await SignalingServiceClient.shared.getTurnCredentials(callId: callId)
+            if let turn {
+                active?.turn = turn
+                Log.info("📞 TURN credentials ready for outgoing call (call_id=\(callId.prefix(8))…)", category: "Calls")
+            } else {
+                Log.info("📞 TURN unavailable — proceeding STUN-only (call_id=\(callId.prefix(8))…)", category: "Calls")
+            }
 
             try openStreamIfNeeded()
 
             try ensureWebRTC(role: .caller)
             try await sendOffer(toUserId: userId)
         } catch {
-            Log.error("📞 Failed to fetch TURN credentials: \(error)", category: "Calls")
-            endActiveCall(reason: .local("TURN credentials fetch failed"))
+            Log.error("📞 Outgoing call setup failed: \(error)", category: "Calls")
+            endActiveCall(reason: .local("Call setup failed"))
         }
     }
 
@@ -185,8 +189,13 @@ final class CallManager {
 
         Task {
             do {
-                let turn = try await SignalingServiceClient.shared.getTurnCredentials(callId: active.session.id)
-                self.active?.turn = turn
+                let turn = try? await SignalingServiceClient.shared.getTurnCredentials(callId: active.session.id)
+                if let turn {
+                    self.active?.turn = turn
+                    Log.info("📞 TURN ready for incoming call", category: "Calls")
+                } else {
+                    Log.info("📞 TURN unavailable — proceeding STUN-only (incoming)", category: "Calls")
+                }
                 try self.ensureWebRTC(role: .callee)
                 try openStreamIfNeeded()
                 sendRinging()
@@ -287,6 +296,14 @@ final class CallManager {
             for await msg in stream.incoming {
                 await MainActor.run {
                     self.handleSignalResponse(msg, for: active.session)
+                }
+            }
+            // Stream closed — end call if still active with this session.
+            await MainActor.run { [weak self, weak active] in
+                guard let self, let active else { return }
+                if self.active === active {
+                    Log.error("📞 Signaling stream closed unexpectedly", category: "Calls")
+                    self.endActiveCall(reason: .local("Signal stream closed"))
                 }
             }
         }
@@ -417,16 +434,15 @@ final class CallManager {
     private func ensureWebRTC(role: WebRTCSessionRole) throws {
         guard let active else { throw RPCError(code: .failedPrecondition, message: "No active call") }
         if active.webrtc != nil { return }
-        guard let turn = active.turn else { throw RPCError(code: .failedPrecondition, message: "Missing TURN credentials") }
 
-        let webrtc = try WebRTCSession(role: role, turn: turn)
+        let webrtc = try WebRTCSession(role: role, turn: active.turn)
         webrtc.onLocalIceCandidate = { [weak self] c in
             Task { @MainActor in
                 self?.sendIceCandidate(c)
             }
         }
         active.webrtc = webrtc
-        Log.info("📞 WebRTC session created (role=\(role))", category: "Calls")
+        Log.info("📞 WebRTC session created (role=\(role), turn=\(active.turn != nil ? "yes" : "STUN-only"))", category: "Calls")
     }
 
     private func handleRemoteOffer(_ offer: Shared_Proto_Signaling_V1_CallOffer, for session: CallSession) async {
