@@ -205,8 +205,8 @@ private struct CallHistoryRow: View {
 }
 
 #Preview {
-    let ctx = PreviewHelpers.createPreviewContainer().viewContext
+    let container = PreviewHelpers.createPreviewContainer()
     return CallHistoryView()
-        .environment(\.managedObjectContext, ctx)
+        .environment(\.managedObjectContext, container.viewContext)
 }
 #endif
