@@ -12,11 +12,14 @@ import SwiftUI
 struct InCallView: View {
     let session: CallManager.CallSession
     let isConnecting: Bool
+    var endReason: CallManager.EndReason? = nil
 
     @State private var isMuted = false
     @State private var isSpeaker = false
     @State private var elapsed: Int = 0
     @State private var timer: Timer? = nil
+
+    private var isEnded: Bool { endReason != nil }
 
     var body: some View {
         ZStack {
@@ -30,7 +33,7 @@ struct InCallView: View {
                 VStack(spacing: 16) {
                     ZStack {
                         CallAvatarView(userId: session.peerUserId, displayName: session.peerName, size: 96)
-                        if isConnecting {
+                        if isConnecting && !isEnded {
                             PulseRingView(size: 96)
                         }
                     }
@@ -39,9 +42,9 @@ struct InCallView: View {
                         .font(.title2.weight(.semibold))
                         .foregroundStyle(Color.Construct.textBright)
 
-                    Text(isConnecting ? NSLocalizedString("call_connecting", comment: "") : formattedElapsed)
+                    Text(statusText)
                         .font(ConstructFont.mono(14))
-                        .foregroundStyle(Color.Construct.textDim)
+                        .foregroundStyle(isEnded ? Color.red.opacity(0.85) : Color.Construct.textDim)
                         .animation(.easeInOut(duration: 0.3), value: isConnecting)
                 }
 
@@ -49,49 +52,94 @@ struct InCallView: View {
                 Spacer()
 
                 // Control row
-                HStack(spacing: 44) {
-                    CallControlButton(
-                        systemImage: isMuted ? "mic.slash.fill" : "mic.fill",
-                        label: NSLocalizedString(isMuted ? "call_unmute" : "call_mute", comment: ""),
-                        tint: isMuted ? Color.Construct.accent : Color.Construct.textDim
-                    ) {
-                        isMuted.toggle()
-                        CallManager.shared.setMuted(isMuted)
-                    }
-
-                    // End call — prominent red
+                if isEnded {
                     Button {
+                        // state auto-resets after 3s; allow immediate dismiss via endCall no-op
                         CallManager.shared.endCall()
                     } label: {
-                        Image(systemName: "phone.down.fill")
-                            .font(.system(size: 26))
+                        Text(NSLocalizedString("call_dismiss", comment: "Dismiss ended call"))
+                            .font(.body.weight(.medium))
                             .foregroundStyle(.white)
-                            .frame(width: 68, height: 68)
-                            .background(Color.red)
-                            .clipShape(Circle())
+                            .padding(.horizontal, 36)
+                            .padding(.vertical, 14)
+                            .background(Color.Construct.bg3)
+                            .clipShape(Capsule())
                     }
-                    .accessibilityLabel(NSLocalizedString("call_end", comment: ""))
+                    .padding(.bottom, 52)
+                } else {
+                    HStack(spacing: 44) {
+                        CallControlButton(
+                            systemImage: isMuted ? "mic.slash.fill" : "mic.fill",
+                            label: NSLocalizedString(isMuted ? "call_unmute" : "call_mute", comment: ""),
+                            tint: isMuted ? Color.Construct.accent : Color.Construct.textDim
+                        ) {
+                            isMuted.toggle()
+                            CallManager.shared.setMuted(isMuted)
+                        }
 
-                    CallControlButton(
-                        systemImage: isSpeaker ? "speaker.wave.3.fill" : "speaker.fill",
-                        label: NSLocalizedString("call_speaker", comment: ""),
-                        tint: isSpeaker ? Color.Construct.accent : Color.Construct.textDim
-                    ) {
-                        isSpeaker.toggle()
-                        CallManager.shared.setSpeaker(isSpeaker)
+                        // End call — prominent red
+                        Button {
+                            CallManager.shared.endCall()
+                        } label: {
+                            Image(systemName: "phone.down.fill")
+                                .font(.system(size: 26))
+                                .foregroundStyle(.white)
+                                .frame(width: 68, height: 68)
+                                .background(Color.red)
+                                .clipShape(Circle())
+                        }
+                        .accessibilityLabel(NSLocalizedString("call_end", comment: ""))
+
+                        CallControlButton(
+                            systemImage: isSpeaker ? "speaker.wave.3.fill" : "speaker.fill",
+                            label: NSLocalizedString("call_speaker", comment: ""),
+                            tint: isSpeaker ? Color.Construct.accent : Color.Construct.textDim
+                        ) {
+                            isSpeaker.toggle()
+                            CallManager.shared.setSpeaker(isSpeaker)
+                        }
                     }
+                    .padding(.bottom, 52)
                 }
-                .padding(.bottom, 52)
             }
         }
         .onAppear {
-            guard !isConnecting else { return }
+            guard !isConnecting && !isEnded else { return }
             startTimer()
         }
         .onChange(of: isConnecting) { _, connecting in
-            if !connecting { startTimer() } else { stopTimer() }
+            if !connecting && !isEnded { startTimer() } else { stopTimer() }
+        }
+        .onChange(of: isEnded) { _, ended in
+            if ended { stopTimer() }
         }
         .onDisappear { stopTimer() }
+    }
+
+    // MARK: - Status text
+
+    private var statusText: String {
+        if let reason = endReason {
+            switch reason {
+            case .hangup(let r):
+                switch r {
+                case .normal: return NSLocalizedString("call_ended", comment: "")
+                case .declined: return NSLocalizedString("call_declined", comment: "")
+                case .busy: return NSLocalizedString("call_busy", comment: "")
+                case .timeout: return NSLocalizedString("call_missed", comment: "")
+                default: return NSLocalizedString("call_ended", comment: "")
+                }
+            case .local(let msg):
+                if msg.contains("TURN") { return NSLocalizedString("call_no_relay", comment: "") }
+                return NSLocalizedString("call_failed", comment: "")
+            case .error(_):
+                return NSLocalizedString("call_failed", comment: "")
+            }
+        }
+        if isConnecting {
+            return NSLocalizedString("call_connecting", comment: "")
+        }
+        return formattedElapsed
     }
 
     // MARK: - Timer

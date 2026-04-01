@@ -30,9 +30,15 @@ struct CallHistoryView: View {
                     callList
                 }
             }
-            .navigationTitle(NSLocalizedString("calls_recents", comment: ""))
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text(NSLocalizedString("calls_recents", comment: ""))
+                        .font(ConstructFont.mono(13, weight: .semibold))
+                        .foregroundStyle(Color.Construct.textBright)
+                        .tracking(3)
+                }
+                
                 if !records.isEmpty {
                     ToolbarItem(placement: .topBarTrailing) {
                         Button(NSLocalizedString("calls_clear", comment: "")) {

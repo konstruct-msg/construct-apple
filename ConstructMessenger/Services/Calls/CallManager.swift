@@ -373,6 +373,11 @@ final class CallManager {
         self.active = nil
         state = .ended(session, reason)
 
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            if case .ended = self.state { self.state = .idle }
+        }
+
         CallHistoryService.shared.record(
             session: session,
             status: historyStatus,

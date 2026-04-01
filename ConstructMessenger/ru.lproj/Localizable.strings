@@ -614,6 +614,7 @@
 
 // MARK: - Synaps
 "synaps" = "Синапсы";
+"synapses" = "СИНАПСЫ";
 "synaps_search_prompt" = "Поиск";
 "synaps_empty_title" = "Пока нет связей";
 "synaps_empty_subtitle" = "Люди с которыми вы общаетесь будут здесь, даже если вы удалили переписку.";
@@ -656,4 +657,8 @@
 "call_missed" = "Пропущенный";
 "call_declined" = "Отклонённый";
 "call_failed" = "Не состоялся";
+"call_ended" = "Звонок завершён";
+"call_busy" = "Занято";
+"call_no_relay" = "Нет соединения (relay недоступен)";
+"call_dismiss" = "Закрыть";
 "call_call_back" = "Перезвонить";

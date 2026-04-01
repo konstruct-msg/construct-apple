@@ -33,7 +33,7 @@ struct MainTabView: View {
             }
             .fullScreenCover(isPresented: .constant(isActiveOrConnecting)) {
                 if let session = activeCallSession {
-                    InCallView(session: session, isConnecting: isConnectingState)
+                    InCallView(session: session, isConnecting: isConnectingState, endReason: callEndReason)
                 }
             }
             #endif
@@ -94,23 +94,29 @@ struct MainTabView: View {
 
     private var isActiveOrConnecting: Bool {
         switch callManager.state {
-        case .active, .connecting, .ringing: return true
+        case .dialing, .active, .connecting, .ringing, .ended: return true
         default: return false
         }
     }
 
     private var isConnectingState: Bool {
         switch callManager.state {
-        case .connecting, .ringing: return true
+        case .dialing, .connecting, .ringing: return true
         default: return false
         }
     }
 
     private var activeCallSession: CallManager.CallSession? {
         switch callManager.state {
-        case .active(let s), .connecting(let s), .ringing(let s): return s
+        case .dialing(let s), .active(let s), .connecting(let s), .ringing(let s): return s
+        case .ended(let s, _): return s
         default: return nil
         }
+    }
+
+    private var callEndReason: CallManager.EndReason? {
+        if case .ended(_, let reason) = callManager.state { return reason }
+        return nil
     }
 }
 
