@@ -778,6 +778,42 @@ class CryptoManager {
         return plaintext
     }
     
+    /// Decrypt raw Double Ratchet components — used for signaling fields, not ChatMessage.
+    /// Handles session restore from Keychain if needed. Does not try archived sessions.
+    func decryptRawComponents(
+        contactId: String,
+        ephemeralPublicKey: Data,
+        messageNumber: UInt32,
+        content: String
+    ) throws -> String {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+
+        guard let core = orchestratorCore else {
+            throw CryptoManagerError.coreNotInitialized
+        }
+
+        if !core.hasSession(contactId: contactId) {
+            if !restoreSession(for: contactId) {
+                throw CryptoManagerError.sessionNotFound
+            }
+        }
+
+        guard core.hasSession(contactId: contactId) else {
+            throw CryptoManagerError.sessionNotFound
+        }
+
+        let contentForDecrypt = MessagePadding.unpadCiphertextBase64(content)
+        let plaintext = try core.decryptMessage(
+            contactId: contactId,
+            ephemeralPublicKey: [UInt8](ephemeralPublicKey),
+            messageNumber: messageNumber,
+            content: contentForDecrypt
+        )
+        saveSessionToKeychain(for: contactId)
+        return plaintext
+    }
+
     /// Try to decrypt message with archived sessions
     /// Returns plaintext if successful, throws if all archives fail
     private func tryDecryptWithArchivedSessions(message: ChatMessage) throws -> String {

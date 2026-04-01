@@ -427,8 +427,9 @@ final class CallManager {
     private func handleRemoteOffer(_ offer: Shared_Proto_Signaling_V1_CallOffer, for session: CallSession) async {
         guard let active, active.session == session else { return }
         do {
+            let sdp = try CallSignalCrypto.shared.decryptField(offer.sdp, from: session.peerUserId)
             try ensureWebRTC(role: .callee)
-            try await active.webrtc?.setRemoteOffer(sdp: offer.sdp)
+            try await active.webrtc?.setRemoteOffer(sdp: sdp)
             let answerSdp = try await active.webrtc?.createAnswer() ?? ""
             sendAnswer(sdp: answerSdp)
             active.answeredAt = Date()
@@ -442,8 +443,9 @@ final class CallManager {
     private func handleRemoteAnswer(_ answer: Shared_Proto_Signaling_V1_CallAnswer, for session: CallSession) async {
         guard let active, active.session == session else { return }
         do {
+            let sdp = try CallSignalCrypto.shared.decryptField(answer.sdp, from: session.peerUserId)
             try ensureWebRTC(role: .caller)
-            try await active.webrtc?.setRemoteAnswer(sdp: answer.sdp)
+            try await active.webrtc?.setRemoteAnswer(sdp: sdp)
             active.answeredAt = Date()
             state = .active(session)
             #if os(iOS)
@@ -458,8 +460,9 @@ final class CallManager {
     private func handleRemoteIceCandidate(_ c: Shared_Proto_Signaling_V1_IceCandidate, for session: CallSession) async {
         guard let active, active.session == session else { return }
         do {
+            let candidateSdp = try CallSignalCrypto.shared.decryptField(c.candidate, from: session.peerUserId)
             try ensureWebRTC(role: active.session.direction == .outgoing ? .caller : .callee)
-            let ice = WebRTCIceCandidate(sdp: c.candidate, sdpMid: c.sdpMid, sdpMLineIndex: Int32(c.sdpMLineIndex))
+            let ice = WebRTCIceCandidate(sdp: candidateSdp, sdpMid: c.sdpMid, sdpMLineIndex: Int32(c.sdpMLineIndex))
             try await active.webrtc?.addRemoteIceCandidate(ice)
         } catch {
             Log.error("📞 Failed to add ICE candidate: \(error)", category: "Calls")
@@ -474,9 +477,16 @@ final class CallManager {
 
     private func sendAnswer(sdp: String) {
         guard let active else { return }
+        let peerUserId = active.session.peerUserId
 
         var answer = Shared_Proto_Signaling_V1_CallAnswer()
-        answer.sdp = sdp
+        do {
+            answer.sdp = try CallSignalCrypto.shared.encryptField(sdp, for: peerUserId)
+        } catch {
+            Log.error("📞 Failed to encrypt answer SDP: \(error) — aborting send", category: "Calls")
+            endActiveCall(reason: .local("Signal encryption failed"))
+            return
+        }
         answer.answererDeviceID = Self.currentDeviceId()
         answer.answererUserID = SessionManager.shared.currentUserId ?? ""
         answer.answeredAt = Self.nowMs()
@@ -491,8 +501,15 @@ final class CallManager {
 
     private func sendIceCandidate(_ c: WebRTCIceCandidate) {
         guard let active else { return }
+        let peerUserId = active.session.peerUserId
+
         var ice = Shared_Proto_Signaling_V1_IceCandidate()
-        ice.candidate = c.sdp
+        do {
+            ice.candidate = try CallSignalCrypto.shared.encryptField(c.sdp, for: peerUserId)
+        } catch {
+            Log.error("📞 Failed to encrypt ICE candidate: \(error) — dropping candidate", category: "Calls")
+            return
+        }
         ice.sdpMid = c.sdpMid
         ice.sdpMLineIndex = UInt32(max(0, c.sdpMLineIndex))
 
@@ -507,10 +524,11 @@ final class CallManager {
     private func sendOffer(toUserId: String) async throws {
         guard let active else { throw RPCError(code: .failedPrecondition, message: "No active call") }
         try ensureWebRTC(role: .caller)
-        let sdp = try await active.webrtc?.createOffer() ?? ""
+        let plainSdp = try await active.webrtc?.createOffer() ?? ""
+        let encryptedSdp = try CallSignalCrypto.shared.encryptField(plainSdp, for: toUserId)
 
         var offer = Shared_Proto_Signaling_V1_CallOffer()
-        offer.sdp = sdp
+        offer.sdp = encryptedSdp
         offer.callType = .audio
         offer.callerDeviceID = Self.currentDeviceId()
         offer.callerUserID = SessionManager.shared.currentUserId ?? ""
