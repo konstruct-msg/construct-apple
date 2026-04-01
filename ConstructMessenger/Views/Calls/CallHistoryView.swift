@@ -14,7 +14,6 @@ struct CallHistoryView: View {
     @Environment(\.managedObjectContext) private var viewContext
 
     @FetchRequest(
-        entity: CallRecord.entity(),
         sortDescriptors: [NSSortDescriptor(key: "startedAt", ascending: false)],
         animation: .default
     )
