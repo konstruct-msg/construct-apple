@@ -24,7 +24,6 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         UserDefaults.standard.register(defaults: [
             "pushNotificationsEnabled": true,
             "backgroundFetchEnabled": true,
-            CallsFeature.enabledKey: false,
         ])
 
         // CRITICAL: Register background tasks BEFORE app finishes launching
