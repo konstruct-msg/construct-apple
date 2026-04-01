@@ -35,6 +35,7 @@ struct UserProfileView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var viewModel = ProfileShareViewModel()
+    @State private var callManager = CallManager.shared
     @State private var showingBlockConfirmation = false
     @State private var showResetSessionConfirm = false
     @State private var showingShareAlert = false
@@ -162,7 +163,20 @@ struct UserProfileView: View {
                 }
             }
 
-            ConstructActionRow(icon: "phone.fill", title: "Voice call", role: .disabled) {}
+            if CallsFeature.isEnabled, case .idle = callManager.state {
+                ConstructActionRow(icon: "phone.fill", title: "Voice call", role: .primary) {
+                    Task {
+                        await callManager.startOutgoingCall(
+                            to: user.id,
+                            displayName: user.resolvedDisplayName,
+                            hasVideo: false
+                        )
+                    }
+                    dismiss()
+                }
+            } else if !CallsFeature.isEnabled {
+                ConstructActionRow(icon: "phone.fill", title: "Voice call", role: .disabled) {}
+            }
 
             if user.amISharingWith {
                 ConstructActionRow(icon: "person.crop.circle.badge.minus", title: LocalizedStringKey("stop_sharing_profile"), role: .secondary, isLoading: isSharingInProgress) {
