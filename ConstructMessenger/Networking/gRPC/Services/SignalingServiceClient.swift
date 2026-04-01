@@ -40,6 +40,27 @@ final class SignalingServiceClient: Sendable {
         return creds
     }
 
+    // MARK: - InitiateCall
+
+    /// Registers a call attempt with the server. Must be called by the CALLER before
+    /// sending the SDP offer. Server checks rate limits, mutual contacts and delivers
+    /// IncomingCallNotification / VoIP push to the callee.
+    ///
+    /// - Returns: `calleeOnline` flag (true = callee has active Signal stream).
+    @discardableResult
+    func initiateCall(callId: String, calleeUserId: String, callerName: String, hasVideo: Bool) async throws -> Shared_Proto_Signaling_V1_InitiateCallResponse {
+        return try await GRPCChannelManager.shared.performRPC { grpcClient in
+            let client = Shared_Proto_Signaling_V1_SignalingService.Client(wrapping: grpcClient)
+            var req = Shared_Proto_Signaling_V1_InitiateCallRequest()
+            req.callID = callId
+            req.calleeUserID = calleeUserId
+            req.callerName = callerName
+            req.callType = hasVideo ? .video : .audio
+            let resp = try await client.initiateCall(request: .init(message: req))
+            return resp
+        }
+    }
+
     // MARK: - Signal Stream
 
     /// Opens the bidirectional `Signal` stream.

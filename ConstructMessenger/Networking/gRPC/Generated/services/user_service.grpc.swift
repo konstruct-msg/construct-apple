@@ -140,6 +140,30 @@ public enum Shared_Proto_Services_V1_UserService: Sendable {
                 method: "CheckUsernameAvailability"
             )
         }
+        /// Namespace for "SetDiscoverable" metadata.
+        public enum SetDiscoverable: Sendable {
+            /// Request type for "SetDiscoverable".
+            public typealias Input = Shared_Proto_Services_V1_SetDiscoverableRequest
+            /// Response type for "SetDiscoverable".
+            public typealias Output = Shared_Proto_Services_V1_SetDiscoverableResponse
+            /// Descriptor for "SetDiscoverable".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.UserService"),
+                method: "SetDiscoverable"
+            )
+        }
+        /// Namespace for "FindUser" metadata.
+        public enum FindUser: Sendable {
+            /// Request type for "FindUser".
+            public typealias Input = Shared_Proto_Services_V1_FindUserRequest
+            /// Response type for "FindUser".
+            public typealias Output = Shared_Proto_Services_V1_FindUserResponse
+            /// Descriptor for "FindUser".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.UserService"),
+                method: "FindUser"
+            )
+        }
         /// Descriptors for all methods in the "shared.proto.services.v1.UserService" service.
         public static let descriptors: [GRPCCore.MethodDescriptor] = [
             GetUserProfile.descriptor,
@@ -151,7 +175,9 @@ public enum Shared_Proto_Services_V1_UserService: Sendable {
             GetBlockedUsers.descriptor,
             DeleteAccount.descriptor,
             ExportUserData.descriptor,
-            CheckUsernameAvailability.descriptor
+            CheckUsernameAvailability.descriptor,
+            SetDiscoverable.descriptor,
+            FindUser.descriptor
         ]
     }
 }
@@ -403,6 +429,56 @@ extension Shared_Proto_Services_V1_UserService {
             deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_CheckUsernameAvailabilityResponse>,
             options: GRPCCore.CallOptions,
             onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_CheckUsernameAvailabilityResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "SetDiscoverable" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > SetDiscoverable - Opt in or out of username search (requires auth)
+        /// > Default is off. Idempotent — safe to call multiple times with the same value.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_SetDiscoverableRequest` message.
+        ///   - serializer: A serializer for `Shared_Proto_Services_V1_SetDiscoverableRequest` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_SetDiscoverableResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response, the result of which is
+        ///       returned to the caller. Returning from the closure will cancel the RPC if it
+        ///       hasn't already finished.
+        /// - Returns: The result of `handleResponse`.
+        func setDiscoverable<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_SetDiscoverableRequest>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_SetDiscoverableRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_SetDiscoverableResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_SetDiscoverableResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "FindUser" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > FindUser - Find a user by exact username match (requires auth)
+        /// > Only returns users who have explicitly opted in via SetDiscoverable.
+        /// > Returns identical NOT_FOUND for "user doesn't exist" and "user not discoverable"
+        /// > to prevent username existence oracle attacks.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_FindUserRequest` message.
+        ///   - serializer: A serializer for `Shared_Proto_Services_V1_FindUserRequest` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_FindUserResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response, the result of which is
+        ///       returned to the caller. Returning from the closure will cancel the RPC if it
+        ///       hasn't already finished.
+        /// - Returns: The result of `handleResponse`.
+        func findUser<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_FindUserRequest>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_FindUserRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_FindUserResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_FindUserResponse>) async throws -> Result
         ) async throws -> Result where Result: Sendable
     }
 
@@ -765,6 +841,78 @@ extension Shared_Proto_Services_V1_UserService {
                 onResponse: handleResponse
             )
         }
+
+        /// Call the "SetDiscoverable" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > SetDiscoverable - Opt in or out of username search (requires auth)
+        /// > Default is off. Idempotent — safe to call multiple times with the same value.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_SetDiscoverableRequest` message.
+        ///   - serializer: A serializer for `Shared_Proto_Services_V1_SetDiscoverableRequest` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_SetDiscoverableResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response, the result of which is
+        ///       returned to the caller. Returning from the closure will cancel the RPC if it
+        ///       hasn't already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func setDiscoverable<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_SetDiscoverableRequest>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_SetDiscoverableRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_SetDiscoverableResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_SetDiscoverableResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Shared_Proto_Services_V1_UserService.Method.SetDiscoverable.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "FindUser" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > FindUser - Find a user by exact username match (requires auth)
+        /// > Only returns users who have explicitly opted in via SetDiscoverable.
+        /// > Returns identical NOT_FOUND for "user doesn't exist" and "user not discoverable"
+        /// > to prevent username existence oracle attacks.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_FindUserRequest` message.
+        ///   - serializer: A serializer for `Shared_Proto_Services_V1_FindUserRequest` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_FindUserResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response, the result of which is
+        ///       returned to the caller. Returning from the closure will cancel the RPC if it
+        ///       hasn't already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func findUser<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_FindUserRequest>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_FindUserRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_FindUserResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_FindUserResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Shared_Proto_Services_V1_UserService.Method.FindUser.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
     }
 }
 
@@ -1056,6 +1204,68 @@ extension Shared_Proto_Services_V1_UserService.ClientProtocol {
             request: request,
             serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_CheckUsernameAvailabilityRequest>(),
             deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_CheckUsernameAvailabilityResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "SetDiscoverable" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > SetDiscoverable - Opt in or out of username search (requires auth)
+    /// > Default is off. Idempotent — safe to call multiple times with the same value.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Shared_Proto_Services_V1_SetDiscoverableRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response, the result of which is
+    ///       returned to the caller. Returning from the closure will cancel the RPC if it
+    ///       hasn't already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func setDiscoverable<Result>(
+        request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_SetDiscoverableRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_SetDiscoverableResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.setDiscoverable(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_SetDiscoverableRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_SetDiscoverableResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "FindUser" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > FindUser - Find a user by exact username match (requires auth)
+    /// > Only returns users who have explicitly opted in via SetDiscoverable.
+    /// > Returns identical NOT_FOUND for "user doesn't exist" and "user not discoverable"
+    /// > to prevent username existence oracle attacks.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Shared_Proto_Services_V1_FindUserRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response, the result of which is
+    ///       returned to the caller. Returning from the closure will cancel the RPC if it
+    ///       hasn't already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func findUser<Result>(
+        request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_FindUserRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_FindUserResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.findUser(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_FindUserRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_FindUserResponse>(),
             options: options,
             onResponse: handleResponse
         )
@@ -1389,6 +1599,76 @@ extension Shared_Proto_Services_V1_UserService.ClientProtocol {
             metadata: metadata
         )
         return try await self.checkUsernameAvailability(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "SetDiscoverable" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > SetDiscoverable - Opt in or out of username search (requires auth)
+    /// > Default is off. Idempotent — safe to call multiple times with the same value.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response, the result of which is
+    ///       returned to the caller. Returning from the closure will cancel the RPC if it
+    ///       hasn't already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func setDiscoverable<Result>(
+        _ message: Shared_Proto_Services_V1_SetDiscoverableRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_SetDiscoverableResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Shared_Proto_Services_V1_SetDiscoverableRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.setDiscoverable(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "FindUser" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > FindUser - Find a user by exact username match (requires auth)
+    /// > Only returns users who have explicitly opted in via SetDiscoverable.
+    /// > Returns identical NOT_FOUND for "user doesn't exist" and "user not discoverable"
+    /// > to prevent username existence oracle attacks.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response, the result of which is
+    ///       returned to the caller. Returning from the closure will cancel the RPC if it
+    ///       hasn't already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func findUser<Result>(
+        _ message: Shared_Proto_Services_V1_FindUserRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_FindUserResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Shared_Proto_Services_V1_FindUserRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.findUser(
             request: request,
             options: options,
             onResponse: handleResponse

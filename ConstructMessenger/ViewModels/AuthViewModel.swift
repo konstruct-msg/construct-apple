@@ -695,6 +695,7 @@ class AuthViewModel {
             self.currentUserId = user.id
             self.currentUser = user
             CryptoManager.shared.setLocalUserId(user.id)
+            SessionManager.shared.saveDisplayName(user.displayName.isEmpty ? (user.username.isEmpty ? "" : user.username) : user.displayName)
             
             print("✅ Restored user data from Core Data:")
             print("   userId: \(user.id)")

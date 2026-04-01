@@ -35,10 +35,17 @@ public enum Shared_Proto_Core_V1_ContentType: SwiftProtobuf.Enum, Swift.CaseIter
   case e2EeMls // = 2
 
   /// WebRTC signaling (SDP, ICE candidates)
+  /// Deprecated for SDP: use CONTENT_TYPE_CALL_SIGNAL for E2EE-wrapped call offer/answer.
   case webrtcSignal // = 10
 
   /// Presence updates (typing, online, receipts)
   case presence // = 11
+
+  /// E2EE-wrapped call signal (Double Ratchet).
+  /// Used for call_offer and call_answer payloads so the server cannot
+  /// read or tamper with the DTLS fingerprint. Forwarded opaquely like
+  /// any other E2EE message.
+  case callSignal // = 12
 
   /// Key exchange initiation (X3DH handshake)
   case keyExchange // = 20
@@ -71,6 +78,7 @@ public enum Shared_Proto_Core_V1_ContentType: SwiftProtobuf.Enum, Swift.CaseIter
     case 2: self = .e2EeMls
     case 10: self = .webrtcSignal
     case 11: self = .presence
+    case 12: self = .callSignal
     case 20: self = .keyExchange
     case 21: self = .sessionReset
     case 22: self = .keySync
@@ -86,6 +94,7 @@ public enum Shared_Proto_Core_V1_ContentType: SwiftProtobuf.Enum, Swift.CaseIter
     case .e2EeMls: return 2
     case .webrtcSignal: return 10
     case .presence: return 11
+    case .callSignal: return 12
     case .keyExchange: return 20
     case .sessionReset: return 21
     case .keySync: return 22
@@ -101,6 +110,7 @@ public enum Shared_Proto_Core_V1_ContentType: SwiftProtobuf.Enum, Swift.CaseIter
     .e2EeMls,
     .webrtcSignal,
     .presence,
+    .callSignal,
     .keyExchange,
     .sessionReset,
     .keySync,
@@ -650,7 +660,7 @@ public struct Shared_Proto_Core_V1_SenderCertificate: Sendable {
 fileprivate let _protobuf_package = "shared.proto.core.v1"
 
 extension Shared_Proto_Core_V1_ContentType: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0CONTENT_TYPE_UNSPECIFIED\0\u{1}CONTENT_TYPE_E2EE_SIGNAL\0\u{1}CONTENT_TYPE_E2EE_MLS\0\u{2}\u{8}CONTENT_TYPE_WEBRTC_SIGNAL\0\u{1}CONTENT_TYPE_PRESENCE\0\u{2}\u{9}CONTENT_TYPE_KEY_EXCHANGE\0\u{1}CONTENT_TYPE_SESSION_RESET\0\u{1}CONTENT_TYPE_KEY_SYNC\0\u{1}CONTENT_TYPE_SENDER_SYNC\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0CONTENT_TYPE_UNSPECIFIED\0\u{1}CONTENT_TYPE_E2EE_SIGNAL\0\u{1}CONTENT_TYPE_E2EE_MLS\0\u{2}\u{8}CONTENT_TYPE_WEBRTC_SIGNAL\0\u{1}CONTENT_TYPE_PRESENCE\0\u{1}CONTENT_TYPE_CALL_SIGNAL\0\u{2}\u{8}CONTENT_TYPE_KEY_EXCHANGE\0\u{1}CONTENT_TYPE_SESSION_RESET\0\u{1}CONTENT_TYPE_KEY_SYNC\0\u{1}CONTENT_TYPE_SENDER_SYNC\0")
 }
 
 extension Shared_Proto_Core_V1_MessagePriority: SwiftProtobuf._ProtoNameProviding {

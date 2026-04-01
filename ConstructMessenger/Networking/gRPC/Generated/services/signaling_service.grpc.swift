@@ -44,10 +44,23 @@ public enum Shared_Proto_Signaling_V1_SignalingService: Sendable {
                 method: "GetTurnCredentials"
             )
         }
+        /// Namespace for "InitiateCall" metadata.
+        public enum InitiateCall: Sendable {
+            /// Request type for "InitiateCall".
+            public typealias Input = Shared_Proto_Signaling_V1_InitiateCallRequest
+            /// Response type for "InitiateCall".
+            public typealias Output = Shared_Proto_Signaling_V1_InitiateCallResponse
+            /// Descriptor for "InitiateCall".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.signaling.v1.SignalingService"),
+                method: "InitiateCall"
+            )
+        }
         /// Descriptors for all methods in the "shared.proto.signaling.v1.SignalingService" service.
         public static let descriptors: [GRPCCore.MethodDescriptor] = [
             Signal.descriptor,
-            GetTurnCredentials.descriptor
+            GetTurnCredentials.descriptor,
+            InitiateCall.descriptor
         ]
     }
 }
@@ -131,6 +144,39 @@ extension Shared_Proto_Signaling_V1_SignalingService {
             deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Signaling_V1_GetTurnCredentialsResponse>,
             options: GRPCCore.CallOptions,
             onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Signaling_V1_GetTurnCredentialsResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "InitiateCall" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > InitiateCall — register a call attempt with the server.
+        /// > 
+        /// > Called by the CALLER before sending the SDP offer via MessagingService.
+        /// > The server:
+        /// >   1. Checks mutual contacts, blocks, rate limits, and busy state.
+        /// >   2. Creates the call entry in Redis (TTL 90 s).
+        /// >   3. Delivers IncomingCallNotification via Signal stream if callee is online.
+        /// >   4. Sends a VoIP push (without SDP) if callee is offline.
+        /// > 
+        /// > The SDP offer MUST be sent separately via MessagingService (Double Ratchet)
+        /// > so the server cannot read or tamper with the DTLS fingerprint.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Signaling_V1_InitiateCallRequest` message.
+        ///   - serializer: A serializer for `Shared_Proto_Signaling_V1_InitiateCallRequest` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Signaling_V1_InitiateCallResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response, the result of which is
+        ///       returned to the caller. Returning from the closure will cancel the RPC if it
+        ///       hasn't already finished.
+        /// - Returns: The result of `handleResponse`.
+        func initiateCall<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Signaling_V1_InitiateCallRequest>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Signaling_V1_InitiateCallRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Signaling_V1_InitiateCallResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Signaling_V1_InitiateCallResponse>) async throws -> Result
         ) async throws -> Result where Result: Sendable
     }
 
@@ -235,6 +281,50 @@ extension Shared_Proto_Signaling_V1_SignalingService {
                 onResponse: handleResponse
             )
         }
+
+        /// Call the "InitiateCall" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > InitiateCall — register a call attempt with the server.
+        /// > 
+        /// > Called by the CALLER before sending the SDP offer via MessagingService.
+        /// > The server:
+        /// >   1. Checks mutual contacts, blocks, rate limits, and busy state.
+        /// >   2. Creates the call entry in Redis (TTL 90 s).
+        /// >   3. Delivers IncomingCallNotification via Signal stream if callee is online.
+        /// >   4. Sends a VoIP push (without SDP) if callee is offline.
+        /// > 
+        /// > The SDP offer MUST be sent separately via MessagingService (Double Ratchet)
+        /// > so the server cannot read or tamper with the DTLS fingerprint.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Signaling_V1_InitiateCallRequest` message.
+        ///   - serializer: A serializer for `Shared_Proto_Signaling_V1_InitiateCallRequest` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Signaling_V1_InitiateCallResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response, the result of which is
+        ///       returned to the caller. Returning from the closure will cancel the RPC if it
+        ///       hasn't already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func initiateCall<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Signaling_V1_InitiateCallRequest>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Signaling_V1_InitiateCallRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Signaling_V1_InitiateCallResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Signaling_V1_InitiateCallResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Shared_Proto_Signaling_V1_SignalingService.Method.InitiateCall.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
     }
 }
 
@@ -296,6 +386,45 @@ extension Shared_Proto_Signaling_V1_SignalingService.ClientProtocol {
             request: request,
             serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Signaling_V1_GetTurnCredentialsRequest>(),
             deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Signaling_V1_GetTurnCredentialsResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "InitiateCall" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > InitiateCall — register a call attempt with the server.
+    /// > 
+    /// > Called by the CALLER before sending the SDP offer via MessagingService.
+    /// > The server:
+    /// >   1. Checks mutual contacts, blocks, rate limits, and busy state.
+    /// >   2. Creates the call entry in Redis (TTL 90 s).
+    /// >   3. Delivers IncomingCallNotification via Signal stream if callee is online.
+    /// >   4. Sends a VoIP push (without SDP) if callee is offline.
+    /// > 
+    /// > The SDP offer MUST be sent separately via MessagingService (Double Ratchet)
+    /// > so the server cannot read or tamper with the DTLS fingerprint.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Shared_Proto_Signaling_V1_InitiateCallRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response, the result of which is
+    ///       returned to the caller. Returning from the closure will cancel the RPC if it
+    ///       hasn't already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func initiateCall<Result>(
+        request: GRPCCore.ClientRequest<Shared_Proto_Signaling_V1_InitiateCallRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Signaling_V1_InitiateCallResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.initiateCall(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Signaling_V1_InitiateCallRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Signaling_V1_InitiateCallResponse>(),
             options: options,
             onResponse: handleResponse
         )
@@ -368,6 +497,49 @@ extension Shared_Proto_Signaling_V1_SignalingService.ClientProtocol {
             metadata: metadata
         )
         return try await self.getTurnCredentials(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "InitiateCall" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > InitiateCall — register a call attempt with the server.
+    /// > 
+    /// > Called by the CALLER before sending the SDP offer via MessagingService.
+    /// > The server:
+    /// >   1. Checks mutual contacts, blocks, rate limits, and busy state.
+    /// >   2. Creates the call entry in Redis (TTL 90 s).
+    /// >   3. Delivers IncomingCallNotification via Signal stream if callee is online.
+    /// >   4. Sends a VoIP push (without SDP) if callee is offline.
+    /// > 
+    /// > The SDP offer MUST be sent separately via MessagingService (Double Ratchet)
+    /// > so the server cannot read or tamper with the DTLS fingerprint.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response, the result of which is
+    ///       returned to the caller. Returning from the closure will cancel the RPC if it
+    ///       hasn't already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func initiateCall<Result>(
+        _ message: Shared_Proto_Signaling_V1_InitiateCallRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Signaling_V1_InitiateCallResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Shared_Proto_Signaling_V1_InitiateCallRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.initiateCall(
             request: request,
             options: options,
             onResponse: handleResponse

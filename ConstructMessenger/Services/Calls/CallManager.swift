@@ -111,6 +111,15 @@ final class CallManager {
             )
             #endif
 
+            // Notify server: checks rate limits, delivers push/stream notification to callee.
+            let initResp = try await SignalingServiceClient.shared.initiateCall(
+                callId: callId,
+                calleeUserId: userId,
+                callerName: SessionManager.shared.currentDisplayName,
+                hasVideo: hasVideo
+            )
+            Log.info("📞 InitiateCall: calleeOnline=\(initResp.calleeOnline) (call_id=\(callId.prefix(8))…)", category: "Calls")
+
             let turn = try? await SignalingServiceClient.shared.getTurnCredentials(callId: callId)
             if let turn {
                 active?.turn = turn
