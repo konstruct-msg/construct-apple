@@ -696,6 +696,7 @@ final class MessageStreamManager {
                 oneTimePreKeyId: decoded.oneTimePreKeyId,
                 editsMessageId: envelope.editsMessageID,
                 kemCiphertext: decoded.kemCiphertext ?? Data(),
+                contentType: UInt8(envelope.contentType.rawValue),
                 kyberOtpkId: decoded.kyberOtpkId,
                 senderDeviceId: envelope.senderDevice.deviceID,
                 conversationId: envelope.conversationID,

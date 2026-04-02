@@ -269,7 +269,8 @@ class MessageRouter {
             msgNum: message.messageNumber,
             kemCt: message.kemCiphertext,
             otpkId: message.kyberOtpkId,
-            isControl: false
+            isControl: false,
+            contentType: message.contentType
         )
     }
 
@@ -763,7 +764,8 @@ class MessageRouter {
                 msgNum: 0,
                 kemCt: Data(),
                 otpkId: 0,
-                isControl: true
+                isControl: true,
+                contentType: 0
             )
             if let actions = try? core.handleEvent(event: event) {
                 executeStorageActions(actions)

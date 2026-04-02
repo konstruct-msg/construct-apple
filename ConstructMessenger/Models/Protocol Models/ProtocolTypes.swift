@@ -37,6 +37,9 @@ struct ChatMessage: Codable, Identifiable {
     /// Only present when messageNumber == 0 (first message / session initiation).
     var kemCiphertext: Data = Data()
 
+    /// Content type from the envelope (0 = standard message, 12 = CALL_SIGNAL).
+    var contentType: UInt8 = 0
+
     /// Kyber OTPK key ID used by sender (0 = Kyber SPK was used, >0 = Kyber OTPK ID).
     /// Only meaningful when messageNumber == 0 and kemCiphertext is non-empty.
     var kyberOtpkId: UInt32 = 0

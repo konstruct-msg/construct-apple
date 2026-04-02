@@ -242,6 +242,7 @@ final class MessagingServiceClient: Sendable {
                 timestamp: UInt64(msg.timestamp),
                 oneTimePreKeyId: decoded.oneTimePreKeyId,
                 kemCiphertext: decoded.kemCiphertext ?? Data(),
+                contentType: UInt8(msg.contentType.rawValue),
                 kyberOtpkId: decoded.kyberOtpkId,
                 senderDeviceId: "",
                 conversationId: ""
