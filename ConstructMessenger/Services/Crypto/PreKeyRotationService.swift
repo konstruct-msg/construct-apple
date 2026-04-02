@@ -22,7 +22,10 @@ final class PreKeyRotationService {
     // MARK: - Constants
 
     private static let lastRotationKey = "construct.spk.lastRotationTimestamp"
-    private static let rotationIntervalDays: Double = 30
+    /// Must be strictly less than SPK_MAX_AGE_SECS in the Rust core (currently 14 days).
+    /// 7 days = weekly rotation; gives a full rotation-period grace buffer before
+    /// the Rust peer-side check rejects the bundle as stale.
+    private static let rotationIntervalDays: Double = 7
 
     // MARK: - Public API
 
