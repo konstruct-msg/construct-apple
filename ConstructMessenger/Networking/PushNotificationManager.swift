@@ -93,13 +93,6 @@ class PushNotificationManager: NSObject {
     /// - Returns: Whether permission was granted
     @discardableResult
     func requestPermission() async -> Bool {
-        #if targetEnvironment(macCatalyst)
-        // Remote push notifications are not supported for Mac Catalyst builds
-        // signed without a macOS push provisioning profile. The gRPC stream
-        // provides real-time delivery on desktop — APNs wake-up is unnecessary.
-        Log.info("📱 Push notifications not available on macOS Catalyst (stream-based delivery)", category: "Push")
-        return false
-        #else
         Log.info("📱 Requesting push notification permission", category: "Push")
         
         do {
@@ -124,16 +117,11 @@ class PushNotificationManager: NSObject {
             Log.error("❌ Failed to request push notification permission: \(error)", category: "Push")
             return false
         }
-        #endif
     }
     
     /// Check current authorization status
     func checkAuthorizationStatus() async {
-        #if targetEnvironment(macCatalyst)
-        // macOS Catalyst: push not available, keep status as .notDetermined
-        isPushEnabled = false
-        return
-        #else
+        
         let settings = await notificationCenter.notificationSettings()
         authorizationStatus = settings.authorizationStatus
         
@@ -148,15 +136,15 @@ class PushNotificationManager: NSObject {
             Log.info("📱 Permission not yet requested but user is authenticated — requesting now", category: "Push")
             await requestPermission()
         }
-        #endif
     }
 
     private func registerForRemoteNotificationsIfAuthorized() async {
         guard authorizationStatus == .authorized || authorizationStatus == .provisional else { return }
-        guard deviceToken == nil else { return }
-
+        // Apple recommends calling registerForRemoteNotifications() on every launch.
+        // APNs returns the same token if unchanged (no-op), or a new one if rotated
+        // (e.g. after reinstall). In either case registerDeviceToken() will handle it.
         await MainActor.run {
-            Log.info("📱 Registering for remote notifications (authorized, no token yet)", category: "Push")
+            Log.info("📱 Requesting APNs token (re-register on every launch)", category: "Push")
             UIApplication.shared.registerForRemoteNotifications()
         }
     }
@@ -176,7 +164,12 @@ class PushNotificationManager: NSObject {
         // Register with backend server (may fail if user not authenticated yet)
         await registerWithServer(tokenString)
 
-        await checkAuthorizationStatus()
+        // APNs delivered a token → authorization is confirmed. Set isPushEnabled directly
+        // instead of calling checkAuthorizationStatus(), which would call
+        // registerForRemoteNotifications() again and create an infinite loop:
+        // registerDeviceToken → checkAuthorizationStatus → registerForRemoteNotifications
+        // → APNs callback → registerDeviceToken → …
+        isPushEnabled = true
     }
     
     /// Unregister device token (e.g., on logout)
@@ -209,9 +202,6 @@ class PushNotificationManager: NSObject {
     /// Call this after login and on every foreground transition so the DB record is
     /// always current even if a previous attempt failed or the server DB was cleared.
     func ensureTokenRegistered() async {
-        #if targetEnvironment(macCatalyst)
-        return
-        #else
         // If we don't have a token yet, ask APNs for one.
         // APNs will call didRegisterForRemoteNotificationsWithDeviceToken which
         // calls registerDeviceToken(_:) → registerWithServer.
@@ -226,7 +216,6 @@ class PushNotificationManager: NSObject {
             Log.info("🔄 ensureTokenRegistered — token exists but not on server, retrying", category: "Push")
             await registerWithServer(token)
         }
-        #endif
     }
 
     /// Retry registering with the server if we have a token but haven't succeeded yet.
@@ -283,24 +272,48 @@ class PushNotificationManager: NSObject {
 
 extension PushNotificationManager: UNUserNotificationCenterDelegate {
     
-    /// Handle notification when app is in foreground
+    /// Handle notification when app is in foreground.
+    ///
+    /// The server sends APNs *alert* pushes whose body contains the raw
+    /// encrypted message payload (KNST1:… format). We must never display
+    /// that raw ciphertext to the user. Instead:
+    ///   - Silent push (content-available only)  → suppress (app handles it)
+    ///   - APNs alert push with encrypted body   → cancel raw push,
+    ///                                             schedule a clean local banner
+    ///   - Local notification (from our own code) → show as-is
     nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
-        Log.debug("📱 Received notification while app in foreground", category: "Push")
-        
-        // For silent pushes (content-available), don't show anything
         let userInfo = notification.request.content.userInfo
+
+        // Silent push — wake the app but don't show a banner; our
+        // didReceiveRemoteNotification handler fetches messages and posts
+        // its own local notification.
         if userInfo["content-available"] as? Int == 1 {
-            Log.debug("📱 Silent push - not showing notification", category: "Push")
+            Log.debug("📱 Silent push received in foreground — suppressed", category: "Push")
             completionHandler([])
             return
         }
-        
-        // For visible pushes, show banner + sound + badge
-        completionHandler([.banner, .sound, .badge])
+
+        // APNs alert push (UNPushNotificationTrigger) — the server body may
+        // contain raw ciphertext. Replace with a privacy-safe local notification.
+        if notification.request.trigger is UNPushNotificationTrigger {
+            Log.debug("📱 APNs alert push in foreground — replacing with local banner", category: "Push")
+            let chatId = userInfo["conversation_id"] as? String
+            LocalNotificationManager.shared.showNewMessageNotification(chatId: chatId)
+            completionHandler([])   // suppress the raw push
+            return
+        }
+
+        // Local notification (scheduled by our own code) — show it.
+        Log.debug("📱 Local notification in foreground — showing", category: "Push")
+        if #available(iOS 14.0, *) {
+            completionHandler([.banner, .sound, .badge])
+        } else {
+            completionHandler([.alert, .sound, .badge])
+        }
     }
     
     /// Handle notification tap
@@ -328,6 +341,33 @@ extension PushNotificationManager: UNUserNotificationCenterDelegate {
 
 // MARK: - UNAuthorizationStatus Extension
 
+#else
+// macOS native app uses different push delivery mechanism (or polling via stream).
+// PushNotificationManager is a no-op on macOS.
+import Foundation
+import UserNotifications
+
+final class PushNotificationManager {
+    static let shared = PushNotificationManager()
+    private init() {}
+    // On macOS, push is delivered via persistent gRPC MessageStream — no APNs needed.
+    var isPushEnabled: Bool { true }
+    var lastSilentPushDate: Date? { nil }
+    var authorizationStatus: UNAuthorizationStatus { .authorized }
+    var deviceToken: String? { nil }
+    var isRegisteredWithServer: Bool { true }
+    func registerIfNeeded() {}
+    func updateToken(_ token: Data) {}
+    func signalSilentPush() {}
+    func ensureTokenRegistered() async {}
+    func registerDeviceToken(_ tokenData: Data) async {}
+    func unregisterDeviceToken() async {}
+    func handleRegistrationError(_ error: Error) {}
+    func requestPermission() async -> Bool { true }
+    func checkAuthorizationStatus() async {}
+}
+#endif
+
 extension UNAuthorizationStatus {
     var description: String {
         switch self {
@@ -340,23 +380,3 @@ extension UNAuthorizationStatus {
         }
     }
 }
-
-#else
-// macOS native app uses different push delivery mechanism (or polling via stream).
-// PushNotificationManager is a no-op on macOS.
-import Foundation
-
-final class PushNotificationManager {
-    static let shared = PushNotificationManager()
-    private init() {}
-    func registerIfNeeded() {}
-    func updateToken(_ token: Data) {}
-    func signalSilentPush() {}
-    func ensureTokenRegistered() async {}
-    func registerDeviceToken(_ tokenData: Data) async {}
-    func unregisterDeviceToken() async {}
-    func handleRegistrationError(_ error: Error) {}
-    func requestPermission() async -> Bool { return false }
-    func checkAuthorizationStatus() async {}
-}
-#endif

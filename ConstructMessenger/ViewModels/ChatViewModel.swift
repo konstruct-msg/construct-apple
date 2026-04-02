@@ -53,8 +53,15 @@ class ChatViewModel: NSObject {
     private var oldestLoadedTimestamp: Date?
     private var allLoadedMessageIds: Set<String> = []
 
+    /// Shared predicate that excludes all session-handshake control signals.
+    /// Applied by the FRC, older-message pagination, and hasMoreMessages check
+    /// so control messages never appear anywhere in the conversation view.
+    static let controlMessageFilterPredicate = NSPredicate(
+        format: "NOT (decryptedContent BEGINSWITH '__session_ready') AND NOT (decryptedContent BEGINSWITH 'session_ready_') AND NOT (decryptedContent BEGINSWITH '__session_ping') AND NOT (decryptedContent BEGINSWITH '__END_SESSION')"
+    )
+
     let chat: Chat
-    private var recipientBundle: (identityPublic: String, signedPrekeyPublic: String, signature: String, verifyingKey: String)?
+    private var recipientBundle: (identityPublic: Data, signedPrekeyPublic: Data, signature: Data, verifyingKey: Data)?
 
     private let connectionStatusManager = ConnectionStatusManager.shared
     private let messageQueueManager = MessageQueueManager.shared
@@ -73,7 +80,7 @@ class ChatViewModel: NSObject {
     private let sessionInitService = SessionInitializationService.shared
     private let persistenceService = MessagePersistenceService()
     private let mediaUploadManager = MediaUploadManager()
-    private let retryManager = MessageRetryManager()
+    private let retryManager = MessageRetryManager.shared
 
     // MARK: - Pending media uploads
     // Maps placeholder message-ID → the original payload so retryMessage() can
@@ -128,7 +135,9 @@ class ChatViewModel: NSObject {
         let fetchRequest = Message.fetchRequest()
         // Combine with additional predicate
         let chatPredicate = NSPredicate(format: "chat == %@", chat)
-        fetchRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [chatPredicate])
+        // Exclude session-handshake control signals that should never appear in the message list.
+        let noControlPredicate = ChatViewModel.controlMessageFilterPredicate
+        fetchRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [chatPredicate, noControlPredicate])
         
         // ✅ OPTIMIZATION: Fetch newest 30 messages, then reverse to oldest-first
         // This ensures we get RECENT messages, not ancient history
@@ -275,17 +284,16 @@ class ChatViewModel: NSObject {
         }
     }
     
+    /// Silently refresh the contact's username from the server in the background.
+    /// Called when a session already exists so the full bundle fetch is skipped,
+    // refreshUsernameInBackground removed — server no longer returns plaintext username.
+    // Username comes from invite payload (un field) or profile sharing only.
+
     private func handlePublicKeyBundle(_ data: PublicKeyBundleData) {
         Log.debug("📦 Received publicKeyBundle for userId: \(data.userId), chat.otherUser?.id: \(chat.otherUser?.id ?? "nil"), match: \(data.userId == chat.otherUser?.id)", category: "ChatViewModel")
         guard data.userId == chat.otherUser?.id else { return }
 
-        // Update username if we have the user in Core Data
-        if let user = chat.otherUser {
-            user.applyServerUsername(data.username, userId: data.userId)
-            viewContext.saveAndLog()
-            Log.info("Updated username for user: \(data.username)", category: "ChatViewModel")
-        }
-
+        // Username comes from invite payload or profile sharing — server bundle carries no username.
         // Cache the bundle for use when the user actually sends a message.
         // Do NOT create an INITIATOR session here — proactively initialising a session
         // while the remote side may already be mid-ratchet (messageNumber > 0) causes
@@ -321,9 +329,9 @@ class ChatViewModel: NSObject {
         Log.debug("📥 Loading more messages before \(oldestTimestamp)", category: "ChatViewModel")
         
         let fetchRequest = Message.fetchRequest()
-        // Combine with additional predicate
         let chatPredicate = NSPredicate(format: "chat == %@ AND timestamp < %@", chat, oldestTimestamp as NSDate)
-        fetchRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [chatPredicate])
+        let noControlPredicate = ChatViewModel.controlMessageFilterPredicate
+        fetchRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [chatPredicate, noControlPredicate])
         // ✅ Sort ascending (oldest first) to match main array order
         fetchRequest.sortDescriptors = [NSSortDescriptor(key: "timestamp", ascending: true)]
         fetchRequest.fetchLimit = loadMoreBatchSize  // ✅ Use batch size for pagination
@@ -362,9 +370,9 @@ class ChatViewModel: NSObject {
         }
         
         let fetchRequest = Message.fetchRequest()
-        // Combine with additional predicate
         let chatPredicate = NSPredicate(format: "chat == %@ AND timestamp < %@", chat, oldestTimestamp as NSDate)
-        fetchRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [chatPredicate])
+        let noControlPredicate = ChatViewModel.controlMessageFilterPredicate
+        fetchRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [chatPredicate, noControlPredicate])
         fetchRequest.fetchLimit = 1
         
         hasMoreMessages = (try? viewContext.fetch(fetchRequest).first) != nil
@@ -501,6 +509,28 @@ class ChatViewModel: NSObject {
             return
         }
 
+        // Two-phase handshake: if we are the INITIATOR and haven't received session_ready
+        // from the RESPONDER yet, buffer the message as .queued. SessionCoordinator will
+        // call MessageRetryManager.sendQueuedMessages once session_ready arrives.
+        if SessionConfirmationTracker.shared.isPending(recipientId) {
+            let bufferedId = UUID().uuidString
+            let stub = ChatMessage(
+                id: bufferedId,
+                from: currentUserId,
+                to: recipientId,
+                messageType: nil,
+                ephemeralPublicKey: Data(),
+                messageNumber: 0,
+                content: "",
+                suiteId: 0,
+                timestamp: UInt64(Date().timeIntervalSince1970)
+            )
+            saveMessage(stub, decryptedContent: text, isSentByMe: true, status: .queued,
+                        replyTo: replyTo, replyToContentOverride: replyToContentOverride, suiteId: 0)
+            Log.info("🔒 SESSION_CONFIRM[buffered]: message \(bufferedId.prefix(8))… queued — waiting for RESPONDER session_ready from \(recipientId.prefix(8))…", category: "SessionConfirm")
+            return
+        }
+
         Log.info("📤 Sending to: \(recipientId), from: \(currentUserId)", category: "ChatViewModel")
 
         // Handle files if provided (document attachments)
@@ -582,7 +612,7 @@ class ChatViewModel: NSObject {
             message,
             recipientId: recipientId,
             context: viewContext,
-            onError: { [weak self] error in
+            onError: { error in
                 ErrorRouter.shared.report(.unknown(error))
             }
         )
@@ -659,6 +689,50 @@ class ChatViewModel: NSObject {
                             self?.retryMessage_byId(placeholderId)
                         }
                     )
+                    self.isSending = false
+                }
+            }
+        }
+    }
+
+    func sendVoiceMessage(url: URL, duration: TimeInterval, waveform: [Float]) {
+        guard let recipientId = chat.otherUser?.id,
+              let currentUserId = SessionManager.shared.currentUserId else {
+            Log.error("❌ No recipient/user ID for voice message", category: "ChatViewModel")
+            return
+        }
+
+        let placeholderId = UUID().uuidString
+        persistenceService.saveVoicePlaceholderMessage(
+            id: placeholderId,
+            fromUserId: currentUserId,
+            toUserId: recipientId,
+            duration: duration,
+            waveform: waveform,
+            chat: chat,
+            in: viewContext
+        )
+
+        isSending = true
+
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                let voiceContent = try await MediaManager.shared.uploadAudio(url, duration: duration, waveform: waveform)
+                let jsonData = try JSONEncoder().encode(voiceContent)
+                guard let json = String(data: jsonData, encoding: .utf8) else {
+                    throw MediaUploadError.uploadFailed("JSON encode failed")
+                }
+                await MainActor.run {
+                    try? FileManager.default.removeItem(at: url)
+                    self.persistenceService.deleteMessage(id: placeholderId, in: self.viewContext, autoSave: false)
+                    self.sendTextMessage(text: json, replyTo: nil)
+                }
+            } catch {
+                await MainActor.run {
+                    Log.error("❌ Voice upload failed: \(error.localizedDescription)", category: "ChatViewModel")
+                    self.updateMessageStatus(messageId: placeholderId, status: .failed)
+                    ErrorRouter.shared.report(AppError.mediaUploadFailed(error.localizedDescription))
                     self.isSending = false
                 }
             }
@@ -744,7 +818,7 @@ class ChatViewModel: NSObject {
         isSending = true
 
         do {
-            let messageId = UUID().uuidString
+            let messageId = UUID().uuidString.lowercased()
             let plan = ChunkedMessageSender.shared.buildPlan(plaintext: text, messageId: UUID(uuidString: messageId) ?? UUID())
             guard !plan.payloads.isEmpty else {
                 Log.error("❌ Message too large to send", category: "ChatViewModel")

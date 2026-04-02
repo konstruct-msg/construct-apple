@@ -51,11 +51,30 @@ extension User {
 
         if isReal {
             username = trimmed
-            displayName = trimmed
-        } else {
-            username = ""
             if !isSharingWithMe {
-                displayName = DisplayNameGenerator.generate(from: resolvedId)
+                // Only overwrite displayName when we don't have a profile-shared name.
+                // isSharingWithMe == true → contact sent us their real name; keep it.
+                displayName = trimmed
+            }
+        } else {
+            // Server has no real username for this contact.
+            // Only reset username/displayName if current value is a placeholder
+            // (empty, UUID, or "anonymous") — never discard a name that arrived
+            // from an invite payload or a previous server update.
+            let currentUsernameIsPlaceholder = username.isEmpty
+                || username.lowercased() == "anonymous"
+                || UUID(uuidString: username) != nil
+
+            if currentUsernameIsPlaceholder {
+                username = ""
+            }
+
+            if !isSharingWithMe {
+                let currentDisplayIsPlaceholder = displayName.isEmpty
+                    || UUID(uuidString: displayName) != nil
+                if currentDisplayIsPlaceholder {
+                    displayName = DisplayNameGenerator.generate(from: resolvedId)
+                }
             }
             // isSharingWithMe == true → keep existing displayName (profile-shared name)
         }

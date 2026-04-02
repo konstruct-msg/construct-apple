@@ -560,6 +560,7 @@
 "device_revoke_confirm" = "This device will be removed from your account.";
 "device_last_seen" = "Last seen %@";
 "device_current" = "This device";
+"device_added_%@" = "Added %@";
 "linked_devices" = "Linked Devices";
 "linked_devices_hint" = "Scan the QR code on a new device during onboarding to link it to your account.";
 "link_new_device" = "Link New Device";
@@ -584,12 +585,18 @@
 "session_management" = "Session Management";
 "sign_out_this_device" = "Sign Out This Device";
 "sign_out_this_device_message" = "You will be signed out on this device only. Other linked devices remain active.";
+"sign_out_other_devices" = "Sign Out Other Devices";
+"sign_out_other_devices_message" = "All other linked devices will be signed out. This device stays active.";
 "sign_out_all_devices" = "Sign Out All Devices";
 "sign_out_all_devices_message" = "You will be signed out on ALL devices simultaneously. Use this if a device was lost or compromised.";
 "sign_out_all_hint" = "Signing out of all devices invalidates all sessions immediately. You will need to re-authenticate on every device.";
 "sign_out" = "Sign Out";
 "device_scan_to_approve" = "Scan to Approve New Device";
 "device_revoke_confirm_message" = "Sign out \"%@\" remotely? This device will be disconnected from your account.";
+"this_device" = "This Device";
+"other_devices" = "Other Devices";
+"other_devices_hint" = "Tap − to remove a device from your account.";
+"device_active_now" = "Active now";
 
 // MARK: - Flood guard & Lockdown
 "flood_alert_body" = "Sent %d messages in a short time. Notifications suppressed.";
@@ -604,7 +611,8 @@
 "crop_use_photo" = "Use Photo";
 
 // MARK: - Synaps
-"synaps" = "Synaps";
+"synaps" = "Synapses";
+"synapses" = "SYNAPSES";
 "synaps_search_prompt" = "Search";
 "synaps_empty_title" = "No connections yet";
 "synaps_empty_subtitle" = "People you connect with will appear here, even after you clear a conversation.";
@@ -612,3 +620,43 @@
 "synaps_prune_title" = "Cut this synapse?";
 "synaps_prune_action" = "Cut";
 "synaps_prune_message" = "This will permanently remove %@ from your Synaps and delete the conversation.";
+
+// MARK: - Connection Status Indicator
+"connection_status_secure" = "Connected securely";
+"connection_status_connecting" = "Connecting...";
+"connection_status_offline" = "Offline";
+
+// MARK: - Contact card crypto section
+"session_crypto_suite" = "Encryption";
+"session_crypto_no_session" = "No active session";
+
+"voice_message" = "Voice message";
+"ice_auto_activated_footer" = "ICE was activated automatically — your network blocks direct connections. You can disable it in settings.";
+
+// MARK: - Calls
+"call_start" = "Start audio call";
+"call_mute" = "Mute";
+"call_unmute" = "Unmute";
+"call_speaker" = "Speaker";
+"call_end" = "End Call";
+"call_connecting" = "Connecting…";
+"call_incoming_audio" = "Incoming audio call";
+"call_answer" = "Answer";
+"call_decline" = "Decline";
+
+// MARK: - Call History
+"calls_tab" = "Calls";
+"calls_recents" = "Recents";
+"calls_clear" = "Clear";
+"calls_clear_confirm" = "Clear all recent calls?";
+"calls_empty" = "No recent calls";
+"call_outgoing" = "Outgoing";
+"call_incoming" = "Incoming";
+"call_missed" = "Missed";
+"call_declined" = "Declined";
+"call_failed" = "Failed";
+"call_ended" = "Call Ended";
+"call_busy" = "Busy";
+"call_no_relay" = "No connection (relay unavailable)";
+"call_dismiss" = "Dismiss";
+"call_call_back" = "Call Back";

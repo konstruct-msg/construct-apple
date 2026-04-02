@@ -55,7 +55,9 @@ struct DuressPinSetupView: View {
                 .padding(.bottom, 16)
             }
             .navigationTitle(LocalizedStringKey(step == .enter ? "create_duress_pin" : "confirm_duress_pin"))
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("cancel") { dismiss() }

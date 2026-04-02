@@ -45,6 +45,15 @@ class SessionManager {
         KeychainManager.shared.loadDeviceID()
     }
 
+    /// Cached local display name. Updated by AuthViewModel after login/restore.
+    var currentDisplayName: String {
+        UserDefaults.standard.string(forKey: "local_display_name") ?? ""
+    }
+
+    func saveDisplayName(_ name: String) {
+        UserDefaults.standard.set(name, forKey: "local_display_name")
+    }
+
     // ✅ Get session expiration timestamp
     var sessionExpires: Date? {
         guard let timestamp = UserDefaults.standard.object(forKey: UserDefaultsKey.sessionExpires.key) as? TimeInterval else {

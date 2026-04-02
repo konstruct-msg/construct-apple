@@ -67,7 +67,7 @@ final class SessionHealingService {
             return
         }
 
-        _ = rustQueue.enqueue(contactId: message.from, messageJson: messageJson)
+        rustQueue.enqueue(contactId: message.from, messageJson: messageJson)
 
         // CoreData persistence (survives app restart until PlatformBridge migration)
         let fetch = HealingMessage.fetchRequest()
@@ -162,7 +162,7 @@ final class SessionHealingService {
 
     /// Prunes stale records older than `healingTTLHours`. Call on app launch.
     func pruneExpired(in context: NSManagedObjectContext) {
-        _ = rustQueue.pruneExpired()
+        rustQueue.pruneExpired()
 
         let cutoff = Calendar.current.date(byAdding: .hour, value: -healingTTLHours, to: Date()) ?? Date.distantPast
         let fetch = HealingMessage.fetchRequest()

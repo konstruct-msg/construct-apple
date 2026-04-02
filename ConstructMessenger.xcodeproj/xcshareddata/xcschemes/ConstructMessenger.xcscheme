@@ -87,5 +87,23 @@
    <ArchiveAction
       buildConfiguration = "Release"
       revealArchiveInOrganizer = "YES">
+      <PostActions>
+         <ExecutionAction
+            ActionType = "Xcode.IDEStandardExecutionActionsCore.ExecutionActionType.ShellScriptAction">
+            <ActionContent
+               title = "Generate WebRTC dSYM"
+               scriptText = "# Generate dSYM for WebRTC.framework (stasel/WebRTC pre-compiled binary)&#xa;# Runs post-archive outside the build sandbox.&#xa;set -e&#xa;ARCHIVE_DSYMS=&quot;${XcodeArchivePath}/dSYMs&quot;&#xa;WEBRTC_BINARY=&quot;${XcodeArchivePath}/Products/Applications/Construct Messenger.app/Frameworks/WebRTC.framework/WebRTC&quot;&#xa;if [ ! -f &quot;$WEBRTC_BINARY&quot; ]; then&#xa;  echo &quot;warning: WebRTC.framework binary not found at ${WEBRTC_BINARY}&quot;&#xa;  exit 0&#xa;fi&#xa;DSYM_OUTPUT=&quot;${ARCHIVE_DSYMS}/WebRTC.framework.dSYM&quot;&#xa;echo &quot;Generating WebRTC.framework.dSYM...&quot;&#xa;dsymutil &quot;${WEBRTC_BINARY}&quot; -o &quot;${DSYM_OUTPUT}&quot;&#xa;echo &quot;Done: ${DSYM_OUTPUT}&quot;&#xa;">
+               <EnvironmentBuildable>
+                  <BuildableReference
+                     BuildableIdentifier = "primary"
+                     BlueprintIdentifier = "BF103A6E2EED889800324CEA"
+                     BuildableName = "Construct Messenger.app"
+                     BlueprintName = "Construct Messenger"
+                     ReferencedContainer = "container:ConstructMessenger.xcodeproj">
+                  </BuildableReference>
+               </EnvironmentBuildable>
+            </ActionContent>
+         </ExecutionAction>
+      </PostActions>
    </ArchiveAction>
 </Scheme>

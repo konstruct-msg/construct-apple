@@ -44,6 +44,7 @@ struct SettingsView: View {
                                                 .foregroundColor(.primary)
                                             Text(NSLocalizedString("recovery_banner_subtitle", comment: ""))
                                                 .font(.caption)
+                                                .font(.body.leading(.standard))
                                                 .foregroundColor(.secondary)
                                         }
                                     }
@@ -74,17 +75,17 @@ struct SettingsView: View {
                                                 .resizable()
                                                 .scaledToFill()
                                         } else {
-                                            AvatarStyle.squircle(AvatarStyle.settingsSize)
-                                                .fill(Color.blue)
+                                            AvatarStyle.avatarShape(AvatarStyle.settingsSize)
+                                                .fill(Color.Construct.accent.opacity(0.18))
                                                 .overlay {
                                                     Text(profileInitials)
-                                                        .foregroundColor(.white)
+                                                        .foregroundColor(Color.Construct.accent)
                                                         .fontWeight(.semibold)
                                                 }
                                         }
                                     }
                                     .frame(width: AvatarStyle.settingsSize, height: AvatarStyle.settingsSize)
-                                    .clipShape(AvatarStyle.squircle(AvatarStyle.settingsSize))
+                                    .clipShape(AvatarStyle.avatarShape(AvatarStyle.settingsSize))
 
                                     VStack(alignment: .leading, spacing: 4) {
                                         Text(profileDisplayName)
@@ -104,121 +105,125 @@ struct SettingsView: View {
 
                         // MARK: - Share Section
                         settingsSection {
-                            Button { showingQRCode = true } label: {
-                                settingsRow(icon: "qrcode", text: "show_my_qr_code")
+                            ConstructButtonRow(icon: "qrcode", title: LocalizedStringKey("show_my_qr_code")) {
+                                showingQRCode = true
                             }
-                            .buttonStyle(.plain)
-                            settingsDivider()
-                            Button { copyContactLink() } label: {
-                                settingsRow(
-                                    icon: linkCopied ? "checkmark.circle.fill" : "link",
-                                    text: linkCopied ? "link_copied" : "copy_contact_link",
-                                    iconColor: linkCopied ? Color.AppStatus.success : .gray
-                                )
+                            ConstructRowDivider()
+                            ConstructButtonRow(
+                                icon: linkCopied ? "checkmark.circle.fill" : "link",
+                                title: LocalizedStringKey(linkCopied ? "link_copied" : "copy_contact_link"),
+                                iconColor: linkCopied ? Color.AppStatus.success : Color.Construct.accent
+                            ) {
+                                copyContactLink()
                             }
-                            .buttonStyle(.plain)
                             .disabled(linkCopied)
                         }
 
                         // MARK: - App Settings Section
                         settingsSection {
-                            settingsNavRow(icon: "lock", text: "security", destination: SecurityView())
-                            settingsDivider()
-                            // Devices (multi-device) — hidden until backend is ready
-                            // settingsNavRow(icon: "laptopcomputer", text: "Devices", destination: DevicesView())
-                            // settingsDivider()
-                            settingsNavRow(icon: "internaldrive", text: "data_and_storage", destination: DataStorageSettingsView())
-                            settingsDivider()
-                            settingsNavRow(icon: "paintbrush", text: "appearance", destination: AppearanceSettingsView())
-                            settingsDivider()
-                            settingsNavRow(icon: "bell", text: "notifications", destination: NotificationsSettingsView())
-                            settingsDivider()
+                            ConstructNavRow(icon: "laptopcomputer", title: LocalizedStringKey("linked_devices"), destination: DevicesView())
+                            ConstructRowDivider()
+                            ConstructNavRow(icon: "lock", title: LocalizedStringKey("security"), destination: SecurityView())
+                            ConstructRowDivider()
+                            ConstructNavRow(icon: "internaldrive", title: LocalizedStringKey("data_and_storage"), destination: DataStorageSettingsView())
+                            ConstructRowDivider()
+                            ConstructNavRow(icon: "bell", title: LocalizedStringKey("notifications"), destination: NotificationsSettingsView())
+                            ConstructRowDivider()
+                            // Background Refresh — custom subtitle row
                             NavigationLink(destination: BackgroundFetchSettingsView()) {
-                                HStack {
-                                    Image(systemName: "arrow.clockwise.circle").foregroundColor(.gray).frame(width: 22)
+                                HStack(spacing: 14) {
+                                    Image(systemName: "arrow.clockwise.circle")
+                                        .foregroundColor(Color.Construct.accent)
+                                        .frame(width: 22)
+                                        .font(.system(size: 16))
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(LocalizedStringKey("background_fetch"))
+                                            .font(ConstructFont.display(16))
+                                            .foregroundStyle(Color.Construct.text)
                                         HStack(spacing: 4) {
                                             Circle()
-                                                .fill(BackgroundFetchConfig.shouldBeEnabled ? Color.AppStatus.success : Color.gray)
-                                                .frame(width: 6, height: 6)
+                                                .fill(BackgroundFetchConfig.shouldBeEnabled ? Color.AppStatus.success : Color.Construct.textDim)
+                                                .frame(width: 5, height: 5)
                                             Text(LocalizedStringKey(BackgroundFetchConfig.shouldBeEnabled ? "enabled" : "disabled"))
-                                                .font(.caption).foregroundColor(.secondary)
+                                                .font(ConstructFont.mono(11))
+                                                .foregroundStyle(Color.Construct.textDim)
                                         }
                                     }
                                     Spacer()
                                     Image(systemName: "chevron.right")
-                                        .font(.system(size: 13, weight: .semibold))
-                                        .foregroundColor(Color(.tertiaryLabel))
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundStyle(Color.Construct.textDim)
                                 }
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 14)
                                 .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
-                            settingsDivider()
+                            ConstructRowDivider()
+                            // Network — custom subtitle row
                             NavigationLink(destination: NetworkSettingsView()) {
-                                HStack {
-                                    Image(systemName: "network").foregroundColor(.gray).frame(width: 22)
+                                HStack(spacing: 14) {
+                                    Image(systemName: "network")
+                                        .foregroundColor(Color.Construct.accent)
+                                        .frame(width: 22)
+                                        .font(.system(size: 16))
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(LocalizedStringKey("network"))
+                                            .font(ConstructFont.display(16))
+                                            .foregroundStyle(Color.Construct.text)
                                         HStack(spacing: 4) {
                                             Circle()
                                                 .fill(connectionStatus.isConnected ? Color.AppStatus.success : Color.red)
-                                                .frame(width: 6, height: 6)
+                                                .frame(width: 5, height: 5)
                                             Text(LocalizedStringKey(connectionStatus.connectionStatus.localizedKey))
-                                                .font(.caption).foregroundColor(.secondary)
+                                                .font(ConstructFont.mono(11))
+                                                .foregroundStyle(Color.Construct.textDim)
                                         }
                                     }
                                     Spacer()
                                     Image(systemName: "chevron.right")
-                                        .font(.system(size: 13, weight: .semibold))
-                                        .foregroundColor(Color(.tertiaryLabel))
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundStyle(Color.Construct.textDim)
                                 }
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 14)
                                 .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
-                            settingsDivider()
-                            settingsNavRow(icon: "folder", text: "drafts", destination: DraftsView())
+                            ConstructRowDivider()
+                            ConstructNavRow(icon: "folder", title: LocalizedStringKey("drafts"), destination: DraftsView())
                         }
 
                         // MARK: - About Section
                         settingsSection {
-                            HStack {
-                                Image(systemName: "info.circle").foregroundColor(.gray).frame(width: 22)
+                            HStack(spacing: 14) {
+                                Image(systemName: "info.circle")
+                                    .foregroundStyle(Color.Construct.textDim)
+                                    .frame(width: 22)
+                                    .font(.system(size: 16))
                                 Text(LocalizedStringKey("version"))
+                                    .font(ConstructFont.display(16))
+                                    .foregroundStyle(Color.Construct.text)
                                 Spacer()
-                                Text("Construct v\(AppConstants.appVersion)").foregroundColor(.secondary)
+                                Text("Construct v\(AppConstants.appVersion)")
+                                    .font(ConstructFont.mono(13))
+                                    .foregroundStyle(Color.Construct.textDim)
                             }
                             .padding(.horizontal, 16)
                             .padding(.vertical, 14)
                         }
 
                         // MARK: - Developer Section
-                        #if DEBUG
+//                        #if DEBUG
                         settingsSection(header: "Developer") {
-                            NavigationLink(destination: DiagnosticsView()) {
-                                HStack {
-                                    Text(LocalizedStringKey("diagnostics_and_logs")).foregroundStyle(.orange)
-                                    Spacer()
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 13, weight: .semibold))
-                                        .foregroundColor(Color(.tertiaryLabel))
-                                }
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 14)
-                                .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
+                            ConstructNavRow(icon: "terminal", title: LocalizedStringKey("diagnostics_and_logs"), iconColor: Color(.orange), destination: DiagnosticsView())
                         }
-                        #endif
+//                        #endif
                     }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 24)
                 }
-                .background(Color(uiColor: .systemGroupedBackground))
+                .background(Color.Construct.bg)
                 .navigationBarHidden(true)
                 .onAppear {
                     viewModel.setContext(viewContext)
@@ -249,58 +254,23 @@ struct SettingsView: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             if let header {
-                Text(header)
-                    .font(.footnote)
-                    .foregroundColor(.secondary)
+                Text(header.uppercased())
+                    .font(ConstructFont.mono(10, weight: .semibold))
+                    .foregroundStyle(Color.Construct.textDim)
+                    .tracking(1.5)
                     .padding(.horizontal, 16)
                     .padding(.bottom, 6)
             }
             VStack(spacing: 0) {
                 content()
             }
-            .background(Color(uiColor: .secondarySystemGroupedBackground))
+            .background(Color.Construct.bg2)
             .clipShape(RoundedRectangle(cornerRadius: sectionCornerRadius, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: sectionCornerRadius, style: .continuous)
+                    .strokeBorder(Color.Construct.line, lineWidth: 1)
+            )
         }
-    }
-
-    private func settingsRow(
-        icon: String,
-        text: String,
-        iconColor: Color = .gray
-    ) -> some View {
-        HStack {
-            Image(systemName: icon).foregroundColor(iconColor).frame(width: 22)
-            Text(LocalizedStringKey(text))
-            Spacer()
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
-        .contentShape(Rectangle())
-    }
-
-    private func settingsNavRow<Destination: View>(
-        icon: String,
-        text: String,
-        destination: Destination
-    ) -> some View {
-        NavigationLink(destination: destination) {
-            HStack {
-                Image(systemName: icon).foregroundColor(.gray).frame(width: 22)
-                Text(LocalizedStringKey(text))
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(Color(.tertiaryLabel))
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 14)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func settingsDivider() -> some View {
-        Divider().padding(.leading, 54)
     }
 
     // MARK: - Contact Link
@@ -326,6 +296,7 @@ struct SettingsView: View {
             let link = try inviteGenerator.generateDeepLink(
                 userId: userId,
                 deviceId: deviceId,
+                username: viewModel.resolvedDisplayName,
                 server: serverHostname,
                 useHTTPS: true
             )

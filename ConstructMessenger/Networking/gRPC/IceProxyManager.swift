@@ -135,6 +135,20 @@ struct IceRelay: Codable, Identifiable {
     }
 }
 
+/// Builds an `IceRelay` from a server-pushed address string, automatically
+/// detecting TLS mode by port: `:443` → TLS-wrapped obfs4 (SNI = hostname),
+/// any other port → legacy plain-obfs4.
+private func makeRelay(address: String, bridgeCert: String) -> IceRelay {
+    // "host:port" — extract hostname to use as SNI for port-443 endpoints.
+    let sni: String?
+    if address.hasSuffix(":443") {
+        sni = address.components(separatedBy: ":").first.flatMap { $0.isEmpty ? nil : $0 }
+    } else {
+        sni = nil
+    }
+    return IceRelay(address: address, bridgeCert: bridgeCert, iatMode: .none, tlsServerName: sni)
+}
+
 /// Manages the construct-ice local TCP proxy for gRPC obfuscation.
 @MainActor
 final class IceProxyManager: ObservableObject {
@@ -163,24 +177,25 @@ final class IceProxyManager: ObservableObject {
     private var isStartingOnDemand = false
 
     /// Whether the user has enabled ICE obfuscation. Persists across launches.
+    /// On macOS, defaults to `true` — no battery penalty, sessions are long-lived.
+    /// On iOS, defaults to `false` — opt-in to avoid battery drain on mobile.
     var isEnabled: Bool {
-        get { UserDefaults.standard.bool(forKey: enabledKey) }
+        get {
+            #if os(macOS)
+            // If the user has never explicitly set this key, default to enabled on macOS
+            if UserDefaults.standard.object(forKey: enabledKey) == nil { return true }
+            #endif
+            return UserDefaults.standard.bool(forKey: enabledKey)
+        }
         set { UserDefaults.standard.set(newValue, forKey: enabledKey) }
     }
 
     /// The current effective routing path for traffic.
     /// Updates automatically because it reads `@Published` properties.
     var currentTrafficPath: TrafficPath {
-        guard isEnabled else { return .direct }
-        guard isRunning, let relay = activeRelay else {
-            return .iceConnecting
-        }
-        if isOnCooldown {
-            return .iceCooldown
-        }
-        if relay.tlsServerName != nil {
-            return .icePrimary(host: relay.address)
-        }
+        guard isRunning, let relay = activeRelay else { return .direct }
+        if isOnCooldown { return .iceCooldown }
+        if relay.tlsServerName != nil { return .icePrimary(host: relay.address) }
         return .iceRelay(address: relay.address)
     }
 
@@ -268,6 +283,7 @@ final class IceProxyManager: ObservableObject {
 
         var port: UInt16 = 0
         let result: Int32
+        PerformanceMetrics.shared.start(.iceProxyStartBegin, label: relay.address)
 
         if let sni = relay.tlsServerName {
             // TLS-over-obfs4 mode: outer TLS (SecureTransport, SNI=sni) before obfs4.
@@ -290,12 +306,12 @@ final class IceProxyManager: ObservableObject {
         }
 
         if result == 0 {
+            PerformanceMetrics.shared.end(.iceProxyStartBegin, endEvent: .iceProxyStartEnd, label: relay.address)
             isRunning   = true
             proxyPort   = port
             activeRelay = relay
             return port
         } else {
-            // result == 1 → cert/handshake failure; result == 2 → network/bind failure (heuristic)
             lastError = result == 2 ? "Failed to start proxy (network unreachable)" : "Failed to start proxy (check bridge cert)"
             return nil
         }
@@ -314,20 +330,62 @@ final class IceProxyManager: ObservableObject {
 
     /// Returns the relay address list: server-cached list first, then hardcoded fallback.
     /// Deduplicates while preserving order (server list takes priority).
+    /// The list is then reordered to prefer relays closer to the user's timezone.
     func cachedRelayAddresses() -> [String] {
         let server   = UserDefaults.standard.stringArray(forKey: ICEConfig.cachedRelayListKey) ?? []
         let fallback = ICEConfig.hardcodedRelayAddresses
         var seen = Set<String>()
-        return (server + fallback).filter { seen.insert($0).inserted }
+        let deduped = (server + fallback).filter { seen.insert($0).inserted }
+        return Self.sortRelaysByTimezonePreference(deduped)
+    }
+
+    /// Reorders relay addresses so that geographically closer relays are tried first.
+    /// Uses the device timezone offset as a privacy-preserving location signal —
+    /// no GPS, no IP lookup, no server call required.
+    ///
+    /// Rule priority:
+    ///   1. Server-pushed config (`ICEConfig.cachedRelayRegionsKey` in UserDefaults)
+    ///   2. Hardcoded fallback (`ICEConfig.hardcodedRelayRegions`)
+    ///   3. No match → return relays unchanged
+    ///
+    /// The first matching rule (tzOffsetMin ≤ currentOffset ≤ tzOffsetMax) wins.
+    private static func sortRelaysByTimezonePreference(_ relays: [String]) -> [String] {
+        let offsetHours = TimeZone.current.secondsFromGMT() / 3600
+
+        // Load server-pushed regions (if available), fall back to hardcoded rules.
+        let regions: [ICERelayRegion]
+        if let data = UserDefaults.standard.data(forKey: ICEConfig.cachedRelayRegionsKey),
+           let decoded = try? JSONDecoder().decode([ICERelayRegion].self, from: data) {
+            regions = decoded
+        } else {
+            regions = ICEConfig.hardcodedRelayRegions
+        }
+
+        guard let match = regions.first(where: { offsetHours >= $0.tzOffsetMin && offsetHours <= $0.tzOffsetMax }) else {
+            return relays
+        }
+
+        // Bubble the rule's preferred relays to the front, preserve relative order of the rest.
+        let preferred = relays.filter { match.preferredRelays.contains($0) }
+        let rest      = relays.filter { !match.preferredRelays.contains($0) }
+        if !preferred.isEmpty {
+            Log.debug("🧊 Timezone UTC+\(offsetHours): preferring relay(s) first: \(preferred)", category: "ICE")
+        }
+        return preferred + rest
     }
 
     // MARK: - Multi-endpoint startup
 
     /// Start the ICE proxy trying the primary TLS endpoint first, then each relay (plain obfs4).
     ///
-    /// Connection order:
-    ///   1. Primary: `ice.<grpcHost>:443` (TLS + obfs4) — tried twice before relay fallback
-    ///   2. Relay 1…N from `cachedRelayAddresses()` — plain obfs4, no TLS wrapper
+    /// Connection order (timezone-aware):
+    ///   UTC+3 (Russia/Moscow):
+    ///     1. MSK relay (plain obfs4) — closest, lowest latency for RU users
+    ///     2. Primary: ice.<host>:443 (TLS+obfs4) — if MSK fails
+    ///     3. Remaining relays
+    ///   Other timezones:
+    ///     1. Primary: ice.<host>:443 (TLS+obfs4) — tried twice
+    ///     2. Relay 1…N from cachedRelayAddresses()
     ///
     /// Returns `true` if any endpoint started successfully.
     @discardableResult
@@ -336,14 +394,35 @@ final class IceProxyManager: ObservableObject {
         let iceHost = "ice.\(host)"
         let primary = IceRelay(address: "\(iceHost):443", bridgeCert: cert, iatMode: .none, tlsServerName: iceHost)
 
-        // Attempt 1 — immediate
+        // Build the ordered candidate list.
+        // cachedRelayAddresses() already applies timezone-based sorting using server-pushed
+        // or hardcoded ICERelayRegion rules. If the first relay in the sorted list is
+        // different from the default ordering it means a region rule matched — try relay first.
+        let relayAddresses = cachedRelayAddresses()   // timezone-sorted by region rules
+        let defaultRelayAddresses = ICEConfig.hardcodedRelayAddresses + (UserDefaults.standard.stringArray(forKey: ICEConfig.cachedRelayListKey) ?? [])
+        let preferRelayFirst = !relayAddresses.isEmpty && relayAddresses.first != defaultRelayAddresses.first
+
+        if preferRelayFirst {
+            Log.info("🧊 UTC+\(TimeZone.current.secondsFromGMT() / 3600): trying regional relay(s) before Amsterdam primary", category: "ICE")
+
+            // Try the timezone-preferred relay(s) first (normally just MSK).
+            for relayAddress in relayAddresses {
+                let relayConfig = makeRelay(address: relayAddress, bridgeCert: cert)
+                if start(relay: relayConfig) != nil {
+                    saveRelay(relayConfig)
+                    Log.info("🧊 ICE started via regional relay: \(relayAddress)", category: "ICE")
+                    return true
+                }
+                Log.info("🧊 ICE regional relay \(relayAddress) failed — trying primary", category: "ICE")
+            }
+        }
+
+        // Primary: TLS-wrapped obfs4 (Amsterdam).  Two attempts — network may be settling.
         if start(relay: primary) != nil {
             saveRelay(primary)
             Log.info("🧊 ICE started via primary: \(iceHost):443", category: "ICE")
             return true
         }
-
-        // Attempt 2 — one retry after a brief pause (network may be settling after background)
         Log.debug("🧊 ICE primary attempt 1 failed — retrying in 600 ms", category: "ICE")
         Thread.sleep(forTimeInterval: 0.6)
         if start(relay: primary) != nil {
@@ -352,21 +431,21 @@ final class IceProxyManager: ObservableObject {
             return true
         }
 
-        Log.info("🧊 ICE primary failed — trying relay endpoints", category: "ICE")
-
-        for relayAddress in cachedRelayAddresses() {
-            // Plain obfs4 (no TLS wrapper) — relay is a transparent TCP passthrough.
-            // The obfs4 handshake targets Amsterdam's cert; the relay just forwards bytes.
-            let relayConfig = IceRelay(address: relayAddress, bridgeCert: cert, iatMode: .none, tlsServerName: nil)
-            if start(relay: relayConfig) != nil {
-                saveRelay(relayConfig)
-                Log.info("🧊 ICE started via relay: \(relayAddress)", category: "ICE")
-                return true
+        if !preferRelayFirst {
+            // Non-CIS path: primary failed, fall through to relay list.
+            Log.info("🧊 ICE primary failed — trying relay endpoints", category: "ICE")
+            for relayAddress in relayAddresses {
+                let relayConfig = makeRelay(address: relayAddress, bridgeCert: cert)
+                if start(relay: relayConfig) != nil {
+                    saveRelay(relayConfig)
+                    Log.info("🧊 ICE started via relay: \(relayAddress)", category: "ICE")
+                    return true
+                }
+                Log.info("🧊 ICE relay \(relayAddress) failed", category: "ICE")
             }
-            Log.info("🧊 ICE relay \(relayAddress) failed", category: "ICE")
         }
 
-        Log.error("🧊 ICE start failed on all endpoints (1 primary + \(cachedRelayAddresses().count) relay(s))", category: "ICE")
+        Log.error("🧊 ICE start failed on all endpoints (1 primary + \(relayAddresses.count) relay(s))", category: "ICE")
         return false
     }
 
@@ -409,12 +488,37 @@ final class IceProxyManager: ObservableObject {
     /// If start succeeds, subsequent `performRPC` calls automatically route through ICE until
     /// the proxy is stopped (app restart or user disables ICE in settings).
     func startOnDemandIfNeeded() async {
-        guard !isRunning, !isStartingOnDemand else { return }
+        // If ICE proxy is running but on cooldown, DPI blocking has been confirmed on the direct
+        // path — clear the cooldown so `iceProxyPort()` returns a valid port and the caller
+        // retries the RPC through ICE.  This is the right behaviour: cooldown means "the ICE
+        // relay was recently flaky", but DPI means "the direct path is always broken".
+        if isRunning {
+            if isOnCooldown {
+                clearCooldown()
+                Log.info("🧊 ICE on cooldown but DPI detected — clearing cooldown, routing via ICE", category: "ICE")
+            }
+            return
+        }
+
+        // Another concurrent RPC already kicked off an ICE start — wait for it rather
+        // than returning immediately with no proxy port.  We poll on the MainActor so
+        // Task.sleep yields to let the active start make progress.
+        if isStartingOnDemand {
+            let deadline = Date().addingTimeInterval(5)
+            while isStartingOnDemand, Date() < deadline {
+                try? await Task.sleep(nanoseconds: 100_000_000) // 100 ms
+            }
+            return
+        }
+
         isStartingOnDemand = true
         defer { isStartingOnDemand = false }
         Log.info("🧊 Auto-starting ICE proxy (DPI auto-detection)", category: "ICE")
         let cert = await getIceBridgeCert()
         if startWithRelayFallback(cert: cert) {
+            // Persist the enabled state so the UI toggle and traffic-path indicator
+            // reflect reality — the user implicitly wants ICE if DPI is active.
+            isEnabled = true
             Task { await IceCertFetcher.shared.fetchAndCacheRelayList() }
             Log.info("🧊 ICE auto-started via DPI detection", category: "ICE")
         } else {
@@ -518,18 +622,11 @@ final class IceProxyManager: ObservableObject {
     func loadStoredRelay() -> IceRelay? {
         guard let data = UserDefaults.standard.data(forKey: relayKey),
               let relay = try? JSONDecoder().decode(IceRelay.self, from: data) else { return nil }
-        // Migrate old relay format (pre-TLS mode): address was "ice.<host>:9443", no tlsServerName.
-        // Upgrade transparently to TLS mode: ice.<host>:443 with SNI set.
-        // IMPORTANT: do NOT migrate known relay addresses — MSK relay is intentionally plain obfs4
-        // on port 9443 (no TLS wrapper).
-        let knownRelayAddresses = Set(cachedRelayAddresses())
-        let needsMigration = !knownRelayAddresses.contains(relay.address)
-                          && (relay.tlsServerName == nil || relay.address.hasSuffix(":9443"))
-        if needsMigration {
-            let host = GRPCChannelManager.shared.currentHost
-            let iceHost = "ice.\(host)"
-            let upgraded = IceRelay(address: "\(iceHost):443", bridgeCert: relay.bridgeCert,
-                                    iatMode: relay.iatMode, tlsServerName: iceHost)
+        // Migrate stored relays that still use legacy port 9443 (plain obfs4, no TLS wrapper).
+        // Upgrade to port 443 with TLS SNI — all relays now run TLS-over-obfs4 via Traefik.
+        if relay.address.hasSuffix(":9443") || relay.tlsServerName == nil {
+            let upgraded = makeRelay(address: relay.address.replacingOccurrences(of: ":9443", with: ":443"),
+                                     bridgeCert: relay.bridgeCert)
             saveRelay(upgraded)
             Log.info("🧊 Migrated stored relay to TLS mode: \(upgraded.address)", category: "ICE")
             return upgraded

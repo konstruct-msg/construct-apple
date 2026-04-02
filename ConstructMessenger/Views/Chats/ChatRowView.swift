@@ -12,7 +12,7 @@ struct ChatRowView: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            // Avatar
+            // Avatar — styled like Synaps ContactCircle
             Group {
                 if let avatarData = chat.otherUser?.avatarData,
                    let avatarImage = ImageHelper.imageFromData(avatarData) {
@@ -20,26 +20,37 @@ struct ChatRowView: View {
                         .resizable()
                         .scaledToFill()
                         .frame(width: AvatarStyle.chatSize, height: AvatarStyle.chatSize)
-                        .clipShape(AvatarStyle.squircle(AvatarStyle.chatSize))
+                        .clipShape(AvatarStyle.avatarShape(AvatarStyle.chatSize))
+                        .overlay {
+                            AvatarStyle.avatarShape(AvatarStyle.chatSize)
+                                .strokeBorder(Color.Construct.dim, lineWidth: 1.5)
+                        }
                 } else {
-                    AvatarStyle.squircle(AvatarStyle.chatSize)
-                        .fill(Color.hexagonAccent(for: chat.otherUser?.id ?? ""))
+                    let accent = Color.hexagonAccent(for: chat.otherUser?.id ?? "")
+                    AvatarStyle.avatarShape(AvatarStyle.chatSize)
+                        .fill(accent.opacity(0.15))
                         .frame(width: AvatarStyle.chatSize, height: AvatarStyle.chatSize)
                         .overlay {
                             Text(initials)
-                                .foregroundColor(.white)
-                                .fontWeight(.semibold)
+                                .font(ConstructFont.mono(16, weight: .semibold))
+                                .foregroundStyle(accent)
+                        }
+                        .overlay {
+                            AvatarStyle.avatarShape(AvatarStyle.chatSize)
+                                .strokeBorder(Color.Construct.dim, lineWidth: 1.5)
                         }
                 }
             }
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(chat.otherUser?.resolvedDisplayName ?? NSLocalizedString("unknown", comment: "Unknown user"))
-                    .fontWeight(.semibold)
+                    .font(ConstructFont.display(16, weight: .semibold))
+                    .foregroundStyle(Color.Construct.textBright)
 
                 if let lastMessage = chat.lastMessageText {
                     Text(Chat.formatPreviewText(lastMessage))
-                        .foregroundColor(.secondary)
+                        .font(ConstructFont.display(14))
+                        .foregroundStyle(Color.Construct.textDim)
                         .lineLimit(1)
                 }
             }
@@ -50,21 +61,48 @@ struct ChatRowView: View {
                 if chat.isPinned && chat.unreadCount == 0 {
                     Image(systemName: "pin.fill")
                         .font(.caption2)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(Color.Construct.textDim)
                 }
                 if chat.unreadCount > 0 {
                     Text(chat.unreadCount < 100 ? "\(chat.unreadCount)" : "99+")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Color.accentColor, in: Capsule())
+                        .font(ConstructFont.mono(11, weight: .semibold))
+                        .foregroundStyle(Color.Construct.bg)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(Color.Construct.accent, in: Capsule())
                         .animation(.easeInOut(duration: 0.2), value: chat.unreadCount)
                 }
             }
 
         }
         .padding(.vertical, 4)
+        // Right-click context menu on macOS
+        .contextMenu {
+            Button {
+                chat.isPinned.toggle()
+                try? chat.managedObjectContext?.save()
+            } label: {
+                Label(chat.isPinned ? "Unpin" : "Pin", systemImage: chat.isPinned ? "pin.slash" : "pin")
+            }
+
+            if chat.unreadCount > 0 {
+                Button {
+                    chat.unreadCount = 0
+                    try? chat.managedObjectContext?.save()
+                } label: {
+                    Label("Mark as Read", systemImage: "envelope.open")
+                }
+            }
+
+            Divider()
+
+            Button(role: .destructive) {
+                // Chat deletion is handled via ChatManagementService; tag it for parent list to process
+                NotificationCenter.default.post(name: .deleteChat, object: chat.id)
+            } label: {
+                Label("Delete Chat", systemImage: "trash")
+            }
+        }
     }
 
     private var initials: String {

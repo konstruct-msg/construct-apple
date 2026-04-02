@@ -347,11 +347,24 @@ class BackgroundFetchManager: NSObject {
                     // not the main queue, so there is no deadlock risk.
                     var decryptedContent: String?
 
+                    // Targeted session restore before the hasSession check.
+                    // Background fetch may run before restoreRecentSessions() has completed
+                    // (e.g., silent push during app launch race). restoreSession(for:) is a
+                    // synchronous Keychain lookup — no-op if session already in memory.
+                    _ = DispatchQueue.main.sync { CryptoManager.shared.restoreSession(for: otherUserId) }
+
                     if CryptoManager.shared.hasSession(for: otherUserId) {
                         DispatchQueue.main.sync {
                             do {
                                 decryptedContent = try CryptoManager.shared.decryptMessage(messageData)
                                 Log.debug("✅ Decrypted message \(messageData.id)", category: "BackgroundFetch")
+                                // Immediately mark in-memory on the main thread to close the race window
+                                // with the live gRPC stream.  The stream's isProcessed check hits the
+                                // Rust in-memory cache first — if it finds the ID there it skips the
+                                // message entirely, preventing a double-decrypt AEAD failure that would
+                                // trigger heal_impossible → END_SESSION → silent session destruction.
+                                // Core Data persistence follows below on the background thread.
+                                PersistentACKStore.shared.preemptACK(messageData.id)
                             } catch {
                                 Log.error("❌ Failed to decrypt message \(messageData.id): \(error)", category: "BackgroundFetch")
                             }
@@ -361,12 +374,45 @@ class BackgroundFetchManager: NSObject {
                         // Message will be decrypted when user opens chat and session is initialized
                     }
 
-                    // If decryption succeeded, mark the message as processed in PersistentACKStore.
-                    // This prevents the real-time stream (MessageRouter) from re-processing it when
-                    // it reconnects — which would advance the Double Ratchet a second time and cause
-                    // an AEAD failure, triggering an unnecessary heal loop.
-                    // If decryption FAILED (decryptedContent == nil), we intentionally do NOT mark it
-                    // as processed so the stream can retry with the live session.
+                    // Chunk messages: if the decrypted plaintext starts with "KNST1:" it is a
+                    // chunked-message fragment.  The Double Ratchet advanced above, and the
+                    // in-memory ACK (preemptACK) was already written inside the main.sync block,
+                    // so the stream cannot re-decrypt this chunk.  We still need:
+                    //   1. Core Data ACK persist (markProcessed below) — survives app restart
+                    //   2. Reassembly — feed to shared ChunkedMessageReassembler
+                    // • .complete  → replace decryptedContent with assembled text, fall through to save
+                    // • .incomplete → Core Data ACK + skip save; remaining chunks complete assembly
+                    //                 via subsequent background fetches or the live stream
+                    // • .invalid / .legacy → Core Data ACK + skip save
+                    if let dc = decryptedContent, dc.hasPrefix("KNST1:") {
+                        var assembled: String? = nil
+                        DispatchQueue.main.sync {
+                            switch ChunkedMessageReassembler.shared.process(decryptedText: dc) {
+                            case .complete(let text):
+                                assembled = text
+                            case .legacy(let text):
+                                assembled = text
+                            case .incomplete, .invalid:
+                                break
+                            }
+                        }
+                        // Always ACK — ratchet is past this chunk, stream must not retry.
+                        PersistentACKStore.shared.markProcessed(messageData.id, senderId: messageData.from, in: backgroundContext)
+                        if let text = assembled {
+                            Log.debug("✅ Chunk assembled in background fetch \(messageData.id.prefix(8))", category: "BackgroundFetch")
+                            decryptedContent = text
+                        } else {
+                            Log.debug("⏭️ Chunk fragment \(messageData.id.prefix(8)) ACK'd; waiting for remaining chunks", category: "BackgroundFetch")
+                            continue
+                        }
+                    }
+
+                    // Persist the ACK to Core Data for non-chunk messages.
+                    // The in-memory cache was already updated by preemptACK inside main.sync,
+                    // which closed the stream race window.  This call durably persists across
+                    // app restarts.  Idempotent — calling markProcessed on an already-cached
+                    // ID is a no-op in Core Data (guarded by fetchLimit:1 check).
+                    // Skip for failed decryptions (nil) so the stream can retry with the live session.
                     if decryptedContent != nil {
                         PersistentACKStore.shared.markProcessed(messageData.id, senderId: messageData.from, in: backgroundContext)
                     }
@@ -450,8 +496,8 @@ class BackgroundFetchManager: NSObject {
         } else {
             let newUser = User(context: context)
             newUser.id = userId
-            newUser.username = userId // Temporary, will be updated when public key bundle is received
-            newUser.displayName = userId
+            newUser.username = ""
+            newUser.displayName = DisplayNameGenerator.generate(from: userId)
             newUser.isSharingWithMe = false
             newUser.isBlocked = false
             newUser.amISharingWith = false

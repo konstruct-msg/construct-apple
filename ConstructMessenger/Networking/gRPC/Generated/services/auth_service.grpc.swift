@@ -140,6 +140,18 @@ public enum Shared_Proto_Services_V1_AuthService: Sendable {
                 method: "GetSenderCertificate"
             )
         }
+        /// Namespace for "ApproveJoinRequest" metadata.
+        public enum ApproveJoinRequest: Sendable {
+            /// Request type for "ApproveJoinRequest".
+            public typealias Input = Shared_Proto_Services_V1_ApproveJoinRequestRequest
+            /// Response type for "ApproveJoinRequest".
+            public typealias Output = Shared_Proto_Services_V1_AuthTokensResponse
+            /// Descriptor for "ApproveJoinRequest".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.AuthService"),
+                method: "ApproveJoinRequest"
+            )
+        }
         /// Descriptors for all methods in the "shared.proto.services.v1.AuthService" service.
         public static let descriptors: [GRPCCore.MethodDescriptor] = [
             GetPowChallenge.descriptor,
@@ -151,7 +163,8 @@ public enum Shared_Proto_Services_V1_AuthService: Sendable {
             SetRecoveryKey.descriptor,
             GetRecoveryStatus.descriptor,
             RecoverAccount.descriptor,
-            GetSenderCertificate.descriptor
+            GetSenderCertificate.descriptor,
+            ApproveJoinRequest.descriptor
         ]
     }
 }
@@ -411,6 +424,31 @@ extension Shared_Proto_Services_V1_AuthService {
             deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_GetSenderCertificateResponse>,
             options: GRPCCore.CallOptions,
             onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_GetSenderCertificateResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "ApproveJoinRequest" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > ApproveJoinRequest - Phone approves TUI device link (Flow B)
+        /// > Authenticated: requires valid JWT from the primary/existing device
+        /// > Creates the device in DB and returns auth tokens for the new device
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_ApproveJoinRequestRequest` message.
+        ///   - serializer: A serializer for `Shared_Proto_Services_V1_ApproveJoinRequestRequest` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_AuthTokensResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response, the result of which is
+        ///       returned to the caller. Returning from the closure will cancel the RPC if it
+        ///       hasn't already finished.
+        /// - Returns: The result of `handleResponse`.
+        func approveJoinRequest<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_ApproveJoinRequestRequest>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_ApproveJoinRequestRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_AuthTokensResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_AuthTokensResponse>) async throws -> Result
         ) async throws -> Result where Result: Sendable
     }
 
@@ -781,6 +819,42 @@ extension Shared_Proto_Services_V1_AuthService {
                 onResponse: handleResponse
             )
         }
+
+        /// Call the "ApproveJoinRequest" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > ApproveJoinRequest - Phone approves TUI device link (Flow B)
+        /// > Authenticated: requires valid JWT from the primary/existing device
+        /// > Creates the device in DB and returns auth tokens for the new device
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_ApproveJoinRequestRequest` message.
+        ///   - serializer: A serializer for `Shared_Proto_Services_V1_ApproveJoinRequestRequest` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_AuthTokensResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response, the result of which is
+        ///       returned to the caller. Returning from the closure will cancel the RPC if it
+        ///       hasn't already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func approveJoinRequest<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_ApproveJoinRequestRequest>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_ApproveJoinRequestRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_AuthTokensResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_AuthTokensResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Shared_Proto_Services_V1_AuthService.Method.ApproveJoinRequest.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
     }
 }
 
@@ -1080,6 +1154,37 @@ extension Shared_Proto_Services_V1_AuthService.ClientProtocol {
             request: request,
             serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_GetSenderCertificateRequest>(),
             deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_GetSenderCertificateResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "ApproveJoinRequest" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > ApproveJoinRequest - Phone approves TUI device link (Flow B)
+    /// > Authenticated: requires valid JWT from the primary/existing device
+    /// > Creates the device in DB and returns auth tokens for the new device
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Shared_Proto_Services_V1_ApproveJoinRequestRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response, the result of which is
+    ///       returned to the caller. Returning from the closure will cancel the RPC if it
+    ///       hasn't already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func approveJoinRequest<Result>(
+        request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_ApproveJoinRequestRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_AuthTokensResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.approveJoinRequest(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_ApproveJoinRequestRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_AuthTokensResponse>(),
             options: options,
             onResponse: handleResponse
         )
@@ -1426,6 +1531,41 @@ extension Shared_Proto_Services_V1_AuthService.ClientProtocol {
             onResponse: handleResponse
         )
     }
+
+    /// Call the "ApproveJoinRequest" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > ApproveJoinRequest - Phone approves TUI device link (Flow B)
+    /// > Authenticated: requires valid JWT from the primary/existing device
+    /// > Creates the device in DB and returns auth tokens for the new device
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response, the result of which is
+    ///       returned to the caller. Returning from the closure will cancel the RPC if it
+    ///       hasn't already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func approveJoinRequest<Result>(
+        _ message: Shared_Proto_Services_V1_ApproveJoinRequestRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_AuthTokensResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Shared_Proto_Services_V1_ApproveJoinRequestRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.approveJoinRequest(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
 }
 
 // MARK: - shared.proto.services.v1.DeviceService
@@ -1442,7 +1582,7 @@ public enum Shared_Proto_Services_V1_DeviceService: Sendable {
             /// Request type for "ListDevices".
             public typealias Input = Shared_Proto_Services_V1_ListDevicesRequest
             /// Response type for "ListDevices".
-            public typealias Output = Shared_Proto_Services_V1_DeviceInfo
+            public typealias Output = Shared_Proto_Services_V1_ListDevicesResponse
             /// Descriptor for "ListDevices".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.DeviceService"),
@@ -1562,7 +1702,7 @@ extension Shared_Proto_Services_V1_DeviceService {
         /// - Parameters:
         ///   - request: A request containing a single `Shared_Proto_Services_V1_ListDevicesRequest` message.
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_ListDevicesRequest` messages.
-        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_DeviceInfo` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_ListDevicesResponse` messages.
         ///   - options: Options to apply to this RPC.
         ///   - handleResponse: A closure which handles the response, the result of which is
         ///       returned to the caller. Returning from the closure will cancel the RPC if it
@@ -1571,9 +1711,9 @@ extension Shared_Proto_Services_V1_DeviceService {
         func listDevices<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_ListDevicesRequest>,
             serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_ListDevicesRequest>,
-            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_DeviceInfo>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_ListDevicesResponse>,
             options: GRPCCore.CallOptions,
-            onResponse handleResponse: @Sendable @escaping (GRPCCore.StreamingClientResponse<Shared_Proto_Services_V1_DeviceInfo>) async throws -> Result
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.StreamingClientResponse<Shared_Proto_Services_V1_ListDevicesResponse>) async throws -> Result
         ) async throws -> Result where Result: Sendable
 
         /// Call the "RevokeDevice" method.
@@ -1745,7 +1885,7 @@ extension Shared_Proto_Services_V1_DeviceService {
         /// - Parameters:
         ///   - request: A request containing a single `Shared_Proto_Services_V1_ListDevicesRequest` message.
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_ListDevicesRequest` messages.
-        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_DeviceInfo` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_ListDevicesResponse` messages.
         ///   - options: Options to apply to this RPC.
         ///   - handleResponse: A closure which handles the response, the result of which is
         ///       returned to the caller. Returning from the closure will cancel the RPC if it
@@ -1754,9 +1894,9 @@ extension Shared_Proto_Services_V1_DeviceService {
         public func listDevices<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_ListDevicesRequest>,
             serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_ListDevicesRequest>,
-            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_DeviceInfo>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_ListDevicesResponse>,
             options: GRPCCore.CallOptions = .defaults,
-            onResponse handleResponse: @Sendable @escaping (GRPCCore.StreamingClientResponse<Shared_Proto_Services_V1_DeviceInfo>) async throws -> Result
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.StreamingClientResponse<Shared_Proto_Services_V1_ListDevicesResponse>) async throws -> Result
         ) async throws -> Result where Result: Sendable {
             try await self.client.serverStreaming(
                 request: request,
@@ -1994,12 +2134,12 @@ extension Shared_Proto_Services_V1_DeviceService.ClientProtocol {
     public func listDevices<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_ListDevicesRequest>,
         options: GRPCCore.CallOptions = .defaults,
-        onResponse handleResponse: @Sendable @escaping (GRPCCore.StreamingClientResponse<Shared_Proto_Services_V1_DeviceInfo>) async throws -> Result
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.StreamingClientResponse<Shared_Proto_Services_V1_ListDevicesResponse>) async throws -> Result
     ) async throws -> Result where Result: Sendable {
         try await self.listDevices(
             request: request,
             serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_ListDevicesRequest>(),
-            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_DeviceInfo>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_ListDevicesResponse>(),
             options: options,
             onResponse: handleResponse
         )
@@ -2202,7 +2342,7 @@ extension Shared_Proto_Services_V1_DeviceService.ClientProtocol {
         _ message: Shared_Proto_Services_V1_ListDevicesRequest,
         metadata: GRPCCore.Metadata = [:],
         options: GRPCCore.CallOptions = .defaults,
-        onResponse handleResponse: @Sendable @escaping (GRPCCore.StreamingClientResponse<Shared_Proto_Services_V1_DeviceInfo>) async throws -> Result
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.StreamingClientResponse<Shared_Proto_Services_V1_ListDevicesResponse>) async throws -> Result
     ) async throws -> Result where Result: Sendable {
         let request = GRPCCore.ClientRequest<Shared_Proto_Services_V1_ListDevicesRequest>(
             message: message,
@@ -2436,9 +2576,35 @@ public enum Shared_Proto_Services_V1_DeviceLinkService: Sendable {
                 method: "ConfirmDeviceLink"
             )
         }
+        /// Namespace for "SubmitJoinRequest" metadata.
+        public enum SubmitJoinRequest: Sendable {
+            /// Request type for "SubmitJoinRequest".
+            public typealias Input = Shared_Proto_Services_V1_JoinRequestPayload
+            /// Response type for "SubmitJoinRequest".
+            public typealias Output = Shared_Proto_Services_V1_JoinRequestAck
+            /// Descriptor for "SubmitJoinRequest".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.DeviceLinkService"),
+                method: "SubmitJoinRequest"
+            )
+        }
+        /// Namespace for "CheckJoinRequestStatus" metadata.
+        public enum CheckJoinRequestStatus: Sendable {
+            /// Request type for "CheckJoinRequestStatus".
+            public typealias Input = Shared_Proto_Services_V1_CheckJoinRequestStatusRequest
+            /// Response type for "CheckJoinRequestStatus".
+            public typealias Output = Shared_Proto_Services_V1_CheckJoinRequestStatusResponse
+            /// Descriptor for "CheckJoinRequestStatus".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.DeviceLinkService"),
+                method: "CheckJoinRequestStatus"
+            )
+        }
         /// Descriptors for all methods in the "shared.proto.services.v1.DeviceLinkService" service.
         public static let descriptors: [GRPCCore.MethodDescriptor] = [
-            ConfirmDeviceLink.descriptor
+            ConfirmDeviceLink.descriptor,
+            SubmitJoinRequest.descriptor,
+            CheckJoinRequestStatus.descriptor
         ]
     }
 }
@@ -2466,7 +2632,7 @@ extension Shared_Proto_Services_V1_DeviceLinkService {
         ///
         /// > Source IDL Documentation:
         /// >
-        /// > ConfirmDeviceLink - New device completes the link using the QR token
+        /// > ConfirmDeviceLink - New device completes the link using the QR token (Flow A)
         /// > NOT authenticated: new device has no JWT yet, uses link_token instead
         ///
         /// - Parameters:
@@ -2484,6 +2650,55 @@ extension Shared_Proto_Services_V1_DeviceLinkService {
             deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_AuthTokensResponse>,
             options: GRPCCore.CallOptions,
             onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_AuthTokensResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "SubmitJoinRequest" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > SubmitJoinRequest - TUI device submits a join request (Flow B)
+        /// > NOT authenticated: the TUI device has no JWT yet
+        /// > Stores device keys + metadata in Redis for 10 minutes
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_JoinRequestPayload` message.
+        ///   - serializer: A serializer for `Shared_Proto_Services_V1_JoinRequestPayload` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_JoinRequestAck` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response, the result of which is
+        ///       returned to the caller. Returning from the closure will cancel the RPC if it
+        ///       hasn't already finished.
+        /// - Returns: The result of `handleResponse`.
+        func submitJoinRequest<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_JoinRequestPayload>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_JoinRequestPayload>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_JoinRequestAck>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_JoinRequestAck>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "CheckJoinRequestStatus" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > CheckJoinRequestStatus - TUI polls to check if phone approved (Flow B)
+        /// > NOT authenticated: still waiting for approval
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_CheckJoinRequestStatusRequest` message.
+        ///   - serializer: A serializer for `Shared_Proto_Services_V1_CheckJoinRequestStatusRequest` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_CheckJoinRequestStatusResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response, the result of which is
+        ///       returned to the caller. Returning from the closure will cancel the RPC if it
+        ///       hasn't already finished.
+        /// - Returns: The result of `handleResponse`.
+        func checkJoinRequestStatus<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_CheckJoinRequestStatusRequest>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_CheckJoinRequestStatusRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_CheckJoinRequestStatusResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_CheckJoinRequestStatusResponse>) async throws -> Result
         ) async throws -> Result where Result: Sendable
     }
 
@@ -2511,7 +2726,7 @@ extension Shared_Proto_Services_V1_DeviceLinkService {
         ///
         /// > Source IDL Documentation:
         /// >
-        /// > ConfirmDeviceLink - New device completes the link using the QR token
+        /// > ConfirmDeviceLink - New device completes the link using the QR token (Flow A)
         /// > NOT authenticated: new device has no JWT yet, uses link_token instead
         ///
         /// - Parameters:
@@ -2541,6 +2756,77 @@ extension Shared_Proto_Services_V1_DeviceLinkService {
                 onResponse: handleResponse
             )
         }
+
+        /// Call the "SubmitJoinRequest" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > SubmitJoinRequest - TUI device submits a join request (Flow B)
+        /// > NOT authenticated: the TUI device has no JWT yet
+        /// > Stores device keys + metadata in Redis for 10 minutes
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_JoinRequestPayload` message.
+        ///   - serializer: A serializer for `Shared_Proto_Services_V1_JoinRequestPayload` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_JoinRequestAck` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response, the result of which is
+        ///       returned to the caller. Returning from the closure will cancel the RPC if it
+        ///       hasn't already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func submitJoinRequest<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_JoinRequestPayload>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_JoinRequestPayload>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_JoinRequestAck>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_JoinRequestAck>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Shared_Proto_Services_V1_DeviceLinkService.Method.SubmitJoinRequest.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "CheckJoinRequestStatus" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > CheckJoinRequestStatus - TUI polls to check if phone approved (Flow B)
+        /// > NOT authenticated: still waiting for approval
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_CheckJoinRequestStatusRequest` message.
+        ///   - serializer: A serializer for `Shared_Proto_Services_V1_CheckJoinRequestStatusRequest` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_CheckJoinRequestStatusResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response, the result of which is
+        ///       returned to the caller. Returning from the closure will cancel the RPC if it
+        ///       hasn't already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func checkJoinRequestStatus<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_CheckJoinRequestStatusRequest>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_CheckJoinRequestStatusRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_CheckJoinRequestStatusResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_CheckJoinRequestStatusResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Shared_Proto_Services_V1_DeviceLinkService.Method.CheckJoinRequestStatus.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
     }
 }
 
@@ -2551,7 +2837,7 @@ extension Shared_Proto_Services_V1_DeviceLinkService.ClientProtocol {
     ///
     /// > Source IDL Documentation:
     /// >
-    /// > ConfirmDeviceLink - New device completes the link using the QR token
+    /// > ConfirmDeviceLink - New device completes the link using the QR token (Flow A)
     /// > NOT authenticated: new device has no JWT yet, uses link_token instead
     ///
     /// - Parameters:
@@ -2576,6 +2862,67 @@ extension Shared_Proto_Services_V1_DeviceLinkService.ClientProtocol {
             onResponse: handleResponse
         )
     }
+
+    /// Call the "SubmitJoinRequest" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > SubmitJoinRequest - TUI device submits a join request (Flow B)
+    /// > NOT authenticated: the TUI device has no JWT yet
+    /// > Stores device keys + metadata in Redis for 10 minutes
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Shared_Proto_Services_V1_JoinRequestPayload` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response, the result of which is
+    ///       returned to the caller. Returning from the closure will cancel the RPC if it
+    ///       hasn't already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func submitJoinRequest<Result>(
+        request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_JoinRequestPayload>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_JoinRequestAck>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.submitJoinRequest(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_JoinRequestPayload>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_JoinRequestAck>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "CheckJoinRequestStatus" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > CheckJoinRequestStatus - TUI polls to check if phone approved (Flow B)
+    /// > NOT authenticated: still waiting for approval
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Shared_Proto_Services_V1_CheckJoinRequestStatusRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response, the result of which is
+    ///       returned to the caller. Returning from the closure will cancel the RPC if it
+    ///       hasn't already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func checkJoinRequestStatus<Result>(
+        request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_CheckJoinRequestStatusRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_CheckJoinRequestStatusResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.checkJoinRequestStatus(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_CheckJoinRequestStatusRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_CheckJoinRequestStatusResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
 }
 
 // Helpers providing sugared APIs for 'ClientProtocol' methods.
@@ -2585,7 +2932,7 @@ extension Shared_Proto_Services_V1_DeviceLinkService.ClientProtocol {
     ///
     /// > Source IDL Documentation:
     /// >
-    /// > ConfirmDeviceLink - New device completes the link using the QR token
+    /// > ConfirmDeviceLink - New device completes the link using the QR token (Flow A)
     /// > NOT authenticated: new device has no JWT yet, uses link_token instead
     ///
     /// - Parameters:
@@ -2609,6 +2956,75 @@ extension Shared_Proto_Services_V1_DeviceLinkService.ClientProtocol {
             metadata: metadata
         )
         return try await self.confirmDeviceLink(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "SubmitJoinRequest" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > SubmitJoinRequest - TUI device submits a join request (Flow B)
+    /// > NOT authenticated: the TUI device has no JWT yet
+    /// > Stores device keys + metadata in Redis for 10 minutes
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response, the result of which is
+    ///       returned to the caller. Returning from the closure will cancel the RPC if it
+    ///       hasn't already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func submitJoinRequest<Result>(
+        _ message: Shared_Proto_Services_V1_JoinRequestPayload,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_JoinRequestAck>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Shared_Proto_Services_V1_JoinRequestPayload>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.submitJoinRequest(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "CheckJoinRequestStatus" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > CheckJoinRequestStatus - TUI polls to check if phone approved (Flow B)
+    /// > NOT authenticated: still waiting for approval
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response, the result of which is
+    ///       returned to the caller. Returning from the closure will cancel the RPC if it
+    ///       hasn't already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func checkJoinRequestStatus<Result>(
+        _ message: Shared_Proto_Services_V1_CheckJoinRequestStatusRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_CheckJoinRequestStatusResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Shared_Proto_Services_V1_CheckJoinRequestStatusRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.checkJoinRequestStatus(
             request: request,
             options: options,
             onResponse: handleResponse

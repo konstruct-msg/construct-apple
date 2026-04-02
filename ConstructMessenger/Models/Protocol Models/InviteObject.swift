@@ -19,18 +19,19 @@ import Foundation
 /// Format:
 /// ```json
 /// {
-///   "v": 1,
+///   "v": 3,
 ///   "jti": "550e8400-e29b-41d4-a716-446655440000",
 ///   "uuid": "550e8400-e29b-41d4-a716-446655440000",  // userId (UUID)
 ///   "deviceId": "4e1f9dbe209c1bedb33ee32dda5a28f0",  // deviceId (hex)
 ///   "server": "konstruct.cc",
 ///   "ephKey": "base64-x25519-public-key",
 ///   "ts": 1738156800,
-///   "sig": "base64-ed25519-signature"
+///   "sig": "base64-ed25519-signature",
+///   "un": "alice"  // optional sender username (V3+, included in signature)
 /// }
 /// ```
 struct InviteObject: Codable, Equatable {
-    /// Protocol version (1 or 2)
+    /// Protocol version (1, 2, or 3)
     let v: Int
     
     /// JTI - unique invite ID for one-time use tracking
@@ -61,12 +62,36 @@ struct InviteObject: Codable, Equatable {
     /// 64 bytes, proves authenticity
     let sig: String
     
+    /// Sender's username or display name (V3+, optional)
+    /// Included in the Ed25519 canonical string — cryptographically authenticated.
+    /// Allows the recipient to see the sender's name immediately without a server roundtrip.
+    /// Server stores only a username hash, so the plaintext travels here peer-to-peer.
+    let un: String?
+
+    // MARK: - Codable (custom encode to omit nil `un` and keep QR payload compact)
+
+    enum CodingKeys: String, CodingKey {
+        case v, jti, uuid, deviceId, server, ephKey, ts, sig, un
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(v,        forKey: .v)
+        try c.encode(jti,      forKey: .jti)
+        try c.encode(uuid,     forKey: .uuid)
+        try c.encode(deviceId, forKey: .deviceId)
+        try c.encode(server,   forKey: .server)
+        try c.encode(ephKey,   forKey: .ephKey)
+        try c.encode(ts,       forKey: .ts)
+        try c.encode(sig,      forKey: .sig)
+        try c.encodeIfPresent(un, forKey: .un)  // omit key entirely when nil
+    }
+    
     // MARK: - Validation
     
     /// Validate invite object structure
     /// - Throws: InviteValidationError if invalid
     func validate() throws {
-        // Version check
         guard InviteConfig.supportedVersions.contains(v) else {
             throw InviteValidationError.unsupportedVersion(v)
         }
@@ -136,6 +161,7 @@ struct InviteObject: Codable, Equatable {
     /// Fields are concatenated in order:
     /// - v1: v|jti|uuid|server|ephKey|ts
     /// - v2: v|jti|uuid|deviceId|server|ephKey|ts
+    /// - v3: v|jti|uuid|deviceId|server|ephKey|ts|un  (un is empty string if nil)
     /// This exact order must be used for both signing and verification.
     ///
     /// - Returns: String to sign/verify
@@ -146,8 +172,11 @@ struct InviteObject: Codable, Equatable {
         let uuidLower = uuid.lowercased()
         if v == 1 {
             return "\(v)|\(jtiLower)|\(uuidLower)|\(server)|\(ephKey)|\(ts)"
+        } else if v == 2 {
+            return "\(v)|\(jtiLower)|\(uuidLower)|\(deviceId)|\(server)|\(ephKey)|\(ts)"
         }
-        return "\(v)|\(jtiLower)|\(uuidLower)|\(deviceId)|\(server)|\(ephKey)|\(ts)"
+        // V3: username is included in the signature (empty string if absent)
+        return "\(v)|\(jtiLower)|\(uuidLower)|\(deviceId)|\(server)|\(ephKey)|\(ts)|\(un ?? "")"
     }
 }
 

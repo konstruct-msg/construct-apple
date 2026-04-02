@@ -35,7 +35,7 @@ class MessagePersistenceService {
         Log.debug("💾 Saving message \(message.id), isSentByMe: \(isSentByMe), status: \(status)", category: "MessagePersistence")
         
         let fetchRequest = Message.fetchRequest()
-        let messagePredicate = NSPredicate(format: "id == %@", message.id)
+        let messagePredicate = NSPredicate(format: "id ==[c] %@", message.id)
         fetchRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [messagePredicate])
         
         let messageTimestamp = Date(timeIntervalSince1970: TimeInterval(message.timestamp))
@@ -57,7 +57,7 @@ class MessagePersistenceService {
         } else {
             Log.debug("✨ Creating new message \(message.id)", category: "MessagePersistence")
             let newMessage = Message(context: context)
-            newMessage.id = message.id
+            newMessage.id = message.id.lowercased()
             newMessage.fromUserId = message.from
             newMessage.toUserId = message.to
             newMessage.encryptedContent = message.content
@@ -71,7 +71,7 @@ class MessagePersistenceService {
             
             // Set reply information
             if let replyMessage = replyTo {
-                newMessage.replyToMessageId = replyMessage.id
+                newMessage.replyToMessageId = replyMessage.id.lowercased()
                 newMessage.replyToContent = replyToContentOverride ?? replyMessage.decryptedContent
             }
             
@@ -115,7 +115,7 @@ class MessagePersistenceService {
         in context: NSManagedObjectContext
     ) {
         let fetchRequest = Message.fetchRequest()
-        fetchRequest.predicate = NSPredicate(format: "id == %@", messageId)
+        fetchRequest.predicate = NSPredicate(format: "id ==[c] %@", messageId)
         fetchRequest.fetchLimit = 1
         guard let message = try? context.fetch(fetchRequest).first else {
             Log.error("❌ Cannot find message to update content: \(messageId)", category: "MessagePersistence")
@@ -153,7 +153,7 @@ class MessagePersistenceService {
 
         let now = Date()
         let newMessage = Message(context: context)
-        newMessage.id = id
+        newMessage.id = id.lowercased()
         newMessage.fromUserId = fromUserId
         newMessage.toUserId = toUserId
         newMessage.encryptedContent = ""
@@ -165,7 +165,7 @@ class MessagePersistenceService {
         newMessage.chat = chat
 
         if let replyMessage = replyTo {
-            newMessage.replyToMessageId = replyMessage.id
+            newMessage.replyToMessageId = replyMessage.id.lowercased()
             newMessage.replyToContent = replyToContentOverride ?? replyMessage.decryptedContent
         }
 
@@ -182,6 +182,43 @@ class MessagePersistenceService {
         Log.debug("📎 Saved upload placeholder \(id.prefix(8))…", category: "MessagePersistence")
     }
 
+    /// Save a voice-upload placeholder so the voice UI appears immediately while upload is in progress.
+    /// Uses `type: "voice"` JSON so `parseVoiceContent` routes it to `VoiceMessageBubbleView`
+    /// instead of the generic `MediaMessageView` (which shows a broken-image error on failure).
+    func saveVoicePlaceholderMessage(
+        id: String,
+        fromUserId: String,
+        toUserId: String,
+        duration: TimeInterval,
+        waveform: [Float],
+        chat: Chat,
+        in context: NSManagedObjectContext
+    ) {
+        let waveformJson = waveform.map { String(format: "%.4f", $0) }.joined(separator: ",")
+        let placeholderJson = """
+        {"type":"voice","mediaId":"","mediaUrl":"","mediaKey":"","mediaType":"audio/m4a","size":0,"duration":\(duration),"waveform":[\(waveformJson)],"hash":"","_uploading":true}
+        """
+
+        let now = Date()
+        let newMessage = Message(context: context)
+        newMessage.id = id
+        newMessage.fromUserId = fromUserId
+        newMessage.toUserId = toUserId
+        newMessage.encryptedContent = ""
+        newMessage.decryptedContent = placeholderJson
+        newMessage.timestamp = now
+        newMessage.isSentByMe = true
+        newMessage.deliveryStatus = .sending
+        newMessage.retryCount = 0
+        newMessage.chat = chat
+
+        context.saveAndLog()
+
+        try? updateChatMetadata(chat: chat, lastMessageText: "Voice message", lastMessageTime: now, in: context)
+
+        Log.debug("🎤 Saved voice upload placeholder \(id.prefix(8))…", category: "MessagePersistence")
+    }
+
     /// Delete a placeholder (or any) message by ID — used after upload succeeds so the
     /// real sent message can take its place.
     /// Delete a message by ID.
@@ -192,7 +229,7 @@ class MessagePersistenceService {
     /// `context.saveAndLog()` once all changes are staged.
     func deleteMessage(id: String, in context: NSManagedObjectContext, autoSave: Bool = true) {
         let req = Message.fetchRequest()
-        req.predicate = NSPredicate(format: "id == %@", id)
+        req.predicate = NSPredicate(format: "id ==[c] %@", id)
         req.fetchLimit = 1
         guard let msg = try? context.fetch(req).first else { return }
         context.delete(msg)
@@ -208,7 +245,7 @@ class MessagePersistenceService {
         in context: NSManagedObjectContext
     ) {
         let fetchRequest = Message.fetchRequest()
-        let messagePredicate = NSPredicate(format: "id == %@", messageId)
+        let messagePredicate = NSPredicate(format: "id ==[c] %@", messageId)
         fetchRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [messagePredicate])
         
         guard let message = try? context.fetch(fetchRequest).first else {

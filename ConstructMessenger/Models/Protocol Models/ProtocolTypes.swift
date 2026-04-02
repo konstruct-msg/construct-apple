@@ -37,6 +37,9 @@ struct ChatMessage: Codable, Identifiable {
     /// Only present when messageNumber == 0 (first message / session initiation).
     var kemCiphertext: Data = Data()
 
+    /// Content type from the envelope (0 = standard message, 12 = CALL_SIGNAL).
+    var contentType: UInt8 = 0
+
     /// Kyber OTPK key ID used by sender (0 = Kyber SPK was used, >0 = Kyber OTPK ID).
     /// Only meaningful when messageNumber == 0 and kemCiphertext is non-empty.
     var kyberOtpkId: UInt32 = 0
@@ -53,7 +56,12 @@ struct ChatMessage: Codable, Identifiable {
     /// If non-empty, this message is a reply to the message with this ID.
     /// Propagated from `envelope.reply_to_message_id`.
     var replyToMessageId: String = ""
-    
+
+    /// Raw binary WirePayload from `Envelope.encrypted_payload`.
+    /// Passed directly to Rust for decryption, bypassing JSON conversion.
+    /// Empty for CONTROL_MESSAGE and SENDER_SYNC types.
+    var rawPayload: Data = Data()
+
     /// Check if this is an END_SESSION control message
     var isEndSession: Bool {
         messageType == "CONTROL_MESSAGE" && content == "END_SESSION"
@@ -75,7 +83,7 @@ extension ChatMessage {
     private enum CodingKeys: String, CodingKey {
         case id, from, to, messageType, ephemeralPublicKey, messageNumber, content, suiteId
         case timestamp, oneTimePreKeyId, editsMessageId, kemCiphertext, kyberOtpkId
-        case senderDeviceId, conversationId, replyToMessageId
+        case senderDeviceId, conversationId, replyToMessageId, rawPayload
     }
 
     init(from decoder: Decoder) throws {
@@ -96,6 +104,7 @@ extension ChatMessage {
         senderDeviceId = (try? c.decodeIfPresent(String.self, forKey: .senderDeviceId)) ?? ""
         conversationId = (try? c.decodeIfPresent(String.self, forKey: .conversationId)) ?? ""
         replyToMessageId = (try? c.decodeIfPresent(String.self, forKey: .replyToMessageId)) ?? ""
+        rawPayload = (try? c.decodeIfPresent(Data.self, forKey: .rawPayload)) ?? Data()
     }
 }
 
@@ -125,12 +134,12 @@ struct SignedPrekeyUpdate: Codable {
 struct PublicKeyBundleData: Codable {
     let userId: String
     let username: String
-    let identityPublic: String
-    let signedPrekeyPublic: String
-    let signature: String
-    let verifyingKey: String
+    let identityPublic: Data
+    let signedPrekeyPublic: Data
+    let signature: Data
+    let verifyingKey: Data
     let suiteId: UInt16
-    var oneTimePreKeyPublic: String?  // Base64; nil if server has no OTPKs left
+    var oneTimePreKeyPublic: Data?    // nil if server has no OTPKs left
     var oneTimePreKeyId: UInt32?      // nil if no OTPK available
     // PQXDH fields (optional for backward compatibility with classic-only servers)
     var kyberPreKeyPublic: Data?      // ML-KEM-768 SPK public key (1184 bytes)

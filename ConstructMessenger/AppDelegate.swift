@@ -19,6 +19,13 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 
         Log.info("Application did finish launching")
 
+        // Register UserDefaults defaults — only applies when key has never been set.
+        // This makes push notifications and background fetch ON for new installs.
+        UserDefaults.standard.register(defaults: [
+            "pushNotificationsEnabled": true,
+            "backgroundFetchEnabled": true,
+        ])
+
         // CRITICAL: Register background tasks BEFORE app finishes launching
         // This must be done early in the launch process
         BackgroundFetchManager.shared.registerBackgroundTasks()
@@ -39,6 +46,11 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         // ✅ NEW: Initialize push notification manager
         // This sets up the UNUserNotificationCenter delegate
         _ = PushNotificationManager.shared
+
+        // ✅ Calls base: start PushKit VoIP registry (feature-flagged).
+        _ = VoIPPushManager.shared
+        VoIPPushManager.shared.startIfEnabled()
+        _ = CallManager.shared
 
         // NOTE: NetworkReachabilityManager and MessageQueueManager will be initialized
         // lazily when first accessed. This avoids potential circular dependencies
@@ -74,21 +86,32 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     // MARK: - Silent Push (background wakeup)
 
     /// Called when a silent push arrives (content-available: 1).
-    /// Server sends this when a new message is waiting. We wake up, trigger
-    /// stream reconnect to fetch pending messages, then call the completion handler.
+    /// Server sends one whenever a new message is waiting.
+    /// We fetch pending messages immediately and show a local notification banner,
+    /// then signal completion. The OS allows up to 30 seconds for this work.
     func application(
         _ application: UIApplication,
         didReceiveRemoteNotification userInfo: [AnyHashable: Any],
         fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
     ) {
-        Log.info("📱 Silent push received: \(userInfo["type"] ?? "unknown")", category: "Push")
-
-        // Signal ChatsViewModel to reconnect the stream and pick up pending messages
+        Log.info("📱 Silent push received", category: "Push")
         PushNotificationManager.shared.signalSilentPush()
 
-        // Give the stream up to 25s to connect and fetch (system limit is 30s)
+        // Race the fetch against a 27-second safety timeout so we always call
+        // the completion handler before iOS's 30-second hard deadline.
+        // fetchPendingMessages → processOfflineMessages → showNewMessageNotification.
         Task {
-            try? await Task.sleep(nanoseconds: 25_000_000_000)
+            await withTaskGroup(of: Void.self) { group in
+                group.addTask {
+                    await BackgroundFetchManager.shared.fetchPendingMessages()
+                }
+                group.addTask {
+                    try? await Task.sleep(nanoseconds: 27_000_000_000)
+                }
+                // Complete as soon as either the fetch finishes or the timeout fires.
+                await group.next()
+                group.cancelAll()
+            }
             completionHandler(.newData)
         }
     }
@@ -159,9 +182,13 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         // Remove all delivered notifications
         LocalNotificationManager.shared.removeAllNotifications()
 
-        // Refresh push authorization state and re-register if needed
-        Task { await PushNotificationManager.shared.checkAuthorizationStatus() }
+        // Re-request APNs token on every foreground transition (Apple-recommended).
+        // If the token is unchanged APNs returns immediately. If it rotated (e.g.
+        // reinstall, OS upgrade) the new token flows through registerDeviceToken()
+        // and is immediately synced with the server — preventing BadDeviceToken errors.
+        application.registerForRemoteNotifications()
         Task { await PushNotificationManager.shared.ensureTokenRegistered() }
+        Task { await VoIPPushManager.shared.ensureTokenRegistered() }
     }
 
     func applicationDidEnterBackground(_ application: UIApplication) {

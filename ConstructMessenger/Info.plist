@@ -33,13 +33,12 @@
 	</dict>
 	<key>NSUserNotificationsUsageDescription</key>
 	<string>Construct Messenger sends you notifications for new messages.</string>
-	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>Construct Messenger needs access to save received photos to your library.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>fetch</string>
 		<string>processing</string>
 		<string>remote-notification</string>
+		<string>voip</string>
 	</array>
 </dict>
 </plist>

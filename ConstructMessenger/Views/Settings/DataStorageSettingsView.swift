@@ -129,7 +129,9 @@ struct DataStorageSettingsView: View {
         }
         .navigationTitle("data_and_storage")
         #if canImport(UIKit)
+        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
+        #endif
         #endif
         .task { cacheSize = MediaManager.shared.diskCacheSize() }
         .confirmationDialog("storage_clear_confirm_title",

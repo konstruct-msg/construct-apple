@@ -26,7 +26,7 @@ public enum Shared_Proto_Core_V1_ContentType: SwiftProtobuf.Enum, Swift.CaseIter
   public typealias RawValue = Int
 
   /// Unscpecified content type (must be 0)
-  case unspecitied // = 0
+  case unspecified // = 0
 
   /// Signal Protocol E2EE message (1-to-1)
   case e2EeSignal // = 1
@@ -35,10 +35,17 @@ public enum Shared_Proto_Core_V1_ContentType: SwiftProtobuf.Enum, Swift.CaseIter
   case e2EeMls // = 2
 
   /// WebRTC signaling (SDP, ICE candidates)
+  /// Deprecated for SDP: use CONTENT_TYPE_CALL_SIGNAL for E2EE-wrapped call offer/answer.
   case webrtcSignal // = 10
 
   /// Presence updates (typing, online, receipts)
   case presence // = 11
+
+  /// E2EE-wrapped call signal (Double Ratchet).
+  /// Used for call_offer and call_answer payloads so the server cannot
+  /// read or tamper with the DTLS fingerprint. Forwarded opaquely like
+  /// any other E2EE message.
+  case callSignal // = 12
 
   /// Key exchange initiation (X3DH handshake)
   case keyExchange // = 20
@@ -61,16 +68,17 @@ public enum Shared_Proto_Core_V1_ContentType: SwiftProtobuf.Enum, Swift.CaseIter
   case UNRECOGNIZED(Int)
 
   public init() {
-    self = .unspecitied
+    self = .unspecified
   }
 
   public init?(rawValue: Int) {
     switch rawValue {
-    case 0: self = .unspecitied
+    case 0: self = .unspecified
     case 1: self = .e2EeSignal
     case 2: self = .e2EeMls
     case 10: self = .webrtcSignal
     case 11: self = .presence
+    case 12: self = .callSignal
     case 20: self = .keyExchange
     case 21: self = .sessionReset
     case 22: self = .keySync
@@ -81,11 +89,12 @@ public enum Shared_Proto_Core_V1_ContentType: SwiftProtobuf.Enum, Swift.CaseIter
 
   public var rawValue: Int {
     switch self {
-    case .unspecitied: return 0
+    case .unspecified: return 0
     case .e2EeSignal: return 1
     case .e2EeMls: return 2
     case .webrtcSignal: return 10
     case .presence: return 11
+    case .callSignal: return 12
     case .keyExchange: return 20
     case .sessionReset: return 21
     case .keySync: return 22
@@ -96,11 +105,12 @@ public enum Shared_Proto_Core_V1_ContentType: SwiftProtobuf.Enum, Swift.CaseIter
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
   public static let allCases: [Shared_Proto_Core_V1_ContentType] = [
-    .unspecitied,
+    .unspecified,
     .e2EeSignal,
     .e2EeMls,
     .webrtcSignal,
     .presence,
+    .callSignal,
     .keyExchange,
     .sessionReset,
     .keySync,
@@ -588,7 +598,7 @@ public struct Shared_Proto_Core_V1_SealedInner: Sendable {
   public var encryptedPayload: Data = Data()
 
   /// Content type (needed by server for priority routing / notification text)
-  public var contentType: Shared_Proto_Core_V1_ContentType = .unspecitied
+  public var contentType: Shared_Proto_Core_V1_ContentType = .unspecified
 
   /// Message priority
   public var priority: Shared_Proto_Core_V1_MessagePriority = .normal
@@ -650,7 +660,7 @@ public struct Shared_Proto_Core_V1_SenderCertificate: Sendable {
 fileprivate let _protobuf_package = "shared.proto.core.v1"
 
 extension Shared_Proto_Core_V1_ContentType: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0CONTENT_TYPE_UNSPECITIED\0\u{1}CONTENT_TYPE_E2EE_SIGNAL\0\u{1}CONTENT_TYPE_E2EE_MLS\0\u{2}\u{8}CONTENT_TYPE_WEBRTC_SIGNAL\0\u{1}CONTENT_TYPE_PRESENCE\0\u{2}\u{9}CONTENT_TYPE_KEY_EXCHANGE\0\u{1}CONTENT_TYPE_SESSION_RESET\0\u{1}CONTENT_TYPE_KEY_SYNC\0\u{1}CONTENT_TYPE_SENDER_SYNC\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0CONTENT_TYPE_UNSPECIFIED\0\u{1}CONTENT_TYPE_E2EE_SIGNAL\0\u{1}CONTENT_TYPE_E2EE_MLS\0\u{2}\u{8}CONTENT_TYPE_WEBRTC_SIGNAL\0\u{1}CONTENT_TYPE_PRESENCE\0\u{1}CONTENT_TYPE_CALL_SIGNAL\0\u{2}\u{8}CONTENT_TYPE_KEY_EXCHANGE\0\u{1}CONTENT_TYPE_SESSION_RESET\0\u{1}CONTENT_TYPE_KEY_SYNC\0\u{1}CONTENT_TYPE_SENDER_SYNC\0")
 }
 
 extension Shared_Proto_Core_V1_MessagePriority: SwiftProtobuf._ProtoNameProviding {
@@ -666,7 +676,7 @@ extension Shared_Proto_Core_V1_Envelope: SwiftProtobuf.Message, SwiftProtobuf._M
     var _senderDevice: Shared_Proto_Core_V1_DeviceId? = nil
     var _recipient: Shared_Proto_Core_V1_UserId? = nil
     var _recipientDevice: Shared_Proto_Core_V1_DeviceId? = nil
-    var _contentType: Shared_Proto_Core_V1_ContentType = .unspecitied
+    var _contentType: Shared_Proto_Core_V1_ContentType = .unspecified
     var _messageIDType: Shared_Proto_Core_V1_Envelope.OneOf_MessageIDType?
     var _timestamp: Int64 = 0
     var _ttl: UInt32 = 0
@@ -794,7 +804,7 @@ extension Shared_Proto_Core_V1_Envelope: SwiftProtobuf.Message, SwiftProtobuf._M
       try { if let v = _storage._recipientDevice {
         try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
       } }()
-      if _storage._contentType != .unspecitied {
+      if _storage._contentType != .unspecified {
         try visitor.visitSingularEnumField(value: _storage._contentType, fieldNumber: 5)
       }
       try { if case .messageID(let v)? = _storage._messageIDType {
@@ -1186,7 +1196,7 @@ extension Shared_Proto_Core_V1_SealedInner: SwiftProtobuf.Message, SwiftProtobuf
     if !self.encryptedPayload.isEmpty {
       try visitor.visitSingularBytesField(value: self.encryptedPayload, fieldNumber: 4)
     }
-    if self.contentType != .unspecitied {
+    if self.contentType != .unspecified {
       try visitor.visitSingularEnumField(value: self.contentType, fieldNumber: 5)
     }
     if self.priority != .normal {

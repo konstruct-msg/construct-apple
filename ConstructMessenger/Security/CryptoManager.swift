@@ -108,127 +108,60 @@ class CryptoManager {
 
     /// Export signing secret key from current core (for device-signed flows).
     func exportSigningSecretKey() throws -> [UInt8] {
-        let keysJSON: String
+        let keyBytes: Data
         if let oc = orchestratorCore {
-            keysJSON = try oc.exportPrivateKeysJson()
+            keyBytes = try oc.getSigningKeyBytes()
         } else if let bc = _bootstrapCore {
-            keysJSON = try bc.exportPrivateKeysJson()
+            keyBytes = try bc.getSigningKeyBytes()
         } else {
             throw CryptoManagerError.coreNotInitialized
         }
-        guard let data = keysJSON.data(using: .utf8),
-              let keys = try? JSONDecoder().decode(PrivateKeysJSON.self, from: data),
-              let signingSecretData = Data(base64Encoded: keys.signingSecret) else {
-            throw CryptoError.InvalidKeyData(message: "Failed to decode signing secret key")
+        guard !keyBytes.isEmpty else {
+            throw CryptoError.InvalidKeyData(message: "getSigningKeyBytes returned empty")
         }
-
-        return [UInt8](signingSecretData)
+        return [UInt8](keyBytes)
     }
     
     /// Generate a complete registration bundle for device-based authentication
     /// Returns: (deviceId, registrationBundle JSON, signing key bytes, identity key bytes)
-    func generateRegistrationBundle() throws -> (deviceId: String, bundleJson: String, signingKey: Data, identityKey: Data) {
+    func generateRegistrationBundle() throws -> (deviceId: String, bundle: RegistrationBundleJson, signingKey: Data, identityKey: Data) {
         Log.info("🔑 Generating registration bundle...", category: "CryptoManager")
-        
+
         // Always generate fresh keys for registration — never reuse an existing core
         // (an old core would carry a signature computed with the previous prologue/suite_id)
         let activeCore = try createCryptoCore()
         self._bootstrapCore = activeCore
-        
-        // Export registration bundle (contains all public keys)
-        let bundleJson = try activeCore.exportRegistrationBundleJson()
-        Log.debug("📦 Registration bundle: \(bundleJson.prefix(200))...", category: "CryptoManager")
-        
-        // Export private keys to extract what we need (JSON for intermediate parsing)
-        let privateKeysJson = try activeCore.exportPrivateKeysJson()
-        self._cachedKeysJson = privateKeysJson
-        Log.debug("🔐 Private keys JSON: \(privateKeysJson.prefix(200))...", category: "CryptoManager")
 
-        // Persist in CFE binary format
-        let saved: Bool
-        if let cfeData = try? Data(activeCore.exportPrivateKeys()) {
-            saved = KeychainManager.shared.savePrivateKeys(cfeData)
-        } else {
-            saved = KeychainManager.shared.savePrivateKeysJson(privateKeysJson)
-        }
+        // Persist in CFE binary format immediately (no JSON fallback)
+        let cfeData = try Data(activeCore.exportPrivateKeys())
+        let saved = KeychainManager.shared.savePrivateKeys(cfeData)
         if saved {
             Log.info("✅ Saved registration private keys (CFE) to Keychain", category: "CryptoManager")
         } else {
             Log.error("⚠️ Failed to save registration private keys to Keychain", category: "CryptoManager")
         }
-        
-        // Parse private keys JSON to get signing and identity keys
-        guard let keysData = privateKeysJson.data(using: .utf8) else {
-            Log.error("❌ Failed to convert privateKeysJson to UTF-8 data", category: "CryptoManager")
-            throw CryptoError.InvalidKeyData(message: "Failed to convert private keys JSON to UTF-8")
+
+        // Typed bundle — zero JSON round-trip
+        let bundle = try activeCore.getRegistrationBundleFields()
+        Log.debug("📦 Registration bundle: identity=\(bundle.identityPublic.prefix(20))… suiteId=\(bundle.suiteId)", category: "CryptoManager")
+
+        // Key bytes — no JSON parsing
+        let signingKeyData = try activeCore.getSigningKeyBytes()
+        let identityKeyData = try activeCore.getIdentityKeyBytes()
+        guard !signingKeyData.isEmpty, !identityKeyData.isEmpty else {
+            throw CryptoError.InvalidKeyData(message: "getSigningKeyBytes or getIdentityKeyBytes returned empty")
         }
-        
-        guard let keysDict = try? JSONSerialization.jsonObject(with: keysData) as? [String: Any] else {
-            Log.error("❌ Failed to parse JSON: \(privateKeysJson)", category: "CryptoManager")
-            throw CryptoError.InvalidKeyData(message: "Failed to deserialize private keys JSON")
-        }
-        
-        Log.debug("📋 Keys dict keys: \(keysDict.keys.joined(separator: ", "))", category: "CryptoManager")
-        
-        // ✅ Use snake_case (Rust convention)
-        guard let signingSecret = keysDict["signing_secret"] as? String else {
-            Log.error("❌ Missing 'signing_secret' in keys: \(keysDict.keys)", category: "CryptoManager")
-            throw CryptoError.InvalidKeyData(message: "Missing 'signing_secret' in private keys JSON")
-        }
-        
-        guard let identitySecret = keysDict["identity_secret"] as? String else {
-            Log.error("❌ Missing 'identity_secret' in keys: \(keysDict.keys)", category: "CryptoManager")
-            throw CryptoError.InvalidKeyData(message: "Missing 'identity_secret' in private keys JSON")
-        }
-        
-        // Convert base64 strings to Data (Rust returns base64, not hex)
-        guard let signingKeyData = Data(base64Encoded: signingSecret) else {
-            Log.error("❌ Failed to decode signingSecret base64: \(signingSecret.prefix(20))...", category: "CryptoManager")
-            throw CryptoError.InvalidKeyData(message: "Failed to decode signing key base64 string")
-        }
-        
-        guard let identityKeyData = Data(base64Encoded: identitySecret) else {
-            Log.error("❌ Failed to decode identitySecret base64: \(identitySecret.prefix(20))...", category: "CryptoManager")
-            throw CryptoError.InvalidKeyData(message: "Failed to decode identity key base64 string")
-        }
-        
+
         // Derive device_id from identity public key
-        // Parse bundle JSON to get identity public key (base64 from Rust)
-        guard let bundleData = bundleJson.data(using: .utf8),
-              let bundleDict = try? JSONSerialization.jsonObject(with: bundleData) as? [String: Any],
-              let identityPublic = bundleDict["identity_public"] as? String,
-              let identityPublicBytes = Data(base64Encoded: identityPublic) else {
-            Log.error("❌ Failed to parse registration bundle JSON", category: "CryptoManager")
-            throw CryptoError.InvalidKeyData(message: "Failed to parse registration bundle JSON")
+        guard let identityPublicBytes = Data(base64Encoded: bundle.identityPublic) else {
+            throw CryptoError.InvalidKeyData(message: "Failed to decode identityPublic base64 from bundle")
         }
-        
-        // Compute device_id using Rust function
         let deviceId = deriveDeviceId(identityPublicKey: [UInt8](identityPublicBytes))
-        
+
         Log.info("✅ Generated registration bundle: device_id=\(deviceId)", category: "CryptoManager")
-        
-        return (deviceId, bundleJson, signingKeyData, identityKeyData)
+        return (deviceId, bundle, signingKeyData, identityKeyData)
     }
 
-    // MARK: - Private Keys JSON Structure
-
-    /// Matches Rust PrivateKeysJson structure (snake_case)
-    private struct PrivateKeysJSON: Codable {
-        let identitySecret: String
-        let signingSecret: String
-        let signedPrekeySecret: String
-        let prekeySignature: String
-        let suiteId: String
-
-        enum CodingKeys: String, CodingKey {
-            case identitySecret = "identity_secret"
-            case signingSecret = "signing_secret"
-            case signedPrekeySecret = "signed_prekey_secret"
-            case prekeySignature = "prekey_signature"
-            case suiteId = "suite_id"
-        }
-    }
-    
     // MARK: - Prekey ID Tracking
     
     /// Track a prekey ID for a user and detect reinstall
@@ -267,7 +200,7 @@ class CryptoManager {
             if saved {
                 Log.debug("💾 Session (CFE) saved to Keychain: \(userId)", category: "CryptoManager")
             } else {
-                Log.debug("⚠️ Failed to save session to Keychain: \(userId)", category: "CryptoManager")
+                Log.error("❌ Failed to save session to Keychain: \(userId)", category: "CryptoManager")
             }
         } catch {
             Log.error("❌ Session export failed: \(error)", category: "CryptoManager")
@@ -431,8 +364,10 @@ class CryptoManager {
             Log.debug("✅ Restored session (CFE): \(userId)", category: "CryptoManager")
             return true
         } catch {
-            _ = KeychainManager.shared.saveSessionData(Data(), for: userId)
-            Log.error("❌ Session import FAILED for \(userId) (stale/incompatible format — cleared): \(error)", category: "CryptoManager")
+            // Delete the corrupt/incompatible entry cleanly instead of writing empty bytes
+            // (writing Data() followed by a failed SecItemAdd would silently delete the key).
+            KeychainManager.shared.deleteSession(for: userId)
+            Log.error("❌ Session import FAILED for \(userId) (corrupt/incompatible — deleted): \(error)", category: "CryptoManager")
             return false
         }
     }
@@ -494,7 +429,7 @@ class CryptoManager {
 
     /// Initializes a secure session with a recipient using the Rust core.
     @discardableResult
-    func initializeSession(for userId: String, recipientBundle: (identityPublic: String, signedPrekeyPublic: String, signature: String, verifyingKey: String, suiteId: String), oneTimePreKeyPublic: Data? = nil, oneTimePreKeyId: UInt32? = nil, kyberPreKeyPublic: Data? = nil, kyberOneTimePreKeyPublic: Data? = nil, kyberOneTimePreKeyId: UInt32? = nil, spkUploadedAt: UInt64 = 0, spkRotationEpoch: UInt32 = 0, kyberSpkUploadedAt: UInt64 = 0, kyberSpkRotationEpoch: UInt32 = 0) throws -> (kemCiphertext: Data?, kyberOtpkId: UInt32) {
+    func initializeSession(for userId: String, recipientBundle: (identityPublic: Data, signedPrekeyPublic: Data, signature: Data, verifyingKey: Data, suiteId: String), oneTimePreKeyPublic: Data? = nil, oneTimePreKeyId: UInt32? = nil, kyberPreKeyPublic: Data? = nil, kyberOneTimePreKeyPublic: Data? = nil, kyberOneTimePreKeyId: UInt32? = nil, spkUploadedAt: UInt64 = 0, spkRotationEpoch: UInt32 = 0, kyberSpkUploadedAt: UInt64 = 0, kyberSpkRotationEpoch: UInt32 = 0) throws -> (kemCiphertext: Data?, kyberOtpkId: UInt32) {
         do {
             let result = try sessionInitService.initializeSession(
                 for: userId,
@@ -607,14 +542,14 @@ class CryptoManager {
         
         Log.info("📦 Archiving session for \(userId), reason: \(reason.rawValue)", category: "CryptoManager")
         
-        // 1. Export current session to JSON and store archive.
+        // 1. Export current session to CFE binary format and store archive.
         //    IMPORTANT: only proceed with deletion if export succeeded — otherwise the session
         //    would be permanently lost with no archive to restore from.
         do {
-            let sessionJson = try core.exportSessionJson(contactId: userId)
+            let sessionData = Data(try core.exportSession(contactId: userId))
             
             let archive = SessionArchive(
-                sessionJson: sessionJson,
+                sessionData: sessionData,
                 archivedAt: Date(),
                 reason: reason
             )
@@ -661,12 +596,12 @@ class CryptoManager {
     /// memory, so we must NOT call `exportSessionJson` here — we store the bytes
     /// Rust handed us directly into `SessionArchiveManager`.
     func acceptRustSessionArchive(contactId: String, sessionJsonBytes: [UInt8]) {
-        guard !sessionJsonBytes.isEmpty,
-              let json = String(bytes: sessionJsonBytes, encoding: .utf8) else {
-            Log.error("❌ acceptRustSessionArchive: invalid/empty bytes for \(contactId.prefix(8))…", category: "CryptoManager")
+        guard !sessionJsonBytes.isEmpty else {
+            Log.error("❌ acceptRustSessionArchive: empty bytes for \(contactId.prefix(8))…", category: "CryptoManager")
             return
         }
-        let archive = SessionArchive(sessionJson: json, archivedAt: Date(), reason: .endSessionReceived)
+        // Rust currently sends JSON bytes; store as Data — import_session has a LegacyJson fallback.
+        let archive = SessionArchive(sessionData: Data(sessionJsonBytes), archivedAt: Date(), reason: .endSessionReceived)
         archiveManager.storeArchive(archive, for: contactId)
         let count = archiveManager.loadArchives(for: contactId)?.count ?? 0
         Log.info("📦 acceptRustSessionArchive: archived session for \(contactId.prefix(8))… (\(count) total)", category: "CryptoManager")
@@ -684,7 +619,17 @@ class CryptoManager {
         let idx = archives.count - 1
         let latest = archives[idx]
         do {
-            _ = try core.importSessionJson(contactId: userId, sessionJson: latest.sessionJson)
+            let suiteIdBefore = UserDefaults.standard.integer(forKey: "construct.session.suite.\(userId)")
+            // importSession handles both CFE binary (new archives) and legacy JSON (old archives).
+            _ = try core.importSession(contactId: userId, data: [UInt8](latest.sessionData))
+            // Use typed accessor — no JSON round-trip needed.
+            let suiteId = Int(core.getSessionSuiteId(contactId: userId))
+            if suiteId > 0 {
+                UserDefaults.standard.set(suiteId, forKey: "construct.session.suite.\(userId)")
+                Log.info("🔑 SESSION_STATE[restore_suite_id]: peer=\(userId.prefix(8))… suiteId \(suiteIdBefore) → \(suiteId)", category: "SessionInit")
+            } else {
+                Log.error("🚨 SESSION_STATE[restore_suite_id_failed]: peer=\(userId.prefix(8))… suiteId_before=\(suiteIdBefore) — getSessionSuiteId returned 0 after import; remote decrypt will likely fail", category: "CryptoManager")
+            }
             saveSessionToKeychain(for: userId)
             archiveManager.restoreArchiveToCurrent(for: userId, index: idx)
             Log.info("♻️ Restored INITIATOR session from archive for \(userId.prefix(8))… (tie-break)", category: "CryptoManager")
@@ -719,7 +664,7 @@ class CryptoManager {
     /// Initialize a receiving session (for responder/Bob) using sender's bundle + first message
     /// This is called when Bob receives the first message from Alice
     /// Returns the decrypted plaintext of the first message
-    func initReceivingSession(for userId: String, recipientBundle: (identityPublic: String, signedPrekeyPublic: String, signature: String, verifyingKey: String, suiteId: String), firstMessage: ChatMessage) throws -> String {
+    func initReceivingSession(for userId: String, recipientBundle: (identityPublic: Data, signedPrekeyPublic: Data, signature: Data, verifyingKey: Data, suiteId: String), firstMessage: ChatMessage) throws -> String {
         do {
             let plaintext = try sessionInitService.initReceivingSession(
                 for: userId,
@@ -756,6 +701,10 @@ class CryptoManager {
     /// Encrypts a plaintext message using the session for a specific user
     /// Returns separate components per server ChatMessage format
     func encryptMessage(_ message: String, for userId: String) throws -> EncryptedMessageComponents {
+        // coreLock serializes Rust FFI calls so that a background task and the main
+        // actor cannot advance the DR ratchet concurrently (would corrupt chain state).
+        coreLock.lock()
+        defer { coreLock.unlock() }
         let components = try messageCrypto.encryptMessage(
             message,
             for: userId,
@@ -792,6 +741,10 @@ class CryptoManager {
         Log.debug("   ephemeralPublicKey: \(message.ephemeralPublicKey.count) bytes", category: "CryptoManager")
         Log.debug("   content length: \(message.content.count) chars", category: "CryptoManager")
 
+        // coreLock serializes decrypt alongside encrypt — concurrent decrypts on the same
+        // session advance the DR receive chain non-deterministically.
+        coreLock.lock()
+        defer { coreLock.unlock() }
         let plaintext: String
         do {
             plaintext = try messageCrypto.decryptMessage(
@@ -827,6 +780,42 @@ class CryptoManager {
         return plaintext
     }
     
+    /// Decrypt raw Double Ratchet components — used for signaling fields, not ChatMessage.
+    /// Handles session restore from Keychain if needed. Does not try archived sessions.
+    func decryptRawComponents(
+        contactId: String,
+        ephemeralPublicKey: Data,
+        messageNumber: UInt32,
+        content: String
+    ) throws -> String {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+
+        guard let core = orchestratorCore else {
+            throw CryptoManagerError.coreNotInitialized
+        }
+
+        if !core.hasSession(contactId: contactId) {
+            if !restoreSession(for: contactId) {
+                throw CryptoManagerError.sessionNotFound
+            }
+        }
+
+        guard core.hasSession(contactId: contactId) else {
+            throw CryptoManagerError.sessionNotFound
+        }
+
+        let contentForDecrypt = MessagePadding.unpadCiphertextBase64(content)
+        let plaintext = try core.decryptMessage(
+            contactId: contactId,
+            ephemeralPublicKey: [UInt8](ephemeralPublicKey),
+            messageNumber: messageNumber,
+            content: contentForDecrypt
+        )
+        saveSessionToKeychain(for: contactId)
+        return plaintext
+    }
+
     /// Try to decrypt message with archived sessions
     /// Returns plaintext if successful, throws if all archives fail
     private func tryDecryptWithArchivedSessions(message: ChatMessage) throws -> String {
@@ -845,14 +834,15 @@ class CryptoManager {
         Log.info("📦 Trying \(archives.count) archived sessions for \(message.from)", category: "CryptoManager")
 
         // Snapshot the active session so we can restore it if all archives fail.
-        // Without this, each failed importSessionJson permanently overwrites the Rust core state.
-        let activeSessionSnapshot = try? core.exportSessionJson(contactId: message.from)
+        // Without this, each failed import permanently overwrites the Rust core state.
+        let activeSessionSnapshot = try? Data(core.exportSession(contactId: message.from))
 
         // Try each archived session (newest first - already ordered)
         for (index, archive) in archives.enumerated().reversed() {
             do {
-                // Temporarily restore archived session to Rust core
-                _ = try core.importSessionJson(contactId: message.from, sessionJson: archive.sessionJson)
+                // Temporarily restore archived session to Rust core.
+                // importSession handles CFE binary (new) and legacy JSON (old) archives.
+                _ = try core.importSession(contactId: message.from, data: [UInt8](archive.sessionData))
                 
                 // Try to decrypt
                 let plaintext = try core.decryptMessage(
@@ -881,8 +871,8 @@ class CryptoManager {
         }
 
         // All archives failed — restore the original active session into Rust core.
-        if let json = activeSessionSnapshot {
-            _ = try? core.importSessionJson(contactId: message.from, sessionJson: json)
+        if let snap = activeSessionSnapshot {
+            _ = try? core.importSession(contactId: message.from, data: [UInt8](snap))
         }
         
         Log.info("⚠️ All \(archives.count) archived sessions failed to decrypt", category: "CryptoManager")
@@ -940,12 +930,50 @@ enum ArchiveReason: String, Codable {
     case remoteRekeying = "remote_rekeying"
 }
 
-/// Archived session data for fallback decryption
+/// Archived session data for fallback decryption.
+/// Stored in CFE binary format (MessagePack + header). Legacy archives written as
+/// JSON strings are transparently read back via the migration initializer and fed
+/// to `import_session`, which has a built-in `LegacyJson` fallback.
 struct SessionArchive: Codable {
-    let sessionJson: String  // Exported session from Rust
+    let sessionData: Data  // CFE binary (new) or UTF-8 JSON bytes (legacy)
     let archivedAt: Date
     let reason: ArchiveReason
-    
+
+    init(sessionData: Data, archivedAt: Date, reason: ArchiveReason) {
+        self.sessionData = sessionData
+        self.archivedAt = archivedAt
+        self.reason = reason
+    }
+
+    // MARK: Migration — read archives written with the old `sessionJson: String` field
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        archivedAt = try c.decode(Date.self, forKey: .archivedAt)
+        reason    = try c.decode(ArchiveReason.self, forKey: .reason)
+        if let data = try c.decodeIfPresent(Data.self, forKey: .sessionData) {
+            sessionData = data
+        } else if let json = try c.decodeIfPresent(String.self, forKey: .sessionJson) {
+            // Old format: JSON string → store as UTF-8 bytes; importSession handles LegacyJson
+            sessionData = Data(json.utf8)
+        } else {
+            throw DecodingError.dataCorrupted(
+                DecodingError.Context(codingPath: c.codingPath,
+                                      debugDescription: "SessionArchive missing sessionData and sessionJson"))
+        }
+    }
+
+    // Explicit Encodable: always write the new `sessionData` key
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(sessionData,  forKey: .sessionData)
+        try c.encode(archivedAt,   forKey: .archivedAt)
+        try c.encode(reason,       forKey: .reason)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case sessionData, sessionJson, archivedAt, reason
+    }
+
     /// Check if archive is expired (older than retention period)
     func isExpired(retentionDays: Int) -> Bool {
         let expirationDate = Calendar.current.date(byAdding: .day, value: retentionDays, to: archivedAt) ?? Date()

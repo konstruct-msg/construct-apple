@@ -23,6 +23,7 @@ struct DevicesView: View {
     @State private var deviceToRevoke: AuthServiceClient.LinkedDevice? = nil
     @State private var showRevokeConfirm = false
     @State private var showSignOutConfirm = false
+    @State private var showSignOutOthersConfirm = false
     @State private var showSignOutAllConfirm = false
 
     var body: some View {
@@ -32,16 +33,34 @@ struct DevicesView: View {
                     HStack { Spacer(); ProgressView(); Spacer() }.padding()
                 }
             } else {
-                // MARK: - Device list
-                Section {
-                    ForEach(devices) { device in
-                        DeviceRow(device: device) {
-                            deviceToRevoke = device
-                            showRevokeConfirm = true
+                // MARK: - This Device (always first)
+                if let current = devices.first(where: { $0.isCurrent }) {
+                    Section {
+                        DeviceRow(device: current, isCurrent: true, onRevoke: {})
+                    } header: {
+                        Text(LocalizedStringKey("this_device"))
+                    }
+                }
+
+                // MARK: - Other Devices
+                let others = devices.filter { !$0.isCurrent }
+                if !others.isEmpty {
+                    Section {
+                        ForEach(others) { device in
+                            DeviceRow(device: device, isCurrent: false) {
+                                deviceToRevoke = device
+                                showRevokeConfirm = true
+                            }
+                        }
+                    } header: {
+                        Text(LocalizedStringKey("other_devices"))
+                    } footer: {
+                        if others.count > 1 {
+                            Text(LocalizedStringKey("other_devices_hint"))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
                     }
-                } header: {
-                    Text(LocalizedStringKey("linked_devices"))
                 }
 
                 // MARK: - Link / Approve
@@ -71,6 +90,14 @@ struct DevicesView: View {
                         showSignOutConfirm = true
                     } label: {
                         Label(LocalizedStringKey("sign_out_this_device"), systemImage: "rectangle.portrait.and.arrow.right")
+                    }
+
+                    if devices.filter({ !$0.isCurrent }).count > 0 {
+                        Button(role: .destructive) {
+                            showSignOutOthersConfirm = true
+                        } label: {
+                            Label(LocalizedStringKey("sign_out_other_devices"), systemImage: "iphone.slash")
+                        }
                     }
 
                     Button(role: .destructive) {
@@ -129,6 +156,20 @@ struct DevicesView: View {
             Text(LocalizedStringKey("sign_out_this_device_message"))
         }
 
+        // MARK: Confirmations — sign out other devices
+        .confirmationDialog(
+            LocalizedStringKey("sign_out_other_devices"),
+            isPresented: $showSignOutOthersConfirm,
+            titleVisibility: .visible
+        ) {
+            Button(LocalizedStringKey("sign_out_other_devices"), role: .destructive) {
+                Task { await revokeAllOtherDevices() }
+            }
+            Button(LocalizedStringKey("cancel"), role: .cancel) {}
+        } message: {
+            Text(LocalizedStringKey("sign_out_other_devices_message"))
+        }
+
         // MARK: Confirmations — sign out all devices
         .confirmationDialog(
             LocalizedStringKey("sign_out_all_devices"),
@@ -164,6 +205,18 @@ struct DevicesView: View {
         }
     }
 
+    private func revokeAllOtherDevices() async {
+        let others = devices.filter { !$0.isCurrent }
+        for device in others {
+            do {
+                try await AuthServiceClient.shared.revokeDevice(deviceId: device.id)
+            } catch {
+                Log.error("❌ revokeDevice failed for \(device.name): \(error)", category: "DevicesView")
+            }
+        }
+        await loadDevices()
+    }
+
     private func revokeDevice(_ device: AuthServiceClient.LinkedDevice) async {
         do {
             try await AuthServiceClient.shared.revokeDevice(deviceId: device.id)
@@ -179,30 +232,27 @@ struct DevicesView: View {
 
 private struct DeviceRow: View {
     let device: AuthServiceClient.LinkedDevice
+    let isCurrent: Bool
     let onRevoke: () -> Void
 
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: platformIcon)
                 .font(.system(size: 22))
-                .foregroundStyle(device.isCurrent ? Color.blue : Color.secondary)
+                .foregroundStyle(isCurrent ? Color.accentColor : Color.secondary)
                 .frame(width: 32)
 
             VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text(device.name)
-                        .font(.body)
-                    if device.isCurrent {
-                        Text(LocalizedStringKey("device_current"))
-                            .font(.caption2)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Color.blue.opacity(0.15))
-                            .foregroundStyle(Color.blue)
-                            .clipShape(Capsule())
-                    }
-                }
-                if !device.isCurrent {
+                Text(device.name)
+                    .font(.body)
+                    .fontWeight(isCurrent ? .semibold : .regular)
+
+                if isCurrent {
+                    Label(LocalizedStringKey("device_active_now"), systemImage: "circle.fill")
+                        .font(.caption)
+                        .foregroundStyle(Color.green)
+                        .labelStyle(CompactLabelStyle())
+                } else {
                     Text(lastSeenText)
                         .font(.caption)
                         .foregroundStyle(Color.secondary)
@@ -211,10 +261,7 @@ private struct DeviceRow: View {
 
             Spacer()
 
-            if device.isCurrent {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(Color.green)
-            } else {
+            if !isCurrent {
                 Button(role: .destructive, action: onRevoke) {
                     Image(systemName: "minus.circle")
                         .foregroundStyle(Color.red)
@@ -235,8 +282,26 @@ private struct DeviceRow: View {
     }
 
     private var lastSeenText: String {
+        if abs(device.lastSeen.timeIntervalSince(device.createdAt)) < 5 {
+            let fmt = DateFormatter()
+            fmt.dateStyle = .medium
+            fmt.timeStyle = .none
+            return String(format: NSLocalizedString("device_added_%@", comment: ""), fmt.string(from: device.createdAt))
+        }
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .full
         return formatter.localizedString(for: device.lastSeen, relativeTo: Date())
+    }
+}
+
+// MARK: - Compact label style (icon + text, tighter spacing)
+
+private struct CompactLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 4) {
+            configuration.icon
+                .font(.system(size: 7))
+            configuration.title
+        }
     }
 }

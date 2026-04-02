@@ -116,7 +116,9 @@ struct ContactQRCodeView: View {
             .padding(.vertical, 24)
             .frame(maxWidth: .infinity)
             .navigationTitle(username.isEmpty ? DisplayNameGenerator.generate(from: userId) : "@\(username)")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("close") { dismiss() }
@@ -173,6 +175,7 @@ struct ContactQRCodeView: View {
             let deepLink = try generator.generateDeepLink(
                 userId: userId,
                 deviceId: deviceId,
+                username: username.isEmpty ? nil : username,
                 server: serverHostname,
                 useHTTPS: false
             )

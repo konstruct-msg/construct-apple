@@ -9,12 +9,23 @@
 
 import SwiftUI
 import CoreData
+import AppKit
+import UniformTypeIdentifiers
+
+extension Notification.Name {
+    static let desktopShowAddContact = Notification.Name("desktopShowAddContact")
+}
 
 struct DesktopRootView: View {
     @Environment(AuthViewModel.self) private var authViewModel
     @Environment(ChatsViewModel.self) private var chatsViewModel
+    @Environment(DeepLinkHandler.self) private var deepLinkHandler
     @Environment(\.managedObjectContext) private var viewContext
     @AppStorage("appTheme") private var appTheme: AppTheme = .automatic
+
+    // Sidebar column visibility (user can hide sidebar with toggle)
+    @State private var columnVisibility: NavigationSplitViewVisibility = .all
+    @State private var showAddContact = false
 
     var body: some View {
         Group {
@@ -35,26 +46,104 @@ struct DesktopRootView: View {
         .onAppear {
             authViewModel.refreshDeviceKeyState()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .desktopShowAddContact)) { _ in
+            showAddContact = true
+        }
+        // Update Dock badge with unread count
+        .onChange(of: chatsViewModel.totalUnreadCount) { _, count in
+            NSApplication.shared.dockTile.badgeLabel = count > 0 ? "\(count)" : nil
+        }
     }
 
     // MARK: - Main split view (authenticated)
 
     private var mainContent: some View {
-        NavigationSplitView(columnVisibility: .constant(.all)) {
-            // Sidebar: chats list
+        NavigationSplitView(columnVisibility: $columnVisibility) {
+            // Sidebar: chats list with search
             ChatsListView()
                 .environment(chatsViewModel)
-                .navigationSplitViewColumnWidth(min: 260, ideal: 300, max: 360)
+                .navigationSplitViewColumnWidth(min: 240, ideal: 300, max: 360)
         } detail: {
             // Detail: active chat or placeholder
             if let chatId = chatsViewModel.chatToOpen,
                let chat = fetchChat(id: chatId) {
                 ChatView(chat: chat, context: viewContext)
+                    // Accept dropped images/files directly into the chat
+                    .onDrop(of: [.image, .fileURL], isTargeted: nil) { providers in
+                        handleDrop(providers: providers, into: chat)
+                    }
             } else {
-                DesktopEmptyDetailView()
+                DesktopEmptyStateView()
+                    .onDrop(of: [.fileURL], isTargeted: nil) { _ in false }
             }
         }
-        .frame(minWidth: 800, minHeight: 500)
+        .frame(minWidth: 760, minHeight: 500)
+        // Add Contact sheet (⌘⌥N)
+        .sheet(isPresented: $showAddContact) {
+            DesktopAddContactView()
+                .environment(authViewModel)
+                .environment(deepLinkHandler)
+        }
+        // New Chat sheet (⌘N)
+        .sheet(isPresented: Binding(
+            get: { chatsViewModel.showNewChat },
+            set: { chatsViewModel.showNewChat = $0 }
+        )) {
+            NewChatView(chatsViewModel: chatsViewModel)
+                .environment(\.managedObjectContext, viewContext)
+                .frame(minWidth: 400, minHeight: 300)
+        }
+        // Toolbar button — sidebar header
+        .toolbar {
+            // Leading: Add Contact (left of sidebar toggle)
+            ToolbarItem(placement: .navigation) {
+                Button {
+                    showAddContact = true
+                } label: {
+                    Label("Add Contact", systemImage: "person.badge.plus")
+                }
+                .help("Add Contact (⌥⌘N)")
+                .keyboardShortcut("n", modifiers: [.command, .option])
+            }
+
+            // Trailing: QR scanner
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    showAddContact = true
+                } label: {
+                    Image(systemName: "qrcode.viewfinder")
+                }
+                .help("Scan QR code to add contact")
+            }
+        }
+    }
+
+    // MARK: - Drag & Drop into chat
+
+    private func handleDrop(providers: [NSItemProvider], into chat: Chat) -> Bool {
+        var handled = false
+        for provider in providers {
+            if provider.hasItemConformingToTypeIdentifier("public.image") {
+                provider.loadDataRepresentation(forTypeIdentifier: "public.image") { data, _ in
+                    guard let data, let image = NSImage(data: data) else { return }
+                    DispatchQueue.main.async {
+                        // Push dropped image to ChatView via ChatsViewModel
+                        chatsViewModel.pendingDroppedImage = image
+                    }
+                }
+                handled = true
+            } else if provider.hasItemConformingToTypeIdentifier("public.file-url") {
+                provider.loadItem(forTypeIdentifier: "public.file-url") { item, _ in
+                    guard let data = item as? Data,
+                          let url = URL(dataRepresentation: data, relativeTo: nil) else { return }
+                    DispatchQueue.main.async {
+                        chatsViewModel.pendingDroppedFileURL = url
+                    }
+                }
+                handled = true
+            }
+        }
+        return handled
     }
 
     private func fetchChat(id: String) -> Chat? {
@@ -65,22 +154,17 @@ struct DesktopRootView: View {
     }
 }
 
-// MARK: - Empty detail state
+// MARK: - Xcode Previews
 
-private struct DesktopEmptyDetailView: View {
-    var body: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "bubble.left.and.bubble.right")
-                .font(.system(size: 56, weight: .ultraLight))
-                .foregroundStyle(.tertiary)
-            Text("Select a conversation")
-                .font(.title3)
-                .foregroundStyle(.secondary)
-            Text("or scan a QR code with ⌘N")
-                .font(.subheadline)
-                .foregroundStyle(.tertiary)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
+#Preview("Empty state (no chat selected)") {
+    // Shows the detail pane when no conversation is open — quick layout check
+    // without needing to launch the full app.
+    DesktopEmptyStateView()
+        .frame(width: 760, height: 500)
 }
 
+#Preview("Add Contact sheet") {
+    DesktopAddContactView()
+        .environment(AuthViewModel(context: PersistenceController.shared.container.viewContext))
+        .environment(DeepLinkHandler())
+}

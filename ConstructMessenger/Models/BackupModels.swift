@@ -62,11 +62,11 @@ struct CryptoKeysBackup: Codable {
 // MARK: - Session Backup
 struct SessionBackup: Codable {
     let contactId: String
-    let sessionJson: String  // Serialized DoubleRatchet session from Rust
+    let sessionData: Data  // CFE binary serialized DoubleRatchet session
 
     enum CodingKeys: String, CodingKey {
         case contactId = "contact_id"
-        case sessionJson = "session_json"
+        case sessionData = "session_data"
     }
 }
 

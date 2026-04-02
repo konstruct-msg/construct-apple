@@ -19,13 +19,14 @@ struct BackgroundFetchConfig {
     /// Whether background fetch is enabled
     static var isEnabled: Bool {
         get {
-            UserDefaults.standard.bool(forKey: UserDefaultsKey.backgroundFetchEnabled.key)
+            // Use the camelCase key that BackgroundFetchSettingsView writes via @AppStorage
+            UserDefaults.standard.bool(forKey: "backgroundFetchEnabled")
         }
         set {
-            UserDefaults.standard.set(newValue, forKey: UserDefaultsKey.backgroundFetchEnabled.key)
+            UserDefaults.standard.set(newValue, forKey: "backgroundFetchEnabled")
             // Auto-disable if Low Power Mode is enabled
             if newValue && ProcessInfo.processInfo.isLowPowerModeEnabled {
-                UserDefaults.standard.set(false, forKey: UserDefaultsKey.backgroundFetchEnabled.key)
+                UserDefaults.standard.set(false, forKey: "backgroundFetchEnabled")
             }
         }
     }
@@ -60,7 +61,7 @@ struct BackgroundFetchConfig {
         if ProcessInfo.processInfo.isLowPowerModeEnabled {
             if isEnabled {
                 // Auto-disable and save
-                UserDefaults.standard.set(false, forKey: UserDefaultsKey.backgroundFetchEnabled.key)
+                UserDefaults.standard.set(false, forKey: "backgroundFetchEnabled")
             }
             return false
         }

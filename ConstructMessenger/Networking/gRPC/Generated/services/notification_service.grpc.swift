@@ -68,12 +68,51 @@ public enum Shared_Proto_Services_V1_NotificationService: Sendable {
                 method: "UpdateNotificationPreferences"
             )
         }
+        /// Namespace for "RegisterVoipToken" metadata.
+        public enum RegisterVoipToken: Sendable {
+            /// Request type for "RegisterVoipToken".
+            public typealias Input = Shared_Proto_Services_V1_RegisterVoipTokenRequest
+            /// Response type for "RegisterVoipToken".
+            public typealias Output = Shared_Proto_Services_V1_RegisterVoipTokenResponse
+            /// Descriptor for "RegisterVoipToken".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.NotificationService"),
+                method: "RegisterVoipToken"
+            )
+        }
+        /// Namespace for "UnregisterVoipToken" metadata.
+        public enum UnregisterVoipToken: Sendable {
+            /// Request type for "UnregisterVoipToken".
+            public typealias Input = Shared_Proto_Services_V1_UnregisterVoipTokenRequest
+            /// Response type for "UnregisterVoipToken".
+            public typealias Output = Shared_Proto_Services_V1_UnregisterVoipTokenResponse
+            /// Descriptor for "UnregisterVoipToken".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.NotificationService"),
+                method: "UnregisterVoipToken"
+            )
+        }
+        /// Namespace for "SendVoipIncomingCall" metadata.
+        public enum SendVoipIncomingCall: Sendable {
+            /// Request type for "SendVoipIncomingCall".
+            public typealias Input = Shared_Proto_Services_V1_SendVoipIncomingCallRequest
+            /// Response type for "SendVoipIncomingCall".
+            public typealias Output = Shared_Proto_Services_V1_SendVoipIncomingCallResponse
+            /// Descriptor for "SendVoipIncomingCall".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.NotificationService"),
+                method: "SendVoipIncomingCall"
+            )
+        }
         /// Descriptors for all methods in the "shared.proto.services.v1.NotificationService" service.
         public static let descriptors: [GRPCCore.MethodDescriptor] = [
             SendBlindNotification.descriptor,
             RegisterDeviceToken.descriptor,
             UnregisterDeviceToken.descriptor,
-            UpdateNotificationPreferences.descriptor
+            UpdateNotificationPreferences.descriptor,
+            RegisterVoipToken.descriptor,
+            UnregisterVoipToken.descriptor,
+            SendVoipIncomingCall.descriptor
         ]
     }
 }
@@ -189,6 +228,77 @@ extension Shared_Proto_Services_V1_NotificationService {
             deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_UpdateNotificationPreferencesResponse>,
             options: GRPCCore.CallOptions,
             onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_UpdateNotificationPreferencesResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "RegisterVoipToken" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > Регистрация VoIP token (APNs VoIP) — используется для входящих звонков (CallKit),
+        /// > когда приложение в фоне/убито.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_RegisterVoipTokenRequest` message.
+        ///   - serializer: A serializer for `Shared_Proto_Services_V1_RegisterVoipTokenRequest` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_RegisterVoipTokenResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response, the result of which is
+        ///       returned to the caller. Returning from the closure will cancel the RPC if it
+        ///       hasn't already finished.
+        /// - Returns: The result of `handleResponse`.
+        func registerVoipToken<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_RegisterVoipTokenRequest>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_RegisterVoipTokenRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_RegisterVoipTokenResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_RegisterVoipTokenResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "UnregisterVoipToken" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > Удаление VoIP token (при выходе с устройства).
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_UnregisterVoipTokenRequest` message.
+        ///   - serializer: A serializer for `Shared_Proto_Services_V1_UnregisterVoipTokenRequest` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_UnregisterVoipTokenResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response, the result of which is
+        ///       returned to the caller. Returning from the closure will cancel the RPC if it
+        ///       hasn't already finished.
+        /// - Returns: The result of `handleResponse`.
+        func unregisterVoipToken<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_UnregisterVoipTokenRequest>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_UnregisterVoipTokenRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_UnregisterVoipTokenResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_UnregisterVoipTokenResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "SendVoipIncomingCall" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > Внутренний RPC: отправить VoIP push о входящем звонке (APNs VoIP).
+        /// > Вызывается signaling-service когда callee оффлайн.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_SendVoipIncomingCallRequest` message.
+        ///   - serializer: A serializer for `Shared_Proto_Services_V1_SendVoipIncomingCallRequest` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_SendVoipIncomingCallResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response, the result of which is
+        ///       returned to the caller. Returning from the closure will cancel the RPC if it
+        ///       hasn't already finished.
+        /// - Returns: The result of `handleResponse`.
+        func sendVoipIncomingCall<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_SendVoipIncomingCallRequest>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_SendVoipIncomingCallRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_SendVoipIncomingCallResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_SendVoipIncomingCallResponse>) async throws -> Result
         ) async throws -> Result where Result: Sendable
     }
 
@@ -349,6 +459,110 @@ extension Shared_Proto_Services_V1_NotificationService {
                 onResponse: handleResponse
             )
         }
+
+        /// Call the "RegisterVoipToken" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > Регистрация VoIP token (APNs VoIP) — используется для входящих звонков (CallKit),
+        /// > когда приложение в фоне/убито.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_RegisterVoipTokenRequest` message.
+        ///   - serializer: A serializer for `Shared_Proto_Services_V1_RegisterVoipTokenRequest` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_RegisterVoipTokenResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response, the result of which is
+        ///       returned to the caller. Returning from the closure will cancel the RPC if it
+        ///       hasn't already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func registerVoipToken<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_RegisterVoipTokenRequest>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_RegisterVoipTokenRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_RegisterVoipTokenResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_RegisterVoipTokenResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Shared_Proto_Services_V1_NotificationService.Method.RegisterVoipToken.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "UnregisterVoipToken" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > Удаление VoIP token (при выходе с устройства).
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_UnregisterVoipTokenRequest` message.
+        ///   - serializer: A serializer for `Shared_Proto_Services_V1_UnregisterVoipTokenRequest` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_UnregisterVoipTokenResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response, the result of which is
+        ///       returned to the caller. Returning from the closure will cancel the RPC if it
+        ///       hasn't already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func unregisterVoipToken<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_UnregisterVoipTokenRequest>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_UnregisterVoipTokenRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_UnregisterVoipTokenResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_UnregisterVoipTokenResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Shared_Proto_Services_V1_NotificationService.Method.UnregisterVoipToken.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "SendVoipIncomingCall" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > Внутренний RPC: отправить VoIP push о входящем звонке (APNs VoIP).
+        /// > Вызывается signaling-service когда callee оффлайн.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_SendVoipIncomingCallRequest` message.
+        ///   - serializer: A serializer for `Shared_Proto_Services_V1_SendVoipIncomingCallRequest` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_SendVoipIncomingCallResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response, the result of which is
+        ///       returned to the caller. Returning from the closure will cancel the RPC if it
+        ///       hasn't already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func sendVoipIncomingCall<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_SendVoipIncomingCallRequest>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_SendVoipIncomingCallRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_SendVoipIncomingCallResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_SendVoipIncomingCallResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Shared_Proto_Services_V1_NotificationService.Method.SendVoipIncomingCall.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
     }
 }
 
@@ -467,6 +681,95 @@ extension Shared_Proto_Services_V1_NotificationService.ClientProtocol {
             request: request,
             serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_UpdateNotificationPreferencesRequest>(),
             deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_UpdateNotificationPreferencesResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "RegisterVoipToken" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > Регистрация VoIP token (APNs VoIP) — используется для входящих звонков (CallKit),
+    /// > когда приложение в фоне/убито.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Shared_Proto_Services_V1_RegisterVoipTokenRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response, the result of which is
+    ///       returned to the caller. Returning from the closure will cancel the RPC if it
+    ///       hasn't already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func registerVoipToken<Result>(
+        request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_RegisterVoipTokenRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_RegisterVoipTokenResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.registerVoipToken(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_RegisterVoipTokenRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_RegisterVoipTokenResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "UnregisterVoipToken" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > Удаление VoIP token (при выходе с устройства).
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Shared_Proto_Services_V1_UnregisterVoipTokenRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response, the result of which is
+    ///       returned to the caller. Returning from the closure will cancel the RPC if it
+    ///       hasn't already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func unregisterVoipToken<Result>(
+        request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_UnregisterVoipTokenRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_UnregisterVoipTokenResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.unregisterVoipToken(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_UnregisterVoipTokenRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_UnregisterVoipTokenResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "SendVoipIncomingCall" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > Внутренний RPC: отправить VoIP push о входящем звонке (APNs VoIP).
+    /// > Вызывается signaling-service когда callee оффлайн.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Shared_Proto_Services_V1_SendVoipIncomingCallRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response, the result of which is
+    ///       returned to the caller. Returning from the closure will cancel the RPC if it
+    ///       hasn't already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func sendVoipIncomingCall<Result>(
+        request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_SendVoipIncomingCallRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_SendVoipIncomingCallResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.sendVoipIncomingCall(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_SendVoipIncomingCallRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_SendVoipIncomingCallResponse>(),
             options: options,
             onResponse: handleResponse
         )
@@ -603,6 +906,107 @@ extension Shared_Proto_Services_V1_NotificationService.ClientProtocol {
             metadata: metadata
         )
         return try await self.updateNotificationPreferences(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "RegisterVoipToken" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > Регистрация VoIP token (APNs VoIP) — используется для входящих звонков (CallKit),
+    /// > когда приложение в фоне/убито.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response, the result of which is
+    ///       returned to the caller. Returning from the closure will cancel the RPC if it
+    ///       hasn't already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func registerVoipToken<Result>(
+        _ message: Shared_Proto_Services_V1_RegisterVoipTokenRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_RegisterVoipTokenResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Shared_Proto_Services_V1_RegisterVoipTokenRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.registerVoipToken(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "UnregisterVoipToken" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > Удаление VoIP token (при выходе с устройства).
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response, the result of which is
+    ///       returned to the caller. Returning from the closure will cancel the RPC if it
+    ///       hasn't already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func unregisterVoipToken<Result>(
+        _ message: Shared_Proto_Services_V1_UnregisterVoipTokenRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_UnregisterVoipTokenResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Shared_Proto_Services_V1_UnregisterVoipTokenRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.unregisterVoipToken(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "SendVoipIncomingCall" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > Внутренний RPC: отправить VoIP push о входящем звонке (APNs VoIP).
+    /// > Вызывается signaling-service когда callee оффлайн.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response, the result of which is
+    ///       returned to the caller. Returning from the closure will cancel the RPC if it
+    ///       hasn't already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func sendVoipIncomingCall<Result>(
+        _ message: Shared_Proto_Services_V1_SendVoipIncomingCallRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_SendVoipIncomingCallResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Shared_Proto_Services_V1_SendVoipIncomingCallRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.sendVoipIncomingCall(
             request: request,
             options: options,
             onResponse: handleResponse

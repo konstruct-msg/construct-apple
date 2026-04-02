@@ -172,15 +172,50 @@ class MediaManager {
         )
     }
 
-    /// Uploads data with one automatic retry on transient gRPC stream failures.
-    private static func uploadWithRetry(data: Data, mimeType: String) async throws -> MediaServiceClient.UploadedMedia {
-        do {
-            return try await MediaServiceClient.shared.uploadData(data, mimeType: mimeType)
-        } catch let error as GRPCCore.RPCError where error.code == .unavailable {
-            Log.info("🔄 Upload stream dropped — retrying once (code=\(error.code))", category: "MediaManager")
-            try await Task.sleep(nanoseconds: 1_500_000_000) // 1.5s backoff
-            return try await MediaServiceClient.shared.uploadData(data, mimeType: mimeType)
+    /// Uploads data with up to 2 automatic retries on transient gRPC/ICE stream failures.
+    static func uploadWithRetry(data: Data, mimeType: String) async throws -> MediaServiceClient.UploadedMedia {
+        // .cancelled       → in-flight RPC killed when the persistent connection was torn down
+        // .unavailable     → server/transport unreachable
+        // .deadlineExceeded → upload timed out (large file on slow link)
+        // .unknown         → gRPC-swift wraps Swift CancellationError from the transport as .unknown
+        //                     when ICE proxy restarts mid-stream (e.g. foreground wake)
+        //                     log: unknown: "The transport threw an unexpected error." (cause: "CancellationError()")
+        let retryableCodes: Set<RPCError.Code> = [.cancelled, .unavailable, .deadlineExceeded, .unknown]
+        let delays: [UInt64] = [3_000_000_000, 6_000_000_000]   // 3s, 6s — ICE restart can take a few seconds
+
+        var lastError: Error?
+        for delay in ([0] + delays.map { Optional($0) }) as [UInt64?] {
+            do {
+                if let ns = delay {
+                    try await Task.sleep(nanoseconds: ns)
+                }
+                return try await MediaServiceClient.shared.uploadData(data, mimeType: mimeType)
+            } catch let error as GRPCCore.RPCError where retryableCodes.contains(error.code) {
+                lastError = error
+                Log.info("🔄 Upload dropped (code=\(error.code)) — will retry", category: "MediaManager")
+            }
         }
+        throw lastError!
+    }
+
+    /// Downloads encrypted media data with up to 2 automatic retries on transient ICE/stream failures.
+    private static func downloadWithRetry(mediaId: String) async throws -> Data {
+        let retryableCodes: Set<RPCError.Code> = [.cancelled, .unavailable, .deadlineExceeded, .unknown]
+        let delays: [UInt64] = [3_000_000_000, 6_000_000_000]
+
+        var lastError: Error?
+        for delay in ([0] + delays.map { Optional($0) }) as [UInt64?] {
+            do {
+                if let ns = delay {
+                    try await Task.sleep(nanoseconds: ns)
+                }
+                return try await MediaServiceClient.shared.downloadEncryptedFile(mediaId: mediaId)
+            } catch let error as GRPCCore.RPCError where retryableCodes.contains(error.code) {
+                lastError = error
+                Log.info("🔄 Download dropped (code=\(error.code)) — will retry", category: "MediaManager")
+            }
+        }
+        throw lastError!
     }
 
     /// Upload a file (document, PDF, etc.) for a chat message.
@@ -203,7 +238,7 @@ class MediaManager {
         // Attempt ZLIB compression for compressible file types
         let (dataToUpload, compressed) = Self.compressIfBeneficial(originalData, mimeType: detectedMimeType)
 
-        let uploadResult = try await MediaServiceClient.shared.uploadData(dataToUpload, mimeType: detectedMimeType)
+        let uploadResult = try await Self.uploadWithRetry(data: dataToUpload, mimeType: detectedMimeType)
         Log.info("✅ File uploaded: \(uploadResult.mediaId) compressed=\(compressed)", category: "MediaManager")
 
         let mediaKeyBase64 = uploadResult.encryptionKey.base64EncodedString()
@@ -221,6 +256,32 @@ class MediaManager {
             hash: uploadResult.hash,
             filename: filename,
             compressed: compressed
+        )
+    }
+
+    // MARK: - Voice message upload
+
+    /// Upload an AAC/M4A voice recording.
+    /// - Parameters:
+    ///   - url: Local temp file URL (caller is responsible for deleting after this returns)
+    ///   - duration: Recording duration in seconds
+    ///   - waveform: ~100 normalized amplitude samples (0.0–1.0) for waveform display
+    /// - Returns: `VoiceMessageContent` ready to be JSON-encoded as the message payload
+    func uploadAudio(_ url: URL, duration: TimeInterval, waveform: [Float]) async throws -> VoiceMessageContent {
+        Log.info("📤 Uploading voice message (duration \(Int(duration))s)", category: "MediaManager")
+        let data = try Data(contentsOf: url)
+        let uploadResult = try await Self.uploadWithRetry(data: data, mimeType: "audio/m4a")
+        Log.info("✅ Voice uploaded: \(uploadResult.mediaId)", category: "MediaManager")
+        return VoiceMessageContent(
+            type: "voice",
+            mediaId: uploadResult.mediaId,
+            mediaUrl: uploadResult.mediaUrl,
+            mediaKey: uploadResult.encryptionKey.base64EncodedString(),
+            mediaType: "audio/m4a",
+            size: data.count,
+            duration: duration,
+            waveform: waveform,
+            hash: uploadResult.hash
         )
     }
 
@@ -275,8 +336,8 @@ class MediaManager {
             throw MediaManagerError.optimizationFailed
         }
         
-        let uploadResult = try await MediaServiceClient.shared.uploadData(
-                avatarData,
+        let uploadResult = try await Self.uploadWithRetry(
+                data: avatarData,
                 mimeType: "image/jpeg"
             )
         Log.info("✅ Avatar uploaded: \(uploadResult.mediaId)", category: "MediaManager")
@@ -334,7 +395,7 @@ class MediaManager {
         
         Log.debug("   Decoded media key: \(keyData.count) bytes", category: "MediaManager")
         
-        let encryptedData = try await MediaServiceClient.shared.downloadEncryptedFile(mediaId: mediaId)
+        let encryptedData = try await Self.downloadWithRetry(mediaId: mediaId)
         Log.debug("   Downloaded encrypted data: \(encryptedData.count) bytes", category: "MediaManager")
         
         // Decrypt media using symmetric AES key
@@ -410,10 +471,9 @@ class MediaManager {
             throw MediaManagerError.invalidMediaKey
         }
         
-        let encryptedData = try await MediaServiceClient.shared.downloadEncryptedFile(mediaId: mediaId)
-        
+        let encryptedData = try await Self.downloadWithRetry(mediaId: mediaId)
         let decryptedData = try CryptoManager.shared.decryptMediaData(encryptedData, with: keyData)
-        
+
         Log.info("✅ Avatar decrypted: \(decryptedData.count) bytes", category: "MediaManager")
         return decryptedData
     }

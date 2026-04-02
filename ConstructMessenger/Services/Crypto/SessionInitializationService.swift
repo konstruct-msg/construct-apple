@@ -131,10 +131,11 @@ class SessionInitializationService {
             suiteId: String(bundle.suiteId)
         )
 
-        let otpkPublic = bundle.oneTimePreKeyPublic.flatMap { Data(base64Encoded: $0) }
+        let otpkPublic = bundle.oneTimePreKeyPublic
         let otpkId = bundle.oneTimePreKeyId
 
         do {
+            PerformanceMetrics.shared.start(.sessionInitStart, label: String(userId.prefix(8)))
             let result = try CryptoManager.shared.initializeSession(
                 for: userId,
                 recipientBundle: bundleWithSuite,
@@ -148,6 +149,7 @@ class SessionInitializationService {
                 kyberSpkUploadedAt: bundle.kyberSpkUploadedAt,
                 kyberSpkRotationEpoch: bundle.kyberSpkRotationEpoch
             )
+            PerformanceMetrics.shared.end(.sessionInitStart, endEvent: .sessionInitEnd, label: String(userId.prefix(8)))
             Log.info("✅ Session initialized as INITIATOR for \(userId)", category: "SessionInit")
             if let kem = result.kemCiphertext {
                 pendingKemCiphertexts[userId] = kem

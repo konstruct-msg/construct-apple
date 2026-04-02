@@ -35,6 +35,7 @@ struct ChatsListView: View {
                     NavigationLink(value: chat.id) {
                         ChatRowView(chat: chat)
                     }
+                    .listRowSeparatorTint(Color.white.opacity(0.05))
                     .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                         Button(role: .destructive) {
                             Task { await chatsViewModel.deleteChatWithEndSession(chat: chat) }
@@ -65,16 +66,23 @@ struct ChatsListView: View {
                 await BackgroundFetchManager.shared.fetchPendingMessages()
                 #endif
             }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .background(Color.Construct.bg)
             .navigationDestination(for: String.self) { chatId in
                 if let chat = chats.first(where: { $0.id == chatId }) {
                     ChatView(chat: chat, context: viewContext)
                 }
             }
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(Color.Construct.bg2, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     ConnectionStatusIndicator()
                 }
-
                 ToolbarItem(placement: .automatic) {
                     Button {
                         showingQRScanner = true
@@ -88,9 +96,7 @@ struct ChatsListView: View {
                     handleScannedContact(contactURL)
                 }
             }
-            .sheet(isPresented: $showingDrafts) {
-                DraftsView()
-            }
+            #endif
             .onAppear {
                 chatsViewModel.setContext(viewContext)
                 // ✅ Clear badge when user opens chats list
@@ -108,6 +114,16 @@ struct ChatsListView: View {
                         navigationPath.append(chatId)
                     }
                 }
+            }
+            // macOS: handle right-click delete from ChatRowView context menu
+            .onReceive(NotificationCenter.default.publisher(for: .deleteChat)) { note in
+                guard let chatId = note.object as? String,
+                      let chat = chats.first(where: { $0.id == chatId }) else { return }
+                Task { await chatsViewModel.deleteChatWithEndSession(chat: chat) }
+            }
+            // Keep totalUnreadCount in sync for macOS Dock badge
+            .onChange(of: chats.reduce(0, { $0 + Int($1.unreadCount) })) { _, total in
+                chatsViewModel.totalUnreadCount = total
             }
         }
     }

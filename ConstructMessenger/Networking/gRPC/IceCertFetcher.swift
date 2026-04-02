@@ -33,6 +33,13 @@ private struct ConstructServerWellKnown: Decodable {
     struct ICEEndpoints: Decodable {
         let primary: String?
         let relays: [String]?
+        let relayRegions: [ICERelayRegion]?
+
+        enum CodingKeys: String, CodingKey {
+            case primary
+            case relays
+            case relayRegions = "relay_regions"
+        }
     }
     let ice: ICEEndpoints?
 }
@@ -68,11 +75,13 @@ actor IceCertFetcher {
         }
     }
 
-    /// Fetch the relay list from `https://ams.konstruct.cc/.well-known/construct-server`.
+    /// Fetch the relay list and relay-region config from `https://ams.konstruct.cc/.well-known/construct-server`.
     ///
-    /// On success, updates the UserDefaults cache under `ICEConfig.cachedRelayListKey`
-    /// and returns the relay address strings (e.g. `["ice.msk.konstruct.cc:9443"]`).
-    /// Returns nil if the server is unreachable or the response cannot be parsed.
+    /// On success, updates UserDefaults caches:
+    ///   - `ICEConfig.cachedRelayListKey`    → relay address strings
+    ///   - `ICEConfig.cachedRelayRegionsKey` → JSON-encoded `[ICERelayRegion]` (optional field)
+    ///
+    /// Returns the relay address strings, or nil if the server is unreachable or unparseable.
     @discardableResult
     func fetchAndCacheRelayList() async -> [String]? {
         let urlString = "https://ams.konstruct.cc/.well-known/construct-server"
@@ -90,9 +99,18 @@ actor IceCertFetcher {
             let parsed = try JSONDecoder().decode(ConstructServerWellKnown.self, from: data)
             guard let relays = parsed.ice?.relays, !relays.isEmpty else { return nil }
 
-            // Cache for use at next launch or when starting ICE with relay fallback.
+            // Cache relay list.
             UserDefaults.standard.set(relays, forKey: ICEConfig.cachedRelayListKey)
             Log.info("🧊 ICE relay list updated: \(relays)", category: "ICE")
+
+            // Cache relay-region rules (optional — server may not include them yet).
+            if let regions = parsed.ice?.relayRegions, !regions.isEmpty {
+                if let encoded = try? JSONEncoder().encode(regions) {
+                    UserDefaults.standard.set(encoded, forKey: ICEConfig.cachedRelayRegionsKey)
+                    Log.info("🧊 ICE relay regions updated: \(regions.count) rule(s)", category: "ICE")
+                }
+            }
+
             return relays
         } catch {
             Log.debug("🧊 construct-server .well-known fetch error: \(error)", category: "ICE")

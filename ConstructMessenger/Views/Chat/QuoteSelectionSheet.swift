@@ -64,7 +64,9 @@ struct QuoteSelectionSheet: View {
             .padding(.top, 8)
             .navigationTitle(NSLocalizedString("select_quote", comment: ""))
 #if canImport(UIKit)
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
 #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

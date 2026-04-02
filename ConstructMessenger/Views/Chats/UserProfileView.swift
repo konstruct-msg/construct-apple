@@ -2,20 +2,40 @@
 //  UserProfileView.swift
 //  Construct Messenger
 //
-//  Profile view for viewing and managing user profile data sharing
+//  Unified contact card — shown from Synaps grid AND from Chat header.
+//  Visual design matches the Construct dark precision-tool aesthetic.
+//
+//  Parameters:
+//    showMessageButton: false when opened from an active chat (prevents loop)
+//    onOpenChat:        closure to open/create chat (nil = no message action)
+//    onPrune:           closure to remove contact (nil = action hidden)
 //
 
 import SwiftUI
 import CoreData
 
+/// Maps a numeric suite ID (as stored in UserDefaults) to a human-readable name.
+private func cryptoSuiteName(suiteId: Int) -> String {
+    switch suiteId {
+    case 1: return "X25519 + Kyber768"
+    case 2: return "X25519 + Kyber1024"
+    default: return "Suite \(suiteId)"
+    }
+}
+
 struct UserProfileView: View {
     @ObservedObject var user: User
+
+    /// Hide "Message" when the card is already opened from inside the chat.
+    var showMessageButton: Bool = true
     var onOpenChat: (() -> Void)? = nil
+    var onPrune: (() -> Void)? = nil
 
     @Environment(\.managedObjectContext) private var viewContext
     @Environment(\.dismiss) private var dismiss
 
     @State private var viewModel = ProfileShareViewModel()
+    @State private var callManager = CallManager.shared
     @State private var showingBlockConfirmation = false
     @State private var showResetSessionConfirm = false
     @State private var showingShareAlert = false
@@ -24,35 +44,45 @@ struct UserProfileView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 0) {
-                    avatarHeader
-                    Divider()
-                    sharingStatusSection
-                    Divider()
-                    actionsSection
+            ZStack {
+                Color.Construct.bg.ignoresSafeArea()
+
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 0) {
+                        avatarHeader
+                        actionsList
+                        cryptoSection
+                        sharingStatus
+                    }
+                    .padding(.bottom, 32)
                 }
             }
-            .background(Color.secondary.opacity(0.08))
-            .navigationTitle(LocalizedStringKey("profile"))
+            .navigationTitle("")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(Color.Construct.bg2, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
             #endif
             .toolbar {
-                ToolbarItem(placement: .automatic) {
-                    Button(LocalizedStringKey("done")) { dismiss() }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                        .font(ConstructFont.display(16, weight: .medium))
+                        .foregroundStyle(Color.Construct.accent)
                 }
             }
             .onAppear { viewModel.setContext(viewContext) }
             .alert(LocalizedStringKey("block_user_confirmation"), isPresented: $showingBlockConfirmation) {
-                Button(LocalizedStringKey("cancel"), role: .cancel) { }
-                Button(user.isBlocked ? LocalizedStringKey("unblock") : LocalizedStringKey("block"),
-                       role: user.isBlocked ? .none : .destructive) { handleBlockToggle() }
+                Button(LocalizedStringKey("cancel"), role: .cancel) {}
+                Button(
+                    LocalizedStringKey(user.isBlocked ? "unblock" : "block"),
+                    role: user.isBlocked ? .none : .destructive
+                ) { handleBlockToggle() }
             } message: {
                 Text(LocalizedStringKey(user.isBlocked ? "unblock_user_confirmation_message" : "block_user_confirmation_message"))
             }
             .alert(LocalizedStringKey("share_my_data_alert"), isPresented: $showingShareAlert) {
-                Button(LocalizedStringKey("ok")) { }
+                Button(LocalizedStringKey("ok")) {}
             } message: {
                 Text(shareAlertMessage)
             }
@@ -63,11 +93,7 @@ struct UserProfileView: View {
             ) {
                 Button(LocalizedStringKey("reset_session"), role: .destructive) {
                     Task {
-                        do {
-                            try await SessionCoordinator().sendEndSession(to: user.id, reason: "user_requested")
-                        } catch {
-                            Log.error("❌ Failed to reset session: \(error)", category: "UserProfileView")
-                        }
+                        try? await SessionCoordinator().sendEndSession(to: user.id, reason: "user_requested")
                     }
                 }
                 Button(LocalizedStringKey("cancel"), role: .cancel) {}
@@ -77,192 +103,199 @@ struct UserProfileView: View {
         }
     }
 
-    // MARK: - Avatar Header
+    // MARK: - Avatar header
 
     private var avatarHeader: some View {
-        VStack(spacing: 10) {
-            if let avatarData = user.avatarData,
-               let avatarImage = ImageHelper.imageFromData(avatarData) {
-                #if canImport(UIKit)
-                Image(uiImage: avatarImage)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: 88, height: 88)
-                    .clipShape(AvatarStyle.avatarShape())
-                #else
-                Image(nsImage: avatarImage)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: 88, height: 88)
-                    .clipShape(AvatarStyle.avatarShape())
-                #endif
-            } else {
-                Circle()
-                    .fill(Color.hexagonAccent(for: user.id).opacity(0.15))
-                    .frame(width: 88, height: 88)
-                    .overlay {
-                        Text(initials)
-                            .font(.system(size: 34, weight: .semibold))
-                            .foregroundColor(Color.hexagonAccent(for: user.id))
-                    }
+        VStack(spacing: 12) {
+            ZStack {
+                if let data = user.avatarData, let img = PlatformImage(data: data) {
+                    Image(platformImage: img)
+                        .resizable()
+                        .scaledToFill()
+                } else {
+                    Circle().fill(accentColor.opacity(0.18))
+                    Text(initials)
+                        .font(ConstructFont.mono(32, weight: .semibold))
+                        .foregroundStyle(accentColor)
+                }
             }
+            .frame(width: 96, height: 96)
+            .clipShape(Circle())
+            .overlay(
+                Circle().strokeBorder(
+                    user.isBlocked ? Color.red.opacity(0.5) : Color.Construct.dim,
+                    lineWidth: 2
+                )
+            )
 
-            Text(user.resolvedDisplayName)
-                .font(.title3.weight(.semibold))
+            VStack(spacing: 4) {
+                Text(user.resolvedDisplayName)
+                    .font(ConstructFont.display(22, weight: .semibold))
+                    .foregroundStyle(Color.Construct.textBright)
 
-            if !user.username.isEmpty && user.username != user.resolvedDisplayName {
-                Text("@\(user.username)")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
+                if !user.username.isEmpty {
+                    Text("@\(user.username)")
+                        .font(ConstructFont.mono(13))
+                        .foregroundStyle(Color.Construct.textDim)
+                }
+
+                if user.isBlocked {
+                    Label("Blocked", systemImage: "slash.circle")
+                        .font(ConstructFont.mono(11, weight: .semibold))
+                        .foregroundStyle(Color.red)
+                        .padding(.top, 2)
+                }
             }
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 24)
-        .background(Color.secondary.opacity(0.12))
+        .padding(.vertical, 28)
+        .background(Color.Construct.bg2)
     }
 
-    // MARK: - Sharing Status
+    // MARK: - Actions list
 
-    private var sharingStatusSection: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            sectionHeader(LocalizedStringKey("profile_sharing_info"))
-            VStack(alignment: .leading, spacing: 6) {
-                HStack {
-                    Text(LocalizedStringKey("profile_sharing_status"))
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                    Spacer()
-                    if let sharedAt = user.sharedWithMeAt {
-                        Text(formatDate(sharedAt))
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
+    private var actionsList: some View {
+        VStack(spacing: 9) {
+            if showMessageButton, let openChat = onOpenChat {
+                ConstructActionRow(icon: "message.fill", title: LocalizedStringKey("synaps_open_chat"), role: .primary) {
+                    openChat()
+                    dismiss()
                 }
-                Text(LocalizedStringKey(user.isSharingWithMe ? "sharing_with_you" : "not_sharing_with_you"))
-                    .font(.body)
+            }
+
+            if CallsFeature.isEnabled, case .idle = callManager.state {
+                ConstructActionRow(icon: "phone.fill", title: "Voice call", role: .primary) {
+                    Task {
+                        await callManager.startOutgoingCall(
+                            to: user.id,
+                            displayName: user.resolvedDisplayName,
+                            hasVideo: false
+                        )
+                    }
+                    dismiss()
+                }
+            } else if !CallsFeature.isEnabled {
+                ConstructActionRow(icon: "phone.fill", title: "Voice call", role: .disabled) {}
+            }
+
+            if user.amISharingWith {
+                ConstructActionRow(icon: "person.crop.circle.badge.minus", title: LocalizedStringKey("stop_sharing_profile"), role: .secondary, isLoading: isSharingInProgress) {
+                    handleShareToggle(false)
+                }
+            } else {
+                ConstructActionRow(icon: "person.crop.circle.badge.checkmark", title: LocalizedStringKey("share_my_profile"), role: .accent, isLoading: isSharingInProgress) {
+                    handleShareToggle(true)
+                }
+            }
+
+            Spacer()
+
+            ConstructActionRow(
+                icon: user.isBlocked ? "checkmark.circle" : "slash.circle",
+                title: LocalizedStringKey(user.isBlocked ? "unblock_user" : "block_user"),
+                role: .secondary
+            ) {
+                showingBlockConfirmation = true
+            }
+
+            ConstructActionRow(icon: "arrow.counterclockwise", title: LocalizedStringKey("reset_session"), role: .destructive) {
+                showResetSessionConfirm = true
+            }
+
+            if let prune = onPrune {
+                ConstructActionRow(icon: "scissors", title: LocalizedStringKey("synaps_prune_action"), role: .destructive) {
+                    prune()
+                    dismiss()
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 20)
+    }
+
+    // MARK: - Crypto section
+
+    private var cryptoSection: some View {
+        let hasSession = CryptoManager.shared.hasSession(for: user.id)
+        let suiteId = UserDefaults.standard.integer(forKey: "construct.session.suite.\(user.id)")
+        let suiteLabel = hasSession && suiteId > 0
+            ? cryptoSuiteName(suiteId: suiteId)
+            : NSLocalizedString("session_crypto_no_session", comment: "")
+
+        return VStack(spacing: 0) {
+            Divider()
+                .background(Color.Construct.dim)
+                .padding(.horizontal, 16)
+
+            HStack(spacing: 10) {
+                Image(systemName: hasSession ? "lock.fill" : "lock.open")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(hasSession ? Color.Construct.accent.opacity(0.8) : Color.Construct.textDim)
+                    .frame(width: 20)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(LocalizedStringKey("session_crypto_suite"))
+                        .font(ConstructFont.mono(11, weight: .medium))
+                        .foregroundStyle(Color.Construct.textDim)
+                    Text(suiteLabel)
+                        .font(ConstructFont.mono(13, weight: .semibold))
+                        .foregroundStyle(hasSession ? Color.Construct.textBright : Color.Construct.textDim)
+                }
+
+                Spacer()
+
+                if hasSession {
+                    Image(systemName: "checkmark.shield.fill")
+                        .font(.system(size: 14))
+                        .foregroundStyle(Color.Construct.accent.opacity(0.7))
+                }
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .background(Color.secondary.opacity(0.12))
-
-            sectionFooter(LocalizedStringKey("profile_sharing_info_footer"))
+            .padding(.vertical, 14)
         }
+        .padding(.top, 12)
     }
 
-    // MARK: - Actions
+    // MARK: - Sharing status
 
-    private var actionsSection: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            sectionHeader(LocalizedStringKey("actions"))
-            VStack(spacing: 0) {
-                // Open chat (only shown from Synaps context)
-                if let openChat = onOpenChat {
-                    actionRow {
-                        Label(LocalizedStringKey("synaps_open_chat"), systemImage: "message")
-                    } action: {
-                        openChat()          // switches tab + sets chatToOpen
-                        dismiss()           // closes sheet after triggering navigation
-                    }
-                    Divider().padding(.leading, 16)
+    private var sharingStatus: some View {
+        Group {
+            if let sharedAt = user.sharedWithMeAt, user.isSharingWithMe {
+                VStack(alignment: .leading, spacing: 4) {
+                    Label(
+                        String(format: NSLocalizedString("sharing_with_you", comment: ""), formatDate(sharedAt)),
+                        systemImage: "checkmark.shield"
+                    )
+                    .font(ConstructFont.mono(11))
+                    .foregroundStyle(Color.Construct.textDim)
                 }
-
-                // Share / stop sharing
-                if user.amISharingWith {
-                    actionRow {
-                        HStack {
-                            Text(LocalizedStringKey("stop_sharing_profile"))
-                                .foregroundColor(.red)
-                            Spacer()
-                            if isSharingInProgress {
-                                ProgressView().scaleEffect(0.8)
-                            }
-                        }
-                    } action: { handleShareToggle(false) }
-                } else {
-                    actionRow {
-                        HStack {
-                            Text(LocalizedStringKey("share_my_profile"))
-                            Spacer()
-                            if isSharingInProgress {
-                                ProgressView().scaleEffect(0.8)
-                            }
-                        }
-                    } action: { handleShareToggle(true) }
-                }
-
-                Divider().padding(.leading, 16)
-
-                // Block / unblock
-                actionRow {
-                    Text(LocalizedStringKey(user.isBlocked ? "unblock_user" : "block_user"))
-                        .foregroundColor(user.isBlocked ? .primary : .red)
-                } action: { showingBlockConfirmation = true }
-
-                Divider().padding(.leading, 16)
-
-                // Reset session
-                actionRow {
-                    Text(LocalizedStringKey("reset_session"))
-                        .foregroundColor(.red)
-                } action: { showResetSessionConfirm = true }
-            }
-            .background(Color.secondary.opacity(0.12))
-
-            if user.isBlocked {
-                sectionFooter(LocalizedStringKey("user_is_blocked_footer"), color: .red)
-            } else if !user.amISharingWith {
-                sectionFooter(LocalizedStringKey("share_profile_explanation"))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 16)
+                .padding(.top, 20)
             }
         }
     }
 
     // MARK: - Helpers
 
-    @ViewBuilder
-    private func actionRow<Label: View>(@ViewBuilder label: () -> Label, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            label()
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 13)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .disabled(isSharingInProgress)
-    }
-
-    private func sectionHeader(_ title: LocalizedStringKey) -> some View {
-        Text(title)
-            .font(.footnote)
-            .foregroundColor(.secondary)
-            .textCase(.uppercase)
-            .padding(.horizontal, 16)
-            .padding(.top, 20)
-            .padding(.bottom, 6)
-    }
-
-    private func sectionFooter(_ text: LocalizedStringKey, color: Color = .secondary) -> some View {
-        Text(text)
-            .font(.footnote)
-            .foregroundColor(color)
-            .padding(.horizontal, 16)
-            .padding(.top, 6)
-            .padding(.bottom, 8)
-    }
+    private var accentColor: Color { .hexagonAccent(for: user.id) }
 
     private var initials: String {
-        let components = user.displayName.split(separator: " ")
-        if components.count >= 2 {
-            return String(components[0].prefix(1) + components[1].prefix(1)).uppercased()
+        let words = user.displayName
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .components(separatedBy: .whitespaces).filter { !$0.isEmpty }
+        switch words.count {
+        case 0:  return "?"
+        case 1:  return String(words[0].prefix(2)).uppercased()
+        default: return (String(words[0].prefix(1)) + String(words[1].prefix(1))).uppercased()
         }
-        return String(user.displayName.prefix(2)).uppercased()
     }
 
     private func formatDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
-        return formatter.string(from: date)
+        let f = DateFormatter()
+        f.dateStyle = .medium
+        f.timeStyle = .none
+        return f.string(from: date)
     }
 
     private func handleShareToggle(_ share: Bool) {
@@ -292,6 +325,24 @@ struct UserProfileView: View {
         user.isBlocked.toggle()
         try? viewContext.save()
     }
+}
+
+// MARK: - Preview
+
+#Preview {
+    let container = PreviewHelpers.createPreviewContainer()
+    let context = container.viewContext
+    let user = PreviewHelpers.createSampleUser(context: context, id: "user1", username: "alice", displayName: "Alice Wonderland")
+    user.isContact = true
+    try? context.save()
+
+    return UserProfileView(
+        user: user,
+        showMessageButton: true,
+        onOpenChat: {},
+        onPrune: {}
+    )
+    .environment(\.managedObjectContext, context)
 }
 
 #Preview {

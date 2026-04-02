@@ -107,15 +107,29 @@ struct LinkParser {
         if !invite.deviceId.isEmpty {
             inviteToken.deviceID = invite.deviceId
         }
+        if let un = invite.un, !un.isEmpty {
+            inviteToken.un = un
+        }
         
         var acceptRequest = Shared_Proto_Services_V1_AcceptInviteRequest()
         acceptRequest.invite = inviteToken
         
+        // Retry AcceptInvite with backoff — "Stream unexpectedly closed" happens when
+        // ICE is reconnecting. A few attempts let the transport stabilize.
         let response: Shared_Proto_Services_V1_AcceptInviteResponse
         do {
-            response = try await InviteServiceClient.shared.acceptInvite(invite: acceptRequest)
+            response = try await withRetry(
+                maxAttempts: 3,
+                backoff: 1.5,
+                retryIf: { error in
+                    let desc = error.localizedDescription.lowercased()
+                    return desc.contains("stream") || desc.contains("unavailable") || desc.contains("closed")
+                },
+                label: "AcceptInvite"
+            ) {
+                try await InviteServiceClient.shared.acceptInvite(invite: acceptRequest)
+            }
         } catch {
-            Log.error("❌ AcceptInvite failed: \(error)", category: "LinkParser")
             throw ContactLinkError.verificationFailed(error)
         }
         
@@ -124,10 +138,15 @@ struct LinkParser {
         
         Log.info("✅ Invite accepted: userId=\(userId.prefix(8))..., deviceId=\(deviceId)", category: "LinkParser")
         
+        // Use the sender's username from the invite payload if present (V3+, cryptographically signed).
+        // Falls back to userId as a placeholder that will be overwritten once the session is live.
+        let trimmedUsername = invite.un?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let resolvedUsername = trimmedUsername.isEmpty ? userId : trimmedUsername
+        
         return ContactInfo(
             userId: userId,
             deviceId: deviceId,
-            username: userId, // Placeholder, will be resolved by ChatsViewModel
+            username: resolvedUsername,
             ephemeralKey: invite.ephKey,
             isDynamic: true
         )

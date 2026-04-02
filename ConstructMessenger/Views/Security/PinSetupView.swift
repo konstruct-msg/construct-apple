@@ -71,7 +71,9 @@ struct PinSetupView: View {
                 }
             }
             .navigationTitle(titleKey)
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("cancel") {

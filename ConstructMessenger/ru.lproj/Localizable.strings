@@ -562,6 +562,7 @@
 "device_revoke_confirm" = "Это устройство будет удалено из вашего аккаунта.";
 "device_last_seen" = "Последний раз: %@";
 "device_current" = "Это устройство";
+"device_added_%@" = "Добавлено %@";
 "linked_devices" = "Привязанные устройства";
 "linked_devices_hint" = "Отсканируйте QR-код на новом устройстве при первом входе, чтобы привязать его к аккаунту.";
 "link_new_device" = "Привязать новое устройство";
@@ -586,12 +587,18 @@
 "session_management" = "Управление сессиями";
 "sign_out_this_device" = "Выйти с этого устройства";
 "sign_out_this_device_message" = "Вы выйдете только с этого устройства. Другие привязанные устройства останутся активными.";
+"sign_out_other_devices" = "Выйти с других устройств";
+"sign_out_other_devices_message" = "Все другие привязанные устройства будут отключены. Это устройство останется активным.";
 "sign_out_all_devices" = "Выйти со всех устройств";
 "sign_out_all_devices_message" = "Вы выйдете ОДНОВРЕМЕННО со всех устройств. Используйте, если устройство было утеряно или скомпрометировано.";
 "sign_out_all_hint" = "Выход со всех устройств немедленно аннулирует все сессии. Потребуется повторная аутентификация на каждом устройстве.";
 "sign_out" = "Выйти";
 "device_scan_to_approve" = "Сканировать для одобрения";
 "device_revoke_confirm_message" = "Удалённо выйти с устройства «%@»? Оно будет отключено от вашего аккаунта.";
+"this_device" = "Это устройство";
+"other_devices" = "Другие устройства";
+"other_devices_hint" = "Нажмите − чтобы удалить устройство из аккаунта.";
+"device_active_now" = "Активно сейчас";
 
 // MARK: - Flood guard & Lockdown
 "flood_alert_body" = "Отправил %d сообщений за короткое время. Уведомления приостановлены.";
@@ -607,6 +614,7 @@
 
 // MARK: - Synaps
 "synaps" = "Синапсы";
+"synapses" = "СИНАПСЫ";
 "synaps_search_prompt" = "Поиск";
 "synaps_empty_title" = "Пока нет связей";
 "synaps_empty_subtitle" = "Люди с которыми вы общаетесь будут здесь, даже если вы удалили переписку.";
@@ -614,3 +622,43 @@
 "synaps_prune_title" = "Отрезать синапс?";
 "synaps_prune_action" = "Отрезать";
 "synaps_prune_message" = "Это навсегда удалит %@ из ваших синапсов и удалит переписку.";
+
+// MARK: - Connection Status Indicator
+"connection_status_secure" = "Соединение установлено";
+"connection_status_connecting" = "Подключение...";
+"connection_status_offline" = "Не в сети";
+
+// MARK: - Contact card crypto section
+"session_crypto_suite" = "Шифрование";
+"session_crypto_no_session" = "Нет активной сессии";
+
+"voice_message" = "Голосовое сообщение";
+"ice_auto_activated_footer" = "Лёд активирован автоматически — ваша сеть блокирует прямые подключения. Вы можете отключить его в настройках.";
+
+// MARK: - Calls
+"call_start" = "Аудиозвонок";
+"call_mute" = "Выкл. микрофон";
+"call_unmute" = "Вкл. микрофон";
+"call_speaker" = "Динамик";
+"call_end" = "Завершить";
+"call_connecting" = "Соединение…";
+"call_incoming_audio" = "Входящий аудиозвонок";
+"call_answer" = "Ответить";
+"call_decline" = "Отклонить";
+
+// MARK: - Call History
+"calls_tab" = "Звонки";
+"calls_recents" = "Недавние";
+"calls_clear" = "Очистить";
+"calls_clear_confirm" = "Очистить историю звонков?";
+"calls_empty" = "Нет недавних звонков";
+"call_outgoing" = "Исходящий";
+"call_incoming" = "Входящий";
+"call_missed" = "Пропущенный";
+"call_declined" = "Отклонённый";
+"call_failed" = "Не состоялся";
+"call_ended" = "Звонок завершён";
+"call_busy" = "Занято";
+"call_no_relay" = "Нет соединения (relay недоступен)";
+"call_dismiss" = "Закрыть";
+"call_call_back" = "Перезвонить";

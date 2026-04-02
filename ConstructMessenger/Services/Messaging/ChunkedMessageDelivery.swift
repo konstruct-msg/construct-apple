@@ -72,6 +72,12 @@ final class ChunkedMessageSender {
 }
 
 final class ChunkedMessageReassembler {
+
+    /// Shared instance used by both MessageRouter (live stream) and
+    /// BackgroundFetchManager (silent-push path).  Both paths run their
+    /// reassembler interactions on the main thread, so no extra locking is needed.
+    static let shared = ChunkedMessageReassembler()
+
     private struct PendingMessage {
         let messageId: UUID
         let totalChunks: UInt16

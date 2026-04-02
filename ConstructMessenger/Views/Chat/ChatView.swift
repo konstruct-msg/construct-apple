@@ -22,6 +22,7 @@ struct ChatView: View {
     /// Message opened for "Quote & Reply" selection sheet.
     @State private var quotingMessage: Message? = nil
     @State private var showingUserProfile = false
+    @State private var callManager = CallManager.shared
 
     @State private var searchText = ""
     @State private var isSearchActive = false
@@ -53,8 +54,6 @@ struct ChatView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // ❌ REMOVED: statusBanner (moved to overlay)
-
             // Flood-burst banner — shown when this chat's sender is burst-suppressed
             floodBurstBanner
             
@@ -235,11 +234,19 @@ struct ChatView: View {
             
             messageInputView
         }
+        // macOS: give the VStack deterministic size so NavigationSplitView's
+        // NSSplitView doesn't enter an infinite constraint-update loop when
+        // the TextField(axis:) resizes inside an NSHostingView.
+        #if os(macOS)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        #endif
+        #if os(iOS)
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .tabBar)
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbarBackground(Color.AppBackground.primary, for: .navigationBar)
+        #endif
         #endif
         .toolbar(content: toolbarContent)
         .gesture(
@@ -289,9 +296,13 @@ struct ChatView: View {
         .overlay(alignment: .top, content: searchOverlay)
         .sheet(isPresented: $showingUserProfile) {
             if let user = viewModel.chat.otherUser {
-                UserProfileView(user: user)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
+                UserProfileView(
+                    user: user,
+                    showMessageButton: false   // already inside this chat — no loop
+                )
+                .environment(\.managedObjectContext, viewContext)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
             }
         }
         .sheet(item: $quotingMessage) { msg in
@@ -440,6 +451,10 @@ struct ChatView: View {
                     }
                 }
             },
+            onSendVoice: { url, duration, waveform in
+                viewModel.sendVoiceMessage(url: url, duration: duration, waveform: waveform)
+                scrollManager.shouldScrollToBottom = true
+            },
             onCancelReply: {
                 replyingTo = nil
                 replyQuoteText = nil
@@ -515,6 +530,24 @@ struct ChatView: View {
 
         // Split into separate ToolbarItems to avoid NSToolbarItemGroup selectionMode warnings on macOS
         if !isEditMode {
+            // Call button — only for 1-on-1 chats when calls are enabled
+            if CallsFeature.isEnabled, let otherUser = viewModel.chat.otherUser, case .idle = callManager.state {
+                ToolbarItem(placement: .automatic) {
+                    Button {
+                        Task {
+                            await callManager.startOutgoingCall(
+                                to: otherUser.id,
+                                displayName: otherUser.resolvedDisplayName,
+                                hasVideo: false
+                            )
+                        }
+                    } label: {
+                        Image(systemName: "phone")
+                    }
+                    .accessibilityLabel(NSLocalizedString("call_start", comment: ""))
+                }
+            }
+
             ToolbarItem(placement: .automatic) {
                 Button {
                     withAnimation {

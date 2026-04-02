@@ -5,7 +5,9 @@ import os.log
 /// Manages message retry logic for failed and queued messages
 @MainActor
 class MessageRetryManager {
-    
+
+    static let shared = MessageRetryManager()
+
     private let messageQueueManager = MessageQueueManager.shared
     
     // MARK: - Single Message Retry

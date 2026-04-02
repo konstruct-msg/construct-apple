@@ -16,13 +16,36 @@ struct MainTabView: View {
     /// Regular = iPad full-screen or landscape
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
+    // Call overlays
+    @State private var callManager = CallManager.shared
+
     var body: some View {
+        callContent
+            .debugMetricsOverlay()
+            // In-app incoming call sheet (CallKit handles lock-screen / background)
+            #if os(iOS)
+            .overlay(alignment: .bottom) {
+                if case .incoming(let session) = callManager.state {
+                    IncomingCallView(session: session)
+                        .zIndex(100)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: isIncomingState)
+                }
+            }
+            .fullScreenCover(isPresented: .constant(isActiveOrConnecting)) {
+                if let session = activeCallSession {
+                    InCallView(session: session, isConnecting: isConnectingState, endReason: callEndReason)
+                }
+            }
+            #endif
+    }
+
+    @ViewBuilder
+    private var callContent: some View {
         if horizontalSizeClass == .regular {
-            // iPad: sidebar + detail split layout
             ChatsSplitView()
                 .environment(chatsViewModel)
         } else {
-            // iPhone: classic tab bar navigation
             @Bindable var vm = chatsViewModel
             TabView(selection: $vm.selectedTab) {
                 ChatsListView()
@@ -40,14 +63,61 @@ struct MainTabView: View {
                     .tag(1)
 
                 #if os(iOS)
+                if CallsFeature.isEnabled {
+                    CallHistoryView()
+                        .tabItem {
+                            Label(NSLocalizedString("calls_tab", comment: ""), systemImage: "phone")
+                        }
+                        .tag(2)
+                }
+
                 SettingsView()
                     .tabItem {
                         Label("settings", systemImage: "gear")
                     }
-                    .tag(2)
+                    .tag(CallsFeature.isEnabled ? 3 : 2)
                 #endif
             }
+            #if os(iOS)
+            .toolbarBackground(Color.Construct.bg, for: .tabBar)
+            .toolbarBackground(.visible, for: .tabBar)
+            .toolbarColorScheme(.dark, for: .tabBar)
+            #endif
         }
+    }
+
+    // MARK: - Call state helpers
+
+    private var isIncomingState: Bool {
+        if case .incoming = callManager.state { return true }
+        return false
+    }
+
+    private var isActiveOrConnecting: Bool {
+        switch callManager.state {
+        case .dialing, .active, .connecting, .ringing, .ended: return true
+        default: return false
+        }
+    }
+
+    private var isConnectingState: Bool {
+        switch callManager.state {
+        case .dialing, .connecting, .ringing: return true
+        default: return false
+        }
+    }
+
+    private var activeCallSession: CallManager.CallSession? {
+        switch callManager.state {
+        case .dialing(let s), .active(let s), .connecting(let s), .ringing(let s): return s
+        case .ended(let s, _): return s
+        default: return nil
+        }
+    }
+
+    private var callEndReason: CallManager.EndReason? {
+        if case .ended(_, let reason) = callManager.state { return reason }
+        return nil
     }
 }
 

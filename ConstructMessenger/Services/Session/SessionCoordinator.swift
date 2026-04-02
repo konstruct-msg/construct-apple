@@ -120,7 +120,7 @@ final class SessionCoordinator {
     /// Broadcast END_SESSION to all peers that have an active session (e.g., on logout).
     /// Pre-warm sessions for contacts where we are the natural INITIATOR (lower userId).
     /// Called once per app launch after stream connects. Ensures first messages are instant.
-    func prewarmSessions(for contactIds: [String]) {
+    func prewarmSessions(for contactIds: [String], skipEndSessionNotification: Bool = false) {
         let myId = SessionManager.shared.currentUserId ?? ""
         guard !myId.isEmpty else { return }
 
@@ -132,25 +132,35 @@ final class SessionCoordinator {
         Log.info("🔥 Session prewarm: \(toPrewarm.count) contact(s) need sessions", category: "SessionInit")
         Task {
             for contactId in toPrewarm {
+                // Guard against both a session that appeared since we built toPrewarm
+                // AND against a parallel prewarm Task for the same peer.
+                // We insert into usersInitializingSession here (not inside
+                // initializeSessionProactively) so that a second concurrent Task that
+                // also reaches this point sees the flag and skips — otherwise both tasks
+                // would slip past the guard, race through fetchBundle, and the second
+                // would delete the session just created by the first.
                 guard !CryptoManager.shared.hasSession(for: contactId),
-                      !usersInitializingSession.contains(contactId) else { continue }
+                      !usersInitializingSession.contains(contactId) else {
+                    Log.info("⏸️ Prewarm skipped — session exists or init in progress for \(contactId.prefix(8))…", category: "SessionInit")
+                    continue
+                }
+                usersInitializingSession.insert(contactId)
+                defer { usersInitializingSession.remove(contactId) }
 
-                // Before re-establishing a fresh session, notify the peer that our session is
-                // missing. This handles ratchet divergence: if we lost our Keychain session
-                // (e.g. after iOS Keychain wipe or app reinstall) but the peer's ratchet is
-                // already advanced (e.g. at msgNum=3), any new message they send will be
-                // encrypted at the wrong ratchet position and will be undecryptable.
-                //
-                // Sending END_SESSION first tells the peer to archive their stale session so
-                // they will start fresh when our X3DH init message (from initializeSessionProactively)
-                // arrives. This is safe even if the peer has no session — END_SESSION on a
-                // non-existent session is a no-op for them.
-                do {
-                    try await sendEndSession(to: contactId, reason: "session_missing_restart")
-                    endSessionSentAt[contactId] = Date()
-                    Log.info("🔥 Prewarm: notified \(contactId.prefix(8))… of missing session before fresh init", category: "SessionInit")
-                } catch {
-                    Log.error("⚠️ Prewarm: END_SESSION to \(contactId.prefix(8))… failed (proceeding with prewarm): \(error.localizedDescription)", category: "SessionInit")
+                // Notify the peer that our session is missing ONLY when this prewarm
+                // was triggered proactively (startup / stream-connect). When triggered
+                // by onEndSessionReceived the peer has already sent us END_SESSION —
+                // they already know their session with us needs reset. Sending another
+                // END_SESSION in that path creates a ping-pong loop where each side
+                // continuously triggers the other's END_SESSION handler.
+                if !skipEndSessionNotification {
+                    do {
+                        try await sendEndSession(to: contactId, reason: "session_missing_restart")
+                        endSessionSentAt[contactId] = Date()
+                        Log.info("🔥 Prewarm: notified \(contactId.prefix(8))… of missing session before fresh init", category: "SessionInit")
+                    } catch {
+                        Log.error("⚠️ Prewarm: END_SESSION to \(contactId.prefix(8))… failed (proceeding with prewarm): \(error.localizedDescription)", category: "SessionInit")
+                    }
                 }
 
                 await sessionInitService.initializeSessionProactively(
@@ -256,7 +266,12 @@ final class SessionCoordinator {
             Task {
                 // Brief delay so END_SESSION processing (archive, queue clear) finishes first.
                 try? await Task.sleep(nanoseconds: 300_000_000) // 300 ms
-                self.prewarmSessions(for: [userId])
+                // Do NOT send session_missing_restart here: the peer just sent us END_SESSION,
+                // which means they already know they need to reset. Sending another END_SESSION
+                // in response would cause them to restart their own onEndSessionReceived path,
+                // creating a ping-pong loop. Our X3DH init message implicitly signals the new
+                // session — that's all the peer needs to become RESPONDER.
+                self.prewarmSessions(for: [userId], skipEndSessionNotification: true)
             }
         }
 
@@ -264,17 +279,40 @@ final class SessionCoordinator {
         // send a session establishment ping so the loser can immediately become RESPONDER.
         messageRouter.onTieBreakWin = { [weak self] userId in
             guard let self else { return }
+            let suiteIdAtWin = UserDefaults.standard.integer(forKey: "construct.session.suite.\(userId)")
+            Log.info("🏆 SESSION_STATE[tie_break_outcome]: INITIATOR role confirmed, peer=\(userId.prefix(8))… suiteId=\(suiteIdAtWin), sending END_SESSION+ping", category: "SessionInit")
             Task {
+                var endSessionOk = false
                 do {
                     // Send END_SESSION directly to the network — do NOT call
                     // SessionCoordinator.sendEndSession because that would archive and clear
                     // our just-restored INITIATOR session.
                     let _ = try await MessagingServiceClient.shared.sendEndSession(to: userId, reason: "tie_break_win")
-                    Log.info("📤 SESSION_STATE[tie_break_end_session]: sent to \(userId.prefix(8))…", category: "SessionInit")
+                    endSessionOk = true
+                    Log.info("📤 SESSION_STATE[tie_break_end_session]: sent to \(userId.prefix(8))… suiteId=\(suiteIdAtWin)", category: "SessionInit")
                 } catch {
-                    Log.error("❌ SESSION_STATE[tie_break_end_session_fail]: \(error.localizedDescription)", category: "SessionInit")
+                    Log.error("❌ SESSION_STATE[tie_break_end_session_fail]: peer=\(userId.prefix(8))… error=\(error.localizedDescription)", category: "SessionInit")
                 }
+                // The RESPONDER already wiped their session when they sent us the X3DH init
+                // (their healing attempt). The DR-ratchet ping encoded in the restored session
+                // (msgNum > 0) is unreachable by them — they have no matching state.
+                // Re-initialize from scratch: fetch RESPONDER's bundle → new outgoing session
+                // (msgNum=0). The subsequent sendSessionPing then carries a fresh X3DH init
+                // that RESPONDER can accept via initReceivingSession.
+                await self.sessionInitService.initializeSessionProactively(
+                    userId: userId,
+                    onSuccess: { },
+                    onFailure: { err in
+                        Log.error("❌ SESSION_STATE[tie_break_reinit_fail]: \(err.localizedDescription)", category: "SessionInit")
+                    }
+                )
                 await self.sendSessionPing(to: userId)
+                // Phase 1 of two-phase handshake: session is now "unconfirmed" until
+                // RESPONDER sends back __session_ready__. ChatViewModel will buffer any
+                // outgoing messages as .queued until confirmation is received.
+                SessionConfirmationTracker.shared.markPending(userId)
+                let suiteIdAtPing = UserDefaults.standard.integer(forKey: "construct.session.suite.\(userId)")
+                Log.info("🏓 SESSION_STATE[tie_break_seq]: peer=\(userId.prefix(8))… endSession=\(endSessionOk ? "✓" : "✗") ping=sent suiteId=\(suiteIdAtPing)", category: "SessionInit")
             }
             // Start watchdog: if RESPONDER has not replied within timeout, re-send ping.
             self.startTieBreakWatchdog(for: userId)
@@ -319,17 +357,12 @@ final class SessionCoordinator {
                 // SaveSessionToSecureStore actions — the session was already persisted
                 // by initReceivingSession above.
                 if let core = CryptoManager.shared.orchestratorCore,
-                   let sessionJson = try? core.exportSessionJson(contactId: userId) {
-                    let event: [String: Any] = [
-                        "SessionInitCompleted": [
-                            "contact_id": userId,
-                            "session_json": sessionJson
-                        ]
-                    ]
-                    if let eventJson = (try? JSONSerialization.data(withJSONObject: event))
-                            .flatMap({ String(data: $0, encoding: .utf8) }) {
-                        let _ = try? core.handleEventJson(eventJson: eventJson)
-                    }
+                   let sessionBytes = try? core.exportSession(contactId: userId) {
+                    let event = CfeIncomingEvent.sessionInitCompleted(
+                        contactId: userId,
+                        sessionData: Data(sessionBytes)
+                    )
+                    let _ = try? core.handleEvent(event: event)
                 }
 
                 // Replenish OTPKs — Bob consumed one OTPK for this X3DH session init.
@@ -338,6 +371,12 @@ final class SessionCoordinator {
                     await OtpkReplenishmentService.replenishIfNeeded(deviceId: deviceId)
                 }
                 drainPendingQueue(for: userId, skippingFirst: true)
+                // Re-send messages that were re-queued on prior END_SESSION receipt.
+                sendSessionQueuedMessages(for: userId)
+                // Phase 2 of two-phase handshake: notify INITIATOR that RESPONDER
+                // session is established. INITIATOR cancels its watchdog and flushes
+                // any buffered outgoing messages.
+                Task { await self.sendSessionReady(to: userId) }
             } else {
                 // initReceivingSession failed — prekey exhausted or invalid.
                 Log.info("🔄 initReceivingSession failed — clearing queue, sending END_SESSION to \(userId.prefix(8))...", category: "SessionInit")
@@ -442,6 +481,22 @@ final class SessionCoordinator {
         }
     }
 
+    /// Re-sends any outgoing messages that were marked `.queued` by `requeueUndeliveredOutgoing`
+    /// after receiving END_SESSION (i.e. messages encrypted under the now-replaced session).
+    private func sendSessionQueuedMessages(for userId: String) {
+        guard let context = viewContext,
+              let myId = SessionManager.shared.currentUserId, !myId.isEmpty else { return }
+        let chatFetch = Chat.fetchRequest()
+        chatFetch.predicate = NSPredicate(format: "otherUser.id == %@", userId)
+        guard let chat = (try? context.fetch(chatFetch))?.first else { return }
+        MessageRetryManager.shared.sendQueuedMessages(
+            for: chat,
+            recipientId: userId,
+            currentUserId: myId,
+            context: context
+        )
+    }
+
     /// Upload a fresh batch of OTPKs after session-init or heal failure.
     private func uploadFreshOtpks(reason: String) async {
         let deviceId = KeychainManager.shared.loadDeviceID() ?? ""
@@ -523,7 +578,7 @@ final class SessionCoordinator {
                     kemCiphertext: kemCiphertext,
                     kyberOtpkId: kyberOtpkId
                 )
-                Log.info("🏓 SESSION_STATE[tie_break_ping]: sent to \(userId.prefix(8))… (attempt \(attempt)) — loser can now init as RESPONDER", category: "SessionInit")
+                Log.info("🏓 SESSION_STATE[tie_break_ping]: sent to \(userId.prefix(8))… (attempt \(attempt)) suiteId=\(components.suiteId) msgNum=\(components.messageNumber) — loser can now init as RESPONDER", category: "SessionInit")
                 return
             } catch {
                 Log.error("❌ SESSION_STATE[tie_break_ping_fail]: attempt \(attempt)/\(pingMaxAttempts): \(error.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
@@ -534,6 +589,42 @@ final class SessionCoordinator {
                     Log.error("❌ SESSION_STATE[tie_break_ping_exhausted]: loser \(userId.prefix(8))… must re-initiate manually", category: "SessionInit")
                 }
             }
+        }
+    }
+
+    // MARK: - Session ready signal (RESPONDER → INITIATOR, phase 2 of two-phase handshake)
+
+    /// Sent by the RESPONDER after a successful `initReceivingSession`.
+    /// Signals to the INITIATOR that both sides have established matching sessions,
+    /// allowing them to cancel the watchdog and flush any buffered outgoing messages.
+    private func sendSessionReady(to userId: String) async {
+        guard CryptoManager.shared.hasSession(for: userId) else {
+            Log.info("⚠️ SESSION_STATE[session_ready_skip]: no RESPONDER session for \(userId.prefix(8))…", category: "SessionInit")
+            return
+        }
+        guard let myId = SessionManager.shared.currentUserId, !myId.isEmpty else { return }
+
+        do {
+            let readyContent = "__session_ready_\(UUID().uuidString)__"
+            let readyId = UUID()
+            let plan = ChunkedMessageSender.shared.buildPlan(plaintext: readyContent, messageId: readyId)
+            guard let firstPayload = plan.payloads.first else { return }
+            let components = try CryptoManager.shared.encryptMessage(firstPayload, for: userId)
+            let kemCiphertext = components.messageNumber == 0 ? sessionInitService.consumeKemCiphertext(for: userId) : nil
+            let kyberOtpkId = components.messageNumber == 0 ? sessionInitService.consumeKyberOtpkId(for: userId) : 0
+            let _ = try await ChunkedMessageSender.shared.sendChunks(
+                plan: plan,
+                senderId: myId,
+                recipientId: userId,
+                conversationId: ConversationId.direct(myUserId: myId, theirUserId: userId),
+                timestamp: UInt64(Date().timeIntervalSince1970),
+                preEncryptedFirst: components,
+                kemCiphertext: kemCiphertext,
+                kyberOtpkId: kyberOtpkId
+            )
+            Log.info("🤝 SESSION_STATE[session_ready_sent]: RESPONDER notified INITIATOR \(userId.prefix(8))… msgNum=\(components.messageNumber)", category: "SessionInit")
+        } catch {
+            Log.error("❌ SESSION_STATE[session_ready_fail]: \(error.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
         }
     }
 
@@ -552,10 +643,16 @@ final class SessionCoordinator {
                 return // Task was cancelled — RESPONDER replied in time
             }
             guard !Task.isCancelled else { return }
-            // If we still hold an INITIATOR session, the RESPONDER has not yet
-            // completed their init — re-send the ping to unblock them.
-            guard CryptoManager.shared.hasSession(for: userId) else { return }
-            Log.info("⏰ SESSION_STATE[tie_break_watchdog]: timeout — re-sending ping to \(userId.prefix(8))…", category: "SessionInit")
+            // RESPONDER has not replied — reinitialize session so the retry ping
+            // is a fresh X3DH init (msgNum=0) that RESPONDER can accept.
+            Log.info("⏰ SESSION_STATE[tie_break_watchdog]: timeout — re-prewarming for \(userId.prefix(8))…", category: "SessionInit")
+            await self.sessionInitService.initializeSessionProactively(
+                userId: userId,
+                onSuccess: { },
+                onFailure: { err in
+                    Log.error("❌ SESSION_STATE[watchdog_reinit_fail]: \(err.localizedDescription)", category: "SessionInit")
+                }
+            )
             await self.sendSessionPing(to: userId)
         }
     }
@@ -591,6 +688,21 @@ final class SessionCoordinator {
             Log.info("🏓 SESSION_STATE[ping_received]: session established as RESPONDER (ping discarded)", category: "SessionCoordinator")
             // Cancel any watchdog for this peer — they proved they have an active session.
             cancelTieBreakWatchdog(for: messageData.from)
+            return
+        }
+
+        // Phase 2 of two-phase handshake: RESPONDER sends __session_ready__ after its
+        // initReceivingSession succeeds. We are the INITIATOR receiving confirmation.
+        // Also handle legacy format without __ markers (older client versions).
+        if plaintext.hasPrefix("__session_ready") || plaintext.hasPrefix("session_ready_") {
+            let peerId = messageData.from
+            Log.info("🤝 SESSION_STATE[session_ready_received]: RESPONDER \(peerId.prefix(8))… confirmed — session established both sides", category: "SessionCoordinator")
+            // Cancel watchdog — RESPONDER proved they have a working session.
+            cancelTieBreakWatchdog(for: peerId)
+            // Mark session as confirmed so ChatViewModel stops buffering.
+            SessionConfirmationTracker.shared.markConfirmed(peerId)
+            // Flush any messages that were buffered while session was unconfirmed.
+            sendSessionQueuedMessages(for: peerId)
             return
         }
 

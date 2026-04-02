@@ -88,6 +88,24 @@ final class GRPCChannelManager: Sendable {
         return port > 0 ? port : nil
     }
 
+    /// Polls `ice_proxy_is_running()` and `ice_proxy_port()` until the Rust goroutine signals
+    /// it is fully ready, or the timeout elapses.
+    ///
+    /// `ice_proxy_start_tls()` binds the TCP port synchronously and returns, but the Rust goroutine
+    /// that sets the "is_running" flag runs asynchronously. Without this wait, the immediate
+    /// `iceProxyPort()` check after startOnDemandIfNeeded() / restartAfterCrash() sees 0 and
+    /// falls back to a direct channel — defeating ICE entirely.
+    ///
+    /// In practice the Rust goroutine initializes in <50 ms; the 2-second timeout is generous.
+    private func waitForProxyReady(timeout: TimeInterval = 2.0) async {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if ice_proxy_is_running() != 0, ice_proxy_port() > 0 { return }
+            try? await Task.sleep(nanoseconds: 50_000_000) // 50 ms
+        }
+        Log.debug("🧊 waitForProxyReady: timed out after \(Int(timeout * 1000)) ms", category: "gRPC")
+    }
+
     private init() {}
 
     // MARK: - Persistent Connection
@@ -128,11 +146,14 @@ final class GRPCChannelManager: Sendable {
         }
 
         // Tear down stale connection gracefully.
-        _conn?.task.cancel()
+        // beginGracefulShutdown() signals "no new RPCs"; runConnections() exits naturally.
+        // Do NOT call task.cancel() — it force-closes NIO streams and causes the fatalError
+        // in GRPCStreamStateMachine when a concurrent in-flight RPC is mid-write.
         _conn?.client.beginGracefulShutdown()
         _conn = nil
 
         let client = try makeClient()
+        PerformanceMetrics.shared.start(.grpcConnectStart, label: key)
         let task = Task.detached { [weak self] in
             do {
                 try await client.runConnections()
@@ -149,11 +170,16 @@ final class GRPCChannelManager: Sendable {
     }
 
     /// Invalidates the persistent connection so the next RPC gets a fresh one.
+    /// Only calls beginGracefulShutdown() — does NOT cancel the task immediately.
+    /// task.cancel() on a live connection triggers the fatalError in GRPCStreamStateMachine
+    /// when a concurrent in-flight RPC tries to write after the shutdown signal.
+    /// Graceful shutdown signals "no new RPCs"; the runConnections() task exits naturally
+    /// once all existing streams drain (typically <100 ms for unary calls).
     func invalidatePersistentClient() {
         _connLock.lock()
         defer { _connLock.unlock() }
-        _conn?.task.cancel()
         _conn?.client.beginGracefulShutdown()
+        // Do NOT call task.cancel() here — let runConnections() exit naturally.
         _conn = nil
         Log.debug("🔌 Persistent gRPC connection invalidated", category: "GRPCChannel")
     }
@@ -219,17 +245,28 @@ final class GRPCChannelManager: Sendable {
         _ operation: @Sendable @escaping (GRPCClient<HTTP2ClientTransport.Posix>) async throws -> Result
     ) async throws -> Result {
         func shouldRecordIceFailure(_ error: Error) -> Bool {
+            if error is CancellationError { return false }
             if let rpc = error as? RPCError {
                 switch rpc.code {
-                case .unavailable, .deadlineExceeded:
-                    return true
-                case .unauthenticated, .permissionDenied, .invalidArgument:
+                // These are application-level errors — the relay delivered the response fine.
+                case .unauthenticated, .permissionDenied, .invalidArgument, .notFound,
+                     .alreadyExists, .resourceExhausted, .unimplemented, .cancelled:
                     return false
+                case .unavailable, .deadlineExceeded, .unknown:
+                    // Distinguish relay failures (TCP/TLS errors) from non-relay failures
+                    // (server-side closes or our own connection invalidation).
+                    // "Stream unexpectedly closed" / "channel is closed" / "CancellationError"
+                    // all indicate the relay itself was not the problem.
+                    let msg = rpc.message.lowercased()
+                    if msg.contains("stream") && msg.contains("closed") { return false }
+                    if msg.contains("channel is closed")                 { return false }
+                    if msg.contains("cancellation")                      { return false }
+                    if msg.contains("cancelled")                         { return false }
+                    return true
                 default:
                     return true
                 }
             }
-            if error is CancellationError { return false }
             return true
         }
 
@@ -266,6 +303,7 @@ final class GRPCChannelManager: Sendable {
         }
 
         var lastError: Error?
+        var iceAutoStartedThisCall = false   // true once we DPI-auto-started ICE in this call
         for attempt in 0..<3 {
             let usingICE = iceProxyPort() != nil
 
@@ -350,8 +388,8 @@ final class GRPCChannelManager: Sendable {
                     }
                 }
 
+                PerformanceMetrics.shared.end(.grpcConnectStart, endEvent: .grpcConnectEnd, label: routingKey())
                 return result
-
             } catch {
                 lastError = error
 
@@ -380,15 +418,18 @@ final class GRPCChannelManager: Sendable {
 
                 // If the call failed while routing through ICE, record relay failure only for
                 // network-ish failures. Don't disable ICE due to auth/validation errors.
+                // Also skip cooldown when ICE was just auto-started this call — a warm-up
+                // failure doesn't mean the relay itself is broken.
                 if usingICE, isStaleLocalProxy(error) {
                     // ECONNREFUSED on 127.0.0.1 — local proxy died in background.
                     // Restart immediately; do NOT enter cooldown (this is a process crash, not relay failure).
                     Log.info("🧊 ICE proxy port dead (ECONNREFUSED) — restarting proxy", category: "gRPC")
                     await IceProxyManager.shared.restartAfterCrash()
+                    await waitForProxyReady()
                     if iceProxyPort() != nil {
                         continue
                     }
-                } else if usingICE, shouldRecordIceFailure(error) {
+                } else if usingICE, !iceAutoStartedThisCall, shouldRecordIceFailure(error) {
                     recordICEFailure()
                 }
 
@@ -399,6 +440,7 @@ final class GRPCChannelManager: Sendable {
                     if hasCert {
                         Log.info("🧊 DNS failure on direct path — forcing ICE routing (VPN?)", category: "gRPC")
                         await IceProxyManager.shared.forceStartIgnoringCooldown()
+                        await waitForProxyReady()
                         if iceProxyPort() != nil {
                             continue
                         }
@@ -407,11 +449,18 @@ final class GRPCChannelManager: Sendable {
 
                 // DPI auto-fallback: when direct connection fails with a network error on the
                 // first attempt, try starting ICE proxy and retrying through the obfs4 relay.
+                // Also fires when ICE is running but on cooldown — startOnDemandIfNeeded() clears
+                // the cooldown in that case, so iceProxyPort() becomes non-nil after the call.
                 if !usingICE, attempt == 0, shouldTryICEFallback(error) {
                     Log.info("🧊 Direct connection failed — auto-starting ICE (DPI detected)", category: "GRPCChannel")
                     await IceProxyManager.shared.startOnDemandIfNeeded()
+                    await waitForProxyReady()
                     if iceProxyPort() != nil {
-                        Log.info("🧊 ICE proxy started — retrying RPC through relay", category: "GRPCChannel")
+                        // The failed connection was already invalidated at the top of this catch block.
+                        // No extra invalidation needed — just retry; acquirePersistentClient() will
+                        // open a fresh channel routed through the ICE proxy port.
+                        iceAutoStartedThisCall = true
+                        Log.info("🧊 ICE proxy active — retrying RPC through relay", category: "GRPCChannel")
                         continue
                     }
                 }

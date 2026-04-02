@@ -50,6 +50,12 @@ extension Chat {
     static func formatPreviewText(_ content: String?) -> String {
         guard let content = content else { return "" }
         
+        // Never show session-handshake control signals as chat preview text.
+        if content.hasPrefix("__session_ready") || content.hasPrefix("session_ready_") ||
+           content.hasPrefix("__session_ping") || content.hasPrefix("__END_SESSION") {
+            return ""
+        }
+        
         // Check if it's JSON (media or profile message)
         if let data = content.data(using: .utf8),
            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -59,29 +65,32 @@ extension Chat {
             case "file":
                 let files = json["files"] as? [[String: Any]] ?? []
                 if files.count == 1, let name = files.first?["filename"] as? String {
-                    return "📎 \(name)"
+                    return name
                 } else if files.count > 1 {
-                    return "📎 \(files.count) " + NSLocalizedString("files", comment: "")
+                    return "\(files.count) " + NSLocalizedString("files", comment: "")
                 }
-                return "📎 File"
+                return "File"
 
             case "media":
                 // Media message
                 let caption = json["caption"] as? String ?? ""
                 if caption.isEmpty {
-                    return "📷 Photo"
+                    return "Photo"
                 } else {
-                    return "📷 \(caption)"
+                    return caption
                 }
                 
             case "profile":
                 // Profile share message
                 if let displayName = json["displayName"] as? String {
-                    return "👤 Shared profile: \(displayName)"
+                    return "Shared profile: \(displayName)"
                 } else {
-                    return "👤 Shared profile"
+                    return "Shared profile"
                 }
-                
+
+            case "voice":
+                return NSLocalizedString("voice_message", comment: "")
+
             default:
                 // Unknown JSON type - show first 50 chars
                 return String(content.prefix(50))

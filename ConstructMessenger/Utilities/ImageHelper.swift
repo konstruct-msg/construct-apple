@@ -122,6 +122,7 @@ struct ImageHelper {
 ///   - name: SF Symbol name.
 ///   - degrees: Clockwise rotation in degrees.
 ///   - pointSize: Symbol point size (default 22 matches tab bar).
+#if canImport(UIKit)
 func rotatedSFSymbol(_ name: String, degrees: Double, pointSize: CGFloat = 22) -> Image {
     let config = UIImage.SymbolConfiguration(pointSize: pointSize, weight: .regular)
     guard let source = UIImage(systemName: name, withConfiguration: config) else {
@@ -140,3 +141,4 @@ func rotatedSFSymbol(_ name: String, degrees: Double, pointSize: CGFloat = 22) -
     }
     return Image(uiImage: rotated.withRenderingMode(.alwaysTemplate))
 }
+#endif

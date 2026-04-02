@@ -11,7 +11,7 @@ import os.log
 final class CryptoSessionInitializationService {
     func initializeSession(
         for userId: String,
-        recipientBundle: (identityPublic: String, signedPrekeyPublic: String, signature: String, verifyingKey: String, suiteId: String),
+        recipientBundle: (identityPublic: Data, signedPrekeyPublic: Data, signature: Data, verifyingKey: Data, suiteId: String),
         oneTimePreKeyPublic: Data? = nil,
         oneTimePreKeyId: UInt32? = nil,
         kyberPreKeyPublic: Data? = nil,
@@ -33,44 +33,26 @@ final class CryptoSessionInitializationService {
             archiveSession(userId, .manualReset)
         }
 
-        Log.debug("🔐 Session init bundle lengths: identity=\(recipientBundle.identityPublic.count), signedPrekey=\(recipientBundle.signedPrekeyPublic.count), signature=\(recipientBundle.signature.count), verifyingKey=\(recipientBundle.verifyingKey.count), suiteId=\(recipientBundle.suiteId)", category: "CryptoManager")
+        Log.debug("🔐 Session init bundle: identity=\(recipientBundle.identityPublic.count)B, signedPrekey=\(recipientBundle.signedPrekeyPublic.count)B, signature=\(recipientBundle.signature.count)B, verifyingKey=\(recipientBundle.verifyingKey.count)B, suiteId=\(recipientBundle.suiteId)", category: "CryptoManager")
         
-        // Log RAW bundle data for INITIATOR session
         #if DEBUG
         Log.debug("🔐 INITIATOR RAW bundle from server:", category: "CryptoManager")
-        Log.debug("   identityPublic (base64): \(recipientBundle.identityPublic.prefix(32))...", category: "CryptoManager")
-        Log.debug("   signedPrekeyPublic (base64): \(recipientBundle.signedPrekeyPublic.prefix(32))...", category: "CryptoManager")
-        Log.debug("   signature (base64): \(recipientBundle.signature.prefix(32))...", category: "CryptoManager")
-        Log.debug("   verifyingKey (base64): \(recipientBundle.verifyingKey.prefix(32))...", category: "CryptoManager")
+        Log.debug("   identityPublic: \(recipientBundle.identityPublic.prefix(16).map { String(format: "%02x", $0) }.joined())...", category: "CryptoManager")
+        Log.debug("   signedPrekeyPublic: \(recipientBundle.signedPrekeyPublic.prefix(16).map { String(format: "%02x", $0) }.joined())...", category: "CryptoManager")
+        Log.debug("   signature: \(recipientBundle.signature.prefix(16).map { String(format: "%02x", $0) }.joined())...", category: "CryptoManager")
+        Log.debug("   verifyingKey: \(recipientBundle.verifyingKey.prefix(16).map { String(format: "%02x", $0) }.joined())...", category: "CryptoManager")
         Log.debug("   suiteId: \(recipientBundle.suiteId)", category: "CryptoManager")
         #endif
-
-        guard let identityPublicData = Data(base64Encoded: recipientBundle.identityPublic) else {
-            Log.error("❌ Invalid base64: identityPublic", category: "CryptoManager")
-            throw CryptoManagerError.invalidKeyData
-        }
-        guard let signedPrekeyPublicData = Data(base64Encoded: recipientBundle.signedPrekeyPublic) else {
-            Log.error("❌ Invalid base64: signedPrekeyPublic", category: "CryptoManager")
-            throw CryptoManagerError.invalidKeyData
-        }
-        guard let signatureData = Data(base64Encoded: recipientBundle.signature) else {
-            Log.error("❌ Invalid base64: signature", category: "CryptoManager")
-            throw CryptoManagerError.invalidKeyData
-        }
-        guard let verifyingKeyData = Data(base64Encoded: recipientBundle.verifyingKey) else {
-            Log.error("❌ Invalid base64: verifyingKey", category: "CryptoManager")
-            throw CryptoManagerError.invalidKeyData
-        }
 
         guard let suiteID = UInt16(recipientBundle.suiteId) else {
             throw CryptoManagerError.invalidKeyData
         }
 
         var bundleDict: [String: Any] = [
-            "identity_public": [UInt8](identityPublicData),
-            "signed_prekey_public": [UInt8](signedPrekeyPublicData),
-            "signature": [UInt8](signatureData),
-            "verifying_key": [UInt8](verifyingKeyData),
+            "identity_public": [UInt8](recipientBundle.identityPublic),
+            "signed_prekey_public": [UInt8](recipientBundle.signedPrekeyPublic),
+            "signature": [UInt8](recipientBundle.signature),
+            "verifying_key": [UInt8](recipientBundle.verifyingKey),
             "suite_id": suiteID,
             // SPK freshness fields — Rust validates these in validate_bundle_freshness().
             // 0 = legacy server; Rust skips validation when 0.
@@ -153,7 +135,7 @@ final class CryptoSessionInitializationService {
 
     func initReceivingSession(
         for userId: String,
-        recipientBundle: (identityPublic: String, signedPrekeyPublic: String, signature: String, verifyingKey: String, suiteId: String),
+        recipientBundle: (identityPublic: Data, signedPrekeyPublic: Data, signature: Data, verifyingKey: Data, suiteId: String),
         firstMessage: ChatMessage,
         core: OrchestratorCore?,
         archiveSession: (String, ArchiveReason) -> Void,
@@ -167,43 +149,20 @@ final class CryptoSessionInitializationService {
             archiveSession(userId, .manualReset)
         }
 
-        Log.debug("🔐 Receiving init bundle lengths: identity=\(recipientBundle.identityPublic.count), signedPrekey=\(recipientBundle.signedPrekeyPublic.count), signature=\(recipientBundle.signature.count), verifyingKey=\(recipientBundle.verifyingKey.count), suiteId=\(recipientBundle.suiteId)", category: "CryptoManager")
+        Log.debug("🔐 Receiving init bundle: identity=\(recipientBundle.identityPublic.count)B, signedPrekey=\(recipientBundle.signedPrekeyPublic.count)B, signature=\(recipientBundle.signature.count)B, verifyingKey=\(recipientBundle.verifyingKey.count)B, suiteId=\(recipientBundle.suiteId)", category: "CryptoManager")
         
-        // Log RAW bundle data from server (first 32 chars of each)
         #if DEBUG
         Log.debug("🔐 RAW bundle from server:", category: "CryptoManager")
-        Log.debug("   identityPublic (base64): \(recipientBundle.identityPublic.prefix(32))...", category: "CryptoManager")
-        Log.debug("   signedPrekeyPublic (base64): \(recipientBundle.signedPrekeyPublic.prefix(32))...", category: "CryptoManager")
-        Log.debug("   signature (base64): \(recipientBundle.signature.prefix(32))...", category: "CryptoManager")
-        Log.debug("   verifyingKey (base64): \(recipientBundle.verifyingKey.prefix(32))...", category: "CryptoManager")
+        Log.debug("   identityPublic: \(recipientBundle.identityPublic.prefix(16).map { String(format: "%02x", $0) }.joined())...", category: "CryptoManager")
+        Log.debug("   signedPrekeyPublic: \(recipientBundle.signedPrekeyPublic.prefix(16).map { String(format: "%02x", $0) }.joined())...", category: "CryptoManager")
+        Log.debug("   signature: \(recipientBundle.signature.prefix(16).map { String(format: "%02x", $0) }.joined())...", category: "CryptoManager")
+        Log.debug("   verifyingKey: \(recipientBundle.verifyingKey.prefix(16).map { String(format: "%02x", $0) }.joined())...", category: "CryptoManager")
         Log.debug("   suiteId: \(recipientBundle.suiteId)", category: "CryptoManager")
-        
         Log.debug("🔐 RAW first message from server:", category: "CryptoManager")
         Log.debug("   ephemeralPublicKey count: \(firstMessage.ephemeralPublicKey.count)", category: "CryptoManager")
         Log.debug("   content (padded): \(firstMessage.content.prefix(32))...", category: "CryptoManager")
         Log.debug("   messageNumber: \(firstMessage.messageNumber)", category: "CryptoManager")
         #endif
-
-        guard let identityPublicData = Data(base64Encoded: recipientBundle.identityPublic) else {
-            Log.error("❌ Invalid base64: identityPublic", category: "CryptoManager")
-            Log.error("   Content: \(recipientBundle.identityPublic.prefix(100))...", category: "CryptoManager")
-            throw CryptoManagerError.invalidKeyData
-        }
-        guard let signedPrekeyPublicData = Data(base64Encoded: recipientBundle.signedPrekeyPublic) else {
-            Log.error("❌ Invalid base64: signedPrekeyPublic", category: "CryptoManager")
-            Log.error("   Content: \(recipientBundle.signedPrekeyPublic.prefix(100))...", category: "CryptoManager")
-            throw CryptoManagerError.invalidKeyData
-        }
-        guard let signatureData = Data(base64Encoded: recipientBundle.signature) else {
-            Log.error("❌ Invalid base64: signature", category: "CryptoManager")
-            Log.error("   Content: \(recipientBundle.signature.prefix(100))...", category: "CryptoManager")
-            throw CryptoManagerError.invalidKeyData
-        }
-        guard let verifyingKeyData = Data(base64Encoded: recipientBundle.verifyingKey) else {
-            Log.error("❌ Invalid base64: verifyingKey", category: "CryptoManager")
-            Log.error("   Content: \(recipientBundle.verifyingKey.prefix(100))...", category: "CryptoManager")
-            throw CryptoManagerError.invalidKeyData
-        }
 
         guard let suiteID = UInt16(recipientBundle.suiteId) else {
             Log.error("❌ Invalid suiteId: \(recipientBundle.suiteId)", category: "CryptoManager")
@@ -211,17 +170,17 @@ final class CryptoSessionInitializationService {
         }
         
         Log.debug("🔐 Decoded bundle data:", category: "CryptoManager")
-        Log.debug("   identityPublic: \(identityPublicData.count) bytes", category: "CryptoManager")
-        Log.debug("   signedPrekeyPublic: \(signedPrekeyPublicData.count) bytes", category: "CryptoManager")
-        Log.debug("   signature: \(signatureData.count) bytes", category: "CryptoManager")
-        Log.debug("   verifyingKey: \(verifyingKeyData.count) bytes", category: "CryptoManager")
+        Log.debug("   identityPublic: \(recipientBundle.identityPublic.count) bytes", category: "CryptoManager")
+        Log.debug("   signedPrekeyPublic: \(recipientBundle.signedPrekeyPublic.count) bytes", category: "CryptoManager")
+        Log.debug("   signature: \(recipientBundle.signature.count) bytes", category: "CryptoManager")
+        Log.debug("   verifyingKey: \(recipientBundle.verifyingKey.count) bytes", category: "CryptoManager")
         Log.debug("   suiteId: \(suiteID)", category: "CryptoManager")
 
         let bundleDict: [String: Any] = [
-            "identity_public": [UInt8](identityPublicData),
-            "signed_prekey_public": [UInt8](signedPrekeyPublicData),
-            "signature": [UInt8](signatureData),
-            "verifying_key": [UInt8](verifyingKeyData),
+            "identity_public": [UInt8](recipientBundle.identityPublic),
+            "signed_prekey_public": [UInt8](recipientBundle.signedPrekeyPublic),
+            "signature": [UInt8](recipientBundle.signature),
+            "verifying_key": [UInt8](recipientBundle.verifyingKey),
             "suite_id": suiteID,
         ]
 

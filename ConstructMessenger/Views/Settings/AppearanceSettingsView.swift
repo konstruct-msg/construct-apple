@@ -42,7 +42,9 @@ struct AppearanceSettingsView: View {
         }
         .navigationTitle("appearance")
         #if canImport(UIKit)
+        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
+        #endif
         #endif
     }
 }

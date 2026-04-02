@@ -110,21 +110,13 @@ final class DeviceLinkViewModel {
 
         do {
             // 1. Generate fresh keys for this new device
-            let (deviceId, bundleJson, _, _) = try CryptoManager.shared.generateRegistrationBundle()
-
-            guard let bundleData = bundleJson.data(using: .utf8),
-                  let bundleDict = try? JSONSerialization.jsonObject(with: bundleData) as? [String: Any] else {
-                throw DeviceLinkError.keyGenerationFailed
-            }
-
-            let spkSig = (bundleDict["signed_prekey_signature"] as? String)
-                ?? (bundleDict["signature"] as? String) ?? ""
+            let (deviceId, bundle, _, _) = try CryptoManager.shared.generateRegistrationBundle()
 
             var publicKeys = Shared_Proto_Services_V1_DevicePublicKeys()
-            publicKeys.verifyingKey = bundleDict["verifying_key"] as? String ?? ""
-            publicKeys.identityPublic = bundleDict["identity_public"] as? String ?? ""
-            publicKeys.signedPrekeyPublic = bundleDict["signed_prekey_public"] as? String ?? ""
-            publicKeys.signedPrekeySignature = spkSig
+            publicKeys.verifyingKey = bundle.verifyingKey
+            publicKeys.identityPublic = bundle.identityPublic
+            publicKeys.signedPrekeyPublic = bundle.signedPrekeyPublic
+            publicKeys.signedPrekeySignature = bundle.signature
             publicKeys.cryptoSuite = "Curve25519+Ed25519"
 
             Log.info("🔑 Device B: generated deviceId=\(deviceId) for link confirmation", category: "DeviceLink")
@@ -170,17 +162,12 @@ final class DeviceLinkViewModel {
         joinRequestQRContent = nil
         defer { isGenerating = false }
         do {
-            let (deviceId, bundleJson, _, _) = try CryptoManager.shared.generateRegistrationBundle()
-            guard let bundleData = bundleJson.data(using: .utf8),
-                  let bundleDict = try? JSONSerialization.jsonObject(with: bundleData) as? [String: Any],
-                  let identityPublic = bundleDict["identity_public"] as? String
-            else { throw DeviceLinkError.keyGenerationFailed }
-
+            let (deviceId, bundle, _, _) = try CryptoManager.shared.generateRegistrationBundle()
             joinDeviceId = deviceId
             let name = DeviceInfo.deviceName
             let platform = platformString()
             let encoded = name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? name
-            let url = "konstruct://link-to-me?id=\(deviceId)&pubkey=\(identityPublic)&name=\(encoded)&platform=\(platform)"
+            let url = "konstruct://link-to-me?id=\(deviceId)&pubkey=\(bundle.identityPublic)&name=\(encoded)&platform=\(platform)"
 
             joinRequestQRContent = url
             isWaitingForApproval = true
@@ -221,9 +208,13 @@ final class DeviceLinkViewModel {
                         self.linkCompleted = true
                         break
                     }
-                } catch DeviceLinkError.joinRequestNotImplemented {
-                    // Backend not yet available — stop polling silently
+                } catch DeviceLinkError.rejected {
                     self.isWaitingForApproval = false
+                    self.errorMessage = DeviceLinkError.rejected.errorDescription
+                    break
+                } catch DeviceLinkError.expired {
+                    self.isWaitingForApproval = false
+                    self.errorMessage = DeviceLinkError.expired.errorDescription
                     break
                 } catch {
                     // Transient network error — keep polling
@@ -262,8 +253,6 @@ final class DeviceLinkViewModel {
             )
             approvalGranted = true
             Log.info("✅ Approved join request for '\(name)' (id=\(pendingId.prefix(8))…)", category: "DeviceLink")
-        } catch DeviceLinkError.joinRequestNotImplemented {
-            errorMessage = NSLocalizedString("device_link_feature_unavailable", comment: "")
         } catch {
             errorMessage = localizedError(error)
         }
@@ -327,14 +316,15 @@ final class DeviceLinkViewModel {
 enum DeviceLinkError: LocalizedError {
     case keyGenerationFailed
     case invalidQRCode
-    /// Backend endpoint not yet implemented — used as a non-fatal sentinel.
-    case joinRequestNotImplemented
+    case rejected
+    case expired
 
     var errorDescription: String? {
         switch self {
-        case .keyGenerationFailed:        return "Failed to generate device keys — please try again"
-        case .invalidQRCode:              return "Could not read QR code — make sure it's a valid Construct link"
-        case .joinRequestNotImplemented:  return "Feature not yet available"
+        case .keyGenerationFailed: return "Failed to generate device keys — please try again"
+        case .invalidQRCode:       return "Could not read QR code — make sure it's a valid Construct link"
+        case .rejected:            return "Device link request was rejected by the existing device"
+        case .expired:             return "Device link request expired — please generate a new QR code"
         }
     }
 }

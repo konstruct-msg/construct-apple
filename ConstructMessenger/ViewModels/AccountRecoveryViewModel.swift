@@ -190,21 +190,14 @@ final class AccountRecoveryViewModel {
             )
 
             // 3. Generate fresh device keys
-            let (deviceId, bundleJson, signingKeyData, identityKeyData) =
+            let (deviceId, bundle, signingKeyData, identityKeyData) =
                 try CryptoManager.shared.generateRegistrationBundle()
 
-            guard let bundleData = bundleJson.data(using: .utf8),
-                  let bundleDict = try? JSONSerialization.jsonObject(with: bundleData) as? [String: Any]
-            else {
-                throw RecoveryError.bundleGenerationFailed
-            }
-
             var publicKeys = Shared_Proto_Services_V1_DevicePublicKeys()
-            publicKeys.verifyingKey       = bundleDict["verifying_key"]       as? String ?? ""
-            publicKeys.identityPublic     = bundleDict["identity_public"]     as? String ?? ""
-            publicKeys.signedPrekeyPublic = bundleDict["signed_prekey_public"] as? String ?? ""
-            publicKeys.signedPrekeySignature = (bundleDict["signed_prekey_signature"] as? String)
-                ?? (bundleDict["signature"] as? String) ?? ""
+            publicKeys.verifyingKey = bundle.verifyingKey
+            publicKeys.identityPublic = bundle.identityPublic
+            publicKeys.signedPrekeyPublic = bundle.signedPrekeyPublic
+            publicKeys.signedPrekeySignature = bundle.signature
             publicKeys.cryptoSuite = "Curve25519+Ed25519"
 
             // 4. Call RecoverAccount (no auth header)

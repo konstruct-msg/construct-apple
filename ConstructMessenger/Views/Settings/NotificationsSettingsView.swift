@@ -18,7 +18,7 @@ struct NotificationsSettingsView: View {
     @AppStorage("notificationPreviewType") private var notificationPreviewType: NotificationPreviewType = .nameAndMessage
     @AppStorage("notificationSound") private var notificationSound: Bool = true
     @AppStorage("notificationVibration") private var notificationVibration: Bool = true
-    @AppStorage("pushNotificationsEnabled") private var pushNotificationsEnabled: Bool = false
+    @AppStorage("pushNotificationsEnabled") private var pushNotificationsEnabled: Bool = true
 
     // MARK: - State
     @State private var authorizationStatus: UNAuthorizationStatus = .notDetermined
@@ -185,7 +185,9 @@ struct NotificationsSettingsView: View {
         }
         .navigationTitle("notifications")
         #if canImport(UIKit)
+        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
+        #endif
         #endif
         .onAppear {
             checkNotificationAuthorization()

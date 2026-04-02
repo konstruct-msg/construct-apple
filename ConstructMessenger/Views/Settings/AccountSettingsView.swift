@@ -26,19 +26,22 @@ struct AccountSettingsView: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 0) {
+            VStack(spacing: 20) {
                 avatarHeader
-                Divider()
                 identitySection
-                Divider()
                 privacySection
-                Divider()
                 dangerSection
             }
+            .padding(.vertical, 20)
         }
-        .background(Color(uiColor: .systemGroupedBackground))
+        .background(Color.Construct.bg.ignoresSafeArea())
         .navigationTitle(LocalizedStringKey("account"))
+        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(Color.Construct.bg2, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
+        .toolbarColorScheme(.dark, for: .navigationBar)
+        #endif
         .onAppear {
             viewModel.setContext(viewContext)
             viewModel.loadUserInfo(from: authViewModel)
@@ -91,7 +94,7 @@ struct AccountSettingsView: View {
     // MARK: - Avatar Header
 
     private var avatarHeader: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 12) {
             ZStack(alignment: .bottomTrailing) {
                 Group {
                     if let image = viewModel.profileImage {
@@ -99,15 +102,15 @@ struct AccountSettingsView: View {
                             .resizable()
                             .scaledToFill()
                             .frame(width: AvatarStyle.accountSize, height: AvatarStyle.accountSize)
-                            .clipShape(AvatarStyle.squircle(AvatarStyle.accountSize))
+                            .clipShape(AvatarStyle.avatarShape(AvatarStyle.accountSize))
                     } else {
-                        AvatarStyle.squircle(AvatarStyle.accountSize)
-                            .fill(Color.blue.opacity(0.15))
+                        AvatarStyle.avatarShape(AvatarStyle.accountSize)
+                            .fill(Color.Construct.accent.opacity(0.15))
                             .frame(width: AvatarStyle.accountSize, height: AvatarStyle.accountSize)
                             .overlay {
                                 Text(viewModel.displayName.prefix(1).uppercased())
                                     .font(.system(size: 40, weight: .semibold))
-                                    .foregroundColor(.blue)
+                                    .foregroundColor(Color.Construct.accent)
                             }
                     }
                 }
@@ -119,116 +122,103 @@ struct AccountSettingsView: View {
 
             if !viewModel.displayName.isEmpty {
                 Text(viewModel.displayName)
-                    .font(.title3.weight(.semibold))
+                    .font(ConstructFont.display(20, weight: .semibold))
+                    .foregroundStyle(Color.Construct.textBright)
             }
 
             Text(viewModel.username.isEmpty
                  ? DisplayNameGenerator.generate(from: viewModel.userId)
                  : "@\(viewModel.username)")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-
+                .font(ConstructFont.mono(13))
+                .foregroundStyle(Color.Construct.textDim)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 24)
-        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .padding(.vertical, 28)
+        .background(Color.Construct.bg2)
+        .overlay(
+            Rectangle()
+                .fill(Color.Construct.line)
+                .frame(height: 1),
+            alignment: .bottom
+        )
     }
 
     // MARK: - Identity Section
 
     private var identitySection: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            sectionHeader(LocalizedStringKey("account_information"))
-            VStack(spacing: 0) {
-                // Display Name
-                fieldRow(label: LocalizedStringKey("display_name")) {
-                    TextField(LocalizedStringKey("display_name"), text: $viewModel.displayName)
-                        .onChange(of: viewModel.displayName) { _, newValue in
-                            viewModel.saveDisplayName(newValue, authViewModel: authViewModel)
-                        }
-                }
+        ConstructSection(header: NSLocalizedString("account_information", comment: "")) {
+            fieldRow(label: LocalizedStringKey("display_name")) {
+                TextField(LocalizedStringKey("display_name"), text: $viewModel.displayName)
+                    .font(ConstructFont.display(16))
+                    .foregroundStyle(Color.Construct.textBright)
+                    .onChange(of: viewModel.displayName) { _, newValue in
+                        viewModel.saveDisplayName(newValue, authViewModel: authViewModel)
+                    }
+            }
 
-                Divider().padding(.leading, 16)
+            ConstructRowDivider(indent: 16)
 
-                // Username
-                fieldRow(label: LocalizedStringKey("username")) {
-                    HStack {
-                        TextField(LocalizedStringKey("username"), text: $viewModel.username)
-                            .font(.body.monospaced())
-                            .autocorrectionDisabled()
-                            .textInputAutocapitalization(.never)
-                            .onSubmit {
-                                Task { await viewModel.saveUsername(viewModel.username, authViewModel: authViewModel) }
-                            }
-                        if viewModel.isSavingUsername {
-                            ProgressView().scaleEffect(0.8)
-                        } else if viewModel.username != originalUsername {
-                            Button(LocalizedStringKey("save")) {
-                                Task { await viewModel.saveUsername(viewModel.username, authViewModel: authViewModel) }
-                            }
-                            .font(.subheadline)
-                        } else if viewModel.usernameSaved {
-                            Text(LocalizedStringKey("saved"))
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                                .transition(.opacity)
+            fieldRow(label: LocalizedStringKey("username")) {
+                HStack {
+                    TextField(LocalizedStringKey("username"), text: $viewModel.username)
+                        .font(ConstructFont.mono(15))
+                        .foregroundStyle(Color.Construct.textBright)
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.never)
+                        .onSubmit {
+                            Task { await viewModel.saveUsername(viewModel.username, authViewModel: authViewModel) }
                         }
+                    if viewModel.isSavingUsername {
+                        ProgressView().scaleEffect(0.8)
+                    } else if viewModel.username != originalUsername {
+                        Button(LocalizedStringKey("save")) {
+                            Task { await viewModel.saveUsername(viewModel.username, authViewModel: authViewModel) }
+                        }
+                        .font(ConstructFont.mono(13))
+                        .foregroundStyle(Color.Construct.accent)
+                    } else if viewModel.usernameSaved {
+                        Text(LocalizedStringKey("saved"))
+                            .font(ConstructFont.mono(12))
+                            .foregroundStyle(Color.Construct.textDim)
+                            .transition(.opacity)
                     }
                 }
-
-                if let error = viewModel.usernameSaveError {
-                    Text(error)
-                        .font(.caption)
-                        .foregroundColor(.red)
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 8)
-                }
             }
-            .background(Color(uiColor: .secondarySystemGroupedBackground))
+
+            if let error = viewModel.usernameSaveError {
+                Text(error)
+                    .font(ConstructFont.mono(11))
+                    .foregroundStyle(Color.red)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 8)
+            }
         }
     }
 
     // MARK: - Data & Privacy
 
     private var privacySection: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            sectionHeader(LocalizedStringKey("data_and_privacy"))
-            Button {
-                showingExportAlert = true
-            } label: {
-                HStack {
-                    Text(LocalizedStringKey("export_my_data"))
-                    Spacer()
+        VStack(alignment: .leading, spacing: 6) {
+            ConstructSection(header: NSLocalizedString("data_and_privacy", comment: "")) {
+                ConstructButtonRow(icon: "square.and.arrow.up", title: LocalizedStringKey("export_my_data")) {
+                    showingExportAlert = true
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 13)
-                .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
-            .background(Color(uiColor: .secondarySystemGroupedBackground))
-            sectionFooter(LocalizedStringKey("export_my_data_footer"))
+            Text(LocalizedStringKey("export_my_data_footer"))
+                .font(ConstructFont.mono(11))
+                .foregroundStyle(Color.Construct.textDim)
+                .padding(.horizontal, 20)
         }
     }
 
     // MARK: - Danger Zone
 
     private var dangerSection: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            sectionHeader(LocalizedStringKey("danger_zone"))
-            Button(role: .destructive) {
+        ConstructSection(header: NSLocalizedString("danger_zone", comment: "")) {
+            ConstructActionRow(icon: "trash", title: LocalizedStringKey("delete_my_account"), role: .destructive) {
                 showingDeleteConfirmation = true
-            } label: {
-                HStack {
-                    Text(LocalizedStringKey("delete_my_account"))
-                        .foregroundColor(.red)
-                    Spacer()
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 13)
-                .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
-            .background(Color(uiColor: .secondarySystemGroupedBackground))
+            .padding(3)
         }
         .padding(.bottom, 32)
     }
@@ -236,35 +226,18 @@ struct AccountSettingsView: View {
     // MARK: - Layout Helpers
 
     private func fieldRow<Content: View>(label: LocalizedStringKey, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 4) {
             Text(label)
-                .font(.caption)
-                .foregroundColor(.secondary)
+                .font(ConstructFont.mono(10, weight: .semibold))
+                .foregroundStyle(Color.Construct.textDim)
+                .tracking(0.8)
             content()
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-    }
-
-    private func sectionHeader(_ title: LocalizedStringKey) -> some View {
-        Text(title)
-            .font(.footnote)
-            .foregroundColor(.secondary)
-            .textCase(.uppercase)
-            .padding(.horizontal, 16)
-            .padding(.top, 20)
-            .padding(.bottom, 6)
-    }
-
-    private func sectionFooter(_ text: LocalizedStringKey) -> some View {
-        Text(text)
-            .font(.footnote)
-            .foregroundColor(.secondary)
-            .padding(.horizontal, 16)
-            .padding(.top, 6)
-            .padding(.bottom, 8)
+        .padding(.vertical, 12)
     }
 }
+
 
 // MARK: - Delete Account Confirmation View
 struct DeleteAccountConfirmationView: View {
@@ -287,12 +260,6 @@ struct DeleteAccountConfirmationView: View {
                 .padding(.bottom, 24)
 
             Spacer()
-
-            // Icon
-            Image(systemName: "exclamationmark.triangle")
-                .font(.system(size: 52, weight: .light))
-                .foregroundColor(.red.opacity(0.85))
-                .padding(.bottom, 20)
 
             Text("delete_my_account")
                 .font(.title2).fontWeight(.semibold)
@@ -417,7 +384,9 @@ struct AvatarViewerSheet: View {
                         .ignoresSafeArea(edges: .bottom)
                 }
             }
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("close") { dismiss() }
@@ -428,9 +397,11 @@ struct AvatarViewerSheet: View {
                         .foregroundColor(.white)
                 }
             }
+            #if os(iOS)
             .toolbarBackground(.black, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
             .toolbarColorScheme(.dark, for: .navigationBar)
+            #endif
         }
     }
 }

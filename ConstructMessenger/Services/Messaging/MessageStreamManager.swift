@@ -529,8 +529,15 @@ final class MessageStreamManager {
         defer {
             hbTask.cancel()
             watchdogTask.cancel()
-            connectTask.cancel()
+            // Finish the outbound stream and request graceful shutdown BEFORE cancelling the
+            // connect task. connectTask.cancel() force-closes the NIO transport immediately;
+            // if the producer closure is mid-write at that moment, GRPCStreamStateMachine
+            // fires a preconditionFailure ("Client is closed, cannot send a message").
+            // Calling beginGracefulShutdown() first lets the HTTP/2 layer drain cleanly.
+            // connectTask.cancel() is kept as a backstop after shutdown is already signaled.
+            continuation.finish()
             grpcClient.beginGracefulShutdown()
+            connectTask.cancel()
             // Only tear down shared state if this is still the active stream.
             if self.activeStreamGeneration == generation {
                 self.isConnected = false
@@ -676,7 +683,7 @@ final class MessageStreamManager {
                 Log.info("⚠️ Failed to decode encrypted_payload for message \(envelope.messageID)", category: "MessageStream")
                 return nil
             }
-            return .message(ChatMessage(
+            let msg = ChatMessage(
                 id: envelope.messageID,
                 from: envelope.sender.userID,
                 to: envelope.recipient.userID,
@@ -689,11 +696,15 @@ final class MessageStreamManager {
                 oneTimePreKeyId: decoded.oneTimePreKeyId,
                 editsMessageId: envelope.editsMessageID,
                 kemCiphertext: decoded.kemCiphertext ?? Data(),
+                contentType: UInt8(envelope.contentType.rawValue),
                 kyberOtpkId: decoded.kyberOtpkId,
                 senderDeviceId: envelope.senderDevice.deviceID,
                 conversationId: envelope.conversationID,
-                replyToMessageId: envelope.replyToMessageID
-            ))
+                replyToMessageId: envelope.replyToMessageID,
+                rawPayload: envelope.encryptedPayload
+            )
+            PerformanceMetrics.shared.messageEnvelopeArrived(messageId: envelope.messageID)
+            return .message(msg)
         case .receipt(let receipt):
             // Deliver receipt: extract confirmed message IDs and propagate
             if case .direct(let directReceipt) = receipt.receiptType,

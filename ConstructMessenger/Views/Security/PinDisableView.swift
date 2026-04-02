@@ -59,7 +59,9 @@ struct PinDisableView: View {
                 .padding(.bottom, 16)
             }
             .navigationTitle("disable_pin_code")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("cancel") {

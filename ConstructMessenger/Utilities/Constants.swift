@@ -29,7 +29,7 @@ struct AccountDeletionConfig {
 
 // MARK: - Avatar Styling
 struct AvatarStyle {
-    static let chatSize: CGFloat = 50
+    static let chatSize: CGFloat = 56
     static let settingsSize: CGFloat = 54
     static let bubbleSize: CGFloat = 60
     static let accountSize: CGFloat = 100
@@ -63,8 +63,15 @@ struct ServerConfig {
 
 // MARK: - Invite Configuration
 struct InviteConfig {
-    static let supportedVersions: Set<Int> = [1, 2]
-    static let currentVersion: Int = 2
+    /// Versions the client can DECODE and accept (forward-compatible with V3).
+    static let supportedVersions: Set<Int> = [1, 2, 3]
+
+    /// Version used when GENERATING new invites.
+    ///
+    /// Currently set to 2 for server compatibility during the V3 rollout.
+    /// The server must support V3 canonical string (`…|ts|un`) before this is bumped.
+    /// Upgrade path: change this single constant to 3 once server is deployed.
+    static let currentVersion: Int = 3
     static let ttlSeconds: TimeInterval = 300 // 5 minutes
     static let maxFutureSkewSeconds: TimeInterval = 300 // 5 minutes
     static let deviceIdLength = 32
@@ -352,6 +359,27 @@ enum UserDefaultsKey: String {
     var key: String { rawValue }
 }
 
+// MARK: - ICE Relay Region
+
+/// Maps a UTC timezone offset range to a preferred relay ordering.
+/// Used by IceProxyManager to geo-prefer the closest relay without IP lookup or GPS.
+/// Fetched from `.well-known/construct-server` and cached in UserDefaults;
+/// falls back to `ICEConfig.hardcodedRelayRegions` when server config is unavailable.
+struct ICERelayRegion: Codable {
+    /// Minimum UTC offset in hours (inclusive).
+    let tzOffsetMin: Int
+    /// Maximum UTC offset in hours (inclusive).
+    let tzOffsetMax: Int
+    /// Relay addresses to place at the front of the candidate list for this timezone range.
+    let preferredRelays: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case tzOffsetMin = "tz_offset_min"
+        case tzOffsetMax = "tz_offset_max"
+        case preferredRelays = "preferred_relays"
+    }
+}
+
 // MARK: - ICE Bridge Configuration
 struct ICEConfig {
     /// Hardcoded fallback bridge cert used when Keychain is empty (first launch before login).
@@ -362,16 +390,30 @@ struct ICEConfig {
     /// Primary ICE endpoint: TLS 1.3 → obfs4 → gRPC (Amsterdam, via Traefik).
     /// Uses `ice.<grpcHost>:443` derived at runtime from GRPCChannelManager.currentHost.
 
-    /// Moscow relay: plain TCP → obfs4 → TCP relay → Amsterdam.
-    /// No outer TLS wrapper — Yandex Cloud VM does transparent TCP forwarding.
-    /// Same bridge cert as primary (the relay just passes obfs4 bytes through).
-    static let mskRelayAddress = "ice.msk.konstruct.cc:9443"
+    /// Moscow relay: TLS 1.3 → obfs4 → TCP relay → Amsterdam.
+    /// Traefik on the relay server terminates TLS on port 443, passes plaintext TCP to
+    /// the gateway's obfs4 listener (same as the primary AMS setup).
+    static let mskRelayAddress = "ice.msk.konstruct.cc:443"
 
     /// Hardcoded relay list used as a last resort when discovery is unavailable.
     static let hardcodedRelayAddresses: [String] = [mskRelayAddress]
 
     /// UserDefaults key where the relay list fetched from the server is cached.
     static let cachedRelayListKey = "construct.ice_relays"
+
+    /// UserDefaults key where the relay-region config fetched from the server is cached.
+    /// Value is JSON-encoded array of `ICERelayRegion` (see IceCertFetcher).
+    static let cachedRelayRegionsKey = "construct.ice_relay_regions"
+
+    /// Fallback relay-region rules used when the server config has not been fetched yet.
+    /// Each rule maps a UTC offset range (hours, inclusive) to a preferred relay ordering.
+    /// The first matching rule wins; unmatched → default ordering.
+    ///
+    /// Currently: UTC+3 exactly → Moscow relay first.
+    /// Override via `.well-known/construct-server` `ice.relay_regions` without a new build.
+    static let hardcodedRelayRegions: [ICERelayRegion] = [
+        ICERelayRegion(tzOffsetMin: 3, tzOffsetMax: 3, preferredRelays: [mskRelayAddress])
+    ]
 }
 
 // MARK: - Log Categories
@@ -423,4 +465,5 @@ extension APIConstants {
 // MARK: - Notifications
 extension Notification.Name {
     static let serverURLChanged = Notification.Name("serverURLChanged")
+    static let deleteChat = Notification.Name("constructDeleteChat")
 }

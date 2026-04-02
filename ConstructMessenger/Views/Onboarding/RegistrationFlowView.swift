@@ -198,7 +198,7 @@ struct RegistrationFlowView: View {
     @State private var difficulty: UInt32 = 6
 
     // Generated keys
-    @State private var registrationBundle: String = ""
+    @State private var registrationBundle: RegistrationBundleJson? = nil
     @State private var signingKey: Data = Data()
     @State private var identityKey: Data = Data()
 
@@ -232,24 +232,15 @@ struct RegistrationFlowView: View {
             currentStep = .generatingKeys
             
             // Generate real cryptographic keys using Rust core
-            let (generatedDeviceId, bundleJson, signingKeyData, identityKeyData) = try CryptoManager.shared.generateRegistrationBundle()
-            
-            // Store for later use
+            let (generatedDeviceId, bundle, signingKeyData, identityKeyData) = try CryptoManager.shared.generateRegistrationBundle()
+
             deviceId = generatedDeviceId
-            registrationBundle = bundleJson
+            registrationBundle = bundle
             signingKey = signingKeyData
             identityKey = identityKeyData
-            
+
             Log.info("✅ Generated keys: device_id=\(generatedDeviceId)", category: "Registration")
-            
-            // Debug: compare verifying key in bundle vs derived from signing secret
-            if let bundleData = bundleJson.data(using: .utf8),
-               let bundleDict = try? JSONSerialization.jsonObject(with: bundleData) as? [String: Any],
-               let bundleVerifyingKey = bundleDict["verifying_key"] as? String {
-                Log.info("🔐 Registration bundle verifying_key: \(bundleVerifyingKey)", category: "Registration")
-            } else {
-                Log.info("⚠️ Could not parse verifying_key from registration bundle", category: "Registration")
-            }
+            Log.info("🔐 Registration bundle verifying_key: \(bundle.verifyingKey)", category: "Registration")
 
             do {
                 let derivedVerifyingKey = try deriveVerifyingKeyFromSecret(identitySecretKey: [UInt8](signingKeyData))
@@ -293,7 +284,9 @@ struct RegistrationFlowView: View {
             let registerData = try await AuthServiceClient.shared.registerDevice(
                 username: username,
                 deviceId: deviceId,
-                registrationBundle: registrationBundle,
+                registrationBundle: registrationBundle ?? RegistrationBundleJson(
+                    identityPublic: "", signedPrekeyPublic: "", signature: "", verifyingKey: "", suiteId: ""
+                ),
                 challenge: challenge,
                 powSolution: solution
             )
