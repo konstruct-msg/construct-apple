@@ -473,6 +473,28 @@ public struct Shared_Proto_Services_V1_SendMessageRequest: Sendable {
   fileprivate var _idempotencyKey: String? = nil
 }
 
+/// RateLimitChallenge - Proof-of-Work challenge issued on soft rate-limit breach.
+/// Client must solve this challenge before retrying the send.
+/// difficulty: 4 = x1.5 limit, 6 = x3 limit, 8 = x5+ limit
+public struct Shared_Proto_Services_V1_RateLimitChallenge: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// Random hex string the client must hash against
+  public var challenge: String = String()
+
+  /// Argon2 difficulty level
+  public var difficulty: UInt32 = 0
+
+  /// Unix millis — challenge expires in 60 seconds
+  public var expiresAt: Int64 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 /// SendMessageResponse - Send message response
 public struct Shared_Proto_Services_V1_SendMessageResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
@@ -501,11 +523,23 @@ public struct Shared_Proto_Services_V1_SendMessageResponse: Sendable {
   /// Clears the value of `error`. Subsequent reads from it will return its default value.
   public mutating func clearError() {self._error = nil}
 
+  /// PoW challenge issued when rate limit is soft-exceeded.
+  /// Client must solve this challenge before retrying.
+  public var rateLimitChallenge: Shared_Proto_Services_V1_RateLimitChallenge {
+    get {_rateLimitChallenge ?? Shared_Proto_Services_V1_RateLimitChallenge()}
+    set {_rateLimitChallenge = newValue}
+  }
+  /// Returns true if `rateLimitChallenge` has been explicitly set.
+  public var hasRateLimitChallenge: Bool {self._rateLimitChallenge != nil}
+  /// Clears the value of `rateLimitChallenge`. Subsequent reads from it will return its default value.
+  public mutating func clearRateLimitChallenge() {self._rateLimitChallenge = nil}
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
   fileprivate var _error: Shared_Proto_Services_V1_MessageError? = nil
+  fileprivate var _rateLimitChallenge: Shared_Proto_Services_V1_RateLimitChallenge? = nil
 }
 
 /// EditMessageRequest - Edit message
@@ -1374,9 +1408,49 @@ extension Shared_Proto_Services_V1_SendMessageRequest: SwiftProtobuf.Message, Sw
   }
 }
 
+extension Shared_Proto_Services_V1_RateLimitChallenge: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".RateLimitChallenge"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}challenge\0\u{1}difficulty\0\u{3}expires_at\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.challenge) }()
+      case 2: try { try decoder.decodeSingularUInt32Field(value: &self.difficulty) }()
+      case 3: try { try decoder.decodeSingularInt64Field(value: &self.expiresAt) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.challenge.isEmpty {
+      try visitor.visitSingularStringField(value: self.challenge, fieldNumber: 1)
+    }
+    if self.difficulty != 0 {
+      try visitor.visitSingularUInt32Field(value: self.difficulty, fieldNumber: 2)
+    }
+    if self.expiresAt != 0 {
+      try visitor.visitSingularInt64Field(value: self.expiresAt, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Services_V1_RateLimitChallenge, rhs: Shared_Proto_Services_V1_RateLimitChallenge) -> Bool {
+    if lhs.challenge != rhs.challenge {return false}
+    if lhs.difficulty != rhs.difficulty {return false}
+    if lhs.expiresAt != rhs.expiresAt {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
 extension Shared_Proto_Services_V1_SendMessageResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SendMessageResponse"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}message_id\0\u{3}message_number\0\u{3}server_timestamp\0\u{1}success\0\u{1}error\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}message_id\0\u{3}message_number\0\u{3}server_timestamp\0\u{1}success\0\u{1}error\0\u{3}rate_limit_challenge\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1389,6 +1463,7 @@ extension Shared_Proto_Services_V1_SendMessageResponse: SwiftProtobuf.Message, S
       case 3: try { try decoder.decodeSingularInt64Field(value: &self.serverTimestamp) }()
       case 4: try { try decoder.decodeSingularBoolField(value: &self.success) }()
       case 5: try { try decoder.decodeSingularMessageField(value: &self._error) }()
+      case 6: try { try decoder.decodeSingularMessageField(value: &self._rateLimitChallenge) }()
       default: break
       }
     }
@@ -1414,6 +1489,9 @@ extension Shared_Proto_Services_V1_SendMessageResponse: SwiftProtobuf.Message, S
     try { if let v = self._error {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 5)
     } }()
+    try { if let v = self._rateLimitChallenge {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1423,6 +1501,7 @@ extension Shared_Proto_Services_V1_SendMessageResponse: SwiftProtobuf.Message, S
     if lhs.serverTimestamp != rhs.serverTimestamp {return false}
     if lhs.success != rhs.success {return false}
     if lhs._error != rhs._error {return false}
+    if lhs._rateLimitChallenge != rhs._rateLimitChallenge {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
