@@ -429,7 +429,7 @@ class CryptoManager {
 
     /// Initializes a secure session with a recipient using the Rust core.
     @discardableResult
-    func initializeSession(for userId: String, recipientBundle: (identityPublic: String, signedPrekeyPublic: String, signature: String, verifyingKey: String, suiteId: String), oneTimePreKeyPublic: Data? = nil, oneTimePreKeyId: UInt32? = nil, kyberPreKeyPublic: Data? = nil, kyberOneTimePreKeyPublic: Data? = nil, kyberOneTimePreKeyId: UInt32? = nil, spkUploadedAt: UInt64 = 0, spkRotationEpoch: UInt32 = 0, kyberSpkUploadedAt: UInt64 = 0, kyberSpkRotationEpoch: UInt32 = 0) throws -> (kemCiphertext: Data?, kyberOtpkId: UInt32) {
+    func initializeSession(for userId: String, recipientBundle: (identityPublic: Data, signedPrekeyPublic: Data, signature: Data, verifyingKey: Data, suiteId: String), oneTimePreKeyPublic: Data? = nil, oneTimePreKeyId: UInt32? = nil, kyberPreKeyPublic: Data? = nil, kyberOneTimePreKeyPublic: Data? = nil, kyberOneTimePreKeyId: UInt32? = nil, spkUploadedAt: UInt64 = 0, spkRotationEpoch: UInt32 = 0, kyberSpkUploadedAt: UInt64 = 0, kyberSpkRotationEpoch: UInt32 = 0) throws -> (kemCiphertext: Data?, kyberOtpkId: UInt32) {
         do {
             let result = try sessionInitService.initializeSession(
                 for: userId,
@@ -664,7 +664,7 @@ class CryptoManager {
     /// Initialize a receiving session (for responder/Bob) using sender's bundle + first message
     /// This is called when Bob receives the first message from Alice
     /// Returns the decrypted plaintext of the first message
-    func initReceivingSession(for userId: String, recipientBundle: (identityPublic: String, signedPrekeyPublic: String, signature: String, verifyingKey: String, suiteId: String), firstMessage: ChatMessage) throws -> String {
+    func initReceivingSession(for userId: String, recipientBundle: (identityPublic: Data, signedPrekeyPublic: Data, signature: Data, verifyingKey: Data, suiteId: String), firstMessage: ChatMessage) throws -> String {
         do {
             let plaintext = try sessionInitService.initReceivingSession(
                 for: userId,

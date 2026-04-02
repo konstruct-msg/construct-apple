@@ -532,7 +532,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = ConstructMessenger/ConstructMessenger.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 263;
+				CURRENT_PROJECT_VERSION = 266;
 				DEVELOPMENT_TEAM = PK2473XF3P;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -546,8 +546,8 @@
 				INFOPLIST_KEY_NSCameraUsageDescription = "Construct Messenger needs access to your camera to send photos and videos.";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "Use Face ID to unlock Construct Messenger.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Construct Messenger needs access to your local network to check network connectivity and ensure reliable message delivery.";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Construct Messenger needs access to your microphone to record and send voice messages.";
-				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Construct Messenger needs permission to save photos and videos to your library.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Construct Messenger needs microphone access to record voice messages.";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Construct Messenger needs access to save received photos to your library.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Construct Messenger needs access to your photo library to send photos and videos.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -568,7 +568,7 @@
 					"$(PROJECT_DIR)/target/aarch64-apple-ios-macabi/release",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.11.4;
+				MARKETING_VERSION = 0.11.7;
 				PRODUCT_BUNDLE_IDENTIFIER = maximeliseyev.constructmessenger;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -722,7 +722,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = ConstructMessenger/ConstructMessenger.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 263;
+				CURRENT_PROJECT_VERSION = 266;
 				DEVELOPMENT_TEAM = PK2473XF3P;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -736,8 +736,8 @@
 				INFOPLIST_KEY_NSCameraUsageDescription = "Construct Messenger needs access to your camera to send photos and videos.";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "Use Face ID to unlock Construct Messenger.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Construct Messenger needs access to your local network to check network connectivity and ensure reliable message delivery.";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Construct Messenger needs access to your microphone to record and send voice messages.";
-				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Construct Messenger needs permission to save photos and videos to your library.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Construct Messenger needs microphone access to record voice messages.";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Construct Messenger needs access to save received photos to your library.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Construct Messenger needs access to your photo library to send photos and videos.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -758,7 +758,7 @@
 					"$(PROJECT_DIR)/target/aarch64-apple-ios-macabi/release",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.11.4;
+				MARKETING_VERSION = 0.11.7;
 				PRODUCT_BUNDLE_IDENTIFIER = maximeliseyev.constructmessenger;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -783,7 +783,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = ConstructMessenger/ConstructMessenger.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 263;
+				CURRENT_PROJECT_VERSION = 266;
 				DEVELOPMENT_TEAM = PK2473XF3P;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -797,8 +797,8 @@
 				INFOPLIST_KEY_NSCameraUsageDescription = "Construct Messenger needs access to your camera to send photos and videos.";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "Use Face ID to unlock Construct Messenger.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Construct Messenger needs access to your local network to check network connectivity and ensure reliable message delivery.";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Construct Messenger needs access to your microphone to record and send voice messages.";
-				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Construct Messenger needs permission to save photos and videos to your library.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Construct Messenger needs microphone access to record voice messages.";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Construct Messenger needs access to save received photos to your library.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Construct Messenger needs access to your photo library to send photos and videos.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -819,7 +819,7 @@
 					"$(PROJECT_DIR)/target/aarch64-apple-ios-macabi/release",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.11.4;
+				MARKETING_VERSION = 0.11.7;
 				PRODUCT_BUNDLE_IDENTIFIER = maximeliseyev.constructmessenger;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;

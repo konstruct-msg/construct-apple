@@ -37,7 +37,7 @@ final class KeyServiceClient: Sendable {
                 let b = deviceBundle.bundle
                 guard !b.identityKey.isEmpty else { return nil }
 
-                let otpkPublic = b.oneTimePreKey.isEmpty ? nil : b.oneTimePreKey.base64EncodedString()
+                let otpkPublic: Data? = b.oneTimePreKey.isEmpty ? nil : b.oneTimePreKey
                 let otpkId: UInt32? = b.oneTimePreKeyID > 0 ? b.oneTimePreKeyID : nil
                 let kyberPK: Data? = b.hasKyberPreKey && !b.kyberPreKey.isEmpty ? b.kyberPreKey : nil
                 let kyberPKId: UInt32? = b.hasKyberPreKeyID && b.kyberPreKeyID > 0 ? b.kyberPreKeyID : nil
@@ -48,10 +48,10 @@ final class KeyServiceClient: Sendable {
                 let bundle = PublicKeyBundleData(
                     userId: userId,
                     username: "",
-                    identityPublic: b.identityKey.base64EncodedString(),
-                    signedPrekeyPublic: b.signedPreKey.base64EncodedString(),
-                    signature: b.signedPreKeySignature.base64EncodedString(),
-                    verifyingKey: "",
+                    identityPublic: b.identityKey,
+                    signedPrekeyPublic: b.signedPreKey,
+                    signature: b.signedPreKeySignature,
+                    verifyingKey: Data(),
                     suiteId: Self.parseSuiteId(b.cryptoSuite),
                     oneTimePreKeyPublic: otpkPublic,
                     oneTimePreKeyId: otpkId,
@@ -92,11 +92,7 @@ final class KeyServiceClient: Sendable {
             }
             let bundle = response.bundle
 
-            let verifyingKeyB64 = response.verifyingKey.isEmpty
-                ? ""
-                : response.verifyingKey.base64EncodedString()
-
-            let otpkPublic = bundle.oneTimePreKey.isEmpty ? nil : bundle.oneTimePreKey.base64EncodedString()
+            let otpkPublic: Data? = bundle.oneTimePreKey.isEmpty ? nil : bundle.oneTimePreKey
             let otpkId: UInt32? = bundle.oneTimePreKeyID > 0 ? bundle.oneTimePreKeyID : nil
 
             // PQXDH fields (optional — nil if server doesn't support Kyber yet)
@@ -112,10 +108,10 @@ final class KeyServiceClient: Sendable {
             return PublicKeyBundleData(
                 userId: userId,
                 username: "",
-                identityPublic: bundle.identityKey.base64EncodedString(),
-                signedPrekeyPublic: bundle.signedPreKey.base64EncodedString(),
-                signature: bundle.signedPreKeySignature.base64EncodedString(),
-                verifyingKey: verifyingKeyB64,
+                identityPublic: bundle.identityKey,
+                signedPrekeyPublic: bundle.signedPreKey,
+                signature: bundle.signedPreKeySignature,
+                verifyingKey: response.verifyingKey,
                 suiteId: Self.parseSuiteId(bundle.cryptoSuite),
                 oneTimePreKeyPublic: otpkPublic,
                 oneTimePreKeyId: otpkId,

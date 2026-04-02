@@ -131,7 +131,7 @@ class SessionInitializationService {
             suiteId: String(bundle.suiteId)
         )
 
-        let otpkPublic = bundle.oneTimePreKeyPublic.flatMap { Data(base64Encoded: $0) }
+        let otpkPublic = bundle.oneTimePreKeyPublic
         let otpkId = bundle.oneTimePreKeyId
 
         do {

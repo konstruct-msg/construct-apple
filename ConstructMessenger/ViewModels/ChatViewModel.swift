@@ -61,7 +61,7 @@ class ChatViewModel: NSObject {
     )
 
     let chat: Chat
-    private var recipientBundle: (identityPublic: String, signedPrekeyPublic: String, signature: String, verifyingKey: String)?
+    private var recipientBundle: (identityPublic: Data, signedPrekeyPublic: Data, signature: Data, verifyingKey: Data)?
 
     private let connectionStatusManager = ConnectionStatusManager.shared
     private let messageQueueManager = MessageQueueManager.shared

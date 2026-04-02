@@ -108,7 +108,8 @@ class PublicKeyBundleHandler {
         }
         
         // Track prekey ID and detect reinstall
-        let prekeyChanged = CryptoManager.shared.trackPreKeyId(data.signedPrekeyPublic, for: data.userId)
+        // trackPreKeyId uses base64 as stable string key for change detection/storage
+        let prekeyChanged = CryptoManager.shared.trackPreKeyId(data.signedPrekeyPublic.base64EncodedString(), for: data.userId)
         if prekeyChanged {
             Log.info("⚠️ Prekey changed for \(data.userId) - potential reinstall detected!", category: "PublicKeyBundleHandler")
             // Session was already archived by trackPreKeyId()

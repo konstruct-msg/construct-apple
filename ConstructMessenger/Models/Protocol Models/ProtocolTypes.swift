@@ -134,12 +134,12 @@ struct SignedPrekeyUpdate: Codable {
 struct PublicKeyBundleData: Codable {
     let userId: String
     let username: String
-    let identityPublic: String
-    let signedPrekeyPublic: String
-    let signature: String
-    let verifyingKey: String
+    let identityPublic: Data
+    let signedPrekeyPublic: Data
+    let signature: Data
+    let verifyingKey: Data
     let suiteId: UInt16
-    var oneTimePreKeyPublic: String?  // Base64; nil if server has no OTPKs left
+    var oneTimePreKeyPublic: Data?    // nil if server has no OTPKs left
     var oneTimePreKeyId: UInt32?      // nil if no OTPK available
     // PQXDH fields (optional for backward compatibility with classic-only servers)
     var kyberPreKeyPublic: Data?      // ML-KEM-768 SPK public key (1184 bytes)

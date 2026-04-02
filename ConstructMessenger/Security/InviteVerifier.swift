@@ -123,15 +123,15 @@ class InviteVerifier {
         // Step 3: Fetch sender's public key bundle
         let publicKeyBundle = try await fetchPublicKey(userId: invite.uuid, server: invite.server)
         
-        // Step 4: Extract verifying key (Ed25519 public key)
-        guard let verifyingKeyData = Data(base64Encoded: publicKeyBundle.verifyingKey) else {
-            Log.error("❌ Invalid verifyingKey base64 format", category: "InviteVerifier")
+        // Step 4: Validate verifying key
+        let verifyingKeyData = publicKeyBundle.verifyingKey
+        guard !verifyingKeyData.isEmpty else {
+            Log.error("❌ Empty verifyingKey in bundle", category: "InviteVerifier")
             throw InviteVerificationError.invalidVerifyingKey
         }
         
-        Log.debug("🔐 VERIFY: Server verifying key: \(publicKeyBundle.verifyingKey)", category: "InviteVerifier")
+        Log.debug("🔐 VERIFY: Server verifying key (first 16 bytes): \(verifyingKeyData.prefix(16).map { String(format: "%02x", $0) }.joined())...", category: "InviteVerifier")
         Log.debug("🔐 Verifying key from server (first 16 bytes): \(verifyingKeyData.prefix(16).base64EncodedString())", category: "InviteVerifier")
-        Log.debug("🔐 Full verifying key base64: \(publicKeyBundle.verifyingKey)", category: "InviteVerifier")
         
         // Step 5: Extract signature
         guard let signatureData = Data(base64Encoded: invite.sig) else {
