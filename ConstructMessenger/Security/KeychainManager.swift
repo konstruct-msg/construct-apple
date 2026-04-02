@@ -406,7 +406,9 @@ class KeychainManager {
     @discardableResult
     func saveSessionData(_ data: Data, for contactId: String) -> Bool {
         let key = "session_\(contactId)"
-        return save(data, forKey: key, accessible: kSecAttrAccessibleWhenUnlockedThisDeviceOnly)
+        // AfterFirstUnlockThisDeviceOnly: accessible in background after first unlock
+        // (needed so incoming push notifications can decrypt messages while screen is locked).
+        return save(data, forKey: key, accessible: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly)
     }
 
     /// Load raw session bytes (CFE or legacy JSON).
@@ -450,16 +452,28 @@ class KeychainManager {
 
     // MARK: - Generic Helpers
     private func save(_ data: Data, forKey key: String, accessible: CFString) -> Bool {
-        let query: [String: Any] = [
+        guard !data.isEmpty else {
+            // Treat empty-data saves as deletes to avoid silent Keychain corruption.
+            delete(forKey: key)
+            return true
+        }
+
+        let searchQuery: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrAccount as String: key,
+            kSecAttrAccount as String: key
+        ]
+        let attributes: [String: Any] = [
             kSecValueData as String: data,
             kSecAttrAccessible as String: accessible
         ]
 
-        SecItemDelete(query as CFDictionary)
-        let status = SecItemAdd(query as CFDictionary, nil)
-        return status == errSecSuccess
+        let updateStatus = SecItemUpdate(searchQuery as CFDictionary, attributes as CFDictionary)
+        if updateStatus == errSecItemNotFound {
+            var addQuery = searchQuery
+            addQuery.merge(attributes) { $1 }
+            return SecItemAdd(addQuery as CFDictionary, nil) == errSecSuccess
+        }
+        return updateStatus == errSecSuccess
     }
 
     private func load(forKey key: String) -> Data? {
@@ -471,7 +485,10 @@ class KeychainManager {
 
         var result: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
-        return status == errSecSuccess ? result as? Data : nil
+        guard status == errSecSuccess, let data = result as? Data, !data.isEmpty else {
+            return nil
+        }
+        return data
     }
 
     private func delete(forKey key: String) {

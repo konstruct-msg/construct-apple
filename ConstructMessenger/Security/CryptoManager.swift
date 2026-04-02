@@ -200,7 +200,7 @@ class CryptoManager {
             if saved {
                 Log.debug("💾 Session (CFE) saved to Keychain: \(userId)", category: "CryptoManager")
             } else {
-                Log.debug("⚠️ Failed to save session to Keychain: \(userId)", category: "CryptoManager")
+                Log.error("❌ Failed to save session to Keychain: \(userId)", category: "CryptoManager")
             }
         } catch {
             Log.error("❌ Session export failed: \(error)", category: "CryptoManager")
@@ -364,8 +364,10 @@ class CryptoManager {
             Log.debug("✅ Restored session (CFE): \(userId)", category: "CryptoManager")
             return true
         } catch {
-            _ = KeychainManager.shared.saveSessionData(Data(), for: userId)
-            Log.error("❌ Session import FAILED for \(userId) (stale/incompatible format — cleared): \(error)", category: "CryptoManager")
+            // Delete the corrupt/incompatible entry cleanly instead of writing empty bytes
+            // (writing Data() followed by a failed SecItemAdd would silently delete the key).
+            KeychainManager.shared.deleteSession(for: userId)
+            Log.error("❌ Session import FAILED for \(userId) (corrupt/incompatible — deleted): \(error)", category: "CryptoManager")
             return false
         }
     }
