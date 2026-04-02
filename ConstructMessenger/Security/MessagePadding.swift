@@ -13,6 +13,34 @@ enum MessagePadding {
     private static let headerLength = 8 // 4 bytes magic + 4 bytes length
     private static let buckets = MessagePaddingConfig.buckets
 
+    // MARK: - Data-based API (preferred — no base64 round-trip)
+
+    static func padCiphertext(_ data: Data) -> Data {
+        guard MessagePaddingConfig.enabled else { return data }
+        let target = targetBucketSize(for: data.count)
+        guard let target, target >= data.count + headerLength else { return data }
+
+        var output = Data(capacity: target)
+        output.append(contentsOf: magic)
+        output.append(contentsOf: UInt32(data.count).bigEndianBytes)
+        output.append(data)
+        let paddingLength = target - output.count
+        if paddingLength > 0 { output.append(randomBytes(count: paddingLength)) }
+        return output
+    }
+
+    static func unpadCiphertext(_ data: Data) -> Data {
+        guard MessagePaddingConfig.enabled, data.count >= headerLength else { return data }
+        let prefix = [UInt8](data.prefix(4))
+        guard prefix == magic else { return data }
+        let lengthData = data.subdata(in: 4..<8)
+        let originalLength = lengthData.toUInt32()
+        guard originalLength > 0, originalLength <= data.count - headerLength else { return data }
+        return data.subdata(in: headerLength ..< headerLength + Int(originalLength))
+    }
+
+    // MARK: - Legacy base64 API (kept for ChatMessage.content String storage paths)
+
     static func padCiphertextBase64(_ base64: String) -> String {
         guard MessagePaddingConfig.enabled else {
             return base64

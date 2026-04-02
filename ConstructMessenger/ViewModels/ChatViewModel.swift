@@ -835,7 +835,7 @@ class ChatViewModel: NSObject {
                 messageType: nil,
                 ephemeralPublicKey: firstComponents.ephemeralPublicKey,
                 messageNumber: firstComponents.messageNumber,
-                content: firstComponents.content,
+                content: firstComponents.content.base64EncodedString(),
                 suiteId: firstComponents.suiteId,
                 timestamp: UInt64(Date().timeIntervalSince1970),
                 oneTimePreKeyId: firstComponents.oneTimePreKeyId

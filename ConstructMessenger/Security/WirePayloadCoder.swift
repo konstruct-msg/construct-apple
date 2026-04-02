@@ -39,9 +39,7 @@ enum WirePayloadCoder {
         guard components.ephemeralPublicKey.count == dhPublicKeySize else {
             throw WirePayloadError.invalidDHPublicKey
         }
-        guard let sealedBox = Data(base64Encoded: components.content) else {
-            throw WirePayloadError.invalidBase64Content
-        }
+        let sealedBox = components.content
 
         let kemLen = kemCiphertext?.count ?? 0
         var payload = Data(capacity: headerSize + kemLen + sealedBox.count)
@@ -144,7 +142,6 @@ enum WirePayloadCoder {
 
 enum WirePayloadError: Error, LocalizedError {
     case invalidDHPublicKey
-    case invalidBase64Content
     case payloadTooShort(Int)
     case kemTooLarge(Int)
 
@@ -152,8 +149,6 @@ enum WirePayloadError: Error, LocalizedError {
         switch self {
         case .invalidDHPublicKey:
             return "DH public key must be exactly 32 bytes"
-        case .invalidBase64Content:
-            return "Content is not valid Base64"
         case .payloadTooShort(let size):
             return "Payload too short: \(size) bytes (minimum \(WirePayloadCoder.headerSize + 1))"
         case .kemTooLarge(let size):

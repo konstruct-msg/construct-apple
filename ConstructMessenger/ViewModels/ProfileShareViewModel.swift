@@ -137,7 +137,7 @@ class ProfileShareViewModel {
                     messageType: nil,  // Will be set by server
                     ephemeralPublicKey: firstComponents.ephemeralPublicKey,
                     messageNumber: firstComponents.messageNumber,
-                    content: firstComponents.content,
+                content: firstComponents.content.base64EncodedString(),
                     suiteId: firstComponents.suiteId,
                     timestamp: UInt64(Date().timeIntervalSince1970),
                     oneTimePreKeyId: firstComponents.oneTimePreKeyId
