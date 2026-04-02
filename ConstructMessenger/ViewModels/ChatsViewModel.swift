@@ -26,7 +26,7 @@ class ChatsViewModel {
     /// How long to wait before treating the app as "truly backgrounded" and tearing down
     /// the stream. Brief app-switches (Notification Center, App Switcher, <5 s away) cancel
     /// this task and preserve the live connection — no reconnect penalty.
-    private static let backgroundGracePeriod: Duration = .seconds(5)
+    private static let backgroundGracePeriod: Duration = .seconds(15)
 
     // 🔑 OTPK replenishment: check server count once per app session on stream connect
     private var hasPerformedStartupOtpkCheck = false
