@@ -239,9 +239,28 @@ class MessageRouter {
 
     /// Build a typed `CfeIncomingEvent.messageReceived` from a server message.
     private func buildIncomingEvent(message: ChatMessage, otherUserId: String) -> CfeIncomingEvent? {
+        guard !message.rawPayload.isEmpty else {
+            Log.error("❌ buildIncomingEvent: empty rawPayload for \(message.id.prefix(8))… — falling back to JSON path", category: "MessageRouter")
+            return buildIncomingEventLegacy(message: message, otherUserId: otherUserId)
+        }
+
+        return .messageReceived(
+            messageId: message.id,
+            from: otherUserId,
+            data: message.rawPayload,
+            msgNum: message.messageNumber,
+            kemCt: message.kemCiphertext,
+            otpkId: message.kyberOtpkId,
+            isControl: false,
+            contentType: message.contentType
+        )
+    }
+
+    /// Legacy JSON path — only used when rawPayload is unavailable (e.g. old healing records).
+    private func buildIncomingEventLegacy(message: ChatMessage, otherUserId: String) -> CfeIncomingEvent? {
         let unpaddedContent = MessagePadding.unpadCiphertextBase64(message.content)
         guard let sealedBox = Data(base64Encoded: unpaddedContent), sealedBox.count >= 12 else {
-            Log.error("❌ buildIncomingEvent: cannot decode content for \(message.id.prefix(8))…", category: "MessageRouter")
+            Log.error("❌ buildIncomingEventLegacy: cannot decode content for \(message.id.prefix(8))…", category: "MessageRouter")
             return nil
         }
 
@@ -249,8 +268,6 @@ class MessageRouter {
         let ciphertext = Array(sealedBox.dropFirst(12))
         let dhPublicKey = Array(message.ephemeralPublicKey)
 
-        // Wire message encoded as CFE MessagePack by Rust; for now we pass the JSON-encoded
-        // wire bytes as the `data` field — Rust orchestrator deserialises them internally.
         let wireMessage: [String: Any] = [
             "dh_public_key": dhPublicKey.map { Int($0) },
             "message_number": Int(message.messageNumber),
@@ -260,7 +277,6 @@ class MessageRouter {
             "suite_id": 1
         ]
         guard let wireJsonData = try? JSONSerialization.data(withJSONObject: wireMessage) else { return nil }
-        let _ = Array(wireJsonData)
 
         return .messageReceived(
             messageId: message.id,

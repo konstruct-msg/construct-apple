@@ -56,7 +56,12 @@ struct ChatMessage: Codable, Identifiable {
     /// If non-empty, this message is a reply to the message with this ID.
     /// Propagated from `envelope.reply_to_message_id`.
     var replyToMessageId: String = ""
-    
+
+    /// Raw binary WirePayload from `Envelope.encrypted_payload`.
+    /// Passed directly to Rust for decryption, bypassing JSON conversion.
+    /// Empty for CONTROL_MESSAGE and SENDER_SYNC types.
+    var rawPayload: Data = Data()
+
     /// Check if this is an END_SESSION control message
     var isEndSession: Bool {
         messageType == "CONTROL_MESSAGE" && content == "END_SESSION"
@@ -78,7 +83,7 @@ extension ChatMessage {
     private enum CodingKeys: String, CodingKey {
         case id, from, to, messageType, ephemeralPublicKey, messageNumber, content, suiteId
         case timestamp, oneTimePreKeyId, editsMessageId, kemCiphertext, kyberOtpkId
-        case senderDeviceId, conversationId, replyToMessageId
+        case senderDeviceId, conversationId, replyToMessageId, rawPayload
     }
 
     init(from decoder: Decoder) throws {
@@ -99,6 +104,7 @@ extension ChatMessage {
         senderDeviceId = (try? c.decodeIfPresent(String.self, forKey: .senderDeviceId)) ?? ""
         conversationId = (try? c.decodeIfPresent(String.self, forKey: .conversationId)) ?? ""
         replyToMessageId = (try? c.decodeIfPresent(String.self, forKey: .replyToMessageId)) ?? ""
+        rawPayload = (try? c.decodeIfPresent(Data.self, forKey: .rawPayload)) ?? Data()
     }
 }
 

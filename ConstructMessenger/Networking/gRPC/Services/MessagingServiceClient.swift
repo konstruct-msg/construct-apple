@@ -245,7 +245,8 @@ final class MessagingServiceClient: Sendable {
                 contentType: UInt8(msg.contentType.rawValue),
                 kyberOtpkId: decoded.kyberOtpkId,
                 senderDeviceId: "",
-                conversationId: ""
+                conversationId: "",
+                rawPayload: msg.encryptedPayload
             )
         }
 
