@@ -56,7 +56,7 @@ final class CallKitProvider: NSObject, CXProviderDelegate {
     }
 
     @MainActor
-    func requestStartCall(uuid: UUID, calleeId: String, calleeName: String, hasVideo: Bool) async {
+    func requestStartCall(uuid: UUID, calleeId: String, calleeName: String, hasVideo: Bool) async throws {
         let handle = CXHandle(type: .generic, value: calleeId)
         let action = CXStartCallAction(call: uuid, handle: handle)
         action.isVideo = hasVideo
@@ -70,6 +70,7 @@ final class CallKitProvider: NSObject, CXProviderDelegate {
             Log.info("📞 CallKit start-call transaction ok (uuid=\(uuid.uuidString.prefix(8))…)", category: "Calls")
         } catch {
             Log.error("📞 CallKit start-call transaction failed: \(error)", category: "Calls")
+            throw error
         }
     }
 

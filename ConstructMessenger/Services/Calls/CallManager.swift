@@ -51,6 +51,11 @@ final class CallManager {
         var receiveTask: Task<Void, Never>?
         let startedAt: Date = Date()
         var answeredAt: Date? = nil
+        /// SDP offer received via MessagingService before the user answered.
+        var pendingRemoteOfferSdp: String? = nil
+        /// Whether CallKit successfully registered this call (requestStartCall succeeded).
+        /// Only true calls should have reportCallEnded called on them.
+        var callKitRegistered: Bool = false
 
         init(session: CallSession) {
             self.session = session
@@ -103,12 +108,13 @@ final class CallManager {
 
         do {
             #if os(iOS)
-            await CallKitProvider.shared.requestStartCall(
+            try await CallKitProvider.shared.requestStartCall(
                 uuid: uuid,
                 calleeId: userId,
                 calleeName: displayName,
                 hasVideo: hasVideo
             )
+            active?.callKitRegistered = true
             #endif
 
             // Notify server: checks rate limits, delivers push/stream notification to callee.
@@ -181,6 +187,7 @@ final class CallManager {
             direction: .incoming
         )
         active = ActiveCall(session: adjusted)
+        active?.callKitRegistered = true
         state = .incoming(adjusted)
         #endif
     }
@@ -379,6 +386,7 @@ final class CallManager {
         let session = active.session
         let startedAt = active.startedAt
         let answeredAt = active.answeredAt
+        let wasRegisteredWithCallKit = active.callKitRegistered
 
         // Determine call status for history
         let historyStatus: CallRecord.Status
@@ -412,7 +420,7 @@ final class CallManager {
         )
 
         #if os(iOS)
-        if reportToCallKit {
+        if reportToCallKit && wasRegisteredWithCallKit {
             CallKitProvider.shared.reportCallEnded(uuid: session.uuid)
         }
         #endif
@@ -505,86 +513,201 @@ final class CallManager {
         }
     }
 
-    private func sendAnswer(sdp: String) {
-        guard let active else { return }
-        let peerUserId = active.session.peerUserId
+    // MARK: - E2EE Call Signal via MessagingService
 
-        var answer = Shared_Proto_Signaling_V1_CallAnswer()
-        do {
-            answer.sdp = try CallSignalCrypto.shared.encryptField(sdp, for: peerUserId)
-        } catch {
-            Log.error("📞 Failed to encrypt answer SDP: \(error) — aborting send", category: "Calls")
-            endActiveCall(reason: .local("Signal encryption failed"))
+    /// Send a `WebRTCSignal` proto to `peerUserId` via MessagingService (Double Ratchet E2EE).
+    /// Feeds raw proto bytes into the Rust orchestrator via `OutgoingCallSignal` event.
+    /// Rust encrypts + packs WirePayload and returns `SendEncryptedMessage` action,
+    /// which is handled by `MessageRouter.executeRustActions`.
+    private func sendCallSignalProto(_ signal: Shared_Proto_Signaling_V1_WebRTCSignal, to peerUserId: String) {
+        guard let protoData = try? signal.serializedData() else {
+            Log.error("📞 Failed to serialize WebRTCSignal proto", category: "Calls")
             return
         }
+        guard let core = CryptoManager.shared.orchestratorCore else {
+            Log.error("📞 No orchestratorCore — cannot send call signal", category: "Calls")
+            return
+        }
+        let messageId = UUID().uuidString
+        let event = CfeIncomingEvent.outgoingCallSignal(
+            contactId: peerUserId,
+            messageId: messageId,
+            protoBytes: protoData
+        )
+        do {
+            let actions = try core.handleEvent(event: event)
+            // sendEncryptedMessage action is handled by MessageRouter.executeRustActions;
+            // here we execute it directly since we're outside the normal message routing path.
+            for action in actions {
+                switch action {
+                case .sendEncryptedMessage(let to, let payload, let msgId, _):
+                    let currentUserId = SessionManager.shared.currentUserId ?? ""
+                    Task {
+                        do {
+                            _ = try await MessagingServiceClient.shared.sendMessage(
+                                messageId: msgId,
+                                recipientId: to,
+                                senderId: currentUserId,
+                                conversationId: "",
+                                encryptedPayload: payload,
+                                timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+                                senderDeviceId: Self.currentDeviceId(),
+                                contentType: .callSignal
+                            )
+                            Log.info("📞 WebRTCSignal sent via Rust E2EE to=\(to.prefix(8))… callId=\(signal.callID.prefix(8))…", category: "Calls")
+                        } catch {
+                            Log.error("📞 Failed to send WebRTCSignal: \(error)", category: "Calls")
+                        }
+                    }
+                case .saveSessionToSecureStore(let key, _):
+                    // Persist updated session state after Rust encrypt.
+                    if key.hasPrefix("session_") {
+                        let contactId = String(key.dropFirst("session_".count))
+                        CryptoManager.shared.saveSessionToKeychainPublic(for: contactId)
+                        CryptoManager.shared.saveOrchestratorStateCFE()
+                    }
+                case .notifyError(let code, let msg):
+                    Log.error("📞 Rust call signal error [\(code)]: \(msg)", category: "Calls")
+                default:
+                    break
+                }
+            }
+        } catch {
+            Log.error("📞 Rust handleEvent(outgoingCallSignal) failed: \(error)", category: "Calls")
+        }
+    }
+
+    /// Decode `WebRTCSignal` proto from decrypted binary data returned by Rust `CallSignalDecrypted`.
+    static func decodeSignalProto(from data: Data) -> Shared_Proto_Signaling_V1_WebRTCSignal? {
+        try? Shared_Proto_Signaling_V1_WebRTCSignal(serializedBytes: data)
+    }
+
+    /// Handle a decrypted `WebRTCSignal` proto received via MessagingService.
+    func handleCallSignalProto(from senderUserId: String, signal: Shared_Proto_Signaling_V1_WebRTCSignal) {
+        Log.info("📞 handleCallSignalProto type=\(signal.signal.map { "\($0)" } ?? "none") from=\(senderUserId.prefix(8))… callId=\(signal.callID.prefix(8))…", category: "Calls")
+
+        switch signal.signal {
+        case .offer(let offer):
+            handleIncomingCallOffer(callId: signal.callID, callerUserId: senderUserId,
+                                    callerName: offer.callerUserID.isEmpty ? nil : offer.callerUserID,
+                                    sdp: offer.sdp)
+        case .answer(let answer):
+            guard let active, active.session.id == signal.callID else { return }
+            let sdp = answer.sdp
+            Task {
+                do {
+                    Log.info("📞 Received E2EE answer SDP, setting remote description", category: "Calls")
+                    try await active.webrtc?.setRemoteAnswer(sdp: sdp)
+                    await MainActor.run { [weak self] in
+                        guard let self, let active = self.active, active.session.id == signal.callID else { return }
+                        self.state = .active(active.session)
+                        active.answeredAt = Date()
+                    }
+                } catch {
+                    Log.error("📞 Failed to set remote answer: \(error)", category: "Calls")
+                }
+            }
+        case .iceCandidate(let ice):
+            guard let active, active.session.id == signal.callID else { return }
+            let c = WebRTCIceCandidate(sdp: ice.candidate, sdpMid: ice.sdpMid, sdpMLineIndex: Int32(ice.sdpMLineIndex))
+            Task { try? await active.webrtc?.addRemoteIceCandidate(c) }
+        case .iceCandidates(let batch):
+            guard let active, active.session.id == signal.callID else { return }
+            for ice in batch.candidates {
+                let c = WebRTCIceCandidate(sdp: ice.candidate, sdpMid: ice.sdpMid, sdpMLineIndex: Int32(ice.sdpMLineIndex))
+                Task { try? await active.webrtc?.addRemoteIceCandidate(c) }
+            }
+        case .hangup(let hangup):
+            guard active?.session.id == signal.callID else { return }
+            endActiveCall(reason: .hangup(hangup.reason), reportToCallKit: true)
+        case .busy:
+            guard active?.session.id == signal.callID else { return }
+            endActiveCall(reason: .hangup(.busy), reportToCallKit: true)
+        case .ringing:
+            guard let active, active.session.id == signal.callID else { return }
+            if case .dialing = state { state = .ringing(active.session) }
+        case .mediaUpdate, nil:
+            break
+        }
+    }
+
+    /// Handle an incoming call offer (SDP received via E2EE message before user answers).
+    private func handleIncomingCallOffer(callId: String, callerUserId: String, callerName: String?, sdp: String) {
+        // If we already have a call from VoIP push, attach SDP to it.
+        if let active, active.session.id == callId, case .incoming = active.session.direction {
+            active.pendingRemoteOfferSdp = sdp
+            Log.info("📞 Stored pending SDP for existing call callId=\(callId.prefix(8))…", category: "Calls")
+            return
+        }
+        // No existing call — create from message-based offer.
+        let uuid = UUID()
+        let name = callerName ?? "Incoming Call"
+        let session = CallSession(id: callId, uuid: uuid, peerUserId: callerUserId, peerName: name, direction: .incoming)
+        begin(session: session, initialState: .incoming(session))
+        active?.pendingRemoteOfferSdp = sdp
+        Log.info("📞 Incoming call via E2EE offer from \(callerUserId.prefix(8))… callId=\(callId.prefix(8))…", category: "Calls")
+        #if os(iOS)
+        let reportedUUID = CallKitProvider.shared.reportIncomingCall(
+            callId: callId, callerId: callerUserId, callerName: name, hasVideo: false
+        )
+        active?.close()
+        let adjusted = CallSession(id: callId, uuid: reportedUUID, peerUserId: callerUserId, peerName: name, direction: .incoming)
+        active = ActiveCall(session: adjusted)
+        active?.pendingRemoteOfferSdp = sdp
+        state = .incoming(adjusted)
+        #endif
+    }
+
+    private func sendAnswer(sdp: String) {
+        guard let active else { return }
+        var answer = Shared_Proto_Signaling_V1_CallAnswer()
+        answer.sdp = sdp
         answer.answererDeviceID = Self.currentDeviceId()
         answer.answererUserID = SessionManager.shared.currentUserId ?? ""
         answer.answeredAt = Self.nowMs()
-
-        let msg = Self.makeRoutedSignal(
-            callId: active.session.id,
-            deviceId: Self.currentDeviceId(),
-            signal: .answer(answer)
-        )
-        active.stream?.send(msg)
-    }
-
-    private func sendIceCandidate(_ c: WebRTCIceCandidate) {
-        guard let active else { return }
-        let peerUserId = active.session.peerUserId
-
-        var ice = Shared_Proto_Signaling_V1_IceCandidate()
-        do {
-            ice.candidate = try CallSignalCrypto.shared.encryptField(c.sdp, for: peerUserId)
-        } catch {
-            Log.error("📞 Failed to encrypt ICE candidate: \(error) — dropping candidate", category: "Calls")
-            return
-        }
-        ice.sdpMid = c.sdpMid
-        ice.sdpMLineIndex = UInt32(max(0, c.sdpMLineIndex))
-
-        let msg = Self.makeRoutedSignal(
-            callId: active.session.id,
-            deviceId: Self.currentDeviceId(),
-            signal: .iceCandidate(ice)
-        )
-        active.stream?.send(msg)
+        var sig = Shared_Proto_Signaling_V1_WebRTCSignal()
+        sig.callID = active.session.id
+        sig.senderDeviceID = Self.currentDeviceId()
+        sig.timestamp = Self.nowMs()
+        sig.signal = .answer(answer)
+        sendCallSignalProto(sig, to: active.session.peerUserId)
+        Log.info("📞 Answer (proto) sent via E2EE to \(active.session.peerUserId.prefix(8))…", category: "Calls")
     }
 
     private func sendOffer(toUserId: String) async throws {
         guard let active else { throw RPCError(code: .failedPrecondition, message: "No active call") }
         try ensureWebRTC(role: .caller)
         let plainSdp = try await active.webrtc?.createOffer() ?? ""
-        let encryptedSdp = try CallSignalCrypto.shared.encryptField(plainSdp, for: toUserId)
-
         var offer = Shared_Proto_Signaling_V1_CallOffer()
-        offer.sdp = encryptedSdp
+        offer.sdp = plainSdp
         offer.callType = .audio
         offer.callerDeviceID = Self.currentDeviceId()
         offer.callerUserID = SessionManager.shared.currentUserId ?? ""
         offer.offeredAt = Self.nowMs()
+        var sig = Shared_Proto_Signaling_V1_WebRTCSignal()
+        sig.callID = active.session.id
+        sig.senderDeviceID = Self.currentDeviceId()
+        sig.timestamp = Self.nowMs()
+        sig.signal = .offer(offer)
+        sendCallSignalProto(sig, to: toUserId)
+        Log.info("📞 Offer (proto) sent via E2EE to \(toUserId.prefix(8))… call_id=\(active.session.id.prefix(8))…", category: "Calls")
+    }
 
-        var rtc = Shared_Proto_Signaling_V1_WebRTCSignal()
-        rtc.callID = active.session.id
-        rtc.senderDeviceID = Self.currentDeviceId()
-        rtc.timestamp = Self.nowMs()
-        rtc.signal = .offer(offer)
-
-        var route = Shared_Proto_Signaling_V1_SignalRoute()
-        var user = Shared_Proto_Signaling_V1_UserTarget()
-        user.userID = toUserId
-        user.allDevices = true
-        route.user = user
-
-        var routed = Shared_Proto_Signaling_V1_RoutedWebRtcSignal()
-        routed.signal = rtc
-        routed.route = route
-
-        var req = Shared_Proto_Signaling_V1_SignalRequest()
-        req.request = .routedSignal(routed)
-
-        active.stream?.send(req)
-        Log.info("📞 Offer sent (to=\(toUserId.prefix(8))… call_id=\(active.session.id.prefix(8))…)", category: "Calls")
+    /// ICE candidates still travel via Signal stream (encrypted with CallSignalCrypto).
+    private func sendIceCandidate(_ c: WebRTCIceCandidate) {
+        guard let active else { return }
+        let peerUserId = active.session.peerUserId
+        var ice = Shared_Proto_Signaling_V1_IceCandidate()
+        do {
+            ice.candidate = try CallSignalCrypto.shared.encryptField(c.sdp, for: peerUserId)
+        } catch {
+            Log.error("📞 Failed to encrypt ICE candidate: \(error) — dropping", category: "Calls")
+            return
+        }
+        ice.sdpMid = c.sdpMid
+        ice.sdpMLineIndex = UInt32(max(0, c.sdpMLineIndex))
+        let msg = Self.makeRoutedSignal(callId: active.session.id, deviceId: Self.currentDeviceId(), signal: .iceCandidate(ice))
+        active.stream?.send(msg)
     }
 
     // MARK: - Message Builders
