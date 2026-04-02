@@ -16,7 +16,7 @@ final class CallKitProvider: NSObject, CXProviderDelegate {
     var onEnd: (@Sendable (UUID) -> Void)?
 
     private override init() {
-        let config = CXProviderConfiguration(localizedName: "Construct")
+        let config = CXProviderConfiguration()
         config.supportsVideo = true
         config.maximumCallsPerCallGroup = 1
         config.maximumCallGroups = 1

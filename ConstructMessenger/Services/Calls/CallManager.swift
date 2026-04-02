@@ -61,6 +61,7 @@ final class CallManager {
             self.session = session
         }
 
+        @MainActor
         func close() {
             keepaliveTask?.cancel()
             receiveTask?.cancel()

@@ -23,7 +23,8 @@ enum WebRTCSessionError: Error {
     case invalidState(String)
 }
 
-protocol WebRTCSessionProtocol: AnyObject, Sendable {
+@MainActor
+protocol WebRTCSessionProtocol: AnyObject {
     var onLocalIceCandidate: (@Sendable (WebRTCIceCandidate) -> Void)? { get set }
 
     func createOffer() async throws -> String
@@ -150,7 +151,7 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
     // MARK: - Helpers
 
     private func createSessionDescription(
-        _ build: @escaping (@escaping (RTCSessionDescription?, Error?) -> Void) -> Void
+        _ build: @escaping (@Sendable @escaping (RTCSessionDescription?, Error?) -> Void) -> Void
     ) async throws -> RTCSessionDescription {
         try await withCheckedThrowingContinuation { cont in
             build { sdp, error in
@@ -213,7 +214,7 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
 
     private static func configureAudioSession() throws {
         let session = AVAudioSession.sharedInstance()
-        try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetooth])
+        try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetoothHFP])
         try session.setActive(true)
     }
 }

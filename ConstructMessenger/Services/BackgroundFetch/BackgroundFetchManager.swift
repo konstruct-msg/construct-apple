@@ -351,7 +351,7 @@ class BackgroundFetchManager: NSObject {
                     // Background fetch may run before restoreRecentSessions() has completed
                     // (e.g., silent push during app launch race). restoreSession(for:) is a
                     // synchronous Keychain lookup — no-op if session already in memory.
-                    DispatchQueue.main.sync { CryptoManager.shared.restoreSession(for: otherUserId) }
+                    _ = DispatchQueue.main.sync { CryptoManager.shared.restoreSession(for: otherUserId) }
 
                     if CryptoManager.shared.hasSession(for: otherUserId) {
                         DispatchQueue.main.sync {

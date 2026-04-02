@@ -536,7 +536,7 @@ struct ChatView: View {
                     Button {
                         Task {
                             await callManager.startOutgoingCall(
-                                to: otherUser.id ?? "",
+                                to: otherUser.id,
                                 displayName: otherUser.resolvedDisplayName,
                                 hasVideo: false
                             )

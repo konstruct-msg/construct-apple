@@ -612,7 +612,7 @@ class ChatViewModel: NSObject {
             message,
             recipientId: recipientId,
             context: viewContext,
-            onError: { [weak self] error in
+            onError: { error in
                 ErrorRouter.shared.report(.unknown(error))
             }
         )
