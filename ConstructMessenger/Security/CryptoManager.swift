@@ -722,7 +722,7 @@ class CryptoManager {
             }
         )
 
-        Log.debug("✅ ENCRYPT: msgNum=\(components.messageNumber), otpkId=\(components.oneTimePreKeyId), ephemKey=\(components.ephemeralPublicKey.prefix(8).map { String(format: "%02x", $0) }.joined()), content=\(components.content.prefix(20))...", category: "CryptoManager")
+        Log.debug("✅ ENCRYPT: msgNum=\(components.messageNumber), otpkId=\(components.oneTimePreKeyId), ephemKey=\(components.ephemeralPublicKey.prefix(8).map { String(format: "%02x", $0) }.joined()), content=\(components.content.count) bytes", category: "CryptoManager")
 
         return components
     }
@@ -739,7 +739,7 @@ class CryptoManager {
         Log.debug("🔓 Decrypting message \(message.id.prefix(8))... contactId=\(logContactId.prefix(16))...", category: "CryptoManager")
         Log.debug("   messageNumber: \(message.messageNumber)", category: "CryptoManager")
         Log.debug("   ephemeralPublicKey: \(message.ephemeralPublicKey.count) bytes", category: "CryptoManager")
-        Log.debug("   content length: \(message.content.count) chars", category: "CryptoManager")
+        Log.debug("   content length: \(message.content.count) bytes (base64)", category: "CryptoManager")
 
         // coreLock serializes decrypt alongside encrypt — concurrent decrypts on the same
         // session advance the DR receive chain non-deterministically.
@@ -805,12 +805,13 @@ class CryptoManager {
             throw CryptoManagerError.sessionNotFound
         }
 
-        let contentForDecrypt = MessagePadding.unpadCiphertextBase64(content)
+        let rawContent = Data(base64Encoded: content) ?? Data()
+        let contentForDecrypt = MessagePadding.unpadCiphertext(rawContent)
         let plaintext = try core.decryptMessage(
             contactId: contactId,
             ephemeralPublicKey: [UInt8](ephemeralPublicKey),
             messageNumber: messageNumber,
-            content: contentForDecrypt
+            content: [UInt8](contentForDecrypt)
         )
         saveSessionToKeychain(for: contactId)
         return plaintext
@@ -845,11 +846,13 @@ class CryptoManager {
                 _ = try core.importSession(contactId: message.from, data: [UInt8](archive.sessionData))
                 
                 // Try to decrypt
+                let rawContent = Data(base64Encoded: message.content) ?? Data()
+                let contentBytes = [UInt8](MessagePadding.unpadCiphertext(rawContent))
                 let plaintext = try core.decryptMessage(
                     contactId: message.from,
                     ephemeralPublicKey: [UInt8](message.ephemeralPublicKey),
                     messageNumber: message.messageNumber,
-                    content: message.content
+                    content: contentBytes
                 )
                 
                 Log.info("✅ Decrypted with archived session #\(index) (archived at: \(archive.archivedAt))", category: "CryptoManager")

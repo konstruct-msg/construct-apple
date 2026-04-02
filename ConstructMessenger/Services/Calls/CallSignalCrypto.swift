@@ -65,7 +65,7 @@ final class CallSignalCrypto {
             let envelope = SignalFieldEnvelope(
                 epk: components.ephemeralPublicKey.base64EncodedString(),
                 n: components.messageNumber,
-                c: components.content
+                c: components.content.base64EncodedString()
             )
             let json = try JSONEncoder().encode(envelope)
             return Self.encryptedPrefix + json.base64EncodedString()
