@@ -269,6 +269,7 @@ final class IceProxyManager: ObservableObject {
 
         var port: UInt16 = 0
         let result: Int32
+        PerformanceMetrics.shared.start(.iceProxyStartBegin, label: relay.address)
 
         if let sni = relay.tlsServerName {
             // TLS-over-obfs4 mode: outer TLS (SecureTransport, SNI=sni) before obfs4.
@@ -291,12 +292,12 @@ final class IceProxyManager: ObservableObject {
         }
 
         if result == 0 {
+            PerformanceMetrics.shared.end(.iceProxyStartBegin, endEvent: .iceProxyStartEnd, label: relay.address)
             isRunning   = true
             proxyPort   = port
             activeRelay = relay
             return port
         } else {
-            // result == 1 → cert/handshake failure; result == 2 → network/bind failure (heuristic)
             lastError = result == 2 ? "Failed to start proxy (network unreachable)" : "Failed to start proxy (check bridge cert)"
             return nil
         }

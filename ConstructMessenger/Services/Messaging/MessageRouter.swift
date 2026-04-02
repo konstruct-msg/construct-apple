@@ -189,7 +189,9 @@ class MessageRouter {
             if let core = CryptoManager.shared.orchestratorCore,
                let event = buildIncomingEvent(message: message, otherUserId: otherUserId) {
                 do {
+                    PerformanceMetrics.shared.messageDecryptStart(messageId: message.id)
                     let actions = try core.handleEvent(event: event)
+                    PerformanceMetrics.shared.messageDecryptEnd(messageId: message.id)
                     if actions.contains(where: { if case .messageDecrypted = $0 { return true }; return false }) {
                         executeRustActions(actions, for: message, chat: chat, otherUserId: otherUserId, in: context)
                         return
@@ -944,6 +946,7 @@ class MessageRouter {
         
         do {
             try context.save()
+            PerformanceMetrics.shared.messageUIDisplayed(messageId: messageData.id)
 
             let senderId = messageData.from
 

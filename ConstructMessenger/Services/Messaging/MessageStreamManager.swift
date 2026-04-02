@@ -683,7 +683,7 @@ final class MessageStreamManager {
                 Log.info("⚠️ Failed to decode encrypted_payload for message \(envelope.messageID)", category: "MessageStream")
                 return nil
             }
-            return .message(ChatMessage(
+            let msg = ChatMessage(
                 id: envelope.messageID,
                 from: envelope.sender.userID,
                 to: envelope.recipient.userID,
@@ -702,7 +702,9 @@ final class MessageStreamManager {
                 conversationId: envelope.conversationID,
                 replyToMessageId: envelope.replyToMessageID,
                 rawPayload: envelope.encryptedPayload
-            ))
+            )
+            PerformanceMetrics.shared.messageEnvelopeArrived(messageId: envelope.messageID)
+            return .message(msg)
         case .receipt(let receipt):
             // Deliver receipt: extract confirmed message IDs and propagate
             if case .direct(let directReceipt) = receipt.receiptType,

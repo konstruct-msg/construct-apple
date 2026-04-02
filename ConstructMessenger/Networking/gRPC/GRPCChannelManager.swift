@@ -153,6 +153,7 @@ final class GRPCChannelManager: Sendable {
         _conn = nil
 
         let client = try makeClient()
+        PerformanceMetrics.shared.start(.grpcConnectStart, label: key)
         let task = Task.detached { [weak self] in
             do {
                 try await client.runConnections()
@@ -387,8 +388,8 @@ final class GRPCChannelManager: Sendable {
                     }
                 }
 
+                PerformanceMetrics.shared.end(.grpcConnectStart, endEvent: .grpcConnectEnd, label: routingKey())
                 return result
-
             } catch {
                 lastError = error
 

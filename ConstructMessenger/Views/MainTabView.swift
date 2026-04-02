@@ -21,6 +21,7 @@ struct MainTabView: View {
 
     var body: some View {
         callContent
+            .debugMetricsOverlay()
             // In-app incoming call sheet (CallKit handles lock-screen / background)
             #if os(iOS)
             .overlay(alignment: .bottom) {
