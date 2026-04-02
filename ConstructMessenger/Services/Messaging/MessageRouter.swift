@@ -336,6 +336,14 @@ class MessageRouter {
                 // Nothing to do here — Swift handles this via ChatsViewModel.pruneExpired.
                 break
 
+            case .callSignalDecrypted(let contactId, _, let protoBytes):
+                // Rust decrypted a content_type=12 WirePayload — dispatch the raw proto bytes to CallManager.
+                if let signal = CallManager.decodeSignalProto(from: protoBytes) {
+                    CallManager.shared.handleCallSignalProto(from: contactId, signal: signal)
+                } else {
+                    Log.error("❌ callSignalDecrypted: failed to decode WebRTCSignal proto from \(contactId.prefix(8))…", category: "MessageRouter")
+                }
+
             case .notifyError(let code, let msg):
                 Log.error("❌ Rust orchestrator error [\(code)]: \(msg)", category: "MessageRouter")
 

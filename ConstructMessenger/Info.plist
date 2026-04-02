@@ -31,6 +31,8 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Construct uses the microphone to record voice messages and make encrypted calls.</string>
 	<key>NSUserNotificationsUsageDescription</key>
 	<string>Construct Messenger sends you notifications for new messages.</string>
 	<key>UIBackgroundModes</key>
