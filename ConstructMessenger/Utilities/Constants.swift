@@ -390,10 +390,10 @@ struct ICEConfig {
     /// Primary ICE endpoint: TLS 1.3 → obfs4 → gRPC (Amsterdam, via Traefik).
     /// Uses `ice.<grpcHost>:443` derived at runtime from GRPCChannelManager.currentHost.
 
-    /// Moscow relay: plain TCP → obfs4 → TCP relay → Amsterdam.
-    /// No outer TLS wrapper — Yandex Cloud VM does transparent TCP forwarding.
-    /// Same bridge cert as primary (the relay just passes obfs4 bytes through).
-    static let mskRelayAddress = "ice.msk.konstruct.cc:9443"
+    /// Moscow relay: TLS 1.3 → obfs4 → TCP relay → Amsterdam.
+    /// Traefik on the relay server terminates TLS on port 443, passes plaintext TCP to
+    /// the gateway's obfs4 listener (same as the primary AMS setup).
+    static let mskRelayAddress = "ice.msk.konstruct.cc:443"
 
     /// Hardcoded relay list used as a last resort when discovery is unavailable.
     static let hardcodedRelayAddresses: [String] = [mskRelayAddress]

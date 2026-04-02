@@ -135,6 +135,20 @@ struct IceRelay: Codable, Identifiable {
     }
 }
 
+/// Builds an `IceRelay` from a server-pushed address string, automatically
+/// detecting TLS mode by port: `:443` → TLS-wrapped obfs4 (SNI = hostname),
+/// any other port → legacy plain-obfs4.
+private func makeRelay(address: String, bridgeCert: String) -> IceRelay {
+    // "host:port" — extract hostname to use as SNI for port-443 endpoints.
+    let sni: String?
+    if address.hasSuffix(":443") {
+        sni = address.components(separatedBy: ":").first.flatMap { $0.isEmpty ? nil : $0 }
+    } else {
+        sni = nil
+    }
+    return IceRelay(address: address, bridgeCert: bridgeCert, iatMode: .none, tlsServerName: sni)
+}
+
 /// Manages the construct-ice local TCP proxy for gRPC obfuscation.
 @MainActor
 final class IceProxyManager: ObservableObject {
@@ -393,7 +407,7 @@ final class IceProxyManager: ObservableObject {
 
             // Try the timezone-preferred relay(s) first (normally just MSK).
             for relayAddress in relayAddresses {
-                let relayConfig = IceRelay(address: relayAddress, bridgeCert: cert, iatMode: .none, tlsServerName: nil)
+                let relayConfig = makeRelay(address: relayAddress, bridgeCert: cert)
                 if start(relay: relayConfig) != nil {
                     saveRelay(relayConfig)
                     Log.info("🧊 ICE started via regional relay: \(relayAddress)", category: "ICE")
@@ -421,7 +435,7 @@ final class IceProxyManager: ObservableObject {
             // Non-CIS path: primary failed, fall through to relay list.
             Log.info("🧊 ICE primary failed — trying relay endpoints", category: "ICE")
             for relayAddress in relayAddresses {
-                let relayConfig = IceRelay(address: relayAddress, bridgeCert: cert, iatMode: .none, tlsServerName: nil)
+                let relayConfig = makeRelay(address: relayAddress, bridgeCert: cert)
                 if start(relay: relayConfig) != nil {
                     saveRelay(relayConfig)
                     Log.info("🧊 ICE started via relay: \(relayAddress)", category: "ICE")
@@ -608,18 +622,11 @@ final class IceProxyManager: ObservableObject {
     func loadStoredRelay() -> IceRelay? {
         guard let data = UserDefaults.standard.data(forKey: relayKey),
               let relay = try? JSONDecoder().decode(IceRelay.self, from: data) else { return nil }
-        // Migrate old relay format (pre-TLS mode): address was "ice.<host>:9443", no tlsServerName.
-        // Upgrade transparently to TLS mode: ice.<host>:443 with SNI set.
-        // IMPORTANT: do NOT migrate known relay addresses — MSK relay is intentionally plain obfs4
-        // on port 9443 (no TLS wrapper).
-        let knownRelayAddresses = Set(cachedRelayAddresses())
-        let needsMigration = !knownRelayAddresses.contains(relay.address)
-                          && (relay.tlsServerName == nil || relay.address.hasSuffix(":9443"))
-        if needsMigration {
-            let host = GRPCChannelManager.shared.currentHost
-            let iceHost = "ice.\(host)"
-            let upgraded = IceRelay(address: "\(iceHost):443", bridgeCert: relay.bridgeCert,
-                                    iatMode: relay.iatMode, tlsServerName: iceHost)
+        // Migrate stored relays that still use legacy port 9443 (plain obfs4, no TLS wrapper).
+        // Upgrade to port 443 with TLS SNI — all relays now run TLS-over-obfs4 via Traefik.
+        if relay.address.hasSuffix(":9443") || relay.tlsServerName == nil {
+            let upgraded = makeRelay(address: relay.address.replacingOccurrences(of: ":9443", with: ":443"),
+                                     bridgeCert: relay.bridgeCert)
             saveRelay(upgraded)
             Log.info("🧊 Migrated stored relay to TLS mode: \(upgraded.address)", category: "ICE")
             return upgraded
