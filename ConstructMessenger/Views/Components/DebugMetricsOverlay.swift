@@ -3,13 +3,12 @@
 //  Construct Messenger
 //
 //  Debug-build overlay showing real-time performance metrics.
-//  Activated by triple-tap gesture on the main view.
-//  Only compiled in DEBUG builds.
+//  Activated by shake gesture. Only the overlay itself is compiled in DEBUG only.
 //
 
-#if DEBUG
-
 import SwiftUI
+
+#if DEBUG
 
 // MARK: - Overlay
 
