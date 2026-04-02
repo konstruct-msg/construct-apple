@@ -12,7 +12,7 @@ final class MessageCryptoService {
     struct EncryptedMessageComponents {
         let ephemeralPublicKey: Data
         let messageNumber: UInt32
-        let content: String
+        let content: Data           // raw bytes: nonce || ciphertext_with_tag (optionally padded)
         let suiteId: UInt16
         let oneTimePreKeyId: UInt32  // OTPK key_id used in X3DH (0 = no OTPK)
     }
@@ -77,21 +77,21 @@ final class MessageCryptoService {
             Log.debug("   ephemeralPublicKey preview: \(ephemeralPreview)...", category: "CryptoManager")
             Log.debug("   messageNumber: \(rustComponents.messageNumber)", category: "CryptoManager")
             Log.debug("   oneTimePrekeyId: \(rustComponents.oneTimePrekeyId)", category: "CryptoManager")
-            Log.debug("   content (before padding): \(rustComponents.content.count) chars", category: "CryptoManager")
-            Log.debug("   content preview: \(rustComponents.content.prefix(32))...", category: "CryptoManager")
+            Log.debug("   content (before padding): \(rustComponents.content.count) bytes", category: "CryptoManager")
             #endif
 
+            let rawContent = Data(rustComponents.content)
             let components = EncryptedMessageComponents(
                 ephemeralPublicKey: Data(rustComponents.ephemeralPublicKey),
                 messageNumber: rustComponents.messageNumber,
-                content: MessagePadding.padCiphertextBase64(rustComponents.content),
+                content: MessagePadding.padCiphertext(rawContent),
                 suiteId: suiteId,
                 oneTimePreKeyId: rustComponents.oneTimePrekeyId
             )
 
             #if DEBUG
             Log.debug("🔐 ENCRYPT: After padding", category: "CryptoManager")
-            Log.debug("   content (after padding): \(components.content.count) chars", category: "CryptoManager")
+            Log.debug("   content (after padding): \(components.content.count) bytes", category: "CryptoManager")
             #endif
 
             saveSession(userId)
@@ -127,12 +127,13 @@ final class MessageCryptoService {
         }
 
         do {
-            let contentForDecrypt = MessagePadding.unpadCiphertextBase64(message.content)
+            let rawContent = Data(base64Encoded: message.content) ?? Data()
+            let contentForDecrypt = MessagePadding.unpadCiphertext(rawContent)
             let plaintext = try core.decryptMessage(
                 contactId: contactId,
                 ephemeralPublicKey: [UInt8](message.ephemeralPublicKey),
                 messageNumber: message.messageNumber,
-                content: contentForDecrypt
+                content: [UInt8](contentForDecrypt)
             )
             saveSession(contactId)
             return plaintext
