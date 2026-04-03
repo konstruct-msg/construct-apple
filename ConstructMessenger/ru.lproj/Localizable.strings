@@ -662,3 +662,26 @@
 "call_no_relay" = "Нет соединения (relay недоступен)";
 "call_dismiss" = "Закрыть";
 "call_call_back" = "Перезвонить";
+
+
+// MARK: - Account / Identity Settings
+"change_photo" = "изменить фото";
+"identity_section" = "идентичность";
+"account_section" = "аккаунт";
+"bio" = "био";
+"user_id" = "id пользователя";
+"joined" = "присоединился";
+"changes_encrypted_footer" = "> изменения защищены сквозным шифрованием";
+"delete_account_row" = "удалить аккаунт";
+"delete_action" = "удалить";
+"manage_action" = "управлять";
+"add_action" = "добавить";
+
+// MARK: - Profile / User
+"call_voice" = "голосовой звонок";
+"end_to_end_encrypted" = "изменения защищены сквозным шифрованием";
+
+// MARK: - QR / Invite
+"invite" = "пригласить";
+"qr_caption_trust" = "доверие вычисляется, а не предполагается.";
+"qr_scan_hint" = "покажи кому-то рядом или сделай скриншот";
