@@ -15,15 +15,15 @@ struct MessageReplyBar: View {
     let onCancel: () -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 10) {
             Rectangle()
-                .fill(Color.blue)
-                .frame(width: 3)
+                .fill(Color.CT.accent)
+                .frame(width: 2)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text("reply_to_colon")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                Text(LocalizedStringKey("reply_to_colon"))
+                    .font(CTFont.regular(10))
+                    .foregroundColor(Color.CT.textDim)
                 ReplyPreviewContent(
                     content: content,
                     messageId: messageId,
@@ -36,19 +36,19 @@ struct MessageReplyBar: View {
             Spacer()
 
             Button(action: onCancel) {
-                Image(systemName: "xmark.circle.fill")
-                    .foregroundColor(.secondary)
-                    .font(.title3)
+                Text("[×]")
+                    .font(CTFont.bold(13))
+                    .foregroundColor(Color.CT.textDim)
             }
+            .buttonStyle(.plain)
         }
-        .padding(.horizontal)
+        .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .frame(maxHeight: 50)
-        #if canImport(UIKit)
-        .background(Color(uiColor: .systemGray6))
-        #else
-        .background(Color(nsColor: .windowBackgroundColor))
-        #endif
+        .background(Color.CT.bgMsg)
+        .overlay(alignment: .bottom) {
+            Rectangle().frame(height: 0.5).foregroundColor(Color.CT.noise)
+        }
         .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 }
@@ -60,38 +60,38 @@ struct MessageEditBar: View {
     let onCancel: () -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 10) {
             Rectangle()
-                .fill(Color.orange)
-                .frame(width: 3)
+                .fill(Color.CT.accentDim)
+                .frame(width: 2)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(LocalizedStringKey("editing_message"))
-                    .font(.caption)
-                    .foregroundColor(.orange)
+                    .font(CTFont.regular(10))
+                    .foregroundColor(Color.CT.accentDim)
                 Text(content)
-                    .font(.subheadline)
+                    .font(CTFont.regular(13))
                     .lineLimit(1)
-                    .foregroundColor(.primary)
+                    .foregroundColor(Color.CT.textDim)
             }
             .fixedSize(horizontal: false, vertical: true)
 
             Spacer()
 
             Button(action: onCancel) {
-                Image(systemName: "xmark.circle.fill")
-                    .foregroundColor(.secondary)
-                    .font(.title3)
+                Text("[×]")
+                    .font(CTFont.bold(13))
+                    .foregroundColor(Color.CT.textDim)
             }
+            .buttonStyle(.plain)
         }
-        .padding(.horizontal)
+        .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .frame(maxHeight: 50)
-        #if canImport(UIKit)
-        .background(Color(uiColor: .systemGray6))
-        #else
-        .background(Color(nsColor: .windowBackgroundColor))
-        #endif
+        .background(Color.CT.bgMsg)
+        .overlay(alignment: .bottom) {
+            Rectangle().frame(height: 0.5).foregroundColor(Color.CT.noise)
+        }
         .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 }

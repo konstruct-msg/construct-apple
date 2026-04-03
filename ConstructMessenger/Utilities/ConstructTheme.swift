@@ -90,6 +90,10 @@ enum CTSymbol {
     static let tabContacts = "[⊹]"
     static let tabSettings = "[cfg]"
 
+    // Input
+    static let mic         = "[mic]"
+    static let attach      = "[+]"
+
     // Separators — call as functions for custom length
     static func thin(_ count: Int = 25)  -> String { String(repeating: "- ", count: count) }
     static func thick(_ count: Int = 25) -> String { String(repeating: "= ", count: count) }

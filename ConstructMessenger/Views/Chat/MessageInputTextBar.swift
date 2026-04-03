@@ -25,12 +25,8 @@ struct MessageInputTextBar: View {
             sendButton
             voiceButton
         }
-        #if canImport(UIKit)
-        .background(Color(uiColor: .systemGray6))
-        #else
-        .background(Color(nsColor: .windowBackgroundColor))
-        #endif
-        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .background(Color.CT.bgMsg)
+        .overlay(Rectangle().stroke(Color.CT.noise, lineWidth: 0.5))
     }
 
     // MARK: - Text field
@@ -41,14 +37,15 @@ struct MessageInputTextBar: View {
         ZStack(alignment: .topLeading) {
             if text.isEmpty {
                 Text(LocalizedStringKey("message_placeholder"))
-                    .foregroundStyle(.secondary)
-                    .font(.system(size: 13))
+                    .foregroundStyle(Color.CT.textDim)
+                    .font(CTFont.regular(13))
                     .padding(.horizontal, 16)
                     .padding(.vertical, 9)
                     .allowsHitTesting(false)
             }
             TextEditor(text: $text)
-                .font(.system(size: 13))
+                .font(CTFont.regular(13))
+                .foregroundColor(Color.CT.text)
                 .scrollContentBackground(.hidden)
                 .focused($focused)
                 .padding(.horizontal, 12)
@@ -63,10 +60,12 @@ struct MessageInputTextBar: View {
         .padding(.trailing, canSend ? 8 : 12)
         #else
         TextField("message_placeholder", text: $text, axis: .vertical)
+            .font(CTFont.regular(14))
+            .foregroundColor(Color.CT.text)
             .lineLimit(1...5)
             .padding(.leading, 12)
             .padding(.trailing, canSend ? 8 : 12)
-            .padding(.vertical, 8)
+            .padding(.vertical, 10)
             .focused($focused)
         #endif
     }
@@ -77,9 +76,9 @@ struct MessageInputTextBar: View {
     private var charCounter: some View {
         if text.count > MessageSizeLimits.maxTextCharacters - 200 {
             let remaining = MessageSizeLimits.maxTextCharacters - text.count
-            Text(remaining >= 0 ? "\(remaining)" : "\(-remaining) over limit")
-                .font(.caption2)
-                .foregroundColor(remaining < 0 ? .red : .secondary)
+            Text(remaining >= 0 ? "\(remaining)" : "+\(-remaining)")
+                .font(CTFont.regular(10))
+                .foregroundColor(remaining < 0 ? Color.CT.danger : Color.CT.textDim)
                 .padding(.trailing, 4)
                 .transition(.opacity)
         }
@@ -91,23 +90,14 @@ struct MessageInputTextBar: View {
     private var sendButton: some View {
         if canSend {
             Button(action: onSend) {
-                #if os(macOS)
-                ZStack {
-                    Circle()
-                        .fill(Color.accentColor)
-                        .frame(width: 26, height: 26)
-                    Image(systemName: "arrow.up")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.white)
-                }
-                .padding(.trailing, 6)
-                .help("Send (⏎) · New line (⇧⏎)")
-                #else
-                Image(systemName: "arrow.up.circle.fill")
-                    .font(.system(size: 32))
-                    .foregroundColor(Color.blue)
-                    .padding(.trailing, 4)
-                #endif
+                Text("[↑]")
+                    .font(CTFont.bold(15))
+                    .foregroundColor(Color.CT.accent)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 10)
+                    #if os(macOS)
+                    .help("Send (⏎) · New line (⇧⏎)")
+                    #endif
             }
             .disabled(isSending)
             .transition(.scale.combined(with: .opacity))
@@ -121,10 +111,11 @@ struct MessageInputTextBar: View {
         #if os(iOS)
         if !canSend, let onStartVoice {
             Button(action: onStartVoice) {
-                Image(systemName: "microphone")
-                    .font(.system(size: 24))
-                    .foregroundStyle(Color.secondary)
-                    .padding(.trailing, 6)
+                Text(CTSymbol.mic)
+                    .font(CTFont.regular(13))
+                    .foregroundColor(Color.CT.textDim)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 10)
             }
             .buttonStyle(.plain)
             .transition(.scale.combined(with: .opacity))

@@ -95,7 +95,8 @@ struct MessageInputView: View {
             inputRow
             #endif
         }
-        .background(Color.AppBackground.primary)
+        .background(Color.CT.bg)
+        .ctBorderTop()
         .animation(.easeInOut(duration: 0.2), value: canSend)
         .animation(.easeInOut(duration: 0.2), value: replyingTo != nil)
         .animation(.easeInOut(duration: 0.2), value: editingMessage != nil)
@@ -162,9 +163,9 @@ struct MessageInputView: View {
 
     private var attachmentButton: some View {
         Button { showAttachmentMenu = true } label: {
-            Image(systemName: "plus.circle.fill")
-                .font(.system(size: 28))
-                .foregroundColor(Color.blue)
+            Text(CTSymbol.attach)
+                .font(CTFont.bold(15))
+                .foregroundColor(Color.CT.accentDim)
         }
         #if os(iOS)
         .confirmationDialog(LocalizedStringKey("attach"), isPresented: $showAttachmentMenu) {
