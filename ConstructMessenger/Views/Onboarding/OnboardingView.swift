@@ -50,12 +50,7 @@ struct OnboardingView: View {
 
                 // Branding
                 VStack(spacing: 10) {
-                    Image("KonstructLogo")
-                        .resizable()
-                        .renderingMode(.template)
-                        .foregroundColor(Color.CT.text)
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 64, height: 64)
+                    CTLogoView(size: 64, color: Color.CT.text)
 
                     Text("CONSTRUCT")
                         .font(CTFont.bold(26))

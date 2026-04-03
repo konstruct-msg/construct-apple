@@ -21,16 +21,13 @@ struct PinLockView: View {
 
     var body: some View {
         ZStack {
-            Color.AppBackground.primary.ignoresSafeArea()
-            LatticeBackgroundView().ignoresSafeArea().opacity(0.35)
+            Color.CT.bg.ignoresSafeArea()
+            CTMatrixBackground().ignoresSafeArea()
 
             VStack(spacing: 0) {
                 Spacer()
 
-                Image("KonstructLogo")
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 134, height: 134)
+                CTLogoView(size: 134)
 
                 Spacer().frame(height: 52)
 
@@ -59,17 +56,17 @@ struct PinLockView: View {
         VStack(spacing: 20) {
             Image(systemName: securityViewModel.biometricIconName)
                 .font(.system(size: 52, weight: .thin))
-                .foregroundColor(Color.blue)
+                .foregroundStyle(Color.CT.accent)
 
             Text(String(format: NSLocalizedString("use_biometric", comment: ""),
                         securityViewModel.biometricDisplayName))
-                .font(.headline)
-                .foregroundColor(.secondary)
+                .font(CTFont.medium(16))
+                .foregroundStyle(Color.CT.textDim)
 
             if let errorMessage {
                 Text(errorMessage)
-                    .foregroundColor(.red)
-                    .font(.subheadline)
+                    .foregroundStyle(Color.CT.danger)
+                    .font(CTFont.regular(13))
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 32)
             }
@@ -77,7 +74,7 @@ struct PinLockView: View {
             Button("use_pin_code") {
                 withAnimation { showPinEntry = true; errorMessage = nil }
             }
-            .foregroundColor(Color.blue)
+            .foregroundStyle(Color.CT.accent)
             .padding(.top, 8)
         }
     }
@@ -95,8 +92,8 @@ struct PinLockView: View {
 
             if let errorMessage {
                 Text(errorMessage)
-                    .foregroundColor(.red)
-                    .font(.subheadline)
+                    .foregroundStyle(Color.CT.danger)
+                    .font(CTFont.regular(13))
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 32)
             }
@@ -112,7 +109,7 @@ struct PinLockView: View {
                                securityViewModel.biometricDisplayName),
                         systemImage: securityViewModel.biometricIconName
                     )
-                    .foregroundColor(Color.blue)
+                    .foregroundStyle(Color.CT.accent)
                 }
             }
         }
@@ -125,10 +122,10 @@ struct PinLockView: View {
         return HStack(spacing: 14) {
             ForEach(0 ..< length, id: \.self) { index in
                 Circle()
-                    .fill(index < pin.count ? Color.primary : Color.clear)
+                    .fill(index < pin.count ? Color.CT.text : Color.clear)
                     .overlay(
                         Circle().stroke(
-                            Color.primary.opacity(index < pin.count ? 1.0 : 0.3),
+                            Color.CT.text.opacity(index < pin.count ? 1.0 : 0.3),
                             lineWidth: 1.5
                         )
                     )
@@ -169,15 +166,15 @@ struct PinLockView: View {
             Button { numpadTap(key) } label: {
                 ZStack {
                     Circle()
-                        .fill(Color.primary.opacity(0.20))
+                        .fill(Color.CT.noise)
                     if key == "⌫" {
                         Image(systemName: "delete.left")
                             .font(.system(size: 20, weight: .medium))
-                            .foregroundColor(.primary)
+                            .foregroundStyle(Color.CT.text)
                     } else {
                         Text(key)
-                            .font(.system(size: 26, weight: .regular, design: .rounded))
-                            .foregroundColor(.primary)
+                            .font(CTFont.regular(26))
+                            .foregroundStyle(Color.CT.text)
                     }
                 }
                 .frame(width: 76, height: 76)
