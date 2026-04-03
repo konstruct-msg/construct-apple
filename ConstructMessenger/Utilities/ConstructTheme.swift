@@ -336,15 +336,16 @@ struct CTTabBar: View {
 
 struct CTSettingsSectionHeader: View {
     let title: String
+    var color: Color = Color.CT.accentDim
 
     var body: some View {
         HStack(spacing: 6) {
             Text(">")
                 .font(CTFont.bold(11))
-                .foregroundColor(Color.CT.accentDim)
+                .foregroundColor(color)
             Text(title.uppercased())
                 .font(CTFont.bold(11))
-                .foregroundColor(Color.CT.accentDim)
+                .foregroundColor(color)
         }
         .padding(.horizontal, 12)
         .padding(.top, 16)

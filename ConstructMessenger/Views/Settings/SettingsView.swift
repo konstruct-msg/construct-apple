@@ -122,9 +122,9 @@ struct SettingsView: View {
                         CTSep()
 
                         // MARK: Developer
-                        CTSettingsSectionHeader(title: NSLocalizedString("developer", comment: ""))
+                        CTSettingsSectionHeader(title: NSLocalizedString("developer", comment: ""), color: .orange)
                         NavigationLink(destination: DiagnosticsView()) {
-                            CTSettingsRow(label: "DIAGNOSTICS & LOGS", value: CTSymbol.forward)
+                            CTSettingsRow(label: "DIAGNOSTICS & LOGS", value: CTSymbol.forward, valueColor: .orange)
                         }
                         .buttonStyle(.plain)
                         CTSep()
