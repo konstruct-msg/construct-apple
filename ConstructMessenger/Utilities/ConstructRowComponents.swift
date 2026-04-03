@@ -62,14 +62,8 @@ struct ConstructActionRow: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 13)
-            .background(
-                RoundedRectangle(cornerRadius: 13)
-                    .fill(rowFill)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 13)
-                            .strokeBorder(rowBorder, lineWidth: 1)
-                    )
-            )
+            .background(rowFill)
+            .overlay(Rectangle().strokeBorder(rowBorder, lineWidth: 1))
             .foregroundStyle(rowForeground)
         }
         .buttonStyle(.plain)
@@ -83,7 +77,7 @@ struct ConstructActionRow: View {
             .font(CTFont.regular(10))
             .foregroundStyle(Color.CT.textDim)
             .padding(.horizontal, 6).padding(.vertical, 2)
-            .background(Capsule().fill(Color.CT.bgMsg))
+            .background(Rectangle().fill(Color.CT.bgMsg))
     }
 
     private var rowFill: Color {
@@ -168,22 +162,12 @@ struct ConstructButtonRow: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 14) {
-                Image(systemName: icon)
-                    .foregroundStyle(iconColor)
-                    .frame(width: 22, alignment: .center)
-                    .font(.system(size: 16))
-
+                
                 Text(title)
                     .font(CTFont.bold(16))
                     .foregroundStyle(Color.CT.text)
 
                 Spacer()
-
-                if showChevron {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Color.CT.textDim)
-                }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
@@ -236,7 +220,7 @@ struct ConstructSection<Content: View>: View {
                             .strokeBorder(Color.CT.noise, lineWidth: 1)
                     )
             )
-            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .clipShape(Rectangle())
         }
         .padding(.horizontal, 16)
     }
