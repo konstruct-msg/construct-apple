@@ -35,18 +35,14 @@ struct FileAttachmentBubbleView: View {
             }
             if !fileContent.caption.isEmpty {
                 Text(fileContent.caption)
-                    .font(.subheadline)
-                    .foregroundColor(isSentByMe ? .white : .primary)
+                    .font(CTFont.regular(12))
+                    .foregroundColor(isSentByMe ? Color.CT.bg : Color.CT.text)
                     .padding(.top, 2)
             }
         }
         .padding(12)
-        #if canImport(UIKit)
-        .background(isSentByMe ? Color.accentColor : Color(uiColor: .systemGray5))
-        #else
-        .background(isSentByMe ? Color.accentColor : Color(nsColor: .controlBackgroundColor))
-        #endif
-        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .background(isSentByMe ? Color.CT.accent : Color.CT.bgMsg)
+        .ctNoiseBorder()
         .quickLookPreview($previewURL)
         #if canImport(UIKit)
         .fullScreenCover(item: Binding(
@@ -79,18 +75,18 @@ struct FileAttachmentBubbleView: View {
                 .frame(maxWidth: .infinity)
                 .frame(height: 180)
                 .clipped()
-                .cornerRadius(10)
+                .ctNoiseBorder()
 
                 // Play / Download overlay
                 ZStack {
-                    Circle()
+                    Rectangle()
                         .fill(Color.black.opacity(0.55))
                         .frame(width: 54, height: 54)
                     if downloading.contains(file.mediaId) {
-                        ProgressView().tint(.white).scaleEffect(1.2)
+                        ProgressView().tint(Color.CT.accent).scaleEffect(1.2)
                     } else {
-                        Image(systemName: downloadedURLs[file.mediaId] != nil ? "play.fill" : "arrow.down.circle.fill")
-                            .font(.system(size: 24, weight: .semibold))
+                        Text(downloadedURLs[file.mediaId] != nil ? "[▶]" : "[↓]")
+                            .font(CTFont.bold(20))
                             .foregroundColor(.white)
                     }
                 }
@@ -101,11 +97,10 @@ struct FileAttachmentBubbleView: View {
                     HStack {
                         Spacer()
                         Text(ByteCountFormatter.string(fromByteCount: Int64(file.size), countStyle: .file))
-                            .font(.caption2.weight(.medium))
+                            .font(CTFont.regular(10))
                             .foregroundColor(.white)
                             .padding(.horizontal, 6).padding(.vertical, 3)
                             .background(Color.black.opacity(0.5))
-                            .cornerRadius(6)
                             .padding(6)
                     }
                 }
@@ -124,31 +119,33 @@ struct FileAttachmentBubbleView: View {
             HStack(spacing: 10) {
                 Image(systemName: iconName(for: file.filename))
                     .font(.system(size: 22))
-                    .foregroundColor(isSentByMe ? .white.opacity(0.9) : .accentColor)
+                    .foregroundColor(isSentByMe ? Color.CT.bg : Color.CT.accent)
                     .frame(width: 32)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(file.filename)
-                        .font(.subheadline.weight(.medium))
-                        .foregroundColor(isSentByMe ? .white : .primary)
+                        .font(CTFont.medium(13))
+                        .foregroundColor(isSentByMe ? Color.CT.bg : Color.CT.text)
                         .lineLimit(1)
                     Text(ByteCountFormatter.string(fromByteCount: Int64(file.size), countStyle: .file))
-                        .font(.caption)
-                        .foregroundColor(isSentByMe ? .white.opacity(0.7) : .secondary)
+                        .font(CTFont.regular(11))
+                        .foregroundColor(isSentByMe ? Color.CT.bg.opacity(0.7) : Color.CT.textDim)
                 }
 
                 Spacer()
 
                 if downloading.contains(file.mediaId) {
                     ProgressView()
-                        .tint(isSentByMe ? .white : .accentColor)
+                        .tint(isSentByMe ? Color.CT.bg : Color.CT.accent)
                         .scaleEffect(0.8)
                 } else if downloadedURLs[file.mediaId] != nil {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(isSentByMe ? .white.opacity(0.8) : .green)
+                    Text("[✓]")
+                        .font(CTFont.regular(13))
+                        .foregroundColor(isSentByMe ? Color.CT.bg.opacity(0.8) : Color.CT.accent)
                 } else {
-                    Image(systemName: "arrow.down.circle")
-                        .foregroundColor(isSentByMe ? .white.opacity(0.8) : .accentColor)
+                    Text("[↓]")
+                        .font(CTFont.regular(13))
+                        .foregroundColor(isSentByMe ? Color.CT.bg.opacity(0.8) : Color.CT.accent)
                 }
             }
         }

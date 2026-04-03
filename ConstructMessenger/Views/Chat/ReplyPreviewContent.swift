@@ -37,8 +37,8 @@ struct ReplyPreviewContent: View {
             HStack(spacing: 6) {
                 thumbnailView
                 Text(mediaCaptionLabel)
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .font(CTFont.regular(12))
+                    .foregroundColor(Color.CT.textDim)
                     .lineLimit(1)
             }
             .onAppear { loadThumbnail() }
@@ -46,16 +46,16 @@ struct ReplyPreviewContent: View {
             HStack(spacing: 6) {
                 Image(systemName: fileIcon(for: fc.files.first?.mediaType))
                     .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Color.CT.textDim)
                 Text(fc.files.first?.filename ?? NSLocalizedString("file_attachment", comment: ""))
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .font(CTFont.regular(12))
+                    .foregroundColor(Color.CT.textDim)
                     .lineLimit(1)
             }
         } else {
             Text(content ?? "")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
+                .font(CTFont.regular(12))
+                .foregroundColor(Color.CT.textDim)
                 .lineLimit(lineLimit)
         }
     }
@@ -68,23 +68,16 @@ struct ReplyPreviewContent: View {
                     .resizable()
                     .scaledToFill()
             } else {
-                let placeholderColor: Color = {
-#if canImport(UIKit)
-                    return Color(uiColor: .systemGray4)
-#else
-                    return Color(NSColor.systemGray)
-#endif
-                }()
-                placeholderColor
+                Color.CT.bgMsg
                     .overlay(
                         Image(systemName: "photo")
                             .font(.system(size: thumbnailSize * 0.38))
-                            .foregroundColor(.gray)
+                            .foregroundColor(Color.CT.textDim)
                     )
             }
         }
         .frame(width: thumbnailSize, height: thumbnailSize)
-        .clipShape(RoundedRectangle(cornerRadius: 4))
+        .clipShape(Rectangle())
     }
 
     private var mediaCaptionLabel: String {
