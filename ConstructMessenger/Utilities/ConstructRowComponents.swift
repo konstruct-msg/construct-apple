@@ -48,7 +48,7 @@ struct ConstructActionRow: View {
                     .font(.system(size: 16))
 
                 Text(title)
-                    .font(ConstructFont.display(16))
+                    .font(CTFont.bold(16))
 
                 Spacer()
 
@@ -80,36 +80,36 @@ struct ConstructActionRow: View {
 
     private func badgeView(_ text: String) -> some View {
         Text(text)
-            .font(ConstructFont.mono(10))
-            .foregroundStyle(Color.Construct.textDim)
+            .font(CTFont.regular(10))
+            .foregroundStyle(Color.CT.textDim)
             .padding(.horizontal, 6).padding(.vertical, 2)
-            .background(Capsule().fill(Color.Construct.bg3))
+            .background(Capsule().fill(Color.CT.bgMsg))
     }
 
     private var rowFill: Color {
         switch role {
-        case .primary:     return Color.Construct.accent.opacity(0.12)
-        case .accent:      return Color.Construct.accent.opacity(0.08)
+        case .primary:     return Color.CT.accent.opacity(0.12)
+        case .accent:      return Color.CT.accent.opacity(0.08)
         case .destructive: return Color.red.opacity(0.10)
-        default:           return Color.Construct.bg2
+        default:           return Color.CT.bgMsg
         }
     }
 
     private var rowBorder: Color {
         switch role {
-        case .primary:     return Color.Construct.accent.opacity(0.35)
-        case .accent:      return Color.Construct.accent.opacity(0.25)
+        case .primary:     return Color.CT.accent.opacity(0.35)
+        case .accent:      return Color.CT.accent.opacity(0.25)
         case .destructive: return Color.red.opacity(0.30)
-        default:           return Color.Construct.line
+        default:           return Color.CT.noise
         }
     }
 
     private var rowForeground: Color {
         switch role {
-        case .primary, .accent: return Color.Construct.accent
+        case .primary, .accent: return Color.CT.accent
         case .destructive:      return Color.red
-        case .disabled:         return Color.Construct.textDim
-        case .secondary:        return Color.Construct.text
+        case .disabled:         return Color.CT.textDim
+        case .secondary:        return Color.CT.text
         }
     }
 }
@@ -121,7 +121,7 @@ struct ConstructNavRow<Destination: View>: View {
 
     let icon: String
     let title: LocalizedStringKey
-    var iconColor: Color = Color.Construct.accent
+    var iconColor: Color = Color.CT.accent
     let destination: Destination
 
     var body: some View {
@@ -139,14 +139,14 @@ struct ConstructNavRow<Destination: View>: View {
                 .font(.system(size: 16))
 
             Text(title)
-                .font(ConstructFont.display(16))
-                .foregroundStyle(Color.Construct.text)
+                .font(CTFont.bold(16))
+                .foregroundStyle(Color.CT.text)
 
             Spacer()
 
             Image(systemName: "chevron.right")
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(Color.Construct.textDim)
+                .foregroundStyle(Color.CT.textDim)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
@@ -161,7 +161,7 @@ struct ConstructButtonRow: View {
 
     let icon: String
     let title: LocalizedStringKey
-    var iconColor: Color = Color.Construct.accent
+    var iconColor: Color = Color.CT.accent
     var showChevron: Bool = false
     let action: () -> Void
 
@@ -174,15 +174,15 @@ struct ConstructButtonRow: View {
                     .font(.system(size: 16))
 
                 Text(title)
-                    .font(ConstructFont.display(16))
-                    .foregroundStyle(Color.Construct.text)
+                    .font(CTFont.bold(16))
+                    .foregroundStyle(Color.CT.text)
 
                 Spacer()
 
                 if showChevron {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Color.Construct.textDim)
+                        .foregroundStyle(Color.CT.textDim)
                 }
             }
             .padding(.horizontal, 16)
@@ -201,7 +201,7 @@ struct ConstructRowDivider: View {
 
     var body: some View {
         Divider()
-            .overlay(Color.Construct.line)
+            .overlay(Color.CT.noise)
             .padding(.leading, indent)
     }
 }
@@ -218,8 +218,8 @@ struct ConstructSection<Content: View>: View {
         VStack(alignment: .leading, spacing: 0) {
             if let header {
                 Text(header.uppercased())
-                    .font(ConstructFont.mono(10, weight: .semibold))
-                    .foregroundStyle(Color.Construct.textDim)
+                    .font(CTFont.bold(10))
+                    .foregroundStyle(Color.CT.textDim)
                     .tracking(1.5)
                     .padding(.horizontal, 20)
                     .padding(.bottom, 6)
@@ -230,10 +230,10 @@ struct ConstructSection<Content: View>: View {
             }
             .background(
                 RoundedRectangle(cornerRadius: 16)
-                    .fill(Color.Construct.bg2)
+                    .fill(Color.CT.bgMsg)
                     .overlay(
                         RoundedRectangle(cornerRadius: 16)
-                            .strokeBorder(Color.Construct.line, lineWidth: 1)
+                            .strokeBorder(Color.CT.noise, lineWidth: 1)
                     )
             )
             .clipShape(RoundedRectangle(cornerRadius: 16))
