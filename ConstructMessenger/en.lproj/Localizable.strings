@@ -662,3 +662,16 @@
 "call_call_back" = "Call Back";
 "share" = "Share";
 "developer" = "Developer";
+"change_photo" = "change photo";
+"identity_section" = "identity";
+"account_section" = "account";
+"bio" = "bio";
+"user_id" = "user id";
+"joined" = "joined";
+"changes_encrypted_footer" = "> changes are end-to-end encrypted";
+"delete_account_row" = "delete account";
+"delete_action" = "delete";
+"manage_action" = "manage";
+"add_action" = "add";
+"call_voice" = "voice call";
+"end_to_end_encrypted" = "changes are end-to-end encrypted";
