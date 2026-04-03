@@ -267,9 +267,10 @@ struct CTNavBar: View {
                         .foregroundColor(Color.CT.accent)
                 }
             }
-            Text(title)
-                .font(CTFont.bold(15))
+            Text(title.uppercased())
+                .font(CTFont.bold(13))
                 .foregroundColor(Color.CT.text)
+                .tracking(4)
             Spacer()
             if let sym = trailingSymbol {
                 Button(action: { trailingAction?() }) {
@@ -340,7 +341,7 @@ struct CTSettingsSectionHeader: View {
             Text(">")
                 .font(CTFont.bold(11))
                 .foregroundColor(Color.CT.accentDim)
-            Text(title)
+            Text(title.uppercased())
                 .font(CTFont.bold(11))
                 .foregroundColor(Color.CT.accentDim)
         }

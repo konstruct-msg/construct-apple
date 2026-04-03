@@ -21,7 +21,9 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                CTNavBar(title: "SETTINGS")
+                
+                CTNavBar(title: NSLocalizedString("settings", comment: ""))
+                
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
@@ -32,7 +34,7 @@ struct SettingsView: View {
                         }
 
                         // MARK: Profile
-                        CTSettingsSectionHeader(title: "PROFILE")
+                        CTSettingsSectionHeader(title: "IDENTITY")
                         NavigationLink(destination: AccountSettingsView().environment(authViewModel)) {
                             profileRow
                         }

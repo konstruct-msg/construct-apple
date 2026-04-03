@@ -131,17 +131,7 @@ struct SynapsView: View {
     // MARK: - Nav Bar
 
     private var synapsNavBar: some View {
-        HStack {
-            Text(NSLocalizedString("synaps", comment: "").uppercased())
-                .font(CTFont.bold(13))
-                .foregroundStyle(Color.CT.text)
-                .tracking(4)
-            Spacer()
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 11)
-        .background(Color.CT.bgMsg)
-        .ctBorderBottom()
+        CTNavBar(title: NSLocalizedString("synaps", comment: ""))
     }
 
     // MARK: - Search Bar
