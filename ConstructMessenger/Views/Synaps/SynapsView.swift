@@ -47,7 +47,7 @@ struct SynapsView: View {
         NavigationStack {
             GeometryReader { geo in
                 ZStack {
-                    Color.Construct.bg.ignoresSafeArea()
+                    Color.CT.bg.ignoresSafeArea()
 
                     if contacts.isEmpty {
                         emptyState
@@ -82,15 +82,15 @@ struct SynapsView: View {
             }
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(Color.Construct.bg2, for: .navigationBar)
+            .toolbarBackground(Color.CT.bg, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
             .toolbarColorScheme(.dark, for: .navigationBar)
             #endif
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     Text("SYNAPSES")
-                        .font(ConstructFont.mono(13, weight: .semibold))
-                        .foregroundStyle(Color.Construct.textBright)
+                        .font(CTFont.bold(13))
+                        .foregroundStyle(Color.CT.text)
                         .tracking(3)
                 }
             }
@@ -143,13 +143,13 @@ struct SynapsView: View {
         VStack(spacing: 16) {
             Image(systemName: "point.3.filled.connected.trianglepath.dotted")
                 .font(.system(size: 48, weight: .thin))
-                .foregroundStyle(Color.Construct.textDim)
+                .foregroundStyle(Color.CT.textDim)
             Text(LocalizedStringKey("synaps_empty_title"))
-                .font(ConstructFont.display(17, weight: .semibold))
-                .foregroundStyle(Color.Construct.textBright)
+                .font(CTFont.bold(17))
+                .foregroundStyle(Color.CT.text)
             Text(LocalizedStringKey("synaps_empty_subtitle"))
-                .font(ConstructFont.display(14))
-                .foregroundStyle(Color.Construct.textDim)
+                .font(CTFont.regular(14))
+                .foregroundStyle(Color.CT.textDim)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
         }
@@ -440,7 +440,7 @@ private struct ContactCircle: View {
                 } else {
                     Circle().fill(accentColor.opacity(0.18))
                     Text(initials)
-                        .font(ConstructFont.mono(effectiveSize * 0.26, weight: .semibold))
+                        .font(CTFont.bold(effectiveSize * 0.26))
                         .foregroundStyle(accentColor)
                 }
             }
@@ -491,7 +491,7 @@ private struct ContactCircle: View {
 
     private var accentColor: Color { .hexagonAccent(for: user.id) }
     private var borderColor: Color {
-        user.isBlocked ? Color.red.opacity(0.55) : Color.Construct.dim
+        user.isBlocked ? Color.red.opacity(0.55) : Color.CT.textDim.opacity(0.5)
     }
 
     private var initials: String {

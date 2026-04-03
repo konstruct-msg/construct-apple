@@ -84,10 +84,10 @@ enum CTSymbol {
     static let drafts      = "[dft]"
 
     // Tab bar
-    static let tabChats    = "[⌂]"
-    static let tabSynaps   = "[⊹]"
+    static let tabChats    = "[msg]"
+    static let tabSynaps   = "[syn]"
     static let tabCalls    = "[tel]"
-    static let tabContacts = "[⊹]"
+    static let tabContacts = "[syn]"
     static let tabSettings = "[cfg]"
 
     // Input
@@ -303,9 +303,9 @@ struct CTTabBar: View {
     }
 
     static let defaultItems: [CTTabItem] = [
-        CTTabItem(symbol: CTSymbol.tabChats,    label: "chats"),
-        CTTabItem(symbol: CTSymbol.tabSynaps,   label: "synaps"),
-        CTTabItem(symbol: CTSymbol.tabSettings, label: "settings"),
+        CTTabItem(symbol: CTSymbol.tabChats,    label: "MSG"),
+        CTTabItem(symbol: CTSymbol.tabSynaps,   label: "SYN"),
+        CTTabItem(symbol: CTSymbol.tabSettings, label: "CFG"),
     ]
 
     var body: some View {
@@ -313,14 +313,19 @@ struct CTTabBar: View {
             ForEach(items.indices, id: \.self) { i in
                 Spacer()
                 Button(action: { selected = i }) {
-                    Text(items[i].symbol)
-                        .font(selected == i ? CTFont.bold(16) : CTFont.regular(16))
-                        .foregroundColor(selected == i ? Color.CT.accent : Color.CT.textDim)
+                    VStack(spacing: 2) {
+                        Text(items[i].symbol)
+                            .font(selected == i ? CTFont.bold(13) : CTFont.regular(13))
+                            .foregroundColor(selected == i ? Color.CT.accent : Color.CT.textDim)
+                        Text(selected == i ? "> \(items[i].label)" : items[i].label)
+                            .font(selected == i ? CTFont.bold(9) : CTFont.regular(9))
+                            .foregroundColor(selected == i ? Color.CT.accent : Color.CT.textDim)
+                    }
                 }
                 Spacer()
             }
         }
-        .padding(.vertical, 12)
+        .padding(.vertical, 10)
         .ctBorderTop()
     }
 }
