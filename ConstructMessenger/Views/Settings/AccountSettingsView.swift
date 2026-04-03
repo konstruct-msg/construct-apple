@@ -34,11 +34,11 @@ struct AccountSettingsView: View {
             }
             .padding(.vertical, 20)
         }
-        .background(Color.Construct.bg.ignoresSafeArea())
+        .background(Color.CT.bg.ignoresSafeArea())
         .navigationTitle(LocalizedStringKey("account"))
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(Color.Construct.bg2, for: .navigationBar)
+        .toolbarBackground(Color.CT.bgMsg, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
         #endif
@@ -105,12 +105,12 @@ struct AccountSettingsView: View {
                             .clipShape(AvatarStyle.avatarShape(AvatarStyle.accountSize))
                     } else {
                         AvatarStyle.avatarShape(AvatarStyle.accountSize)
-                            .fill(Color.Construct.accent.opacity(0.15))
+                            .fill(Color.CT.accent.opacity(0.15))
                             .frame(width: AvatarStyle.accountSize, height: AvatarStyle.accountSize)
                             .overlay {
                                 Text(viewModel.displayName.prefix(1).uppercased())
                                     .font(.system(size: 40, weight: .semibold))
-                                    .foregroundColor(Color.Construct.accent)
+                                    .foregroundColor(Color.CT.accent)
                             }
                     }
                 }
@@ -122,22 +122,22 @@ struct AccountSettingsView: View {
 
             if !viewModel.displayName.isEmpty {
                 Text(viewModel.displayName)
-                    .font(ConstructFont.display(20, weight: .semibold))
-                    .foregroundStyle(Color.Construct.textBright)
+                    .font(CTFont.bold(20))
+                    .foregroundStyle(Color.CT.text)
             }
 
             Text(viewModel.username.isEmpty
                  ? DisplayNameGenerator.generate(from: viewModel.userId)
                  : "@\(viewModel.username)")
-                .font(ConstructFont.mono(13))
-                .foregroundStyle(Color.Construct.textDim)
+                .font(CTFont.regular(13))
+                .foregroundStyle(Color.CT.textDim)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 28)
-        .background(Color.Construct.bg2)
+        .background(Color.CT.bgMsg)
         .overlay(
             Rectangle()
-                .fill(Color.Construct.line)
+                .fill(Color.CT.noise)
                 .frame(height: 1),
             alignment: .bottom
         )
@@ -149,8 +149,8 @@ struct AccountSettingsView: View {
         ConstructSection(header: NSLocalizedString("account_information", comment: "")) {
             fieldRow(label: LocalizedStringKey("display_name")) {
                 TextField(LocalizedStringKey("display_name"), text: $viewModel.displayName)
-                    .font(ConstructFont.display(16))
-                    .foregroundStyle(Color.Construct.textBright)
+                    .font(CTFont.regular(16))
+                    .foregroundStyle(Color.CT.text)
                     .onChange(of: viewModel.displayName) { _, newValue in
                         viewModel.saveDisplayName(newValue, authViewModel: authViewModel)
                     }
@@ -161,8 +161,8 @@ struct AccountSettingsView: View {
             fieldRow(label: LocalizedStringKey("username")) {
                 HStack {
                     TextField(LocalizedStringKey("username"), text: $viewModel.username)
-                        .font(ConstructFont.mono(15))
-                        .foregroundStyle(Color.Construct.textBright)
+                        .font(CTFont.regular(15))
+                        .foregroundStyle(Color.CT.text)
                         .autocorrectionDisabled()
                         .textInputAutocapitalization(.never)
                         .onSubmit {
@@ -174,12 +174,12 @@ struct AccountSettingsView: View {
                         Button(LocalizedStringKey("save")) {
                             Task { await viewModel.saveUsername(viewModel.username, authViewModel: authViewModel) }
                         }
-                        .font(ConstructFont.mono(13))
-                        .foregroundStyle(Color.Construct.accent)
+                        .font(CTFont.regular(13))
+                        .foregroundStyle(Color.CT.accent)
                     } else if viewModel.usernameSaved {
                         Text(LocalizedStringKey("saved"))
-                            .font(ConstructFont.mono(12))
-                            .foregroundStyle(Color.Construct.textDim)
+                            .font(CTFont.regular(12))
+                            .foregroundStyle(Color.CT.textDim)
                             .transition(.opacity)
                     }
                 }
@@ -187,7 +187,7 @@ struct AccountSettingsView: View {
 
             if let error = viewModel.usernameSaveError {
                 Text(error)
-                    .font(ConstructFont.mono(11))
+                    .font(CTFont.regular(11))
                     .foregroundStyle(Color.red)
                     .padding(.horizontal, 16)
                     .padding(.bottom, 8)
@@ -205,8 +205,8 @@ struct AccountSettingsView: View {
                 }
             }
             Text(LocalizedStringKey("export_my_data_footer"))
-                .font(ConstructFont.mono(11))
-                .foregroundStyle(Color.Construct.textDim)
+                .font(CTFont.regular(11))
+                .foregroundStyle(Color.CT.textDim)
                 .padding(.horizontal, 20)
         }
     }
@@ -228,8 +228,8 @@ struct AccountSettingsView: View {
     private func fieldRow<Content: View>(label: LocalizedStringKey, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label)
-                .font(ConstructFont.mono(10, weight: .semibold))
-                .foregroundStyle(Color.Construct.textDim)
+                .font(CTFont.bold(10))
+                .foregroundStyle(Color.CT.textDim)
                 .tracking(0.8)
             content()
         }

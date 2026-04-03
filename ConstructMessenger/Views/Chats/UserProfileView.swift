@@ -45,7 +45,7 @@ struct UserProfileView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Color.Construct.bg.ignoresSafeArea()
+                Color.CT.bg.ignoresSafeArea()
 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 0) {
@@ -60,15 +60,15 @@ struct UserProfileView: View {
             .navigationTitle("")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(Color.Construct.bg2, for: .navigationBar)
+            .toolbarBackground(Color.CT.bgMsg, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
             .toolbarColorScheme(.dark, for: .navigationBar)
             #endif
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
-                        .font(ConstructFont.display(16, weight: .medium))
-                        .foregroundStyle(Color.Construct.accent)
+                        .font(CTFont.medium(16))
+                        .foregroundStyle(Color.CT.accent)
                 }
             }
             .onAppear { viewModel.setContext(viewContext) }
@@ -115,7 +115,7 @@ struct UserProfileView: View {
                 } else {
                     Circle().fill(accentColor.opacity(0.18))
                     Text(initials)
-                        .font(ConstructFont.mono(32, weight: .semibold))
+                        .font(CTFont.bold(32))
                         .foregroundStyle(accentColor)
                 }
             }
@@ -123,25 +123,25 @@ struct UserProfileView: View {
             .clipShape(Circle())
             .overlay(
                 Circle().strokeBorder(
-                    user.isBlocked ? Color.red.opacity(0.5) : Color.Construct.dim,
+                    user.isBlocked ? Color.red.opacity(0.5) : Color.CT.noise,
                     lineWidth: 2
                 )
             )
 
             VStack(spacing: 4) {
                 Text(user.resolvedDisplayName)
-                    .font(ConstructFont.display(22, weight: .semibold))
-                    .foregroundStyle(Color.Construct.textBright)
+                    .font(CTFont.bold(22))
+                    .foregroundStyle(Color.CT.text)
 
                 if !user.username.isEmpty {
                     Text("@\(user.username)")
-                        .font(ConstructFont.mono(13))
-                        .foregroundStyle(Color.Construct.textDim)
+                        .font(CTFont.regular(13))
+                        .foregroundStyle(Color.CT.textDim)
                 }
 
                 if user.isBlocked {
                     Label("Blocked", systemImage: "slash.circle")
-                        .font(ConstructFont.mono(11, weight: .semibold))
+                        .font(CTFont.bold(11))
                         .foregroundStyle(Color.red)
                         .padding(.top, 2)
                 }
@@ -149,7 +149,7 @@ struct UserProfileView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 28)
-        .background(Color.Construct.bg2)
+        .background(Color.CT.bgMsg)
     }
 
     // MARK: - Actions list
@@ -224,22 +224,22 @@ struct UserProfileView: View {
 
         return VStack(spacing: 0) {
             Divider()
-                .background(Color.Construct.dim)
+                .background(Color.CT.noise)
                 .padding(.horizontal, 16)
 
             HStack(spacing: 10) {
                 Image(systemName: hasSession ? "lock.fill" : "lock.open")
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(hasSession ? Color.Construct.accent.opacity(0.8) : Color.Construct.textDim)
+                    .foregroundStyle(hasSession ? Color.CT.accent.opacity(0.8) : Color.CT.textDim)
                     .frame(width: 20)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(LocalizedStringKey("session_crypto_suite"))
-                        .font(ConstructFont.mono(11, weight: .medium))
-                        .foregroundStyle(Color.Construct.textDim)
+                        .font(CTFont.medium(11))
+                        .foregroundStyle(Color.CT.textDim)
                     Text(suiteLabel)
-                        .font(ConstructFont.mono(13, weight: .semibold))
-                        .foregroundStyle(hasSession ? Color.Construct.textBright : Color.Construct.textDim)
+                        .font(CTFont.bold(13))
+                        .foregroundStyle(hasSession ? Color.CT.text : Color.CT.textDim)
                 }
 
                 Spacer()
@@ -247,7 +247,7 @@ struct UserProfileView: View {
                 if hasSession {
                     Image(systemName: "checkmark.shield.fill")
                         .font(.system(size: 14))
-                        .foregroundStyle(Color.Construct.accent.opacity(0.7))
+                        .foregroundStyle(Color.CT.accent.opacity(0.7))
                 }
             }
             .padding(.horizontal, 16)
@@ -266,8 +266,8 @@ struct UserProfileView: View {
                         String(format: NSLocalizedString("sharing_with_you", comment: ""), formatDate(sharedAt)),
                         systemImage: "checkmark.shield"
                     )
-                    .font(ConstructFont.mono(11))
-                    .foregroundStyle(Color.Construct.textDim)
+                    .font(CTFont.regular(11))
+                    .foregroundStyle(Color.CT.textDim)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 16)

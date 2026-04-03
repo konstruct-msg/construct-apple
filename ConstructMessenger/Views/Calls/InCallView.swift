@@ -23,7 +23,7 @@ struct InCallView: View {
 
     var body: some View {
         ZStack {
-            Color.Construct.bg
+            Color.CT.bg
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
@@ -40,11 +40,11 @@ struct InCallView: View {
 
                     Text(session.peerName)
                         .font(.title2.weight(.semibold))
-                        .foregroundStyle(Color.Construct.textBright)
+                        .foregroundStyle(Color.CT.text)
 
                     Text(statusText)
-                        .font(ConstructFont.mono(14))
-                        .foregroundStyle(isEnded ? Color.red.opacity(0.85) : Color.Construct.textDim)
+                        .font(CTFont.regular(14))
+                        .foregroundStyle(isEnded ? Color.red.opacity(0.85) : Color.CT.textDim)
                         .animation(.easeInOut(duration: 0.3), value: isConnecting)
                 }
 
@@ -62,7 +62,7 @@ struct InCallView: View {
                             .foregroundStyle(.white)
                             .padding(.horizontal, 36)
                             .padding(.vertical, 14)
-                            .background(Color.Construct.bg3)
+                            .background(Color.CT.bgMsg)
                             .clipShape(Capsule())
                     }
                     .padding(.bottom, 52)
@@ -71,7 +71,7 @@ struct InCallView: View {
                         CallControlButton(
                             systemImage: isMuted ? "mic.slash.fill" : "mic.fill",
                             label: NSLocalizedString(isMuted ? "call_unmute" : "call_mute", comment: ""),
-                            tint: isMuted ? Color.Construct.accent : Color.Construct.textDim
+                            tint: isMuted ? Color.CT.accent : Color.CT.textDim
                         ) {
                             isMuted.toggle()
                             CallManager.shared.setMuted(isMuted)
@@ -93,7 +93,7 @@ struct InCallView: View {
                         CallControlButton(
                             systemImage: isSpeaker ? "speaker.wave.3.fill" : "speaker.fill",
                             label: NSLocalizedString("call_speaker", comment: ""),
-                            tint: isSpeaker ? Color.Construct.accent : Color.Construct.textDim
+                            tint: isSpeaker ? Color.CT.accent : Color.CT.textDim
                         ) {
                             isSpeaker.toggle()
                             CallManager.shared.setSpeaker(isSpeaker)
@@ -172,7 +172,7 @@ private struct PulseRingView: View {
 
     var body: some View {
         Circle()
-            .stroke(Color.Construct.accent.opacity(opacity), lineWidth: 2)
+            .stroke(Color.CT.accent.opacity(opacity), lineWidth: 2)
             .scaleEffect(scale)
             .frame(width: size, height: size)
             .onAppear {
@@ -199,11 +199,11 @@ private struct CallControlButton: View {
                     .font(.system(size: 22))
                     .foregroundStyle(tint)
                     .frame(width: 52, height: 52)
-                    .background(Color.Construct.bg3)
+                    .background(Color.CT.bgMsg)
                     .clipShape(Circle())
                 Text(label)
                     .font(.caption2)
-                    .foregroundStyle(Color.Construct.textDim)
+                    .foregroundStyle(Color.CT.textDim)
             }
         }
         .accessibilityLabel(label)

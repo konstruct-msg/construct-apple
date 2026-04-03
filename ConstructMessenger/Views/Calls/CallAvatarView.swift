@@ -21,12 +21,12 @@ struct CallAvatarView: View {
             .frame(width: size, height: size)
             .overlay {
                 Text(initials)
-                    .font(ConstructFont.mono(size * 0.3, weight: .semibold))
+                    .font(CTFont.bold(size * 0.3))
                     .foregroundStyle(accent)
             }
             .overlay {
                 AvatarStyle.avatarShape(size)
-                    .strokeBorder(Color.Construct.dim, lineWidth: 1.5)
+                    .strokeBorder(Color.CT.noise, lineWidth: 1.5)
             }
     }
 

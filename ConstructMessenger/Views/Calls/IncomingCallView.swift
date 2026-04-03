@@ -19,7 +19,7 @@ struct IncomingCallView: View {
             VStack(spacing: 20) {
                 // Header pill
                 Capsule()
-                    .fill(Color.Construct.dim)
+                    .fill(Color.CT.noise)
                     .frame(width: 36, height: 4)
                     .padding(.top, 10)
 
@@ -29,11 +29,11 @@ struct IncomingCallView: View {
 
                     Text(session.peerName)
                         .font(.title3.weight(.semibold))
-                        .foregroundStyle(Color.Construct.textBright)
+                        .foregroundStyle(Color.CT.text)
 
                     Text(NSLocalizedString("call_incoming_audio", comment: ""))
                         .font(.subheadline)
-                        .foregroundStyle(Color.Construct.textDim)
+                        .foregroundStyle(Color.CT.textDim)
                 }
 
                 // Answer / Decline row
@@ -52,7 +52,7 @@ struct IncomingCallView: View {
                         }
                         Text(NSLocalizedString("call_decline", comment: ""))
                             .font(.caption2)
-                            .foregroundStyle(Color.Construct.textDim)
+                            .foregroundStyle(Color.CT.textDim)
                     }
 
                     // Answer
@@ -64,18 +64,18 @@ struct IncomingCallView: View {
                                 .font(.system(size: 24))
                                 .foregroundStyle(.white)
                                 .frame(width: 64, height: 64)
-                                .background(Color.Construct.green)
+                                .background(Color.CT.accent)
                                 .clipShape(Circle())
                         }
                         Text(NSLocalizedString("call_answer", comment: ""))
                             .font(.caption2)
-                            .foregroundStyle(Color.Construct.textDim)
+                            .foregroundStyle(Color.CT.textDim)
                     }
                 }
                 .padding(.bottom, 32)
             }
             .frame(maxWidth: .infinity)
-            .background(Color.Construct.bg2)
+            .background(Color.CT.bgMsg)
             .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
             .padding(.horizontal, 12)
             .padding(.bottom, 8)
@@ -87,7 +87,7 @@ struct IncomingCallView: View {
 
 #Preview {
     ZStack {
-        Color.Construct.bg.ignoresSafeArea()
+        Color.CT.bg.ignoresSafeArea()
         IncomingCallView(session: .init(
             id: UUID().uuidString,
             uuid: UUID(),

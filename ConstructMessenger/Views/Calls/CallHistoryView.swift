@@ -34,8 +34,8 @@ struct CallHistoryView: View {
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     Text(NSLocalizedString("calls_recents", comment: ""))
-                        .font(ConstructFont.mono(13, weight: .semibold))
-                        .foregroundStyle(Color.Construct.textBright)
+                        .font(CTFont.bold(13))
+                        .foregroundStyle(Color.CT.text)
                         .tracking(3)
                 }
                 
@@ -44,7 +44,7 @@ struct CallHistoryView: View {
                         Button(NSLocalizedString("calls_clear", comment: "")) {
                             showClearConfirm = true
                         }
-                        .foregroundStyle(Color.Construct.accent)
+                        .foregroundStyle(Color.CT.accent)
                     }
                 }
             }
@@ -58,7 +58,7 @@ struct CallHistoryView: View {
                 }
             }
         }
-        .background(Color.Construct.bg)
+        .background(Color.CT.bg)
     }
 
     // MARK: - List
@@ -67,8 +67,8 @@ struct CallHistoryView: View {
         List {
             ForEach(records, id: \.id) { record in
                 CallHistoryRow(record: record)
-                    .listRowBackground(Color.Construct.bg)
-                    .listRowSeparatorTint(Color.Construct.dim)
+                    .listRowBackground(Color.CT.bg)
+                    .listRowSeparatorTint(Color.CT.noise)
                     .swipeActions(edge: .trailing) {
                         Button(role: .destructive) {
                             deleteRecord(record)
@@ -81,13 +81,13 @@ struct CallHistoryView: View {
                         } label: {
                             Label(NSLocalizedString("call_call_back", comment: ""), systemImage: "phone.fill")
                         }
-                        .tint(Color.Construct.green)
+                        .tint(Color.CT.accent)
                     }
             }
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
-        .background(Color.Construct.bg)
+        .background(Color.CT.bg)
     }
 
     // MARK: - Empty state
@@ -96,10 +96,10 @@ struct CallHistoryView: View {
         VStack(spacing: 16) {
             Image(systemName: "phone.slash")
                 .font(.system(size: 44))
-                .foregroundStyle(Color.Construct.textDim)
+                .foregroundStyle(Color.CT.textDim)
             Text(NSLocalizedString("calls_empty", comment: ""))
                 .font(.subheadline)
-                .foregroundStyle(Color.Construct.textDim)
+                .foregroundStyle(Color.CT.textDim)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -137,7 +137,7 @@ private struct CallHistoryRow: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(record.peerName)
                     .font(.body)
-                    .foregroundStyle(record.status == .missed ? Color.red : Color.Construct.textBright)
+                    .foregroundStyle(record.status == .missed ? Color.red : Color.CT.text)
 
                 HStack(spacing: 4) {
                     Image(systemName: directionIcon)
@@ -145,7 +145,7 @@ private struct CallHistoryRow: View {
                         .foregroundStyle(directionColor)
                     Text(statusLabel)
                         .font(.caption)
-                        .foregroundStyle(Color.Construct.textDim)
+                        .foregroundStyle(Color.CT.textDim)
                 }
             }
 
@@ -154,20 +154,20 @@ private struct CallHistoryRow: View {
             // Time + duration
             VStack(alignment: .trailing, spacing: 3) {
                 Text(relativeTime)
-                    .font(ConstructFont.mono(12))
-                    .foregroundStyle(Color.Construct.textDim)
+                    .font(CTFont.regular(12))
+                    .foregroundStyle(Color.CT.textDim)
 
                 if let dur = record.formattedDuration {
                     Text(dur)
-                        .font(ConstructFont.mono(11))
-                        .foregroundStyle(Color.Construct.textDim)
+                        .font(CTFont.regular(11))
+                        .foregroundStyle(Color.CT.textDim)
                 }
             }
 
             // Call-back phone icon
             Image(systemName: "phone.fill")
                 .font(.system(size: 16))
-                .foregroundStyle(Color.Construct.accent)
+                .foregroundStyle(Color.CT.accent)
         }
         .padding(.vertical, 4)
     }
@@ -183,9 +183,9 @@ private struct CallHistoryRow: View {
     private var directionColor: Color {
         switch record.status {
         case .missed, .declined: return .red
-        case .completed:         return record.direction == .outgoing ? Color.Construct.textDim : Color.Construct.green
+        case .completed:         return record.direction == .outgoing ? Color.CT.textDim : Color.CT.accent
         case .failed:            return .orange
-        @unknown default:        return Color.Construct.textDim
+        @unknown default:        return Color.CT.textDim
         }
     }
 
