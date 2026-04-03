@@ -16,6 +16,7 @@ struct ChatsListView: View {
     @State private var showingQRScanner = false
     @State private var navigationPath = NavigationPath()
     @State private var showingDrafts = false
+    @State private var searchQuery = ""
 
     init() {
         let fetchRequest: NSFetchRequest<Chat> = Chat.fetchRequest()
@@ -30,6 +31,7 @@ struct ChatsListView: View {
         NavigationStack(path: $navigationPath) {
             VStack(spacing: 0) {
                 navBar
+                searchBar
                 chatList
             }
             .ctBackground()
@@ -68,13 +70,45 @@ struct ChatsListView: View {
         }
     }
 
+    // MARK: - Search Bar
+
+    private var searchBar: some View {
+        HStack(spacing: 6) {
+            Text("[")
+                .font(CTFont.regular(13))
+                .foregroundColor(Color.CT.textDim)
+            TextField("", text: $searchQuery, prompt: Text("search_")
+                .font(CTFont.regular(13))
+                .foregroundColor(Color.CT.textDim))
+                .font(CTFont.regular(13))
+                .foregroundColor(Color.CT.text)
+                .autocorrectionDisabled()
+                #if os(iOS)
+                .textInputAutocapitalization(.never)
+                #endif
+                .tint(Color.CT.accent)
+            if !searchQuery.isEmpty {
+                Button { searchQuery = "" } label: {
+                    Text("×")
+                        .font(CTFont.regular(13))
+                        .foregroundColor(Color.CT.textDim)
+                }
+            } else {
+                Text("]")
+                    .font(CTFont.regular(13))
+                    .foregroundColor(Color.CT.textDim)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .background(Color.CT.bgMsg)
+        .ctBorderBottom()
+    }
+
     // MARK: - Nav Bar
 
     private var navBar: some View {
         HStack(spacing: 10) {
-            Text("CHATS")
-                .font(CTFont.bold(15))
-                .foregroundColor(Color.CT.text)
             ConnectionStatusIndicator()
             Spacer()
             Button { showingQRScanner = true } label: {
@@ -90,12 +124,24 @@ struct ChatsListView: View {
 
     // MARK: - Chat List
 
+    private var filteredChats: [Chat] {
+        guard !searchQuery.isEmpty else { return Array(chats) }
+        let q = searchQuery.lowercased()
+        return chats.filter { chat in
+            let name = (chat.otherUser?.resolvedDisplayName ?? "").lowercased()
+            let username = (chat.otherUser?.username ?? "").lowercased()
+            let preview = (chat.lastMessageText ?? "").lowercased()
+            return name.contains(q) || username.contains(q) || preview.contains(q)
+        }
+    }
+
     private var chatList: some View {
         List {
-            ForEach(chats) { chat in
-                NavigationLink(value: chat.id) {
+            ForEach(filteredChats) { chat in
+                Button { navigationPath.append(chat.id) } label: {
                     ChatRowView(chat: chat)
                 }
+                .buttonStyle(.plain)
                 .listRowBackground(Color.CT.bg)
                 .listRowSeparatorTint(Color.CT.noise)
                 .swipeActions(edge: .trailing, allowsFullSwipe: true) {
