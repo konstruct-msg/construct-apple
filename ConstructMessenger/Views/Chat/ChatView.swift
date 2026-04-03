@@ -54,6 +54,8 @@ struct ChatView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            chatNavBar
+
             // Flood-burst banner — shown when this chat's sender is burst-suppressed
             floodBurstBanner
             
@@ -72,9 +74,9 @@ struct ChatView: View {
                                         viewModel.loadMoreMessages()
                                     } label: {
                                         Text(NSLocalizedString("load_older_messages", comment: "Load older messages button"))
-                                            .font(FontStyle.caption)
-                                            .foregroundColor(Color.AppText.accent)
-                                            .padding(.vertical, Spacing.small)
+                                            .font(CTFont.regular(12))
+                                            .foregroundColor(Color.CT.accentDim)
+                                            .padding(.vertical, 8)
                                     }
                                 }
                                 Spacer()
@@ -241,14 +243,9 @@ struct ChatView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         #endif
         #if os(iOS)
-        #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
-        .toolbarBackground(.visible, for: .navigationBar)
-        .toolbarBackground(Color.AppBackground.primary, for: .navigationBar)
         #endif
-        #endif
-        .toolbar(content: toolbarContent)
         .gesture(
             DragGesture(minimumDistance: 10)
                 .updating($dragState) { value, state, _ in
@@ -484,7 +481,7 @@ struct ChatView: View {
                              : NSLocalizedString("scroll_to_bottom", comment: "Scroll back to latest messages"))
                             .font(.system(size: 14, weight: .medium))
                     }
-                    .foregroundColor(Color.AppBackground.primary)
+                    .foregroundColor(Color.CT.bg)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
                     .background(
@@ -507,80 +504,71 @@ struct ChatView: View {
         }
     }
     
-    @ToolbarContentBuilder
-    private func toolbarContent() -> some ToolbarContent {
-        ToolbarItem(placement: .principal) {
-            Button {
-                showingUserProfile = true
-            } label: {
-                VStack(spacing: 1) {
-                    Text(viewModel.chat.otherUser?.resolvedDisplayName ?? NSLocalizedString("chat", comment: "Default chat title"))
-                        .font(.headline)
-                        .foregroundColor(.primary)
+    // MARK: - CT Navigation Bar
+
+    private var chatNavBar: some View {
+        HStack(spacing: 10) {
+            Button { dismiss() } label: {
+                Text(CTSymbol.back)
+                    .font(CTFont.bold(14))
+                    .foregroundColor(Color.CT.accent)
+            }
+
+            Button { showingUserProfile = true } label: {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text((viewModel.chat.otherUser?.resolvedDisplayName ?? NSLocalizedString("chat", comment: "")).uppercased())
+                        .font(CTFont.bold(13))
+                        .foregroundColor(Color.CT.text)
                     if let subtitle = navigationStatusSubtitle {
                         Text(subtitle)
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                            .transition(.opacity.combined(with: .move(edge: .top)))
+                            .font(CTFont.regular(10))
+                            .foregroundColor(Color.CT.accentDim)
+                            .transition(.opacity)
                     }
                 }
                 .animation(.easeInOut(duration: 0.25), value: navigationStatusSubtitle)
             }
-        }
+            .buttonStyle(.plain)
 
-        // Split into separate ToolbarItems to avoid NSToolbarItemGroup selectionMode warnings on macOS
-        if !isEditMode {
-            // Call button — only for 1-on-1 chats when calls are enabled
-            if CallsFeature.isEnabled, let otherUser = viewModel.chat.otherUser, case .idle = callManager.state {
-                ToolbarItem(placement: .automatic) {
+            Spacer()
+
+            if isEditMode {
+                Button {
+                    withAnimation { isEditMode = false; selectedMessages.removeAll() }
+                } label: {
+                    Text("[done]")
+                        .font(CTFont.bold(13))
+                        .foregroundColor(Color.CT.accent)
+                }
+            } else {
+                if CallsFeature.isEnabled, let otherUser = viewModel.chat.otherUser,
+                   case .idle = callManager.state {
                     Button {
-                        Task {
-                            await callManager.startOutgoingCall(
-                                to: otherUser.id,
-                                displayName: otherUser.resolvedDisplayName,
-                                hasVideo: false
-                            )
-                        }
+                        Task { await callManager.startOutgoingCall(
+                            to: otherUser.id,
+                            displayName: otherUser.resolvedDisplayName,
+                            hasVideo: false
+                        ) }
                     } label: {
-                        Image(systemName: "phone")
+                        Text(CTSymbol.tabCalls)
+                            .font(CTFont.bold(14))
+                            .foregroundColor(Color.CT.accent)
                     }
-                    .accessibilityLabel(NSLocalizedString("call_start", comment: ""))
                 }
-            }
-
-            ToolbarItem(placement: .automatic) {
                 Button {
-                    withAnimation {
-                        isSearchActive.toggle()
-                        if !isSearchActive { searchText = "" }
-                    }
+                    withAnimation { isSearchActive.toggle(); if !isSearchActive { searchText = "" } }
                 } label: {
-                    Image(systemName: isSearchActive ? "xmark.circle.fill" : "magnifyingglass")
-                }
-            }
-        } else {
-            ToolbarItem(placement: .automatic) {
-                Button {
-                    withAnimation {
-                        isSearchActive.toggle()
-                        if !isSearchActive { searchText = "" }
-                    }
-                } label: {
-                    Image(systemName: isSearchActive ? "xmark.circle.fill" : "magnifyingglass")
-                }
-            }
-            ToolbarItem(placement: .automatic) {
-                Button {
-                    withAnimation {
-                        isEditMode = false
-                        selectedMessages.removeAll()
-                    }
-                } label: {
-                    Text("done")
+                    Text(isSearchActive ? CTSymbol.close : CTSymbol.search)
+                        .font(CTFont.bold(14))
+                        .foregroundColor(Color.CT.accent)
                 }
             }
         }
-    }  // end toolbarContent()
+        .padding(.horizontal, 12)
+        .padding(.vertical, 11)
+        .ctBorderBottom()
+    }
+
 
     /// Returns a subtle subtitle for the navigation bar when connection or session state requires attention.
     /// Returns nil when everything is healthy (no subtitle shown).
@@ -619,7 +607,7 @@ struct ChatView: View {
                     }
                 }
                 .padding()
-                .background(Color.AppBackground.primary.shadow(color: .black.opacity(0.1), radius: 2, y: 1))
+                .background(Color.CT.bg.shadow(color: .black.opacity(0.1), radius: 2, y: 1))
                 Spacer()
             }
         }
