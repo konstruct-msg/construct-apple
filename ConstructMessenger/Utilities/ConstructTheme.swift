@@ -116,16 +116,45 @@ struct CTHexShape: Shape {
     }
 }
 
+// MARK: - Avatar Palette (deterministic per-user colors)
+
+/// 8 terminal-palette hues. Seeded from userId/username hash — always same color per user.
+struct CTAvatarColor {
+    private static let palette: [Color] = [
+        Color(hex: 0x1A3FFF), // brand blue
+        Color(hex: 0x00C8A0), // teal
+        Color(hex: 0x9B5CFF), // purple
+        Color(hex: 0xFF5C8A), // rose
+        Color(hex: 0xFF9A1A), // amber
+        Color(hex: 0x00C8FF), // cyan
+        Color(hex: 0x5CFF7A), // green
+        Color(hex: 0xFF5C5C), // red
+    ]
+
+    /// Deterministically pick a color from the palette based on any string seed (userId / username).
+    static func forSeed(_ seed: String) -> Color {
+        guard !seed.isEmpty else { return palette[0] }
+        let hash = seed.unicodeScalars.reduce(5381) { ($0 &* 31) &+ Int($1.value) }
+        return palette[abs(hash) % palette.count]
+    }
+}
+
 struct CTHexAvatar: View {
     var initials: String
     var image: Image? = nil
     var size: AvatarSize = .medium
+    /// Seed for deterministic color (pass userId or username). Defaults to initials.
+    var colorSeed: String? = nil
 
     enum AvatarSize: CGFloat {
-        case small  = 32   // reserved for group chats
-        case medium = 40   // chat list rows
-        case large  = 56   // settings main profile block
-        case xlarge = 80   // profile detail screen
+        case small  = 32
+        case medium = 40
+        case large  = 56
+        case xlarge = 80
+    }
+
+    private var accentColor: Color {
+        CTAvatarColor.forSeed(colorSeed ?? initials)
     }
 
     var body: some View {
@@ -137,15 +166,15 @@ struct CTHexAvatar: View {
                     .frame(width: size.rawValue, height: size.rawValue)
                     .clipShape(CTHexShape())
                 CTHexShape()
-                    .stroke(Color.CT.accent, lineWidth: 1)
+                    .stroke(accentColor, lineWidth: 1)
             } else {
                 CTHexShape()
-                    .fill(Color.CT.accent.opacity(0.18))
+                    .fill(accentColor.opacity(0.18))
                 CTHexShape()
-                    .stroke(Color.CT.accent, lineWidth: 1)
+                    .stroke(accentColor, lineWidth: 1)
                 Text(String(initials.prefix(2)).uppercased())
                     .font(CTFont.bold(size.rawValue * 0.28))
-                    .foregroundColor(Color.CT.accent)
+                    .foregroundColor(accentColor)
             }
         }
         .frame(width: size.rawValue, height: size.rawValue)

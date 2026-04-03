@@ -9,42 +9,56 @@ struct ChatRowView: View {
     @ObservedObject var chat: Chat
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 10) {
             avatarView
 
             VStack(alignment: .leading, spacing: 3) {
-                Text((chat.otherUser?.resolvedDisplayName ?? NSLocalizedString("unknown", comment: "")).uppercased())
-                    .font(CTFont.bold(13))
-                    .foregroundColor(Color.CT.text)
-
-                if let lastMessage = chat.lastMessageText {
-                    Text(Chat.formatPreviewText(lastMessage))
-                        .font(CTFont.regular(12))
-                        .foregroundColor(Color.CT.textDim)
-                        .lineLimit(1)
+                HStack {
+                    // <@username> only when user has a real handle; otherwise deterministic name
+                    if let user = chat.otherUser, !user.username.isEmpty {
+                        Text("<@\(user.username.lowercased())>")
+                            .font(CTFont.bold(13))
+                            .foregroundColor(Color.CT.text)
+                    } else {
+                        Text((chat.otherUser?.resolvedDisplayName ?? NSLocalizedString("unknown", comment: "")).uppercased())
+                            .font(CTFont.bold(13))
+                            .foregroundColor(Color.CT.text)
+                    }
+                    Spacer()
+                    if let ts = chat.lastMessageTime {
+                        Text(ts, formatter: ChatRowView.rowTimeFormatter)
+                            .font(CTFont.regular(11))
+                            .foregroundColor(Color.CT.textDim)
+                    }
+                    if chat.isPinned && chat.unreadCount == 0 {
+                        Text(CTSymbol.pin)
+                            .font(CTFont.regular(10))
+                            .foregroundColor(Color.CT.textDim)
+                    }
                 }
-            }
 
-            Spacer()
-
-            VStack(alignment: .trailing, spacing: 4) {
-                if chat.isPinned && chat.unreadCount == 0 {
-                    Text(CTSymbol.pin)
-                        .font(CTFont.regular(10))
-                        .foregroundColor(Color.CT.textDim)
-                }
-                if chat.unreadCount > 0 {
-                    Text(chat.unreadCount < 100 ? "\(chat.unreadCount)" : "99+")
-                        .font(CTFont.bold(10))
-                        .foregroundColor(Color.CT.bg)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Color.CT.accent)
-                        .animation(.easeInOut(duration: 0.2), value: chat.unreadCount)
+                HStack {
+                    if let lastMessage = chat.lastMessageText {
+                        Text(Chat.formatPreviewText(lastMessage))
+                            .font(CTFont.regular(12))
+                            .foregroundColor(Color.CT.textDim)
+                            .lineLimit(1)
+                    }
+                    Spacer()
+                    if chat.unreadCount > 0 {
+                        Text(chat.unreadCount < 100 ? "[\(chat.unreadCount)]" : "[99+]")
+                            .font(CTFont.bold(11))
+                            .foregroundColor(Color.CT.bg)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(Color.CT.accent)
+                            .clipShape(Rectangle())
+                            .animation(.easeInOut(duration: 0.2), value: chat.unreadCount)
+                    }
                 }
             }
         }
-        .padding(.vertical, 6)
+        .padding(.vertical, 8)
         .contextMenu {
             Button {
                 chat.isPinned.toggle()
@@ -77,11 +91,12 @@ struct ChatRowView: View {
 
     @ViewBuilder
     private var avatarView: some View {
+        let seed = chat.otherUser?.id ?? initials
         if let data = chat.otherUser?.avatarData,
            let platformImg = ImageHelper.imageFromData(data) {
-            CTHexAvatar(initials: initials, image: Image(platformImage: platformImg), size: .medium)
+            CTHexAvatar(initials: initials, image: Image(platformImage: platformImg), size: .medium, colorSeed: seed)
         } else {
-            CTHexAvatar(initials: initials, size: .medium)
+            CTHexAvatar(initials: initials, size: .medium, colorSeed: seed)
         }
     }
 
@@ -95,4 +110,12 @@ struct ChatRowView: View {
         }
         return String(name.prefix(2)).uppercased()
     }
+
+    static let rowTimeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.doesRelativeDateFormatting = true
+        f.dateStyle = .none
+        f.timeStyle = .short
+        return f
+    }()
 }
