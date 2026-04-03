@@ -273,10 +273,10 @@ struct NetworkSettingsView: View {
         #endif
         .toolbar {
             ToolbarItem(placement: .principal) {
-                Text("NETWORK")
+                Text(NSLocalizedString("network", comment: "").uppercased())
                     .font(CTFont.bold(13))
                     .foregroundStyle(Color.CT.text)
-                    .tracking(3)
+                    .tracking(4)
             }
         }
         .alert("server_applied_title", isPresented: $showingAppliedAlert) {

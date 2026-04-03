@@ -89,10 +89,10 @@ struct SynapsView: View {
             #endif
             .toolbar {
                 ToolbarItem(placement: .principal) {
-                    Text("SYNAPSES")
+                    Text(NSLocalizedString("synaps", comment: "").uppercased())
                         .font(CTFont.bold(13))
                         .foregroundStyle(Color.CT.text)
-                        .tracking(3)
+                        .tracking(4)
                 }
             }
             .sheet(item: $selectedContact) { user in

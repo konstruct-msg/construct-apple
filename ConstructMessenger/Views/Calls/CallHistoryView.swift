@@ -39,10 +39,10 @@ struct CallHistoryView: View {
             #endif
             .toolbar {
                 ToolbarItem(placement: .principal) {
-                    Text("CALLS")
+                    Text(NSLocalizedString("calls_recents", comment: "").uppercased())
                         .font(CTFont.bold(13))
                         .foregroundStyle(Color.CT.text)
-                        .tracking(3)
+                        .tracking(4)
                 }
                 if !records.isEmpty {
                     ToolbarItem(placement: .topBarTrailing) {

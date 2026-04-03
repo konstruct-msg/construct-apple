@@ -44,10 +44,10 @@ struct AccountSettingsView: View {
         #endif
         .toolbar {
             ToolbarItem(placement: .principal) {
-                Text("ACCOUNT")
+                Text(NSLocalizedString("account", comment: ""))
                     .font(CTFont.bold(13))
                     .foregroundStyle(Color.CT.text)
-                    .tracking(3)
+                    .tracking(4)
             }
         }
         .onAppear {

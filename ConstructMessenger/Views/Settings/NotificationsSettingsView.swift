@@ -239,10 +239,10 @@ struct NotificationsSettingsView: View {
         #endif
         .toolbar {
             ToolbarItem(placement: .principal) {
-                Text("NOTIFICATIONS")
+                Text(NSLocalizedString("notifications", comment: "").uppercased())
                     .font(CTFont.bold(13))
                     .foregroundStyle(Color.CT.text)
-                    .tracking(3)
+                    .tracking(4)
             }
         }
         .onAppear {

@@ -27,7 +27,7 @@ struct PinLockView: View {
             VStack(spacing: 0) {
                 Spacer()
 
-                CTLogoView(size: 134)
+                CTLogoView(size: 160)
 
                 Spacer().frame(height: 52)
 

@@ -122,10 +122,10 @@ struct DevicesView: View {
         #endif
         .toolbar {
             ToolbarItem(placement: .principal) {
-                Text("LINKED DEVICES")
+                Text(NSLocalizedString("linked_devices", comment: "").uppercased())
                     .font(CTFont.bold(13))
                     .foregroundStyle(Color.CT.text)
-                    .tracking(3)
+                    .tracking(4)
             }
         }
         .refreshable { await loadDevices() }

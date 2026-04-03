@@ -89,7 +89,7 @@
 "preferences" = "Настройки";
 "version" = "Версия";
 "about" = "О приложении";
-"account" = "Идентичность";
+"account" = "ИДЕНТИЧНОСТЬ";
 "appearance" = "Внешний вид";
 "network" = "Сеть";
 "notifications" = "Уведомления";
@@ -305,13 +305,13 @@
 "server" = "Сервер";
 "port" = "Порт";
 "server_applied_title" = "Сервер обновлён";
-"server_applied_message" = "Новый gRPC сервер будет использоваться для всех последующих подключений.";
+"server_applied_message" = "Новый сервер будет использоваться для всех последующих подключений.";
 "close" = "Закрыть";
 "change_avatar" = "Сменить фото";
 
 // Onboarding
 "onboarding_tagline" = "постмодерн мессенджер";
-"onboarding_username_placeholder" = "выберите публичный псевдоним (опционально)";
+"onboarding_username_placeholder" = "публичный псевдоним (опционально)";
 "onboarding_create_identity" = "Создать идентификатор устройства";
 "onboarding_restore" = "Восстановить из ключа восстановления";
 "onboarding_recovery_coming_soon" = "Восстановление скоро будет доступно";
@@ -411,7 +411,7 @@
 "recovery_intro_body" = "Сгенерируйте фразу из 12 слов. Если вы потеряете устройство, используйте фразу для восстановления доступа.";
 "recovery_generate" = "Сгенерировать фразу";
 "recovery_write_down" = "Запишите эти 12 слов по порядку. Храните их в надёжном месте — никому не передавайте.";
-"recovery_never_share" = "⚠️ Никогда не передавайте свою фразу восстановления.";
+"recovery_never_share" = "Никогда не передавайте свою фразу восстановления.";
 "recovery_wrote_it_down" = "Я записал(а)";
 "recovery_quiz_title" = "Подтвердите фразу восстановления";
 "recovery_quiz_word_n" = "Слово №%d";

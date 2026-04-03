@@ -147,10 +147,10 @@ struct BackgroundFetchSettingsView: View {
         #endif
         .toolbar {
             ToolbarItem(placement: .principal) {
-                Text("BACKGROUND FETCH")
+                Text(NSLocalizedString("background_fetch", comment: "").uppercased())
                     .font(CTFont.bold(13))
                     .foregroundStyle(Color.CT.text)
-                    .tracking(3)
+                    .tracking(4)
             }
         }
         .onAppear {

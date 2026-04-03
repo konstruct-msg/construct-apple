@@ -203,10 +203,10 @@ struct SecurityView: View {
         #endif
         .toolbar {
             ToolbarItem(placement: .principal) {
-                Text("SECURITY")
+                Text(NSLocalizedString("security", comment: "").uppercased())
                     .font(CTFont.bold(13))
                     .foregroundStyle(Color.CT.text)
-                    .tracking(3)
+                    .tracking(4)
             }
         }
         .sheet(isPresented: $showingPinSetup) {

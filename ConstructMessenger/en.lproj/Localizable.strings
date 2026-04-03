@@ -89,7 +89,7 @@
 "preferences" = "Preferences";
 "version" = "Version";
 "about" = "About";
-"account" = "Identity";
+"account" = "IDENTITY";
 "appearance" = "Appearance";
 "network" = "Network";
 "notifications" = "Notifications";
@@ -409,7 +409,7 @@
 "recovery_intro_body" = "Generate a 12-word recovery phrase. If you lose this device, use the phrase to recover your account.";
 "recovery_generate" = "Generate Recovery Phrase";
 "recovery_write_down" = "Write down these 12 words in order. Store them somewhere safe — never share them.";
-"recovery_never_share" = "⚠️ Never share your recovery phrase with anyone.";
+"recovery_never_share" = "Never share your recovery phrase with anyone.";
 "recovery_wrote_it_down" = "I've Written It Down";
 "recovery_quiz_title" = "Verify Your Recovery Phrase";
 "recovery_quiz_word_n" = "Word #%d";
