@@ -137,31 +137,36 @@ struct MainTabView: View {
 }
 
 #if DEBUG
-#Preview {
-    let container = PreviewHelpers.createPreviewContainer()
-    let context = container.viewContext
-    
-    guard context.persistentStoreCoordinator != nil else {
-        fatalError("Preview Core Data context not ready")
+/// Retains the Core Data container for the lifetime of the preview process.
+/// Using a class ensures ARC keeps the container alive even after the #Preview closure returns.
+@MainActor
+private final class MainTabPreviewState {
+    static let shared = MainTabPreviewState()
+    let container = PersistenceController(inMemory: true).container
+    let authViewModel: AuthViewModel
+    let chatsViewModel: ChatsViewModel
+
+    private init() {
+        let context = container.viewContext
+        authViewModel = AuthViewModel(context: context)
+        authViewModel.configureMockAuth()
+        chatsViewModel = ChatsViewModel()
+        chatsViewModel.setContext(context)
+
+        let user1 = PreviewHelpers.createSampleUser(context: context, id: "user1", username: "alice", displayName: "Alice")
+        let user2 = PreviewHelpers.createSampleUser(context: context, id: "user2", username: "bob", displayName: "Bob")
+        _ = PreviewHelpers.createSampleChat(context: context, with: user1)
+        _ = PreviewHelpers.createSampleChat(context: context, with: user2)
+        try? context.save()
     }
-    
-    let authViewModel = AuthViewModel(context: context)
-    authViewModel.configureMockAuth()
-    
-    let chatsViewModel = ChatsViewModel()
-    chatsViewModel.setContext(context)
+}
 
-    // Create sample chats
-    let user1 = PreviewHelpers.createSampleUser(context: context, id: "user1", username: "alice", displayName: "Alice")
-    let user2 = PreviewHelpers.createSampleUser(context: context, id: "user2", username: "bob", displayName: "Bob")
-    _ = PreviewHelpers.createSampleChat(context: context, with: user1)
-    _ = PreviewHelpers.createSampleChat(context: context, with: user2)
-    try? context.save()
-
+#Preview {
+    let state = MainTabPreviewState.shared
     return MainTabView()
-        .environment(\.managedObjectContext, context)
-        .environment(authViewModel)
-        .environment(chatsViewModel)
+        .environment(\.managedObjectContext, state.container.viewContext)
+        .environment(state.authViewModel)
+        .environment(state.chatsViewModel)
         .environment(SecurityViewModel())
 }
 #endif
