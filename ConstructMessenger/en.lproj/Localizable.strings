@@ -675,3 +675,6 @@
 "add_action" = "add";
 "call_voice" = "voice call";
 "end_to_end_encrypted" = "changes are end-to-end encrypted";
+"invite" = "invite";
+"qr_caption_trust" = "trust is computed, not assumed.";
+"qr_scan_hint" = "show to someone nearby or take a screenshot";
