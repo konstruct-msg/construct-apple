@@ -50,13 +50,13 @@ struct MainTabView: View {
             VStack(spacing: 0) {
                 tabContent(vm: vm)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                if !vm.isInChat {
+                if !vm.isInChat && !vm.isInSettings {
                     CTTabBar(selected: $vm.selectedTab, items: tabItems)
                         .background(Color.CT.bg)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
-            .animation(.easeInOut(duration: 0.2), value: vm.isInChat)
+            .animation(.easeInOut(duration: 0.2), value: vm.isInChat || vm.isInSettings)
             .ctBackground()
         }
     }
@@ -83,6 +83,7 @@ struct MainTabView: View {
             }
 
             SettingsView()
+                .environment(chatsViewModel)
                 .opacity(vm.selectedTab == (CallsFeature.isEnabled ? 3 : 2) ? 1 : 0)
                 .allowsHitTesting(vm.selectedTab == (CallsFeature.isEnabled ? 3 : 2))
             #endif

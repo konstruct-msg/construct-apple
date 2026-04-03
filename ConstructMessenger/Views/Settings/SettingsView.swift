@@ -9,17 +9,19 @@ struct SettingsView: View {
     @Environment(\.managedObjectContext) private var viewContext
     @Environment(AuthViewModel.self) private var authViewModel
     @Environment(AccountRecoveryViewModel.self) private var recoveryVM
+    @Environment(ChatsViewModel.self) private var chatsViewModel
     @State private var viewModel = SettingsViewModel()
     private var connectionStatus = ConnectionStatusManager.shared
     @State private var showingQRCode = false
     @State private var linkCopied = false
     @State private var showingRecoverySetup = false
     @State private var recoveryBannerDismissed = UserDefaults.standard.bool(forKey: "recovery_banner_dismissed")
+    @State private var navigationPath = NavigationPath()
 
     private let inviteGenerator = InviteGenerator()
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $navigationPath) {
             VStack(spacing: 0) {
                 
                 CTNavBar(title: NSLocalizedString("settings", comment: ""))
@@ -145,6 +147,9 @@ struct SettingsView: View {
             }
             .sheet(isPresented: $showingQRCode) {
                 ContactQRCodeView(userId: viewModel.userId, username: viewModel.username)
+            }
+            .onChange(of: navigationPath) { _, path in
+                chatsViewModel.isInSettings = !path.isEmpty
             }
         }
     }

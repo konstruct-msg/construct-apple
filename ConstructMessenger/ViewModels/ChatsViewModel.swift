@@ -36,6 +36,7 @@ class ChatsViewModel {
 
     // true when ChatView is on the navigation stack — hides CTTabBar
     var isInChat: Bool = false
+    var isInSettings: Bool = false
 
     // ✅ Selected tab index — used to switch tabs programmatically (e.g., open chat from Synaps)
     var selectedTab: Int = 0
