@@ -98,10 +98,10 @@ struct CTDigitalCountdown: View {
     var body: some View {
         ZStack {
             // Bezel
-            RoundedRectangle(cornerRadius: 10)
+            Rectangle()
                 .fill(Color.CT.bgMsg)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 10)
+                    Rectangle()
                         .strokeBorder(Color.CT.danger.opacity(0.25), lineWidth: 1)
                 )
 

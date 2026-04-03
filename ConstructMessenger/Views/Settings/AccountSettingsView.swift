@@ -215,10 +215,24 @@ struct AccountSettingsView: View {
 
     private var dangerSection: some View {
         ConstructSection(header: NSLocalizedString("danger_zone", comment: "")) {
-            ConstructActionRow(icon: "trash", title: LocalizedStringKey("delete_my_account"), role: .destructive) {
+            Button {
                 showingDeleteConfirmation = true
+            } label: {
+                HStack(spacing: 14) {
+                    Image(systemName: "trash")
+                        .foregroundStyle(Color.CT.danger)
+                        .frame(width: 22, alignment: .center)
+                        .font(.system(size: 16))
+                    Text(LocalizedStringKey("delete_my_account"))
+                        .font(CTFont.bold(16))
+                        .foregroundStyle(Color.CT.danger)
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+                .contentShape(Rectangle())
             }
-            .padding(3)
+            .buttonStyle(.plain)
         }
         .padding(.bottom, 32)
     }
@@ -310,10 +324,10 @@ struct DeleteAccountConfirmationView: View {
                             .frame(maxWidth: .infinity)
                             .frame(height: 50)
                             .background(
-                                RoundedRectangle(cornerRadius: 14)
-                                    .fill(countdown > 0 ? Color.CT.danger.opacity(0.15) : Color.CT.danger.opacity(0.18))
+                                Rectangle()
+                                    .fill(countdown > 0 ? Color.CT.danger.opacity(0.08) : Color.CT.danger.opacity(0.15))
                                     .overlay(
-                                        RoundedRectangle(cornerRadius: 14)
+                                        Rectangle()
                                             .strokeBorder(countdown > 0 ? Color.CT.danger.opacity(0.2) : Color.CT.danger.opacity(0.5), lineWidth: 1)
                                     )
                             )
