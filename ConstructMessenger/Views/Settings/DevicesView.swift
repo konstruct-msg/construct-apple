@@ -113,13 +113,21 @@ struct DevicesView: View {
             .padding(.vertical, 20)
         }
         .background(Color.CT.bg.ignoresSafeArea())
-        .navigationTitle(LocalizedStringKey("linked_devices"))
+        .navigationTitle("")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(Color.CT.bgMsg, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
         #endif
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text("LINKED DEVICES")
+                    .font(CTFont.bold(13))
+                    .foregroundStyle(Color.CT.text)
+                    .tracking(3)
+            }
+        }
         .refreshable { await loadDevices() }
         .task { await loadDevices() }
 
@@ -308,3 +316,17 @@ private struct CompactLabelStyle: LabelStyle {
         }
     }
 }
+
+#if DEBUG
+#Preview {
+    let container = PreviewHelpers.createPreviewContainer()
+    let context = container.viewContext
+    let authViewModel = AuthViewModel(context: context)
+    authViewModel.configureMockAuth()
+    return NavigationStack {
+        DevicesView()
+            .environment(authViewModel)
+    }
+    .preferredColorScheme(.dark)
+}
+#endif

@@ -144,13 +144,21 @@ struct DataStorageSettingsView: View {
             .padding(.vertical, 20)
         }
         .background(Color.CT.bg.ignoresSafeArea())
-        .navigationTitle("data_and_storage")
+        .navigationTitle("")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(Color.CT.bgMsg, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
         #endif
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text("DATA & STORAGE")
+                    .font(CTFont.bold(13))
+                    .foregroundStyle(Color.CT.text)
+                    .tracking(3)
+            }
+        }
         .task { cacheSize = MediaManager.shared.diskCacheSize() }
         .confirmationDialog("storage_clear_confirm_title",
                             isPresented: $showClearConfirm,
@@ -188,5 +196,6 @@ struct DataStorageSettingsView: View {
     NavigationStack {
         DataStorageSettingsView()
     }
+        .preferredColorScheme(.dark)
 }
 #endif

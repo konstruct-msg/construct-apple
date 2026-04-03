@@ -138,13 +138,21 @@ struct BackgroundFetchSettingsView: View {
             .padding(.vertical, 20)
         }
         .background(Color.CT.bg.ignoresSafeArea())
-        .navigationTitle("background_fetch")
+        .navigationTitle("")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(Color.CT.bgMsg, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
         #endif
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text("BACKGROUND FETCH")
+                    .font(CTFont.bold(13))
+                    .foregroundStyle(Color.CT.text)
+                    .tracking(3)
+            }
+        }
         .onAppear {
             loadSettings()
             checkLowPowerMode()
@@ -301,4 +309,5 @@ struct QuickIntervalButton: View {
     NavigationStack {
         BackgroundFetchSettingsView()
     }
+        .preferredColorScheme(.dark)
 }

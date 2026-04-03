@@ -63,13 +63,21 @@ struct AppearanceSettingsView: View {
             .padding(.vertical, 20)
         }
         .background(Color.CT.bg.ignoresSafeArea())
-        .navigationTitle("appearance")
+        .navigationTitle("")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(Color.CT.bgMsg, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
         #endif
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text("APPEARANCE")
+                    .font(CTFont.bold(13))
+                    .foregroundStyle(Color.CT.text)
+                    .tracking(3)
+            }
+        }
         .onAppear {
             // If user previously selected an unavailable theme, reset to dark
             if !appTheme.isAvailable { appTheme = .dark }
@@ -123,4 +131,5 @@ enum AppTheme: String, CaseIterable {
     NavigationStack {
         AppearanceSettingsView()
     }
+        .preferredColorScheme(.dark)
 }

@@ -194,13 +194,21 @@ struct SecurityView: View {
             .padding(.vertical, 20)
         }
         .background(Color.CT.bg.ignoresSafeArea())
-        .navigationTitle("security")
+        .navigationTitle("")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(Color.CT.bgMsg, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
         #endif
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text("SECURITY")
+                    .font(CTFont.bold(13))
+                    .foregroundStyle(Color.CT.text)
+                    .tracking(3)
+            }
+        }
         .sheet(isPresented: $showingPinSetup) {
             PinSetupView(isChanging: securityViewModel.isPinEnabled)
                 .environment(securityViewModel)
@@ -242,3 +250,18 @@ struct SecurityView: View {
         return Set(chats.compactMap { $0.otherUser?.id })
     }
 }
+
+#if DEBUG
+#Preview {
+    let container = PreviewHelpers.createPreviewContainer()
+    let context = container.viewContext
+    return NavigationStack {
+        SecurityView()
+            .environment(\.managedObjectContext, context)
+            .environment(SecurityViewModel())
+            .environment(AccountRecoveryViewModel())
+            .environment(AuthViewModel(context: context))
+    }
+    .preferredColorScheme(.dark)
+}
+#endif

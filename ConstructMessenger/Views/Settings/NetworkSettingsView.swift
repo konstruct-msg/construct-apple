@@ -264,13 +264,21 @@ struct NetworkSettingsView: View {
             .padding(.vertical, 20)
         }
         .background(Color.CT.bg.ignoresSafeArea())
-        .navigationTitle("network")
+        .navigationTitle("")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(Color.CT.bgMsg, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
         #endif
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text("NETWORK")
+                    .font(CTFont.bold(13))
+                    .foregroundStyle(Color.CT.text)
+                    .tracking(3)
+            }
+        }
         .alert("server_applied_title", isPresented: $showingAppliedAlert) {
             Button("ok") { }
         } message: {
@@ -322,4 +330,5 @@ struct NetworkSettingsView: View {
     NavigationStack {
         NetworkSettingsView()
     }
+        .preferredColorScheme(.dark)
 }
