@@ -660,3 +660,5 @@
 "call_no_relay" = "No connection (relay unavailable)";
 "call_dismiss" = "Dismiss";
 "call_call_back" = "Call Back";
+"share" = "Share";
+"developer" = "Developer";

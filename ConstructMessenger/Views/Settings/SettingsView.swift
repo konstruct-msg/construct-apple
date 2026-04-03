@@ -34,7 +34,7 @@ struct SettingsView: View {
                         }
 
                         // MARK: Profile
-                        CTSettingsSectionHeader(title: "IDENTITY")
+                        CTSettingsSectionHeader(title: NSLocalizedString("account", comment: ""))
                         NavigationLink(destination: AccountSettingsView().environment(authViewModel)) {
                             profileRow
                         }
@@ -42,7 +42,7 @@ struct SettingsView: View {
                         CTSep()
 
                         // MARK: Share
-                        CTSettingsSectionHeader(title: "SHARE")
+                        CTSettingsSectionHeader(title: NSLocalizedString("share", comment: ""))
                         Button { showingQRCode = true } label: {
                             CTSettingsRow(label: "SHOW QR CODE", value: CTSymbol.forward, isAction: true)
                         }
@@ -61,7 +61,7 @@ struct SettingsView: View {
                         CTSep()
 
                         // MARK: Settings
-                        CTSettingsSectionHeader(title: "SETTINGS")
+                        CTSettingsSectionHeader(title: NSLocalizedString("settings", comment: ""))
                         NavigationLink(destination: DevicesView()) {
                             CTSettingsRow(label: "LINKED DEVICES", value: CTSymbol.forward)
                         }
@@ -107,7 +107,7 @@ struct SettingsView: View {
                         CTSep()
 
                         // MARK: Appearance
-                        CTSettingsSectionHeader(title: "APPEARANCE")
+                        CTSettingsSectionHeader(title: NSLocalizedString("appearance", comment: ""))
                         NavigationLink(destination: AppearanceSettingsView()) {
                             CTSettingsRow(label: "THEME", value: CTSymbol.forward)
                         }
@@ -115,12 +115,12 @@ struct SettingsView: View {
                         CTSep()
 
                         // MARK: About
-                        CTSettingsSectionHeader(title: "ABOUT")
+                        CTSettingsSectionHeader(title: NSLocalizedString("about", comment: ""))
                         CTSettingsRow(label: "VERSION", value: "v\(AppConstants.appVersion)")
                         CTSep()
 
                         // MARK: Developer
-                        CTSettingsSectionHeader(title: "DEVELOPER")
+                        CTSettingsSectionHeader(title: NSLocalizedString("developer", comment: ""))
                         NavigationLink(destination: DiagnosticsView()) {
                             CTSettingsRow(label: "DIAGNOSTICS & LOGS", value: CTSymbol.forward)
                         }
