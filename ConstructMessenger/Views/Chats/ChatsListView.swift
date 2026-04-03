@@ -50,6 +50,9 @@ struct ChatsListView: View {
                 chatsViewModel.setContext(viewContext)
                 LocalNotificationManager.shared.clearBadge()
             }
+            .onChange(of: navigationPath) { _, path in
+                chatsViewModel.isInChat = !path.isEmpty
+            }
             .onChange(of: chatsViewModel.chatToOpen) { _, chatId in
                 if let chatId {
                     chatsViewModel.chatToOpen = nil

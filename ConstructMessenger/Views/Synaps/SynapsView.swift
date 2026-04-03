@@ -177,9 +177,6 @@ struct SynapsView: View {
 
     private var emptyState: some View {
         VStack(spacing: 16) {
-            Image(systemName: "point.3.filled.connected.trianglepath.dotted")
-                .font(.system(size: 48, weight: .thin))
-                .foregroundStyle(Color.CT.textDim)
             Text(LocalizedStringKey("synaps_empty_title"))
                 .font(CTFont.bold(17))
                 .foregroundStyle(Color.CT.text)

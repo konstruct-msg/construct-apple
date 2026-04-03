@@ -34,6 +34,9 @@ class ChatsViewModel {
     // ✅ Chat ID to open programmatically (e.g., from deep link or Synaps)
     var chatToOpen: String?
 
+    // true when ChatView is on the navigation stack — hides CTTabBar
+    var isInChat: Bool = false
+
     // ✅ Selected tab index — used to switch tabs programmatically (e.g., open chat from Synaps)
     var selectedTab: Int = 0
 

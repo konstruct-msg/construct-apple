@@ -50,9 +50,13 @@ struct MainTabView: View {
             VStack(spacing: 0) {
                 tabContent(vm: vm)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                CTTabBar(selected: $vm.selectedTab, items: tabItems)
-                    .background(Color.CT.bg)
+                if !vm.isInChat {
+                    CTTabBar(selected: $vm.selectedTab, items: tabItems)
+                        .background(Color.CT.bg)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
             }
+            .animation(.easeInOut(duration: 0.2), value: vm.isInChat)
             .ctBackground()
         }
     }
