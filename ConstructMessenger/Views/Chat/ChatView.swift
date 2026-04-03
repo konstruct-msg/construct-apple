@@ -474,26 +474,20 @@ struct ChatView: View {
                     }
                 } label: {
                     HStack(spacing: 6) {
-                        Image(systemName: "arrow.down.circle.fill")
-                            .font(.system(size: 16, weight: .semibold))
+                        Text("↓")
+                            .font(CTFont.bold(14))
                         Text(viewModel.chat.unreadCount > 0
                              ? NSLocalizedString("new_messages", comment: "New messages below")
                              : NSLocalizedString("scroll_to_bottom", comment: "Scroll back to latest messages"))
-                            .font(.system(size: 14, weight: .medium))
+                            .font(CTFont.regular(13))
                     }
-                    .foregroundColor(Color.CT.bg)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
+                    .foregroundColor(Color.CT.accent)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
                     .background(
-                        Capsule()
-                            .fill(
-                                LinearGradient(
-                                    colors: [Color.accentColor, Color.accentColor.opacity(0.8)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .shadow(color: .black.opacity(0.25), radius: 8, x: 0, y: 4)
+                        Rectangle()
+                            .fill(Color.CT.bgMsg)
+                            .overlay(Rectangle().strokeBorder(Color.CT.accent.opacity(0.5), lineWidth: 1))
                     )
                 }
                 .padding(.trailing, 16)

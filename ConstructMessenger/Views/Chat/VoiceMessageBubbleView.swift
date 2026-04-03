@@ -59,12 +59,12 @@ struct VoiceMessageBubbleView: View {
                 if isLoading {
                     Text("[···]")
                         .font(CTFont.regular(13))
-                        .foregroundColor(isSentByMe ? Color.CT.bg : Color.CT.accent)
+                        .foregroundColor(isSentByMe ? .white : Color.CT.accent)
                         .frame(width: 38)
                 } else {
                     Text(isPlaying ? "[⏸]" : "[▶]")
                         .font(CTFont.regular(13))
-                        .foregroundColor(isSentByMe ? Color.CT.bg : Color.CT.accent)
+                        .foregroundColor(isSentByMe ? .white : Color.CT.accent)
                         .frame(width: 38)
                 }
             }
@@ -80,7 +80,7 @@ struct VoiceMessageBubbleView: View {
 
             Text(durationLabel)
                 .font(CTFont.regular(11))
-                .foregroundColor(isSentByMe ? Color.CT.bg.opacity(0.85) : Color.CT.textDim)
+                .foregroundColor(isSentByMe ? Color.white.opacity(0.85) : Color.CT.textDim)
                 .monospacedDigit()
                 .frame(width: 34, alignment: .trailing)
         }
@@ -96,7 +96,7 @@ struct VoiceMessageBubbleView: View {
         HStack(spacing: 8) {
             Text("[···]")
                 .font(CTFont.regular(13))
-                .foregroundColor(isSentByMe ? Color.CT.bg : Color.CT.textDim)
+                .foregroundColor(isSentByMe ? .white : Color.CT.textDim)
                 .frame(width: 38)
 
             CTWaveformView(
@@ -109,7 +109,7 @@ struct VoiceMessageBubbleView: View {
 
             Text(durationLabel)
                 .font(CTFont.regular(11))
-                .foregroundColor(isSentByMe ? Color.CT.bg.opacity(0.7) : Color.CT.textDim)
+                .foregroundColor(isSentByMe ? Color.white.opacity(0.7) : Color.CT.textDim)
                 .monospacedDigit()
                 .frame(width: 34, alignment: .trailing)
         }
@@ -258,10 +258,10 @@ private struct CTWaveformView: View {
     }
 
     private var playedColor: Color {
-        isSentByMe ? Color.CT.bg.opacity(0.95) : Color.CT.accent
+        isSentByMe ? Color.white.opacity(0.95) : Color.CT.accent
     }
     private var unplayedColor: Color {
-        isSentByMe ? Color.CT.bg.opacity(0.35) : Color.CT.textDim.opacity(0.45)
+        isSentByMe ? Color.white.opacity(0.35) : Color.CT.textDim.opacity(0.45)
     }
 
     private func downsample(_ array: [Float], to count: Int) -> [Float] {

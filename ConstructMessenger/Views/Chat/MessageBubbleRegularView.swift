@@ -102,7 +102,7 @@ struct MessageBubbleRegularView: View {
                             } else {
                                 LinkDetectingText(
                                     message.decryptedContent!,
-                                    color: message.isSentByMe ? Color.CT.bg : Color.CT.text
+                                    color: message.isSentByMe ? .white : Color.CT.text
                                 )
                             }
                         }
