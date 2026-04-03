@@ -46,6 +46,7 @@ struct SynapsView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
+                synapsNavBar
                 synapsSearchBar
                 GeometryReader { geo in
                     ZStack {
@@ -82,19 +83,8 @@ struct SynapsView: View {
                 }
             }
             #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(Color.CT.bg, for: .navigationBar)
-            .toolbarBackground(.visible, for: .navigationBar)
-            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbar(.hidden, for: .navigationBar)
             #endif
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Text(NSLocalizedString("synaps", comment: "").uppercased())
-                        .font(CTFont.bold(13))
-                        .foregroundStyle(Color.CT.text)
-                        .tracking(4)
-                }
-            }
             .sheet(item: $selectedContact) { user in
                 UserProfileView(
                     user: user,
@@ -136,6 +126,22 @@ struct SynapsView: View {
         guard !contacts.isEmpty else { return 1.0 }
         let engine = HoneycombLayoutEngine(contacts: contacts, canvasSize: screenSize)
         return engine.initialScale
+    }
+
+    // MARK: - Nav Bar
+
+    private var synapsNavBar: some View {
+        HStack {
+            Text(NSLocalizedString("synaps", comment: "").uppercased())
+                .font(CTFont.bold(13))
+                .foregroundStyle(Color.CT.text)
+                .tracking(4)
+            Spacer()
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 11)
+        .background(Color.CT.bgMsg)
+        .ctBorderBottom()
     }
 
     // MARK: - Search Bar
