@@ -25,11 +25,11 @@ struct DebugMetricsOverlay: View {
 
             VStack(alignment: .leading, spacing: 0) {
                 header
-                Divider().background(Color.green.opacity(0.4))
+                Divider().background(Color.orange.opacity(0.4))
                 ScrollView {
                     VStack(alignment: .leading, spacing: 12) {
                         summarySection
-                        Divider().background(Color.green.opacity(0.3))
+                        Divider().background(Color.orange.opacity(0.3))
                         recentEventsSection
                     }
                     .padding(12)
@@ -38,21 +38,21 @@ struct DebugMetricsOverlay: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .font(.system(.caption, design: .monospaced))
-        .foregroundColor(.green)
+        .foregroundColor(.orange)
         .onAppear { vm.refresh() }
     }
 
     private var header: some View {
         HStack {
-            Text("⚡ PERF METRICS")
+            Text("// DEBUG METRICS")
                 .font(.system(.caption, design: .monospaced).bold())
-                .foregroundColor(.green)
+                .foregroundColor(.orange)
             Spacer()
             Button(action: { vm.clear() }) {
-                Text("CLEAR").foregroundColor(.yellow)
+                Text("CLEAR").foregroundColor(.orange.opacity(0.6))
             }
             Button(action: { isPresented = false }) {
-                Text("✕").foregroundColor(.red)
+                Text("[x]").foregroundColor(.orange)
             }
         }
         .padding(10)
@@ -60,7 +60,7 @@ struct DebugMetricsOverlay: View {
 
     private var summarySection: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("── AVERAGES (last 20) ──").foregroundColor(.green.opacity(0.6))
+            Text("── AVERAGES (last 20) ──").foregroundColor(.orange.opacity(0.6))
 
             metricRow("Msg receive→display",
                       avg: vm.avgReceiveDisplay,
@@ -89,17 +89,17 @@ struct DebugMetricsOverlay: View {
         HStack {
             Text(label)
                 .frame(width: 160, alignment: .leading)
-                .foregroundColor(.green.opacity(0.8))
+                .foregroundColor(.orange.opacity(0.8))
             if let avg {
                 Text(String(format: "avg: %.0f%@", avg, unit))
-                    .foregroundColor(avg < 100 ? .green : avg < 500 ? .yellow : .red)
+                    .foregroundColor(avg < 100 ? .orange : avg < 500 ? .yellow : .red)
                     .frame(width: 80)
             } else {
                 Text("avg: —").foregroundColor(.gray).frame(width: 80)
             }
             if let p95 {
                 Text(String(format: "p95: %.0f%@", p95, unit))
-                    .foregroundColor(p95 < 200 ? .green : p95 < 800 ? .yellow : .red)
+                    .foregroundColor(p95 < 200 ? .orange : p95 < 800 ? .yellow : .red)
             } else {
                 Text("p95: —").foregroundColor(.gray)
             }
@@ -108,14 +108,14 @@ struct DebugMetricsOverlay: View {
 
     private var recentEventsSection: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("── RECENT EVENTS ──").foregroundColor(.green.opacity(0.6))
+            Text("── RECENT EVENTS ──").foregroundColor(.orange.opacity(0.6))
             ForEach(vm.recentSamples) { sample in
                 HStack {
                     Text(sample.formattedDuration)
                         .frame(width: 70, alignment: .trailing)
-                        .foregroundColor(sample.durationMs < 150 ? .green : sample.durationMs < 500 ? .yellow : .red)
+                        .foregroundColor(sample.durationMs < 150 ? .orange : sample.durationMs < 500 ? .yellow : .red)
                     Text(sample.label)
-                        .foregroundColor(.green.opacity(0.7))
+                        .foregroundColor(.orange.opacity(0.7))
                         .lineLimit(1)
                 }
             }
@@ -172,7 +172,7 @@ final class DebugMetricsViewModel: ObservableObject {
 // MARK: - View Modifier
 
 struct DebugMetricsModifier: ViewModifier {
-    @State private var showOverlay = false
+    @State private var showOverlay = true
 
     func body(content: Content) -> some View {
         content

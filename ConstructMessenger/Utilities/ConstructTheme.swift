@@ -356,7 +356,8 @@ struct CTSettingsSectionHeader: View {
 struct CTSettingsRow: View {
     let label: String
     let value: String
-    var valueColor: Color = Color.CT.text
+    var labelColor: Color   = Color.CT.textDim
+    var valueColor: Color   = Color.CT.text
     var isAction: Bool      = false
     var isDestructive: Bool = false
 
@@ -364,7 +365,7 @@ struct CTSettingsRow: View {
         HStack(spacing: 0) {
             Text(label)
                 .font(CTFont.regular(13))
-                .foregroundColor(isDestructive ? Color.CT.danger : Color.CT.textDim)
+                .foregroundColor(isDestructive ? Color.CT.danger : labelColor)
                 .frame(width: 150, alignment: .leading)
             Spacer(minLength: 8)
             Text(value)
