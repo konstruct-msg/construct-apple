@@ -14,12 +14,12 @@ struct MessageBubbleSystemView: View {
         HStack {
             Spacer()
             Text(content)
-                .font(.caption)
-                .foregroundColor(.secondary)
+                .font(CTFont.regular(11))
+                .foregroundColor(Color.CT.textDim)
                 .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(Color.secondary.opacity(0.12))
-                .cornerRadius(12)
+                .padding(.vertical, 5)
+                .background(Color.CT.bgMsg)
+                .overlay(Rectangle().stroke(Color.CT.noise, lineWidth: 0.5))
             Spacer()
         }
         .padding(.vertical, 4)
