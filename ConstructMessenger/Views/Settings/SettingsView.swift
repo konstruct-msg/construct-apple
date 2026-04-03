@@ -253,3 +253,16 @@ struct SettingsView: View {
     }
 }
 
+#if DEBUG
+#Preview {
+    let container = PreviewHelpers.createPreviewContainer()
+    let context = container.viewContext
+    let authViewModel = AuthViewModel(context: context)
+    authViewModel.configureMockAuth()
+    let recoveryVM = AccountRecoveryViewModel()
+    return SettingsView()
+        .environment(\.managedObjectContext, context)
+        .environment(authViewModel)
+        .environment(recoveryVM)
+}
+#endif
