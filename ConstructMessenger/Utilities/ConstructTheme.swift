@@ -116,28 +116,7 @@ struct CTHexShape: Shape {
     }
 }
 
-// MARK: - Avatar Palette (deterministic per-user colors)
-
-/// 8 terminal-palette hues. Seeded from userId/username hash — always same color per user.
-struct CTAvatarColor {
-    private static let palette: [Color] = [
-        Color(hex: 0x1A3FFF), // brand blue
-        Color(hex: 0x00C8A0), // teal
-        Color(hex: 0x9B5CFF), // purple
-        Color(hex: 0xFF5C8A), // rose
-        Color(hex: 0xFF9A1A), // amber
-        Color(hex: 0x00C8FF), // cyan
-        Color(hex: 0x5CFF7A), // green
-        Color(hex: 0xFF5C5C), // red
-    ]
-
-    /// Deterministically pick a color from the palette based on any string seed (userId / username).
-    static func forSeed(_ seed: String) -> Color {
-        guard !seed.isEmpty else { return palette[0] }
-        let hash = seed.unicodeScalars.reduce(5381) { ($0 &* 31) &+ Int($1.value) }
-        return palette[abs(hash) % palette.count]
-    }
-}
+// MARK: - CTHexAvatar
 
 struct CTHexAvatar: View {
     var initials: String
@@ -154,7 +133,7 @@ struct CTHexAvatar: View {
     }
 
     private var accentColor: Color {
-        CTAvatarColor.forSeed(colorSeed ?? initials)
+        Color.hexagonAccent(for: colorSeed ?? initials)
     }
 
     var body: some View {
