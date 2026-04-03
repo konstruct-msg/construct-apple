@@ -254,40 +254,29 @@ struct DeleteAccountConfirmationView: View {
         VStack(spacing: 0) {
             // Drag indicator
             Capsule()
-                .fill(Color.secondary.opacity(0.4))
+                .fill(Color.CT.noise)
                 .frame(width: 36, height: 4)
                 .padding(.top, 12)
                 .padding(.bottom, 24)
 
             Spacer()
 
-            Text("delete_my_account")
-                .font(.title2).fontWeight(.semibold)
+            Text(LocalizedStringKey("delete_my_account"))
+                .font(CTFont.bold(20))
+                .foregroundStyle(Color.CT.text)
                 .padding(.bottom, 8)
 
-            Text("delete_account_confirmation_message")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
+            Text(LocalizedStringKey("delete_account_confirmation_message"))
+                .font(CTFont.regular(14))
+                .foregroundStyle(Color.CT.textDim)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 32)
                 .padding(.bottom, 32)
 
-            // Countdown ring
+            // Retro digital countdown
             if countdown > 0 && !authViewModel.isLoading {
-                ZStack {
-                    Circle()
-                        .stroke(Color.red.opacity(0.15), lineWidth: 4)
-                    Circle()
-                        .trim(from: 0, to: CGFloat(7 - countdown) / 7.0)
-                        .stroke(Color.red.opacity(0.7), style: StrokeStyle(lineWidth: 4, lineCap: .round))
-                        .rotationEffect(.degrees(-90))
-                        .animation(.linear(duration: 1), value: countdown)
-                    Text("\(countdown)")
-                        .font(.system(size: 22, weight: .semibold, design: .monospaced))
-                        .foregroundColor(.red.opacity(0.8))
-                }
-                .frame(width: 64, height: 64)
-                .padding(.bottom, 28)
+                CTDigitalCountdown(value: countdown)
+                    .padding(.bottom, 28)
             }
 
             // Local-delete fallback — shown after a server-side deletion failure
@@ -295,10 +284,10 @@ struct DeleteAccountConfirmationView: View {
                 Button {
                     showLocalDeleteConfirm = true
                 } label: {
-                    Text("delete_account_local_only")
-                        .font(.footnote)
+                    Text(LocalizedStringKey("delete_account_local_only"))
+                        .font(CTFont.regular(12))
                         .underline()
-                        .foregroundColor(.red.opacity(0.75))
+                        .foregroundStyle(Color.CT.danger.opacity(0.75))
                 }
                 .padding(.bottom, 16)
             }
@@ -309,34 +298,45 @@ struct DeleteAccountConfirmationView: View {
             VStack(spacing: 12) {
                 if authViewModel.isLoading {
                     ProgressView()
+                        .tint(Color.CT.danger)
                         .frame(maxWidth: .infinity)
                         .frame(height: 50)
                 } else {
-                    Button(role: .destructive) {
+                    Button {
                         onDelete()
                     } label: {
-                        Text("delete_account")
-                            .font(.headline)
+                        Text(LocalizedStringKey("delete_account"))
+                            .font(CTFont.bold(16))
                             .frame(maxWidth: .infinity)
                             .frame(height: 50)
-                            .background(countdown > 0 ? Color.red.opacity(0.3) : Color.red)
-                            .foregroundColor(.white)
-                            .cornerRadius(14)
+                            .background(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .fill(countdown > 0 ? Color.CT.danger.opacity(0.15) : Color.CT.danger.opacity(0.18))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 14)
+                                            .strokeBorder(countdown > 0 ? Color.CT.danger.opacity(0.2) : Color.CT.danger.opacity(0.5), lineWidth: 1)
+                                    )
+                            )
+                            .foregroundStyle(countdown > 0 ? Color.CT.danger.opacity(0.4) : Color.CT.danger)
                     }
                     .disabled(countdown > 0)
                     .animation(.easeInOut(duration: 0.25), value: countdown)
                 }
 
-                Button("cancel") {
+                Button {
                     onCancel()
                     dismiss()
+                } label: {
+                    Text(LocalizedStringKey("cancel"))
+                        .font(CTFont.regular(15))
+                        .foregroundStyle(Color.CT.textDim)
                 }
-                .foregroundColor(.secondary)
                 .disabled(authViewModel.isLoading)
             }
             .padding(.horizontal, 24)
             .padding(.bottom, 36)
         }
+        .background(Color.CT.bg)
         .presentationDetents([.medium])
         .presentationDragIndicator(.hidden)
         .alert("delete_account_local_only_title", isPresented: $showLocalDeleteConfirm) {
