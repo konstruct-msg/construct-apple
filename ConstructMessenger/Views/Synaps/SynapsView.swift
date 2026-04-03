@@ -45,39 +45,40 @@ struct SynapsView: View {
 
     var body: some View {
         NavigationStack {
-            GeometryReader { geo in
-                ZStack {
-                    Color.CT.bg.ignoresSafeArea()
+            VStack(spacing: 0) {
+                synapsSearchBar
+                GeometryReader { geo in
+                    ZStack {
+                        Color.CT.bg.ignoresSafeArea()
+                        CTMatrixBackground().ignoresSafeArea()
 
-                    if contacts.isEmpty {
-                        emptyState
-                    } else {
-                        ZoomableCloud(
-                            scale:    $canvasScale,
-                            offset:   $canvasOffset,
-                            minScale: 0.20,
-                            maxScale: 3.0
-                        ) {
-                            HoneycombCloud(
-                                contacts:     filtered,
-                                selected:     $selectedContact,
-                                canvasScale:  canvasScale,
-                                canvasOffset: canvasOffset,
-                                screenSize:   geo.size
-                            )
+                        if contacts.isEmpty {
+                            emptyState
+                        } else {
+                            ZoomableCloud(
+                                scale:    $canvasScale,
+                                offset:   $canvasOffset,
+                                minScale: 0.20,
+                                maxScale: 3.0
+                            ) {
+                                HoneycombCloud(
+                                    contacts:     filtered,
+                                    selected:     $selectedContact,
+                                    canvasScale:  canvasScale,
+                                    canvasOffset: canvasOffset,
+                                    screenSize:   geo.size
+                                )
+                            }
                         }
                     }
-                }
-                .onAppear {
-                    canvasScale = fitScale(contacts: Array(contacts), screenSize: geo.size)
+                    .onAppear {
+                        canvasScale = fitScale(contacts: Array(contacts), screenSize: geo.size)
+                    }
                 }
             }
-            .searchable(text: $searchText, prompt: LocalizedStringKey("synaps_search_prompt"))
             .onChange(of: searchText) { _, _ in
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                     canvasOffset = .zero
-                    // Recompute fit for the filtered list — need size; use a rough estimate
-                    // (exact recalc happens via the engine on next render)
                 }
             }
             #if os(iOS)
@@ -135,6 +136,41 @@ struct SynapsView: View {
         guard !contacts.isEmpty else { return 1.0 }
         let engine = HoneycombLayoutEngine(contacts: contacts, canvasSize: screenSize)
         return engine.initialScale
+    }
+
+    // MARK: - Search Bar
+
+    private var synapsSearchBar: some View {
+        HStack(spacing: 6) {
+            Text("[")
+                .font(CTFont.regular(13))
+                .foregroundColor(Color.CT.textDim)
+            TextField("", text: $searchText, prompt: Text(LocalizedStringKey("synaps_search_prompt"))
+                .font(CTFont.regular(13))
+                .foregroundColor(Color.CT.textDim))
+                .font(CTFont.regular(13))
+                .foregroundColor(Color.CT.text)
+                .autocorrectionDisabled()
+                #if os(iOS)
+                .textInputAutocapitalization(.never)
+                #endif
+                .tint(Color.CT.accent)
+            if !searchText.isEmpty {
+                Button { searchText = "" } label: {
+                    Text("×")
+                        .font(CTFont.regular(13))
+                        .foregroundColor(Color.CT.textDim)
+                }
+            } else {
+                Text("]")
+                    .font(CTFont.regular(13))
+                    .foregroundColor(Color.CT.textDim)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .background(Color.CT.bgMsg)
+        .ctBorderBottom()
     }
 
     // MARK: - Empty state
@@ -438,15 +474,15 @@ private struct ContactCircle: View {
                         .resizable()
                         .scaledToFill()
                 } else {
-                    Circle().fill(accentColor.opacity(0.18))
+                    HexagonShape().fill(accentColor.opacity(0.18))
                     Text(initials)
                         .font(CTFont.bold(effectiveSize * 0.26))
                         .foregroundStyle(accentColor)
                 }
             }
             .frame(width: effectiveSize, height: effectiveSize)
-            .clipShape(Circle())
-            .overlay(Circle().strokeBorder(borderColor, lineWidth: 1.5))
+            .clipShape(HexagonShape())
+            .overlay(HexagonShape().stroke(borderColor, lineWidth: 1.5))
             .scaleEffect(proximityScale)
             .opacity(proximityOpacity)
         }
@@ -514,16 +550,16 @@ private struct ContactCircle: View {
     let context = container.viewContext
 
     let users: [(String, String, String)] = [
-        ("u1", "alice",   "Alice Wonderland"),
-        ("u2", "bob",     "Bob Builder"),
-        ("u3", "charlie", "Charlie Chaplin"),
-        ("u4", "dave",    "Dave Villain"),
-        ("u5", "eve",     "Eve Listener"),
-        ("u6", "frank",   "Frank Ocean"),
-        ("u7", "grace",   "Grace Hopper"),
-        ("u8", "henry",   "Henry Ford"),
-        ("u9", "iris",    "Iris Chang"),
-        ("u10","james",   "James Webb"),
+        ("u1",  "alice",   "Alice Wonderland"),
+        ("u2",  "bob",     "Bob Builder"),
+        ("u3",  "charlie", "Charlie Chaplin"),
+        ("u4",  "dave",    "Dave Villain"),
+        ("u5",  "eve",     "Eve Listener"),
+        ("u6",  "frank",   "Frank Ocean"),
+        ("u7",  "grace",   "Grace Hopper"),
+        ("u8",  "henry",   "Henry Ford"),
+        ("u9",  "iris",    "Iris Chang"),
+        ("u10", "james",   "James Webb"),
     ]
     for (id, username, name) in users {
         let user = PreviewHelpers.createSampleUser(context: context, id: id, username: username, displayName: name)
@@ -542,6 +578,7 @@ private struct ContactCircle: View {
     return SynapsView()
         .environment(\.managedObjectContext, context)
         .environment(chatsVM)
+        .preferredColorScheme(.dark)
 }
 
 #Preview("Empty") {
@@ -552,4 +589,5 @@ private struct ContactCircle: View {
     return SynapsView()
         .environment(\.managedObjectContext, context)
         .environment(chatsVM)
+        .preferredColorScheme(.dark)
 }
