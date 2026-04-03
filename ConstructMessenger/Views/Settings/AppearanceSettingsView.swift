@@ -11,40 +11,52 @@ struct AppearanceSettingsView: View {
     @AppStorage("appTheme") private var appTheme: AppTheme = .automatic
 
     var body: some View {
-        List {
-            Section {
-                ForEach(AppTheme.allCases, id: \.self) { theme in
-                    Button {
-                        appTheme = theme
-                    } label: {
-                        HStack {
-                            Image(systemName: theme.iconName)
-                                .foregroundColor(theme.color)
-
-                            Text(theme.displayName)
-                                .foregroundColor(.primary)
-
-                            Spacer()
-
-                            if appTheme == theme {
-                                Image(systemName: "checkmark")
-                                    .foregroundColor(Color.blue)
+        ScrollView {
+            VStack(spacing: 20) {
+                VStack(alignment: .leading, spacing: 6) {
+                    ConstructSection(header: NSLocalizedString("theme", comment: "")) {
+                        ForEach(Array(AppTheme.allCases.enumerated()), id: \.element) { index, theme in
+                            if index > 0 { ConstructRowDivider(indent: 52) }
+                            Button {
+                                appTheme = theme
+                            } label: {
+                                HStack(spacing: 14) {
+                                    Image(systemName: theme.iconName)
+                                        .foregroundStyle(theme.color)
+                                        .frame(width: 22, alignment: .center)
+                                        .font(.system(size: 16))
+                                    Text(theme.displayName)
+                                        .font(CTFont.bold(16))
+                                        .foregroundStyle(Color.CT.text)
+                                    Spacer()
+                                    if appTheme == theme {
+                                        Image(systemName: "checkmark")
+                                            .font(.system(size: 14, weight: .semibold))
+                                            .foregroundStyle(Color.CT.accent)
+                                    }
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 14)
+                                .contentShape(Rectangle())
                             }
+                            .buttonStyle(.plain)
                         }
                     }
+                    Text(LocalizedStringKey("theme_footer"))
+                        .font(CTFont.regular(11))
+                        .foregroundStyle(Color.CT.textDim)
+                        .padding(.horizontal, 20)
                 }
-            } header: {
-                Text("theme")
-            } footer: {
-                Text("theme_footer")
-                    .font(.caption)
             }
+            .padding(.vertical, 20)
         }
+        .background(Color.CT.bg.ignoresSafeArea())
         .navigationTitle("appearance")
-        #if canImport(UIKit)
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
-        #endif
+        .toolbarBackground(Color.CT.bgMsg, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
+        .toolbarColorScheme(.dark, for: .navigationBar)
         #endif
     }
 }
@@ -73,9 +85,9 @@ enum AppTheme: String, CaseIterable {
 
     var color: Color {
         switch self {
-        case .automatic: return Color.blue
+        case .automatic: return Color.CT.textDim
         case .light: return .orange
-        case .dark: return .indigo
+        case .dark: return Color.CT.accent
         }
     }
 

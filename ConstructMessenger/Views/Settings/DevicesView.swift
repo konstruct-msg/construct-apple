@@ -27,94 +27,99 @@ struct DevicesView: View {
     @State private var showSignOutAllConfirm = false
 
     var body: some View {
-        List {
-            if isLoading && devices.isEmpty {
-                Section {
-                    HStack { Spacer(); ProgressView(); Spacer() }.padding()
-                }
-            } else {
-                // MARK: - This Device (always first)
-                if let current = devices.first(where: { $0.isCurrent }) {
-                    Section {
-                        DeviceRow(device: current, isCurrent: true, onRevoke: {})
-                    } header: {
-                        Text(LocalizedStringKey("this_device"))
+        ScrollView {
+            VStack(spacing: 20) {
+                if isLoading && devices.isEmpty {
+                    ConstructSection {
+                        HStack { Spacer(); ProgressView(); Spacer() }.padding()
                     }
-                }
+                } else {
+                    // MARK: - This Device (always first)
+                    if let current = devices.first(where: { $0.isCurrent }) {
+                        ConstructSection(header: NSLocalizedString("this_device", comment: "")) {
+                            DeviceRow(device: current, isCurrent: true, onRevoke: {})
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 14)
+                        }
+                    }
 
-                // MARK: - Other Devices
-                let others = devices.filter { !$0.isCurrent }
-                if !others.isEmpty {
-                    Section {
-                        ForEach(others) { device in
-                            DeviceRow(device: device, isCurrent: false) {
-                                deviceToRevoke = device
-                                showRevokeConfirm = true
+                    // MARK: - Other Devices
+                    let others = devices.filter { !$0.isCurrent }
+                    if !others.isEmpty {
+                        VStack(alignment: .leading, spacing: 6) {
+                            ConstructSection(header: NSLocalizedString("other_devices", comment: "")) {
+                                ForEach(Array(others.enumerated()), id: \.element.id) { index, device in
+                                    if index > 0 { ConstructRowDivider(indent: 52) }
+                                    DeviceRow(device: device, isCurrent: false) {
+                                        deviceToRevoke = device
+                                        showRevokeConfirm = true
+                                    }
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 14)
+                                }
+                            }
+                            if others.count > 1 {
+                                Text(LocalizedStringKey("other_devices_hint"))
+                                    .font(CTFont.regular(11))
+                                    .foregroundStyle(Color.CT.textDim)
+                                    .padding(.horizontal, 20)
                             }
                         }
-                    } header: {
-                        Text(LocalizedStringKey("other_devices"))
-                    } footer: {
-                        if others.count > 1 {
-                            Text(LocalizedStringKey("other_devices_hint"))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                    }
+
+                    // MARK: - Link / Approve
+                    VStack(alignment: .leading, spacing: 6) {
+                        ConstructSection {
+                            ConstructButtonRow(icon: "plus.circle.fill", title: LocalizedStringKey("link_new_device")) {
+                                showingQRSheet = true
+                            }
+                            #if os(iOS)
+                            ConstructRowDivider(indent: 52)
+                            ConstructButtonRow(icon: "qrcode.viewfinder", title: LocalizedStringKey("device_scan_to_approve")) {
+                                showingScanner = true
+                            }
+                            #endif
                         }
-                    }
-                }
-
-                // MARK: - Link / Approve
-                Section {
-                    Button {
-                        showingQRSheet = true
-                    } label: {
-                        Label(LocalizedStringKey("link_new_device"), systemImage: "plus.circle.fill")
+                        Text(LocalizedStringKey("linked_devices_hint"))
+                            .font(CTFont.regular(11))
+                            .foregroundStyle(Color.CT.textDim)
+                            .padding(.horizontal, 20)
                     }
 
-                    #if os(iOS)
-                    Button {
-                        showingScanner = true
-                    } label: {
-                        Label(LocalizedStringKey("device_scan_to_approve"), systemImage: "qrcode.viewfinder")
-                    }
-                    #endif
-                } footer: {
-                    Text(LocalizedStringKey("linked_devices_hint"))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                // MARK: - Session management
-                Section {
-                    Button(role: .destructive) {
-                        showSignOutConfirm = true
-                    } label: {
-                        Label(LocalizedStringKey("sign_out_this_device"), systemImage: "rectangle.portrait.and.arrow.right")
-                    }
-
-                    if devices.filter({ !$0.isCurrent }).count > 0 {
-                        Button(role: .destructive) {
-                            showSignOutOthersConfirm = true
-                        } label: {
-                            Label(LocalizedStringKey("sign_out_other_devices"), systemImage: "iphone.slash")
+                    // MARK: - Session management
+                    VStack(alignment: .leading, spacing: 6) {
+                        ConstructSection(header: NSLocalizedString("session_management", comment: "")) {
+                            ConstructActionRow(icon: "rectangle.portrait.and.arrow.right", title: LocalizedStringKey("sign_out_this_device"), role: .destructive) {
+                                showSignOutConfirm = true
+                            }
+                            if devices.filter({ !$0.isCurrent }).count > 0 {
+                                ConstructRowDivider(indent: 52)
+                                ConstructActionRow(icon: "iphone.slash", title: LocalizedStringKey("sign_out_other_devices"), role: .destructive) {
+                                    showSignOutOthersConfirm = true
+                                }
+                            }
+                            ConstructRowDivider(indent: 52)
+                            ConstructActionRow(icon: "xmark.shield", title: LocalizedStringKey("sign_out_all_devices"), role: .destructive) {
+                                showSignOutAllConfirm = true
+                            }
                         }
+                        Text(LocalizedStringKey("sign_out_all_hint"))
+                            .font(CTFont.regular(11))
+                            .foregroundStyle(Color.CT.textDim)
+                            .padding(.horizontal, 20)
                     }
-
-                    Button(role: .destructive) {
-                        showSignOutAllConfirm = true
-                    } label: {
-                        Label(LocalizedStringKey("sign_out_all_devices"), systemImage: "xmark.shield")
-                    }
-                } header: {
-                    Text(LocalizedStringKey("session_management"))
-                } footer: {
-                    Text(LocalizedStringKey("sign_out_all_hint"))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                 }
             }
+            .padding(.vertical, 20)
         }
+        .background(Color.CT.bg.ignoresSafeArea())
         .navigationTitle(LocalizedStringKey("linked_devices"))
+        #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(Color.CT.bgMsg, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
+        .toolbarColorScheme(.dark, for: .navigationBar)
+        #endif
         .refreshable { await loadDevices() }
         .task { await loadDevices() }
 
@@ -239,23 +244,22 @@ private struct DeviceRow: View {
         HStack(spacing: 12) {
             Image(systemName: platformIcon)
                 .font(.system(size: 22))
-                .foregroundStyle(isCurrent ? Color.accentColor : Color.secondary)
+                .foregroundStyle(isCurrent ? Color.CT.accent : Color.CT.textDim)
                 .frame(width: 32)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(device.name)
-                    .font(.body)
-                    .fontWeight(isCurrent ? .semibold : .regular)
+                    .font(CTFont.bold(16))
 
                 if isCurrent {
                     Label(LocalizedStringKey("device_active_now"), systemImage: "circle.fill")
-                        .font(.caption)
-                        .foregroundStyle(Color.green)
+                        .font(CTFont.regular(12))
+                        .foregroundStyle(Color.CT.accent)
                         .labelStyle(CompactLabelStyle())
                 } else {
                     Text(lastSeenText)
-                        .font(.caption)
-                        .foregroundStyle(Color.secondary)
+                        .font(CTFont.regular(12))
+                        .foregroundStyle(Color.CT.textDim)
                 }
             }
 
@@ -264,12 +268,11 @@ private struct DeviceRow: View {
             if !isCurrent {
                 Button(role: .destructive, action: onRevoke) {
                     Image(systemName: "minus.circle")
-                        .foregroundStyle(Color.red)
+                        .foregroundStyle(Color.CT.danger)
                 }
                 .buttonStyle(.plain)
             }
         }
-        .padding(.vertical, 4)
     }
 
     private var platformIcon: String {
