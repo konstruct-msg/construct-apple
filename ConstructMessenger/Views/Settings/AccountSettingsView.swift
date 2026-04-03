@@ -45,6 +45,7 @@ struct AccountSettingsView: View {
         .toolbar {
             ToolbarItem(placement: .principal) {
                 Text(NSLocalizedString("account", comment: ""))
+                    .textCase(.uppercase)
                     .font(CTFont.bold(13))
                     .foregroundStyle(Color.CT.text)
                     .tracking(4)
@@ -103,29 +104,16 @@ struct AccountSettingsView: View {
 
     private var avatarHeader: some View {
         VStack(spacing: 12) {
-            ZStack(alignment: .bottomTrailing) {
-                Group {
-                    if let image = viewModel.profileImage {
-                        Image(uiImage: image)
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: AvatarStyle.accountSize, height: AvatarStyle.accountSize)
-                            .clipShape(AvatarStyle.avatarShape(AvatarStyle.accountSize))
-                    } else {
-                        AvatarStyle.avatarShape(AvatarStyle.accountSize)
-                            .fill(Color.CT.accent.opacity(0.15))
-                            .frame(width: AvatarStyle.accountSize, height: AvatarStyle.accountSize)
-                            .overlay {
-                                Text(viewModel.displayName.prefix(1).uppercased())
-                                    .font(.system(size: 40, weight: .semibold))
-                                    .foregroundColor(Color.CT.accent)
-                            }
-                    }
-                }
-                .onTapGesture {
-                    if viewModel.profileImage != nil { showingAvatarViewer = true }
-                    else { showingImagePicker = true }
-                }
+            HexagonAvatarView(
+                userId: viewModel.userId,
+                displayName: viewModel.displayName,
+                image: viewModel.profileImage,
+                size: AvatarStyle.accountSize,
+                isActive: false
+            )
+            .onTapGesture {
+                if viewModel.profileImage != nil { showingAvatarViewer = true }
+                else { showingImagePicker = true }
             }
 
             if !viewModel.displayName.isEmpty {
@@ -227,10 +215,6 @@ struct AccountSettingsView: View {
                 showingDeleteConfirmation = true
             } label: {
                 HStack(spacing: 14) {
-                    Image(systemName: "trash")
-                        .foregroundStyle(Color.CT.danger)
-                        .frame(width: 22, alignment: .center)
-                        .font(.system(size: 16))
                     Text(LocalizedStringKey("delete_my_account"))
                         .font(CTFont.bold(16))
                         .foregroundStyle(Color.CT.danger)
