@@ -47,43 +47,58 @@ struct MainTabView: View {
                 .environment(chatsViewModel)
         } else {
             @Bindable var vm = chatsViewModel
-            TabView(selection: $vm.selectedTab) {
-                ChatsListView()
-                    .environment(chatsViewModel)
-                    .tabItem {
-                        Label("chats", systemImage: "message")
-                    }
-                    .tag(0)
-
-                SynapsView()
-                    .environment(chatsViewModel)
-                    .tabItem {
-                        Label("synaps", systemImage: "point.3.filled.connected.trianglepath.dotted")
-                    }
-                    .tag(1)
-
-                #if os(iOS)
-                if CallsFeature.isEnabled {
-                    CallHistoryView()
-                        .tabItem {
-                            Label(NSLocalizedString("calls_tab", comment: ""), systemImage: "phone")
-                        }
-                        .tag(2)
-                }
-
-                SettingsView()
-                    .tabItem {
-                        Label("settings", systemImage: "gear")
-                    }
-                    .tag(CallsFeature.isEnabled ? 3 : 2)
-                #endif
+            VStack(spacing: 0) {
+                tabContent(vm: vm)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                CTTabBar(selected: $vm.selectedTab, items: tabItems)
+                    .background(Color.CT.bg)
             }
+            .ctBackground()
+        }
+    }
+
+    /// Renders all tab views simultaneously (ZStack) so scroll/nav state is preserved.
+    @ViewBuilder
+    private func tabContent(vm: ChatsViewModel) -> some View {
+        ZStack {
+            ChatsListView()
+                .environment(chatsViewModel)
+                .opacity(vm.selectedTab == 0 ? 1 : 0)
+                .allowsHitTesting(vm.selectedTab == 0)
+
+            SynapsView()
+                .environment(chatsViewModel)
+                .opacity(vm.selectedTab == 1 ? 1 : 0)
+                .allowsHitTesting(vm.selectedTab == 1)
+
             #if os(iOS)
-            .toolbarBackground(Color.Construct.bg, for: .tabBar)
-            .toolbarBackground(.visible, for: .tabBar)
-            .toolbarColorScheme(.dark, for: .tabBar)
+            if CallsFeature.isEnabled {
+                CallHistoryView()
+                    .opacity(vm.selectedTab == 2 ? 1 : 0)
+                    .allowsHitTesting(vm.selectedTab == 2)
+            }
+
+            SettingsView()
+                .opacity(vm.selectedTab == (CallsFeature.isEnabled ? 3 : 2) ? 1 : 0)
+                .allowsHitTesting(vm.selectedTab == (CallsFeature.isEnabled ? 3 : 2))
             #endif
         }
+    }
+
+    private var tabItems: [CTTabItem] {
+        #if os(iOS)
+        var items: [CTTabItem] = [
+            CTTabItem(symbol: CTSymbol.tabChats,  label: "chats"),
+            CTTabItem(symbol: CTSymbol.tabSynaps, label: "synaps"),
+        ]
+        if CallsFeature.isEnabled {
+            items.append(CTTabItem(symbol: CTSymbol.tabCalls, label: "calls"))
+        }
+        items.append(CTTabItem(symbol: CTSymbol.tabSettings, label: "settings"))
+        return items
+        #else
+        return CTTabBar.defaultItems
+        #endif
     }
 
     // MARK: - Call state helpers

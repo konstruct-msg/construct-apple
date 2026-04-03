@@ -85,6 +85,8 @@ enum CTSymbol {
 
     // Tab bar
     static let tabChats    = "[⌂]"
+    static let tabSynaps   = "[⊹]"
+    static let tabCalls    = "[tel]"
     static let tabContacts = "[⊹]"
     static let tabSettings = "[cfg]"
 
@@ -273,13 +275,25 @@ struct CTNavBar: View {
 
 // MARK: - Tab Bar
 
+struct CTTabItem {
+    let symbol: String
+    let label: String
+}
+
 struct CTTabBar: View {
     @Binding var selected: Int
+    var items: [CTTabItem]
 
-    private let items: [(symbol: String, label: String)] = [
-        (CTSymbol.tabChats,    "chats"),
-        (CTSymbol.tabContacts, "contacts"),
-        (CTSymbol.tabSettings, "settings"),
+    /// Convenience initialiser with default 3-tab layout (chats / synaps / settings).
+    init(selected: Binding<Int>, items: [CTTabItem] = CTTabBar.defaultItems) {
+        _selected = selected
+        self.items = items
+    }
+
+    static let defaultItems: [CTTabItem] = [
+        CTTabItem(symbol: CTSymbol.tabChats,    label: "chats"),
+        CTTabItem(symbol: CTSymbol.tabSynaps,   label: "synaps"),
+        CTTabItem(symbol: CTSymbol.tabSettings, label: "settings"),
     ]
 
     var body: some View {
