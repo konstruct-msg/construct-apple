@@ -39,14 +39,11 @@ struct CallHistoryView: View {
             }
         }
         .background(Color.CT.bg.ignoresSafeArea())
-        .confirmationDialog(
-            NSLocalizedString("calls_clear_confirm", comment: ""),
-            isPresented: $showClearConfirm,
-            titleVisibility: .visible
-        ) {
+        .alert(NSLocalizedString("calls_clear_confirm", comment: ""), isPresented: $showClearConfirm) {
             Button(NSLocalizedString("calls_clear", comment: ""), role: .destructive) {
                 CallHistoryService.shared.deleteAll()
             }
+            Button(NSLocalizedString("cancel", comment: ""), role: .cancel) {}
         }
     }
 
