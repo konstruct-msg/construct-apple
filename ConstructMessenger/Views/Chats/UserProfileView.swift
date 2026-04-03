@@ -66,9 +66,9 @@ struct UserProfileView: View {
             #endif
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
-                        .font(CTFont.medium(16))
-                        .foregroundStyle(Color.CT.accent)
+                    Button("[ done ]") { dismiss() }
+                        .font(CTFont.regular(13))
+                        .foregroundStyle(Color.CT.textDim)
                 }
             }
             .onAppear { viewModel.setContext(viewContext) }
@@ -106,26 +106,14 @@ struct UserProfileView: View {
     // MARK: - Avatar header
 
     private var avatarHeader: some View {
-        VStack(spacing: 12) {
-            ZStack {
-                if let data = user.avatarData, let img = PlatformImage(data: data) {
-                    Image(platformImage: img)
-                        .resizable()
-                        .scaledToFill()
-                } else {
-                    Circle().fill(accentColor.opacity(0.18))
-                    Text(initials)
-                        .font(CTFont.bold(32))
-                        .foregroundStyle(accentColor)
-                }
-            }
-            .frame(width: 96, height: 96)
-            .clipShape(Circle())
-            .overlay(
-                Circle().strokeBorder(
-                    user.isBlocked ? Color.red.opacity(0.5) : Color.CT.noise,
-                    lineWidth: 2
-                )
+        let avatarImage: PlatformImage? = user.avatarData.flatMap { PlatformImage(data: $0) }
+        return VStack(spacing: 12) {
+            HexagonAvatarView(
+                userId: user.id,
+                displayName: user.resolvedDisplayName,
+                image: avatarImage,
+                size: 96,
+                isActive: false
             )
 
             VStack(spacing: 4) {
@@ -140,9 +128,9 @@ struct UserProfileView: View {
                 }
 
                 if user.isBlocked {
-                    Label("Blocked", systemImage: "slash.circle")
-                        .font(CTFont.bold(11))
-                        .foregroundStyle(Color.red)
+                    Text("[ BLOCKED ]")
+                        .font(CTFont.bold(10))
+                        .foregroundStyle(Color.CT.danger)
                         .padding(.top, 2)
                 }
             }
@@ -155,62 +143,114 @@ struct UserProfileView: View {
     // MARK: - Actions list
 
     private var actionsList: some View {
-        VStack(spacing: 9) {
-            if showMessageButton, let openChat = onOpenChat {
-                ConstructActionRow(icon: "message.fill", title: LocalizedStringKey("synaps_open_chat"), role: .primary) {
-                    openChat()
-                    dismiss()
-                }
-            }
-
-            if CallsFeature.isEnabled, case .idle = callManager.state {
-                ConstructActionRow(icon: "phone.fill", title: "Voice call", role: .primary) {
-                    Task {
-                        await callManager.startOutgoingCall(
-                            to: user.id,
-                            displayName: user.resolvedDisplayName,
-                            hasVideo: false
-                        )
+        VStack(spacing: 20) {
+            // Primary actions
+            ConstructSection(header: nil) {
+                if showMessageButton, let openChat = onOpenChat {
+                    profileActionRow(label: LocalizedStringKey("synaps_open_chat"), color: Color.CT.accent) {
+                        openChat()
+                        dismiss()
                     }
-                    dismiss()
+                    ConstructRowDivider(indent: 16)
                 }
-            } else if !CallsFeature.isEnabled {
-                ConstructActionRow(icon: "phone.fill", title: "Voice call", role: .disabled) {}
-            }
 
-            if user.amISharingWith {
-                ConstructActionRow(icon: "person.crop.circle.badge.minus", title: LocalizedStringKey("stop_sharing_profile"), role: .secondary, isLoading: isSharingInProgress) {
-                    handleShareToggle(false)
+                if CallsFeature.isEnabled, case .idle = callManager.state {
+                    profileActionRow(label: "Voice Call", color: Color.CT.accent) {
+                        Task {
+                            await callManager.startOutgoingCall(
+                                to: user.id,
+                                displayName: user.resolvedDisplayName,
+                                hasVideo: false
+                            )
+                        }
+                        dismiss()
+                    }
+                    ConstructRowDivider(indent: 16)
+                } else if !CallsFeature.isEnabled {
+                    profileActionRowDisabled(label: "Voice Call")
+                    ConstructRowDivider(indent: 16)
                 }
-            } else {
-                ConstructActionRow(icon: "person.crop.circle.badge.checkmark", title: LocalizedStringKey("share_my_profile"), role: .accent, isLoading: isSharingInProgress) {
-                    handleShareToggle(true)
+
+                if user.amISharingWith {
+                    profileActionRow(label: LocalizedStringKey("stop_sharing_profile"), color: Color.CT.text, isLoading: isSharingInProgress) {
+                        handleShareToggle(false)
+                    }
+                } else {
+                    profileActionRow(label: LocalizedStringKey("share_my_profile"), color: Color.CT.accent, isLoading: isSharingInProgress) {
+                        handleShareToggle(true)
+                    }
                 }
             }
 
-            Spacer()
-
-            ConstructActionRow(
-                icon: user.isBlocked ? "checkmark.circle" : "slash.circle",
-                title: LocalizedStringKey(user.isBlocked ? "unblock_user" : "block_user"),
-                role: .secondary
-            ) {
-                showingBlockConfirmation = true
+            // Block
+            ConstructSection(header: nil) {
+                profileActionRow(
+                    label: LocalizedStringKey(user.isBlocked ? "unblock_user" : "block_user"),
+                    color: Color.CT.text
+                ) {
+                    showingBlockConfirmation = true
+                }
             }
 
-            ConstructActionRow(icon: "arrow.counterclockwise", title: LocalizedStringKey("reset_session"), role: .destructive) {
-                showResetSessionConfirm = true
-            }
-
-            if let prune = onPrune {
-                ConstructActionRow(icon: "scissors", title: LocalizedStringKey("synaps_prune_action"), role: .destructive) {
-                    prune()
-                    dismiss()
+            // Destructive
+            ConstructSection(header: nil) {
+                profileActionRow(label: LocalizedStringKey("reset_session"), color: Color.CT.danger) {
+                    showResetSessionConfirm = true
+                }
+                if let prune = onPrune {
+                    ConstructRowDivider(indent: 16)
+                    profileActionRow(label: LocalizedStringKey("synaps_prune_action"), color: Color.CT.danger) {
+                        prune()
+                        dismiss()
+                    }
                 }
             }
         }
         .padding(.horizontal, 16)
         .padding(.top, 20)
+    }
+
+    // MARK: - Row helpers
+
+    @ViewBuilder
+    private func profileActionRow(label: LocalizedStringKey, color: Color, isLoading: Bool = false, action: @escaping () -> Void) -> some View {
+        Button(action: { guard !isLoading else { return }; action() }) {
+            HStack {
+                Text(label)
+                    .font(CTFont.bold(15))
+                    .foregroundStyle(color)
+                Spacer()
+                if isLoading {
+                    ProgressView().scaleEffect(0.75).tint(Color.CT.textDim)
+                } else {
+                    Text(">")
+                        .font(CTFont.regular(13))
+                        .foregroundStyle(Color.CT.textDim)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(isLoading)
+    }
+
+    @ViewBuilder
+    private func profileActionRowDisabled(label: String) -> some View {
+        HStack {
+            Text(label)
+                .font(CTFont.bold(15))
+                .foregroundStyle(Color.CT.textDim)
+            Spacer()
+            Text("soon")
+                .font(CTFont.regular(10))
+                .foregroundStyle(Color.CT.textDim)
+                .padding(.horizontal, 6).padding(.vertical, 2)
+                .overlay(Rectangle().strokeBorder(Color.CT.noise, lineWidth: 1))
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
     }
 
     // MARK: - Crypto section
@@ -223,15 +263,11 @@ struct UserProfileView: View {
             : NSLocalizedString("session_crypto_no_session", comment: "")
 
         return VStack(spacing: 0) {
-            Divider()
-                .background(Color.CT.noise)
-                .padding(.horizontal, 16)
-
             HStack(spacing: 10) {
-                Image(systemName: hasSession ? "lock.fill" : "lock.open")
-                    .font(.system(size: 13, weight: .medium))
+                Text(hasSession ? "[ENC]" : "[---]")
+                    .font(CTFont.regular(10))
                     .foregroundStyle(hasSession ? Color.CT.accent.opacity(0.8) : Color.CT.textDim)
-                    .frame(width: 20)
+                    .frame(width: 36, alignment: .leading)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(LocalizedStringKey("session_crypto_suite"))
@@ -245,15 +281,15 @@ struct UserProfileView: View {
                 Spacer()
 
                 if hasSession {
-                    Image(systemName: "checkmark.shield.fill")
-                        .font(.system(size: 14))
+                    Text("[ OK ]")
+                        .font(CTFont.regular(10))
                         .foregroundStyle(Color.CT.accent.opacity(0.7))
                 }
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, 32)
             .padding(.vertical, 14)
         }
-        .padding(.top, 12)
+        .padding(.top, 4)
     }
 
     // MARK: - Sharing status
@@ -261,35 +297,17 @@ struct UserProfileView: View {
     private var sharingStatus: some View {
         Group {
             if let sharedAt = user.sharedWithMeAt, user.isSharingWithMe {
-                VStack(alignment: .leading, spacing: 4) {
-                    Label(
-                        String(format: NSLocalizedString("sharing_with_you", comment: ""), formatDate(sharedAt)),
-                        systemImage: "checkmark.shield"
-                    )
+                Text(String(format: NSLocalizedString("sharing_with_you", comment: ""), formatDate(sharedAt)))
                     .font(CTFont.regular(11))
                     .foregroundStyle(Color.CT.textDim)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 16)
-                .padding(.top, 20)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 32)
+                    .padding(.top, 8)
             }
         }
     }
 
     // MARK: - Helpers
-
-    private var accentColor: Color { .hexagonAccent(for: user.id) }
-
-    private var initials: String {
-        let words = user.displayName
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .components(separatedBy: .whitespaces).filter { !$0.isEmpty }
-        switch words.count {
-        case 0:  return "?"
-        case 1:  return String(words[0].prefix(2)).uppercased()
-        default: return (String(words[0].prefix(1)) + String(words[1].prefix(1))).uppercased()
-        }
-    }
 
     private func formatDate(_ date: Date) -> String {
         let f = DateFormatter()
