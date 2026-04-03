@@ -21,47 +21,31 @@ struct CallHistoryView: View {
     @State private var showClearConfirm = false
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                Color.CT.bg.ignoresSafeArea()
+        VStack(spacing: 0) {
+            CTNavBar(
+                title: NSLocalizedString("calls_recents", comment: ""),
+                trailingSymbol: records.isEmpty ? nil : "[\(NSLocalizedString("calls_clear", comment: ""))]",
+                trailingColor: Color.CT.danger,
+                trailingAction: { showClearConfirm = true }
+            )
+            Rectangle()
+                .fill(Color.CT.noise)
+                .frame(height: 1)
 
-                if records.isEmpty {
-                    emptyState
-                } else {
-                    callList
-                }
+            if records.isEmpty {
+                emptyState
+            } else {
+                callList
             }
-            #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(Color.CT.bgMsg, for: .navigationBar)
-            .toolbarBackground(.visible, for: .navigationBar)
-            .toolbarColorScheme(.dark, for: .navigationBar)
-            #endif
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Text(NSLocalizedString("calls_recents", comment: "").uppercased())
-                        .font(CTFont.bold(13))
-                        .foregroundStyle(Color.CT.text)
-                        .tracking(4)
-                }
-                if !records.isEmpty {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button(NSLocalizedString("calls_clear", comment: "")) {
-                            showClearConfirm = true
-                        }
-                        .font(CTFont.regular(13))
-                        .foregroundStyle(Color.CT.danger)
-                    }
-                }
-            }
-            .confirmationDialog(
-                NSLocalizedString("calls_clear_confirm", comment: ""),
-                isPresented: $showClearConfirm,
-                titleVisibility: .visible
-            ) {
-                Button(NSLocalizedString("calls_clear", comment: ""), role: .destructive) {
-                    CallHistoryService.shared.deleteAll()
-                }
+        }
+        .background(Color.CT.bg.ignoresSafeArea())
+        .confirmationDialog(
+            NSLocalizedString("calls_clear_confirm", comment: ""),
+            isPresented: $showClearConfirm,
+            titleVisibility: .visible
+        ) {
+            Button(NSLocalizedString("calls_clear", comment: ""), role: .destructive) {
+                CallHistoryService.shared.deleteAll()
             }
         }
     }
@@ -70,20 +54,16 @@ struct CallHistoryView: View {
 
     private var callList: some View {
         ScrollView(showsIndicators: false) {
-            VStack(spacing: 20) {
-                ConstructSection(header: nil) {
-                    ForEach(Array(records.enumerated()), id: \.element.id) { index, record in
-                        CallHistoryRow(record: record, onDelete: { deleteRecord(record) }, onCallBack: { callBack(record) })
-                        if index < records.count - 1 {
-                            ConstructRowDivider(indent: 72)
-                        }
-                    }
+            VStack(spacing: 0) {
+                ForEach(Array(records.enumerated()), id: \.element.id) { index, record in
+                    CallHistoryRow(record: record, onDelete: { deleteRecord(record) }, onCallBack: { callBack(record) })
+                    Rectangle()
+                        .fill(Color.CT.noise.opacity(0.35))
+                        .frame(height: 1)
+                        .padding(.leading, 72)
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 20)
         }
-        .background(Color.CT.bg)
     }
 
     // MARK: - Empty state

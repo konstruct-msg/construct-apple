@@ -255,6 +255,7 @@ struct CTNavBar: View {
     let title: String
     var showBack: Bool      = false
     var trailingSymbol: String? = nil
+    var trailingColor: Color    = Color.CT.accent
     var backAction: (() -> Void)?     = nil
     var trailingAction: (() -> Void)? = nil
 
@@ -275,8 +276,8 @@ struct CTNavBar: View {
             if let sym = trailingSymbol {
                 Button(action: { trailingAction?() }) {
                     Text(sym)
-                        .font(CTFont.bold(16))
-                        .foregroundColor(Color.CT.accent)
+                        .font(CTFont.regular(13))
+                        .foregroundColor(trailingColor)
                 }
             }
         }
