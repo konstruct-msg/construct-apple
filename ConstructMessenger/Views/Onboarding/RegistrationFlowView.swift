@@ -67,18 +67,20 @@ struct RegistrationStageView: View {
     private var preparingContent: some View {
         VStack(spacing: 44) {
             VStack(spacing: 8) {
-                Text("reg_establishing_trust")
-                    .font(.title2).fontWeight(.semibold)
-                Text("reg_joining_network")
-                    .font(.subheadline).foregroundColor(.secondary)
+                Text(LocalizedStringKey("reg_establishing_trust"))
+                    .font(CTFont.bold(18))
+                    .foregroundColor(Color.CT.text)
+                Text(LocalizedStringKey("reg_joining_network"))
+                    .font(CTFont.regular(13))
+                    .foregroundColor(Color.CT.textDim)
             }
 
             ConvergingSignalView(progress: unifiedProgress, collapsed: signalCollapsed)
                 .frame(height: 72)
 
             Text(phaseLabel)
-                .font(.system(.caption, design: .monospaced))
-                .foregroundColor(.secondary)
+                .font(CTFont.regular(11))
+                .foregroundColor(Color.CT.textDim)
                 .id(phaseLabel)
                 .transition(.opacity.animation(.easeInOut(duration: 0.4)))
         }
@@ -87,38 +89,38 @@ struct RegistrationStageView: View {
     // MARK: Complete
 
     private var completeContent: some View {
-        VStack(spacing: 32) {
-            
+        VStack(spacing: 28) {
+            Text(LocalizedStringKey("reg_welcome"))
+                .font(CTFont.bold(24))
+                .foregroundColor(Color.CT.text)
 
-            Text("reg_welcome")
-                .font(.largeTitle).fontWeight(.bold)
-
-            VStack(spacing: 16) {
+            VStack(spacing: 0) {
                 if let u = username, !u.isEmpty {
                     DetailRow(label: NSLocalizedString("reg_label_username", comment: ""), value: "@\(u)")
+                    CTSep()
                 } else {
                     DetailRow(label: NSLocalizedString("reg_label_mode", comment: ""), value: NSLocalizedString("reg_mode_anonymous", comment: ""))
+                    CTSep()
                 }
                 if !deviceId.isEmpty {
                     DetailRow(label: NSLocalizedString("reg_label_device_id", comment: ""), value: String(deviceId.prefix(16)) + "…")
                 }
-                
             }
-            .padding()
-            .background(Color.secondary.opacity(0.12))
-            .cornerRadius(12)
+            .background(Color.CT.bgMsg)
+            .overlay(Rectangle().stroke(Color.CT.noise, lineWidth: 0.5))
         }
     }
 
     // MARK: Error
 
     private func errorContent(_ message: String) -> some View {
-        VStack(spacing: 24) {
- 
-            Text("reg_error_title")
-                .font(.title2).fontWeight(.semibold)
+        VStack(spacing: 20) {
+            Text(LocalizedStringKey("reg_error_title"))
+                .font(CTFont.bold(18))
+                .foregroundColor(Color.CT.danger)
             Text(message)
-                .font(.body).foregroundColor(.secondary)
+                .font(CTFont.regular(13))
+                .foregroundColor(Color.CT.textDim)
                 .multilineTextAlignment(.center)
         }
     }
@@ -129,16 +131,18 @@ struct RegistrationStageView: View {
     private var actionButton: some View {
         switch step {
         case .complete:
-            Button { onComplete?() } label: {
-                Text("reg_continue")
-                    .font(.headline).foregroundColor(.white)
-                    .frame(maxWidth: .infinity).padding()
-                    .background(Color.AppBrand.button).cornerRadius(18)
+            CTButton(label: NSLocalizedString("reg_continue", comment: "").uppercased()) {
+                onComplete?()
             }
         case .error:
-            Button("reg_try_again") { onDismiss?() }.buttonStyle(.bordered)
+            CTButton(label: NSLocalizedString("reg_try_again", comment: "").uppercased(), isDestructive: true) {
+                onDismiss?()
+            }
         default:
-            Button("reg_cancel") { onDismiss?() }.foregroundColor(.secondary)
+            Button(NSLocalizedString("reg_cancel", comment: "")) { onDismiss?() }
+                .font(CTFont.regular(13))
+                .foregroundColor(Color.CT.textDim)
+                .buttonStyle(.plain)
         }
     }
 
@@ -174,10 +178,16 @@ struct RegistrationStageView: View {
         let label: String; let value: String
         var body: some View {
             HStack {
-                Text(label).foregroundColor(.secondary)
+                Text(label)
+                    .font(CTFont.regular(12))
+                    .foregroundColor(Color.CT.textDim)
                 Spacer()
-                Text(value).fontWeight(.medium)
-            }.font(.subheadline)
+                Text(value)
+                    .font(CTFont.bold(12))
+                    .foregroundColor(Color.CT.text)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
         }
     }
 }
@@ -216,6 +226,8 @@ struct RegistrationFlowView: View {
             },
             onDismiss: { dismiss() }
         )
+        .ctBackground()
+        .toolbar(.hidden, for: .navigationBar)
         .navigationBarBackButtonHidden(true)
         .task {
             guard !hasStarted else { return }

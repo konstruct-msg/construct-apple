@@ -360,6 +360,71 @@ struct CTSettingsRow: View {
     }
 }
 
+// MARK: - Text Field
+
+struct CTTextField: View {
+    let placeholder: String
+    @Binding var text: String
+    var isSecure: Bool = false
+    var alignment: TextAlignment = .leading
+
+    var body: some View {
+        Group {
+            if isSecure {
+                SecureField(placeholder, text: $text)
+            } else {
+                TextField(placeholder, text: $text)
+            }
+        }
+        .font(CTFont.regular(14))
+        .foregroundColor(Color.CT.text)
+        .multilineTextAlignment(alignment)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 11)
+        .background(Color.CT.bgMsg)
+        .overlay(Rectangle().stroke(Color.CT.noise, lineWidth: 0.5))
+        #if os(macOS)
+        .textFieldStyle(.plain)
+        #endif
+    }
+}
+
+// MARK: - Button
+
+struct CTButton: View {
+    let label: String
+    var isEnabled: Bool    = true
+    var isDestructive: Bool = false
+    let action: () -> Void
+
+    var fgColor: Color {
+        guard isEnabled else { return Color.CT.textDim }
+        return isDestructive ? .white : Color.CT.bg
+    }
+
+    var bgColor: Color {
+        guard isEnabled else { return Color(hex: 0x1C1C1C) }
+        return isDestructive ? Color.CT.danger : Color.CT.accent
+    }
+
+    var body: some View {
+        Button(action: action) {
+            Text(label)
+                .font(CTFont.bold(13))
+                .foregroundColor(fgColor)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background(bgColor)
+                .overlay(
+                    Rectangle()
+                        .stroke(isEnabled ? Color.clear : Color.CT.noise, lineWidth: 0.5)
+                )
+        }
+        .buttonStyle(.plain)
+        .disabled(!isEnabled)
+    }
+}
+
 // MARK: - View Extensions
 
 extension View {

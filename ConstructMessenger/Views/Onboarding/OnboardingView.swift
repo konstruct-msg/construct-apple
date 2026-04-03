@@ -25,115 +25,123 @@ struct OnboardingView: View {
     
     var body: some View {
         NavigationStack {
-            VStack(spacing: 32) {
-                // Logo/Branding
-                VStack(spacing: 12) {
-                    Image("KonstructLogo")
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 120, height: 120)
-
-                    Image("MainTitle")
-                        .padding(.top, 12)
-
-                    Text("onboarding_tagline")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .padding(.vertical, 6)
+            VStack(spacing: 0) {
+                // Top bar — network settings
+                HStack {
+                    Spacer()
+                    Button {
+                        #if os(macOS)
+                        openSettings()
+                        #else
+                        showingNetworkSettings = true
+                        #endif
+                    } label: {
+                        Text("[net]")
+                            .font(CTFont.regular(12))
+                            .foregroundColor(Color.CT.textDim)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(Text("onboarding_network_settings"))
+                    .padding(.horizontal, 16)
+                    .padding(.top, 16)
                 }
-                .padding(.top, 120)
 
                 Spacer()
-                
-                // Username input (optional)
-                VStack(alignment: .center, spacing: 8) {
 
-                    TextField("onboarding_username_placeholder", text: $username)
+                // Branding
+                VStack(spacing: 10) {
+                    Image("KonstructLogo")
+                        .resizable()
+                        .renderingMode(.template)
+                        .foregroundColor(Color.CT.text)
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 64, height: 64)
+
+                    Text("CONSTRUCT")
+                        .font(CTFont.bold(26))
+                        .foregroundColor(Color.CT.text)
+                        .tracking(4)
+
+                    CTSep()
+                        .frame(maxWidth: 200)
+                        .padding(.vertical, 2)
+
+                    Text(LocalizedStringKey("onboarding_tagline"))
+                        .font(CTFont.regular(12))
+                        .foregroundColor(Color.CT.textDim)
                         .multilineTextAlignment(.center)
-                        .font(.system(size: 14, weight: .regular, design: .monospaced))
-                        .frame(height: 30)
-                        .padding(12)
-                        .background(Color.secondary.opacity(0.12))
-                        .cornerRadius(8)
-                        #if os(macOS)
-                        .textFieldStyle(.plain)
-                        #endif
-                        .onChange(of: username) { oldValue, newValue in
-                            let lowered = newValue.lowercased()
-                            if newValue != lowered {
-                                username = lowered
-                                return
-                            }
-                            validateUsername()
-                            scheduleUsernameAvailabilityCheck()
+                }
+                .padding(.horizontal, 32)
+
+                Spacer()
+
+                // Username input + status
+                VStack(alignment: .leading, spacing: 6) {
+                    CTTextField(
+                        placeholder: NSLocalizedString("onboarding_username_placeholder", comment: ""),
+                        text: $username,
+                        alignment: .center
+                    )
+                    .onChange(of: username) { _, newValue in
+                        let lowered = newValue.lowercased()
+                        if newValue != lowered {
+                            username = lowered
+                            return
                         }
+                        validateUsername()
+                        scheduleUsernameAvailabilityCheck()
+                    }
 
-                    if let usernameErrorKey {
-                        Text(LocalizedStringKey(usernameErrorKey))
-                            .font(.caption)
-                            .foregroundColor(.red)
+                    if let errorKey = usernameErrorKey {
+                        Text("> [!] \(NSLocalizedString(errorKey, comment: ""))")
+                            .font(CTFont.regular(11))
+                            .foregroundColor(Color.CT.danger)
                     } else if isCheckingUsername {
-                        Text("username_checking")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                        Text("> checking...")
+                            .font(CTFont.regular(11))
+                            .foregroundColor(Color.CT.textDim)
                     } else if let available = usernameIsAvailable {
-                        Text(LocalizedStringKey(available ? "username_available" : "username_unavailable"))
-                            .font(.caption)
-                            .foregroundColor(available ? Color.AppStatus.success : .red)
+                        Text(available ? "> [ok] available" : "> [!] taken")
+                            .font(CTFont.regular(11))
+                            .foregroundColor(available ? Color.CT.accentDim : Color.CT.danger)
                     }
-                    
                 }
                 .frame(maxWidth: 360)
                 .padding(.horizontal, 24)
+                .padding(.bottom, 20)
 
-                // Primary actions
-                VStack(spacing: 12) {
-                    Button {
+                // Actions
+                VStack(spacing: 14) {
+                    CTButton(
+                        label: NSLocalizedString("onboarding_create_identity", comment: "").uppercased(),
+                        isEnabled: canProceed
+                    ) {
                         showingRegistration = true
-                    } label: {
-                        Text("onboarding_create_identity")
-                            .font(.headline)
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 44)
-                            .background(canProceed ? Color.AppBrand.button : Color.gray.opacity(0.5))
-                            .cornerRadius(10)
                     }
-                    .buttonStyle(.plain)
-                    .disabled(!canProceed)
+                    .frame(maxWidth: 360)
 
-                    Button {
-                        showingRecovery = true
-                    } label: {
-                        Text("onboarding_restore")
-                            .font(.subheadline)
-                            .foregroundColor(Color.Construct.accent)
-                            .padding(.vertical, 6)
+                    HStack(spacing: 32) {
+                        Button { showingRecovery = true } label: {
+                            Text("[restore →]")
+                                .font(CTFont.regular(13))
+                                .foregroundColor(Color.CT.accentDim)
+                        }
+                        .buttonStyle(.plain)
+
+                        Button { showingDeviceLink = true } label: {
+                            Text("[link device →]")
+                                .font(CTFont.regular(13))
+                                .foregroundColor(Color.CT.textDim)
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
-
-                    // Device linking — hidden until backend is ready
-                    // Button {
-                    //     showingDeviceLink = true
-                    // } label: {
-                    //     Text("onboarding_link_device")
-                    //         .font(.subheadline)
-                    //         .foregroundColor(Color.secondary)
-                    //         .padding(.vertical, 4)
-                    // }
-                    // .buttonStyle(.plain)
                 }
-                .frame(maxWidth: 360)
                 .padding(.horizontal, 24)
-                .padding(.bottom, 40)
+                .padding(.bottom, 52)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-//            .background {
-//                // Lattice background — visual nod to lattice-based cryptography
-//                LatticeBackgroundView()
-//                    .ignoresSafeArea()
-//                    .opacity(0.8)
-//            }
+            .ctBackground()
+            .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(isPresented: $showingRegistration) {
                 RegistrationFlowView(username: username.isEmpty ? nil : username)
             }
@@ -141,14 +149,13 @@ struct OnboardingView: View {
                 RecoveryEntryView()
                     .environment(recoveryVM)
             }
-            // Device linking sheet — hidden until backend is ready
-            // .sheet(isPresented: $showingDeviceLink) {
-            //     #if os(iOS)
-            //     DeviceLinkScanView()
-            //     #else
-            //     DesktopLinkRequestView()
-            //     #endif
-            // }
+            .sheet(isPresented: $showingDeviceLink) {
+                #if os(iOS)
+                DeviceLinkScanView()
+                #else
+                DesktopLinkRequestView()
+                #endif
+            }
             .sheet(isPresented: $showingNetworkSettings) {
                 NavigationStack {
                     NetworkSettingsView()
@@ -159,21 +166,6 @@ struct OnboardingView: View {
                                 }
                             }
                         }
-                }
-            }
-            .toolbar {
-                ToolbarItem(placement: .automatic) {
-                    Button {
-                        #if os(macOS)
-                        openSettings()
-                        #else
-                        showingNetworkSettings = true
-                        #endif
-                    } label: {
-                        Image(systemName: "network")
-                    }
-                    .foregroundStyle(Color.Construct.accent)
-                    .accessibilityLabel(Text("onboarding_network_settings"))
                 }
             }
         }
