@@ -7,9 +7,9 @@
 //  Only compiled in DEBUG builds.
 //
 
-#if DEBUG
-
 import SwiftUI
+
+#if DEBUG
 
 // MARK: - Overlay
 

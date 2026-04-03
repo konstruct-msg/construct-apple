@@ -9,8 +9,6 @@
 import Foundation
 import os.signpost
 
-#if DEBUG
-
 // MARK: - Event Types
 
 enum MetricEvent: String {
@@ -34,6 +32,8 @@ enum MetricEvent: String {
     case streamOpenStart        = "stream_open_start"
     case streamOpenEnd          = "stream_open_end"
 }
+
+#if DEBUG
 
 // MARK: - Metric Record
 
@@ -225,9 +225,9 @@ final class PerformanceMetrics: @unchecked Sendable {
     static let shared = PerformanceMetrics()
     private init() {}
 
-    @inline(__always) func record(_ event: Any, label: String = "", value: Double? = nil) {}
-    @inline(__always) func start(_ event: Any, label: String) {}
-    @discardableResult @inline(__always) func end(_ startEvent: Any, endEvent: Any, label: String) -> Double? { nil }
+    @inline(__always) func record(_ event: MetricEvent, label: String = "", value: Double? = nil) {}
+    @inline(__always) func start(_ event: MetricEvent, label: String) {}
+    @discardableResult @inline(__always) func end(_ startEvent: MetricEvent, endEvent: MetricEvent, label: String) -> Double? { nil }
     @inline(__always) func messageEnvelopeArrived(messageId: String) {}
     @inline(__always) func messageDecryptStart(messageId: String) {}
     @inline(__always) func messageDecryptEnd(messageId: String) {}
