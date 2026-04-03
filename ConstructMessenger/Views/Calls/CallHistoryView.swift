@@ -2,8 +2,7 @@
 //  CallHistoryView.swift
 //  Construct Messenger
 //
-//  Recent calls screen — iOS Phone app "Recents" aesthetic
-//  within the Construct visual language.
+//  Recent calls screen — Construct Terminal design.
 //
 
 import SwiftUI
@@ -23,28 +22,35 @@ struct CallHistoryView: View {
 
     var body: some View {
         NavigationStack {
-            Group {
+            ZStack {
+                Color.CT.bg.ignoresSafeArea()
+
                 if records.isEmpty {
                     emptyState
                 } else {
                     callList
                 }
             }
-            .navigationBarTitleDisplayMode(.large)
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(Color.CT.bgMsg, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .principal) {
-                    Text(NSLocalizedString("calls_recents", comment: ""))
+                    Text("CALLS")
                         .font(CTFont.bold(13))
                         .foregroundStyle(Color.CT.text)
                         .tracking(3)
                 }
-                
                 if !records.isEmpty {
                     ToolbarItem(placement: .topBarTrailing) {
                         Button(NSLocalizedString("calls_clear", comment: "")) {
                             showClearConfirm = true
                         }
-                        .foregroundStyle(Color.CT.accent)
+                        .font(CTFont.regular(13))
+                        .foregroundStyle(Color.CT.danger)
                     }
                 }
             }
@@ -58,48 +64,39 @@ struct CallHistoryView: View {
                 }
             }
         }
-        .background(Color.CT.bg)
     }
 
     // MARK: - List
 
     private var callList: some View {
-        List {
-            ForEach(records, id: \.id) { record in
-                CallHistoryRow(record: record)
-                    .listRowBackground(Color.CT.bg)
-                    .listRowSeparatorTint(Color.CT.noise)
-                    .swipeActions(edge: .trailing) {
-                        Button(role: .destructive) {
-                            deleteRecord(record)
-                        } label: {
-                            Label("delete", systemImage: "trash")
+        ScrollView(showsIndicators: false) {
+            VStack(spacing: 20) {
+                ConstructSection(header: nil) {
+                    ForEach(Array(records.enumerated()), id: \.element.id) { index, record in
+                        CallHistoryRow(record: record, onDelete: { deleteRecord(record) }, onCallBack: { callBack(record) })
+                        if index < records.count - 1 {
+                            ConstructRowDivider(indent: 72)
                         }
-
-                        Button {
-                            callBack(record)
-                        } label: {
-                            Label(NSLocalizedString("call_call_back", comment: ""), systemImage: "phone.fill")
-                        }
-                        .tint(Color.CT.accent)
                     }
+                }
             }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 20)
         }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
         .background(Color.CT.bg)
     }
 
     // MARK: - Empty state
 
     private var emptyState: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "phone.slash")
-                .font(.system(size: 44))
+        VStack(spacing: 12) {
+            Text("[ no calls ]")
+                .font(CTFont.regular(20))
                 .foregroundStyle(Color.CT.textDim)
             Text(NSLocalizedString("calls_empty", comment: ""))
-                .font(.subheadline)
+                .font(CTFont.regular(13))
                 .foregroundStyle(Color.CT.textDim)
+                .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -127,26 +124,33 @@ struct CallHistoryView: View {
 
 private struct CallHistoryRow: View {
     let record: CallRecord
+    var onDelete: () -> Void
+    var onCallBack: () -> Void
 
     var body: some View {
         HStack(spacing: 12) {
-            // Avatar
-            CallAvatarView(userId: record.peerUserId, displayName: record.peerName, size: 44)
+            // Direction tag
+            Text(directionTag)
+                .font(CTFont.regular(10))
+                .foregroundStyle(directionColor)
+                .frame(width: 20, alignment: .center)
 
-            // Name + direction/status
+            // Avatar
+            HexagonAvatarView(
+                userId: record.peerUserId,
+                displayName: record.peerName,
+                size: 40
+            )
+
+            // Name + status
             VStack(alignment: .leading, spacing: 3) {
                 Text(record.peerName)
-                    .font(.body)
-                    .foregroundStyle(record.status == .missed ? Color.red : Color.CT.text)
+                    .font(CTFont.bold(15))
+                    .foregroundStyle(record.status == .missed ? Color.CT.danger : Color.CT.text)
 
-                HStack(spacing: 4) {
-                    Image(systemName: directionIcon)
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(directionColor)
-                    Text(statusLabel)
-                        .font(.caption)
-                        .foregroundStyle(Color.CT.textDim)
-                }
+                Text(statusLabel)
+                    .font(CTFont.regular(11))
+                    .foregroundStyle(Color.CT.textDim)
             }
 
             Spacer()
@@ -154,35 +158,49 @@ private struct CallHistoryRow: View {
             // Time + duration
             VStack(alignment: .trailing, spacing: 3) {
                 Text(relativeTime)
-                    .font(CTFont.regular(12))
+                    .font(CTFont.regular(11))
                     .foregroundStyle(Color.CT.textDim)
 
                 if let dur = record.formattedDuration {
                     Text(dur)
-                        .font(CTFont.regular(11))
+                        .font(CTFont.regular(10))
                         .foregroundStyle(Color.CT.textDim)
                 }
             }
 
-            // Call-back phone icon
-            Image(systemName: "phone.fill")
-                .font(.system(size: 16))
-                .foregroundStyle(Color.CT.accent)
+            // Call-back button
+            Button(action: onCallBack) {
+                Text("[↗]")
+                    .font(CTFont.regular(13))
+                    .foregroundStyle(Color.CT.accent)
+            }
+            .buttonStyle(.plain)
         }
-        .padding(.vertical, 4)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .contentShape(Rectangle())
+        .swipeActions(edge: .trailing) {
+            Button(role: .destructive, action: onDelete) {
+                Text(NSLocalizedString("delete", comment: ""))
+            }
+            Button(action: onCallBack) {
+                Text(NSLocalizedString("call_call_back", comment: ""))
+            }
+            .tint(Color.CT.accent)
+        }
     }
 
-    private var directionIcon: String {
+    private var directionTag: String {
         switch record.direction {
-        case .outgoing: return "arrow.up.right"
-        case .incoming: return record.status == .missed ? "arrow.down.left" : "arrow.down.left"
-        @unknown default: return "arrow.left.and.right"
+        case .outgoing: return "↗"
+        case .incoming: return record.status == .missed ? "↙" : "↙"
+        @unknown default: return "~"
         }
     }
 
     private var directionColor: Color {
         switch record.status {
-        case .missed, .declined: return .red
+        case .missed, .declined: return Color.CT.danger
         case .completed:         return record.direction == .outgoing ? Color.CT.textDim : Color.CT.accent
         case .failed:            return .orange
         @unknown default:        return Color.CT.textDim
@@ -214,5 +232,6 @@ private struct CallHistoryRow: View {
     let container = PreviewHelpers.createPreviewContainer()
     return CallHistoryView()
         .environment(\.managedObjectContext, container.viewContext)
+        .preferredColorScheme(.dark)
 }
 #endif
