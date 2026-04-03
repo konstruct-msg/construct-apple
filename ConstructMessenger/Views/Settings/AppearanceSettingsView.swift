@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct AppearanceSettingsView: View {
-    @AppStorage("appTheme") private var appTheme: AppTheme = .automatic
+    @AppStorage("appTheme") private var appTheme: AppTheme = .dark
 
     var body: some View {
         ScrollView {
@@ -18,18 +18,29 @@ struct AppearanceSettingsView: View {
                         ForEach(Array(AppTheme.allCases.enumerated()), id: \.element) { index, theme in
                             if index > 0 { ConstructRowDivider(indent: 52) }
                             Button {
+                                guard theme.isAvailable else { return }
                                 appTheme = theme
                             } label: {
                                 HStack(spacing: 14) {
                                     Image(systemName: theme.iconName)
-                                        .foregroundStyle(theme.color)
+                                        .foregroundStyle(theme.isAvailable ? theme.color : Color.CT.textDim)
                                         .frame(width: 22, alignment: .center)
                                         .font(.system(size: 16))
                                     Text(theme.displayName)
                                         .font(CTFont.bold(16))
-                                        .foregroundStyle(Color.CT.text)
+                                        .foregroundStyle(theme.isAvailable ? Color.CT.text : Color.CT.textDim)
                                     Spacer()
-                                    if appTheme == theme {
+                                    if !theme.isAvailable {
+                                        Text("soon")
+                                            .font(CTFont.regular(10))
+                                            .foregroundStyle(Color.CT.textDim)
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 2)
+                                            .overlay(
+                                                Rectangle()
+                                                    .strokeBorder(Color.CT.noise, lineWidth: 1)
+                                            )
+                                    } else if appTheme == theme {
                                         Image(systemName: "checkmark")
                                             .font(.system(size: 14, weight: .semibold))
                                             .foregroundStyle(Color.CT.accent)
@@ -40,6 +51,7 @@ struct AppearanceSettingsView: View {
                                 .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
+                            .disabled(!theme.isAvailable)
                         }
                     }
                     Text(LocalizedStringKey("theme_footer"))
@@ -58,6 +70,10 @@ struct AppearanceSettingsView: View {
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
         #endif
+        .onAppear {
+            // If user previously selected an unavailable theme, reset to dark
+            if !appTheme.isAvailable { appTheme = .dark }
+        }
     }
 }
 
@@ -66,6 +82,9 @@ enum AppTheme: String, CaseIterable {
     case automatic = "automatic"
     case light = "light"
     case dark = "dark"
+
+    /// Only dark theme is currently implemented.
+    var isAvailable: Bool { self == .dark }
 
     var displayName: LocalizedStringKey {
         switch self {
