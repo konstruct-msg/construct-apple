@@ -2,54 +2,77 @@
 //  ProfileShareBubbleView.swift
 //  Construct Messenger
 //
-//  Created by Maxim Eliseyev on 13.12.2025.
-//
 
 import SwiftUI
 
 struct ProfileShareBubbleView: View {
     let profileData: ProfileShareData
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 12) {
-                // Avatar placeholder or image
-                if let avatarData = profileData.avatarData,
-                   let imageData = Data(base64Encoded: avatarData),
-                   let uiImage = PlatformImage(data: imageData)
-                {
-                    Image(platformImage: uiImage)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: 60, height: 60)
-                        .clipShape(AvatarStyle.avatarShape(AvatarStyle.bubbleSize))
-                } else {
-                    AvatarStyle.avatarShape(AvatarStyle.bubbleSize)
-                        .fill(Color.blue.opacity(0.2))
-                        .frame(width: 60, height: 60)
-                        .overlay(
-                            Text(String(profileData.displayName.prefix(1)).uppercased())
-                                .font(.title2)
-                                .foregroundColor(Color.blue)
-                        )
-                }
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(profileData.displayName)
-                        .font(.headline)
-                        .foregroundColor(.primary)
-
-                    Text(LocalizedStringKey("shared_profile"))
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-
-                Spacer()
-            }
-        }
-        .padding(12)
-        .background(Color.gray.opacity(0.1))
-        .cornerRadius(16)
+    private var initials: String {
+        profileData.displayName
+            .components(separatedBy: .whitespaces)
+            .compactMap { $0.first.map(String.init) }
+            .prefix(2)
+            .joined()
+            .uppercased()
     }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            // Avatar
+            if let avatarData = profileData.avatarData,
+               let imageData = Data(base64Encoded: avatarData),
+               let uiImage = PlatformImage(data: imageData)
+            {
+                CTHexAvatar(
+                    initials: initials,
+                    image: Image(platformImage: uiImage),
+                    size: .large
+                )
+            } else {
+                CTHexAvatar(
+                    initials: initials,
+                    image: nil,
+                    size: .large,
+                    colorSeed: profileData.displayName
+                )
+            }
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(profileData.displayName)
+                    .font(CTFont.bold(13))
+                    .foregroundColor(Color.CT.text)
+                    .lineLimit(1)
+
+                Text(LocalizedStringKey("shared_profile"))
+                    .font(CTFont.regular(11))
+                    .foregroundColor(Color.CT.textDim)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(10)
+        .background(Color.CT.bgMsg)
+        .ctNoiseBorder()
+    }
+}
+
+#Preview {
+    VStack(spacing: 8) {
+        ProfileShareBubbleView(profileData: ProfileShareData(
+            displayName: "Alice Wonderland",
+            avatarMediaId: nil, avatarMediaUrl: nil,
+            avatarMediaKey: nil, avatarMediaType: nil,
+            timestamp: 0
+        ))
+        ProfileShareBubbleView(profileData: ProfileShareData(
+            displayName: "B",
+            avatarMediaId: nil, avatarMediaUrl: nil,
+            avatarMediaKey: nil, avatarMediaType: nil,
+            timestamp: 0
+        ))
+    }
+    .padding()
+    .background(Color.CT.bg)
 }
 

@@ -490,4 +490,11 @@ extension View {
                 }
             )
     }
+
+    /// Flat 0.5pt noise-coloured border with no padding. Use after setting your own background.
+    func ctNoiseBorder() -> some View {
+        self
+            .clipShape(Rectangle())
+            .overlay(Rectangle().stroke(Color.CT.noise, lineWidth: 0.5))
+    }
 }
