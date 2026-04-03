@@ -77,6 +77,12 @@ enum CTSymbol {
     static let online      = "[[ONLINE]]"
     static let cursor      = "_"
 
+    // State
+    static let pin         = "[pin]"
+    static let scan        = "[scan]"
+    static let search      = "[srch]"
+    static let drafts      = "[dft]"
+
     // Tab bar
     static let tabChats    = "[⌂]"
     static let tabContacts = "[⊹]"
@@ -106,6 +112,7 @@ struct CTHexShape: Shape {
 
 struct CTHexAvatar: View {
     var initials: String
+    var image: Image? = nil
     var size: AvatarSize = .medium
 
     enum AvatarSize: CGFloat {
@@ -117,13 +124,23 @@ struct CTHexAvatar: View {
 
     var body: some View {
         ZStack {
-            CTHexShape()
-                .fill(Color.CT.accent.opacity(0.18))
-            CTHexShape()
-                .stroke(Color.CT.accent, lineWidth: 1)
-            Text(String(initials.prefix(2)).uppercased())
-                .font(CTFont.bold(size.rawValue * 0.28))
-                .foregroundColor(Color.CT.accent)
+            if let image {
+                image
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: size.rawValue, height: size.rawValue)
+                    .clipShape(CTHexShape())
+                CTHexShape()
+                    .stroke(Color.CT.accent, lineWidth: 1)
+            } else {
+                CTHexShape()
+                    .fill(Color.CT.accent.opacity(0.18))
+                CTHexShape()
+                    .stroke(Color.CT.accent, lineWidth: 1)
+                Text(String(initials.prefix(2)).uppercased())
+                    .font(CTFont.bold(size.rawValue * 0.28))
+                    .foregroundColor(Color.CT.accent)
+            }
         }
         .frame(width: size.rawValue, height: size.rawValue)
     }
