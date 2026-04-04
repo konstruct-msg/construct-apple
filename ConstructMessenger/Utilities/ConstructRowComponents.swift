@@ -44,7 +44,7 @@ struct ConstructActionRow: View {
         } label: {
             HStack(spacing: 12) {
                 ctIconView(icon, color: rowForeground)
-                    .frame(width: 20, alignment: .center)
+                    .frame(minWidth: 20, alignment: .center)
 
                 Text(title)
                     .font(CTFont.bold(16))
@@ -78,6 +78,8 @@ struct ConstructActionRow: View {
             Text(icon)
                 .font(CTFont.regular(13))
                 .foregroundStyle(color)
+                .lineLimit(1)
+                .fixedSize()
         } else {
             Image(systemName: icon)
                 .font(.system(size: 16))
@@ -141,7 +143,7 @@ struct ConstructNavRow<Destination: View>: View {
     private var rowContent: some View {
         HStack(spacing: 14) {
             navIconView(icon, color: iconColor)
-                .frame(width: 22, alignment: .center)
+                .frame(minWidth: 22, alignment: .center)
 
             Text(title)
                 .font(CTFont.bold(16))
@@ -164,6 +166,8 @@ struct ConstructNavRow<Destination: View>: View {
             Text(icon)
                 .font(CTFont.regular(13))
                 .foregroundStyle(color)
+                .lineLimit(1)
+                .fixedSize()
         } else {
             Image(systemName: icon)
                 .font(.system(size: 16))
@@ -186,6 +190,8 @@ struct ConstructButtonRow: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 14) {
+                
+                Text(icon)
                 
                 Text(title)
                     .font(CTFont.bold(16))
