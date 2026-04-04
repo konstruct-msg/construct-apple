@@ -131,6 +131,14 @@ class MessageRetryManager {
             return
         }
 
+        // Guard: if no session exists yet (e.g. we just got END_SESSION and are waiting as
+        // RESPONDER), skip here — SessionCoordinator.sendSessionQueuedMessages() will call
+        // us again once the new session is established.
+        guard CryptoManager.shared.hasSession(for: recipientId) else {
+            Log.debug("⏸️ sendQueuedMessages: no active session for \(recipientId.prefix(8))… — deferring until session is ready", category: "MessageRetryManager")
+            return
+        }
+
         Log.info("📤 Sending \(queuedMessages.count) queued messages (sequential to preserve ratchet state)", category: "MessageRetryManager")
 
         // Capture IDs and plans before the Task to avoid managed object threading issues
