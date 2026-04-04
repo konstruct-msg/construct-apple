@@ -70,12 +70,12 @@ struct DevicesView: View {
                     // MARK: - Link / Approve
                     VStack(alignment: .leading, spacing: 6) {
                         ConstructSection {
-                            ConstructButtonRow(icon: "plus.circle.fill", title: LocalizedStringKey("link_new_device")) {
+                            ConstructButtonRow(icon: "[+]", title: LocalizedStringKey("link_new_device")) {
                                 showingQRSheet = true
                             }
                             #if os(iOS)
                             ConstructRowDivider(indent: 52)
-                            ConstructButtonRow(icon: "qrcode.viewfinder", title: LocalizedStringKey("device_scan_to_approve")) {
+                            ConstructButtonRow(icon: "[scan]", title: LocalizedStringKey("device_scan_to_approve")) {
                                 showingScanner = true
                             }
                             #endif
@@ -89,17 +89,17 @@ struct DevicesView: View {
                     // MARK: - Session management
                     VStack(alignment: .leading, spacing: 6) {
                         ConstructSection(header: NSLocalizedString("session_management", comment: "")) {
-                            ConstructActionRow(icon: "rectangle.portrait.and.arrow.right", title: LocalizedStringKey("sign_out_this_device"), role: .destructive) {
+                            ConstructActionRow(icon: "[→]", title: LocalizedStringKey("sign_out_this_device"), role: .destructive) {
                                 showSignOutConfirm = true
                             }
                             if devices.filter({ !$0.isCurrent }).count > 0 {
                                 ConstructRowDivider(indent: 52)
-                                ConstructActionRow(icon: "iphone.slash", title: LocalizedStringKey("sign_out_other_devices"), role: .destructive) {
+                                ConstructActionRow(icon: "[x]", title: LocalizedStringKey("sign_out_other_devices"), role: .destructive) {
                                     showSignOutOthersConfirm = true
                                 }
                             }
                             ConstructRowDivider(indent: 52)
-                            ConstructActionRow(icon: "xmark.shield", title: LocalizedStringKey("sign_out_all_devices"), role: .destructive) {
+                            ConstructActionRow(icon: "[x]", title: LocalizedStringKey("sign_out_all_devices"), role: .destructive) {
                                 showSignOutAllConfirm = true
                             }
                         }
@@ -250,8 +250,8 @@ private struct DeviceRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: platformIcon)
-                .font(.system(size: 22))
+            Text(asciiPlatformIcon)
+                .font(CTFont.bold(16))
                 .foregroundStyle(isCurrent ? Color.CT.accent : Color.CT.textDim)
                 .frame(width: 32)
 
@@ -260,10 +260,14 @@ private struct DeviceRow: View {
                     .font(CTFont.bold(16))
 
                 if isCurrent {
-                    Label(LocalizedStringKey("device_active_now"), systemImage: "circle.fill")
-                        .font(CTFont.regular(12))
-                        .foregroundStyle(Color.CT.accent)
-                        .labelStyle(CompactLabelStyle())
+                    HStack(spacing: 4) {
+                        Text("●")
+                            .font(.system(size: 7))
+                            .foregroundStyle(Color.CT.accent)
+                        Text(LocalizedStringKey("device_active_now"))
+                            .font(CTFont.regular(12))
+                            .foregroundStyle(Color.CT.accent)
+                    }
                 } else {
                     Text(lastSeenText)
                         .font(CTFont.regular(12))
@@ -275,7 +279,8 @@ private struct DeviceRow: View {
 
             if !isCurrent {
                 Button(role: .destructive, action: onRevoke) {
-                    Image(systemName: "minus.circle")
+                    Text("[x]")
+                        .font(CTFont.bold(14))
                         .foregroundStyle(Color.CT.danger)
                 }
                 .buttonStyle(.plain)
@@ -283,12 +288,12 @@ private struct DeviceRow: View {
         }
     }
 
-    private var platformIcon: String {
+    private var asciiPlatformIcon: String {
         switch device.platform {
-        case .ios:     return "iphone"
-        case .desktop: return "laptopcomputer"
-        case .android: return "smartphone"
-        default:       return "desktopcomputer"
+        case .ios:     return "[iOS]"
+        case .desktop: return "[mac]"
+        case .android: return "[drd]"
+        default:       return "[dev]"
         }
     }
 
@@ -302,18 +307,6 @@ private struct DeviceRow: View {
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .full
         return formatter.localizedString(for: device.lastSeen, relativeTo: Date())
-    }
-}
-
-// MARK: - Compact label style (icon + text, tighter spacing)
-
-private struct CompactLabelStyle: LabelStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        HStack(spacing: 4) {
-            configuration.icon
-                .font(.system(size: 7))
-            configuration.title
-        }
     }
 }
 

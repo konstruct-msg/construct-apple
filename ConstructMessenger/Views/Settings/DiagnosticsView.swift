@@ -52,10 +52,10 @@ struct DiagnosticsView: View {
                 // MARK: - Status
                 ConstructSection {
                     HStack(spacing: 14) {
-                        Image(systemName: "doc.text")
+                        Text(LogCollector.shared.isEnabled ? "[log]" : "[log]")
+                            .font(CTFont.bold(14))
                             .foregroundStyle(LogCollector.shared.isEnabled ? Color.CT.accent : Color.CT.textDim)
                             .frame(width: 22, alignment: .center)
-                            .font(.system(size: 16))
                         Text("Log collection")
                             .font(CTFont.bold(16))
                             .foregroundStyle(Color.CT.text)
@@ -70,10 +70,10 @@ struct DiagnosticsView: View {
                     if !logSize.isEmpty {
                         ConstructRowDivider(indent: 52)
                         HStack(spacing: 14) {
-                            Image(systemName: "internaldrive")
+                            Text("[disk]")
+                                .font(CTFont.bold(14))
                                 .foregroundStyle(Color.CT.textDim)
                                 .frame(width: 22, alignment: .center)
-                                .font(.system(size: 16))
                             Text("Size")
                                 .font(CTFont.bold(16))
                                 .foregroundStyle(Color.CT.text)
@@ -93,10 +93,10 @@ struct DiagnosticsView: View {
                         shareArchive()
                     } label: {
                         HStack(spacing: 14) {
-                            Image(systemName: "square.and.arrow.up")
+                            Text("[→]")
+                                .font(CTFont.bold(14))
                                 .foregroundStyle(LogCollector.shared.isEnabled ? Color.CT.accent : Color.CT.textDim)
                                 .frame(width: 22, alignment: .center)
-                                .font(.system(size: 16))
                             Text("Share logs")
                                 .font(CTFont.bold(16))
                                 .foregroundStyle(LogCollector.shared.isEnabled ? Color.CT.text : Color.CT.textDim)
@@ -112,7 +112,7 @@ struct DiagnosticsView: View {
 
                     ConstructRowDivider(indent: 52)
 
-                    ConstructActionRow(icon: "trash", title: LocalizedStringKey("Clear logs"), role: .destructive) {
+                    ConstructActionRow(icon: "[x]", title: LocalizedStringKey("Clear logs"), role: .destructive) {
                         clearLogs()
                     }
                     .disabled(!LogCollector.shared.isEnabled)
@@ -123,7 +123,7 @@ struct DiagnosticsView: View {
                 // MARK: - Dev Tools (Debug only)
                 VStack(alignment: .leading, spacing: 6) {
                     ConstructSection(header: NSLocalizedString("DEVELOPER", comment: "")) {
-                        ConstructActionRow(icon: "exclamationmark.triangle", title: LocalizedStringKey("Reset local data & Keychain"), role: .destructive) {
+                        ConstructActionRow(icon: "[!]", title: LocalizedStringKey("Reset local data & Keychain"), role: .destructive) {
                             resetLocalData()
                         }
                     }

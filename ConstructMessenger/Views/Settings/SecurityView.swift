@@ -28,7 +28,7 @@ struct SecurityView: View {
                 // MARK: - PIN Code section
                 ConstructSection(header: NSLocalizedString("PIN_CODE", comment: "")) {
                     ConstructButtonRow(
-                        icon: "lock.fill",
+                        icon: "[lock]",
                         title: securityViewModel.isPinEnabled
                             ? LocalizedStringKey("change_pin_code")
                             : LocalizedStringKey("enable_pin_code"),
@@ -41,10 +41,10 @@ struct SecurityView: View {
                         ConstructRowDivider(indent: 52)
 
                         HStack(spacing: 14) {
-                            Image(systemName: securityViewModel.biometricIconName)
+                            Text("[bio]")
+                                .font(CTFont.bold(14))
                                 .foregroundStyle(securityViewModel.isBiometricEnabled ? Color.CT.accent : Color.CT.textDim)
                                 .frame(width: 22, alignment: .center)
-                                .font(.system(size: 16))
                             Text(String(format: NSLocalizedString("use_biometric", comment: ""), securityViewModel.biometricDisplayName))
                                 .font(CTFont.bold(16))
                                 .foregroundStyle(Color.CT.text)
@@ -60,7 +60,7 @@ struct SecurityView: View {
                         ConstructRowDivider(indent: 52)
 
                         ConstructActionRow(
-                            icon: "lock.slash.fill",
+                            icon: "[x]",
                             title: LocalizedStringKey("disable_pin_code"),
                             role: .destructive
                         ) {
@@ -74,10 +74,10 @@ struct SecurityView: View {
                     ConstructSection(header: NSLocalizedString("ACCOUNT_RECOVERY", comment: "")) {
                         Button { showingRecoverySetup = true } label: {
                             HStack(spacing: 14) {
-                                Image(systemName: recoveryVM.isSetup ? "checkmark.shield.fill" : "key.fill")
+                                Text(recoveryVM.isSetup ? "[✓]" : "[key]")
+                                    .font(CTFont.bold(14))
                                     .foregroundStyle(recoveryVM.isSetup ? Color.CT.accent : Color.CT.textDim)
                                     .frame(width: 22, alignment: .center)
-                                    .font(.system(size: 16))
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(LocalizedStringKey("account_recovery_seed"))
                                         .font(CTFont.bold(16))
@@ -95,8 +95,8 @@ struct SecurityView: View {
                                     }
                                 }
                                 Spacer()
-                                Image(systemName: "chevron.right")
-                                    .font(.system(size: 12, weight: .semibold))
+                                Text("[→]")
+                                    .font(CTFont.regular(12))
                                     .foregroundStyle(Color.CT.textDim)
                             }
                             .padding(.horizontal, 16)
@@ -116,7 +116,7 @@ struct SecurityView: View {
                     ConstructSection(header: NSLocalizedString("DURESS_PIN", comment: "")) {
                         if securityViewModel.isDuresspinEnabled {
                             ConstructButtonRow(
-                                icon: "bolt.shield.fill",
+                                icon: "[⚡]",
                                 title: LocalizedStringKey("duress_pin_change"),
                                 iconColor: Color.CT.danger
                             ) {
@@ -124,7 +124,7 @@ struct SecurityView: View {
                             }
                             ConstructRowDivider(indent: 52)
                             ConstructActionRow(
-                                icon: "bolt.shield",
+                                icon: "[x]",
                                 title: LocalizedStringKey("disable_duress_pin"),
                                 role: .destructive
                             ) {
@@ -132,7 +132,7 @@ struct SecurityView: View {
                             }
                         } else {
                             ConstructButtonRow(
-                                icon: "bolt.shield.fill",
+                                icon: "[⚡]",
                                 title: LocalizedStringKey("enable_duress_pin"),
                                 iconColor: securityViewModel.isPinEnabled ? Color.CT.textDim : Color.CT.textDim.opacity(0.4)
                             ) {
@@ -152,10 +152,10 @@ struct SecurityView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     ConstructSection(header: NSLocalizedString("LOCKDOWN", comment: "")) {
                         HStack(spacing: 14) {
-                            Image(systemName: lockdown.isActive ? "lock.shield.fill" : "lock.shield")
+                            Text(lockdown.isActive ? "[🔒]" : "[lock]")
+                                .font(CTFont.bold(14))
                                 .foregroundStyle(lockdown.isActive ? .orange : Color.CT.textDim)
                                 .frame(width: 22, alignment: .center)
-                                .font(.system(size: 16))
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(LocalizedStringKey("lockdown_mode"))
                                     .font(CTFont.bold(16))

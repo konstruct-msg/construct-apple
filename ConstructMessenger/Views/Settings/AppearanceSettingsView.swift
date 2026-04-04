@@ -22,10 +22,10 @@ struct AppearanceSettingsView: View {
                                 appTheme = theme
                             } label: {
                                 HStack(spacing: 14) {
-                                    Image(systemName: theme.iconName)
+                                    Text(theme.asciiIcon)
+                                        .font(CTFont.bold(14))
                                         .foregroundStyle(theme.isAvailable ? theme.color : Color.CT.textDim)
                                         .frame(width: 22, alignment: .center)
-                                        .font(.system(size: 16))
                                     Text(theme.displayName)
                                         .font(CTFont.bold(16))
                                         .foregroundStyle(theme.isAvailable ? Color.CT.text : Color.CT.textDim)
@@ -41,8 +41,8 @@ struct AppearanceSettingsView: View {
                                                     .strokeBorder(Color.CT.noise, lineWidth: 1)
                                             )
                                     } else if appTheme == theme {
-                                        Image(systemName: "checkmark")
-                                            .font(.system(size: 14, weight: .semibold))
+                                        Text("[✓]")
+                                            .font(CTFont.bold(14))
                                             .foregroundStyle(Color.CT.accent)
                                     }
                                 }
@@ -99,6 +99,14 @@ enum AppTheme: String, CaseIterable {
         case .automatic: return "automatic"
         case .light: return "light"
         case .dark: return "dark"
+        }
+    }
+
+    var asciiIcon: String {
+        switch self {
+        case .automatic: return "[◐]"
+        case .light:     return "[□]"
+        case .dark:      return "[■]"
         }
     }
 

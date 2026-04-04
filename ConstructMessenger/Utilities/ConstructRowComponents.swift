@@ -43,9 +43,8 @@ struct ConstructActionRow: View {
             action()
         } label: {
             HStack(spacing: 12) {
-                Image(systemName: icon)
+                ctIconView(icon, color: rowForeground)
                     .frame(width: 20, alignment: .center)
-                    .font(.system(size: 16))
 
                 Text(title)
                     .font(CTFont.bold(16))
@@ -71,6 +70,20 @@ struct ConstructActionRow: View {
     }
 
     // MARK: Private helpers
+
+    /// Renders ASCII label strings (e.g. "[!]") as Text; falls back to Image(systemName:) for SF Symbol names.
+    @ViewBuilder
+    private func ctIconView(_ icon: String, color: Color) -> some View {
+        if icon.hasPrefix("[") || icon.hasPrefix("●") {
+            Text(icon)
+                .font(CTFont.regular(13))
+                .foregroundStyle(color)
+        } else {
+            Image(systemName: icon)
+                .font(.system(size: 16))
+                .foregroundStyle(color)
+        }
+    }
 
     private func badgeView(_ text: String) -> some View {
         Text(text)
@@ -127,10 +140,8 @@ struct ConstructNavRow<Destination: View>: View {
 
     private var rowContent: some View {
         HStack(spacing: 14) {
-            Image(systemName: icon)
-                .foregroundStyle(iconColor)
+            navIconView(icon, color: iconColor)
                 .frame(width: 22, alignment: .center)
-                .font(.system(size: 16))
 
             Text(title)
                 .font(CTFont.bold(16))
@@ -138,13 +149,26 @@ struct ConstructNavRow<Destination: View>: View {
 
             Spacer()
 
-            Image(systemName: "chevron.right")
-                .font(.system(size: 12, weight: .semibold))
+            Text("[→]")
+                .font(CTFont.regular(12))
                 .foregroundStyle(Color.CT.textDim)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
         .contentShape(Rectangle())
+    }
+
+    @ViewBuilder
+    private func navIconView(_ icon: String, color: Color) -> some View {
+        if icon.hasPrefix("[") || icon.hasPrefix("●") {
+            Text(icon)
+                .font(CTFont.regular(13))
+                .foregroundStyle(color)
+        } else {
+            Image(systemName: icon)
+                .font(.system(size: 16))
+                .foregroundStyle(color)
+        }
     }
 }
 
@@ -213,10 +237,10 @@ struct ConstructSection<Content: View>: View {
                 content()
             }
             .background(
-                RoundedRectangle(cornerRadius: 16)
+                Rectangle()
                     .fill(Color.CT.bgMsg)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 16)
+                        Rectangle()
                             .strokeBorder(Color.CT.noise, lineWidth: 1)
                     )
             )
