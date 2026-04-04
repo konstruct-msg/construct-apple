@@ -112,25 +112,31 @@ struct MediaGalleryViewer: View {
             // Top chrome: close / counter / save
             HStack(alignment: .center) {
                 Button { isPresented = false } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 28))
-                        .foregroundColor(.white.opacity(0.8))
+                    Text("[x]")
+                        .font(CTFont.bold(20))
+                        .foregroundColor(.white.opacity(0.9))
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                        .lineLimit(1).fixedSize()
                 }
 
                 Spacer()
 
                 if entries.count > 1 {
                     Text("\(currentPosition) / \(entries.count)")
-                        .font(.subheadline.weight(.medium))
+                        .font(CTFont.medium(13))
                         .foregroundColor(.white.opacity(0.8))
                 }
 
                 Spacer()
 
                 Button { saveCurrentImage() } label: {
-                    Image(systemName: saveStatusIcon)
-                        .font(.system(size: 24))
+                    Text(saveStatusAscii)
+                        .font(CTFont.bold(16))
                         .foregroundColor(saveStatusColor)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                        .lineLimit(1).fixedSize()
                         .animation(.easeInOut(duration: 0.2), value: saveStatus)
                 }
                 .disabled(saveStatus == .saving)
@@ -177,14 +183,17 @@ struct MediaGalleryViewer: View {
         )
     }
 
-    private var saveStatusIcon: String {
+    private var saveStatusAscii: String {
         switch saveStatus {
-        case .idle:    return "square.and.arrow.down"
-        case .saving:  return "arrow.down.circle"
-        case .saved:   return "checkmark.circle.fill"
-        case .failed:  return "exclamationmark.circle"
+        case .idle:    return "[↓]"
+        case .saving:  return "[···]"
+        case .saved:   return "[✓]"
+        case .failed:  return "[!]"
         }
     }
+
+    @available(*, unavailable)
+    private var saveStatusIcon: String { "" }
 
     private var saveStatusColor: Color {
         switch saveStatus {
@@ -277,9 +286,10 @@ struct MediaGalleryPage: View {
                         .tint(.white)
                         .scaleEffect(1.5)
                 } else {
-                    Image(systemName: "photo")
-                        .font(.system(size: 60))
+                    Text("[img]")
+                        .font(CTFont.regular(28))
                         .foregroundColor(.white.opacity(0.3))
+                        .lineLimit(1).fixedSize()
                 }
             }
         }

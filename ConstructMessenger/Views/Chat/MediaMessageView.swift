@@ -80,13 +80,13 @@ private struct SingleMediaCell: View {
                     .resizable()
                     .scaledToFit()
                     .frame(maxWidth: 260, maxHeight: 320)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .clipShape(Rectangle())
                     .overlay(alignment: .bottom) {
                         if isUploading { uploadingBadge }
                     }
                     .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2)
+                        Rectangle()
+                            .stroke(isSelected ? Color.CT.accent : Color.clear, lineWidth: 2)
                     )
                     .onTapGesture { onTap() }
             } else if isLoading {
@@ -106,55 +106,61 @@ private struct SingleMediaCell: View {
         HStack(spacing: 5) {
             ProgressView().scaleEffect(0.75).tint(.white)
             Text(LocalizedStringKey("uploading"))
-                .font(.caption2.weight(.medium)).foregroundColor(.white)
+                .font(CTFont.regular(11)).foregroundColor(.white)
         }
         .padding(.horizontal, 8).padding(.vertical, 4)
-        .background(.black.opacity(0.55)).clipShape(Capsule())
+        .background(.black.opacity(0.55))
         .padding(.bottom, 8)
     }
 
     private var loadingPlaceholder: some View {
-        RoundedRectangle(cornerRadius: 12)
-            .fill(Color.gray.opacity(0.2)).frame(width: 200, height: 200)
+        Rectangle()
+            .fill(Color.CT.bgMsg).frame(width: 200, height: 200)
             .overlay {
                 VStack(spacing: 12) {
-                    ProgressView().scaleEffect(1.5).tint(Color.blue)
+                    ProgressView().scaleEffect(1.5).tint(Color.CT.accent)
                     if downloadProgress > 0 && downloadProgress < 1 {
-                        Text("\(Int(downloadProgress * 100))%").font(.caption).foregroundColor(.secondary)
+                        Text("\(Int(downloadProgress * 100))%").font(CTFont.regular(11)).foregroundColor(Color.CT.textDim)
                     } else {
-                        Text(LocalizedStringKey("loading")).font(.caption).foregroundColor(.secondary)
+                        Text(LocalizedStringKey("loading")).font(CTFont.regular(11)).foregroundColor(Color.CT.textDim)
                     }
                 }
             }
     }
 
     private var errorPlaceholder: some View {
-        RoundedRectangle(cornerRadius: 12)
-            .fill(Color.gray.opacity(0.2)).frame(width: 200, height: 200)
+        Rectangle()
+            .fill(Color.CT.bgMsg).frame(width: 200, height: 200)
             .overlay {
                 VStack(spacing: 12) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.system(size: 40)).foregroundColor(.orange)
-                    Text(LocalizedStringKey("failed_to_load")).font(.caption).foregroundColor(.secondary)
+                    Text("[!]")
+                        .font(CTFont.bold(36)).foregroundColor(.orange)
+                        .lineLimit(1).fixedSize()
+                    Text(LocalizedStringKey("failed_to_load")).font(CTFont.regular(11)).foregroundColor(Color.CT.textDim)
                     Button { loadThumbnail() } label: {
                         HStack(spacing: 4) {
-                            Image(systemName: "arrow.clockwise")
+                            Text("[↺]").lineLimit(1).fixedSize()
                             Text(LocalizedStringKey("retry"))
                         }
-                        .font(.caption).foregroundColor(.blue)
+                        .font(CTFont.regular(11)).foregroundColor(Color.CT.accent)
                         .padding(.horizontal, 12).padding(.vertical, 6)
-                        .background(Color.blue.opacity(0.1)).cornerRadius(8)
+                        .background(Color.CT.accent.opacity(0.1))
+                        .overlay(Rectangle().stroke(Color.CT.accent.opacity(0.3), lineWidth: 1))
                     }
                 }
             }
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2))
+            .overlay(Rectangle().stroke(isSelected ? Color.CT.accent : Color.clear, lineWidth: 2))
     }
 
     private var emptyPlaceholder: some View {
-        RoundedRectangle(cornerRadius: 12)
-            .fill(Color.gray.opacity(0.2)).frame(width: 200, height: 200)
-            .overlay { Image(systemName: "photo").font(.system(size: 40)).foregroundColor(.gray) }
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2))
+        Rectangle()
+            .fill(Color.CT.bgMsg).frame(width: 200, height: 200)
+            .overlay {
+                Text("[img]")
+                    .font(CTFont.regular(20)).foregroundColor(Color.CT.textDim)
+                    .lineLimit(1).fixedSize()
+            }
+            .overlay(Rectangle().stroke(isSelected ? Color.CT.accent : Color.clear, lineWidth: 2))
     }
 
     // MARK: Load logic
@@ -245,11 +251,11 @@ private struct MediaGridView: View {
                     onTap: { onTapItem(index) }
                 )
                 .frame(width: gridSize, height: gridSize)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .clipShape(Rectangle())
             }
         }
         .frame(width: gridSize * 2 + spacing)
-        .overlay(RoundedRectangle(cornerRadius: 10).stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2))
+        .overlay(Rectangle().stroke(isSelected ? Color.CT.accent : Color.clear, lineWidth: 2))
     }
 }
 
@@ -272,8 +278,10 @@ private struct GridCell: View {
             if let img = thumbnailImage {
                 Image(platformImage: img).resizable().scaledToFill()
             } else {
-                Color.gray.opacity(0.2)
-                Image(systemName: "photo").foregroundColor(.gray)
+                Color.CT.bgMsg
+                Text("[img]")
+                    .font(CTFont.regular(16)).foregroundColor(Color.CT.textDim)
+                    .lineLimit(1).fixedSize()
             }
 
             if extraCount > 0 {
