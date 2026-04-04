@@ -54,9 +54,10 @@ struct PinLockView: View {
 
     private var biometricContent: some View {
         VStack(spacing: 20) {
-            Image(systemName: securityViewModel.biometricIconName)
-                .font(.system(size: 52, weight: .thin))
+            Text(biometricAscii)
+                .font(CTFont.bold(48))
                 .foregroundStyle(Color.CT.accent)
+                .lineLimit(1).fixedSize()
 
             Text(String(format: NSLocalizedString("use_biometric", comment: ""),
                         securityViewModel.biometricDisplayName))
@@ -158,6 +159,10 @@ struct PinLockView: View {
         }
     }
 
+    private var biometricAscii: String {
+        securityViewModel.biometricIconName == "touchid" ? "[touch]" : "[face]"
+    }
+
     @ViewBuilder
     private func numpadButton(_ key: String) -> some View {
         if key.isEmpty {
@@ -165,12 +170,13 @@ struct PinLockView: View {
         } else {
             Button { numpadTap(key) } label: {
                 ZStack {
-                    Circle()
+                    Rectangle()
                         .fill(Color.CT.noise)
                     if key == "⌫" {
-                        Image(systemName: "delete.left")
-                            .font(.system(size: 20, weight: .medium))
+                        Text("[⌫]")
+                            .font(CTFont.regular(18))
                             .foregroundStyle(Color.CT.text)
+                            .lineLimit(1).fixedSize()
                     } else {
                         Text(key)
                             .font(CTFont.regular(26))

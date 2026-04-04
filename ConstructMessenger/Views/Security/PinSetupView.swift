@@ -58,12 +58,11 @@ struct PinSetupView: View {
                         handlePrimaryAction()
                     } label: {
                         Text(primaryActionTitle)
-                            .font(.headline)
+                            .font(CTFont.regular(14))
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
                             .padding()
-                            .background(canProceed ? Color.blue : Color.gray.opacity(0.4))
-                            .cornerRadius(12)
+                            .background(canProceed ? Color.CT.accent : Color.CT.noise)
                     }
                     .disabled(!canProceed)
                     .padding(.horizontal, 32)
@@ -174,12 +173,11 @@ struct PinSetupView: View {
                         dismiss()
                     } label: {
                         Text("done")
-                            .font(.headline)
+                            .font(CTFont.regular(14))
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
                             .padding()
-                            .background(Color.blue)
-                            .cornerRadius(12)
+                            .background(Color.CT.accent)
                     }
                     .padding(.top, 8)
                 } else {

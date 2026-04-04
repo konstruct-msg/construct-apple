@@ -82,13 +82,14 @@ struct DuressPinSetupView: View {
         switch step {
         case .enter:
             VStack(spacing: 20) {
-                Image(systemName: "bolt.shield.fill")
-                    .font(.system(size: 44, weight: .light))
-                    .foregroundColor(.red.opacity(0.8))
+                Text("[!]")
+                    .font(CTFont.bold(44))
+                    .foregroundColor(Color.CT.danger)
+                    .lineLimit(1).fixedSize()
 
                 Text("duress_pin_setup_warning")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .font(CTFont.regular(13))
+                    .foregroundColor(Color.CT.textDim)
                     .multilineTextAlignment(.center)
 
                 PinDotsField(length: 6, pin: $newPin, shake: $shake)
