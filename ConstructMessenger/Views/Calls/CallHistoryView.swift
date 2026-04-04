@@ -105,57 +105,56 @@ private struct CallHistoryRow: View {
     var onCallBack: () -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
-            // Direction tag
-            Text(directionTag)
-                .font(CTFont.regular(10))
-                .foregroundStyle(directionColor)
-                .frame(width: 20, alignment: .center)
+        Button(action: onCallBack) {
+            HStack(spacing: 12) {
+                // Direction indicator
+                Text(directionTag)
+                    .font(CTFont.regular(10))
+                    .foregroundStyle(directionColor)
+                    .frame(width: 20, alignment: .center)
 
-            // Avatar
-            HexagonAvatarView(
-                userId: record.peerUserId,
-                displayName: record.peerName,
-                size: 40
-            )
+                // Avatar
+                HexagonAvatarView(
+                    userId: record.peerUserId,
+                    displayName: record.peerName,
+                    size: 40
+                )
 
-            // Name + status
-            VStack(alignment: .leading, spacing: 3) {
-                Text(record.peerName)
-                    .font(CTFont.bold(15))
-                    .foregroundStyle(record.status == .missed ? Color.CT.danger : Color.CT.text)
+                // Name + status
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(record.peerName)
+                        .font(CTFont.bold(15))
+                        .foregroundStyle(record.status == .missed ? Color.CT.danger : Color.CT.text)
 
-                Text(statusLabel)
-                    .font(CTFont.regular(11))
-                    .foregroundStyle(Color.CT.textDim)
-            }
-
-            Spacer()
-
-            // Time + duration
-            VStack(alignment: .trailing, spacing: 3) {
-                Text(relativeTime)
-                    .font(CTFont.regular(11))
-                    .foregroundStyle(Color.CT.textDim)
-
-                if let dur = record.formattedDuration {
-                    Text(dur)
-                        .font(CTFont.regular(10))
+                    Text(statusLabel)
+                        .font(CTFont.regular(11))
                         .foregroundStyle(Color.CT.textDim)
                 }
-            }
 
-            // Call-back button
-            Button(action: onCallBack) {
+                Spacer()
+
+                // Time + duration + call-back hint
+                VStack(alignment: .trailing, spacing: 3) {
+                    Text(relativeTime)
+                        .font(CTFont.regular(11))
+                        .foregroundStyle(Color.CT.textDim)
+
+                    if let dur = record.formattedDuration {
+                        Text(dur)
+                            .font(CTFont.regular(10))
+                            .foregroundStyle(Color.CT.textDim)
+                    }
+                }
+
                 Text("[↗]")
                     .font(CTFont.regular(13))
                     .foregroundStyle(Color.CT.accent)
             }
-            .buttonStyle(.plain)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .contentShape(Rectangle())
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .contentShape(Rectangle())
+        .buttonStyle(.plain)
         .swipeActions(edge: .trailing) {
             Button(role: .destructive, action: onDelete) {
                 Text(NSLocalizedString("delete", comment: ""))
