@@ -26,239 +26,238 @@ struct NetworkSettingsView: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 20) {
+            VStack(spacing: 0) {
 
                 // MARK: - Connection Status
-                ConstructSection(header: NSLocalizedString("status", comment: "").uppercased()) {
-                    let path = iceManager.currentTrafficPath
-                    HStack(spacing: 12) {
-                        ZStack {
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(statusColor.opacity(0.12))
-                                .frame(width: 36, height: 36)
-                            Image(systemName: connectionStatusSymbol)
-                                .foregroundStyle(statusColor)
-                                .font(.system(size: 15, weight: .semibold))
-                        }
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(connectionManager.connectionStatus.displayText)
-                                .font(CTFont.bold(16))
-                                .foregroundStyle(Color.CT.text)
-                            Text(path.displayDetail)
-                                .font(CTFont.regular(13))
-                                .foregroundStyle(Color.CT.textDim)
-                                .textSelection(.enabled)
-                        }
-                        Spacer()
-                        Circle()
-                            .fill(statusColor)
-                            .frame(width: 8, height: 8)
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-
-                    if let heartbeat = streamManager.lastHeartbeatDate {
-                        ConstructRowDivider(indent: 16)
-                        HStack {
-                            Text(LocalizedStringKey("last_heartbeat"))
-                                .font(CTFont.regular(13))
-                                .foregroundStyle(Color.CT.textDim)
-                            Spacer()
-                            Text(heartbeat, style: .relative)
-                                .font(CTFont.regular(13))
-                                .foregroundStyle(Color.CT.textDim)
-                                .monospacedDigit()
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 10)
-                    }
-
-                    if let error = connectionManager.lastError {
-                        ConstructRowDivider(indent: 16)
-                        Text(error)
-                            .font(.system(size: 11, design: .monospaced))
-                            .foregroundStyle(Color.CT.danger)
+                CTSettingsSectionHeader(title: NSLocalizedString("status", comment: "").uppercased())
+                let path = iceManager.currentTrafficPath
+                HStack(spacing: 12) {
+                    Text(connectionStatusASCII)
+                        .font(CTFont.regular(13))
+                        .foregroundColor(statusColor)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(connectionManager.connectionStatus.displayText)
+                            .font(CTFont.regular(13))
+                            .foregroundStyle(Color.CT.text)
+                        Text(path.displayDetail)
+                            .font(CTFont.regular(11))
+                            .foregroundStyle(Color.CT.textDim)
                             .textSelection(.enabled)
-                            .padding(.horizontal, 16)
+                    }
+                    Spacer()
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 12)
+
+                if let heartbeat = streamManager.lastHeartbeatDate {
+                    CTSep(style: .thin)
+                    HStack {
+                        Text(LocalizedStringKey("last_heartbeat"))
+                            .font(CTFont.regular(13))
+                            .foregroundStyle(Color.CT.textDim)
+                        Spacer()
+                        Text(heartbeat, style: .relative)
+                            .font(CTFont.regular(13))
+                            .foregroundStyle(Color.CT.textDim)
+                            .monospacedDigit()
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                }
+
+                if let error = connectionManager.lastError {
+                    CTSep(style: .thin)
+                    Text(error)
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundStyle(Color.CT.danger)
+                        .textSelection(.enabled)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                }
+                CTSep()
+
+                // MARK: - Traffic Protection (ICE)
+                CTSettingsSectionHeader(title: NSLocalizedString("traffic_protection", comment: "").uppercased())
+                HStack {
+                    Text(LocalizedStringKey("ice_title"))
+                        .font(CTFont.regular(13))
+                        .foregroundColor(iceManager.hasCert ? Color.CT.textDim : Color.CT.textDim.opacity(0.5))
+                    Spacer()
+                    Toggle("", isOn: Binding(
+                        get: { iceEnabled },
+                        set: { newValue in
+                            iceEnabled = newValue
+                            iceManager.isEnabled = newValue
+                            if newValue {
+                                Task { await iceManager.startIfEnabled() }
+                            } else {
+                                iceManager.stop()
+                            }
+                        }
+                    ))
+                    .labelsHidden()
+                    .tint(Color.CT.accent)
+                    .disabled(!iceManager.hasCert)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 12)
+
+                if (iceEnabled || iceManager.isRunning) && iceManager.hasCert {
+                    if iceManager.isOnCooldown {
+                        CTSep(style: .thin)
+                        Button {
+                            iceManager.clearCooldown()
+                        } label: {
+                            HStack {
+                                Text(LocalizedStringKey("ice_retry"))
+                                    .font(CTFont.regular(13))
+                                    .foregroundColor(Color.CT.accent)
+                                Spacer()
+                                Text("[↺]")
+                                    .font(CTFont.regular(13))
+                                    .foregroundColor(Color.CT.accent)
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 12)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    } else if iceManager.isRunning, let relay = iceManager.activeRelay {
+                        CTSep(style: .thin)
+                        HStack {
+                            Text(pathASCII(iceManager.currentTrafficPath))
+                                .font(CTFont.regular(13))
+                                .foregroundColor(pathColor(iceManager.currentTrafficPath))
+                            Text(relay.address)
+                                .font(.system(size: 13, design: .monospaced))
+                                .foregroundColor(Color.CT.textDim)
+                                .textSelection(.enabled)
+                            Spacer()
+                            if relay.tlsServerName != nil {
+                                Text("TLS")
+                                    .font(CTFont.regular(10))
+                                    .foregroundColor(Color.CT.accentDim)
+                                    .padding(.horizontal, 5).padding(.vertical, 2)
+                                    .overlay(Rectangle().stroke(Color.CT.accent.opacity(0.4), lineWidth: 0.5))
+                                Text("obfs4")
+                                    .font(CTFont.regular(10))
+                                    .foregroundColor(Color.CT.accentDim)
+                                    .padding(.horizontal, 5).padding(.vertical, 2)
+                                    .overlay(Rectangle().stroke(Color.CT.accent.opacity(0.4), lineWidth: 0.5))
+                            } else {
+                                Text("obfs4")
+                                    .font(CTFont.regular(10))
+                                    .foregroundColor(Color.CT.accentDim)
+                                    .padding(.horizontal, 5).padding(.vertical, 2)
+                                    .overlay(Rectangle().stroke(Color.CT.accent.opacity(0.4), lineWidth: 0.5))
+                            }
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                    } else if !iceManager.isRunning {
+                        CTSep(style: .thin)
+                        Text(iceManager.lastError ?? NSLocalizedString("ice_unavailable", comment: ""))
+                            .font(CTFont.regular(11))
+                            .foregroundStyle(Color.CT.textDim)
+                            .padding(.horizontal, 12)
                             .padding(.vertical, 10)
                     }
                 }
 
-                // MARK: - Traffic Protection (ICE)
-                VStack(alignment: .leading, spacing: 6) {
-                    ConstructSection(header: NSLocalizedString("traffic_protection", comment: "").uppercased()) {
-                        HStack(spacing: 14) {
-                            Image(systemName: "shield.lefthalf.filled")
-                                .foregroundStyle(iceEnabled ? Color.CT.accent : Color.CT.textDim)
-                                .frame(width: 22, alignment: .center)
-                                .font(.system(size: 16))
-                            Text(LocalizedStringKey("ice_title"))
-                                .font(CTFont.bold(16))
-                                .foregroundStyle(iceManager.hasCert ? Color.CT.text : Color.CT.textDim)
-                            Spacer()
-                            Toggle("", isOn: Binding(
-                                get: { iceEnabled },
-                                set: { newValue in
-                                    iceEnabled = newValue
-                                    iceManager.isEnabled = newValue
-                                    if newValue {
-                                        Task { await iceManager.startIfEnabled() }
-                                    } else {
-                                        iceManager.stop()
-                                    }
-                                }
-                            ))
-                            .labelsHidden()
-                            .tint(Color.CT.accent)
-                            .disabled(!iceManager.hasCert)
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 14)
-
-                        if (iceEnabled || iceManager.isRunning) && iceManager.hasCert {
-                            ConstructRowDivider(indent: 52)
-                            if iceManager.isOnCooldown {
-                                Button {
-                                    iceManager.clearCooldown()
-                                } label: {
-                                    HStack(spacing: 14) {
-                                        Image(systemName: "arrow.clockwise")
-                                            .foregroundStyle(Color.CT.accent)
-                                            .frame(width: 22, alignment: .center)
-                                            .font(.system(size: 16))
-                                        Text(LocalizedStringKey("ice_retry"))
-                                            .font(CTFont.bold(16))
-                                            .foregroundStyle(Color.CT.accent)
-                                        Spacer()
-                                    }
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 14)
-                                    .contentShape(Rectangle())
-                                }
-                                .buttonStyle(.plain)
-                            } else if iceManager.isRunning, let relay = iceManager.activeRelay {
-                                HStack {
-                                    Image(systemName: iceManager.currentTrafficPath.symbolName)
-                                        .foregroundColor(pathColor(iceManager.currentTrafficPath))
-                                        .frame(width: 16)
-                                    Text(relay.address)
-                                        .font(.system(size: 13, design: .monospaced))
-                                        .foregroundColor(Color.CT.textDim)
-                                        .textSelection(.enabled)
-                                    Spacer()
-                                    Text(relay.tlsServerName != nil ? "TLS·obfs4" : "obfs4")
-                                        .font(.caption2.weight(.semibold))
-                                        .foregroundColor(Color.CT.textDim)
-                                        .padding(.horizontal, 5)
-                                        .padding(.vertical, 2)
-                                        .background(Color.CT.noise)
-                                        .clipShape(Capsule())
-                                }
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 8)
-                            } else if !iceManager.isRunning {
-                                Text(iceManager.lastError ?? NSLocalizedString("ice_unavailable", comment: ""))
-                                    .font(CTFont.regular(12))
-                                    .foregroundStyle(Color.CT.textDim)
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 10)
-                            }
-                        }
-                    }
-
-                    if !iceManager.hasCert {
-                        Text(LocalizedStringKey("ice_unavailable"))
-                            .font(CTFont.regular(11))
-                            .foregroundStyle(Color.CT.textDim)
-                            .padding(.horizontal, 20)
-                    } else if iceManager.isRunning && !iceEnabled {
-                        Text(LocalizedStringKey("ice_auto_activated_footer"))
-                            .font(CTFont.regular(11))
-                            .foregroundStyle(Color.CT.textDim)
-                            .padding(.horizontal, 20)
-                    } else {
-                        #if os(macOS)
-                        (Text(LocalizedStringKey("ice_footer_short")) + Text(" ") + Text("Enabled by default on macOS."))
-                            .font(CTFont.regular(11))
-                            .foregroundStyle(Color.CT.textDim)
-                            .padding(.horizontal, 20)
-                        #else
-                        Text(LocalizedStringKey("ice_footer_short"))
-                            .font(CTFont.regular(11))
-                            .foregroundStyle(Color.CT.textDim)
-                            .padding(.horizontal, 20)
-                        #endif
-                    }
+                if !iceManager.hasCert {
+                    Text(LocalizedStringKey("ice_unavailable"))
+                        .font(CTFont.regular(11))
+                        .foregroundStyle(Color.CT.textDim)
+                        .padding(.horizontal, 12)
+                        .padding(.bottom, 8)
+                } else if iceManager.isRunning && !iceEnabled {
+                    Text(LocalizedStringKey("ice_auto_activated_footer"))
+                        .font(CTFont.regular(11))
+                        .foregroundStyle(Color.CT.textDim)
+                        .padding(.horizontal, 12)
+                        .padding(.bottom, 8)
+                } else {
+                    #if os(macOS)
+                    (Text(LocalizedStringKey("ice_footer_short")) + Text(" ") + Text("Enabled by default on macOS."))
+                        .font(CTFont.regular(11))
+                        .foregroundStyle(Color.CT.textDim)
+                        .padding(.horizontal, 12)
+                        .padding(.bottom, 8)
+                    #else
+                    Text(LocalizedStringKey("ice_footer_short"))
+                        .font(CTFont.regular(11))
+                        .foregroundStyle(Color.CT.textDim)
+                        .padding(.horizontal, 12)
+                        .padding(.bottom, 8)
+                    #endif
                 }
+                CTSep()
 
                 // MARK: - Server
-                ConstructSection(header: NSLocalizedString("server", comment: "").uppercased()) {
-                    HStack {
-                        Text(GRPCChannelManager.shared.currentHost)
-                            .font(.system(size: 13, design: .monospaced))
-                            .foregroundStyle(Color.CT.text)
-                            .textSelection(.enabled)
-                        Spacer()
-                        Text(LocalizedStringKey("tls"))
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(Color.CT.accent)
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 2)
-                            .background(Color.CT.accent.opacity(0.12))
-                            .clipShape(Capsule())
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 14)
+                CTSettingsSectionHeader(title: NSLocalizedString("server", comment: "").uppercased())
+                HStack {
+                    Text(GRPCChannelManager.shared.currentHost)
+                        .font(.system(size: 13, design: .monospaced))
+                        .foregroundStyle(Color.CT.text)
+                        .textSelection(.enabled)
+                    Spacer()
+                    Text("TLS")
+                        .font(CTFont.regular(10))
+                        .foregroundColor(Color.CT.accentDim)
+                        .padding(.horizontal, 5).padding(.vertical, 2)
+                        .overlay(Rectangle().stroke(Color.CT.accent.opacity(0.4), lineWidth: 0.5))
                 }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 12)
+                CTSep()
 
                 // MARK: - Custom Server (Debug only)
                 #if DEBUG
-                VStack(alignment: .leading, spacing: 6) {
-                    ConstructSection(header: NSLocalizedString("custom_server_debug", comment: "").uppercased()) {
-                        VStack(alignment: .leading, spacing: 8) {
-                            TextField("Host (e.g. dev.konstruct.cc)", text: $customHost)
-                                #if canImport(UIKit)
-                                .autocapitalization(.none)
-                                .keyboardType(.URL)
-                                #endif
-                                .textFieldStyle(.roundedBorder)
+                CTSettingsSectionHeader(title: NSLocalizedString("custom_server_debug", comment: "").uppercased())
+                VStack(alignment: .leading, spacing: 8) {
+                    TextField("Host (e.g. dev.konstruct.cc)", text: $customHost)
+                        #if canImport(UIKit)
+                        .autocapitalization(.none)
+                        .keyboardType(.URL)
+                        #endif
+                        .textFieldStyle(.roundedBorder)
 
-                            TextField("Port (e.g. 443)", text: $customPort)
-                                #if canImport(UIKit)
-                                .keyboardType(.numberPad)
-                                #endif
-                                .textFieldStyle(.roundedBorder)
+                    TextField("Port (e.g. 443)", text: $customPort)
+                        #if canImport(UIKit)
+                        .keyboardType(.numberPad)
+                        #endif
+                        .textFieldStyle(.roundedBorder)
 
-                            HStack {
-                                Button(role: .destructive) {
-                                    GRPCChannelManager.shared.resetToDefaultServer()
-                                    customHost = GRPCChannelManager.shared.currentHost
-                                    customPort = "\(GRPCChannelManager.shared.currentPort)"
-                                } label: {
-                                    Text(LocalizedStringKey("reset_to_default"))
-                                }
-                                .buttonStyle(.bordered)
-
-                                Spacer()
-
-                                Button {
-                                    applyCustomServer()
-                                } label: {
-                                    Text(LocalizedStringKey("apply_changes"))
-                                        .fontWeight(.semibold)
-                                }
-                                .buttonStyle(.borderedProminent)
-                                .disabled(customHost.trimmingCharacters(in: .whitespaces).isEmpty)
-                            }
+                    HStack {
+                        Button(role: .destructive) {
+                            GRPCChannelManager.shared.resetToDefaultServer()
+                            customHost = GRPCChannelManager.shared.currentHost
+                            customPort = "\(GRPCChannelManager.shared.currentPort)"
+                        } label: {
+                            Text(LocalizedStringKey("reset_to_default"))
                         }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 14)
+                        .buttonStyle(.bordered)
+
+                        Spacer()
+
+                        Button {
+                            applyCustomServer()
+                        } label: {
+                            Text(LocalizedStringKey("apply_changes"))
+                                .fontWeight(.semibold)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(customHost.trimmingCharacters(in: .whitespaces).isEmpty)
                     }
-                    Text(LocalizedStringKey("server_settings_footer"))
-                        .font(CTFont.regular(11))
-                        .foregroundStyle(Color.CT.textDim)
-                        .padding(.horizontal, 20)
                 }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 12)
+                Text(LocalizedStringKey("server_settings_footer"))
+                    .font(CTFont.regular(11))
+                    .foregroundStyle(Color.CT.textDim)
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 8)
+                CTSep()
                 #endif
             }
             .padding(.vertical, 20)
@@ -306,12 +305,22 @@ struct NetworkSettingsView: View {
         }
     }
 
-    private var connectionStatusSymbol: String {
+    private var connectionStatusASCII: String {
         switch connectionManager.connectionStatus {
-        case .connected:    return "checkmark.circle.fill"
-        case .disconnected: return "xmark.circle.fill"
-        case .connecting:   return "arrow.triangle.2.circlepath"
-        case .unknown:      return "questionmark.circle"
+        case .connected:    return "[ok]"
+        case .disconnected: return "[err]"
+        case .connecting:   return "[~]"
+        case .unknown:      return "[?]"
+        }
+    }
+
+    private func pathASCII(_ path: TrafficPath) -> String {
+        switch path {
+        case .direct:        return "[→]"
+        case .icePrimary:    return "[t]"
+        case .iceRelay:      return "[t]"
+        case .iceCooldown:   return "[!]"
+        case .iceConnecting: return "[~]"
         }
     }
 
