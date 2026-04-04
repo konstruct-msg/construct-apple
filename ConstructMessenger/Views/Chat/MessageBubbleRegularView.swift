@@ -56,8 +56,8 @@ struct MessageBubbleRegularView: View {
                 {
                     ProfileShareBubbleView(profileData: profileData)
                         .overlay(
-                            RoundedRectangle(cornerRadius: 16)
-                                .stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2)
+                            Rectangle()
+                                .stroke(isSelected ? Color.CT.accent : Color.clear, lineWidth: 2)
                         )
                 } else if let mediaContent = MessageBubbleContentParsing.parseMediaMessage(message.decryptedContent) {
                     VStack(alignment: .leading, spacing: 0) {
@@ -74,8 +74,8 @@ struct MessageBubbleRegularView: View {
                         replyIndicatorView
                         FileAttachmentBubbleView(fileContent: fileContent, isSentByMe: message.isSentByMe)
                             .overlay(
-                                RoundedRectangle(cornerRadius: 16)
-                                    .stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2)
+                                Rectangle()
+                                    .stroke(isSelected ? Color.CT.accent : Color.clear, lineWidth: 2)
                             )
                     }
                 } else if let voiceContent = MessageBubbleContentParsing.parseVoiceMessage(message.decryptedContent) {
@@ -86,8 +86,8 @@ struct MessageBubbleRegularView: View {
                         onRetry: onRetry != nil ? { onRetry?(message) } : nil
                     )
                         .overlay(
-                            RoundedRectangle(cornerRadius: 16)
-                                .stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2)
+                            Rectangle()
+                                .stroke(isSelected ? Color.CT.accent : Color.clear, lineWidth: 2)
                         )
                 } else {
                     VStack(alignment: .leading, spacing: 0) {
@@ -111,9 +111,10 @@ struct MessageBubbleRegularView: View {
                         .padding(.bottom, 8)
                     }
                     .background(
-                        isSelected
-                            ? (message.isSentByMe ? Color.CT.accent.opacity(0.75) : Color.CT.accent.opacity(0.15))
-                            : (message.isSentByMe ? Color.CT.accent : Color.CT.bgMsg)
+                        CTMessageBubbleTheme.regularBackground(
+                            isSentByMe: message.isSentByMe,
+                            isSelected: isSelected
+                        )
                     )
                     .clipShape(Rectangle())
                     .overlay(
