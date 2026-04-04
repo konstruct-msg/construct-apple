@@ -37,13 +37,32 @@ struct PersistenceController {
             description.shouldMigrateStoreAutomatically = true
         }
 
-        container.loadPersistentStores { _, error in
-            if let error = error {
-                // On first launch the store may not exist yet — that is normal.
-                // A real failure (disk full, model mismatch without migration) is logged.
-                print("❌ Core Data: failed to load persistent stores: \(error)")
-            } else {
-                print("✅ Core Data: persistent stores loaded")
+        container.loadPersistentStores { description, error in
+            guard let error else {
+                return
+            }
+            // Store failed to load — most likely a schema migration failure.
+            // Attempt recovery: destroy the corrupt/incompatible store and recreate
+            // it empty so the app can start. The user loses their local message
+            // history but the app doesn't crash. They can re-register if needed.
+            guard let storeURL = description.url else {
+                fatalError("❌ Core Data: persistent store has no URL — cannot recover: \(error)")
+            }
+            do {
+                let coordinator = NSPersistentStoreCoordinator(managedObjectModel: container.managedObjectModel)
+                try coordinator.destroyPersistentStore(at: storeURL, ofType: NSSQLiteStoreType, options: nil)
+                try container.persistentStoreCoordinator.addPersistentStore(
+                    ofType: NSSQLiteStoreType,
+                    configurationName: nil,
+                    at: storeURL,
+                    options: [
+                        NSMigratePersistentStoresAutomaticallyOption: true,
+                        NSInferMappingModelAutomaticallyOption: true
+                    ]
+                )
+                print("⚠️ Core Data: store was reset after migration failure — user data cleared")
+            } catch {
+                fatalError("❌ Core Data: persistent store recovery failed: \(error)")
             }
         }
 
