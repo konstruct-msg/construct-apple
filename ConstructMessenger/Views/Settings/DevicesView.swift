@@ -14,6 +14,7 @@ import UIKit
 struct DevicesView: View {
 
     @Environment(AuthViewModel.self) private var authViewModel
+    @Environment(\.dismiss) private var dismiss
 
     @State private var devices: [AuthServiceClient.LinkedDevice] = []
     @State private var isLoading = false
@@ -27,7 +28,14 @@ struct DevicesView: View {
     @State private var showSignOutAllConfirm = false
 
     var body: some View {
-        ScrollView {
+        VStack(spacing: 0) {
+            CTNavBar(
+                title: NSLocalizedString("linked_devices", comment: ""),
+                showBack: true,
+                backAction: { dismiss() }
+            )
+
+            ScrollView {
             VStack(spacing: 20) {
                 if isLoading && devices.isEmpty {
                     ConstructSection {
@@ -111,23 +119,10 @@ struct DevicesView: View {
                 }
             }
             .padding(.vertical, 20)
-        }
+        } // ScrollView
+        } // VStack
         .background(Color.CT.bg.ignoresSafeArea())
-        .navigationTitle("")
-        #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(Color.CT.bgMsg, for: .navigationBar)
-        .toolbarBackground(.visible, for: .navigationBar)
-        .toolbarColorScheme(.dark, for: .navigationBar)
-        #endif
-        .toolbar {
-            ToolbarItem(placement: .principal) {
-                Text(NSLocalizedString("linked_devices", comment: "").uppercased())
-                    .font(CTFont.bold(13))
-                    .foregroundStyle(Color.CT.text)
-                    .tracking(4)
-            }
-        }
+        .toolbar(.hidden, for: .navigationBar)
         .refreshable { await loadDevices() }
         .task { await loadDevices() }
 
