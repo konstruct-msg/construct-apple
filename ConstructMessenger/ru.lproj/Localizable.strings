@@ -685,3 +685,8 @@
 "invite" = "пригласить";
 "qr_caption_trust" = "доверие вычисляется, а не предполагается.";
 "qr_scan_hint" = "покажи кому-то рядом или сделай скриншот";
+
+// MARK: - Device Link QR
+"device_link_section" = "связать реплику";
+"generating" = "генерация...";
+"device_link_scan_hint" = "отсканируй с другой реплики для связи";

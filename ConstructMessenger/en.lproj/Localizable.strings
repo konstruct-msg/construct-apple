@@ -678,3 +678,8 @@
 "invite" = "invite";
 "qr_caption_trust" = "trust is computed, not assumed.";
 "qr_scan_hint" = "show to someone nearby or take a screenshot";
+
+// MARK: - Device Link QR
+"device_link_section" = "link replica";
+"generating" = "generating...";
+"device_link_scan_hint" = "scan with another replica to link";

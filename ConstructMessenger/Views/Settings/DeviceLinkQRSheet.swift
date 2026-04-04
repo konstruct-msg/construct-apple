@@ -18,64 +18,87 @@ struct DeviceLinkQRSheet: View {
     @State private var countdownTimer: Timer? = nil
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 24) {
-                if vm.isGenerating {
-                    ProgressView()
-                        .scaleEffect(1.5)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        VStack(spacing: 0) {
+            CTNavBar(
+                title: NSLocalizedString("device_link_qr_title", comment: ""),
+                showBack: true,
+                backAction: { dismiss() }
+            )
+            Rectangle().fill(Color.CT.noise).frame(height: 1)
 
-                } else if let content = vm.qrContent, vm.isTokenValid {
-                    qrContent(content: content)
-
-                } else if vm.qrContent != nil && !vm.isTokenValid {
-                    expiredView
-
-                } else if let error = vm.errorMessage {
-                    errorView(message: error)
-
-                } else {
-                    ProgressView()
-                        .scaleEffect(1.5)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
-            }
-            .padding()
-            .navigationTitle(LocalizedStringKey("device_link_qr_title"))
-            #if os(iOS)
-            #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-            #endif
-            #endif
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(LocalizedStringKey("done")) { dismiss() }
-                }
+            if vm.isGenerating {
+                loadingState
+            } else if let content = vm.qrContent, vm.isTokenValid {
+                qrContent(content: content)
+            } else if vm.qrContent != nil && !vm.isTokenValid {
+                expiredView
+            } else if let error = vm.errorMessage {
+                errorView(message: error)
+            } else {
+                loadingState
             }
         }
+        .background(Color.CT.bg.ignoresSafeArea())
         .task { await vm.generateLinkCode() }
         .onDisappear { stopCountdown() }
+    }
+
+    // MARK: - Loading
+
+    private var loadingState: some View {
+        VStack(spacing: 12) {
+            Text("[···]")
+                .font(CTFont.regular(24))
+                .foregroundColor(Color.CT.textDim)
+            Text(NSLocalizedString("generating", comment: ""))
+                .font(CTFont.regular(13))
+                .foregroundColor(Color.CT.textDim)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - QR code panel
 
     private func qrContent(content: String) -> some View {
-        VStack(spacing: 20) {
-            Text(LocalizedStringKey("device_link_qr_instructions"))
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal)
+        ScrollView {
+            VStack(spacing: 24) {
+                // Sub-header
+                HStack(spacing: 6) {
+                    Text(">")
+                        .font(CTFont.bold(11))
+                        .foregroundColor(Color.CT.accentDim)
+                    Text(NSLocalizedString("device_link_section", comment: "").uppercased())
+                        .font(CTFont.bold(11))
+                        .foregroundColor(Color.CT.accentDim)
+                        .tracking(2)
+                    Spacer()
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 20)
 
-            if let image = generateQRCode(from: content) {
-                qrImageView(image)
-            }
+                Text(NSLocalizedString("device_link_qr_instructions", comment: ""))
+                    .font(CTFont.regular(13))
+                    .foregroundColor(Color.CT.textDim)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 24)
 
-            if !countdown.isEmpty {
-                Label(countdown, systemImage: "clock")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .onAppear { startCountdown() }
+                if let image = generateQRCode(from: content) {
+                    qrImageView(image)
+                }
+
+                if !countdown.isEmpty {
+                    Text(countdown)
+                        .font(CTFont.regular(12))
+                        .foregroundColor(Color.CT.textDim)
+                        .onAppear { startCountdown() }
+                }
+
+                Text(NSLocalizedString("device_link_scan_hint", comment: ""))
+                    .font(CTFont.regular(11))
+                    .foregroundColor(Color.CT.textDim)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 32)
             }
         }
     }
@@ -90,7 +113,7 @@ struct DeviceLinkQRSheet: View {
             .frame(width: 220, height: 220)
             .padding(16)
             .background(Color.white)
-            .cornerRadius(16)
+            .overlay(Rectangle().stroke(Color.CT.noise, lineWidth: 1))
         #else
         Image(nsImage: image)
             .interpolation(.none)
@@ -99,7 +122,7 @@ struct DeviceLinkQRSheet: View {
             .frame(width: 220, height: 220)
             .padding(16)
             .background(Color.white)
-            .cornerRadius(16)
+            .overlay(Rectangle().stroke(Color.CT.noise, lineWidth: 1))
         #endif
     }
 
@@ -107,36 +130,53 @@ struct DeviceLinkQRSheet: View {
 
     private var expiredView: some View {
         VStack(spacing: 16) {
-            Image(systemName: "clock.badge.exclamationmark")
-                .font(.system(size: 48))
-                .foregroundStyle(.secondary)
-            Text(LocalizedStringKey("device_link_expired"))
-                .foregroundStyle(.secondary)
-            Button(LocalizedStringKey("device_link_refresh")) {
+            Text("[!]")
+                .font(CTFont.bold(36))
+                .foregroundColor(Color.CT.danger)
+            Text(NSLocalizedString("device_link_expired", comment: ""))
+                .font(CTFont.regular(13))
+                .foregroundColor(Color.CT.textDim)
+            Button {
                 Task { await vm.generateLinkCode() }
+            } label: {
+                Text("[\(NSLocalizedString("device_link_refresh", comment: "")) →]")
+                    .font(CTFont.regular(13))
+                    .foregroundColor(Color.CT.accent)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .overlay(Rectangle().stroke(Color.CT.accent, lineWidth: 0.5))
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.plain)
         }
-        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - Error state
 
     private func errorView(message: String) -> some View {
         VStack(spacing: 16) {
-            Image(systemName: "exclamationmark.triangle")
-                .font(.system(size: 48))
-                .foregroundStyle(.orange)
+            Text("[!]")
+                .font(CTFont.bold(36))
+                .foregroundColor(.orange)
             Text(message)
-                .foregroundStyle(.secondary)
+                .font(CTFont.regular(13))
+                .foregroundColor(Color.CT.textDim)
                 .multilineTextAlignment(.center)
-            Button(LocalizedStringKey("device_link_refresh")) {
+                .padding(.horizontal, 24)
+            Button {
                 vm.errorMessage = nil
                 Task { await vm.generateLinkCode() }
+            } label: {
+                Text("[\(NSLocalizedString("device_link_refresh", comment: "")) →]")
+                    .font(CTFont.regular(13))
+                    .foregroundColor(Color.CT.accent)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .overlay(Rectangle().stroke(Color.CT.accent, lineWidth: 0.5))
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.plain)
         }
-        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - Countdown timer
@@ -187,4 +227,5 @@ struct DeviceLinkQRSheet: View {
 
 #Preview {
     DeviceLinkQRSheet()
+        .preferredColorScheme(.dark)
 }
