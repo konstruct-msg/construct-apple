@@ -190,20 +190,43 @@ struct ConstructButtonRow: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 14) {
-                
-                Text(icon)
-                
+                buttonIconView(icon, color: iconColor)
+                    .frame(minWidth: 22, alignment: .center)
+
                 Text(title)
                     .font(CTFont.bold(16))
                     .foregroundStyle(Color.CT.text)
 
                 Spacer()
+
+                if showChevron {
+                    Text("[→]")
+                        .font(CTFont.regular(12))
+                        .foregroundStyle(Color.CT.textDim)
+                        .lineLimit(1)
+                        .fixedSize()
+                }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private func buttonIconView(_ icon: String, color: Color) -> some View {
+        if icon.hasPrefix("[") || icon.hasPrefix("●") {
+            Text(icon)
+                .font(CTFont.regular(13))
+                .foregroundStyle(color)
+                .lineLimit(1)
+                .fixedSize()
+        } else {
+            Image(systemName: icon)
+                .font(.system(size: 16))
+                .foregroundStyle(color)
+        }
     }
 }
 
