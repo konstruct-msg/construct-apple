@@ -18,6 +18,10 @@ final class VoIPPushManager: NSObject {
     private(set) var voipToken: String?
     private(set) var isRegisteredWithServer: Bool = false
 
+    /// The device_id that was active when the VoIP token was last successfully registered.
+    /// If the device re-registers and gets a new device_id, the token must be re-registered.
+    private var registeredDeviceId: String?
+
     /// Raw VoIP push payload callback (e.g. for CallKit reporting).
     var onIncomingPush: (@Sendable ([AnyHashable: Any]) -> Void)?
 
@@ -67,6 +71,16 @@ final class VoIPPushManager: NSObject {
     private func retryServerRegistrationIfNeeded() async {
         guard CallsFeature.isEnabled else { return }
         guard SessionManager.shared.sessionToken != nil else { return }
+
+        // If device re-registered with a new device_id, the VoIP token must be re-registered
+        // so the server routes incoming call pushes to the correct device.
+        let currentDeviceId = KeychainManager.shared.loadDeviceID()
+        if isRegisteredWithServer && registeredDeviceId != currentDeviceId {
+            Log.info("🔄 Device ID changed — invalidating VoIP registration (was: \(registeredDeviceId?.prefix(8) ?? "nil"), now: \(currentDeviceId?.prefix(8) ?? "nil"))", category: "Calls")
+            isRegisteredWithServer = false
+            registeredDeviceId = nil
+        }
+
         guard let token = voipToken, !isRegisteredWithServer else { return }
         Log.info("🔄 Retrying VoIP token registration (session now available)", category: "Calls")
         await registerWithServer(token)
@@ -81,6 +95,7 @@ final class VoIPPushManager: NSObject {
         do {
             let ok = try await NotificationServiceClient.shared.registerVoipToken(voipToken: token)
             isRegisteredWithServer = ok
+            if ok { registeredDeviceId = KeychainManager.shared.loadDeviceID() }
             Log.info("📞 VoIP token registered with server: \(ok)", category: "Calls")
         } catch {
             isRegisteredWithServer = false

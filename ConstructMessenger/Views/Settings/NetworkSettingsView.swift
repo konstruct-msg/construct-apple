@@ -105,23 +105,17 @@ struct NetworkSettingsView: View {
                 if (iceEnabled || iceManager.isRunning) && iceManager.hasCert {
                     if iceManager.isOnCooldown {
                         CTSep(style: .thin)
-                        Button {
-                            iceManager.clearCooldown()
-                        } label: {
-                            HStack {
-                                Text(LocalizedStringKey("ice_retry"))
-                                    .font(CTFont.regular(13))
-                                    .foregroundColor(Color.CT.accent)
-                                Spacer()
-                                Text("[↺]")
-                                    .font(CTFont.regular(13))
-                                    .foregroundColor(Color.CT.accent)
-                            }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 12)
-                            .contentShape(Rectangle())
+                        HStack {
+                            Text(LocalizedStringKey("ice_retry"))
+                                .font(CTFont.regular(13))
+                                .foregroundColor(Color.CT.textDim)
+                            Spacer()
+                            Text("[↺]")
+                                .font(CTFont.regular(13))
+                                .foregroundColor(Color.CT.textDim)
                         }
-                        .buttonStyle(.plain)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 12)
                     } else if iceManager.isRunning, let relay = iceManager.activeRelay {
                         CTSep(style: .thin)
                         HStack {

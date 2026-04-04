@@ -43,6 +43,13 @@ struct VoiceMessageBubbleView: View {
         .onDisappear {
             if isPlaying { player.stop() }
         }
+        .onChange(of: ConnectionStatusManager.shared.connectionStatus) { _, newStatus in
+            // Auto-retry download when connection restores after a transient failure.
+            if newStatus == .connected && loadError && audioData == nil {
+                loadError = false
+                loadAndPlay()
+            }
+        }
     }
 
     // MARK: - Player (normal state)
