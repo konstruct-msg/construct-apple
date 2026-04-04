@@ -41,7 +41,7 @@ struct FileAttachmentBubbleView: View {
             }
         }
         .padding(12)
-        .background(isSentByMe ? Color.CT.accent : Color.CT.bgMsg)
+        .background(CTMessageBubbleTheme.background(isSentByMe: isSentByMe))
         .ctNoiseBorder()
         .quickLookPreview($previewURL)
         #if canImport(UIKit)
@@ -117,10 +117,11 @@ struct FileAttachmentBubbleView: View {
             openOrDownload(file)
         } label: {
             HStack(spacing: 10) {
-                Image(systemName: iconName(for: file.filename))
-                    .font(.system(size: 22))
+                Text(asciiIcon(for: file.filename))
+                    .font(CTFont.regular(20))
                     .foregroundColor(isSentByMe ? Color.CT.bg : Color.CT.accent)
                     .frame(width: 32)
+                    .lineLimit(1).fixedSize()
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(file.filename)
@@ -241,20 +242,22 @@ struct FileAttachmentBubbleView: View {
         return ["mp4", "mov", "m4v", "avi", "mkv"].contains(ext)
     }
 
-    private func iconName(for filename: String) -> String {
+    private func asciiIcon(for filename: String) -> String {
         let ext = (filename as NSString).pathExtension.lowercased()
         switch ext {
-        case "pdf": return "doc.richtext"
-        case "md", "markdown": return "doc.text"
-        case "txt": return "doc.plaintext"
-        case "zip", "gz", "tar", "7z": return "archivebox"
-        case "mp3", "aac", "m4a", "wav": return "music.note"
-        case "mp4", "mov", "m4v": return "video"
-        case "xlsx", "xls": return "tablecells"
-        case "docx", "doc": return "doc.richtext"
-        default: return "doc"
+        case "pdf":                          return "[pdf]"
+        case "md", "markdown", "txt":        return "[txt]"
+        case "zip", "gz", "tar", "7z":       return "[zip]"
+        case "mp3", "aac", "m4a", "wav":     return "[♪]"
+        case "mp4", "mov", "m4v":            return "[vid]"
+        case "xlsx", "xls":                  return "[xls]"
+        case "docx", "doc":                  return "[doc]"
+        default:                             return "[doc]"
         }
     }
+
+    @available(*, unavailable)
+    private func iconName(for filename: String) -> String { "" }
 }
 
 // MARK: - Video Player Support
@@ -278,4 +281,3 @@ private struct VideoPlayerView: UIViewControllerRepresentable {
     func updateUIViewController(_ uiViewController: AVPlayerViewController, context: Context) {}
 }
 #endif
-
