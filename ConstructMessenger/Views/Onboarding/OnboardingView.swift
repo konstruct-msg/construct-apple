@@ -50,7 +50,7 @@ struct OnboardingView: View {
 
                 // Branding
                 VStack(spacing: 10) {
-                    CTLogoView(size: 200, color: Color.CT.text)
+                    CTLogoView(size: 100, color: Color.CT.text)
 
                     Text("CONSTRUCT")
                         .font(CTFont.bold(26))
@@ -66,7 +66,7 @@ struct OnboardingView: View {
                         .foregroundColor(Color.CT.textDim)
                         .multilineTextAlignment(.center)
                 }
-                .padding(.horizontal, 32)
+                .padding(.horizontal, 42)
 
                 Spacer()
 

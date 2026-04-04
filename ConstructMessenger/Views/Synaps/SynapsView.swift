@@ -547,7 +547,7 @@ private struct ContactCircle: View {
         ("u2",  "bob",     "Bob Builder"),
         ("u3",  "charlie", "Charlie Chaplin"),
         ("u4",  "dave",    "Dave Villain"),
-        ("u5",  "eve",     "Eve Listener"),
+        ("u5",  "eva",     "Eva Elfie"),
         ("u6",  "frank",   "Frank Ocean"),
         ("u7",  "grace",   "Grace Hopper"),
         ("u8",  "henry",   "Henry Ford"),

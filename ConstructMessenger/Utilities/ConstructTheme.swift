@@ -28,8 +28,10 @@ extension Color {
         /// Near-black main background: #090909
         static let bg         = Color(hex: 0x090909)
         /// Incoming message block background: #111111
-        static let bgMsg      = Color(hex: 0x111111)
-        /// Outgoing message block / primary accent: #1A3FFF
+        static let bgMsg      = Color(hex: 0x333333)
+        /// Outgoing message block: #4415FFA
+        static let outMsgBg   = Color(hex: 0x111111)
+        /// Primary accent: #1A3FFF
         static let accent     = Color(hex: 0x1A3FFF)
         /// System messages, section headers, secondary accent: #4A6AFF
         static let accentDim  = Color(hex: 0x4A6AFF)
@@ -57,6 +59,9 @@ enum CTFont {
 
 /// All UI symbols as named constants. Never hardcode "[←]" inline.
 enum CTSymbol {
+    
+    static let star8 = "✷"
+    
     // Navigation
     static let back     = "[←]"
     static let forward  = "[→]"

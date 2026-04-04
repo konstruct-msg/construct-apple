@@ -86,7 +86,7 @@ struct VoiceMessageBubbleView: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .background(isSentByMe ? Color.CT.accent : Color.CT.bgMsg)
+        .background(CTMessageBubbleTheme.background(isSentByMe: isSentByMe))
         .ctNoiseBorder()
     }
 
@@ -115,7 +115,7 @@ struct VoiceMessageBubbleView: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .background(isSentByMe ? Color.CT.accent.opacity(0.7) : Color.CT.bgMsg)
+        .background(CTMessageBubbleTheme.background(isSentByMe: isSentByMe).opacity(0.7))
         .ctNoiseBorder()
     }
 
@@ -179,7 +179,7 @@ struct VoiceMessageBubbleView: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .background(isSentByMe ? Color.CT.accent.opacity(0.35) : Color.CT.bgMsg)
+        .background(CTMessageBubbleTheme.background(isSentByMe: isSentByMe).opacity(0.35))
         .ctNoiseBorder()
     }
 

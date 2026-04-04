@@ -160,11 +160,6 @@ refactor(scope): short description
 chore(scope): short description
 ```
 
-Always include the Co-authored-by trailer:
-```
-Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
-```
-
 ---
 
 ## Testing

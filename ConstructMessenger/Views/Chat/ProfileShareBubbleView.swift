@@ -52,7 +52,7 @@ struct ProfileShareBubbleView: View {
             Spacer(minLength: 0)
         }
         .padding(10)
-        .background(Color.CT.bgMsg)
+        .background(CTMessageBubbleTheme.incomingBackground)
         .ctNoiseBorder()
     }
 }
@@ -75,4 +75,3 @@ struct ProfileShareBubbleView: View {
     .padding()
     .background(Color.CT.bg)
 }
-

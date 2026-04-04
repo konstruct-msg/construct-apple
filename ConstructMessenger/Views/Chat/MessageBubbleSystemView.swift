@@ -18,11 +18,10 @@ struct MessageBubbleSystemView: View {
                 .foregroundColor(Color.CT.textDim)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 5)
-                .background(Color.CT.bgMsg)
+                .background(CTMessageBubbleTheme.incomingBackground)
                 .overlay(Rectangle().stroke(Color.CT.noise, lineWidth: 0.5))
             Spacer()
         }
         .padding(.vertical, 4)
     }
 }
-

@@ -12,6 +12,7 @@ import PhotosUI
 struct AccountSettingsView: View {
     @Environment(\.managedObjectContext) private var viewContext
     @Environment(AuthViewModel.self) private var authViewModel
+    @Environment(\.dismiss) private var dismiss
     @State private var viewModel = SettingsViewModel()
 
     @State private var showingImagePicker = false
@@ -21,36 +22,42 @@ struct AccountSettingsView: View {
     @State private var showingExportAlert = false
     @State private var imageToCrop: UIImage?
     @State private var showingCropView = false
+    @State private var isEditingDisplayName = false
+    @State private var isEditingUsername = false
 
     @State private var originalUsername: String = ""
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 20) {
-                avatarHeader
-                identitySection
-                privacySection
-                dangerSection
+        VStack(spacing: 0) {
+            CTNavBar(
+                title: NSLocalizedString("account", comment: ""),
+                showBack: true,
+                backAction: { dismiss() }
+            )
+            flatDivider(thick: true)
+
+            ScrollView {
+                VStack(spacing: 0) {
+                    avatarHeader
+                    flatDivider(thick: true)
+                    identitySection
+                    flatDivider(thick: true)
+                    accountSection
+                    flatDivider(thick: true)
+                    dangerSection
+                    flatDivider(thick: true)
+
+                    Text(NSLocalizedString("changes_encrypted_footer", comment: ""))
+                        .font(CTFont.regular(11))
+                        .foregroundStyle(Color.CT.accent.opacity(0.6))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 12)
+                }
             }
-            .padding(.vertical, 20)
         }
         .background(Color.CT.bg.ignoresSafeArea())
-        .navigationTitle("")
-        #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(Color.CT.bgMsg, for: .navigationBar)
-        .toolbarBackground(.visible, for: .navigationBar)
-        .toolbarColorScheme(.dark, for: .navigationBar)
-        #endif
-        .toolbar {
-            ToolbarItem(placement: .principal) {
-                Text(NSLocalizedString("account", comment: ""))
-                    .textCase(.uppercase)
-                    .font(CTFont.bold(13))
-                    .foregroundStyle(Color.CT.text)
-                    .tracking(4)
-            }
-        }
+        .toolbar(.hidden, for: .navigationBar)
         .onAppear {
             viewModel.setContext(viewContext)
             viewModel.loadUserInfo(from: authViewModel)
@@ -103,7 +110,7 @@ struct AccountSettingsView: View {
     // MARK: - Avatar Header
 
     private var avatarHeader: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 14) {
             HexagonAvatarView(
                 userId: viewModel.userId,
                 displayName: viewModel.displayName,
@@ -116,131 +123,221 @@ struct AccountSettingsView: View {
                 else { showingImagePicker = true }
             }
 
-            if !viewModel.displayName.isEmpty {
-                Text(viewModel.displayName)
-                    .font(CTFont.bold(20))
-                    .foregroundStyle(Color.CT.text)
+            Button {
+                showingImagePicker = true
+            } label: {
+                Text("[\(NSLocalizedString("change_photo", comment: ""))]")
+                    .font(CTFont.regular(13))
+                    .foregroundStyle(Color.CT.accent)
             }
-
-            Text(viewModel.username.isEmpty
-                 ? DisplayNameGenerator.generate(from: viewModel.userId)
-                 : "@\(viewModel.username)")
-                .font(CTFont.regular(13))
-                .foregroundStyle(Color.CT.textDim)
+            .buttonStyle(.plain)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 28)
-        .background(Color.CT.bgMsg)
-        .overlay(
-            Rectangle()
-                .fill(Color.CT.noise)
-                .frame(height: 1),
-            alignment: .bottom
-        )
     }
 
     // MARK: - Identity Section
 
     private var identitySection: some View {
-        ConstructSection(header: NSLocalizedString("account_information", comment: "")) {
-            fieldRow(label: LocalizedStringKey("display_name")) {
-                TextField(LocalizedStringKey("display_name"), text: $viewModel.displayName)
-                    .font(CTFont.regular(16))
-                    .foregroundStyle(Color.CT.text)
-                    .onChange(of: viewModel.displayName) { _, newValue in
-                        viewModel.saveDisplayName(newValue, authViewModel: authViewModel)
-                    }
+        VStack(alignment: .leading, spacing: 0) {
+            sectionHeader(NSLocalizedString("identity_section", comment: ""))
+            flatRowDivider()
+
+            // username
+            profileRow(label: NSLocalizedString("username", comment: "")) {
+                Text("<@\(viewModel.username.isEmpty ? "—" : viewModel.username)>")
+                    .font(CTFont.regular(14))
+                    .foregroundStyle(Color.CT.textDim)
             }
+            flatRowDivider()
 
-            ConstructRowDivider(indent: 16)
+            // display name
+            profileEditRow(
+                label: NSLocalizedString("display_name", comment: ""),
+                isEditing: $isEditingDisplayName,
+                value: $viewModel.displayName,
+                onCommit: { viewModel.saveDisplayName(viewModel.displayName, authViewModel: authViewModel) }
+            )
+            flatRowDivider()
 
-            fieldRow(label: LocalizedStringKey("username")) {
-                HStack {
-                    TextField(LocalizedStringKey("username"), text: $viewModel.username)
-                        .font(CTFont.regular(15))
-                        .foregroundStyle(Color.CT.text)
-                        .autocorrectionDisabled()
-                        .textInputAutocapitalization(.never)
-                        .onSubmit {
-                            Task { await viewModel.saveUsername(viewModel.username, authViewModel: authViewModel) }
-                        }
-                    if viewModel.isSavingUsername {
-                        ProgressView().scaleEffect(0.8)
-                    } else if viewModel.username != originalUsername {
-                        Button(LocalizedStringKey("save")) {
-                            Task { await viewModel.saveUsername(viewModel.username, authViewModel: authViewModel) }
-                        }
-                        .font(CTFont.regular(13))
+            // status — placeholder, not yet implemented
+            profileRow(label: NSLocalizedString("status", comment: "")) {
+                HStack(spacing: 8) {
+                    Text("[[ONLINE]]")
+                        .font(CTFont.regular(14))
                         .foregroundStyle(Color.CT.accent)
-                    } else if viewModel.usernameSaved {
-                        Text(LocalizedStringKey("saved"))
-                            .font(CTFont.regular(12))
-                            .foregroundStyle(Color.CT.textDim)
-                            .transition(.opacity)
-                    }
+                    Text("[→]")
+                        .font(CTFont.regular(13))
+                        .foregroundStyle(Color.CT.accent.opacity(0.6))
                 }
             }
+            flatRowDivider()
 
-            if let error = viewModel.usernameSaveError {
-                Text(error)
-                    .font(CTFont.regular(11))
-                    .foregroundStyle(Color.red)
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 8)
+            // bio — placeholder, not yet implemented
+            profileRow(label: NSLocalizedString("bio", comment: "")) {
+                Text("[\(NSLocalizedString("add_action", comment: "")) [→]]")
+                    .font(CTFont.regular(13))
+                    .foregroundStyle(Color.CT.accent.opacity(0.6))
             }
         }
     }
 
-    // MARK: - Data & Privacy
+    // MARK: - Account Section
 
-    private var privacySection: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            ConstructSection(header: NSLocalizedString("data_and_privacy", comment: "")) {
-                ConstructButtonRow(icon: "square.and.arrow.up", title: LocalizedStringKey("export_my_data")) {
-                    showingExportAlert = true
-                }
+    private var accountSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            sectionHeader(NSLocalizedString("account_section", comment: ""))
+            flatRowDivider()
+
+            // user ID
+            profileRow(label: NSLocalizedString("user_id", comment: "")) {
+                let uid = viewModel.userId
+                let short = uid.count > 12
+                    ? "\(uid.prefix(8))...\(uid.suffix(2))"
+                    : uid
+                Text(short)
+                    .font(CTFont.regular(14))
+                    .foregroundStyle(Color.CT.textDim)
             }
-            Text(LocalizedStringKey("export_my_data_footer"))
-                .font(CTFont.regular(11))
-                .foregroundStyle(Color.CT.textDim)
+            flatRowDivider()
+
+            // linked devices
+            NavigationLink(destination: DevicesView()) {
+                HStack {
+                    Text(NSLocalizedString("linked_devices", comment: "").lowercased())
+                        .font(CTFont.regular(14))
+                        .foregroundStyle(Color.CT.textDim)
+                    Spacer()
+                    Text("[\(NSLocalizedString("manage_action", comment: "")) [→]]")
+                        .font(CTFont.regular(13))
+                        .foregroundStyle(Color.CT.accent)
+                }
                 .padding(.horizontal, 20)
+                .padding(.vertical, 14)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
         }
     }
 
     // MARK: - Danger Zone
 
     private var dangerSection: some View {
-        ConstructSection(header: NSLocalizedString("danger_zone", comment: "")) {
+        VStack(alignment: .leading, spacing: 0) {
+            sectionHeader(NSLocalizedString("danger_zone", comment: ""), color: Color.CT.danger)
+            flatRowDivider()
+
             Button {
                 showingDeleteConfirmation = true
             } label: {
-                HStack(spacing: 14) {
-                    Text(LocalizedStringKey("delete_my_account"))
-                        .font(CTFont.bold(16))
+                HStack {
+                    Text(NSLocalizedString("delete_account_row", comment: "").lowercased())
+                        .font(CTFont.regular(14))
                         .foregroundStyle(Color.CT.danger)
                     Spacer()
+                    Text("[\(NSLocalizedString("delete_action", comment: "")) →]")
+                        .font(CTFont.regular(13))
+                        .foregroundStyle(Color.CT.danger.opacity(0.7))
                 }
-                .padding(.horizontal, 16)
+                .padding(.horizontal, 20)
                 .padding(.vertical, 14)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
         }
-        .padding(.bottom, 32)
     }
 
     // MARK: - Layout Helpers
 
-    private func fieldRow<Content: View>(label: LocalizedStringKey, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(label)
-                .font(CTFont.bold(10))
-                .foregroundStyle(Color.CT.textDim)
-                .tracking(0.8)
-            content()
+    private func flatDivider(thick: Bool = false) -> some View {
+        Rectangle()
+            .fill(thick ? Color.CT.noise : Color.CT.noise.opacity(0.5))
+            .frame(height: 1)
+    }
+
+    private func flatRowDivider() -> some View {
+        Rectangle()
+            .fill(Color.CT.noise.opacity(0.35))
+            .frame(height: 1)
+            .padding(.horizontal, 20)
+    }
+
+    private func sectionHeader(_ title: String, color: Color = Color.CT.accent) -> some View {
+        HStack(spacing: 6) {
+            Text(">")
+                .font(CTFont.bold(12))
+                .foregroundStyle(color)
+            Text(title.uppercased())
+                .font(CTFont.bold(12))
+                .foregroundStyle(color)
+                .tracking(2)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 10)
+    }
+
+    private func profileRow<V: View>(label: String, @ViewBuilder value: () -> V) -> some View {
+        HStack {
+            Text(label.lowercased())
+                .font(CTFont.regular(14))
+                .foregroundStyle(Color.CT.textDim)
+            Spacer()
+            value()
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 14)
+    }
+
+    private func profileEditRow(
+        label: String,
+        isEditing: Binding<Bool>,
+        value: Binding<String>,
+        onCommit: @escaping () -> Void
+    ) -> some View {
+        HStack {
+            Text(label.lowercased())
+                .font(CTFont.regular(14))
+                .foregroundStyle(Color.CT.textDim)
+            Spacer()
+            if isEditing.wrappedValue {
+                TextField("", text: value)
+                    .font(CTFont.regular(14))
+                    .foregroundStyle(Color.CT.text)
+                    .multilineTextAlignment(.trailing)
+                    .autocorrectionDisabled()
+                    .onSubmit {
+                        onCommit()
+                        isEditing.wrappedValue = false
+                    }
+                    .frame(maxWidth: 180)
+                Button {
+                    onCommit()
+                    isEditing.wrappedValue = false
+                } label: {
+                    Text("[→]")
+                        .font(CTFont.regular(13))
+                        .foregroundStyle(Color.CT.accent)
+                }
+                .buttonStyle(.plain)
+            } else {
+                Button {
+                    isEditing.wrappedValue = true
+                } label: {
+                    HStack(spacing: 8) {
+                        Text(value.wrappedValue.isEmpty ? "—" : value.wrappedValue)
+                            .font(CTFont.regular(14))
+                            .foregroundStyle(Color.CT.text)
+                        Text("[→]")
+                            .font(CTFont.regular(13))
+                            .foregroundStyle(Color.CT.accent)
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 14)
+        .contentShape(Rectangle())
     }
 }
 
