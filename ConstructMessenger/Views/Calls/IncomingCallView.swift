@@ -17,8 +17,8 @@ struct IncomingCallView: View {
             Spacer()
 
             VStack(spacing: 20) {
-                // Header pill
-                Capsule()
+                // Header drag indicator
+                Rectangle()
                     .fill(Color.CT.noise)
                     .frame(width: 36, height: 4)
                     .padding(.top, 10)
@@ -43,15 +43,16 @@ struct IncomingCallView: View {
                         Button {
                             CallManager.shared.declineIncomingCall()
                         } label: {
-                            Image(systemName: "phone.down.fill")
-                                .font(.system(size: 24))
+                            Text("[end]")
+                                .font(CTFont.bold(18))
                                 .foregroundStyle(.white)
                                 .frame(width: 64, height: 64)
-                                .background(Color.red)
-                                .clipShape(Circle())
+                                .background(Color.CT.danger)
+                                .overlay(Rectangle().strokeBorder(Color.CT.danger, lineWidth: 1))
+                                .lineLimit(1).fixedSize()
                         }
                         Text(NSLocalizedString("call_decline", comment: ""))
-                            .font(.caption2)
+                            .font(CTFont.regular(10))
                             .foregroundStyle(Color.CT.textDim)
                     }
 
@@ -60,15 +61,16 @@ struct IncomingCallView: View {
                         Button {
                             CallManager.shared.answerIncomingCall()
                         } label: {
-                            Image(systemName: "phone.fill")
-                                .font(.system(size: 24))
+                            Text("[ans]")
+                                .font(CTFont.bold(18))
                                 .foregroundStyle(.white)
                                 .frame(width: 64, height: 64)
                                 .background(Color.CT.accent)
-                                .clipShape(Circle())
+                                .overlay(Rectangle().strokeBorder(Color.CT.accent, lineWidth: 1))
+                                .lineLimit(1).fixedSize()
                         }
                         Text(NSLocalizedString("call_answer", comment: ""))
-                            .font(.caption2)
+                            .font(CTFont.regular(10))
                             .foregroundStyle(Color.CT.textDim)
                     }
                 }
@@ -76,7 +78,7 @@ struct IncomingCallView: View {
             }
             .frame(maxWidth: .infinity)
             .background(Color.CT.bgMsg)
-            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .overlay(Rectangle().strokeBorder(Color.CT.noise, lineWidth: 1))
             .padding(.horizontal, 12)
             .padding(.bottom, 8)
         }

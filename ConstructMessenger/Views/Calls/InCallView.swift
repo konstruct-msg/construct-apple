@@ -54,16 +54,15 @@ struct InCallView: View {
                 // Control row
                 if isEnded {
                     Button {
-                        // state auto-resets after 3s; allow immediate dismiss via endCall no-op
                         CallManager.shared.endCall()
                     } label: {
-                        Text(NSLocalizedString("call_dismiss", comment: "Dismiss ended call"))
-                            .font(.body.weight(.medium))
-                            .foregroundStyle(.white)
+                        Text(NSLocalizedString("call_dismiss", comment: ""))
+                            .font(CTFont.regular(15))
+                            .foregroundStyle(Color.CT.textDim)
                             .padding(.horizontal, 36)
                             .padding(.vertical, 14)
                             .background(Color.CT.bgMsg)
-                            .clipShape(Capsule())
+                            .overlay(Rectangle().strokeBorder(Color.CT.noise, lineWidth: 1))
                     }
                     .padding(.bottom, 52)
                 } else {
@@ -81,12 +80,12 @@ struct InCallView: View {
                         Button {
                             CallManager.shared.endCall()
                         } label: {
-                            Image(systemName: "phone.down.fill")
-                                .font(.system(size: 26))
+                            Text("[end]")
+                                .font(CTFont.bold(18))
                                 .foregroundStyle(.white)
                                 .frame(width: 68, height: 68)
-                                .background(Color.red)
-                                .clipShape(Circle())
+                                .background(Color.CT.danger)
+                                .overlay(Rectangle().strokeBorder(Color.CT.danger, lineWidth: 1))
                         }
                         .accessibilityLabel(NSLocalizedString("call_end", comment: ""))
 
@@ -187,22 +186,35 @@ private struct PulseRingView: View {
 // MARK: - Call control button
 
 private struct CallControlButton: View {
-    let systemImage: String
+    let systemImage: String   // kept for accessibility, mapped to ASCII
     let label: String
     let tint: Color
     let action: () -> Void
 
+    // Map SF Symbol names to ASCII equivalents
+    private var asciiLabel: String {
+        switch systemImage {
+        case "mic.fill":            return "[mic]"
+        case "mic.slash.fill":      return "[mute]"
+        case "speaker.fill":        return "[ear]"
+        case "speaker.wave.3.fill": return "[spk]"
+        default:                    return "[\(systemImage)]"
+        }
+    }
+
     var body: some View {
         Button(action: action) {
             VStack(spacing: 6) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 22))
+                Text(asciiLabel)
+                    .font(CTFont.bold(15))
                     .foregroundStyle(tint)
                     .frame(width: 52, height: 52)
                     .background(Color.CT.bgMsg)
-                    .clipShape(Circle())
+                    .overlay(Rectangle().strokeBorder(tint.opacity(0.4), lineWidth: 1))
+                    .lineLimit(1)
+                    .fixedSize()
                 Text(label)
-                    .font(.caption2)
+                    .font(CTFont.regular(10))
                     .foregroundStyle(Color.CT.textDim)
             }
         }
