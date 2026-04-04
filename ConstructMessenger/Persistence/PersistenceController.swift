@@ -27,31 +27,31 @@ struct PersistenceController {
     let container: NSPersistentContainer
 
     init(inMemory: Bool = false) {
-        container = NSPersistentContainer(name: "ConstructMessenger")
+        // Use a local constant so the escaping loadPersistentStores closure can
+        // capture the NSPersistentContainer reference directly without going through
+        // the struct's mutating 'self' (which escaping closures cannot capture).
+        let c = NSPersistentContainer(name: "ConstructMessenger")
 
         if inMemory {
-            container.persistentStoreDescriptions.first?.url = URL(fileURLWithPath: "/dev/null")
-        } else if let description = container.persistentStoreDescriptions.first {
+            c.persistentStoreDescriptions.first?.url = URL(fileURLWithPath: "/dev/null")
+        } else if let description = c.persistentStoreDescriptions.first {
             // Automatic lightweight migration for model changes
             description.shouldInferMappingModelAutomatically = true
             description.shouldMigrateStoreAutomatically = true
         }
 
-        container.loadPersistentStores { description, error in
-            guard let error else {
-                return
-            }
-            // Store failed to load — most likely a schema migration failure.
-            // Attempt recovery: destroy the corrupt/incompatible store and recreate
-            // it empty so the app can start. The user loses their local message
-            // history but the app doesn't crash. They can re-register if needed.
+        c.loadPersistentStores { description, error in
+            guard let error else { return }
+            // Store failed to load — most likely a schema migration failure on iOS 26.
+            // Attempt recovery: destroy the incompatible store and recreate it empty
+            // so the app can start. The user loses local history but the app won't crash.
             guard let storeURL = description.url else {
                 fatalError("❌ Core Data: persistent store has no URL — cannot recover: \(error)")
             }
             do {
-                let coordinator = NSPersistentStoreCoordinator(managedObjectModel: container.managedObjectModel)
+                let coordinator = NSPersistentStoreCoordinator(managedObjectModel: c.managedObjectModel)
                 try coordinator.destroyPersistentStore(at: storeURL, ofType: NSSQLiteStoreType, options: nil)
-                try container.persistentStoreCoordinator.addPersistentStore(
+                try c.persistentStoreCoordinator.addPersistentStore(
                     ofType: NSSQLiteStoreType,
                     configurationName: nil,
                     at: storeURL,
@@ -66,8 +66,9 @@ struct PersistenceController {
             }
         }
 
-        container.viewContext.automaticallyMergesChangesFromParent = true
-        container.viewContext.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
+        c.viewContext.automaticallyMergesChangesFromParent = true
+        c.viewContext.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
+        container = c
 
         migrateExistingContactsToSynaps()
     }
