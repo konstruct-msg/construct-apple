@@ -348,7 +348,8 @@ struct ChatView: View {
         let senderId = viewModel.chat.otherUser?.id ?? ""
         if floodGuard.suppressedSenders.contains(senderId) {
             HStack(spacing: 10) {
-                Image(systemName: "exclamationmark.shield.fill")
+                Text("[!]")
+                    .font(CTFont.regular(16))
                     .foregroundStyle(.orange)
 
                 VStack(alignment: .leading, spacing: 2) {
@@ -361,24 +362,26 @@ struct ChatView: View {
 
                 Spacer()
 
-                Button(LocalizedStringKey("allow")) {
+                Button {
                     IncomingFloodGuard.shared.unsuppress(senderId: senderId)
+                } label: {
+                    Text("[allow →]")
+                        .font(CTFont.regular(12))
+                        .foregroundStyle(.orange)
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.mini)
-                .tint(.green)
 
-                Button(LocalizedStringKey("block")) {
+                Button {
                     // Delegate to existing block flow
                     if let user = viewModel.chat.otherUser {
                         user.isBlocked = true
                         try? user.managedObjectContext?.save()
                     }
                     IncomingFloodGuard.shared.unsuppress(senderId: senderId)
+                } label: {
+                    Text("[block]")
+                        .font(CTFont.regular(12))
+                        .foregroundStyle(Color.CT.danger)
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.mini)
-                .tint(.red)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
@@ -395,19 +398,18 @@ struct ChatView: View {
                 Button(role: .destructive) {
                     deleteSelectedMessages()
                 } label: {
-                    HStack {
-                        Image(systemName: "trash")
-                        Text("delete_selected")
-                    }
-                    .foregroundColor(.red)
+                    Text("[\(NSLocalizedString("delete_selected", comment: "")) →]")
+                        .font(CTFont.regular(13))
+                        .foregroundStyle(Color.CT.danger)
                 }
                 Spacer()
                 Text("\(selectedMessages.count) \(selectedMessages.count == 1 ? "message_selected" : "messages_selected")")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                    .font(CTFont.regular(12))
+                    .foregroundStyle(Color.CT.textDim)
             }
             .padding()
-            .background(Color.secondary.opacity(0.12))
+            .background(Color.CT.bg)
+            .overlay(Rectangle().frame(height: 1).foregroundStyle(Color.CT.accent.opacity(0.3)), alignment: .top)
         }
     }
     
@@ -583,25 +585,56 @@ struct ChatView: View {
     private func searchOverlay() -> some View {
         if isSearchActive {
             VStack(spacing: 0) {
-                HStack(spacing: 12) {
+                HStack(spacing: 8) {
+                    Text(">")
+                        .font(CTFont.regular(14))
+                        .foregroundStyle(Color.CT.accent)
+
                     TextField("search_messages", text: $searchText)
-                        .textFieldStyle(.roundedBorder)
+                        .font(CTFont.regular(14))
+                        .foregroundStyle(Color.CT.text)
+                        .tint(Color.CT.accent)
                         #if os(iOS)
                         .autocapitalization(.none)
                         .submitLabel(.search)
                         #endif
                         .autocorrectionDisabled()
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 6)
+                        .background(Color.CT.bgMsg)
+                        .overlay(Rectangle().stroke(Color.CT.accent.opacity(0.4)))
+
                     Button {
                         withAnimation {
                             isSearchActive = false
                             searchText = ""
                         }
                     } label: {
-                        Text("cancel")
+                        Text("[x]")
+                            .font(CTFont.regular(14))
+                            .foregroundStyle(Color.CT.accentDim)
                     }
                 }
-                .padding()
-                .background(Color.CT.bg.shadow(color: .black.opacity(0.1), radius: 2, y: 1))
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(Color.CT.bg)
+
+                if !searchText.isEmpty {
+                    HStack {
+                        Text("[\(filteredMessages.count) results]")
+                            .font(CTFont.regular(12))
+                            .foregroundStyle(Color.CT.textDim)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.bottom, 6)
+                    .background(Color.CT.bg)
+                }
+
+                Rectangle()
+                    .frame(height: 1)
+                    .foregroundStyle(Color.CT.accent.opacity(0.3))
+
                 Spacer()
             }
         }
