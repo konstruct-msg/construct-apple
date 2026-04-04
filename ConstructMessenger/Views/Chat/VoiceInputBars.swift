@@ -121,7 +121,7 @@ private extension View {
     var ctBar: some View {
         self
             .frame(height: 52)
-            .background(Color.CT.bgMsg)
+            .background(Color.CT.outMsgBg)
             .overlay(Rectangle().strokeBorder(Color.CT.accent.opacity(0.25), lineWidth: 1))
             .padding(.horizontal, 8)
     }

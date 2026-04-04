@@ -25,7 +25,7 @@ struct MessageInputTextBar: View {
             sendButton
             voiceButton
         }
-        .background(Color.CT.bgMsg)
+        .background(Color.CT.outMsgBg)
         .overlay(Rectangle().stroke(Color.CT.noise, lineWidth: 0.5))
     }
 
