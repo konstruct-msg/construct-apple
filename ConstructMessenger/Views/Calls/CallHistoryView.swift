@@ -13,7 +13,7 @@ struct CallHistoryView: View {
     @Environment(\.managedObjectContext) private var viewContext
 
     @FetchRequest(
-        sortDescriptors: [NSSortDescriptor(key: "startedAt", ascending: false)],
+        sortDescriptors: [NSSortDescriptor(keyPath: \CallRecord.startedAt, ascending: false)],
         animation: .default
     )
     private var records: FetchedResults<CallRecord>
