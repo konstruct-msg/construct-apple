@@ -276,15 +276,16 @@ struct ChatView: View {
         }
         .overlay {
             if isChatDropTargeted {
-                RoundedRectangle(cornerRadius: 12)
-                    .strokeBorder(Color.accentColor, lineWidth: 3)
-                    .background(Color.accentColor.opacity(0.06).clipShape(RoundedRectangle(cornerRadius: 12)))
+                Rectangle()
+                    .strokeBorder(Color.CT.accent, lineWidth: 2)
+                    .background(Color.CT.accent.opacity(0.05))
                     .overlay(
-                        Label(LocalizedStringKey("drop_to_attach"), systemImage: "photo.badge.plus")
-                            .font(.title3.weight(.semibold))
-                            .foregroundColor(.accentColor)
+                        Text(LocalizedStringKey("drop_to_attach"))
+                            .font(CTFont.regular(16))
+                            .foregroundColor(Color.CT.accent)
                             .padding(16)
-                            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+                            .background(Color.CT.bgMsg)
+                            .overlay(Rectangle().stroke(Color.CT.accent.opacity(0.4), lineWidth: 1))
                     )
                     .allowsHitTesting(false)
                     .padding(8)
@@ -745,7 +746,7 @@ struct ChatView: View {
 
     // Add sample messages
     _ = PreviewHelpers.createSampleMessage(context: context, chat: chat, isSentByMe: false, text: "Hi! How are you?")
-    _ = PreviewHelpers.createSampleMessage(context: context, chat: chat, isSentByMe: true, text: "I'm good, thanks!")
+    _ = PreviewHelpers.createSampleMessage(context: context, chat: chat, isSentByMe: true, text: "I'm good, thanks! So what about you?")
     _ = PreviewHelpers.createSampleMessage(context: context, chat: chat, isSentByMe: false, text: "Great to hear!")
 
     try? context.save()

@@ -23,23 +23,22 @@ struct DraftsView: View {
                     TextEditor(text: $draftText)
                         .frame(minHeight: 120, maxHeight: 180)
                         .padding(8)
-                        .background({
-                            #if canImport(UIKit)
-                            Color(UIColor.secondarySystemBackground)
-                            #else
-                            Color(NSColor.textBackgroundColor)
-                            #endif
-                        }())
-                        .cornerRadius(12)
+                        .background(Color.CT.bgMsg)
+                        .font(CTFont.regular(13))
+                        .foregroundColor(Color.CT.text)
+                        .overlay(Rectangle().stroke(Color.CT.noise, lineWidth: 1))
 
                     Button {
                         addDraft()
                     } label: {
-                        Label(LocalizedStringKey("save_draft"), systemImage: "tray.and.arrow.down")
+                        Text(LocalizedStringKey("save_draft"))
+                            .font(CTFont.regular(13))
+                            .foregroundColor(Color.CT.text)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 10)
+                            .background(Color.CT.bgMsg)
+                            .overlay(Rectangle().stroke(Color.CT.accent, lineWidth: 1))
                     }
-                    .buttonStyle(.borderedProminent)
                     .disabled(draftText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
 

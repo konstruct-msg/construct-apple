@@ -63,12 +63,12 @@ struct DataStorageSettingsView: View {
                                 let fraction = min(Double(cacheSize) / Double(maxDiskCacheBytesRaw), 1.0)
                                 GeometryReader { geo in
                                     ZStack(alignment: .leading) {
-                                        RoundedRectangle(cornerRadius: 4)
+                                        Rectangle()
                                             .fill(Color.CT.noise)
-                                            .frame(height: 6)
-                                        RoundedRectangle(cornerRadius: 4)
+                                            .frame(height: 4)
+                                        Rectangle()
                                             .fill(fraction > 0.85 ? Color.orange : Color.CT.accent)
-                                            .frame(width: geo.size.width * fraction, height: 6)
+                                            .frame(width: geo.size.width * fraction, height: 4)
                                             .animation(.easeInOut(duration: 0.4), value: fraction)
                                     }
                                 }

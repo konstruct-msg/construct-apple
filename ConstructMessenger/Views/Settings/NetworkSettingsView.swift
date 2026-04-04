@@ -235,8 +235,12 @@ struct NetworkSettingsView: View {
                             customPort = "\(GRPCChannelManager.shared.currentPort)"
                         } label: {
                             Text(LocalizedStringKey("reset_to_default"))
+                                .font(CTFont.regular(13))
+                                .foregroundColor(Color.CT.danger)
+                                .padding(.horizontal, 12).padding(.vertical, 8)
+                                .background(Color.CT.bgMsg)
+                                .overlay(Rectangle().stroke(Color.CT.danger.opacity(0.4), lineWidth: 1))
                         }
-                        .buttonStyle(.bordered)
 
                         Spacer()
 
@@ -244,9 +248,12 @@ struct NetworkSettingsView: View {
                             applyCustomServer()
                         } label: {
                             Text(LocalizedStringKey("apply_changes"))
-                                .fontWeight(.semibold)
+                                .font(CTFont.regular(13))
+                                .foregroundColor(Color.CT.text)
+                                .padding(.horizontal, 12).padding(.vertical, 8)
+                                .background(Color.CT.bgMsg)
+                                .overlay(Rectangle().stroke(Color.CT.accent, lineWidth: 1))
                         }
-                        .buttonStyle(.borderedProminent)
                         .disabled(customHost.trimmingCharacters(in: .whitespaces).isEmpty)
                     }
                 }

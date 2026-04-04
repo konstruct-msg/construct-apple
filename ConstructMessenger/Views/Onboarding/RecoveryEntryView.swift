@@ -106,9 +106,13 @@ struct RecoveryEntryView: View {
                     Task { await vm.submitRecover() }
                 } label: {
                     Text(NSLocalizedString("recovery_restore_account", comment: ""))
+                        .font(CTFont.regular(13))
+                        .foregroundColor(Color.CT.text)
                         .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(Color.CT.bgMsg)
+                        .overlay(Rectangle().stroke(Color.CT.accent, lineWidth: 1))
                 }
-                .buttonStyle(.borderedProminent)
                 .disabled(!vm.enteredMnemonicValid || vm.recoverIdentifier.isEmpty)
                 .padding(.horizontal)
                 .padding(.bottom)
