@@ -48,6 +48,13 @@ final class SessionCoordinator {
     private var tieBreakWatchdogs: [String: Task<Void, Never>] = [:]
     private let tieBreakWatchdogTimeout: TimeInterval = 30.0
 
+    /// Fallback tasks started when we are the natural RESPONDER (higher userId) and receive
+    /// END_SESSION from the INITIATOR. If the INITIATOR does not send a new session init within
+    /// the timeout, we override the natural ordering and proactively initialize ourselves.
+    /// This prevents a permanent session deadlock when the INITIATOR is itself broken/offline.
+    private var responderFallbackTasks: [String: Task<Void, Never>] = [:]
+    private let responderFallbackTimeout: TimeInterval = 20.0
+
     /// Timer that periodically evicts expired entries from cooldown dicts so they don't grow unboundedly.
     private var cooldownPurgeTimer: Timer?
     private let cooldownPurgeInterval: TimeInterval = 5 * 60 // every 5 minutes
@@ -258,6 +265,7 @@ final class SessionCoordinator {
             // or resend here; doing so would restart the tie-break loop.
             guard myId < userId else {
                 Log.info("🔇 END_SESSION from natural INITIATOR \(userId.prefix(8))… — waiting as RESPONDER (no resend, no prewarm)", category: "SessionInit")
+                startResponderFallback(for: userId)
                 return
             }
 
@@ -484,6 +492,8 @@ final class SessionCoordinator {
     /// Re-sends any outgoing messages that were marked `.queued` by `requeueUndeliveredOutgoing`
     /// after receiving END_SESSION (i.e. messages encrypted under the now-replaced session).
     private func sendSessionQueuedMessages(for userId: String) {
+        // Session is now established — cancel any pending RESPONDER fallback.
+        cancelResponderFallback(for: userId)
         guard let context = viewContext,
               let myId = SessionManager.shared.currentUserId, !myId.isEmpty else { return }
         let chatFetch = Chat.fetchRequest()
@@ -663,6 +673,42 @@ final class SessionCoordinator {
         tieBreakWatchdogs.removeValue(forKey: userId)
     }
 
+    // MARK: - Responder fallback
+
+    /// Starts a fallback task: if the natural INITIATOR hasn't sent a new session init within
+    /// `responderFallbackTimeout` seconds, we override the ordering and init ourselves.
+    private func startResponderFallback(for userId: String) {
+        responderFallbackTasks[userId]?.cancel()
+        responderFallbackTasks[userId] = Task { [weak self] in
+            guard let self else { return }
+            try? await Task.sleep(nanoseconds: UInt64(self.responderFallbackTimeout * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                guard !CryptoManager.shared.hasSession(for: userId),
+                      !self.usersInitializingSession.contains(userId) else {
+                    Log.debug("⏸️ RESPONDER fallback: session already established for \(userId.prefix(8))… — skipping", category: "SessionInit")
+                    return
+                }
+                Log.info("⚡ RESPONDER fallback: no init from \(userId.prefix(8))… after \(Int(self.responderFallbackTimeout))s — taking INITIATOR role", category: "SessionInit")
+                self.usersInitializingSession.insert(userId)
+                Task {
+                    defer { Task { @MainActor in self.usersInitializingSession.remove(userId) } }
+                    await self.sessionInitService.initializeSessionProactively(
+                        userId: userId,
+                        onSuccess: { Log.info("⚡ RESPONDER fallback ✅ \(userId.prefix(8))…", category: "SessionInit") },
+                        onFailure: { err in Log.error("⚡ RESPONDER fallback ❌ \(userId.prefix(8))…: \(err.localizedDescription)", category: "SessionInit") }
+                    )
+                }
+            }
+        }
+    }
+
+    /// Cancels any pending RESPONDER fallback task for `userId`.
+    private func cancelResponderFallback(for userId: String) {
+        responderFallbackTasks[userId]?.cancel()
+        responderFallbackTasks.removeValue(forKey: userId)
+    }
+
     // MARK: - Message persistence (session-init path only)
 
     private func saveMessage(for chat: Chat, with messageData: ChatMessage, decryptedContent: String) {
@@ -686,8 +732,9 @@ final class SessionCoordinator {
         // Format: "__session_ping_<UUID>__" (legacy: "__session_ping__").
         if plaintext.hasPrefix("__session_ping") && plaintext.hasSuffix("__") {
             Log.info("🏓 SESSION_STATE[ping_received]: session established as RESPONDER (ping discarded)", category: "SessionCoordinator")
-            // Cancel any watchdog for this peer — they proved they have an active session.
+            // Cancel any watchdog or fallback for this peer — they proved they have an active session.
             cancelTieBreakWatchdog(for: messageData.from)
+            cancelResponderFallback(for: messageData.from)
             return
         }
 
@@ -697,8 +744,9 @@ final class SessionCoordinator {
         if plaintext.hasPrefix("__session_ready") || plaintext.hasPrefix("session_ready_") {
             let peerId = messageData.from
             Log.info("🤝 SESSION_STATE[session_ready_received]: RESPONDER \(peerId.prefix(8))… confirmed — session established both sides", category: "SessionCoordinator")
-            // Cancel watchdog — RESPONDER proved they have a working session.
+            // Cancel watchdog or fallback — RESPONDER proved they have a working session.
             cancelTieBreakWatchdog(for: peerId)
+            cancelResponderFallback(for: peerId)
             // Mark session as confirmed so ChatViewModel stops buffering.
             SessionConfirmationTracker.shared.markConfirmed(peerId)
             // Flush any messages that were buffered while session was unconfirmed.
