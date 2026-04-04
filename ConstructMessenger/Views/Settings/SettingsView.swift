@@ -267,9 +267,12 @@ struct SettingsView: View {
     let authViewModel = AuthViewModel(context: context)
     authViewModel.configureMockAuth()
     let recoveryVM = AccountRecoveryViewModel()
+    let chatsVM = ChatsViewModel()
+    chatsVM.setContext(context)
     return SettingsView()
         .environment(\.managedObjectContext, context)
         .environment(authViewModel)
         .environment(recoveryVM)
+        .environment(chatsVM)
 }
 #endif
