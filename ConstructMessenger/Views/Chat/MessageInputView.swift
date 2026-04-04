@@ -166,7 +166,7 @@ struct MessageInputView: View {
         Button { showAttachmentMenu = true } label: {
             Text(CTSymbol.attach)
                 .font(CTFont.bold(15))
-                .foregroundColor(Color.CT.accentDim)
+                .foregroundColor(Color.CT.textDim)
         }
         #if os(iOS)
         .confirmationDialog(LocalizedStringKey("attach"), isPresented: $showAttachmentMenu) {

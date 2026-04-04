@@ -59,13 +59,17 @@ struct VoiceMessageBubbleView: View {
                 if isLoading {
                     Text("[···]")
                         .font(CTFont.regular(13))
+                        .lineLimit(1)
+                        .fixedSize()
                         .foregroundColor(isSentByMe ? .white : Color.CT.accent)
-                        .frame(width: 38)
+                        .frame(minWidth: 38)
                 } else {
-                    Text(isPlaying ? "[⏸]" : "[▶]")
+                    Text(isPlaying ? "[||]" : "[>]")
                         .font(CTFont.regular(13))
+                        .lineLimit(1)
+                        .fixedSize()
                         .foregroundColor(isSentByMe ? .white : Color.CT.accent)
-                        .frame(width: 38)
+                        .frame(minWidth: 38)
                 }
             }
             .buttonStyle(.plain)
@@ -96,8 +100,10 @@ struct VoiceMessageBubbleView: View {
         HStack(spacing: 8) {
             Text("[···]")
                 .font(CTFont.regular(13))
+                .lineLimit(1)
+                .fixedSize()
                 .foregroundColor(isSentByMe ? .white : Color.CT.textDim)
-                .frame(width: 38)
+                .frame(minWidth: 38)
 
             CTWaveformView(
                 samples: voiceContent.waveform,

@@ -171,14 +171,6 @@ struct AccountSettingsView: View {
                         .foregroundStyle(Color.CT.accent.opacity(0.6))
                 }
             }
-            flatRowDivider()
-
-            // bio — placeholder, not yet implemented
-            profileRow(label: NSLocalizedString("bio", comment: "")) {
-                Text("[\(NSLocalizedString("add_action", comment: "")) [→]]")
-                    .font(CTFont.regular(13))
-                    .foregroundStyle(Color.CT.accent.opacity(0.6))
-            }
         }
     }
 
