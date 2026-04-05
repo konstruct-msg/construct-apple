@@ -67,7 +67,7 @@
             </uniquenessConstraint>
         </uniquenessConstraints>
     </entity>
-    <entity name="CallRecord" representedClassName="CallRecord" syncable="YES" codeGenerationType="none">
+    <entity name="CallRecord" representedClassName="CallRecord" syncable="YES">
         <attribute name="id" attributeType="String"/>
         <attribute name="peerUserId" attributeType="String"/>
         <attribute name="peerName" attributeType="String"/>
