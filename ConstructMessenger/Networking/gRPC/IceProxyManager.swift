@@ -17,6 +17,23 @@
 import Foundation
 import Combine
 import Network
+import os
+
+/// Thread-safe one-shot flag used to prevent double-resuming a CheckedContinuation
+/// when multiple concurrent closures (NW state handler + timeout) race to complete.
+private final class OnceResumeFlag: @unchecked Sendable {
+    private var _triggered = false
+    private let lock = NSLock()
+
+    /// Returns `true` the first time it is called, `false` on every subsequent call.
+    func trigger() -> Bool {
+        lock.withLock {
+            guard !_triggered else { return false }
+            _triggered = true
+            return true
+        }
+    }
+}
 
 /// Describes the current effective traffic routing path.
 /// Used for the Network Settings "Connection Route" indicator.
@@ -350,19 +367,19 @@ final class IceProxyManager: ObservableObject {
 
         return await withCheckedContinuation { continuation in
             let conn = NWConnection(host: .init(hostname), port: port, using: .tcp)
-            var resumed = false
+            // Protect the one-shot resume flag against concurrent access from the
+            // stateUpdateHandler (NW queue) and the timeout (utility queue).
+            let flag = OnceResumeFlag()
             let start = CFAbsoluteTimeGetCurrent()
 
             conn.stateUpdateHandler = { state in
                 switch state {
                 case .ready:
-                    guard !resumed else { return }
-                    resumed = true
+                    guard flag.trigger() else { return }
                     conn.cancel()
                     continuation.resume(returning: CFAbsoluteTimeGetCurrent() - start)
                 case .failed, .cancelled:
-                    guard !resumed else { return }
-                    resumed = true
+                    guard flag.trigger() else { return }
                     continuation.resume(returning: nil)
                 default: break
                 }
@@ -370,8 +387,7 @@ final class IceProxyManager: ObservableObject {
             conn.start(queue: .global(qos: .utility))
 
             DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + timeout) {
-                guard !resumed else { return }
-                resumed = true
+                guard flag.trigger() else { return }
                 conn.cancel()
                 continuation.resume(returning: nil)
             }
