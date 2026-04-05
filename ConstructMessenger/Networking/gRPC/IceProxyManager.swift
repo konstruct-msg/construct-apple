@@ -16,6 +16,7 @@
 
 import Foundation
 import Combine
+import Network
 
 /// Describes the current effective traffic routing path.
 /// Used for the Network Settings "Connection Route" indicator.
@@ -267,7 +268,7 @@ final class IceProxyManager: ObservableObject {
         }
         KeychainManager.shared.saveIceBridgeCert(freshCert)
         if isEnabled {
-            return startWithRelayFallback(cert: freshCert)
+            return await startWithRelayFallback(cert: freshCert)
         }
         return false
     }
@@ -335,117 +336,105 @@ final class IceProxyManager: ObservableObject {
         let server   = UserDefaults.standard.stringArray(forKey: ICEConfig.cachedRelayListKey) ?? []
         let fallback = ICEConfig.hardcodedRelayAddresses
         var seen = Set<String>()
-        let deduped = (server + fallback).filter { seen.insert($0).inserted }
-        return Self.sortRelaysByTimezonePreference(deduped)
+        return (server + fallback).filter { seen.insert($0).inserted }
     }
 
-    /// Reorders relay addresses so that geographically closer relays are tried first.
-    /// Uses the device timezone offset as a privacy-preserving location signal —
-    /// no GPS, no IP lookup, no server call required.
-    ///
-    /// Rule priority:
-    ///   1. Server-pushed config (`ICEConfig.cachedRelayRegionsKey` in UserDefaults)
-    ///   2. Hardcoded fallback (`ICEConfig.hardcodedRelayRegions`)
-    ///   3. No match → return relays unchanged
-    ///
-    /// The first matching rule (tzOffsetMin ≤ currentOffset ≤ tzOffsetMax) wins.
-    private static func sortRelaysByTimezonePreference(_ relays: [String]) -> [String] {
-        let offsetHours = TimeZone.current.secondsFromGMT() / 3600
+    // MARK: - Latency probing
 
-        // Load server-pushed regions (if available), fall back to hardcoded rules.
-        let regions: [ICERelayRegion]
-        if let data = UserDefaults.standard.data(forKey: ICEConfig.cachedRelayRegionsKey),
-           let decoded = try? JSONDecoder().decode([ICERelayRegion].self, from: data) {
-            regions = decoded
-        } else {
-            regions = ICEConfig.hardcodedRelayRegions
-        }
+    /// Opens a TCP connection to `host:port` and returns the time-to-ready, or nil if unreachable
+    /// within `timeout` seconds. Used to order relay candidates before starting the proxy.
+    private static func probeLatency(address: String, timeout: TimeInterval = 2.0) async -> TimeInterval? {
+        let parts = address.split(separator: ":")
+        guard parts.count >= 2, let port = NWEndpoint.Port(String(parts.last!)) else { return nil }
+        let hostname = String(parts.dropLast().joined(separator: ":"))
 
-        guard let match = regions.first(where: { offsetHours >= $0.tzOffsetMin && offsetHours <= $0.tzOffsetMax }) else {
-            return relays
-        }
+        return await withCheckedContinuation { continuation in
+            let conn = NWConnection(host: .init(hostname), port: port, using: .tcp)
+            var resumed = false
+            let start = CFAbsoluteTimeGetCurrent()
 
-        // Bubble the rule's preferred relays to the front, preserve relative order of the rest.
-        let preferred = relays.filter { match.preferredRelays.contains($0) }
-        let rest      = relays.filter { !match.preferredRelays.contains($0) }
-        if !preferred.isEmpty {
-            Log.debug("🧊 Timezone UTC+\(offsetHours): preferring relay(s) first: \(preferred)", category: "ICE")
+            conn.stateUpdateHandler = { state in
+                switch state {
+                case .ready:
+                    guard !resumed else { return }
+                    resumed = true
+                    conn.cancel()
+                    continuation.resume(returning: CFAbsoluteTimeGetCurrent() - start)
+                case .failed, .cancelled:
+                    guard !resumed else { return }
+                    resumed = true
+                    continuation.resume(returning: nil)
+                default: break
+                }
+            }
+            conn.start(queue: .global(qos: .utility))
+
+            DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + timeout) {
+                guard !resumed else { return }
+                resumed = true
+                conn.cancel()
+                continuation.resume(returning: nil)
+            }
         }
-        return preferred + rest
+    }
+
+    /// Probes all `addresses` concurrently and returns them sorted by TCP latency (fastest first).
+    /// Unreachable endpoints (probe timed out) are placed at the end so they are still tried.
+    private static func sortByLatency(_ addresses: [String], timeout: TimeInterval = 2.0) async -> [String] {
+        await withTaskGroup(of: (String, TimeInterval?).self) { group in
+            for address in addresses {
+                group.addTask { (address, await probeLatency(address: address, timeout: timeout)) }
+            }
+            var reachable: [(String, TimeInterval)] = []
+            var unreachable: [String] = []
+            for await (addr, lat) in group {
+                if let lat { reachable.append((addr, lat)) } else { unreachable.append(addr) }
+            }
+            return reachable.sorted { $0.1 < $1.1 }.map(\.0) + unreachable
+        }
     }
 
     // MARK: - Multi-endpoint startup
 
-    /// Start the ICE proxy trying the primary TLS endpoint first, then each relay (plain obfs4).
+    /// Starts the ICE proxy on the best available endpoint.
     ///
-    /// Connection order (timezone-aware):
-    ///   UTC+3 (Russia/Moscow):
-    ///     1. MSK relay (plain obfs4) — closest, lowest latency for RU users
-    ///     2. Primary: ice.<host>:443 (TLS+obfs4) — if MSK fails
-    ///     3. Remaining relays
-    ///   Other timezones:
-    ///     1. Primary: ice.<host>:443 (TLS+obfs4) — tried twice
-    ///     2. Relay 1…N from cachedRelayAddresses()
+    /// All candidates (primary AMS + all known relays) are probed concurrently via TCP connect.
+    /// The fastest-responding endpoint is tried first — no hardcoded geographic heuristics.
+    /// Unreachable endpoints (probe timed out) are still attempted at the end as a last resort.
     ///
     /// Returns `true` if any endpoint started successfully.
     @discardableResult
-    private func startWithRelayFallback(cert: String) -> Bool {
-        let host = GRPCChannelManager.shared.currentHost
+    private func startWithRelayFallback(cert: String) async -> Bool {
+        let host    = GRPCChannelManager.shared.currentHost
         let iceHost = "ice.\(host)"
-        let primary = IceRelay(address: "\(iceHost):443", bridgeCert: cert, iatMode: .none, tlsServerName: iceHost)
 
-        // Build the ordered candidate list.
-        // cachedRelayAddresses() already applies timezone-based sorting using server-pushed
-        // or hardcoded ICERelayRegion rules. If the first relay in the sorted list is
-        // different from the default ordering it means a region rule matched — try relay first.
-        let relayAddresses = cachedRelayAddresses()   // timezone-sorted by region rules
-        let defaultRelayAddresses = ICEConfig.hardcodedRelayAddresses + (UserDefaults.standard.stringArray(forKey: ICEConfig.cachedRelayListKey) ?? [])
-        let preferRelayFirst = !relayAddresses.isEmpty && relayAddresses.first != defaultRelayAddresses.first
+        // Deduplicated candidate list: primary (AMS) + hardcoded + server-fetched relays.
+        var seen = Set<String>()
+        var candidates: [String] = []
+        let allAddresses = ["\(iceHost):443"] + ICEConfig.hardcodedRelayAddresses
+            + (UserDefaults.standard.stringArray(forKey: ICEConfig.cachedRelayListKey) ?? [])
+        for addr in allAddresses where seen.insert(addr).inserted { candidates.append(addr) }
 
-        if preferRelayFirst {
-            Log.info("🧊 UTC+\(TimeZone.current.secondsFromGMT() / 3600): trying regional relay(s) before Amsterdam primary", category: "ICE")
+        // Probe all endpoints concurrently and sort by TCP latency (fastest first).
+        let ordered = await Self.sortByLatency(candidates)
+        Log.info("🧊 Relay probe order: \(ordered.joined(separator: " → "))", category: "ICE")
 
-            // Try the timezone-preferred relay(s) first (normally just MSK).
-            for relayAddress in relayAddresses {
-                let relayConfig = makeRelay(address: relayAddress, bridgeCert: cert)
-                if start(relay: relayConfig) != nil {
-                    saveRelay(relayConfig)
-                    Log.info("🧊 ICE started via regional relay: \(relayAddress)", category: "ICE")
-                    return true
-                }
-                Log.info("🧊 ICE regional relay \(relayAddress) failed — trying primary", category: "ICE")
+        for address in ordered {
+            let relay: IceRelay
+            if address == "\(iceHost):443" {
+                relay = IceRelay(address: address, bridgeCert: cert, iatMode: .none, tlsServerName: iceHost)
+            } else {
+                relay = makeRelay(address: address, bridgeCert: cert)
             }
-        }
-
-        // Primary: TLS-wrapped obfs4 (Amsterdam).  Two attempts — network may be settling.
-        if start(relay: primary) != nil {
-            saveRelay(primary)
-            Log.info("🧊 ICE started via primary: \(iceHost):443", category: "ICE")
-            return true
-        }
-        Log.debug("🧊 ICE primary attempt 1 failed — retrying in 600 ms", category: "ICE")
-        Thread.sleep(forTimeInterval: 0.6)
-        if start(relay: primary) != nil {
-            saveRelay(primary)
-            Log.info("🧊 ICE started via primary (retry): \(iceHost):443", category: "ICE")
-            return true
-        }
-
-        if !preferRelayFirst {
-            // Non-CIS path: primary failed, fall through to relay list.
-            Log.info("🧊 ICE primary failed — trying relay endpoints", category: "ICE")
-            for relayAddress in relayAddresses {
-                let relayConfig = makeRelay(address: relayAddress, bridgeCert: cert)
-                if start(relay: relayConfig) != nil {
-                    saveRelay(relayConfig)
-                    Log.info("🧊 ICE started via relay: \(relayAddress)", category: "ICE")
-                    return true
-                }
-                Log.info("🧊 ICE relay \(relayAddress) failed", category: "ICE")
+            if start(relay: relay) != nil {
+                saveRelay(relay)
+                Log.info("🧊 ICE started via \(address)", category: "ICE")
+                return true
             }
+            Log.info("🧊 ICE \(address) failed — trying next", category: "ICE")
         }
 
-        Log.error("🧊 ICE start failed on all endpoints (1 primary + \(relayAddresses.count) relay(s))", category: "ICE")
+        Log.error("🧊 ICE start failed on all \(ordered.count) endpoint(s)", category: "ICE")
         return false
     }
 
@@ -466,7 +455,7 @@ final class IceProxyManager: ObservableObject {
         }
 
         let cert = await getIceBridgeCert()
-        if startWithRelayFallback(cert: cert) {
+        if await startWithRelayFallback(cert: cert) {
             // Background: refresh relay list so it's up-to-date for next time.
             Task { await IceCertFetcher.shared.fetchAndCacheRelayList() }
             return
@@ -479,7 +468,7 @@ final class IceProxyManager: ObservableObject {
             return
         }
         KeychainManager.shared.saveIceBridgeCert(freshCert)
-        startWithRelayFallback(cert: freshCert)
+        await startWithRelayFallback(cert: freshCert)
     }
 
     /// Auto-start ICE when DPI blocking is detected on a direct connection.
@@ -515,7 +504,7 @@ final class IceProxyManager: ObservableObject {
         defer { isStartingOnDemand = false }
         Log.info("🧊 Auto-starting ICE proxy (DPI auto-detection)", category: "ICE")
         let cert = await getIceBridgeCert()
-        if startWithRelayFallback(cert: cert) {
+        if await startWithRelayFallback(cert: cert) {
             // Persist the enabled state so the UI toggle and traffic-path indicator
             // reflect reality — the user implicitly wants ICE if DPI is active.
             isEnabled = true
@@ -540,7 +529,7 @@ final class IceProxyManager: ObservableObject {
         clearCooldown()
         isStartingOnDemand = false
         let cert = await getIceBridgeCert()
-        if startWithRelayFallback(cert: cert) {
+        if await startWithRelayFallback(cert: cert) {
             Task { await IceCertFetcher.shared.fetchAndCacheRelayList() }
             Log.info("🧊 ICE proxy restarted after crash", category: "ICE")
         } else {
@@ -564,7 +553,7 @@ final class IceProxyManager: ObservableObject {
         defer { isStartingOnDemand = false }
         Log.info("🧊 Force-starting ICE proxy (VPN DNS failure)", category: "ICE")
         let cert = await getIceBridgeCert()
-        if startWithRelayFallback(cert: cert) {
+        if await startWithRelayFallback(cert: cert) {
             Task { await IceCertFetcher.shared.fetchAndCacheRelayList() }
         } else {
             Log.error("🧊 ICE force-start failed (VPN DNS failure)", category: "ICE")
@@ -587,7 +576,7 @@ final class IceProxyManager: ObservableObject {
             // Brief pause to let the OS release the socket before we re-bind.
             try? await Task.sleep(nanoseconds: 200_000_000) // 200 ms
             let cert = await getIceBridgeCert()
-            startWithRelayFallback(cert: cert)
+            await startWithRelayFallback(cert: cert)
         }
     }
 
@@ -607,7 +596,7 @@ final class IceProxyManager: ObservableObject {
             tlsServerName: iceHost
         )
         saveRelay(relay)
-        if isEnabled { startWithRelayFallback(cert: cert) }
+        if isEnabled { Task { await self.startWithRelayFallback(cert: cert) } }
 
         // Background: refresh relay list now that we're authenticated and can reach AMS.
         Task { await IceCertFetcher.shared.fetchAndCacheRelayList() }
