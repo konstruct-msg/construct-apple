@@ -20,15 +20,20 @@ struct ContentView: View {
     var body: some View {
         Group {
             if authViewModel.hasRegisteredDeviceKeys == nil {
-                // Loading screen while checking Keychain
-                ProgressView("Loading...")
-            } else if authViewModel.hasRegisteredDeviceKeys == true {
-                // Device is registered - show main app
+                // Auth state not yet resolved — show splash while Keychain is read.
+                // This happens on cold launch AND when coming to foreground with a locked
+                // device (SecurityGateView sits in ZStack so onAppear fires immediately).
+                SplashView()
+            } else if authViewModel.isAuthenticated || authViewModel.hasRegisteredDeviceKeys == true {
+                // Authenticated OR definitively registered — show main app.
+                // Checking isAuthenticated here prevents a flash to OnboardingView when
+                // Keychain is temporarily unavailable (WhenUnlockedThisDeviceOnly) but
+                // the user's session is still valid in memory.
                 MainTabView()
                     .environment(authViewModel)
                     .environment(chatsViewModel)
             } else {
-                // No device keys = new user -> show onboarding
+                // No device keys and not authenticated → new user or wiped account.
                 OnboardingView()
                     .onDisappear {
                         authViewModel.refreshDeviceKeyState()

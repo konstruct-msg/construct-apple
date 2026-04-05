@@ -19,6 +19,14 @@ class AuthViewModel {
     var hasRegisteredDeviceKeys: Bool? = nil
 
     func refreshDeviceKeyState() {
+        // If already authenticated, don't re-read Keychain — it may be temporarily
+        // inaccessible (WhenUnlockedThisDeviceOnly items while device is locked via
+        // SecurityGateView / biometrics). Returning false here would incorrectly
+        // show OnboardingView for an authenticated user.
+        if isAuthenticated {
+            hasRegisteredDeviceKeys = true
+            return
+        }
         hasRegisteredDeviceKeys = KeychainManager.shared.isDeviceRegistered()
     }
     
@@ -239,13 +247,27 @@ class AuthViewModel {
             
         } catch {
             print("❌ Device authentication failed: \(error)")
-            
-            // ✅ If device auth fails (401 = device not registered on server)
-            // Clear device keys so user sees OnboardingView
-            await MainActor.run {
-                Log.error("🗑️ Device auth failed - clearing device keys to show onboarding", category: "Auth")
-                KeychainManager.shared.deleteDeviceKeys()
-                hasRegisteredDeviceKeys = false
+
+            // Only wipe device keys when the server explicitly rejects this device
+            // (unauthenticated / permission-denied gRPC codes = device not registered).
+            // Transient network errors, timeouts, or server outages must NOT delete keys —
+            // that would permanently log out the user on a bad Wi-Fi reconnect.
+            let description = "\(error)"
+            let isDeviceRejected = description.contains("unauthenticated")
+                || description.contains("permission_denied")
+                || description.contains("UNAUTHENTICATED")
+                || description.contains("PERMISSION_DENIED")
+                || description.contains("error 16")   // gRPC UNAUTHENTICATED
+                || description.contains("error 7")    // gRPC PERMISSION_DENIED
+
+            if isDeviceRejected {
+                await MainActor.run {
+                    Log.error("🗑️ Server rejected device (401/403) — clearing keys to show onboarding", category: "Auth")
+                    KeychainManager.shared.deleteDeviceKeys()
+                    hasRegisteredDeviceKeys = false
+                }
+            } else {
+                Log.error("⚠️ Device auth failed (transient error) — keeping keys: \(error)", category: "Auth")
             }
         }
     }
