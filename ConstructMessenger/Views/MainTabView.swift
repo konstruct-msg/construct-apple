@@ -8,6 +8,31 @@
 import SwiftUI
 import CoreData
 
+/// iOS 26 fix: wraps a tab's content so its body (and any @FetchRequest inside)
+/// is only constructed after the tab appears for the first time.
+/// Without this, iOS 26 TabView eagerly calls each child's body during layout,
+/// triggering @FetchRequest before managedObjectContext is in the environment.
+private struct LazyTabContent<Content: View>: View {
+    @State private var hasAppeared = false
+    private let content: () -> Content
+
+    init(@ViewBuilder content: @escaping () -> Content) {
+        self.content = content
+    }
+
+    var body: some View {
+        Group {
+            if hasAppeared {
+                content()
+            } else {
+                Color.clear
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .onAppear { hasAppeared = true }
+            }
+        }
+    }
+}
+
 struct MainTabView: View {
     @Environment(AuthViewModel.self) private var authViewModel
     @Environment(ChatsViewModel.self) private var chatsViewModel
@@ -55,8 +80,10 @@ struct MainTabView: View {
                     }
                     .tag(0)
 
-                SynapsView()
-                    .environment(chatsViewModel)
+                // iOS 26: TabView eagerly initialises @FetchRequest for ALL tabs during
+                // layout, even unvisited ones. LazyTabContent defers mounting until
+                // the tab's onAppear fires (i.e. first visit), keeping CoreData safe.
+                LazyTabContent { SynapsView().environment(chatsViewModel) }
                     .tabItem {
                         Label("synaps", systemImage: "point.3.filled.connected.trianglepath.dotted")
                     }
@@ -64,14 +91,14 @@ struct MainTabView: View {
 
                 #if os(iOS)
                 if CallsFeature.isEnabled {
-                    CallHistoryView()
+                    LazyTabContent { CallHistoryView() }
                         .tabItem {
                             Label(NSLocalizedString("calls_tab", comment: ""), systemImage: "phone")
                         }
                         .tag(2)
                 }
 
-                SettingsView()
+                LazyTabContent { SettingsView().environment(chatsViewModel) }
                     .tabItem {
                         Label("settings", systemImage: "gear")
                     }

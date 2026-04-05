@@ -19,6 +19,11 @@ struct Construct_MessengerApp: App {
     @State private var recoveryViewModel = AccountRecoveryViewModel()
 
     init() {
+        // Eagerly load the CoreData stack so NSManagedObjectModel is registered
+        // before any view body runs. On iOS 26 TabView initialises @FetchRequest
+        // for all tabs during the first layout pass; without this the entity
+        // registry is empty and the app crashes with "A fetch request must have an entity."
+        _ = PersistenceController.shared
         applyGlobalAppearance()
     }
 
