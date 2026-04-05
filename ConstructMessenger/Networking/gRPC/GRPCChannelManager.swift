@@ -58,12 +58,21 @@ final class GRPCChannelManager: Sendable {
         UserDefaults.standard.set(Date().timeIntervalSinceReferenceDate, forKey: Self.iceFailedAtKey)
         invalidatePersistentClient()  // routing will change (ICE → direct)
         Log.info("⚠️ ICE relay failure recorded — bypassing ICE for \(Int(Self.iceCooldown))s", category: "gRPC")
-        Task { @MainActor in
-            // Notify IceProxyManager so the UI reflects cooldown state immediately
-            // and auto-clears after the cooldown period (drives NetworkSettingsView re-render).
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            // Notify IceProxyManager so the UI reflects cooldown state immediately.
             IceProxyManager.shared.enterCooldown(duration: Self.iceCooldown)
             // Try to recover by switching endpoints (cert refresh + relay fallback).
-            await IceProxyManager.shared.refreshCertAndRestart()
+            let recovered = await IceProxyManager.shared.refreshCertAndRestart()
+            if recovered {
+                // Successfully switched to a different relay (e.g. MSK after AMS failure).
+                // Clear the cooldown immediately so gRPC routes through the new relay —
+                // without this, iceProxyPort() keeps returning nil for the full 60s cooldown
+                // even though a working relay is now running.
+                IceProxyManager.shared.clearCooldown()
+                self.invalidatePersistentClient()
+                Log.info("🧊 ICE recovered via relay failover — cooldown cleared, routing via new relay", category: "gRPC")
+            }
         }
     }
 
