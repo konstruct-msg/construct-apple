@@ -24,25 +24,61 @@ import SwiftUI
 
 extension Color {
     /// Terminal design palette. All new CT* views use these exclusively.
+    /// Colors are dynamic: dark variant is the classic terminal aesthetic,
+    /// light variant uses a very light gray base with dark ink.
     struct CT {
-        /// Near-black main background: #090909
-        static let bg         = Color(hex: 0x090909)
-        /// Incoming message block background: #111111
-        static let bgMsg      = Color(hex: 0x333333)
-        /// Outgoing message block: #4415FFA
-        static let outMsgBg   = Color(hex: 0x111111)
+        // MARK: Backgrounds
+        /// Main background. Dark: #090909 / Light: #F2F2F2
+        static let bg         = Color(dark: 0x090909, light: 0xF2F2F2)
+        /// Message bubble background (incoming). Dark: #333333 / Light: #E2E2E2
+        static let bgMsg      = Color(dark: 0x333333, light: 0xE2E2E2)
+        /// Outgoing message background. Dark: #111111 / Light: #CECECE
+        static let outMsgBg   = Color(dark: 0x111111, light: 0xCECECE)
+
+        // MARK: Accent (brand blue — unchanged across themes)
         /// Primary accent: #1A3FFF
         static let accent     = Color(hex: 0x1A3FFF)
-        /// System messages, section headers, secondary accent: #4A6AFF
+        /// Secondary accent: #4A6AFF
         static let accentDim  = Color(hex: 0x4A6AFF)
-        /// Primary text: #E8E8E8
-        static let text       = Color(hex: 0xE8E8E8)
-        /// Timestamps, metadata, inactive: #555555
-        static let textDim    = Color(hex: 0x555555)
-        /// ASCII noise characters, thin dividers: #1E1E1E
-        static let noise      = Color(hex: 0x1E1E1E)
-        /// Destructive actions: #DC3C3C
+
+        // MARK: Text
+        /// Primary text. Dark: #E8E8E8 / Light: #111111
+        static let text       = Color(dark: 0xE8E8E8, light: 0x111111)
+        /// Timestamps, metadata, inactive. Dark: #555555 / Light: #777777
+        static let textDim    = Color(dark: 0x555555, light: 0x777777)
+
+        // MARK: Structure
+        /// ASCII noise chars, dividers. Dark: #1E1E1E / Light: #C8C8C8
+        static let noise      = Color(dark: 0x1E1E1E, light: 0xC8C8C8)
+        /// Destructive actions: #DC3C3C (unchanged)
         static let danger     = Color(hex: 0xDC3C3C)
+    }
+}
+
+// MARK: - Dynamic color helper (dark/light)
+
+private extension Color {
+    /// Creates a `Color` that adapts to the system's user interface style.
+    /// - Parameters:
+    ///   - dark:  24-bit RGB hex used in dark mode (e.g. `0x090909`)
+    ///   - light: 24-bit RGB hex used in light mode (e.g. `0xF2F2F2`)
+    init(dark: UInt32, light: UInt32) {
+        self.init(uiColor: UIColor(dynamicProvider: { traits in
+            traits.userInterfaceStyle == .dark
+                ? UIColor(rgb: dark)
+                : UIColor(rgb: light)
+        }))
+    }
+}
+
+private extension UIColor {
+    convenience init(rgb hex: UInt32) {
+        self.init(
+            red:   CGFloat((hex >> 16) & 0xff) / 255,
+            green: CGFloat((hex >>  8) & 0xff) / 255,
+            blue:  CGFloat( hex        & 0xff) / 255,
+            alpha: 1
+        )
     }
 }
 
@@ -429,7 +465,7 @@ struct CTButton: View {
     }
 
     var bgColor: Color {
-        guard isEnabled else { return Color(hex: 0x1C1C1C) }
+        guard isEnabled else { return Color(dark: 0x1C1C1C, light: 0xD8D8D8) }
         return isDestructive ? Color.CT.danger : Color.CT.accent
     }
 
@@ -451,17 +487,27 @@ struct CTButton: View {
     }
 }
 
+// MARK: - CT Background View (adapts noise opacity to theme)
+
+private struct _CTBackground: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        ZStack {
+            Color.CT.bg.ignoresSafeArea()
+            // Lower noise opacity in light mode so characters remain barely visible.
+            CTNoise(opacity: colorScheme == .dark ? 0.10 : 0.06).ignoresSafeArea()
+        }
+    }
+}
+
 // MARK: - View Extensions
 
 extension View {
 
-    /// Wraps view in terminal background: dark fill + ASCII noise.
+    /// Wraps view in terminal background: theme-appropriate fill + ASCII noise.
     func ctBackground() -> some View {
-        ZStack {
-            Color.CT.bg.ignoresSafeArea()
-            CTNoise().ignoresSafeArea()
-            self
-        }
+        self.background(_CTBackground())
     }
 
     /// 0.5pt separator line on the bottom edge of the view's background.

@@ -92,7 +92,7 @@ enum AppTheme: String, CaseIterable {
     case dark = "dark"
 
     /// Only dark theme is currently implemented.
-    var isAvailable: Bool { self == .dark }
+    var isAvailable: Bool { true }
 
     var displayName: LocalizedStringKey {
         switch self {
