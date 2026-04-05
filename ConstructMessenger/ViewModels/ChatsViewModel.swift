@@ -213,7 +213,7 @@ class ChatsViewModel {
                 self.backgroundDisconnectTask = Task { [weak self] in
                     #if canImport(UIKit)
                     // Acquire a background task so iOS keeps us alive during the grace window.
-                    let bgTaskId = await UIApplication.shared.beginBackgroundTask(withName: "stream-grace") {
+                    let bgTaskId = UIApplication.shared.beginBackgroundTask(withName: "stream-grace") {
                         // Expiry handler: iOS is about to suspend — disconnect immediately.
                         self?.streamManager.pause()
                         GRPCChannelManager.shared.invalidatePersistentClient()
