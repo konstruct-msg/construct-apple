@@ -200,7 +200,7 @@ struct SettingsView: View {
                 Button {
                     showingRecoverySetup = true
                 } label: {
-                    Text("[setup →]")
+                    Text(CTSymbol.setup)
                         .font(CTFont.bold(11))
                         .foregroundColor(Color.CT.accent)
                 }

@@ -139,7 +139,7 @@ private struct SingleMediaCell: View {
                     Text(LocalizedStringKey("failed_to_load")).font(CTFont.regular(11)).foregroundColor(Color.CT.textDim)
                     Button { loadThumbnail() } label: {
                         HStack(spacing: 4) {
-                            Text("[↺]").lineLimit(1).fixedSize()
+                            Text(CTSymbol.refresh)
                             Text(LocalizedStringKey("retry"))
                         }
                         .font(CTFont.regular(11)).foregroundColor(Color.CT.accent)
@@ -156,7 +156,7 @@ private struct SingleMediaCell: View {
         Rectangle()
             .fill(Color.CT.bgMsg).frame(width: 200, height: 200)
             .overlay {
-                Text("[img]")
+                Text(CTSymbol.image)
                     .font(CTFont.regular(20)).foregroundColor(Color.CT.textDim)
                     .lineLimit(1).fixedSize()
             }
@@ -279,7 +279,7 @@ private struct GridCell: View {
                 Image(platformImage: img).resizable().scaledToFill()
             } else {
                 Color.CT.bgMsg
-                Text("[img]")
+                Text(CTSymbol.image)
                     .font(CTFont.regular(16)).foregroundColor(Color.CT.textDim)
                     .lineLimit(1).fixedSize()
             }

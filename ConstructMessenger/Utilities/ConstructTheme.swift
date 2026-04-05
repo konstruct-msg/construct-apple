@@ -95,9 +95,9 @@ enum CTFont {
 
 /// All UI symbols as named constants. Never hardcode "[←]" inline.
 enum CTSymbol {
-    
+
     static let star8 = "✷"
-    
+
     // Navigation
     static let back     = "[←]"
     static let forward  = "[→]"
@@ -109,6 +109,10 @@ enum CTSymbol {
     static let media    = "[◎]"
     static let menu     = "[***]"
     static let edit     = "[edit]"
+    static let refresh  = "[↺]"
+    static let retry    = "[↺]"
+    static let upload   = "[↑]"
+    static let callOut  = "[↗]"
 
     // Status
     static let ok          = "[✓]"
@@ -117,12 +121,34 @@ enum CTSymbol {
     static let error       = "[!]"
     static let online      = "[[ONLINE]]"
     static let cursor      = "_"
+    static let loading     = "[···]"
+    static let empty       = "[ — ]"
 
     // State
     static let pin         = "[pin]"
     static let scan        = "[scan]"
     static let search      = "[srch]"
     static let drafts      = "[dft]"
+    static let ttl         = "[ttl]"
+    static let setup       = "[setup →]"
+
+    // Security / Settings row icons
+    static let biometric   = "[bio]"
+    static let key         = "[key]"
+    static let lock        = "[lock]"
+    static let log         = "[log]"
+    static let disk        = "[disk]"
+    static let image       = "[img]"
+
+    // Calls
+    static let callEnd     = "[end]"
+    static let callAnswer  = "[ans]"
+
+    // Devices / Platform
+    static let deviceGeneric  = "[dev]"
+    static let deviceIOS      = "[iOS]"
+    static let deviceMac      = "[mac]"
+    static let deviceAndroid  = "[drd]"
 
     // Tab bar
     static let tabChats    = "[msg]"
@@ -138,6 +164,36 @@ enum CTSymbol {
     // Separators — call as functions for custom length
     static func thin(_ count: Int = 25)  -> String { String(repeating: "- ", count: count) }
     static func thick(_ count: Int = 25) -> String { String(repeating: "= ", count: count) }
+}
+
+// MARK: - CTRowIcon
+
+/// A fixed-width icon column for use in list rows (settings, devices, etc).
+/// Handles the lineLimit + fixedSize + frame pattern that prevents CT bracket
+/// symbols from wrapping across lines in narrow containers.
+///
+/// Usage:
+///   CTRowIcon(CTSymbol.biometric)
+///   CTRowIcon(CTSymbol.key, color: .CT.accent)
+struct CTRowIcon: View {
+    let symbol: String
+    var color: Color  = Color.CT.textDim
+    var size: CGFloat = 14
+
+    init(_ symbol: String, color: Color = Color.CT.textDim, size: CGFloat = 14) {
+        self.symbol = symbol
+        self.color  = color
+        self.size   = size
+    }
+
+    var body: some View {
+        Text(symbol)
+            .font(CTFont.bold(size))
+            .foregroundStyle(color)
+            .lineLimit(1)
+            .fixedSize()                     // measure natural width — never truncate
+            .frame(minWidth: 36, alignment: .leading)
+    }
 }
 
 // MARK: - Hexagonal Avatar Shape

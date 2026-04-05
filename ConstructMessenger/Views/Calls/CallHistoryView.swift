@@ -146,7 +146,7 @@ private struct CallHistoryRow: View {
                     }
                 }
 
-                Text("[↗]")
+                Text(CTSymbol.callOut)
                     .font(CTFont.regular(13))
                     .foregroundStyle(Color.CT.accent)
             }

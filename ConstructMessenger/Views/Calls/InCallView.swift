@@ -80,7 +80,7 @@ struct InCallView: View {
                         Button {
                             CallManager.shared.endCall()
                         } label: {
-                            Text("[end]")
+                            Text(CTSymbol.callEnd)
                                 .font(CTFont.bold(18))
                                 .foregroundStyle(.white)
                                 .frame(width: 68, height: 68)

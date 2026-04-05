@@ -134,7 +134,7 @@ struct ContactQRCodeView: View {
                 .frame(width: size, height: size)
                 .overlay(Rectangle().strokeBorder(Color.CT.noise, lineWidth: 1))
                 .overlay {
-                    Text("[···]")
+                    Text(CTSymbol.loading)
                         .font(CTFont.regular(16))
                         .foregroundStyle(Color.CT.textDim)
                 }
@@ -148,7 +148,7 @@ struct ContactQRCodeView: View {
         if timeRemaining > 0 {
             let isWarning = timeRemaining < InviteConfig.qrWarningThresholdSeconds
             HStack(spacing: 6) {
-                Text("[ttl]")
+                Text(CTSymbol.ttl)
                     .font(CTFont.regular(11))
                     .foregroundStyle(isWarning ? Color.CT.danger : Color.CT.textDim)
                 Text(String(format: NSLocalizedString("expires_in", comment: ""), formatTime(timeRemaining)))

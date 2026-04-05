@@ -90,7 +90,7 @@ struct MessageInputTextBar: View {
     private var sendButton: some View {
         if canSend {
             Button(action: onSend) {
-                Text("[↑]")
+                Text(CTSymbol.upload)
                     .font(CTFont.bold(15))
                     .foregroundColor(Color.CT.accent)
                     .padding(.horizontal, 10)

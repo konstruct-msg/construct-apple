@@ -41,11 +41,8 @@ struct SecurityView: View {
                         ConstructRowDivider(indent: 52)
 
                         HStack(spacing: 14) {
-                            Text("[bio]")
-                                .font(CTFont.bold(14))
-                                .foregroundStyle(securityViewModel.isBiometricEnabled ? Color.CT.accent : Color.CT.textDim)
-                                .lineLimit(1).fixedSize()
-                                .frame(width: 40, alignment: .leading)
+                            CTRowIcon(CTSymbol.biometric,
+                                      color: securityViewModel.isBiometricEnabled ? Color.CT.accent : Color.CT.textDim)
                             Text(String(format: NSLocalizedString("use_biometric", comment: ""), securityViewModel.biometricDisplayName))
                                 .font(CTFont.bold(16))
                                 .foregroundStyle(Color.CT.text)
@@ -75,11 +72,8 @@ struct SecurityView: View {
                     ConstructSection(header: NSLocalizedString("ACCOUNT_RECOVERY", comment: "")) {
                         Button { showingRecoverySetup = true } label: {
                             HStack(spacing: 14) {
-                                Text(recoveryVM.isSetup ? "[✓]" : "[key]")
-                                    .font(CTFont.bold(14))
-                                    .foregroundStyle(recoveryVM.isSetup ? Color.CT.accent : Color.CT.textDim)
-                                    .lineLimit(1).fixedSize()
-                                    .frame(width: 40, alignment: .leading)
+                                CTRowIcon(recoveryVM.isSetup ? CTSymbol.ok : CTSymbol.key,
+                                          color: recoveryVM.isSetup ? Color.CT.accent : Color.CT.textDim)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(LocalizedStringKey("account_recovery_seed"))
                                         .font(CTFont.bold(16))
@@ -154,11 +148,8 @@ struct SecurityView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     ConstructSection(header: NSLocalizedString("LOCKDOWN", comment: "")) {
                         HStack(spacing: 14) {
-                            Text(lockdown.isActive ? "[🔒]" : "[lock]")
-                                .font(CTFont.bold(14))
-                                .foregroundStyle(lockdown.isActive ? .orange : Color.CT.textDim)
-                                .lineLimit(1).fixedSize()
-                                .frame(width: 40, alignment: .leading)
+                            CTRowIcon(lockdown.isActive ? "[🔒]" : CTSymbol.lock,
+                                      color: lockdown.isActive ? .orange : Color.CT.textDim)
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(LocalizedStringKey("lockdown_mode"))
                                     .font(CTFont.bold(16))

@@ -186,7 +186,7 @@ struct MediaGalleryViewer: View {
     private var saveStatusAscii: String {
         switch saveStatus {
         case .idle:    return "[↓]"
-        case .saving:  return "[···]"
+        case .saving:  return CTSymbol.loading
         case .saved:   return "[✓]"
         case .failed:  return "[!]"
         }

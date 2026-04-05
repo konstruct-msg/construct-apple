@@ -173,3 +173,10 @@ xcodebuild test -scheme ConstructMessenger \
 Key test files:
 - `ConstructMessengerTests/` — unit tests
 - `CryptoWireIntegrationTests.swift` — E2EE crypto integration tests
+
+---
+
+## Documentation
+
+All project documetation here: `~/Documents/Konstruct`
+Rules how to write documentation in this file: `~/Documents/Konstruct/README.md`

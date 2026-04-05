@@ -110,7 +110,7 @@ struct NetworkSettingsView: View {
                                 .font(CTFont.regular(13))
                                 .foregroundColor(Color.CT.textDim)
                             Spacer()
-                            Text("[↺]")
+                            Text(CTSymbol.refresh)
                                 .font(CTFont.regular(13))
                                 .foregroundColor(Color.CT.textDim)
                         }

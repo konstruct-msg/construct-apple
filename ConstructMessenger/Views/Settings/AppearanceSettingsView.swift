@@ -22,11 +22,8 @@ struct AppearanceSettingsView: View {
                                 appTheme = theme
                             } label: {
                                 HStack(spacing: 14) {
-                                    Text(theme.asciiIcon)
-                                        .font(CTFont.bold(14))
-                                        .foregroundStyle(theme.isAvailable ? theme.color : Color.CT.textDim)
-                                        .lineLimit(1).fixedSize()
-                                        .frame(width: 36, alignment: .leading)
+                                    CTRowIcon(theme.asciiIcon,
+                                              color: theme.isAvailable ? theme.color : Color.CT.textDim)
                                     Text(theme.displayName)
                                         .font(CTFont.bold(16))
                                         .foregroundStyle(theme.isAvailable ? Color.CT.text : Color.CT.textDim)

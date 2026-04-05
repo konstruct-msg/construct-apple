@@ -245,12 +245,8 @@ private struct DeviceRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Text(asciiPlatformIcon)
-                .font(CTFont.bold(14))
-                .foregroundStyle(isCurrent ? Color.CT.accent : Color.CT.textDim)
-                .lineLimit(1)
-                .fixedSize()
-                .frame(width: 44, alignment: .leading)
+            CTRowIcon(asciiPlatformIcon,
+                      color: isCurrent ? Color.CT.accent : Color.CT.textDim)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(device.name)
@@ -287,10 +283,10 @@ private struct DeviceRow: View {
 
     private var asciiPlatformIcon: String {
         switch device.platform {
-        case .ios:     return "[iOS]"
-        case .desktop: return "[mac]"
-        case .android: return "[drd]"
-        default:       return "[dev]"
+        case .ios:     return CTSymbol.deviceIOS
+        case .desktop: return CTSymbol.deviceMac
+        case .android: return CTSymbol.deviceAndroid
+        default:       return CTSymbol.deviceGeneric
         }
     }
 

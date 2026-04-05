@@ -52,7 +52,7 @@ struct DiagnosticsView: View {
                 // MARK: - Status
                 ConstructSection {
                     HStack(spacing: 14) {
-                        Text("[log]")
+                        Text(CTSymbol.log)
                             .font(CTFont.bold(14))
                             .foregroundStyle(LogCollector.shared.isEnabled ? Color.CT.accent : Color.CT.textDim)
                             .lineLimit(1)
@@ -72,7 +72,7 @@ struct DiagnosticsView: View {
                     if !logSize.isEmpty {
                         ConstructRowDivider(indent: 52)
                         HStack(spacing: 14) {
-                            Text("[disk]")
+                            Text(CTSymbol.disk)
                                 .font(CTFont.bold(14))
                                 .foregroundStyle(Color.CT.textDim)
                                 .lineLimit(1)

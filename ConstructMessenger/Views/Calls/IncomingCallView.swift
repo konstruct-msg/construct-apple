@@ -43,7 +43,7 @@ struct IncomingCallView: View {
                         Button {
                             CallManager.shared.declineIncomingCall()
                         } label: {
-                            Text("[end]")
+                            Text(CTSymbol.callEnd)
                                 .font(CTFont.bold(18))
                                 .foregroundStyle(.white)
                                 .frame(width: 64, height: 64)
@@ -61,7 +61,7 @@ struct IncomingCallView: View {
                         Button {
                             CallManager.shared.answerIncomingCall()
                         } label: {
-                            Text("[ans]")
+                            Text(CTSymbol.callAnswer)
                                 .font(CTFont.bold(18))
                                 .foregroundStyle(.white)
                                 .frame(width: 64, height: 64)
