@@ -118,6 +118,33 @@ We have our own terminology. Use it consistently in UI, code, and comments.
 receive → decrypt → heal → END_SESSION → stream → Kyber OTPK.
 All session operations are `@MainActor`. `usersInitializingSession: Set<String>` prevents parallel inits.
 
+**INITIATOR vs RESPONDER paths** (critical — do not confuse):
+- **INITIATOR**: fetch recipient bundle → X3DH → `init_session(bundle)` → send msgNum=0
+- **RESPONDER**: receive msgNum=0 → fetch sender bundle → X3DH → `init_receiving_session(bundle, first_msg)` → decrypt
+
+**Tie-break** (both sides init simultaneously): higher deviceId wins as INITIATOR.
+WIN side: calls `initializeSessionProactively()` then `sendSessionPing()`.
+LOSE side: wipes own session, waits for INITIATOR's ping.
+
+**PQXDH** (post-quantum extension): Kyber-768 OTPK mixed into root key derivation.
+Deferred PQ contribution applies to RK1 (post-first-ratchet) on both sides.
+RESPONDER stores `pre_pq_root_key=RK1` before 2nd ratchet, re-derives sending chain after PQ.
+
+**Session healing** (broken session recovery without END_SESSION):
+Applicable only when `messageNumber == 0` (session init message decrypt fails).
+`SessionHealingService.shared` — max 3 attempts, 24h TTL per contact.
+On failure: falls through to END_SESSION → full re-init.
+`RustHealingQueue` tracks attempts in Rust (persisted across restarts).
+
+**Keychain accessibility of session keys:**
+- `deviceSigningKey` / `deviceIdentityKey`: `kSecAttrAccessibleWhenUnlockedThisDeviceOnly`
+- `deviceId`: `kSecAttrAccessibleAfterFirstUnlock`
+- Session JSON: `kSecAttrAccessibleWhenUnlockedThisDeviceOnly`
+- Auth token: `kSecAttrAccessibleAfterFirstUnlock`
+
+**Auth guard**: if `isAuthenticated == true` in memory, skip Keychain re-read.
+Device keys are only deleted on gRPC UNAUTHENTICATED (16) or PERMISSION_DENIED (7) — never on network errors.
+
 ### Tab bar visibility
 - `ChatsViewModel.isInChat: Bool` — set by `ChatsListView.onChange(of: navigationPath)`
 - `ChatsViewModel.isInSettings: Bool` — set by `SettingsView.onChange(of: navigationPath)`
@@ -125,8 +152,12 @@ All session operations are `@MainActor`. `usersInitializingSession: Set<String>`
 - `SettingsView` must receive `.environment(chatsViewModel)` from `MainTabView`
 
 ### Tab rendering
-All tab views coexist in a `ZStack` with `opacity(0/1)` + `allowsHitTesting`. This means:
-- `confirmationDialog` is blocked in this hierarchy — use `.alert` instead
+All tab views coexist in a `ZStack` with `opacity(0/1)` + `allowsHitTesting`.
+**iOS 26 fix**: tabs are gated by `@State private var visitedTabs: Set<Int>`.
+Tab content is only inserted into the ZStack after the first visit (`if visitedTabs.contains(n)`).
+This prevents iOS 26's `_ZStackLayout.sizeThatFits` from triggering `@FetchRequest.update()` on
+invisible tabs during layout. Tab 0 (ChatsListView) is always in the set at init.
+- `confirmationDialog` is blocked in ZStack hierarchy — use `.alert` instead
 - State is preserved across tab switches (intended)
 
 ### UniFFI bindings
@@ -178,5 +209,27 @@ Key test files:
 
 ## Documentation
 
-All project documetation here: `~/Documents/Konstruct`
-Rules how to write documentation in this file: `~/Documents/Konstruct/README.md`
+All project documentation: `~/Documents/Konstruct` (Obsidian vault)
+Rules for writing documentation: `~/Documents/Konstruct/README.md`
+
+### Key documents for new developers
+
+| Topic | File |
+|-------|------|
+| Cross-platform protocol spec | `04_Client_Applications/specs/construct-protocol-v2-spec.md` |
+| iOS client integration guide | `04_Client_Applications/CLIENT_SDK_SPEC.md` |
+| **Android onboarding** | `04_Client_Applications/android/ANDROID_ONBOARDING.md` |
+| Session flow (X3DH + DR) | `04_Client_Applications/session-flow.md` |
+| Session persistence | `04_Client_Applications/session-persistence.md` |
+| Account recovery (BIP39) | `04_Client_Applications/ACCOUNT_RECOVERY_CLIENT_SPEC.md` |
+| Calls / WebRTC signaling | `04_Client_Applications/specs/CALLS_CLIENT_SPEC.md` |
+| ICE relay fallback (RU) | `04_Client_Applications/specs/ICE_RELAY_FALLBACK_CLIENT_SPEC.md` |
+| Multi-device support | `04_Client_Applications/specs/MULTI_DEVICE_CLIENT_SPEC.md` |
+| FFI binary format (CFE) | `04_Client_Applications/construct-ffi-binary-format.md` |
+| Security architecture | `06_Security/` |
+
+### Documentation conventions
+- Session implementation notes go in `08_Testing_and_Process/SESSION_YYYY-MM-DD.md`
+- iOS bug fixes go in `04_Client_Applications/ios/fixes/`
+- New specs go in `04_Client_Applications/specs/`
+- All spec documents must have a **Version**, **Status**, and **Platform** header
