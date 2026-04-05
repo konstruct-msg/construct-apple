@@ -449,6 +449,8 @@ private struct ContactCircle: View {
     let screenSize:   CGSize
     var onTap: () -> Void
 
+    @State private var touchMoved = false
+
     // MARK: Size
     //
     // Frequency score drives rendered diameter in the range [0.55 … 0.75] × cellWidth.
@@ -460,26 +462,41 @@ private struct ContactCircle: View {
     }
 
     var body: some View {
-        Button(action: onTap) {
-            ZStack {
-                if let data = user.avatarData, let img = PlatformImage(data: data) {
-                    Image(platformImage: img)
-                        .resizable()
-                        .scaledToFill()
-                } else {
-                    HexagonShape().fill(accentColor.opacity(0.18))
-                    Text(initials)
-                        .font(CTFont.bold(effectiveSize * 0.26))
-                        .foregroundStyle(accentColor)
-                }
+        ZStack {
+            if let data = user.avatarData, let img = PlatformImage(data: data) {
+                Image(platformImage: img)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                HexagonShape().fill(accentColor.opacity(0.18))
+                Text(initials)
+                    .font(CTFont.bold(effectiveSize * 0.26))
+                    .foregroundStyle(accentColor)
             }
-            .frame(width: effectiveSize, height: effectiveSize)
-            .clipShape(HexagonShape())
-            .overlay(HexagonShape().stroke(borderColor, lineWidth: 1.5))
-            .scaleEffect(proximityScale)
-            .opacity(proximityOpacity)
         }
-        .buttonStyle(.plain)
+        .frame(width: effectiveSize, height: effectiveSize)
+        .clipShape(HexagonShape())
+        .overlay(HexagonShape().stroke(borderColor, lineWidth: 1.5))
+        .scaleEffect(proximityScale)
+        .opacity(proximityOpacity)
+        // Use DragGesture(minimumDistance: 0) so we can distinguish a stationary
+        // tap from a drag that happens to end over the contact. Only fire onTap
+        // when the finger hasn't moved more than 8 pt — matching the parent
+        // canvas drag threshold — so pan/zoom never triggers navigation.
+        .gesture(
+            DragGesture(minimumDistance: 0, coordinateSpace: .local)
+                .onChanged { value in
+                    if hypot(value.translation.width, value.translation.height) > 8 {
+                        touchMoved = true
+                    }
+                }
+                .onEnded { value in
+                    defer { touchMoved = false }
+                    guard !touchMoved else { return }
+                    guard hypot(value.translation.width, value.translation.height) <= 8 else { return }
+                    onTap()
+                }
+        )
     }
 
     // MARK: Proximity effect
