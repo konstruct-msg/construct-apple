@@ -143,19 +143,26 @@ struct AccountSettingsView: View {
             sectionHeader(NSLocalizedString("identity_section", comment: ""))
             flatRowDivider()
 
-            // username
-            profileRow(label: NSLocalizedString("username", comment: "")) {
-                Text("<@\(viewModel.username.isEmpty ? "—" : viewModel.username)>")
-                    .font(CTFont.regular(14))
-                    .foregroundStyle(Color.CT.textDim)
-            }
+            // username — editable, server-validated
+            profileEditRow(
+                label: NSLocalizedString("username", comment: ""),
+                isEditing: $isEditingUsername,
+                value: $viewModel.username,
+                hint: NSLocalizedString("username_hint", comment: ""),
+                isSaving: viewModel.isSavingUsername,
+                errorMessage: viewModel.usernameSaveError,
+                onCommit: {
+                    Task { await viewModel.saveUsername(viewModel.username, authViewModel: authViewModel) }
+                }
+            )
             flatRowDivider()
 
-            // display name
+            // display name — local, shown to contacts
             profileEditRow(
                 label: NSLocalizedString("display_name", comment: ""),
                 isEditing: $isEditingDisplayName,
                 value: $viewModel.displayName,
+                hint: NSLocalizedString("display_name_hint", comment: ""),
                 onCommit: { viewModel.saveDisplayName(viewModel.displayName, authViewModel: authViewModel) }
             )
             flatRowDivider()
@@ -284,52 +291,80 @@ struct AccountSettingsView: View {
         label: String,
         isEditing: Binding<Bool>,
         value: Binding<String>,
+        hint: String? = nil,
+        isSaving: Bool = false,
+        errorMessage: String? = nil,
         onCommit: @escaping () -> Void
     ) -> some View {
-        HStack {
-            Text(label.lowercased())
-                .font(CTFont.regular(14))
-                .foregroundStyle(Color.CT.textDim)
-            Spacer()
-            if isEditing.wrappedValue {
-                TextField("", text: value)
-                    .font(CTFont.regular(14))
-                    .foregroundStyle(Color.CT.text)
-                    .multilineTextAlignment(.trailing)
-                    .autocorrectionDisabled()
-                    .onSubmit {
-                        onCommit()
-                        isEditing.wrappedValue = false
-                    }
-                    .frame(maxWidth: 180)
-                Button {
-                    onCommit()
-                    isEditing.wrappedValue = false
-                } label: {
-                    Text("[→]")
-                        .font(CTFont.regular(13))
-                        .foregroundStyle(Color.CT.accent)
-                }
-                .buttonStyle(.plain)
-            } else {
-                Button {
-                    isEditing.wrappedValue = true
-                } label: {
-                    HStack(spacing: 8) {
-                        Text(value.wrappedValue.isEmpty ? "—" : value.wrappedValue)
+        VStack(alignment: .leading, spacing: 0) {
+            // Main row — entire row is a tap target
+            Button {
+                if !isEditing.wrappedValue { isEditing.wrappedValue = true }
+            } label: {
+                HStack {
+                    Text(label.lowercased())
+                        .font(CTFont.regular(14))
+                        .foregroundStyle(Color.CT.textDim)
+                    Spacer()
+                    if isEditing.wrappedValue {
+                        TextField("", text: value)
                             .font(CTFont.regular(14))
                             .foregroundStyle(Color.CT.text)
-                        Text("[→]")
-                            .font(CTFont.regular(13))
-                            .foregroundStyle(Color.CT.accent)
+                            .multilineTextAlignment(.trailing)
+                            .autocorrectionDisabled()
+                            .textInputAutocapitalization(.never)
+                            .onSubmit {
+                                onCommit()
+                                isEditing.wrappedValue = false
+                            }
+                            .frame(maxWidth: 180)
+                        Button {
+                            onCommit()
+                            isEditing.wrappedValue = false
+                        } label: {
+                            if isSaving {
+                                ProgressView()
+                                    .tint(Color.CT.accent)
+                                    .scaleEffect(0.8)
+                            } else {
+                                Text("[→]")
+                                    .font(CTFont.bold(13))
+                                    .foregroundStyle(Color.CT.accent)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    } else {
+                        HStack(spacing: 8) {
+                            Text(value.wrappedValue.isEmpty ? "—" : value.wrappedValue)
+                                .font(CTFont.regular(14))
+                                .foregroundStyle(Color.CT.text)
+                            Text("[edit]")
+                                .font(CTFont.regular(12))
+                                .foregroundStyle(Color.CT.accent.opacity(0.7))
+                        }
                     }
                 }
-                .buttonStyle(.plain)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 14)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            // Error or hint line
+            if let err = errorMessage, !err.isEmpty {
+                Text("> [!] \(err)")
+                    .font(CTFont.regular(11))
+                    .foregroundStyle(Color.CT.danger)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 8)
+            } else if !isEditing.wrappedValue, let hint {
+                Text("> \(hint)")
+                    .font(CTFont.regular(11))
+                    .foregroundStyle(Color.CT.textDim)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 8)
             }
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 14)
-        .contentShape(Rectangle())
     }
 }
 

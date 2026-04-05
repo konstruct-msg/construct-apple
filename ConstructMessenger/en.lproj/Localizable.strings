@@ -267,6 +267,8 @@
 "username_available" = "Username is available.";
 "username_unavailable" = "Username is already taken.";
 "username_check_failed" = "Could not verify username right now. Try again.";
+"username_hint" = "your unique public identifier. tap to change.";
+"display_name_hint" = "shown to your contacts. username stays permanent.";
 "new_messages" = "New Messages";
 "scroll_to_bottom" = "Back to Latest";
 
