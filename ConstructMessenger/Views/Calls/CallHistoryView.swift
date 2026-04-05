@@ -54,11 +54,14 @@ struct CallHistoryView: View {
     // MARK: - Data
 
     private func loadRecords() {
-        // Use string-based sort key, NOT keyPath, to avoid CallRecord.entity() lookup
-        let req = NSFetchRequest<CallRecord>(entityName: "CallRecord")
+        // Fetch as NSManagedObject to avoid the iOS 26 "Expected CallRecord but found
+        // CallRecord" Swift bridging cast failure caused by dual class registration.
+        // compactMap { $0 as? CallRecord } safely filters to the correct type.
+        let req = NSFetchRequest<NSManagedObject>(entityName: "CallRecord")
         req.sortDescriptors = [NSSortDescriptor(key: "startedAt", ascending: false)]
         req.fetchLimit = 200
-        records = (try? viewContext.fetch(req)) ?? []
+        let objects = (try? viewContext.fetch(req)) ?? []
+        records = objects.compactMap { $0 as? CallRecord }
     }
 
     // MARK: - List
