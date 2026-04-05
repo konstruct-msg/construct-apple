@@ -246,9 +246,11 @@ private struct DeviceRow: View {
     var body: some View {
         HStack(spacing: 12) {
             Text(asciiPlatformIcon)
-                .font(CTFont.bold(16))
+                .font(CTFont.bold(14))
                 .foregroundStyle(isCurrent ? Color.CT.accent : Color.CT.textDim)
-                .frame(width: 32)
+                .lineLimit(1)
+                .fixedSize()
+                .frame(width: 44, alignment: .leading)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(device.name)
