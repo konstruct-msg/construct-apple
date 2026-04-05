@@ -12,12 +12,11 @@ import CoreData
 struct CallHistoryView: View {
     @Environment(\.managedObjectContext) private var viewContext
 
-    @FetchRequest(
-        sortDescriptors: [NSSortDescriptor(keyPath: \CallRecord.startedAt, ascending: false)],
-        animation: .default
-    )
-    private var records: FetchedResults<CallRecord>
-
+    // iOS 26: @FetchRequest(keyPath:) calls CallRecord.entity() during property wrapper
+    // initialisation, which triggers the "unique match" CoreData crash on iOS 26 when
+    // the NSManagedObjectModel is not yet fully settled. Using a plain @State array +
+    // manual NSFetchRequest(entityName:) avoids the class-introspection path entirely.
+    @State private var records: [CallRecord] = []
     @State private var showClearConfirm = false
 
     var body: some View {
@@ -39,6 +38,11 @@ struct CallHistoryView: View {
             }
         }
         .background(Color.CT.bg.ignoresSafeArea())
+        .onAppear { loadRecords() }
+        // Refresh whenever any CoreData save happens (new call logged, record deleted, clear all)
+        .onReceive(NotificationCenter.default.publisher(for: .NSManagedObjectContextDidSave)) { _ in
+            loadRecords()
+        }
         .alert(NSLocalizedString("calls_clear_confirm", comment: ""), isPresented: $showClearConfirm) {
             Button(NSLocalizedString("calls_clear", comment: ""), role: .destructive) {
                 CallHistoryService.shared.deleteAll()
@@ -47,12 +51,22 @@ struct CallHistoryView: View {
         }
     }
 
+    // MARK: - Data
+
+    private func loadRecords() {
+        // Use string-based sort key, NOT keyPath, to avoid CallRecord.entity() lookup
+        let req = NSFetchRequest<CallRecord>(entityName: "CallRecord")
+        req.sortDescriptors = [NSSortDescriptor(key: "startedAt", ascending: false)]
+        req.fetchLimit = 200
+        records = (try? viewContext.fetch(req)) ?? []
+    }
+
     // MARK: - List
 
     private var callList: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 0) {
-                ForEach(Array(records.enumerated()), id: \.element.id) { index, record in
+                ForEach(records, id: \.id) { record in
                     CallHistoryRow(record: record, onDelete: { deleteRecord(record) }, onCallBack: { callBack(record) })
                     Rectangle()
                         .fill(Color.CT.noise.opacity(0.35))
@@ -83,6 +97,7 @@ struct CallHistoryView: View {
     private func deleteRecord(_ record: CallRecord) {
         viewContext.delete(record)
         try? viewContext.save()
+        // loadRecords() will be called automatically via NSManagedObjectContextDidSave
     }
 
     private func callBack(_ record: CallRecord) {
