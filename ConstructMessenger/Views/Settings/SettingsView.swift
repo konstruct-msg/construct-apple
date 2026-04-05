@@ -274,5 +274,6 @@ struct SettingsView: View {
         .environment(authViewModel)
         .environment(recoveryVM)
         .environment(chatsVM)
+        .environment(SecurityViewModel())
 }
 #endif

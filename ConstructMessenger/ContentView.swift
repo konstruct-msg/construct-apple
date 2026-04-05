@@ -115,6 +115,8 @@ struct ContentView: View {
         .environment(\.managedObjectContext, container.viewContext)
         .environment(authViewModel)
         .environment(deepLinkHandler)
+        .environment(AccountRecoveryViewModel())
+        .environment(SecurityViewModel())
 }
 #endif
 
@@ -145,5 +147,7 @@ struct ContentView: View {
         .environment(authViewModel)
         .environment(deepLinkHandler)
         .environment(chatsViewModel)
+        .environment(AccountRecoveryViewModel())
+        .environment(SecurityViewModel())
 }
 #endif
