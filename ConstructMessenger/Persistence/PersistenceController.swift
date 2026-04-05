@@ -27,10 +27,16 @@ struct PersistenceController {
     let container: NSPersistentContainer
 
     init(inMemory: Bool = false) {
-        // Use a local constant so the escaping loadPersistentStores closure can
-        // capture the NSPersistentContainer reference directly without going through
-        // the struct's mutating 'self' (which escaping closures cannot capture).
-        let c = NSPersistentContainer(name: "ConstructMessenger")
+        // iOS 26 bug: NSPersistentContainer(name:) searches ALL bundles for the momd
+        // file and may find it in multiple locations (e.g. main bundle + xcframework),
+        // registering NSEntityDescriptions twice. This causes "Expected X but found X"
+        // type-cast crashes when fetching entities like CallRecord.
+        // Fix: explicitly load the model from Bundle.main so only one copy is registered.
+        guard let modelURL = Bundle.main.url(forResource: "ConstructMessenger", withExtension: "momd"),
+              let model = NSManagedObjectModel(contentsOf: modelURL) else {
+            fatalError("❌ Core Data: ConstructMessenger.momd not found in Bundle.main")
+        }
+        let c = NSPersistentContainer(name: "ConstructMessenger", managedObjectModel: model)
 
         if inMemory {
             c.persistentStoreDescriptions.first?.url = URL(fileURLWithPath: "/dev/null")
