@@ -19,6 +19,13 @@ struct MainTabView: View {
     // Call overlays
     @State private var callManager = CallManager.shared
 
+    /// Tracks which tab indices have been visited at least once.
+    /// A tab's content view is only inserted into the ZStack after its first visit,
+    /// preventing @FetchRequest from firing for every tab simultaneously at launch.
+    /// This was causing EXC_CRASH on iOS 26: _ZStackLayout.sizeThatFits triggers
+    /// @FetchRequest.update on ALL ZStack children (even opacity=0 ones) during layout.
+    @State private var visitedTabs: Set<Int> = [0]
+
     var body: some View {
         callContent
             .debugMetricsOverlay()
@@ -61,32 +68,44 @@ struct MainTabView: View {
         }
     }
 
-    /// Renders all tab views simultaneously (ZStack) so scroll/nav state is preserved.
+    /// Renders tab views lazily: a tab's content is inserted into the ZStack only after
+    /// it is first selected. Once mounted it stays alive (preserving scroll/nav state).
+    /// Only tab 0 (ChatsListView) is rendered at startup to avoid @FetchRequest bursts.
     @ViewBuilder
     private func tabContent(vm: ChatsViewModel) -> some View {
         ZStack {
+            // Tab 0: always rendered (initial tab).
             ChatsListView()
                 .environment(chatsViewModel)
                 .opacity(vm.selectedTab == 0 ? 1 : 0)
                 .allowsHitTesting(vm.selectedTab == 0)
 
-            SynapsView()
-                .environment(chatsViewModel)
-                .opacity(vm.selectedTab == 1 ? 1 : 0)
-                .allowsHitTesting(vm.selectedTab == 1)
+            // Tab 1–N: mounted only after first visit.
+            if visitedTabs.contains(1) {
+                SynapsView()
+                    .environment(chatsViewModel)
+                    .opacity(vm.selectedTab == 1 ? 1 : 0)
+                    .allowsHitTesting(vm.selectedTab == 1)
+            }
 
             #if os(iOS)
-            if CallsFeature.isEnabled {
+            if CallsFeature.isEnabled, visitedTabs.contains(2) {
                 CallHistoryView()
                     .opacity(vm.selectedTab == 2 ? 1 : 0)
                     .allowsHitTesting(vm.selectedTab == 2)
             }
 
-            SettingsView()
-                .environment(chatsViewModel)
-                .opacity(vm.selectedTab == (CallsFeature.isEnabled ? 3 : 2) ? 1 : 0)
-                .allowsHitTesting(vm.selectedTab == (CallsFeature.isEnabled ? 3 : 2))
+            let settingsTab = CallsFeature.isEnabled ? 3 : 2
+            if visitedTabs.contains(settingsTab) {
+                SettingsView()
+                    .environment(chatsViewModel)
+                    .opacity(vm.selectedTab == settingsTab ? 1 : 0)
+                    .allowsHitTesting(vm.selectedTab == settingsTab)
+            }
             #endif
+        }
+        .onChange(of: vm.selectedTab) { _, newTab in
+            visitedTabs.insert(newTab)
         }
     }
 
