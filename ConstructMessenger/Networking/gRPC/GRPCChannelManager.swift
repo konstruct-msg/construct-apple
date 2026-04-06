@@ -70,7 +70,10 @@ final class GRPCChannelManager: Sendable {
                 // without this, iceProxyPort() keeps returning nil for the full 60s cooldown
                 // even though a working relay is now running.
                 IceProxyManager.shared.clearCooldown()
-                self.invalidatePersistentClient()
+                // No invalidatePersistentClient() here — acquirePersistentClient() detects the
+                // routing key change (ice:newPort vs direct:host:port) automatically on the
+                // next RPC/stream reconnect. An extra invalidation here would create a third
+                // TLS handshake in rapid succession during failure→recovery cycling.
                 Log.info("🧊 ICE recovered via relay failover — cooldown cleared, routing via new relay", category: "gRPC")
             }
         }
@@ -191,6 +194,14 @@ final class GRPCChannelManager: Sendable {
         // Do NOT call task.cancel() here — let runConnections() exit naturally.
         _conn = nil
         Log.debug("🔌 Persistent gRPC connection invalidated", category: "GRPCChannel")
+    }
+
+    /// Returns the shared persistent channel, creating it if needed.
+    /// Long-lived streaming RPCs (MessageStream) should use this instead of makeClient()
+    /// so the HTTP/2 connection is NOT torn down on every stream reconnect.
+    /// The stream itself can close/reopen freely; the channel stays alive.
+    func acquireChannel() throws -> GRPCClient<HTTP2ClientTransport.Posix> {
+        try acquirePersistentClient()
     }
 
     /// Creates a new `GRPCClient` with TLS transport.
