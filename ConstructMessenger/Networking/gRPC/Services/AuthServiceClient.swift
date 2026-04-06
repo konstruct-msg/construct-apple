@@ -146,10 +146,22 @@ final class AuthServiceClient: Sendable {
 
             var request = Shared_Proto_Services_V1_LogoutRequest()
             request.allDevices = allDevices
+            // Include the current access token so the server can add its JTI to the
+            // Redis blocklist, preventing the token from being used for up to its 24h TTL.
+            // Falls back to empty string if the token was already removed from Keychain
+            // (e.g. crash before logout, race with refresh). The server returns
+            // INVALID_ARGUMENT in that case, which we treat as a non-error below.
+            request.accessToken = KeychainManager.shared.loadSessionToken() ?? ""
 
-            _ = try await authClient.logout(
-                request: .init(message: request)
-            )
+            do {
+                _ = try await authClient.logout(
+                    request: .init(message: request)
+                )
+            } catch let rpc as RPCError where rpc.code == .invalidArgument {
+                // Token was absent or already expired — nothing to add to blocklist.
+                // Refresh token is still revoked server-side; treat as success.
+                Log.error("⚠️ Logout: access token not invalidated (absent or expired) — continuing", category: "Auth")
+            }
         }
     }
 
