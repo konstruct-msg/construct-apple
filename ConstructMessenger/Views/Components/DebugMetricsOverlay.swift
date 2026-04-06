@@ -82,6 +82,23 @@ struct DebugMetricsOverlay: View {
                       avg: vm.avgICEStart,
                       p95: nil,
                       unit: "ms")
+
+            Text("── FAILOVER (last 200) ──").foregroundColor(.orange.opacity(0.6))
+                .padding(.top, 6)
+            HStack {
+                Text("Stream ICE failover")
+                    .frame(width: 160, alignment: .leading)
+                    .foregroundColor(.orange.opacity(0.8))
+                Text("count: \(vm.streamFastFailoverCount)")
+                    .foregroundColor(vm.streamFastFailoverCount == 0 ? .orange.opacity(0.7) : .yellow)
+            }
+            HStack {
+                Text("RPC fast ICE fallback")
+                    .frame(width: 160, alignment: .leading)
+                    .foregroundColor(.orange.opacity(0.8))
+                Text("count: \(vm.rpcFastFallbackCount)")
+                    .foregroundColor(vm.rpcFastFallbackCount == 0 ? .orange.opacity(0.7) : .yellow)
+            }
         }
     }
 
@@ -137,6 +154,8 @@ final class DebugMetricsViewModel: ObservableObject {
     @Published var p95SessionInit: Double? = nil
     @Published var avgGRPCConnect: Double? = nil
     @Published var avgICEStart: Double? = nil
+    @Published var streamFastFailoverCount: Int = 0
+    @Published var rpcFastFallbackCount: Int = 0
 
     private var refreshTimer: Timer?
 
@@ -161,6 +180,8 @@ final class DebugMetricsViewModel: ObservableObject {
         p95SessionInit = m.p95Latency(for: "session_init_start→session_init_end")
         avgGRPCConnect = m.averageLatency(for: "grpc_connect_start→grpc_connect_end")
         avgICEStart = m.averageLatency(for: "ice_proxy_start_begin→ice_proxy_start_end")
+        streamFastFailoverCount = m.count(event: .streamOpenFastFailover, last: 200)
+        rpcFastFallbackCount = m.count(event: .rpcFastICEFallbackTriggered, last: 200)
     }
 
     func clear() {

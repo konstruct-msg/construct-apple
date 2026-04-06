@@ -381,7 +381,7 @@ class MessageRouter {
             if rawBytes.isEmpty {
                 // Delete sentinel: Rust archived the session and removed it from memory.
                 KeychainManager.shared.deleteSession(for: contactId)
-                UserDefaults.standard.removeObject(forKey: "construct.session.suite.\(contactId)")
+                KeychainManager.shared.deleteSessionSuiteId(userId: contactId)
                 Log.debug("🗑️ Deleted hot session for \(contactId.prefix(8))… (Rust archive_session)", category: "MessageRouter")
                 CryptoManager.shared.saveOrchestratorStateCFE()
             } else {
@@ -672,7 +672,7 @@ class MessageRouter {
                 // exactly one side to win. Higher deviceId = INITIATOR. Lower deviceId = RESPONDER.
                 // The winner restores its just-archived INITIATOR session; the loser heals.
                 let myUserId = SessionManager.shared.currentUserId ?? ""
-                let suiteIdBeforeTieBreak = UserDefaults.standard.integer(forKey: "construct.session.suite.\(userId)")
+                let suiteIdBeforeTieBreak = Int(KeychainManager.shared.loadSessionSuiteId(userId: userId) ?? 0)
                 let iAmInitiator = (!myUserId.isEmpty && DeviceIdOrdering.isNaturalInitiator(myId: myUserId, peerId: userId))
                 let tieBreakRole = iAmInitiator ? "INITIATOR" : "RESPONDER"
                 Log.info("⚖️ SESSION_STATE[tie_break_decision]: my=\(myUserId.prefix(8))… vs peer=\(userId.prefix(8))… → role=\(tieBreakRole), suiteId_current=\(suiteIdBeforeTieBreak), kemCt=\(message.kemCiphertext.count)b, otpkId=\(message.oneTimePreKeyId)", category: "SessionInit")
@@ -681,7 +681,7 @@ class MessageRouter {
                     // just-archived session so we keep the INITIATOR role.
                     let restored = CryptoManager.shared.restoreLatestArchive(for: userId)
                     if restored {
-                        let suiteIdAfterRestore = UserDefaults.standard.integer(forKey: "construct.session.suite.\(userId)")
+                        let suiteIdAfterRestore = Int(KeychainManager.shared.loadSessionSuiteId(userId: userId) ?? 0)
                         Log.info("🏆 SESSION_STATE[tie_break_win]: kept INITIATOR (higher deviceId), ACKed X3DH from \(userId.prefix(8))…, suiteId_restored=\(suiteIdAfterRestore)", category: "SessionInit")
                         PersistentACKStore.shared.markProcessed(message.id, senderId: userId, in: context)
                         onReceiptNeeded?([message.id], userId, .delivered)
@@ -847,7 +847,7 @@ class MessageRouter {
     private func requeueUndeliveredOutgoing(
         for userId: String,
         in context: NSManagedObjectContext,
-        requeueWindowSeconds: TimeInterval = 300
+        requeueWindowSeconds: TimeInterval = NetworkTiming.Messaging.resendWindowSeconds
     ) {
         let chatFetch = Chat.fetchRequest()
         chatFetch.predicate = NSPredicate(format: "otherUser.id == %@", userId)

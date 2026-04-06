@@ -48,7 +48,7 @@ actor IceCertFetcher {
     static let shared = IceCertFetcher()
     private init() {}
 
-    private let timeout: TimeInterval = 8.0
+    private let timeout: TimeInterval = NetworkTiming.ICE.certFetchTimeoutHTTPS
 
     /// Fetch the ICE bridge cert from `https://<inviteHost>/.well-known/ice-cert`.
     /// Returns nil on any network or parse error.

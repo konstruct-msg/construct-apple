@@ -42,6 +42,19 @@ import AVFoundation
 import WebRTC
 
 @MainActor
+private final class WebRTCFactory {
+    static let shared = WebRTCFactory()
+    let factory: RTCPeerConnectionFactory
+
+    private init() {
+        RTCInitializeSSL()
+        let encoderFactory = RTCDefaultVideoEncoderFactory()
+        let decoderFactory = RTCDefaultVideoDecoderFactory()
+        self.factory = RTCPeerConnectionFactory(encoderFactory: encoderFactory, decoderFactory: decoderFactory)
+    }
+}
+
+@MainActor
 final class WebRTCSession: NSObject, WebRTCSessionProtocol {
     var onLocalIceCandidate: (@Sendable (WebRTCIceCandidate) -> Void)?
 
@@ -54,11 +67,7 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
     init(role: WebRTCSessionRole, turn: Shared_Proto_Signaling_V1_TurnCredentials?) throws {
         self.role = role
 
-        RTCInitializeSSL()
-
-        let encoderFactory = RTCDefaultVideoEncoderFactory()
-        let decoderFactory = RTCDefaultVideoDecoderFactory()
-        self.factory = RTCPeerConnectionFactory(encoderFactory: encoderFactory, decoderFactory: decoderFactory)
+        self.factory = WebRTCFactory.shared.factory
 
         let config = RTCConfiguration()
         config.iceServers = Self.buildIceServers(turn: turn)
@@ -90,6 +99,7 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
 
     func close() {
         peerConnection.close()
+        try? AVAudioSession.sharedInstance().setActive(false, options: [.notifyOthersOnDeactivation])
     }
 
     func setMuted(_ muted: Bool) {
@@ -215,6 +225,8 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
     private static func configureAudioSession() throws {
         let session = AVAudioSession.sharedInstance()
         try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetoothHFP])
+        try? session.setPreferredSampleRate(NetworkTiming.Calls.audioPreferredSampleRateHz)
+        try? session.setPreferredIOBufferDuration(NetworkTiming.Calls.audioPreferredIOBufferDuration)
         try session.setActive(true)
     }
 }
@@ -264,4 +276,3 @@ final class WebRTCSession: WebRTCSessionProtocol {
 }
 
 #endif
-

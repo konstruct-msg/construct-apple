@@ -18,7 +18,7 @@ final class InviteServiceClient: Sendable {
     // MARK: - Generate Invite
 
     func generateInvite(ttlSeconds: Int64 = 86400) async throws -> Shared_Proto_Services_V1_GenerateInviteResponse {
-        try await GRPCChannelManager.shared.performRPC { grpcClient in
+        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.generateInvite) { grpcClient in
             let client = Shared_Proto_Services_V1_InviteService.Client(wrapping: grpcClient)
 
             var request = Shared_Proto_Services_V1_GenerateInviteRequest()
@@ -31,7 +31,7 @@ final class InviteServiceClient: Sendable {
     // MARK: - Accept Invite
 
     func acceptInvite(invite: Shared_Proto_Services_V1_AcceptInviteRequest) async throws -> Shared_Proto_Services_V1_AcceptInviteResponse {
-        try await GRPCChannelManager.shared.performRPC { grpcClient in
+        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.acceptInvite) { grpcClient in
             let client = Shared_Proto_Services_V1_InviteService.Client(wrapping: grpcClient)
 
             return try await client.acceptInvite(request: .init(message: invite))
@@ -41,7 +41,7 @@ final class InviteServiceClient: Sendable {
     // MARK: - List Invites
 
     func listInvites(limit: Int32 = 20, includeExpired: Bool = false) async throws -> Shared_Proto_Services_V1_ListInvitesResponse {
-        try await GRPCChannelManager.shared.performRPC { grpcClient in
+        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.listInvites) { grpcClient in
             let client = Shared_Proto_Services_V1_InviteService.Client(wrapping: grpcClient)
 
             var request = Shared_Proto_Services_V1_ListInvitesRequest()
@@ -55,7 +55,7 @@ final class InviteServiceClient: Sendable {
     // MARK: - Revoke Invite
 
     func revokeInvite(jti: String) async throws -> Bool {
-        try await GRPCChannelManager.shared.performRPC { grpcClient in
+        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.revokeInvite) { grpcClient in
             let client = Shared_Proto_Services_V1_InviteService.Client(wrapping: grpcClient)
 
             var request = Shared_Proto_Services_V1_RevokeInviteRequest()

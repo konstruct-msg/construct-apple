@@ -300,7 +300,7 @@ final class SessionCoordinator {
         // send a session establishment ping so the loser can immediately become RESPONDER.
         messageRouter.onTieBreakWin = { [weak self] userId in
             guard let self else { return }
-            let suiteIdAtWin = UserDefaults.standard.integer(forKey: "construct.session.suite.\(userId)")
+            let suiteIdAtWin = Int(KeychainManager.shared.loadSessionSuiteId(userId: userId) ?? 0)
             Log.info("🏆 SESSION_STATE[tie_break_outcome]: INITIATOR role confirmed, peer=\(userId.prefix(8))… suiteId=\(suiteIdAtWin), sending END_SESSION+ping", category: "SessionInit")
             Task {
                 var endSessionOk = false
@@ -332,7 +332,7 @@ final class SessionCoordinator {
                 // RESPONDER sends back __session_ready__. ChatViewModel will buffer any
                 // outgoing messages as .queued until confirmation is received.
                 SessionConfirmationTracker.shared.markPending(userId)
-                let suiteIdAtPing = UserDefaults.standard.integer(forKey: "construct.session.suite.\(userId)")
+                let suiteIdAtPing = Int(KeychainManager.shared.loadSessionSuiteId(userId: userId) ?? 0)
                 Log.info("🏓 SESSION_STATE[tie_break_seq]: peer=\(userId.prefix(8))… endSession=\(endSessionOk ? "✓" : "✗") ping=sent suiteId=\(suiteIdAtPing)", category: "SessionInit")
             }
             // Start watchdog: if RESPONDER has not replied within timeout, re-send ping.

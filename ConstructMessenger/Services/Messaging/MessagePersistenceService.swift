@@ -259,6 +259,19 @@ class MessagePersistenceService {
         } catch {
             Log.error("Core Data status save failed: \(error)", category: "MessagePersistence")
         }
+
+        // Keep MessageQueueManager's in-memory timers in sync so we don't
+        // incorrectly time out messages based on Core Data timestamps.
+        switch status {
+        case .sending:
+            MessageQueueManager.shared.markMessageAsSending(messageId)
+        case .sent, .delivered:
+            MessageQueueManager.shared.markMessageAsSent(messageId)
+        case .queued:
+            MessageQueueManager.shared.markMessageAsFailed(messageId)
+        case .failed:
+            MessageQueueManager.shared.markMessageAsFailed(messageId)
+        }
         
         Log.debug("✅ Updated message status to \(status) for \(messageId)", category: "MessagePersistence")
     }

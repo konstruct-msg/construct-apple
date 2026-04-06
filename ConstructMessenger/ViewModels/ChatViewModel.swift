@@ -906,6 +906,9 @@ class ChatViewModel: NSObject {
 
                     await MainActor.run {
                         let deliveryStatus: DeliveryStatus
+                        let ecStr = aggregated.errorCode.isEmpty ? "" : " errorCode=\(aggregated.errorCode)"
+                        let raStr = aggregated.retryAfterMs > 0 ? " retryAfterMs=\(aggregated.retryAfterMs)" : ""
+                        let traceTag = aggregated.attemptId.isEmpty ? "" : " attemptId=\(aggregated.attemptId.prefix(8))"
                         switch aggregated.status.lowercased() {
                         case "delivered": deliveryStatus = .delivered
                         case "queued":    deliveryStatus = .queued
@@ -913,26 +916,26 @@ class ChatViewModel: NSObject {
                         case "blocked":
                             deliveryStatus = .failed
                             self.blockedByRecipient = true
-                            Log.error("🚫 Message blocked by recipient — suppressing retry for \(messageId)", category: "ChatViewModel")
+                            Log.error("🚫 Message blocked by recipient — suppressing retry for \(messageId)\(traceTag)", category: "ChatViewModel")
                         case "failed":
                             if aggregated.retryable {
                                 deliveryStatus = .queued
-                                Log.error("❌ Server rejected message \(messageId): status=failed retryable=true — queued for retry", category: "ChatViewModel")
+                                Log.error("❌ Server rejected message \(messageId): retryable=true\(ecStr)\(raStr)\(traceTag) — queued for retry", category: "ChatViewModel")
                             } else {
                                 deliveryStatus = .failed
                                 OutgoingWirePayloadStore.shared.remove(baseMessageId: messageId)
-                                Log.error("❌ Server rejected message \(messageId): status=failed retryable=false", category: "ChatViewModel")
+                                Log.error("❌ Server rejected message \(messageId): retryable=false\(ecStr)\(traceTag)", category: "ChatViewModel")
                             }
                         default:
                             deliveryStatus = .sent
-                            Log.info("⚠️ Unknown server status: \(aggregated.status), using .sent", category: "ChatViewModel")
+                            Log.info("⚠️ Unknown server status: \(aggregated.status), using .sent\(traceTag)", category: "ChatViewModel")
                         }
-                        Log.info("🔄 Updating message status from sending → \(deliveryStatus) for \(messageId)", category: "ChatViewModel")
+                        Log.info("🔄 Updating message status from sending → \(deliveryStatus) for \(messageId)\(traceTag)", category: "ChatViewModel")
                         self.updateMessageStatus(messageId: messageId, status: deliveryStatus)
                         if deliveryStatus == .sent || deliveryStatus == .delivered {
                             OutgoingWirePayloadStore.shared.remove(baseMessageId: messageId)
                         }
-                        Log.info("✅ Message sent via gRPC: \(messageId), server status: \(aggregated.status)", category: "ChatViewModel")
+                        Log.info("✅ Message sent via gRPC: \(messageId) status=\(aggregated.status)\(ecStr)\(traceTag)", category: "ChatViewModel")
                         self.isSending = false
                     }
                 } catch {

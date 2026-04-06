@@ -563,7 +563,7 @@ class CryptoManager {
             let existingCount = archiveManager.loadArchives(for: userId)?.count ?? 0
             if existingCount > 0 {
                 Log.info("ℹ️ archiveSession: session already archived via Rust for \(userId.prefix(8))… (reason: \(reason.rawValue)), cleaning up", category: "CryptoManager")
-                UserDefaults.standard.removeObject(forKey: "construct.session.suite.\(userId)")
+                KeychainManager.shared.deleteSessionSuiteId(userId: userId)
                 _ = orchestratorCore?.removeSession(contactId: userId)
                 KeychainManager.shared.deleteSession(for: userId)
                 return
@@ -575,8 +575,8 @@ class CryptoManager {
         }
         
         // 2. Remove from active storage — only reached when archive is safely stored above.
-        UserDefaults.standard.removeObject(forKey: "construct.session.suite.\(userId)")
-        Log.info("✅ Removed session suite ID from UserDefaults: \(userId)", category: "CryptoManager")
+        KeychainManager.shared.deleteSessionSuiteId(userId: userId)
+        Log.info("✅ Removed session suite ID from Keychain: \(userId)", category: "CryptoManager")
         
         let removed = (orchestratorCore?.removeSession(contactId: userId)) ?? false
         if removed {
@@ -619,13 +619,13 @@ class CryptoManager {
         let idx = archives.count - 1
         let latest = archives[idx]
         do {
-            let suiteIdBefore = UserDefaults.standard.integer(forKey: "construct.session.suite.\(userId)")
+            let suiteIdBefore = KeychainManager.shared.loadSessionSuiteId(userId: userId) ?? 0
             // importSession handles both CFE binary (new archives) and legacy JSON (old archives).
             _ = try core.importSession(contactId: userId, data: [UInt8](latest.sessionData))
             // Use typed accessor — no JSON round-trip needed.
-            let suiteId = Int(core.getSessionSuiteId(contactId: userId))
+            let suiteId = core.getSessionSuiteId(contactId: userId)
             if suiteId > 0 {
-                UserDefaults.standard.set(suiteId, forKey: "construct.session.suite.\(userId)")
+                KeychainManager.shared.saveSessionSuiteId(userId: userId, suiteId: suiteId)
                 Log.info("🔑 SESSION_STATE[restore_suite_id]: peer=\(userId.prefix(8))… suiteId \(suiteIdBefore) → \(suiteId)", category: "SessionInit")
             } else {
                 Log.error("🚨 SESSION_STATE[restore_suite_id_failed]: peer=\(userId.prefix(8))… suiteId_before=\(suiteIdBefore) — getSessionSuiteId returned 0 after import; remote decrypt will likely fail", category: "CryptoManager")
@@ -643,9 +643,9 @@ class CryptoManager {
     /// Delete a session (legacy - use archiveSession instead)
     @available(*, deprecated, message: "Use archiveSession() instead for better error recovery")
     func deleteSession(for userId: String) {
-        // Remove suite ID from UserDefaults
-        UserDefaults.standard.removeObject(forKey: "construct.session.suite.\(userId)")
-        Log.info("✅ Removed session suite ID from UserDefaults: \(userId)", category: "CryptoManager")
+        // Remove suite ID from Keychain
+        KeychainManager.shared.deleteSessionSuiteId(userId: userId)
+        Log.info("✅ Removed session suite ID from Keychain: \(userId)", category: "CryptoManager")
 
         // Remove from the Rust core
         if let core = orchestratorCore {

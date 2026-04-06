@@ -18,7 +18,7 @@ final class SentinelServiceClient: Sendable {
     // MARK: - Report Spam
 
     func reportSpam(deviceId: String, category: Shared_Proto_Sentinel_V1_SpamCategory = .unspecified) async throws -> String {
-        try await GRPCChannelManager.shared.performRPC { grpcClient in
+        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.reportSpam) { grpcClient in
             let client = Shared_Proto_Sentinel_V1_SentinelService.Client(wrapping: grpcClient)
 
             var request = Shared_Proto_Sentinel_V1_ReportSpamRequest()
@@ -33,7 +33,7 @@ final class SentinelServiceClient: Sendable {
     // MARK: - Get Trust Status
 
     func getTrustStatus() async throws -> Shared_Proto_Sentinel_V1_GetTrustStatusResponse {
-        try await GRPCChannelManager.shared.performRPC { grpcClient in
+        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.getTrustStatus) { grpcClient in
             let client = Shared_Proto_Sentinel_V1_SentinelService.Client(wrapping: grpcClient)
 
             let request = Shared_Proto_Sentinel_V1_GetTrustStatusRequest()
@@ -45,7 +45,7 @@ final class SentinelServiceClient: Sendable {
     // MARK: - Check Send Permission
 
     func checkSendPermission(targetDeviceId: String) async throws -> Shared_Proto_Sentinel_V1_CheckSendPermissionResponse {
-        try await GRPCChannelManager.shared.performRPC { grpcClient in
+        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.checkSendPermission) { grpcClient in
             let client = Shared_Proto_Sentinel_V1_SentinelService.Client(wrapping: grpcClient)
 
             var request = Shared_Proto_Sentinel_V1_CheckSendPermissionRequest()

@@ -18,7 +18,7 @@ final class MessageCryptoService {
     }
 
     private static func suiteId(for userId: String) -> UInt16 {
-        UInt16(UserDefaults.standard.integer(forKey: "construct.session.suite.\(userId)"))
+        KeychainManager.shared.loadSessionSuiteId(userId: userId) ?? 0
     }
 
     func encryptMessage(
@@ -55,8 +55,8 @@ final class MessageCryptoService {
                 Log.info("⚠️ ENCRYPT: suiteId from Rust=0, falling back to UserDefaults=\(suiteId) for \(userId.prefix(8))…", category: "CryptoManager")
             }
         } else {
-            // Keep UserDefaults in sync so other code that reads it stays correct.
-            UserDefaults.standard.set(Int(suiteId), forKey: "construct.session.suite.\(userId)")
+            // Keep Keychain in sync so the fallback path stays correct.
+            KeychainManager.shared.saveSessionSuiteId(userId: userId, suiteId: suiteId)
         }
 
         #if DEBUG

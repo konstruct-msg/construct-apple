@@ -70,7 +70,7 @@ final class MessageStreamManager {
     private var heartbeatWatchdogTask: Task<Void, Never>?
     private var serverChangedObserver: NSObjectProtocol?
     private var retryCount = 0
-    private let maxRetryDelay: TimeInterval = 60
+    private let maxRetryDelay: TimeInterval = NetworkTiming.Stream.maxRetryDelay
     private(set) var isPaused = false
     private(set) var subscriptionUserIds: [String] = []
     private var lastPendingCursor: String = UserDefaults.standard.string(forKey: "construct.pendingCursor") ?? "" {
@@ -101,10 +101,10 @@ final class MessageStreamManager {
 
     // MARK: - Configuration
 
-    private let heartbeatInterval: TimeInterval = 25
+    private let heartbeatInterval: TimeInterval = NetworkTiming.Stream.heartbeatInterval
     private let heartbeatTimeoutMultiplier: Double = 3.0
     private var lastWatchdogRestartAt: Date?
-    private let watchdogMinRestartInterval: TimeInterval = 30
+    private let watchdogMinRestartInterval: TimeInterval = NetworkTiming.Stream.watchdogMinRestartInterval
 
     // MARK: - Public API
 
@@ -279,7 +279,7 @@ final class MessageStreamManager {
             await withTaskGroup(of: Void.self) { group in
                 group.addTask { await self.fetchMissedMessages() }
                 group.addTask {
-                    try? await Task.sleep(for: .seconds(3))
+                    try? await Task.sleep(for: .seconds(NetworkTiming.Stream.fetchMissedMessagesWallClockCap))
                     Log.debug("⏰ fetchMissedMessages wall-clock cap reached — proceeding to stream", category: "MessageStream")
                 }
                 _ = await group.next()
@@ -294,9 +294,9 @@ final class MessageStreamManager {
                 try await openStream()
                 // Stream ended cleanly — brief pause before reconnecting to avoid tight loop
                 // (e.g. server closes stream when 0 topics are subscribed)
-                Log.info("📡 MessageStream ended cleanly, reconnecting in 3s", category: "MessageStream")
+                Log.info("📡 MessageStream ended cleanly, reconnecting in \(Int(NetworkTiming.Stream.cleanEndReconnectDelay))s", category: "MessageStream")
                 retryCount = 0
-                try await Task.sleep(for: .seconds(3))
+                try await Task.sleep(for: .seconds(NetworkTiming.Stream.cleanEndReconnectDelay))
             } catch is CancellationError {
                 Log.info("🛑 MessageStream cancelled — connectLoop exiting", category: "MessageStream")
                 break
@@ -315,6 +315,15 @@ final class MessageStreamManager {
                     } catch {
                         Log.error("❌ Token refresh failed for MessageStream: \(error)", category: "MessageStream")
                     }
+                }
+                // Fast ICE failover path: openStream() intentionally throws this sentinel
+                // error to force an immediate reconnect without exponential backoff.
+                if let rpcError = error as? RPCError,
+                   rpcError.code == .unavailable,
+                   rpcError.message.contains("retrying with ICE") {
+                    Log.info("🧊 MessageStream switching routing — reconnecting immediately", category: "MessageStream")
+                    retryCount = 0
+                    continue
                 }
                 // Log full error details for diagnosis
                 if let rpcError = error as? RPCError {
@@ -335,7 +344,7 @@ final class MessageStreamManager {
 
             // Exponential backoff with jitter
             retryCount += 1
-            let base: TimeInterval = 2
+            let base: TimeInterval = NetworkTiming.Stream.backoffBaseDelay
             let delay = min(base * pow(2, Double(min(retryCount - 1, 5))), maxRetryDelay)
             let jitter = Double.random(in: 0...(delay * 0.25))
             let totalDelay = delay + jitter
@@ -365,7 +374,7 @@ final class MessageStreamManager {
             }
 
             let startCursor = lastPendingCursor
-            let fetchResult: FetchResult = try await GRPCChannelManager.shared.performRPC { grpcClient in
+            let fetchResult: FetchResult = try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.getPendingMessages, fastICEFallback: true) { grpcClient in
                 func withTimeout<T: Sendable>(
                     seconds: TimeInterval,
                     _ operation: @Sendable @escaping () async throws -> T
@@ -465,9 +474,14 @@ final class MessageStreamManager {
     }
 
     private func openStream() async throws {
+        struct StreamAcceptTimeout: Error {}
+
         streamGeneration &+= 1
         let generation = streamGeneration
         activeStreamGeneration = generation
+
+        let metricsLabel = GRPCChannelManager.shared.currentRoutingKey
+        PerformanceMetrics.shared.start(.streamOpenStart, label: metricsLabel)
 
         let host = GRPCChannelManager.shared.currentHost
         let port = GRPCChannelManager.shared.currentPort
@@ -603,17 +617,74 @@ final class MessageStreamManager {
 
         defer { processingTask.cancel() }
 
-        try await runMessageStream(
-            client: msgClient,
-            request: request,
-            incomingContinuation: incomingContinuation
-        )
+        let streamTask = Task {
+            try await runMessageStream(
+                client: msgClient,
+                request: request,
+                incomingContinuation: incomingContinuation,
+                metricsLabel: metricsLabel
+            )
+        }
+
+        // Fast ICE failover for stream open: if the RPC isn't accepted quickly, we retry
+        // through ICE instead of waiting for long TCP/TLS timeouts on DPI-blocked networks.
+        do {
+            try await withThrowingTaskGroup(of: Void.self) { group in
+                // 1) Accepted watcher
+                group.addTask { [weak self] in
+                    while let self, !Task.isCancelled {
+                        let accepted = await MainActor.run {
+                            self.isConnected && self.activeStreamGeneration == generation
+                        }
+                        if accepted { return }
+                        try await Task.sleep(for: .seconds(NetworkTiming.GRPC.streamOpenAcceptPollInterval))
+                    }
+                }
+                // 2) Timeout
+                group.addTask {
+                    try await Task.sleep(for: .seconds(NetworkTiming.GRPC.streamOpenAcceptTimeout))
+                    throw StreamAcceptTimeout()
+                }
+                // 3) Early stream failure (before accepted)
+                group.addTask {
+                    try await streamTask.value
+                }
+
+                _ = try await group.next()
+                group.cancelAll()
+            }
+        } catch is StreamAcceptTimeout {
+            // If already accepted, ignore the timeout (race).
+            if isConnected, activeStreamGeneration == generation {
+                // Continue below to await the stream until it ends.
+            } else {
+                Log.info("🧊 MessageStream open timed out — attempting ICE fast-failover", category: "MessageStream")
+                PerformanceMetrics.shared.record(.streamOpenFastFailover, label: metricsLabel)
+                PerformanceMetrics.shared.cancelStart(.streamOpenStart, label: metricsLabel)
+                streamTask.cancel()
+                incomingContinuation.finish()
+                // If ICE is running but on cooldown, clear cooldown: direct path is likely blocked.
+                if IceProxyManager.shared.isRunning, IceProxyManager.shared.isOnCooldown {
+                    IceProxyManager.shared.clearCooldown()
+                } else if !IceProxyManager.shared.isRunning {
+                    await IceProxyManager.shared.startEphemeralOnDemandIfNeeded()
+                }
+                // Force routing key refresh for the next acquireChannel().
+                GRPCChannelManager.shared.invalidatePersistentClient()
+                // Immediate retry: propagate an error to exit openStream() and let connectLoop retry.
+                throw RPCError(code: .unavailable, message: "Stream open timed out — retrying with ICE")
+            }
+        }
+
+        // Stream accepted — wait until it ends (disconnect, server close, etc.).
+        try await streamTask.value
     }
 
     private nonisolated func runMessageStream(
         client: Shared_Proto_Services_V1_MessagingService.Client<HTTP2ClientTransport.Posix>,
         request: StreamingClientRequest<Shared_Proto_Services_V1_MessageStreamRequest>,
-        incomingContinuation: AsyncStream<StreamEvent>.Continuation
+        incomingContinuation: AsyncStream<StreamEvent>.Continuation,
+        metricsLabel: String
     ) async throws {
         try await client.messageStream(
             request: request,
@@ -622,6 +693,7 @@ final class MessageStreamManager {
                 switch response.accepted {
                 case .success(let c):
                     Task { @MainActor in
+                        PerformanceMetrics.shared.end(.streamOpenStart, endEvent: .streamOpenEnd, label: metricsLabel)
                         ConnectionStatusManager.shared.markStreamConnected()
                         self.isConnected = true
                         self.lastHeartbeatDate = Date()
@@ -630,6 +702,7 @@ final class MessageStreamManager {
                     contents = c
                 case .failure(let error):
                     incomingContinuation.finish()
+                    PerformanceMetrics.shared.cancelStart(.streamOpenStart, label: metricsLabel)
                     throw error
                 }
 

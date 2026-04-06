@@ -28,7 +28,7 @@ final class SignalingServiceClient: Sendable {
             return cached
         }
 
-        let creds = try await GRPCChannelManager.shared.performRPC { grpcClient in
+        let creds = try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.getTurnCredentials, fastICEFallback: true) { grpcClient in
             let client = Shared_Proto_Signaling_V1_SignalingService.Client(wrapping: grpcClient)
             var req = Shared_Proto_Signaling_V1_GetTurnCredentialsRequest()
             if let callId { req.callID = callId }
@@ -49,7 +49,7 @@ final class SignalingServiceClient: Sendable {
     /// - Returns: `calleeOnline` flag (true = callee has active Signal stream).
     @discardableResult
     func initiateCall(callId: String, calleeUserId: String, callerName: String, hasVideo: Bool) async throws -> Shared_Proto_Signaling_V1_InitiateCallResponse {
-        return try await GRPCChannelManager.shared.performRPC { grpcClient in
+        return try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.initiateCall, fastICEFallback: true) { grpcClient in
             let client = Shared_Proto_Signaling_V1_SignalingService.Client(wrapping: grpcClient)
             var req = Shared_Proto_Signaling_V1_InitiateCallRequest()
             req.callID = callId
@@ -72,6 +72,7 @@ final class SignalingServiceClient: Sendable {
 
         let (outbound, outboundContinuation) = AsyncStream<Shared_Proto_Signaling_V1_SignalRequest>.makeStream()
         let (incoming, incomingContinuation) = AsyncStream<Shared_Proto_Signaling_V1_SignalResponse>.makeStream()
+        let (accepted, acceptedContinuation) = AsyncStream<Void>.makeStream()
 
         let request = StreamingClientRequest<Shared_Proto_Signaling_V1_SignalRequest>(
             metadata: [],
@@ -95,7 +96,10 @@ final class SignalingServiceClient: Sendable {
                         switch response.accepted {
                         case .success(let c):
                             contents = c
+                            acceptedContinuation.yield(())
+                            acceptedContinuation.finish()
                         case .failure(let error):
+                            acceptedContinuation.finish()
                             incomingContinuation.finish()
                             throw error
                         }
@@ -112,9 +116,11 @@ final class SignalingServiceClient: Sendable {
                     }
                 )
             } catch is CancellationError {
+                acceptedContinuation.finish()
                 incomingContinuation.finish()
             } catch {
                 Log.error("📞 Signaling stream closed with error: \(error)", category: "Calls")
+                acceptedContinuation.finish()
                 incomingContinuation.finish()
                 throw error
             }
@@ -125,6 +131,7 @@ final class SignalingServiceClient: Sendable {
             connectTask: connectTask,
             streamTask: streamTask,
             outboundContinuation: outboundContinuation,
+            accepted: accepted,
             incoming: incoming
         )
     }
@@ -135,7 +142,7 @@ final class SignalingServiceClient: Sendable {
 private actor TurnCredentialsCache {
     private var creds: Shared_Proto_Signaling_V1_TurnCredentials?
 
-    func getIfValid(skewSeconds: TimeInterval = 60) -> Shared_Proto_Signaling_V1_TurnCredentials? {
+    func getIfValid(skewSeconds: TimeInterval = NetworkTiming.WebRTC.turnCredentialsSkewSeconds) -> Shared_Proto_Signaling_V1_TurnCredentials? {
         guard let creds else { return nil }
         guard creds.expiresAt > 0 else { return creds }
         let expiry = Date(timeIntervalSince1970: TimeInterval(creds.expiresAt) / 1000.0)
@@ -154,6 +161,7 @@ private actor TurnCredentialsCache {
 ///
 /// - NOTE: This is a minimal transport handle. Call lifecycle/WebRTC binding will be layered on top.
 final class SignalStream: @unchecked Sendable {
+    let accepted: AsyncStream<Void>
     let incoming: AsyncStream<Shared_Proto_Signaling_V1_SignalResponse>
 
     private let grpcClient: GRPCClient<HTTP2ClientTransport.Posix>
@@ -166,12 +174,14 @@ final class SignalStream: @unchecked Sendable {
         connectTask: Task<Void, Error>,
         streamTask: Task<Void, Error>,
         outboundContinuation: AsyncStream<Shared_Proto_Signaling_V1_SignalRequest>.Continuation,
+        accepted: AsyncStream<Void>,
         incoming: AsyncStream<Shared_Proto_Signaling_V1_SignalResponse>
     ) {
         self.grpcClient = grpcClient
         self.connectTask = connectTask
         self.streamTask = streamTask
         self.outboundContinuation = outboundContinuation
+        self.accepted = accepted
         self.incoming = incoming
     }
 

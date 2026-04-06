@@ -126,15 +126,20 @@ struct APIConstants {
     static let userIdKey = "user_id"
     static let lastUsernameKey = "last_username"
 
-    // API Timeouts
-    static let connectionTimeout: TimeInterval = 30.0  // URLSession timeout for regular requests
-    static let messageAckTimeout: TimeInterval = 15.0  // Timeout for message ACK (increased for poor network)
-    static let reconnectMaxDelay: TimeInterval = 30.0
-    static let messageSendTimeout: TimeInterval = 20.0  // Timeout for stuck messages in sending state
-    static let messageSendNetworkTimeout: TimeInterval = 60.0  // Network timeout for POST /api/v1/messages (slow networks)
-    static let queueCheckInterval: TimeInterval = 5.0   // How often to check for stuck messages
-    static let longPollingTimeout: TimeInterval = 65.0  // > server timeout (60 max)
-    static let longPollingResourceTimeout: TimeInterval = 70.0  // Buffer for long polling resource timeout
+    // API Timeouts (forwarded — single source of truth is `NetworkTiming`)
+    static let connectionTimeout: TimeInterval = NetworkTiming.HTTP.connectionTimeout
+    static let messageAckTimeout: TimeInterval = NetworkTiming.Messaging.messageAckTimeout
+    static let reconnectMaxDelay: TimeInterval = NetworkTiming.WebSocket.reconnectMaxDelay
+    static let messageSendTimeout: TimeInterval = NetworkTiming.Messaging.messageSendTimeout
+    static let messageSendNetworkTimeout: TimeInterval = NetworkTiming.HTTP.messageSendNetworkTimeout
+    static let queueCheckInterval: TimeInterval = NetworkTiming.Messaging.queueCheckInterval
+    static let longPollingTimeout: TimeInterval = NetworkTiming.LongPolling.timeout
+    static let longPollingResourceTimeout: TimeInterval = NetworkTiming.LongPolling.resourceTimeout
+
+    // gRPC routing failover ("happy eyeballs") (forwarded)
+    static let grpcFastFallbackDirectTimeout: TimeInterval = NetworkTiming.GRPC.fastFallbackDirectTimeout
+    static let streamOpenAcceptTimeout: TimeInterval = NetworkTiming.GRPC.streamOpenAcceptTimeout
+    static let streamOpenAcceptPollInterval: TimeInterval = NetworkTiming.GRPC.streamOpenAcceptPollInterval
     
     // Retry Configuration
     static let maxRetryAttempts: Int = 3  // Max retry attempts for transient failures
@@ -308,30 +313,30 @@ struct ChunkedDeliveryConfig {
 struct LongPollingConfig {
     // Add jitter after successful polls to reduce timing correlation
     // Reduced from 2-5s to 1-3s for faster response while maintaining privacy
-    static let successJitterMinMs: UInt64 = 1000   // 1 second
-    static let successJitterMaxMs: UInt64 = 3000   // 3 seconds
+    static let successJitterMinMs: UInt64 = NetworkTiming.LongPolling.successJitterMinMs
+    static let successJitterMaxMs: UInt64 = NetworkTiming.LongPolling.successJitterMaxMs
 
     // Polling behavior
-    static let fullTimeoutSeconds: Int = 30
-    static let minimalTimeoutSeconds: Int = 30
-    static let minimalPostPollDelaySeconds: TimeInterval = 60
+    static let fullTimeoutSeconds: Int = NetworkTiming.LongPolling.fullTimeoutSeconds
+    static let minimalTimeoutSeconds: Int = NetworkTiming.LongPolling.minimalTimeoutSeconds
+    static let minimalPostPollDelaySeconds: TimeInterval = NetworkTiming.LongPolling.minimalPostPollDelaySeconds
 }
 
 // MARK: - WebSocket Configuration
 struct WebSocketConfig {
     // Connection Timeouts
-    static let pingInterval: TimeInterval = 25.0          // Send ping every 25 seconds
-    static let reconnectBaseDelay: TimeInterval = 2.0     // Base delay for exponential backoff
-    static let reconnectMaxDelay: TimeInterval = 30.0     // Max reconnect delay
+    static let pingInterval: TimeInterval = NetworkTiming.WebSocket.pingInterval
+    static let reconnectBaseDelay: TimeInterval = NetworkTiming.WebSocket.reconnectBaseDelay
+    static let reconnectMaxDelay: TimeInterval = NetworkTiming.WebSocket.reconnectMaxDelay
 
     // Background Fetch Timeouts
-    static let backgroundFetchTimeout: TimeInterval = 15.0
-    static let backgroundFetchRequestTimeout: TimeInterval = 15.0
-    static let backgroundFetchResourceTimeout: TimeInterval = 20.0
+    static let backgroundFetchTimeout: TimeInterval = NetworkTiming.WebSocket.backgroundFetchTimeout
+    static let backgroundFetchRequestTimeout: TimeInterval = NetworkTiming.WebSocket.backgroundFetchRequestTimeout
+    static let backgroundFetchResourceTimeout: TimeInterval = NetworkTiming.WebSocket.backgroundFetchResourceTimeout
 
     // Connection Delays
-    static let authenticationDelay: TimeInterval = 0.5    // Delay before authenticating
-    static let messageQueueFlushDelay: TimeInterval = 0.1 // Delay before flushing queue
+    static let authenticationDelay: TimeInterval = NetworkTiming.WebSocket.authenticationDelay
+    static let messageQueueFlushDelay: TimeInterval = NetworkTiming.WebSocket.messageQueueFlushDelay
 }
 
 // MARK: - UserDefaults Keys

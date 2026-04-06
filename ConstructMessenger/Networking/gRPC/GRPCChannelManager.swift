@@ -14,7 +14,7 @@ final class GRPCChannelManager: Sendable {
     // ICE relay health tracking: avoid routing through a dead relay.
     // Stores the Date.timeIntervalSinceReferenceDate of the last relay failure.
     static let iceFailedAtKey = "iceRelayLastFailedAt"
-    private static let iceCooldown: TimeInterval = 60.0
+    private static let iceCooldown: TimeInterval = NetworkTiming.ICE.relayCooldown
     /// Exposed for IceProxyManager to restore cooldown on app launch.
     static let iceCooldownDuration: TimeInterval = iceCooldown
 
@@ -109,7 +109,7 @@ final class GRPCChannelManager: Sendable {
     /// falls back to a direct channel — defeating ICE entirely.
     ///
     /// In practice the Rust goroutine initializes in <50 ms; the 2-second timeout is generous.
-    private func waitForProxyReady(timeout: TimeInterval = 2.0) async {
+    private func waitForProxyReady(timeout: TimeInterval = NetworkTiming.ICE.proxyReadyWaitTimeout) async {
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
             if ice_proxy_is_running() != 0, ice_proxy_port() > 0 { return }
@@ -152,6 +152,9 @@ final class GRPCChannelManager: Sendable {
         if let icePort = iceProxyPort() { return "ice:\(icePort)" }
         return "direct:\(currentHost):\(currentPort)"
     }
+
+    /// Exposes the current routing key for debug metrics and logging.
+    var currentRoutingKey: String { routingKey() }
 
     /// Returns a reusable persistent client, creating/replacing it when routing changes.
     private func acquirePersistentClient() throws -> GRPCClient<HTTP2ClientTransport.Posix> {
@@ -240,10 +243,10 @@ final class GRPCChannelManager: Sendable {
                     // Keepalive is essential on cellular: carrier NAT drops idle TCP connections
                     // after ~30-60s. Without keepalive pings the tunnel dies silently.
                     $0.connection = .init(
-                        maxIdleTime: .seconds(300),
+                        maxIdleTime: .seconds(NetworkTiming.GRPC.maxIdleTimeSeconds),
                         keepalive: .init(
-                            time: .seconds(25),
-                            timeout: .seconds(10),
+                            time: .seconds(NetworkTiming.GRPC.keepaliveTimeIceSeconds),
+                            timeout: .seconds(NetworkTiming.GRPC.keepaliveTimeoutSeconds),
                             allowWithoutCalls: true
                         )
                     )
@@ -261,10 +264,10 @@ final class GRPCChannelManager: Sendable {
             transportSecurity: .tls,
             config: .defaults {
                 $0.connection = .init(
-                    maxIdleTime: .seconds(300),
+                    maxIdleTime: .seconds(NetworkTiming.GRPC.maxIdleTimeSeconds),
                     keepalive: .init(
-                        time: .seconds(30),
-                        timeout: .seconds(10),
+                        time: .seconds(NetworkTiming.GRPC.keepaliveTimeDirectSeconds),
+                        timeout: .seconds(NetworkTiming.GRPC.keepaliveTimeoutSeconds),
                         // true: send keepalive pings even between calls so the TCP connection
                         // (used by the long-lived message stream) stays alive through NAT tables.
                         allowWithoutCalls: true
@@ -285,6 +288,7 @@ final class GRPCChannelManager: Sendable {
     func performRPC<Result: Sendable>(
         timeout: TimeInterval? = nil,
         allowAuthRetry: Bool = true,
+        fastICEFallback: Bool = false,
         _ operation: @Sendable @escaping (GRPCClient<HTTP2ClientTransport.Posix>) async throws -> Result
     ) async throws -> Result {
         func shouldRecordIceFailure(_ error: Error) -> Bool {
@@ -349,6 +353,23 @@ final class GRPCChannelManager: Sendable {
         var iceAutoStartedThisCall = false   // true once we DPI-auto-started ICE in this call
         for attempt in 0..<3 {
             let usingICE = iceProxyPort() != nil
+            let effectiveTimeout: TimeInterval? = {
+                guard let timeout else { return nil }
+                // "Happy eyeballs" for routing: on the first direct attempt, prefer a short
+                // deadline so we can quickly try ICE instead of waiting 20–30 seconds.
+                guard fastICEFallback, !usingICE, attempt == 0 else { return timeout }
+                // 4 seconds is enough for TCP+TLS on healthy networks, but short enough to
+                // avoid UI stalls on DPI-blocked paths.
+                return min(timeout, NetworkTiming.GRPC.fastFallbackDirectTimeout)
+            }()
+
+            if fastICEFallback, !usingICE, attempt == 0, let effectiveTimeout {
+                PerformanceMetrics.shared.record(
+                    .rpcFastICEFallbackArmed,
+                    label: routingKey(),
+                    value: effectiveTimeout * 1000
+                )
+            }
 
             // ------------------------------------------------------------------
             // Prefer the persistent connection (no TLS handshake on hot path).
@@ -370,11 +391,11 @@ final class GRPCChannelManager: Sendable {
                 if usingPersistent {
                     // runConnections() is already running in a background task.
                     // Execute the operation directly; timeout is still enforced.
-                    if let timeout {
+                    if let effectiveTimeout {
                         result = try await withThrowingTaskGroup(of: Result.self) { inner in
                             inner.addTask { try await operation(client) }
                             inner.addTask {
-                                try await Task.sleep(for: .seconds(timeout))
+                                try await Task.sleep(for: .seconds(effectiveTimeout))
                                 throw RPCError(code: .deadlineExceeded, message: "Request timed out")
                             }
                             let first = try await inner.next()!
@@ -402,11 +423,11 @@ final class GRPCChannelManager: Sendable {
 
                         group.addTask {
                             let r: Result
-                            if let timeout {
+                            if let effectiveTimeout {
                                 r = try await withThrowingTaskGroup(of: Result.self) { inner in
                                     inner.addTask { try await operation(client) }
                                     inner.addTask {
-                                        try await Task.sleep(for: .seconds(timeout))
+                                        try await Task.sleep(for: .seconds(effectiveTimeout))
                                         throw RPCError(code: .deadlineExceeded, message: "Request timed out")
                                     }
                                     let first = try await inner.next()!
@@ -495,6 +516,9 @@ final class GRPCChannelManager: Sendable {
                 // Also fires when ICE is running but on cooldown — startOnDemandIfNeeded() clears
                 // the cooldown in that case, so iceProxyPort() becomes non-nil after the call.
                 if !usingICE, attempt == 0, shouldTryICEFallback(error) {
+                    if fastICEFallback {
+                        PerformanceMetrics.shared.record(.rpcFastICEFallbackTriggered, label: routingKey())
+                    }
                     Log.info("🧊 Direct connection failed — auto-starting ICE (DPI detected)", category: "GRPCChannel")
                     await IceProxyManager.shared.startOnDemandIfNeeded()
                     await waitForProxyReady()

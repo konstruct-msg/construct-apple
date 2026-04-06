@@ -181,7 +181,7 @@ class MediaManager {
         //                     when ICE proxy restarts mid-stream (e.g. foreground wake)
         //                     log: unknown: "The transport threw an unexpected error." (cause: "CancellationError()")
         let retryableCodes: Set<RPCError.Code> = [.cancelled, .unavailable, .deadlineExceeded, .unknown]
-        let delays: [UInt64] = [3_000_000_000, 6_000_000_000]   // 3s, 6s — ICE restart can take a few seconds
+        let delays: [UInt64] = NetworkTiming.Media.retryDelaysNs
 
         var lastError: Error?
         for delay in ([0] + delays.map { Optional($0) }) as [UInt64?] {

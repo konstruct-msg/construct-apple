@@ -450,6 +450,32 @@ class KeychainManager {
         delete(forKey: key)
     }
 
+    // MARK: - Session Suite ID
+    // Fallback store for suiteId when the Rust in-memory session returns 0.
+    // Uses kSecAttrAccessibleAfterFirstUnlock so it survives app background/restart
+    // and is atomic with the rest of the Keychain — unlike UserDefaults which can be
+    // cleared independently from Keychain on reinstall or data-reset.
+
+    private func suiteIdKey(for userId: String) -> String {
+        "construct.session.suite.\(userId)"
+    }
+
+    func saveSessionSuiteId(userId: String, suiteId: UInt16) {
+        var value = suiteId
+        let data = Data(bytes: &value, count: MemoryLayout<UInt16>.size)
+        _ = save(data, forKey: suiteIdKey(for: userId), accessible: kSecAttrAccessibleAfterFirstUnlock)
+    }
+
+    func loadSessionSuiteId(userId: String) -> UInt16? {
+        guard let data = load(forKey: suiteIdKey(for: userId)),
+              data.count == MemoryLayout<UInt16>.size else { return nil }
+        return data.withUnsafeBytes { $0.load(as: UInt16.self) }
+    }
+
+    func deleteSessionSuiteId(userId: String) {
+        delete(forKey: suiteIdKey(for: userId))
+    }
+
     // MARK: - Generic Helpers
     private func save(_ data: Data, forKey key: String, accessible: CFString) -> Bool {
         guard !data.isEmpty else {

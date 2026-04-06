@@ -34,6 +34,17 @@ enum MetricEvent: String {
     case iceProxyStartEnd       = "ice_proxy_start_end"
     case streamOpenStart        = "stream_open_start"
     case streamOpenEnd          = "stream_open_end"
+
+    // Routing/failover
+    case rpcFastICEFallbackArmed      = "rpc_fast_ice_fallback_armed"
+    case rpcFastICEFallbackTriggered  = "rpc_fast_ice_fallback_triggered"
+    case streamOpenFastFailover       = "stream_open_fast_failover"
+
+    // Calls
+    case callSetupStart         = "call_setup_start"
+    case callSetupEnd           = "call_setup_end"
+    case callSignalOpenStart    = "call_signal_open_start"
+    case callSignalOpenEnd      = "call_signal_open_end"
 }
 
 #if DEBUG
@@ -112,6 +123,15 @@ final class PerformanceMetrics: @unchecked Sendable {
         record(event, label: label)
     }
 
+    /// Cancel a paired operation start without recording an end event.
+    /// Used when the operation fails or is superseded (e.g., fast failover).
+    func cancelStart(_ event: MetricEvent, label: String) {
+        let key = "\(event.rawValue):\(label)"
+        lock.lock()
+        _ = pendingStarts.removeValue(forKey: key)
+        lock.unlock()
+    }
+
     /// Mark end of a paired operation. Returns duration in ms.
     @discardableResult
     func end(_ startEvent: MetricEvent, endEvent: MetricEvent, label: String) -> Double? {
@@ -182,6 +202,14 @@ final class PerformanceMetrics: @unchecked Sendable {
         return relevant.map(\.durationMs).reduce(0, +) / Double(relevant.count)
     }
 
+    func count(event: MetricEvent, last n: Int? = nil) -> Int {
+        lock.lock()
+        let slice = n == nil ? events[...] : events.suffix(n!)
+        let count = slice.filter { $0.event == event }.count
+        lock.unlock()
+        return count
+    }
+
     func p95Latency(for eventPair: String, last n: Int = 20) -> Double? {
         lock.lock()
         let relevant = latencySamples.filter { $0.label.hasPrefix(eventPair) }.suffix(n)
@@ -230,12 +258,14 @@ final class PerformanceMetrics: @unchecked Sendable {
 
     @inline(__always) func record(_ event: MetricEvent, label: String = "", value: Double? = nil) {}
     @inline(__always) func start(_ event: MetricEvent, label: String) {}
+    @inline(__always) func cancelStart(_ event: MetricEvent, label: String) {}
     @discardableResult @inline(__always) func end(_ startEvent: MetricEvent, endEvent: MetricEvent, label: String) -> Double? { nil }
     @inline(__always) func messageEnvelopeArrived(messageId: String) {}
     @inline(__always) func messageDecryptStart(messageId: String) {}
     @inline(__always) func messageDecryptEnd(messageId: String) {}
     @inline(__always) func messageUIDisplayed(messageId: String) {}
     @inline(__always) func clearAll() {}
+    @inline(__always) func count(event: MetricEvent, last n: Int? = nil) -> Int { 0 }
 }
 
 #endif

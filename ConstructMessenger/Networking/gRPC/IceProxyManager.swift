@@ -360,7 +360,7 @@ final class IceProxyManager: ObservableObject {
 
     /// Opens a TCP connection to `host:port` and returns the time-to-ready, or nil if unreachable
     /// within `timeout` seconds. Used to order relay candidates before starting the proxy.
-    private static func probeLatency(address: String, timeout: TimeInterval = 2.0) async -> TimeInterval? {
+    private static func probeLatency(address: String, timeout: TimeInterval = NetworkTiming.ICE.relayLatencyProbeTimeout) async -> TimeInterval? {
         let parts = address.split(separator: ":")
         guard parts.count >= 2, let port = NWEndpoint.Port(String(parts.last!)) else { return nil }
         let hostname = String(parts.dropLast().joined(separator: ":"))
@@ -396,7 +396,7 @@ final class IceProxyManager: ObservableObject {
 
     /// Probes all `addresses` concurrently and returns them sorted by TCP latency (fastest first).
     /// Unreachable endpoints (probe timed out) are placed at the end so they are still tried.
-    private static func sortByLatency(_ addresses: [String], timeout: TimeInterval = 2.0) async -> [String] {
+    private static func sortByLatency(_ addresses: [String], timeout: TimeInterval = NetworkTiming.ICE.relayLatencyProbeTimeout) async -> [String] {
         await withTaskGroup(of: (String, TimeInterval?).self) { group in
             for address in addresses {
                 group.addTask { (address, await probeLatency(address: address, timeout: timeout)) }
@@ -493,6 +493,16 @@ final class IceProxyManager: ObservableObject {
     /// If start succeeds, subsequent `performRPC` calls automatically route through ICE until
     /// the proxy is stopped (app restart or user disables ICE in settings).
     func startOnDemandIfNeeded() async {
+        await startOnDemandInternal(persistEnabled: true)
+    }
+
+    /// Starts ICE as a fast-fallback probe (e.g. for stream open) without persisting `isEnabled`.
+    /// Use when the direct path looks blocked/slow but we don't yet have a definitive DPI signal.
+    func startEphemeralOnDemandIfNeeded() async {
+        await startOnDemandInternal(persistEnabled: false)
+    }
+
+    private func startOnDemandInternal(persistEnabled: Bool) async {
         // If ICE proxy is running but on cooldown, DPI blocking has been confirmed on the direct
         // path — clear the cooldown so `iceProxyPort()` returns a valid port and the caller
         // retries the RPC through ICE.  This is the right behaviour: cooldown means "the ICE
@@ -509,9 +519,9 @@ final class IceProxyManager: ObservableObject {
         // than returning immediately with no proxy port.  We poll on the MainActor so
         // Task.sleep yields to let the active start make progress.
         if isStartingOnDemand {
-            let deadline = Date().addingTimeInterval(5)
+            let deadline = Date().addingTimeInterval(NetworkTiming.ICE.onDemandStartJoinTimeout)
             while isStartingOnDemand, Date() < deadline {
-                try? await Task.sleep(nanoseconds: 100_000_000) // 100 ms
+                try? await Task.sleep(nanoseconds: UInt64(NetworkTiming.ICE.onDemandStartJoinPollInterval * 1_000_000_000))
             }
             return
         }
@@ -521,9 +531,11 @@ final class IceProxyManager: ObservableObject {
         Log.info("🧊 Auto-starting ICE proxy (DPI auto-detection)", category: "ICE")
         let cert = await getIceBridgeCert()
         if await startWithRelayFallback(cert: cert) {
-            // Persist the enabled state so the UI toggle and traffic-path indicator
-            // reflect reality — the user implicitly wants ICE if DPI is active.
-            isEnabled = true
+            // Persist the enabled state only for definitive DPI detection. Ephemeral start
+            // is a performance optimization and shouldn't change user settings.
+            if persistEnabled {
+                isEnabled = true
+            }
             Task { await IceCertFetcher.shared.fetchAndCacheRelayList() }
             Log.info("🧊 ICE auto-started via DPI detection", category: "ICE")
         } else {

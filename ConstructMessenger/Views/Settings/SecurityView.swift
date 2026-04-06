@@ -225,6 +225,7 @@ struct SecurityView: View {
         .task { await recoveryVM.loadStatus() }
         .onAppear { securityViewModel.refreshPinState() }
         }
+        .toolbar(.hidden, for: .navigationBar)
         .background(Color.CT.bg.ignoresSafeArea())
     }
 

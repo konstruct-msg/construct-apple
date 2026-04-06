@@ -55,6 +55,8 @@ class MessageRetryManager {
             Task {
                 do {
                     var finalStatus: DeliveryStatus = .sent
+                    var maxRetryAfterMs: Int64 = 0
+                    var finalErrorCode: String = ""
                     for (chunkId, wirePayload) in chunks {
                         let response = try await MessagingServiceClient.shared.sendMessage(
                             messageId: chunkId,
@@ -65,6 +67,12 @@ class MessageRetryManager {
                             timestamp: capturedTimestamp,
                             replyToMessageId: chunkId == capturedMessageId ? capturedReplyToId : nil
                         )
+                        if finalErrorCode.isEmpty, !response.errorCode.isEmpty {
+                            finalErrorCode = response.errorCode
+                        }
+                        if response.retryAfterMs > maxRetryAfterMs {
+                            maxRetryAfterMs = response.retryAfterMs
+                        }
                         switch response.status.lowercased() {
                         case "failed":
                             finalStatus = response.retryable ? .queued : .failed
@@ -85,7 +93,12 @@ class MessageRetryManager {
                         if finalStatus == .sent || finalStatus == .delivered {
                             OutgoingWirePayloadStore.shared.remove(baseMessageId: capturedMessageId)
                         }
-                        Log.info("✅ Message retry completed: \(capturedMessageId), status: \(finalStatus)", category: "MessageRetryManager")
+                        let ecStr = finalErrorCode.isEmpty ? "" : " errorCode=\(finalErrorCode)"
+                        let raStr = maxRetryAfterMs > 0 ? " retryAfterMs=\(maxRetryAfterMs)" : ""
+                        Log.info("✅ Message retry completed: \(capturedMessageId) status=\(finalStatus)\(ecStr)\(raStr)", category: "MessageRetryManager")
+                        if finalStatus == .queued, maxRetryAfterMs > 0 {
+                            Log.info("⏳ Rate-limited retry — will reschedule in \(maxRetryAfterMs)ms for \(capturedMessageId.prefix(8))", category: "MessageRetryManager")
+                        }
                     }
                 } catch {
                     await MainActor.run {

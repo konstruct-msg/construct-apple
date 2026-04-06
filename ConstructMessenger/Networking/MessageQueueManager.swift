@@ -90,34 +90,15 @@ class MessageQueueManager {
         
         let timeout = APIConstants.messageSendTimeout
         let now = Date()
-        let timedOutIds = pendingSends.compactMap { (messageId, timestamp) -> String? in
-            now.timeIntervalSince(timestamp) > timeout ? messageId : nil
+
+        // Source of truth for "how long have we been sending": `pendingSends`.
+        // Do NOT infer from `Message.timestamp` — that is message creation time,
+        // and using it here causes false timeouts and retry storms.
+        let timedOutIds = pendingSends.compactMap { (messageId, startedAt) -> String? in
+            now.timeIntervalSince(startedAt) > timeout ? messageId : nil
         }
         if !timedOutIds.isEmpty {
             handleTimedOutMessages(timedOutIds, context: context)
-        }
-        
-        // Check Core Data for messages stuck in .sending state
-        context.perform {
-            let fetchRequest: NSFetchRequest<Message> = Message.fetchRequest()
-            fetchRequest.predicate = NSPredicate(format: "deliveryStatusRaw == %d", DeliveryStatus.sending.rawValue)
-            
-            if let stuckMessages = try? context.fetch(fetchRequest) {
-                let now = Date()
-                for message in stuckMessages {
-                    // If message has been in sending state for more than timeout, mark as queued
-                    let timeSinceSent = now.timeIntervalSince(message.timestamp)
-                    if timeSinceSent > timeout {
-                        Log.info("⏱️ Message \(message.id) stuck in sending state for \(Int(timeSinceSent))s, marking as queued", category: "MessageQueue")
-                        message.deliveryStatus = .queued
-                        do {
-                            try context.save()
-                        } catch {
-                            Log.error("⚠️ MessageQueueManager: failed to save stuck-message status: \(error)", category: "MessageQueue")
-                        }
-                    }
-                }
-            }
         }
     }
     

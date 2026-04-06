@@ -91,7 +91,7 @@ final class CryptoSessionInitializationService {
             #endif
             
             let sessionId = try core.initSession(contactId: userId, recipientBundle: bytes)
-            UserDefaults.standard.set(Int(suiteID), forKey: "construct.session.suite.\(userId)")
+            KeychainManager.shared.saveSessionSuiteId(userId: userId, suiteId: suiteID)
             saveSession(userId)
 
             // PQXDH: Prefer Kyber OTPK over SPK when available.
@@ -270,7 +270,7 @@ final class CryptoSessionInitializationService {
 
             Log.info("✅ Session initialized successfully, decrypted: \(result.decryptedMessage.prefix(50))...", category: "CryptoManager")
 
-            UserDefaults.standard.set(Int(suiteID), forKey: "construct.session.suite.\(userId)")
+            KeychainManager.shared.saveSessionSuiteId(userId: userId, suiteId: suiteID)
             // NOTE: saveSession is intentionally deferred until AFTER PQXDH strengthening below.
             // Writing the session to Keychain before applying the KEM contribution would leave a
             // partially-initialised session on disk if the process crashes between the two steps.

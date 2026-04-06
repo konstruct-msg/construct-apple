@@ -221,7 +221,7 @@ struct UserProfileView: View {
 
     private var securitySection: some View {
         let hasSession = CryptoManager.shared.hasSession(for: user.id)
-        let suiteId = UserDefaults.standard.integer(forKey: "construct.session.suite.\(user.id)")
+        let suiteId = Int(KeychainManager.shared.loadSessionSuiteId(userId: user.id) ?? 0)
         let suiteLabel = hasSession && suiteId > 0
             ? cryptoSuiteName(suiteId: suiteId)
             : NSLocalizedString("session_crypto_no_session", comment: "")

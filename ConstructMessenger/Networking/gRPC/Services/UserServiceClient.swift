@@ -18,7 +18,7 @@ final class UserServiceClient: Sendable {
     // MARK: - Get User Profile
 
     func getUserProfile(userId: String) async throws -> Shared_Proto_Services_V1_UserProfile {
-        try await GRPCChannelManager.shared.performRPC { grpcClient in
+        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.getUserProfile) { grpcClient in
             let client = Shared_Proto_Services_V1_UserService.Client(wrapping: grpcClient)
 
             var request = Shared_Proto_Services_V1_GetUserProfileRequest()
@@ -31,7 +31,7 @@ final class UserServiceClient: Sendable {
     // MARK: - Delete Account (replaces AuthAPI.getDeleteChallenge + confirmDeleteDevice)
 
     func deleteAccount(confirmation: String, reason: String? = nil) async throws -> Shared_Proto_Services_V1_DeleteAccountResponse {
-        try await GRPCChannelManager.shared.performRPC { grpcClient in
+        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.deleteAccount) { grpcClient in
             let client = Shared_Proto_Services_V1_UserService.Client(wrapping: grpcClient)
 
             var request = Shared_Proto_Services_V1_DeleteAccountRequest()
@@ -45,7 +45,7 @@ final class UserServiceClient: Sendable {
     // MARK: - Block / Unblock User
 
     func blockUser(userId: String, reason: String? = nil) async throws -> Bool {
-        try await GRPCChannelManager.shared.performRPC { grpcClient in
+        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.blockUser) { grpcClient in
             let client = Shared_Proto_Services_V1_UserService.Client(wrapping: grpcClient)
 
             var request = Shared_Proto_Services_V1_BlockUserRequest()
@@ -58,7 +58,7 @@ final class UserServiceClient: Sendable {
     }
 
     func unblockUser(userId: String) async throws -> Bool {
-        try await GRPCChannelManager.shared.performRPC { grpcClient in
+        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.unblockUser) { grpcClient in
             let client = Shared_Proto_Services_V1_UserService.Client(wrapping: grpcClient)
 
             var request = Shared_Proto_Services_V1_UnblockUserRequest()
@@ -72,7 +72,7 @@ final class UserServiceClient: Sendable {
     // MARK: - Update Username
 
     func updateUsername(userId: String, username: String) async throws {
-        try await GRPCChannelManager.shared.performRPC { grpcClient in
+        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.updateUserProfile) { grpcClient in
             let client = Shared_Proto_Services_V1_UserService.Client(wrapping: grpcClient)
 
             var request = Shared_Proto_Services_V1_UpdateUserProfileRequest()
@@ -91,7 +91,7 @@ final class UserServiceClient: Sendable {
     }
 
     func checkUsernameAvailability(username: String) async throws -> UsernameAvailability {
-        try await GRPCChannelManager.shared.performRPC { grpcClient in
+        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.usernameAvailability) { grpcClient in
             let client = Shared_Proto_Services_V1_UserService.Client(wrapping: grpcClient)
 
             var request = Shared_Proto_Services_V1_CheckUsernameAvailabilityRequest()

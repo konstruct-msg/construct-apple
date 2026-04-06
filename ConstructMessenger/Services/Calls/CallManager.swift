@@ -49,6 +49,7 @@ final class CallManager {
         var webrtc: (any WebRTCSessionProtocol)?
         var keepaliveTask: Task<Void, Never>?
         var receiveTask: Task<Void, Never>?
+        var acceptTask: Task<Void, Never>?
         let startedAt: Date = Date()
         var answeredAt: Date? = nil
         /// SDP offer received via MessagingService before the user answered.
@@ -65,6 +66,7 @@ final class CallManager {
         func close() {
             keepaliveTask?.cancel()
             receiveTask?.cancel()
+            acceptTask?.cancel()
             webrtc?.close()
             webrtc = nil
             stream?.close()
@@ -283,6 +285,7 @@ final class CallManager {
         active?.close()
         active = ActiveCall(session: session)
         state = initialState
+        PerformanceMetrics.shared.start(.callSetupStart, label: String(session.id.prefix(8)))
     }
 
     private func openStreamIfNeeded() throws {
@@ -292,11 +295,57 @@ final class CallManager {
         let stream = try SignalingServiceClient.shared.openSignalStream()
         active.stream = stream
 
+        let metricsLabel = String(active.session.id.prefix(8))
+        PerformanceMetrics.shared.start(.callSignalOpenStart, label: metricsLabel)
+
+        // Wait until the server accepts the stream; on timeout, try an ICE fast-fallback.
+        active.acceptTask?.cancel()
+        active.acceptTask = Task { @MainActor [weak self, weak active] in
+            struct AcceptTimeout: Error {}
+            guard let self, let active else { return }
+            do {
+                try await withThrowingTaskGroup(of: Void.self) { group in
+                    group.addTask {
+                        for await _ in stream.accepted { return }
+                    }
+                    group.addTask {
+                        try await Task.sleep(for: .seconds(NetworkTiming.Calls.signalingStreamOpenAcceptTimeout))
+                        throw AcceptTimeout()
+                    }
+                    _ = try await group.next()
+                    group.cancelAll()
+                }
+
+                PerformanceMetrics.shared.end(.callSignalOpenStart, endEvent: .callSignalOpenEnd, label: metricsLabel)
+                Log.info("📞 Signaling stream accepted (call_id=\(metricsLabel)…)", category: "Calls")
+            } catch is AcceptTimeout {
+                PerformanceMetrics.shared.cancelStart(.callSignalOpenStart, label: metricsLabel)
+                Log.info("🧊 Signaling stream open timed out — attempting ICE fast-failover (call_id=\(metricsLabel)…)", category: "Calls")
+
+                // If ICE is running but on cooldown, clear cooldown: direct path is likely blocked.
+                if IceProxyManager.shared.isRunning, IceProxyManager.shared.isOnCooldown {
+                    IceProxyManager.shared.clearCooldown()
+                } else if !IceProxyManager.shared.isRunning {
+                    await IceProxyManager.shared.startEphemeralOnDemandIfNeeded()
+                }
+
+                // Only restart if this stream is still the active one.
+                guard self.active === active, active.stream === stream else { return }
+                active.stream?.close()
+                active.stream = nil
+                try? self.openStreamIfNeeded()
+            } catch is CancellationError {
+                PerformanceMetrics.shared.cancelStart(.callSignalOpenStart, label: metricsLabel)
+            } catch {
+                PerformanceMetrics.shared.cancelStart(.callSignalOpenStart, label: metricsLabel)
+            }
+        }
+
         // Keepalive ping every 25s (server closes idle streams).
         active.keepaliveTask?.cancel()
         active.keepaliveTask = Task { [weak active] in
             while !(Task.isCancelled) {
-                try? await Task.sleep(nanoseconds: 25_000_000_000)
+                try? await Task.sleep(for: .seconds(NetworkTiming.Calls.signalingKeepaliveInterval))
                 guard let active else { return }
                 let ping = Self.makePing(timestampMs: Self.nowMs())
                 await MainActor.run {
@@ -325,7 +374,7 @@ final class CallManager {
             }
         }
 
-        Log.info("📞 Signaling stream opened (call_id=\(active.session.id.prefix(8))…)", category: "Calls")
+        Log.info("📞 Signaling stream connecting (call_id=\(active.session.id.prefix(8))…)", category: "Calls")
     }
 
     private func handleSignalResponse(_ response: Shared_Proto_Signaling_V1_SignalResponse, for session: CallSession) {
@@ -388,6 +437,13 @@ final class CallManager {
         let startedAt = active.startedAt
         let answeredAt = active.answeredAt
         let wasRegisteredWithCallKit = active.callKitRegistered
+        let metricsLabel = String(session.id.prefix(8))
+
+        // If we never reached "active", clean up pending metric starts.
+        if answeredAt == nil {
+            PerformanceMetrics.shared.cancelStart(.callSetupStart, label: metricsLabel)
+        }
+        PerformanceMetrics.shared.cancelStart(.callSignalOpenStart, label: metricsLabel)
 
         // Determine call status for history
         let historyStatus: CallRecord.Status
@@ -409,7 +465,7 @@ final class CallManager {
         state = .ended(session, reason)
 
         Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            try? await Task.sleep(for: .seconds(NetworkTiming.Calls.endedAutoClearDelay))
             if case .ended = self.state { self.state = .idle }
         }
 
@@ -473,6 +529,7 @@ final class CallManager {
             sendAnswer(sdp: answerSdp)
             active.answeredAt = Date()
             state = .active(session)
+            PerformanceMetrics.shared.end(.callSetupStart, endEvent: .callSetupEnd, label: String(session.id.prefix(8)))
         } catch {
             Log.error("📞 Failed to handle offer: \(error)", category: "Calls")
             endActiveCall(reason: .local("Offer handling failed"))
@@ -487,6 +544,7 @@ final class CallManager {
             try await active.webrtc?.setRemoteAnswer(sdp: sdp)
             active.answeredAt = Date()
             state = .active(session)
+            PerformanceMetrics.shared.end(.callSetupStart, endEvent: .callSetupEnd, label: String(session.id.prefix(8)))
             #if os(iOS)
             CallKitProvider.shared.reportOutgoingCallConnected(uuid: session.uuid)
             #endif

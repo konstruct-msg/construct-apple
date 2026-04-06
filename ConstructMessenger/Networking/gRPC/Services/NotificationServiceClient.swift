@@ -35,7 +35,7 @@ final class NotificationServiceClient: Sendable {
 
         Log.info("📲 Registering APNs token — environment: \(environment.rawValue) (\(environment == .pushEnvProduction ? "production" : "sandbox"))", category: "Notifications")
 
-        return try await GRPCChannelManager.shared.performRPC { grpcClient in
+        return try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.registerDeviceToken, fastICEFallback: true) { grpcClient in
             let client = Shared_Proto_Services_V1_NotificationService.Client(wrapping: grpcClient)
 
             var request = Shared_Proto_Services_V1_RegisterDeviceTokenRequest()
@@ -63,7 +63,7 @@ final class NotificationServiceClient: Sendable {
         let deviceId = KeychainManager.shared.loadDeviceID() ?? ""
         let environment = pushEnvironment
 
-        return try await GRPCChannelManager.shared.performRPC { grpcClient in
+        return try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.registerVoipToken, fastICEFallback: true) { grpcClient in
             let client = Shared_Proto_Services_V1_NotificationService.Client(wrapping: grpcClient)
 
             var request = Shared_Proto_Services_V1_RegisterVoipTokenRequest()
@@ -81,7 +81,7 @@ final class NotificationServiceClient: Sendable {
     func unregisterVoipToken() async throws {
         let deviceId = KeychainManager.shared.loadDeviceID() ?? ""
 
-        try await GRPCChannelManager.shared.performRPC { grpcClient in
+        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.unregisterVoipToken, fastICEFallback: true) { grpcClient in
             let client = Shared_Proto_Services_V1_NotificationService.Client(wrapping: grpcClient)
             var request = Shared_Proto_Services_V1_UnregisterVoipTokenRequest()
             request.deviceID = deviceId
@@ -93,7 +93,7 @@ final class NotificationServiceClient: Sendable {
 
     /// Removes the push token on logout / notifications disabled.
     func unregisterDeviceToken(token: String) async throws {
-        try await GRPCChannelManager.shared.performRPC { grpcClient in
+        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.unregisterDeviceToken, fastICEFallback: true) { grpcClient in
             let client = Shared_Proto_Services_V1_NotificationService.Client(wrapping: grpcClient)
 
             var request = Shared_Proto_Services_V1_UnregisterDeviceTokenRequest()

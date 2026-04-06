@@ -26,6 +26,13 @@ struct SendMessageResponse: Codable {
     /// False when the server returned a permanent error (e.g. BLOCKED).
     /// The sender should NOT retry the message.
     var retryable: Bool = true
+    /// Server-supplied error code for decision tracing and retry policy.
+    /// Empty string means no error (success path).
+    var errorCode: String = ""
+    /// Non-zero for RATE_LIMIT: milliseconds to wait before retrying.
+    var retryAfterMs: Int64 = 0
+    /// Per-attempt UUID echoed back by server for "attempt → decision" correlation.
+    var attemptId: String = ""
 }
 
 struct EndSessionResponse: Codable {

@@ -40,7 +40,7 @@ final class MessagingServiceClient: Sendable {
         let bgTaskId = UIApplication.shared.beginBackgroundTask(withName: "send-msg-rpc") { }
         defer { UIApplication.shared.endBackgroundTask(bgTaskId) }
         #endif
-        return try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.sendMessage) { grpcClient in
+        return try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.sendMessage, fastICEFallback: true) { grpcClient in
             let msgClient = Shared_Proto_Services_V1_MessagingService.Client(wrapping: grpcClient)
 
             var sender = Shared_Proto_Core_V1_UserId()
@@ -73,13 +73,17 @@ final class MessagingServiceClient: Sendable {
                 envelope.recipientDevice = recipientDevice
             }
 
+            let attemptId = UUID().uuidString.lowercased()
+
             var request = Shared_Proto_Services_V1_SendMessageRequest()
             request.message = envelope
             request.idempotencyKey = messageId
+            request.attemptID = attemptId
 
             Log.debug("""
                 📤 sendMessage RPC →
                    messageId      = \(messageId)
+                   attemptId      = \(attemptId)
                    senderId       = \(senderId)
                    recipientId    = \(recipientId)
                    conversationId = \(conversationId)
@@ -90,26 +94,47 @@ final class MessagingServiceClient: Sendable {
                 request: .init(message: request)
             )
 
-            Log.info("✅ sendMessage response: success=\(response.success) errorCode=\(response.error.errorCode) messageId=\(response.messageID)", category: "MessagingServiceClient")
+            let errorCodeRaw = response.error.errorCode
+            let retryAfterMs = response.error.hasRetryAfterMs ? response.error.retryAfterMs : 0
+            let echoedAttemptId = response.hasAttemptID ? response.attemptID : attemptId
 
             let status: String
             let retryable: Bool
+            let errorCodeStr: String
             if response.success {
                 status = "sent"
                 retryable = true
-            } else if response.error.errorCode == .blocked {
+                errorCodeStr = ""
+                Log.info("✅ sendMessage sent attemptId=\(echoedAttemptId) messageId=\(response.messageID)", category: "MessagingServiceClient")
+            } else if errorCodeRaw == .blocked {
                 status = "blocked"
                 retryable = false
-                Log.error("🚫 Message rejected — recipient has blocked sender (messageId=\(response.messageID))", category: "MessagingServiceClient")
+                errorCodeStr = "blocked"
+                Log.error("🚫 Message blocked by server — attemptId=\(echoedAttemptId) messageId=\(response.messageID)", category: "MessagingServiceClient")
+            } else if errorCodeRaw == .rateLimit {
+                status = "failed"
+                retryable = true
+                errorCodeStr = "rateLimit"
+                Log.error("⏳ Rate limited — attemptId=\(echoedAttemptId) retryAfterMs=\(retryAfterMs) messageId=\(response.messageID)", category: "MessagingServiceClient")
+            } else if errorCodeRaw == .encryptionFailed {
+                status = "failed"
+                retryable = false
+                errorCodeStr = "encryptionFailed"
+                Log.error("🔐 Encryption rejected by server — attemptId=\(echoedAttemptId) messageId=\(response.messageID)", category: "MessagingServiceClient")
             } else {
                 status = "failed"
                 retryable = response.error.retryable
+                errorCodeStr = errorCodeRaw == .unspecified ? "" : "\(errorCodeRaw)"
+                Log.error("❌ sendMessage failed — attemptId=\(echoedAttemptId) errorCode=\(errorCodeRaw) retryable=\(retryable) messageId=\(response.messageID)", category: "MessagingServiceClient")
             }
 
             return SendMessageResponse(
                 messageId: response.messageID,
                 status: status,
-                retryable: retryable
+                retryable: retryable,
+                errorCode: errorCodeStr,
+                retryAfterMs: retryAfterMs,
+                attemptId: echoedAttemptId
             )
         }
     }
@@ -117,7 +142,7 @@ final class MessagingServiceClient: Sendable {
     // MARK: - Send End Session (replaces MessagingAPI.sendEndSession)
 
     func sendEndSession(to recipientId: String, reason: String? = nil) async throws -> EndSessionResponse {
-        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.endSession) { grpcClient in
+        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.endSession, fastICEFallback: true) { grpcClient in
             let msgClient = Shared_Proto_Services_V1_MessagingService.Client(wrapping: grpcClient)
 
             let messageId = UUID().uuidString
@@ -270,7 +295,7 @@ final class MessagingServiceClient: Sendable {
     }
 
     func getPendingMessages(sinceCursor: String? = nil, limit: Int32 = 50) async throws -> PendingMessagesResult {
-        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.getPendingMessages) { grpcClient in
+        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.getPendingMessages, fastICEFallback: true) { grpcClient in
             try await Self.getPendingMessagesPage(grpcClient: grpcClient, sinceCursor: sinceCursor, limit: limit)
         }
     }
@@ -283,7 +308,7 @@ final class MessagingServiceClient: Sendable {
         newEncryptedContent: Data,
         recipientUserId: String
     ) async throws -> Shared_Proto_Services_V1_EditMessageResponse {
-        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.editMessage) { grpcClient in
+        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.editMessage, fastICEFallback: true) { grpcClient in
             let msgClient = Shared_Proto_Services_V1_MessagingService.Client(wrapping: grpcClient)
 
             var request = Shared_Proto_Services_V1_EditMessageRequest()
