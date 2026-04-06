@@ -12,6 +12,7 @@ struct SecurityView: View {
     @Environment(AccountRecoveryViewModel.self) private var recoveryVM
     @Environment(AuthViewModel.self) private var authVM
     @Environment(\.managedObjectContext) private var viewContext
+    @Environment(\.dismiss) private var dismiss
 
     @State private var showingPinSetup = false
     @State private var showingDisablePinSheet = false
@@ -22,7 +23,13 @@ struct SecurityView: View {
 
     var body: some View {
         @Bindable var securityViewModel = securityViewModel
-        ScrollView {
+        VStack(spacing: 0) {
+            CTNavBar(
+                title: NSLocalizedString("security", comment: ""),
+                showBack: true,
+                backAction: { dismiss() }
+            )
+            ScrollView {
             VStack(spacing: 20) {
 
                 // MARK: - PIN Code section
@@ -187,22 +194,6 @@ struct SecurityView: View {
             }
             .padding(.vertical, 20)
         }
-        .background(Color.CT.bg.ignoresSafeArea())
-        .navigationTitle("")
-        #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(Color.CT.bgMsg, for: .navigationBar)
-        .toolbarBackground(.visible, for: .navigationBar)
-        .toolbarColorScheme(.dark, for: .navigationBar)
-        #endif
-        .toolbar {
-            ToolbarItem(placement: .principal) {
-                Text(NSLocalizedString("security", comment: "").uppercased())
-                    .font(CTFont.bold(13))
-                    .foregroundStyle(Color.CT.text)
-                    .tracking(4)
-            }
-        }
         .sheet(isPresented: $showingPinSetup) {
             PinSetupView(isChanging: securityViewModel.isPinEnabled)
                 .environment(securityViewModel)
@@ -233,6 +224,8 @@ struct SecurityView: View {
         }
         .task { await recoveryVM.loadStatus() }
         .onAppear { securityViewModel.refreshPinState() }
+        }
+        .background(Color.CT.bg.ignoresSafeArea())
     }
 
     // MARK: - Helpers

@@ -13,6 +13,7 @@ import UserNotifications
 
 struct NotificationsSettingsView: View {
     // MARK: - Notification Settings
+    @Environment(\.dismiss) private var dismiss
     @AppStorage("notificationsEnabled") private var notificationsEnabled: Bool = true
     @AppStorage("showMessageNotifications") private var showMessageNotifications: Bool = true
     @AppStorage("notificationPreviewType") private var notificationPreviewType: NotificationPreviewType = .nameAndMessage
@@ -25,7 +26,13 @@ struct NotificationsSettingsView: View {
     @State private var showingSystemSettings = false
 
     var body: some View {
-        ScrollView {
+        VStack(spacing: 0) {
+            CTNavBar(
+                title: NSLocalizedString("notifications", comment: ""),
+                showBack: true,
+                backAction: { dismiss() }
+            )
+            ScrollView {
             VStack(spacing: 0) {
 
                 // MARK: - General Notifications
@@ -211,25 +218,11 @@ struct NotificationsSettingsView: View {
             }
             .padding(.vertical, 20)
         }
-        .background(Color.CT.bg.ignoresSafeArea())
-        .navigationTitle("")
-        #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(Color.CT.bgMsg, for: .navigationBar)
-        .toolbarBackground(.visible, for: .navigationBar)
-        .toolbarColorScheme(.dark, for: .navigationBar)
-        #endif
-        .toolbar {
-            ToolbarItem(placement: .principal) {
-                Text(NSLocalizedString("notifications", comment: "").uppercased())
-                    .font(CTFont.bold(13))
-                    .foregroundStyle(Color.CT.text)
-                    .tracking(4)
-            }
-        }
         .onAppear {
             checkNotificationAuthorization()
         }
+        }
+        .background(Color.CT.bg.ignoresSafeArea())
     }
 
     // MARK: - Computed Properties

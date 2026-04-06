@@ -6,6 +6,7 @@
 import SwiftUI
 
 struct NetworkSettingsView: View {
+    @Environment(\.dismiss) private var dismiss
     private var connectionManager = ConnectionStatusManager.shared
     private var streamManager = MessageStreamManager.shared
 
@@ -25,7 +26,13 @@ struct NetworkSettingsView: View {
     @StateObject private var iceManager = IceProxyManager.shared
 
     var body: some View {
-        ScrollView {
+        VStack(spacing: 0) {
+            CTNavBar(
+                title: NSLocalizedString("network", comment: ""),
+                showBack: true,
+                backAction: { dismiss() }
+            )
+            ScrollView {
             VStack(spacing: 0) {
 
                 // MARK: - Connection Status
@@ -263,27 +270,13 @@ struct NetworkSettingsView: View {
             }
             .padding(.vertical, 20)
         }
-        .background(Color.CT.bg.ignoresSafeArea())
-        .navigationTitle("")
-        #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(Color.CT.bgMsg, for: .navigationBar)
-        .toolbarBackground(.visible, for: .navigationBar)
-        .toolbarColorScheme(.dark, for: .navigationBar)
-        #endif
-        .toolbar {
-            ToolbarItem(placement: .principal) {
-                Text(NSLocalizedString("network", comment: "").uppercased())
-                    .font(CTFont.bold(13))
-                    .foregroundStyle(Color.CT.text)
-                    .tracking(4)
-            }
-        }
         .alert("server_applied_title", isPresented: $showingAppliedAlert) {
             Button("ok") { }
         } message: {
             Text("server_applied_message")
         }
+        }
+        .background(Color.CT.bg.ignoresSafeArea())
     }
 
     // MARK: - Actions

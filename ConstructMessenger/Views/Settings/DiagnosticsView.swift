@@ -12,6 +12,8 @@ import UIKit
 #endif
 
 struct DiagnosticsView: View {
+    @Environment(\.dismiss) private var dismiss
+    
     @State private var logText: String = ""
     @State private var logSize: String = ""
     private var push = PushNotificationManager.shared
@@ -19,6 +21,12 @@ struct DiagnosticsView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
+                
+                CTNavBar(
+                    title: NSLocalizedString("diagnostics", comment: ""),
+                    showBack: true,
+                    backAction: { dismiss() }
+                )
 
                 // MARK: - Push Notifications
                 VStack(alignment: .leading, spacing: 6) {
@@ -146,7 +154,7 @@ struct DiagnosticsView: View {
                         ScrollView {
                             Text(logText)
                                 .font(.system(size: 10, design: .monospaced))
-                                .foregroundStyle(Color.CT.textDim)
+                                .foregroundStyle(Color.white)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(8)
                                 .textSelection(.enabled)
@@ -165,14 +173,7 @@ struct DiagnosticsView: View {
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
         #endif
-        .toolbar {
-            ToolbarItem(placement: .principal) {
-                Text(NSLocalizedString("diagnostics", comment: "").uppercased())
-                    .font(CTFont.bold(13))
-                    .foregroundStyle(Color.CT.text)
-                    .tracking(4)
-            }
-        }
+        .toolbar(.hidden, for: .navigationBar)
         .onAppear { refresh() }
     }
 

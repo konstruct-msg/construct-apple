@@ -9,6 +9,7 @@ import SwiftUI
 
 struct BackgroundFetchSettingsView: View {
     // MARK: - State
+    @Environment(\.dismiss) private var dismiss
     @AppStorage("backgroundFetchEnabled") private var isEnabled: Bool = true
     @State private var intervalMinutes: Int = BackgroundFetchConfig.defaultIntervalMinutes
     @State private var isLowPowerModeEnabled: Bool = false
@@ -17,7 +18,13 @@ struct BackgroundFetchSettingsView: View {
 
     // MARK: - Body
     var body: some View {
-        ScrollView {
+        VStack(spacing: 0) {
+            CTNavBar(
+                title: NSLocalizedString("background_fetch", comment: ""),
+                showBack: true,
+                backAction: { dismiss() }
+            )
+            ScrollView {
             VStack(spacing: 0) {
 
                 // MARK: - Enable/Disable section
@@ -120,22 +127,6 @@ struct BackgroundFetchSettingsView: View {
             }
             .padding(.vertical, 20)
         }
-        .background(Color.CT.bg.ignoresSafeArea())
-        .navigationTitle("")
-        #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(Color.CT.bgMsg, for: .navigationBar)
-        .toolbarBackground(.visible, for: .navigationBar)
-        .toolbarColorScheme(.dark, for: .navigationBar)
-        #endif
-        .toolbar {
-            ToolbarItem(placement: .principal) {
-                Text(NSLocalizedString("background_fetch", comment: "").uppercased())
-                    .font(CTFont.bold(13))
-                    .foregroundStyle(Color.CT.text)
-                    .tracking(4)
-            }
-        }
         .onAppear {
             loadSettings()
             checkLowPowerMode()
@@ -148,6 +139,8 @@ struct BackgroundFetchSettingsView: View {
         } message: {
             Text("background_fetch_low_power_mode_alert_message")
         }
+        }
+        .background(Color.CT.bg.ignoresSafeArea())
     }
 
     // MARK: - Sub-views

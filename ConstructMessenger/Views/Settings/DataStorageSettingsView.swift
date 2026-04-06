@@ -22,6 +22,8 @@ struct DataStorageSettingsView: View {
     @State private var cacheSize: Int64 = 0
     @State private var isClearing = false
     @State private var showClearConfirm = false
+    
+    @Environment(\.dismiss) private var dismiss
 
     // MARK: - Options
 
@@ -42,9 +44,15 @@ struct DataStorageSettingsView: View {
     ]
 
     var body: some View {
+            
         ScrollView {
             VStack(spacing: 20) {
-
+                CTNavBar(
+                    title: NSLocalizedString("data_and_storage", comment: ""),
+                    showBack: true,
+                    backAction: { dismiss() }
+                )
+                
                 // MARK: - Usage section
                 VStack(alignment: .leading, spacing: 6) {
                     ConstructSection(header: NSLocalizedString("storage_media_cache", comment: "").uppercased()) {
@@ -75,20 +83,20 @@ struct DataStorageSettingsView: View {
                                 .frame(height: 6)
                                 Text(String(format: NSLocalizedString("storage_of_quota", comment: ""),
                                             formatBytes(cacheSize), formatBytes(Int64(maxDiskCacheBytesRaw))))
-                                    .font(CTFont.regular(11))
-                                    .foregroundStyle(Color.CT.textDim)
+                                .font(CTFont.regular(11))
+                                .foregroundStyle(Color.CT.textDim)
                             }
                         }
                         .padding(.horizontal, 16)
                         .padding(.vertical, 14)
-
+                        
                         ConstructRowDivider(indent: 16)
-
+                        
                         ConstructActionRow(
                             icon: "trash",
                             title: isClearing
-                                ? LocalizedStringKey("storage_clearing")
-                                : LocalizedStringKey("storage_clear_media_cache"),
+                            ? LocalizedStringKey("storage_clearing")
+                            : LocalizedStringKey("storage_clear_media_cache"),
                             role: .destructive,
                             isLoading: isClearing
                         ) {
@@ -102,7 +110,7 @@ struct DataStorageSettingsView: View {
                         .foregroundStyle(Color.CT.textDim)
                         .padding(.horizontal, 20)
                 }
-
+                
                 // MARK: - Quota section
                 VStack(alignment: .leading, spacing: 6) {
                     ConstructSection(header: NSLocalizedString("storage_limit", comment: "").uppercased()) {
@@ -121,7 +129,7 @@ struct DataStorageSettingsView: View {
                         .foregroundStyle(Color.CT.textDim)
                         .padding(.horizontal, 20)
                 }
-
+                
                 // MARK: - Auto-eviction section
                 VStack(alignment: .leading, spacing: 6) {
                     ConstructSection(header: NSLocalizedString("storage_auto_clear", comment: "").uppercased()) {
@@ -145,20 +153,14 @@ struct DataStorageSettingsView: View {
         }
         .background(Color.CT.bg.ignoresSafeArea())
         .navigationTitle("")
-        #if os(iOS)
+#if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(Color.CT.bgMsg, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
-        #endif
-        .toolbar {
-            ToolbarItem(placement: .principal) {
-                Text(NSLocalizedString("data_and_storage", comment: "").uppercased())
-                    .font(CTFont.bold(13))
-                    .foregroundStyle(Color.CT.text)
-                    .tracking(4)
-            }
-        }
+#endif
+        .toolbar(.hidden, for: .navigationBar)
+        
         .task { cacheSize = MediaManager.shared.diskCacheSize() }
         .confirmationDialog("storage_clear_confirm_title",
                             isPresented: $showClearConfirm,

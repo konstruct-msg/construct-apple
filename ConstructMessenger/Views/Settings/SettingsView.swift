@@ -69,6 +69,11 @@ struct SettingsView: View {
                         }
                         .buttonStyle(.plain)
                         CTSep(style: .thin)
+                        NavigationLink(destination: AppearanceSettingsView()) {
+                            CTSettingsRow(label: "APPEARANCE", value: CTSymbol.forward)
+                        }
+                        .buttonStyle(.plain)
+                        CTSep()
                         NavigationLink(destination: SecurityView()) {
                             CTSettingsRow(label: "SECURITY", value: CTSymbol.forward)
                         }
@@ -108,13 +113,8 @@ struct SettingsView: View {
                         .buttonStyle(.plain)
                         CTSep()
 
-                        // MARK: Appearance
-                        CTSettingsSectionHeader(title: NSLocalizedString("appearance", comment: ""))
-                        NavigationLink(destination: AppearanceSettingsView()) {
-                            CTSettingsRow(label: "THEME", value: CTSymbol.forward)
-                        }
-                        .buttonStyle(.plain)
-                        CTSep()
+                        
+                        
 
                         // MARK: About
                         CTSettingsSectionHeader(title: NSLocalizedString("about", comment: ""))

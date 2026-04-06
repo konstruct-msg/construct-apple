@@ -9,10 +9,17 @@ import SwiftUI
 
 struct AppearanceSettingsView: View {
     @AppStorage("appTheme") private var appTheme: AppTheme = .dark
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
+                CTNavBar(
+                    title: NSLocalizedString("appearance", comment: ""),
+                    showBack: true,
+                    backAction: { dismiss() }
+                )
+                
                 VStack(alignment: .leading, spacing: 6) {
                     ConstructSection(header: NSLocalizedString("theme", comment: "")) {
                         ForEach(Array(AppTheme.allCases.enumerated()), id: \.element) { index, theme in
@@ -61,21 +68,7 @@ struct AppearanceSettingsView: View {
             .padding(.vertical, 20)
         }
         .background(Color.CT.bg.ignoresSafeArea())
-        .navigationTitle("")
-        #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(Color.CT.bgMsg, for: .navigationBar)
-        .toolbarBackground(.visible, for: .navigationBar)
-        .toolbarColorScheme(.dark, for: .navigationBar)
-        #endif
-        .toolbar {
-            ToolbarItem(placement: .principal) {
-                Text(NSLocalizedString("appearance", comment: "").uppercased())
-                    .font(CTFont.bold(13))
-                    .foregroundStyle(Color.CT.text)
-                    .tracking(4)
-            }
-        }
+        .toolbar(.hidden, for: .navigationBar)
         .onAppear {
             // If user previously selected an unavailable theme, reset to dark
             if !appTheme.isAvailable { appTheme = .dark }

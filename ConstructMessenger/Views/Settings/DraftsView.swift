@@ -11,13 +11,19 @@ import UIKit
 #endif
 
 struct DraftsView: View {
+    @Environment(\.dismiss) private var dismiss
     @State private var draftText: String = ""
     @State private var drafts: [DraftItem] = []
 
     private let storageKey = "local_drafts"
 
     var body: some View {
-        NavigationStack {
+        VStack(spacing: 0) {
+            CTNavBar(
+                title: NSLocalizedString("drafts", comment: ""),
+                showBack: true,
+                backAction: { dismiss() }
+            )
             VStack(spacing: 16) {
                 VStack(spacing: 8) {
                     TextEditor(text: $draftText)
@@ -67,11 +73,11 @@ struct DraftsView: View {
                 }
             }
             .padding()
-            .navigationTitle(LocalizedStringKey("drafts"))
             .onAppear {
                 loadDrafts()
             }
         }
+        .background(Color.CT.bg.ignoresSafeArea())
     }
 
     private func addDraft() {
