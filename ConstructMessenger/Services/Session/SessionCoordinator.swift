@@ -62,6 +62,10 @@ final class SessionCoordinator {
     /// Prevents parallel session-init attempts for the same peer.
     private var usersInitializingSession: Set<String> = []
 
+    /// Tracks when each session was last successfully established (Unix seconds).
+    /// Used to detect and discard stale END_SESSION messages that arrived late from the server.
+    private var sessionEstablishedAt: [String: UInt64] = [:]
+
     // MARK: - Injected references
 
     private var viewContext: NSManagedObjectContext?
@@ -251,10 +255,19 @@ final class SessionCoordinator {
             }
         }
 
+        // Filter out stale END_SESSION messages that predate the currently-established session.
+        // This prevents server re-deliveries of old END_SESSIONs from tearing down healthy sessions.
+        messageRouter.isEndSessionStale = { [weak self] userId, endSessionTimestamp in
+            guard let self else { return false }
+            guard let establishedAt = sessionEstablishedAt[userId] else { return false }
+            // Allow a 5-second grace window to handle near-simultaneous END_SESSION + session init.
+            return endSessionTimestamp + 5 < establishedAt
+        }
+
         // When we receive END_SESSION from a peer, prewarm if we are the natural INITIATOR
         // (higher deviceId). This ensures the session re-establishes without user action,
         // and prevents the RESPONDER from incorrectly acting as INITIATOR with stale OTPKs.
-        messageRouter.onEndSessionReceived = { [weak self] userId in
+        messageRouter.onEndSessionReceived = { [weak self] userId, endSessionTimestamp in
             guard let self else { return }
             let myId = SessionManager.shared.currentUserId ?? ""
             guard !myId.isEmpty else { return }
@@ -378,6 +391,8 @@ final class SessionCoordinator {
                     let deviceId = KeychainManager.shared.loadDeviceID() ?? ""
                     await OtpkReplenishmentService.replenishIfNeeded(deviceId: deviceId)
                 }
+                // Record session establishment time so stale END_SESSIONs can be filtered.
+                sessionEstablishedAt[userId] = UInt64(Date().timeIntervalSince1970)
                 drainPendingQueue(for: userId, skippingFirst: true)
                 // Re-send messages that were re-queued on prior END_SESSION receipt.
                 sendSessionQueuedMessages(for: userId)
@@ -747,6 +762,8 @@ final class SessionCoordinator {
             // Cancel watchdog or fallback — RESPONDER proved they have a working session.
             cancelTieBreakWatchdog(for: peerId)
             cancelResponderFallback(for: peerId)
+            // Record session establishment time so stale END_SESSIONs can be filtered.
+            sessionEstablishedAt[peerId] = UInt64(Date().timeIntervalSince1970)
             // Mark session as confirmed so ChatViewModel stops buffering.
             SessionConfirmationTracker.shared.markConfirmed(peerId)
             // Flush any messages that were buffered while session was unconfirmed.
