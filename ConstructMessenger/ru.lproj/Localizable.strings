@@ -463,6 +463,7 @@
 
 // MARK: - Settings & Diagnostics
 "diagnostics" = "Диагностика";
+"diagnostics_logs" = "Диагностика и логи";
 "tls" = "TLS";
 "interval" = "Интервал";
 "preview" = "Предпросмотр";
@@ -602,3 +603,11 @@
 "device_link_section" = "связать реплику";
 "generating" = "генерация...";
 "device_link_scan_hint" = "отсканируй с другой реплики для связи";
+
+// MARK: - Settings rows
+"show_qr_code" = "Показать QR-код";
+"copy_contact_link" = "Скопировать ссылку";
+"link_copied" = "Ссылка скопирована";
+"recovery_not_configured_title" = "Резервный ключ не настроен";
+"developer" = "Разработчик";
+"share" = "Поделиться";

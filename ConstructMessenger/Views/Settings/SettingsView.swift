@@ -46,13 +46,13 @@ struct SettingsView: View {
                         // MARK: Share
                         CTSettingsSectionHeader(title: NSLocalizedString("share", comment: ""))
                         Button { showingQRCode = true } label: {
-                            CTSettingsRow(label: "SHOW QR CODE", value: CTSymbol.forward, isAction: true)
+                            CTSettingsRow(label: NSLocalizedString("show_qr_code", comment: "").uppercased(), value: CTSymbol.forward, isAction: true)
                         }
                         .buttonStyle(.plain)
                         CTSep(style: .thin)
                         Button { copyContactLink() } label: {
                             CTSettingsRow(
-                                label: linkCopied ? "LINK COPIED" : "COPY CONTACT LINK",
+                                label: linkCopied ? NSLocalizedString("link_copied", comment: "").uppercased() : NSLocalizedString("copy_contact_link", comment: "").uppercased(),
                                 value: linkCopied ? CTSymbol.ok : CTSymbol.forward,
                                 valueColor: linkCopied ? Color.CT.accentDim : Color.CT.text,
                                 isAction: !linkCopied
@@ -65,33 +65,33 @@ struct SettingsView: View {
                         // MARK: Settings
                         CTSettingsSectionHeader(title: NSLocalizedString("settings", comment: ""))
                         NavigationLink(destination: DevicesView()) {
-                            CTSettingsRow(label: "LINKED DEVICES", value: CTSymbol.forward)
+                            CTSettingsRow(label: NSLocalizedString("linked_devices", comment: "").uppercased(), value: CTSymbol.forward)
                         }
                         .buttonStyle(.plain)
                         CTSep(style: .thin)
                         NavigationLink(destination: AppearanceSettingsView()) {
-                            CTSettingsRow(label: "APPEARANCE", value: CTSymbol.forward)
+                            CTSettingsRow(label: NSLocalizedString("appearance", comment: "").uppercased(), value: CTSymbol.forward)
                         }
                         .buttonStyle(.plain)
                         CTSep()
                         NavigationLink(destination: SecurityView()) {
-                            CTSettingsRow(label: "SECURITY", value: CTSymbol.forward)
+                            CTSettingsRow(label: NSLocalizedString("security", comment: "").uppercased(), value: CTSymbol.forward)
                         }
                         .buttonStyle(.plain)
                         CTSep(style: .thin)
                         NavigationLink(destination: DataStorageSettingsView()) {
-                            CTSettingsRow(label: "DATA & STORAGE", value: CTSymbol.forward)
+                            CTSettingsRow(label: NSLocalizedString("data_and_storage", comment: "").uppercased(), value: CTSymbol.forward)
                         }
                         .buttonStyle(.plain)
                         CTSep(style: .thin)
                         NavigationLink(destination: NotificationsSettingsView()) {
-                            CTSettingsRow(label: "NOTIFICATIONS", value: CTSymbol.forward)
+                            CTSettingsRow(label: NSLocalizedString("notifications", comment: "").uppercased(), value: CTSymbol.forward)
                         }
                         .buttonStyle(.plain)
                         CTSep(style: .thin)
                         NavigationLink(destination: BackgroundFetchSettingsView()) {
                             CTSettingsRow(
-                                label: "BACKGROUND FETCH",
+                                label: NSLocalizedString("background_fetch", comment: "").uppercased(),
                                 value: BackgroundFetchConfig.shouldBeEnabled ? "[on]" : "[off]",
                                 valueColor: BackgroundFetchConfig.shouldBeEnabled ? Color.CT.accentDim : Color.CT.textDim
                             )
@@ -100,7 +100,7 @@ struct SettingsView: View {
                         CTSep(style: .thin)
                         NavigationLink(destination: NetworkSettingsView()) {
                             CTSettingsRow(
-                                label: "NETWORK",
+                                label: NSLocalizedString("network", comment: "").uppercased(),
                                 value: connectionStatus.isConnected ? "[ok]" : "[err]",
                                 valueColor: connectionStatus.isConnected ? Color.CT.accentDim : Color.CT.danger
                             )
@@ -108,7 +108,7 @@ struct SettingsView: View {
                         .buttonStyle(.plain)
                         CTSep(style: .thin)
                         NavigationLink(destination: DraftsView()) {
-                            CTSettingsRow(label: "DRAFTS", value: CTSymbol.forward)
+                            CTSettingsRow(label: NSLocalizedString("drafts", comment: "").uppercased(), value: CTSymbol.forward)
                         }
                         .buttonStyle(.plain)
                         CTSep()
@@ -118,13 +118,13 @@ struct SettingsView: View {
 
                         // MARK: About
                         CTSettingsSectionHeader(title: NSLocalizedString("about", comment: ""))
-                        CTSettingsRow(label: "VERSION", value: "v\(AppConstants.appVersion)")
+                        CTSettingsRow(label: NSLocalizedString("version", comment: "").uppercased(), value: "v\(AppConstants.appVersion)")
                         CTSep()
 
                         // MARK: Developer
                         CTSettingsSectionHeader(title: NSLocalizedString("developer", comment: ""), color: .orange)
                         NavigationLink(destination: DiagnosticsView()) {
-                            CTSettingsRow(label: "DIAGNOSTICS & LOGS", value: CTSymbol.forward, labelColor: .orange, valueColor: .orange)
+                            CTSettingsRow(label: NSLocalizedString("diagnostics_logs", comment: "").uppercased(), value: CTSymbol.forward, labelColor: .orange, valueColor: .orange)
                         }
                         .buttonStyle(.plain)
                         CTSep()
@@ -191,7 +191,7 @@ struct SettingsView: View {
                 .font(CTFont.bold(12))
                 .foregroundColor(Color.CT.danger)
             VStack(alignment: .leading, spacing: 4) {
-                Text("RECOVERY NOT CONFIGURED")
+                Text(NSLocalizedString("recovery_not_configured_title", comment: "").uppercased())
                     .font(CTFont.bold(11))
                     .foregroundColor(Color.CT.danger)
                 Text(NSLocalizedString("recovery_banner_subtitle", comment: ""))

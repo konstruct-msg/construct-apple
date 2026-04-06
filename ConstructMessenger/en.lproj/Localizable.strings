@@ -461,6 +461,7 @@
 
 // MARK: - Settings & Diagnostics
 "diagnostics" = "Diagnostics";
+"diagnostics_logs" = "Diagnostics & Logs";
 "tls" = "TLS";
 "interval" = "Interval";
 "preview" = "Preview";
@@ -574,6 +575,10 @@
 "call_dismiss" = "Dismiss";
 "call_call_back" = "Call Back";
 "share" = "Share";
+"show_qr_code" = "Show QR Code";
+"copy_contact_link" = "Copy Contact Link";
+"link_copied" = "Link Copied";
+"recovery_not_configured_title" = "Recovery Not Configured";
 "developer" = "Developer";
 "change_photo" = "change photo";
 "identity_section" = "identity";
