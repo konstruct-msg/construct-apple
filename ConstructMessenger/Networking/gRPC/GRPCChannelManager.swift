@@ -140,6 +140,12 @@ final class GRPCChannelManager: Sendable {
 
     // nonisolated(unsafe) is correct here: all mutations are serialised through _connLock.
     private nonisolated(unsafe) var _conn: PersistentConn?
+    // Monotonically increasing generation counter.  Bumped on every invalidation (both
+    // explicit and implicit).  The runConnections() task captures the generation at
+    // creation time and bails if the generation has advanced by the time it starts —
+    // this prevents the "clientIsStopped" crash that occurs when beginGracefulShutdown()
+    // races with a not-yet-started runConnections() call.
+    private nonisolated(unsafe) var _connGeneration: UInt64 = 0
     private let _connLock = NSLock()
 
     private func routingKey() -> String {
@@ -163,21 +169,36 @@ final class GRPCChannelManager: Sendable {
         // in GRPCStreamStateMachine when a concurrent in-flight RPC is mid-write.
         _conn?.client.beginGracefulShutdown()
         _conn = nil
+        // Bump generation so the old connection's task sees it is no longer current.
+        _connGeneration &+= 1
+        let gen = _connGeneration
 
         let client = try makeClient()
         PerformanceMetrics.shared.start(.grpcConnectStart, label: key)
-        let task = Task.detached { [weak self] in
+        let task = Task.detached { [weak self, gen] in
+            // Guard against the race where invalidatePersistentClient() fires after the
+            // task is created but before runConnections() is called.  If the generation
+            // has advanced, this client was already shut down — calling runConnections()
+            // here would throw "clientIsStopped".
+            guard let self else { return }
+            self._connLock.lock()
+            let valid = self._connGeneration == gen
+            self._connLock.unlock()
+            guard valid else {
+                Log.debug("🔌 Persistent client gen=\(gen) already superseded — skipping runConnections()", category: "GRPCChannel")
+                return
+            }
             do {
                 try await client.runConnections()
             } catch is CancellationError {
                 // Normal shutdown.
             } catch {
                 Log.error("⚠️ Persistent gRPC connection closed: \(error)", category: "GRPCChannel")
-                self?.invalidatePersistentClient()
+                self.invalidatePersistentClient()
             }
         }
         _conn = PersistentConn(client: client, task: task, key: key)
-        Log.debug("🔌 Persistent gRPC connection created (key=\(key))", category: "GRPCChannel")
+        Log.debug("🔌 Persistent gRPC connection created (key=\(key) gen=\(gen))", category: "GRPCChannel")
         return client
     }
 
@@ -193,7 +214,9 @@ final class GRPCChannelManager: Sendable {
         _conn?.client.beginGracefulShutdown()
         // Do NOT call task.cancel() here — let runConnections() exit naturally.
         _conn = nil
-        Log.debug("🔌 Persistent gRPC connection invalidated", category: "GRPCChannel")
+        // Bump generation so any pending runConnections() task knows it is stale.
+        _connGeneration &+= 1
+        Log.debug("🔌 Persistent gRPC connection invalidated (gen=\(_connGeneration))", category: "GRPCChannel")
     }
 
     /// Returns the shared persistent channel, creating it if needed.
