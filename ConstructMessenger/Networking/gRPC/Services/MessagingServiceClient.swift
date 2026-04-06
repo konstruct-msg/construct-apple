@@ -8,6 +8,9 @@
 import Foundation
 import GRPCCore
 import GRPCNIOTransportHTTP2
+#if canImport(UIKit)
+import UIKit
+#endif
 
 
 final class MessagingServiceClient: Sendable {
@@ -29,7 +32,15 @@ final class MessagingServiceClient: Sendable {
         contentType: Shared_Proto_Core_V1_ContentType = .e2EeSignal,
         replyToMessageId: String? = nil
     ) async throws -> SendMessageResponse {
-        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.sendMessage) { grpcClient in
+        // Acquire a UIBackgroundTask so iOS cannot tear down the network connection
+        // while the RPC is in flight (send_message typically takes ~150ms).
+        // Without this, backgrounding immediately after Send kills the connection
+        // before the server response arrives → client never sees success=true → retry storm.
+        #if canImport(UIKit)
+        let bgTaskId = UIApplication.shared.beginBackgroundTask(withName: "send-msg-rpc") { }
+        defer { UIApplication.shared.endBackgroundTask(bgTaskId) }
+        #endif
+        return try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.sendMessage) { grpcClient in
             let msgClient = Shared_Proto_Services_V1_MessagingService.Client(wrapping: grpcClient)
 
             var sender = Shared_Proto_Core_V1_UserId()
