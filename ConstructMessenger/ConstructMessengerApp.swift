@@ -20,9 +20,10 @@ struct Construct_MessengerApp: App {
 
     init() {
         // Eagerly load the CoreData stack so NSManagedObjectModel is registered
-        // before any view body runs. On iOS 26 TabView initialises @FetchRequest
-        // for all tabs during the first layout pass; without this the entity
-        // registry is empty and the app crashes with "A fetch request must have an entity."
+        // before any view body runs. On iOS 26 TabView / ZStack initialises
+        // @FetchRequest for all children during the first layout pass; without
+        // this the entity registry is empty and the app crashes with
+        // 'A fetch request must have an entity.'
         _ = PersistenceController.shared
         applyGlobalAppearance()
     }
@@ -55,16 +56,16 @@ struct Construct_MessengerApp: App {
     // MARK: - Global UIKit appearance
 
     private func applyGlobalAppearance() {
-        let bg2     = UIColor(Color.Construct.bg2)
-        let accent  = UIColor(Color.Construct.accent)
-        let dim     = UIColor(Color.Construct.textDim)
-        let bright  = UIColor(Color.Construct.textBright)
-        let sep     = UIColor(Color.Construct.dim)
+        let bg2     = UIColor(Color.CT.bgMsg)
+        let accent  = UIColor(Color.CT.accent)
+        let dim     = UIColor(Color.CT.textDim)
+        let bright  = UIColor(Color.CT.text)
+        let sep     = UIColor(Color.CT.noise)
 
         // ── Tab bar ──────────────────────────────────────────────────────────
         let tabApp = UITabBarAppearance()
         tabApp.configureWithOpaqueBackground()
-        tabApp.backgroundColor = UIColor(Color.Construct.bg)
+        tabApp.backgroundColor = UIColor(Color.CT.bg)
         tabApp.stackedLayoutAppearance.selected.iconColor = accent
         tabApp.stackedLayoutAppearance.selected.titleTextAttributes = [.foregroundColor: accent]
         tabApp.stackedLayoutAppearance.normal.iconColor  = dim
@@ -82,14 +83,14 @@ struct Construct_MessengerApp: App {
         navApp.backgroundColor              = bg2
         navApp.titleTextAttributes          = titleAttrs
         navApp.largeTitleTextAttributes     = [.foregroundColor: bright]
-        navApp.shadowColor                  = UIColor(Color.Construct.line)
+        navApp.shadowColor                  = UIColor(Color.CT.noise)
         UINavigationBar.appearance().standardAppearance   = navApp
         UINavigationBar.appearance().scrollEdgeAppearance = navApp
         UINavigationBar.appearance().compactAppearance    = navApp
         UINavigationBar.appearance().tintColor            = accent
 
         // ── Lists / Table views ──────────────────────────────────────────────
-        UITableView.appearance().backgroundColor     = UIColor(Color.Construct.bg)
+        UITableView.appearance().backgroundColor     = UIColor(Color.CT.bg)
         UITableView.appearance().separatorColor      = sep
         UITableViewCell.appearance().backgroundColor = .clear
 
@@ -98,6 +99,6 @@ struct Construct_MessengerApp: App {
         UISearchBar.appearance().tintColor  = accent
         UITextField.appearance(
             whenContainedInInstancesOf: [UISearchBar.self]
-        ).textColor = UIColor(Color.Construct.text)
+        ).textColor = UIColor(Color.CT.text)
     }
 }

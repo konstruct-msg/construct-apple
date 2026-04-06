@@ -14,7 +14,7 @@ import SwiftUI
 // MARK: - Recording Bar
 
 /// Shown while the microphone is active.
-/// Layout: [× cancel]  [live waveform]  [0:05]  [■ stop]
+/// Layout: [x]  [live waveform]  [0:05]  [■]
 struct VoiceRecordingBar: View {
     let duration: TimeInterval
     let waveform: [Float]
@@ -25,43 +25,40 @@ struct VoiceRecordingBar: View {
         HStack(spacing: 0) {
             // Cancel
             Button(action: onCancel) {
-                circleButton(symbol: "xmark", tint: .white.opacity(0.25), icon: .white)
+                asciiButton("[x]", color: Color.CT.textDim)
             }
             .buttonStyle(.plain)
-            .padding(.leading, 8)
+            .padding(.leading, 12)
 
             // Live waveform
             LiveWaveformView(samples: waveform)
                 .frame(maxWidth: .infinity)
-                .frame(height: 32)
+                .frame(height: 28)
                 .padding(.horizontal, 12)
 
             // Timer
             timerLabel(duration)
 
-            // Stop (red square inside white circle)
+            // Stop
             Button(action: onStop) {
-                ZStack {
-                    Circle()
-                        .fill(Color.white.opacity(0.25))
-                        .frame(width: 32, height: 32)
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(Color.red.opacity(0.75))
-                        .frame(width: 12, height: 12)
-                }
+                Text("[■]")
+                    .font(CTFont.bold(18))
+                    .foregroundStyle(Color.CT.danger)
+                    .lineLimit(1)
+                    .fixedSize()
             }
             .buttonStyle(.plain)
             .padding(.leading, 10)
-            .padding(.trailing, 8)
+            .padding(.trailing, 12)
         }
-        .accentPill
+        .ctBar
     }
 }
 
 // MARK: - Preview Bar
 
 /// Shown after recording stops — lets the user review before sending.
-/// Layout: [🗑 discard]  [static waveform]  [0:47]  [✈ send]
+/// Layout: [del]  [static waveform]  [0:47]  [→]
 struct VoicePreviewBar: View {
     let duration: TimeInterval
     let waveform: [Float]
@@ -72,65 +69,61 @@ struct VoicePreviewBar: View {
         HStack(spacing: 0) {
             // Discard
             Button(action: onDiscard) {
-                circleButton(symbol: "trash", tint: .white.opacity(0.25), icon: .white)
+                asciiButton("[del]", color: Color.CT.danger)
             }
             .buttonStyle(.plain)
-            .padding(.leading, 8)
+            .padding(.leading, 12)
 
             // Static waveform
             StaticWaveformView(samples: waveform)
                 .frame(maxWidth: .infinity)
-                .frame(height: 32)
+                .frame(height: 28)
                 .padding(.horizontal, 12)
 
             // Duration
             timerLabel(duration)
 
-            // Send (paper-plane inside white circle)
+            // Send
             Button(action: onSend) {
-                ZStack {
-                    Image(systemName: "arrow.up.circle.fill")
-                        .font(.system(size: 32, weight: .semibold))
-                        .foregroundStyle(Color.white.opacity(0.35))
-                        .offset(x: 1)
-                }
+                Text("[→]")
+                    .font(CTFont.bold(18))
+                    .foregroundStyle(Color.CT.accent)
+                    .lineLimit(1)
+                    .fixedSize()
             }
             .buttonStyle(.plain)
             .padding(.leading, 10)
-            .padding(.trailing, 8)
+            .padding(.trailing, 12)
         }
-        .accentPill
+        .ctBar
     }
 }
 
 // MARK: - Shared helpers
 
-private func circleButton(symbol: String, tint: Color, icon: Color) -> some View {
-    ZStack {
-        Circle()
-            .fill(tint)
-            .frame(width: 32, height: 32)
-        Image(systemName: symbol)
-            .font(.system(size: 15, weight: .semibold))
-            .foregroundStyle(icon)
-    }
+private func asciiButton(_ label: String, color: Color) -> some View {
+    Text(label)
+        .font(CTFont.regular(14))
+        .foregroundStyle(color)
+        .lineLimit(1)
+        .fixedSize()
 }
 
 private func timerLabel(_ duration: TimeInterval) -> some View {
     let s = Int(duration)
     return Text(String(format: "%d:%02d", s / 60, s % 60))
-        .font(.system(size: 15, weight: .medium).monospacedDigit())
-        .foregroundStyle(.white)
+        .font(CTFont.medium(14))
+        .foregroundStyle(Color.CT.textDim)
         .frame(minWidth: 42, alignment: .trailing)
 }
 
 private extension View {
-    var accentPill: some View {
+    var ctBar: some View {
         self
-            .frame(height: 56)
-            .background(Color(.systemGray6))
-            .clipShape(Capsule())
-            .padding(.horizontal)
+            .frame(height: 52)
+            .background(Color.CT.outMsgBg)
+            .overlay(Rectangle().strokeBorder(Color.CT.accent.opacity(0.25), lineWidth: 1))
+            .padding(.horizontal, 8)
     }
 }
 
@@ -150,8 +143,8 @@ struct LiveWaveformView: View {
 
             HStack(alignment: .center, spacing: barSpacing) {
                 ForEach(0..<barCount, id: \.self) { i in
-                    Capsule()
-                        .fill(Color.white.opacity(opacity(for: i)))
+                    Rectangle()
+                        .fill(Color.CT.accent.opacity(opacity(for: i)))
                         .frame(width: barWidth, height: height(for: i, total: geo.size.height))
                 }
             }
@@ -188,8 +181,8 @@ struct StaticWaveformView: View {
 
             HStack(alignment: .center, spacing: barSpacing) {
                 ForEach(0..<barCount, id: \.self) { i in
-                    Capsule()
-                        .fill(Color.white.opacity(0.80))
+                    Rectangle()
+                        .fill(Color.CT.accent.opacity(0.70))
                         .frame(width: barWidth, height: height(for: i, total: geo.size.height))
                 }
             }
@@ -221,7 +214,8 @@ struct StaticWaveformView: View {
         )
         Spacer()
     }
-    .background(Color(.systemBackground))
+    .background(Color.CT.bg)
+    .preferredColorScheme(.dark)
 }
 
 #Preview("Preview bar") {
@@ -235,7 +229,8 @@ struct StaticWaveformView: View {
         )
         Spacer()
     }
-    .background(Color(.systemBackground))
+    .background(Color.CT.bg)
+    .preferredColorScheme(.dark)
 }
 
 #endif

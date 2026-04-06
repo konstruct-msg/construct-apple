@@ -64,7 +64,7 @@ struct VoiceMessageBubbleView: View {
                 }
             } label: {
                 if isLoading {
-                    Text("[···]")
+                    Text(CTSymbol.loading)
                         .font(CTFont.regular(13))
                         .lineLimit(1)
                         .fixedSize()
@@ -105,7 +105,7 @@ struct VoiceMessageBubbleView: View {
 
     private var uploadingBody: some View {
         HStack(spacing: 8) {
-            Text("[···]")
+            Text(CTSymbol.loading)
                 .font(CTFont.regular(13))
                 .lineLimit(1)
                 .fixedSize()
@@ -137,7 +137,7 @@ struct VoiceMessageBubbleView: View {
     private var failedBody: some View {
         HStack(spacing: 8) {
             Button { onRetry?() } label: {
-                Text("[↺]")
+                Text(CTSymbol.refresh)
                     .font(CTFont.regular(13))
                     .foregroundColor(Color(hex: 0xE05555))
                     .frame(width: 38)

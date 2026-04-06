@@ -4,25 +4,16 @@
 "cancel" = "Cancel";
 "done" = "Done";
 "unknown" = "Unknown";
-"constrcut_title" = "KONSTRUCT";
 
 // MARK: - Main Tabs
 "chats" = "Chats";
 "settings" = "Settings";
 
 // MARK: - Auth
-"construct_messenger" = "Konstruct";
-"back_to_login" = "Back to Login";
 "register" = "Register";
 "username" = "Username";
-"enter_username" = "Enter username";
 "password" = "Password";
-"enter_password" = "Enter password";
 "login" = "Login";
-"min_password_placeholder" = "Min %d characters";
-"confirm_password" = "Confirm Password";
-"reenter_password" = "Re-enter password";
-"please_check_all_fields" = "Please check all fields";
 "logout" = "Logout";
 "logout_confirmation" = "Are you sure you want to logout?";
 "password_strength_very_weak" = "Very Weak";
@@ -32,16 +23,12 @@
 "password_strength_very_strong" = "Very Strong";
 
 // MARK: - Chats List
-"add_contact" = "Add Contact";
 "scan_qr_code_or_share_link" = "Scan a QR code or share your contact link to add verified contacts";
 "scan_qr_code" = "Scan QR Code";
-"your_contact_link_is_in_account_settings" = "Your contact link is in Identity Settings";
 "new_contact" = "New Contact";
 
 // MARK: - Chat
 "sending" = "Sending...";
-"initializing_secure_connection" = "Initializing secure connection...";
-"not_connected_to_server" = "Not connected to server";
 "status_connecting" = "Connecting...";
 "status_no_connection" = "No connection";
 "status_encrypting" = "Encrypting...";
@@ -63,17 +50,14 @@
 "direction" = "Direction";
 "outgoing" = "Outgoing";
 "incoming" = "Incoming";
-"retry_count" = "Retry Count";
 "delivery_information" = "Delivery Information";
 "message_id" = "Message ID";
 "from" = "From";
 "to" = "To";
 "reply_to" = "Reply To";
-"technical_details" = "Technical Details";
 "encryption" = "Encryption";
 "end_to_end" = "End-to-End";
 "protocol" = "Protocol";
-"double_ratchet" = "Double Ratchet";
 "security" = "Security";
 "message_info" = "Message Info";
 
@@ -93,19 +77,10 @@
 "appearance" = "Appearance";
 "network" = "Network";
 "notifications" = "Notifications";
-"app_settings" = "App Settings";
 
 // MARK: - Settings -> Account
 "display_name" = "Display Name";
-"account_information" = "Identity";
-"current_password" = "Current Password";
-"new_password" = "New Password";
-"confirm_new_password" = "Confirm New Password";
-"change_password" = "Change Password";
-"password_min_length_message" = "Password must be at least %d characters";
 "show_my_qr_code" = "Show My QR Code";
-"link_copied" = "Link Copied!";
-"copy_contact_link" = "Copy Contact Link";
 "share_contact" = "Share Contact";
 "share_contact_footer" = "Share your QR code or link to let others add you as a contact";
 
@@ -113,7 +88,6 @@
 "enable_pin_code" = "Enable PIN Code";
 "disable_pin_code" = "Disable PIN Code";
 "change_pin_code" = "Change PIN Code";
-"current_pin_code" = "Current PIN Code";
 "enter_pin_code" = "Enter PIN Code";
 "create_pin_code" = "Create PIN Code";
 "confirm_pin_code" = "Confirm PIN Code";
@@ -130,11 +104,9 @@
 "continue" = "Continue";
 "enable_biometric" = "Enable %@?";
 "biometric_unavailable" = "Biometrics are not available on this device.";
-"not_now" = "Not Now";
 "disable" = "Disable";
 
 // MARK: - Settings -> My QR Code
-"my_qr_code" = "My QR Code";
 "failed_to_generate_qr_code" = "Failed to generate QR code";
 "show_this_code_to_someone_nearby" = "Show this code to someone nearby";
 "scan_with_camera_or_screenshot" = "They can scan this with their camera or take a screenshot";
@@ -149,54 +121,28 @@
 // MARK: - Settings -> Network
 "connected" = "Connected";
 "disconnected" = "Disconnected";
-"active_server" = "Active Server";
 "connection" = "Connection";
-"grpc_stream" = "gRPC Stream";
 "subscriptions" = "Subscriptions";
 "last_heartbeat" = "Last Heartbeat";
 "custom_server_debug" = "Custom Server (Debug)";
-"use_custom_server" = "Use Custom Server";
-"custom_server_placeholder" = "https://your-server.com";
 "apply_changes" = "Apply Changes";
-"server_configuration" = "Server Configuration";
-"custom_server_prefix_warning" = "Custom server address must start with https://";
 "environment" = "Environment";
-"build_configuration" = "Build Configuration";
 "debug" = "Debug";
 "release" = "Release";
-"server_information" = "Server Information";
 "server_settings_footer" = "These settings are automatically configured based on your build configuration.";
-"reconnect_required" = "Reconnect Required";
-"reconnect_alert_message" = "The app will reconnect to the new server.";
 "network_settings" = "Network Settings";
-"current_server" = "Current Server";
-"active_configuration" = "Active Configuration";
-"preauth_server_info" = "You can change the server before logging in. This is useful if the default server is unavailable.";
 "default_server" = "Default Server";
-"default_configuration" = "Default Configuration";
 "reset_to_default" = "Reset to Default";
-"server_changed" = "Server Changed";
-"server_changed_message" = "Server changed to: %@";
-"server_reset_message" = "Server reset to default: %@";
-"error_empty_url" = "Server URL cannot be empty";
 "custom_server" = "Custom Server";
-"server_type" = "Server Type";
-"server_address" = "Server Address";
-"default_server_info" = "Using the default server configured in the application settings.";
-"current_active_server" = "Current Active Server";
 
 // MARK: - Notifications Settings
-"notifications_settings" = "Notification Settings";
 "enable_notifications" = "Enable Notifications";
 "notifications_footer" = "Control how and when you receive notifications";
 "message_notifications" = "Message Notifications";
 "show_message_notifications" = "Show Message Notifications";
-"message_notifications_footer" = "Get notified when you receive new messages";
-"notification_preview" = "Notification Preview";
 "preview_name_and_message" = "Name and Message";
 "preview_name_only" = "Name Only";
 "preview_none" = "No Preview";
-"notification_preview_footer" = "Choose what information appears in notifications";
 "sound_and_haptics" = "Sound & Haptics";
 "notification_sound" = "Notification Sound";
 "vibration" = "Vibration";
@@ -219,7 +165,6 @@
 "construct_app_name" = "Construct";
 "construct_new_message" = "New Message";
 "construct_new_messages" = "New Messages";
-"construct_new_message_from" = "New message from %@";
 "construct_new_messages_count" = "You have %d new messages";
 "construct_new_messages_from_contacts" = "You have %d new messages from %d contacts";
 "construct_sync_completed" = "Messages Synced";
@@ -231,7 +176,6 @@
 "background_fetch_disabled" = "Disabled";
 "background_fetch_enabled" = "Enabled";
 "background_fetch_last_check" = "Last check: %@";
-"background_fetch_waiting" = "Enabled, waiting for first check";
 "background_fetch_interval" = "Check Interval";
 "background_fetch_interval_settings" = "Check Interval";
 "background_fetch_interval_footer" = "How often to fetch missed messages when the live stream is inactive. iOS may adjust this based on your usage patterns.";
@@ -274,12 +218,8 @@
 "message_selected" = "message selected";
 "messages_selected" = "messages selected";
 "load_older_messages" = "Load older messages";
-"network_reachability" = "Network Reachability";
 "reachable" = "Reachable";
 "unreachable" = "Unreachable";
-"connection_type" = "Connection Type";
-"default_server" = "Default Server";
-"last_error" = "Last Connection Error";
 "delete_my_account" = "Delete identity";
 "delete_account_warning" = "Permanently deletes your identity from the server. After successful deletion, all local encryption keys and app data will be automatically cleared from this device.";
 "delete_account_warning_title" = "Delete Identity?";
@@ -327,11 +267,12 @@
 "username_available" = "Username is available.";
 "username_unavailable" = "Username is already taken.";
 "username_check_failed" = "Could not verify username right now. Try again.";
+"username_hint" = "your unique public identifier. tap to change.";
+"display_name_hint" = "shown to your contacts. username stays permanent.";
 "new_messages" = "New Messages";
 "scroll_to_bottom" = "Back to Latest";
 
 // Network Settings
-"last_contact" = "Last contact";
 "server" = "Server";
 "port" = "Port";
 "server_applied_title" = "Server Updated";
@@ -388,19 +329,13 @@
 "select_chat_description" = "Choose a conversation from the sidebar to start messaging.";
 
 // QR Code
-"my_qr_code" = "My QR Code";
-"show_this_code_to_someone_nearby" = "Show this code to someone nearby";
-"scan_with_camera_or_screenshot" = "They can scan this with their camera or take a screenshot";
-"failed_to_generate_qr_code" = "Failed to generate QR code";
 
 // Account Settings
-"DANGER_ZONE" = "Danger Zone";
 
 // Reset Session
 "reset_session" = "Reset Session";
 "reset_session_title" = "Reset Session?";
 "reset_session_message" = "This will re-establish a new encrypted session. Messages in transit may be lost.";
-
 
 // Account Recovery
 "try_again" = "Try Again";
@@ -409,7 +344,7 @@
 "recovery_intro_body" = "Generate a 12-word recovery phrase. If you lose this device, use the phrase to recover your account.";
 "recovery_generate" = "Generate Recovery Phrase";
 "recovery_write_down" = "Write down these 12 words in order. Store them somewhere safe — never share them.";
-"recovery_never_share" = "⚠️ Never share your recovery phrase with anyone.";
+"recovery_never_share" = "Never share your recovery phrase with anyone.";
 "recovery_wrote_it_down" = "I've Written It Down";
 "recovery_quiz_title" = "Verify Your Recovery Phrase";
 "recovery_quiz_word_n" = "Word #%d";
@@ -444,7 +379,6 @@
 
 // Profile sharing
 "failed_to_establish_session" = "Failed to establish a secure connection. Please try again.";
-"save" = "Save";
 "saved" = "Saved";
 
 // Swipe actions
@@ -454,9 +388,7 @@
 "mark_read" = "Mark Read";
 
 // ICE — traffic obfuscation
-"ice_section_header" = "Intrusion Countermeasures";
 "ice_title" = "ICE";
-"ice_subtitle" = "Obfuscated connection";
 "ice_footer" = "ICE masks your traffic to make it indistinguishable from regular HTTPS. The configuration is provided automatically by the server.";
 "ice_unavailable" = "Not available on this server";
 "ice_retry" = "Retry ICE connection";
@@ -492,7 +424,6 @@
 "edit_message_limit_reached" = "Edit limit reached (20 edits max)";
 
 // MARK: - Network Settings — Connection Route
-"connection_route" = "Connection Route";
 "endpoint" = "Endpoint";
 "mode" = "Mode";
 
@@ -530,13 +461,7 @@
 
 // MARK: - Settings & Diagnostics
 "diagnostics" = "Diagnostics";
-"construct_logs" = "Construct Logs";
-"exported_log_archive" = "Exported log archive";
-"diagnostics_and_logs" = "Diagnostics & Logs";
 "tls" = "TLS";
-"build_debug" = "Debug";
-"build_release" = "Release";
-"reset_to_default" = "Reset to default";
 "interval" = "Interval";
 "preview" = "Preview";
 
@@ -558,12 +483,7 @@
 "device_revoke" = "Remove Device";
 "device_revoke_confirm_title" = "Remove Device";
 "device_revoke_confirm" = "This device will be removed from your account.";
-"device_last_seen" = "Last seen %@";
-"device_current" = "This device";
 "device_added_%@" = "Added %@";
-"linked_devices" = "Linked Devices";
-"linked_devices_hint" = "Scan the QR code on a new device during onboarding to link it to your account.";
-"link_new_device" = "Link New Device";
 
 // MARK: - Device Join Request (Desktop onboarding)
 "device_link_request_title" = "Link to Existing Account";
@@ -593,7 +513,6 @@
 "sign_out" = "Sign Out";
 "device_scan_to_approve" = "Scan to Approve New Device";
 "device_revoke_confirm_message" = "Sign out \"%@\" remotely? This device will be disconnected from your account.";
-"this_device" = "This Device";
 "other_devices" = "Other Devices";
 "other_devices_hint" = "Tap − to remove a device from your account.";
 "device_active_now" = "Active now";
@@ -612,7 +531,6 @@
 
 // MARK: - Synaps
 "synaps" = "Synapses";
-"synapses" = "SYNAPSES";
 "synaps_search_prompt" = "Search";
 "synaps_empty_title" = "No connections yet";
 "synaps_empty_subtitle" = "People you connect with will appear here, even after you clear a conversation.";
@@ -622,9 +540,6 @@
 "synaps_prune_message" = "This will permanently remove %@ from your Synaps and delete the conversation.";
 
 // MARK: - Connection Status Indicator
-"connection_status_secure" = "Connected securely";
-"connection_status_connecting" = "Connecting...";
-"connection_status_offline" = "Offline";
 
 // MARK: - Contact card crypto section
 "session_crypto_suite" = "Encryption";
@@ -634,7 +549,6 @@
 "ice_auto_activated_footer" = "ICE was activated automatically — your network blocks direct connections. You can disable it in settings.";
 
 // MARK: - Calls
-"call_start" = "Start audio call";
 "call_mute" = "Mute";
 "call_unmute" = "Unmute";
 "call_speaker" = "Speaker";
@@ -645,7 +559,6 @@
 "call_decline" = "Decline";
 
 // MARK: - Call History
-"calls_tab" = "Calls";
 "calls_recents" = "Recents";
 "calls_clear" = "Clear";
 "calls_clear_confirm" = "Clear all recent calls?";
@@ -660,3 +573,26 @@
 "call_no_relay" = "No connection (relay unavailable)";
 "call_dismiss" = "Dismiss";
 "call_call_back" = "Call Back";
+"share" = "Share";
+"developer" = "Developer";
+"change_photo" = "change photo";
+"identity_section" = "identity";
+"account_section" = "account";
+"bio" = "bio";
+"user_id" = "user id";
+"joined" = "joined";
+"changes_encrypted_footer" = "> changes are end-to-end encrypted";
+"delete_account_row" = "delete account";
+"delete_action" = "delete";
+"manage_action" = "manage";
+"add_action" = "add";
+"call_voice" = "voice call";
+"end_to_end_encrypted" = "changes are end-to-end encrypted";
+"invite" = "invite";
+"qr_caption_trust" = "trust is computed, not assumed.";
+"qr_scan_hint" = "show to someone nearby or take a screenshot";
+
+// MARK: - Device Link QR
+"device_link_section" = "link replica";
+"generating" = "generating...";
+"device_link_scan_hint" = "scan with another replica to link";

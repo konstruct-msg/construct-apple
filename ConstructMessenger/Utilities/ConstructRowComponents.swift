@@ -43,12 +43,11 @@ struct ConstructActionRow: View {
             action()
         } label: {
             HStack(spacing: 12) {
-                Image(systemName: icon)
-                    .frame(width: 20, alignment: .center)
-                    .font(.system(size: 16))
+                ctIconView(icon, color: rowForeground)
+                    .frame(minWidth: 20, alignment: .center)
 
                 Text(title)
-                    .font(ConstructFont.display(16))
+                    .font(CTFont.bold(16))
 
                 Spacer()
 
@@ -62,14 +61,8 @@ struct ConstructActionRow: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 13)
-            .background(
-                RoundedRectangle(cornerRadius: 13)
-                    .fill(rowFill)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 13)
-                            .strokeBorder(rowBorder, lineWidth: 1)
-                    )
-            )
+            .background(rowFill)
+            .overlay(Rectangle().strokeBorder(rowBorder, lineWidth: 1))
             .foregroundStyle(rowForeground)
         }
         .buttonStyle(.plain)
@@ -78,38 +71,54 @@ struct ConstructActionRow: View {
 
     // MARK: Private helpers
 
+    /// Renders ASCII label strings (e.g. "[!]") as Text; falls back to Image(systemName:) for SF Symbol names.
+    @ViewBuilder
+    private func ctIconView(_ icon: String, color: Color) -> some View {
+        if icon.hasPrefix("[") || icon.hasPrefix("●") {
+            Text(icon)
+                .font(CTFont.regular(13))
+                .foregroundStyle(color)
+                .lineLimit(1)
+                .fixedSize()
+        } else {
+            Image(systemName: icon)
+                .font(.system(size: 16))
+                .foregroundStyle(color)
+        }
+    }
+
     private func badgeView(_ text: String) -> some View {
         Text(text)
-            .font(ConstructFont.mono(10))
-            .foregroundStyle(Color.Construct.textDim)
+            .font(CTFont.regular(10))
+            .foregroundStyle(Color.CT.textDim)
             .padding(.horizontal, 6).padding(.vertical, 2)
-            .background(Capsule().fill(Color.Construct.bg3))
+            .background(Rectangle().fill(Color.CT.bgMsg))
     }
 
     private var rowFill: Color {
         switch role {
-        case .primary:     return Color.Construct.accent.opacity(0.12)
-        case .accent:      return Color.Construct.accent.opacity(0.08)
+        case .primary:     return Color.CT.accent.opacity(0.12)
+        case .accent:      return Color.CT.accent.opacity(0.08)
         case .destructive: return Color.red.opacity(0.10)
-        default:           return Color.Construct.bg2
+        default:           return Color.CT.bgMsg
         }
     }
 
     private var rowBorder: Color {
         switch role {
-        case .primary:     return Color.Construct.accent.opacity(0.35)
-        case .accent:      return Color.Construct.accent.opacity(0.25)
+        case .primary:     return Color.CT.accent.opacity(0.35)
+        case .accent:      return Color.CT.accent.opacity(0.25)
         case .destructive: return Color.red.opacity(0.30)
-        default:           return Color.Construct.line
+        default:           return Color.CT.noise
         }
     }
 
     private var rowForeground: Color {
         switch role {
-        case .primary, .accent: return Color.Construct.accent
+        case .primary, .accent: return Color.CT.accent
         case .destructive:      return Color.red
-        case .disabled:         return Color.Construct.textDim
-        case .secondary:        return Color.Construct.text
+        case .disabled:         return Color.CT.textDim
+        case .secondary:        return Color.CT.text
         }
     }
 }
@@ -121,7 +130,7 @@ struct ConstructNavRow<Destination: View>: View {
 
     let icon: String
     let title: LocalizedStringKey
-    var iconColor: Color = Color.Construct.accent
+    var iconColor: Color = Color.CT.accent
     let destination: Destination
 
     var body: some View {
@@ -133,24 +142,37 @@ struct ConstructNavRow<Destination: View>: View {
 
     private var rowContent: some View {
         HStack(spacing: 14) {
-            Image(systemName: icon)
-                .foregroundStyle(iconColor)
-                .frame(width: 22, alignment: .center)
-                .font(.system(size: 16))
+            navIconView(icon, color: iconColor)
+                .frame(minWidth: 22, alignment: .center)
 
             Text(title)
-                .font(ConstructFont.display(16))
-                .foregroundStyle(Color.Construct.text)
+                .font(CTFont.bold(16))
+                .foregroundStyle(Color.CT.text)
 
             Spacer()
 
-            Image(systemName: "chevron.right")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(Color.Construct.textDim)
+            Text("[→]")
+                .font(CTFont.regular(12))
+                .foregroundStyle(Color.CT.textDim)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
         .contentShape(Rectangle())
+    }
+
+    @ViewBuilder
+    private func navIconView(_ icon: String, color: Color) -> some View {
+        if icon.hasPrefix("[") || icon.hasPrefix("●") {
+            Text(icon)
+                .font(CTFont.regular(13))
+                .foregroundStyle(color)
+                .lineLimit(1)
+                .fixedSize()
+        } else {
+            Image(systemName: icon)
+                .font(.system(size: 16))
+                .foregroundStyle(color)
+        }
     }
 }
 
@@ -161,28 +183,28 @@ struct ConstructButtonRow: View {
 
     let icon: String
     let title: LocalizedStringKey
-    var iconColor: Color = Color.Construct.accent
+    var iconColor: Color = Color.CT.accent
     var showChevron: Bool = false
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
             HStack(spacing: 14) {
-                Image(systemName: icon)
-                    .foregroundStyle(iconColor)
-                    .frame(width: 22, alignment: .center)
-                    .font(.system(size: 16))
+                buttonIconView(icon, color: iconColor)
+                    .frame(minWidth: 22, alignment: .center)
 
                 Text(title)
-                    .font(ConstructFont.display(16))
-                    .foregroundStyle(Color.Construct.text)
+                    .font(CTFont.bold(16))
+                    .foregroundStyle(Color.CT.text)
 
                 Spacer()
 
                 if showChevron {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Color.Construct.textDim)
+                    Text("[→]")
+                        .font(CTFont.regular(12))
+                        .foregroundStyle(Color.CT.textDim)
+                        .lineLimit(1)
+                        .fixedSize()
                 }
             }
             .padding(.horizontal, 16)
@@ -190,6 +212,21 @@ struct ConstructButtonRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private func buttonIconView(_ icon: String, color: Color) -> some View {
+        if icon.hasPrefix("[") || icon.hasPrefix("●") {
+            Text(icon)
+                .font(CTFont.regular(13))
+                .foregroundStyle(color)
+                .lineLimit(1)
+                .fixedSize()
+        } else {
+            Image(systemName: icon)
+                .font(.system(size: 16))
+                .foregroundStyle(color)
+        }
     }
 }
 
@@ -201,7 +238,7 @@ struct ConstructRowDivider: View {
 
     var body: some View {
         Divider()
-            .overlay(Color.Construct.line)
+            .overlay(Color.CT.noise)
             .padding(.leading, indent)
     }
 }
@@ -218,8 +255,8 @@ struct ConstructSection<Content: View>: View {
         VStack(alignment: .leading, spacing: 0) {
             if let header {
                 Text(header.uppercased())
-                    .font(ConstructFont.mono(10, weight: .semibold))
-                    .foregroundStyle(Color.Construct.textDim)
+                    .font(CTFont.bold(10))
+                    .foregroundStyle(Color.CT.textDim)
                     .tracking(1.5)
                     .padding(.horizontal, 20)
                     .padding(.bottom, 6)
@@ -229,14 +266,14 @@ struct ConstructSection<Content: View>: View {
                 content()
             }
             .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(Color.Construct.bg2)
+                Rectangle()
+                    .fill(Color.CT.bgMsg)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .strokeBorder(Color.Construct.line, lineWidth: 1)
+                        Rectangle()
+                            .strokeBorder(Color.CT.noise, lineWidth: 1)
                     )
             )
-            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .clipShape(Rectangle())
         }
         .padding(.horizontal, 16)
     }

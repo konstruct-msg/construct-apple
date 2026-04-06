@@ -2,8 +2,6 @@
 //  ChatRowView.swift
 //  Construct Messenger
 //
-//  Created by Maxim Eliseyev on 13.12.2025.
-//
 
 import SwiftUI
 
@@ -11,78 +9,63 @@ struct ChatRowView: View {
     @ObservedObject var chat: Chat
 
     var body: some View {
-        HStack(spacing: 12) {
-            // Avatar — styled like Synaps ContactCircle
-            Group {
-                if let avatarData = chat.otherUser?.avatarData,
-                   let avatarImage = ImageHelper.imageFromData(avatarData) {
-                    Image(platformImage: avatarImage)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: AvatarStyle.chatSize, height: AvatarStyle.chatSize)
-                        .clipShape(AvatarStyle.avatarShape(AvatarStyle.chatSize))
-                        .overlay {
-                            AvatarStyle.avatarShape(AvatarStyle.chatSize)
-                                .strokeBorder(Color.Construct.dim, lineWidth: 1.5)
-                        }
-                } else {
-                    let accent = Color.hexagonAccent(for: chat.otherUser?.id ?? "")
-                    AvatarStyle.avatarShape(AvatarStyle.chatSize)
-                        .fill(accent.opacity(0.15))
-                        .frame(width: AvatarStyle.chatSize, height: AvatarStyle.chatSize)
-                        .overlay {
-                            Text(initials)
-                                .font(ConstructFont.mono(16, weight: .semibold))
-                                .foregroundStyle(accent)
-                        }
-                        .overlay {
-                            AvatarStyle.avatarShape(AvatarStyle.chatSize)
-                                .strokeBorder(Color.Construct.dim, lineWidth: 1.5)
-                        }
+        HStack(spacing: 10) {
+            avatarView
+
+            VStack(alignment: .leading, spacing: 3) {
+                HStack {
+                    // <@username> only when user has a real handle; otherwise deterministic name
+                    if let user = chat.otherUser, !user.username.isEmpty {
+                        Text("<@\(user.username.lowercased())>")
+                            .font(CTFont.bold(13))
+                            .foregroundColor(Color.CT.text)
+                    } else {
+                        Text((chat.otherUser?.resolvedDisplayName ?? NSLocalizedString("unknown", comment: "")).uppercased())
+                            .font(CTFont.bold(13))
+                            .foregroundColor(Color.CT.text)
+                    }
+                    Spacer()
+                    if let ts = chat.lastMessageTime {
+                        Text(ts, formatter: ChatRowView.rowTimeFormatter)
+                            .font(CTFont.regular(11))
+                            .foregroundColor(Color.CT.textDim)
+                    }
+                    if chat.isPinned && chat.unreadCount == 0 {
+                        Text(CTSymbol.pin)
+                            .font(CTFont.regular(10))
+                            .foregroundColor(Color.CT.textDim)
+                    }
+                }
+
+                HStack {
+                    if let lastMessage = chat.lastMessageText {
+                        Text(Chat.formatPreviewText(lastMessage))
+                            .font(CTFont.regular(12))
+                            .foregroundColor(Color.CT.textDim)
+                            .lineLimit(1)
+                    }
+                    Spacer()
+                    if chat.unreadCount > 0 {
+                        Text(chat.unreadCount < 100 ? "[\(chat.unreadCount)]" : "[99+]")
+                            .font(CTFont.bold(11))
+                            .foregroundColor(Color.CT.bg)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(Color.CT.accent)
+                            .clipShape(Rectangle())
+                            .animation(.easeInOut(duration: 0.2), value: chat.unreadCount)
+                    }
                 }
             }
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(chat.otherUser?.resolvedDisplayName ?? NSLocalizedString("unknown", comment: "Unknown user"))
-                    .font(ConstructFont.display(16, weight: .semibold))
-                    .foregroundStyle(Color.Construct.textBright)
-
-                if let lastMessage = chat.lastMessageText {
-                    Text(Chat.formatPreviewText(lastMessage))
-                        .font(ConstructFont.display(14))
-                        .foregroundStyle(Color.Construct.textDim)
-                        .lineLimit(1)
-                }
-            }
-
-            Spacer()
-
-            VStack(alignment: .trailing, spacing: 4) {
-                if chat.isPinned && chat.unreadCount == 0 {
-                    Image(systemName: "pin.fill")
-                        .font(.caption2)
-                        .foregroundStyle(Color.Construct.textDim)
-                }
-                if chat.unreadCount > 0 {
-                    Text(chat.unreadCount < 100 ? "\(chat.unreadCount)" : "99+")
-                        .font(ConstructFont.mono(11, weight: .semibold))
-                        .foregroundStyle(Color.Construct.bg)
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 3)
-                        .background(Color.Construct.accent, in: Capsule())
-                        .animation(.easeInOut(duration: 0.2), value: chat.unreadCount)
-                }
-            }
-
         }
-        .padding(.vertical, 4)
-        // Right-click context menu on macOS
+        .padding(.vertical, 8)
         .contextMenu {
             Button {
                 chat.isPinned.toggle()
                 try? chat.managedObjectContext?.save()
             } label: {
-                Label(chat.isPinned ? "Unpin" : "Pin", systemImage: chat.isPinned ? "pin.slash" : "pin")
+                Label(chat.isPinned ? "Unpin" : "Pin",
+                      systemImage: chat.isPinned ? "pin.slash" : "pin")
             }
 
             if chat.unreadCount > 0 {
@@ -97,7 +80,6 @@ struct ChatRowView: View {
             Divider()
 
             Button(role: .destructive) {
-                // Chat deletion is handled via ChatManagementService; tag it for parent list to process
                 NotificationCenter.default.post(name: .deleteChat, object: chat.id)
             } label: {
                 Label("Delete Chat", systemImage: "trash")
@@ -105,12 +87,35 @@ struct ChatRowView: View {
         }
     }
 
-    private var initials: String {
-        guard let displayName = chat.otherUser?.resolvedDisplayName else { return "?" }
-        let components = displayName.split(separator: " ")
-        if components.count >= 2 {
-            return String(components[0].prefix(1) + components[1].prefix(1)).uppercased()
+    // MARK: - Avatar
+
+    @ViewBuilder
+    private var avatarView: some View {
+        let seed = chat.otherUser?.id ?? initials
+        if let data = chat.otherUser?.avatarData,
+           let platformImg = ImageHelper.imageFromData(data) {
+            CTHexAvatar(initials: initials, image: Image(platformImage: platformImg), size: .medium, colorSeed: seed)
+        } else {
+            CTHexAvatar(initials: initials, size: .medium, colorSeed: seed)
         }
-        return String(displayName.prefix(2)).uppercased()
     }
+
+    // MARK: - Helpers
+
+    private var initials: String {
+        guard let name = chat.otherUser?.resolvedDisplayName else { return "?" }
+        let parts = name.split(separator: " ")
+        if parts.count >= 2 {
+            return String(parts[0].prefix(1) + parts[1].prefix(1)).uppercased()
+        }
+        return String(name.prefix(2)).uppercased()
+    }
+
+    static let rowTimeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.doesRelativeDateFormatting = true
+        f.dateStyle = .none
+        f.timeStyle = .short
+        return f
+    }()
 }

@@ -150,8 +150,7 @@ struct LinkDetectingText: View {
             color: .white
         )
         .padding()
-        .background(Color.blue)
-        .cornerRadius(12)
+        .background(Color.CT.accent)
         
         LinkDetectingText(
             "Mixed: some text https://example.com and https://konstruct.cc/c/user123?username=alice more text",

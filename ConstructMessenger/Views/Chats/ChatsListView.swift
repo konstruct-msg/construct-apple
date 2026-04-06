@@ -2,8 +2,6 @@
 //  ChatsListView.swift
 //  Construct Messenger
 //
-//  Created by Maxim Eliseyev on 13.12.2025.
-//
 
 import SwiftUI
 import CoreData
@@ -18,6 +16,7 @@ struct ChatsListView: View {
     @State private var showingQRScanner = false
     @State private var navigationPath = NavigationPath()
     @State private var showingDrafts = false
+    @State private var searchQuery = ""
 
     init() {
         let fetchRequest: NSFetchRequest<Chat> = Chat.fetchRequest()
@@ -30,103 +29,164 @@ struct ChatsListView: View {
 
     var body: some View {
         NavigationStack(path: $navigationPath) {
-            List {
-                ForEach(chats) { chat in
-                    NavigationLink(value: chat.id) {
-                        ChatRowView(chat: chat)
-                    }
-                    .listRowSeparatorTint(Color.white.opacity(0.05))
-                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                        Button(role: .destructive) {
-                            Task { await chatsViewModel.deleteChatWithEndSession(chat: chat) }
-                        } label: {
-                            Label(LocalizedStringKey("delete"), systemImage: "trash")
-                        }
-                        Button {
-                            toggleMarkUnread(chat)
-                        } label: {
-                            Label(LocalizedStringKey(chat.unreadCount > 0 ? "mark_read" : "mark_unread"),
-                                  systemImage: chat.unreadCount > 0 ? "envelope.open" : "envelope.badge")
-                        }
-                        .tint(.blue)
-                    }
-                    .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                        Button {
-                            togglePin(chat)
-                        } label: {
-                            Label(LocalizedStringKey(chat.isPinned ? "unpin" : "pin"),
-                                  systemImage: chat.isPinned ? "pin.slash" : "pin")
-                        }
-                        .tint(.yellow)
-                    }
-                }
+            VStack(spacing: 0) {
+                navBar
+                searchBar
+                chatList
             }
-            .refreshable {
-                #if os(iOS)
-                await BackgroundFetchManager.shared.fetchPendingMessages()
-                #endif
-            }
-            .listStyle(.plain)
-            .scrollContentBackground(.hidden)
-            .background(Color.Construct.bg)
+            .ctBackground()
+            #if os(iOS)
+            .toolbar(.hidden, for: .navigationBar)
+            #endif
             .navigationDestination(for: String.self) { chatId in
                 if let chat = chats.first(where: { $0.id == chatId }) {
                     ChatView(chat: chat, context: viewContext)
                 }
             }
-            #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(Color.Construct.bg2, for: .navigationBar)
-            .toolbarBackground(.visible, for: .navigationBar)
-            .toolbarColorScheme(.dark, for: .navigationBar)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    ConnectionStatusIndicator()
-                }
-                ToolbarItem(placement: .automatic) {
-                    Button {
-                        showingQRScanner = true
-                    } label: {
-                        Image(systemName: "qrcode.viewfinder")
-                    }
-                }
-            }
             .sheet(isPresented: $showingQRScanner) {
-                QRScannerView { contactURL in
-                    handleScannedContact(contactURL)
-                }
+                QRScannerView { contactURL in handleScannedContact(contactURL) }
             }
-            #endif
             .onAppear {
                 chatsViewModel.setContext(viewContext)
-                // ✅ Clear badge when user opens chats list
                 LocalNotificationManager.shared.clearBadge()
             }
+            .onChange(of: navigationPath) { _, path in
+                chatsViewModel.isInChat = !path.isEmpty
+            }
             .onChange(of: chatsViewModel.chatToOpen) { _, chatId in
-                if let chatId = chatId {
-                    // Clear the flag first to prevent re-triggering
+                if let chatId {
                     chatsViewModel.chatToOpen = nil
-                    // Give CoreData a moment to update the fetch request
                     Task { @MainActor in
-                        // Small delay to ensure @FetchRequest has updated with the new chat
-                        try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
-                        // Navigate to the chat
+                        try? await Task.sleep(nanoseconds: 100_000_000)
                         navigationPath.append(chatId)
                     }
                 }
             }
-            // macOS: handle right-click delete from ChatRowView context menu
             .onReceive(NotificationCenter.default.publisher(for: .deleteChat)) { note in
                 guard let chatId = note.object as? String,
                       let chat = chats.first(where: { $0.id == chatId }) else { return }
                 Task { await chatsViewModel.deleteChatWithEndSession(chat: chat) }
             }
-            // Keep totalUnreadCount in sync for macOS Dock badge
             .onChange(of: chats.reduce(0, { $0 + Int($1.unreadCount) })) { _, total in
                 chatsViewModel.totalUnreadCount = total
             }
         }
     }
+
+    // MARK: - Search Bar
+
+    private var searchBar: some View {
+        HStack(spacing: 6) {
+            Text("[")
+                .font(CTFont.regular(13))
+                .foregroundColor(Color.CT.textDim)
+            TextField("", text: $searchQuery, prompt: Text("search_")
+                .font(CTFont.regular(13))
+                .foregroundColor(Color.CT.textDim))
+                .font(CTFont.regular(13))
+                .foregroundColor(Color.CT.text)
+                .autocorrectionDisabled()
+                #if os(iOS)
+                .textInputAutocapitalization(.never)
+                #endif
+                .tint(Color.CT.accent)
+            if !searchQuery.isEmpty {
+                Button { searchQuery = "" } label: {
+                    Text("×")
+                        .font(CTFont.regular(13))
+                        .foregroundColor(Color.CT.textDim)
+                }
+            } else {
+                Text("]")
+                    .font(CTFont.regular(13))
+                    .foregroundColor(Color.CT.textDim)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .background(Color.CT.bgMsg)
+        .ctBorderBottom()
+    }
+
+    // MARK: - Nav Bar
+
+    private var navBar: some View {
+        HStack(spacing: 10) {
+            ConnectionStatusIndicator()
+            Spacer()
+            Button { showingQRScanner = true } label: {
+                Text(CTSymbol.scan)
+                    .font(CTFont.bold(14))
+                    .foregroundColor(Color.CT.accent)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 11)
+        .ctBorderBottom()
+    }
+
+    // MARK: - Chat List
+
+    private var filteredChats: [Chat] {
+        guard !searchQuery.isEmpty else { return Array(chats) }
+        let q = searchQuery.lowercased()
+        return chats.filter { chat in
+            let name = (chat.otherUser?.resolvedDisplayName ?? "").lowercased()
+            let username = (chat.otherUser?.username ?? "").lowercased()
+            let preview = (chat.lastMessageText ?? "").lowercased()
+            return name.contains(q) || username.contains(q) || preview.contains(q)
+        }
+    }
+
+    private var chatList: some View {
+        List {
+            ForEach(filteredChats) { chat in
+                Button { navigationPath.append(chat.id) } label: {
+                    ChatRowView(chat: chat)
+                }
+                .buttonStyle(.plain)
+                .listRowBackground(Color.CT.bg)
+                .listRowSeparatorTint(Color.CT.noise)
+                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                    Button(role: .destructive) {
+                        Task { await chatsViewModel.deleteChatWithEndSession(chat: chat) }
+                    } label: {
+                        Label(LocalizedStringKey("delete"), systemImage: "trash")
+                    }
+                    Button {
+                        toggleMarkUnread(chat)
+                    } label: {
+                        Label(
+                            LocalizedStringKey(chat.unreadCount > 0 ? "mark_read" : "mark_unread"),
+                            systemImage: chat.unreadCount > 0 ? "envelope.open" : "envelope.badge"
+                        )
+                    }
+                    .tint(Color.CT.accentDim)
+                }
+                .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                    Button {
+                        togglePin(chat)
+                    } label: {
+                        Label(
+                            LocalizedStringKey(chat.isPinned ? "unpin" : "pin"),
+                            systemImage: chat.isPinned ? "pin.slash" : "pin"
+                        )
+                    }
+                    .tint(Color.CT.textDim)
+                }
+            }
+        }
+        .refreshable {
+            #if os(iOS)
+            await BackgroundFetchManager.shared.fetchPendingMessages()
+            #endif
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(Color.CT.bg)
+    }
+
+    // MARK: - Actions
 
     private func togglePin(_ chat: Chat) {
         chat.isPinned.toggle()
@@ -134,35 +194,26 @@ struct ChatsListView: View {
     }
 
     private func toggleMarkUnread(_ chat: Chat) {
-        if chat.unreadCount > 0 {
-            chat.unreadCount = 0
-        } else {
-            chat.unreadCount = 1
-        }
+        chat.unreadCount = chat.unreadCount > 0 ? 0 : 1
         try? viewContext.save()
     }
 
     // MARK: - QR Code Handling
+
     private func handleScannedContact(_ urlString: String) {
         Log.info("🔍 ChatsListView: Handling scanned URL: \(urlString)", category: "ChatsListView")
-
         guard let url = URL(string: urlString) else {
-            Log.error("❌ Invalid URL string: \(urlString)", category: "ChatsListView")
-            showErrorAfterDismiss(NSLocalizedString("invalid_qr_code_construct", comment: "Error message for invalid QR code"))
+            showErrorAfterDismiss(NSLocalizedString("invalid_qr_code_construct", comment: ""))
             return
         }
-
         Task {
             do {
                 let contactInfo = try await LinkParser.parseContactLink(url)
-                Log.info("✅ Parsed contact: userId=\(contactInfo.userId), username=\(contactInfo.username)", category: "ChatsListView")
-                
                 await MainActor.run {
                     addContact(contactInfo: contactInfo)
                     showingQRScanner = false
                 }
             } catch {
-                Log.error("❌ Failed to parse contact link: \(error.localizedDescription)", category: "ChatsListView")
                 await MainActor.run {
                     showErrorAfterDismiss(error.localizedDescription)
                     showingQRScanner = false
@@ -174,14 +225,10 @@ struct ChatsListView: View {
     private func addContact(contactInfo: ContactInfo) {
         let userId = contactInfo.userId
         let username = contactInfo.username
-        Log.info("📱 ChatsListView: Adding contact userId=\(userId), username=\(username)", category: "ChatsListView")
-
         if userId == SessionManager.shared.currentUserId {
-            Log.info("📝 Self-chat detected — opening Drafts", category: "ChatsListView")
             showingDrafts = true
             return
         }
-
         let publicUserInfo = PublicUserInfo(
             id: userId,
             username: username,
@@ -189,11 +236,7 @@ struct ChatsListView: View {
             bio: nil,
             deviceId: contactInfo.deviceId
         )
-        if let chat = chatsViewModel.startChat(with: publicUserInfo) {
-            Log.info("✅ ChatsListView: Chat created with @\(username), chat.id=\(chat.id)", category: "ChatsListView")
-        } else {
-            Log.error("❌ ChatsListView: Failed to create chat with @\(username)", category: "ChatsListView")
-        }
+        _ = chatsViewModel.startChat(with: publicUserInfo)
     }
 
     private func showErrorAfterDismiss(_ message: String) {
@@ -207,24 +250,13 @@ struct ChatsListView: View {
 #Preview {
     let container = PreviewHelpers.createPreviewContainer()
     let context = container.viewContext
-    
-    // ✅ Ensure context is ready before using it
-    guard context.persistentStoreCoordinator != nil else {
-        fatalError("Preview Core Data context not ready")
-    }
-
-    // Create sample data
     let user1 = PreviewHelpers.createSampleUser(context: context, id: "user1", username: "alice", displayName: "Alice")
     let user2 = PreviewHelpers.createSampleUser(context: context, id: "user2", username: "bob", displayName: "Bob")
-
     _ = PreviewHelpers.createSampleChat(context: context, with: user1)
     _ = PreviewHelpers.createSampleChat(context: context, with: user2)
-
     try? context.save()
-    
     let chatsViewModel = ChatsViewModel()
     chatsViewModel.setContext(context)
-
     return ChatsListView()
         .environment(\.managedObjectContext, context)
         .environment(chatsViewModel)

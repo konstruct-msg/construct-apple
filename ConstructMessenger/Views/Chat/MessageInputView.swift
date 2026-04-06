@@ -31,6 +31,7 @@ struct MessageInputView: View {
     @State private var showAttachmentMenu = false
     @State private var showPhotoPicker = false
     @State private var showFilePicker = false
+    @State private var showCameraPicker = false
     @State private var isOptimizing = false
 
     // MARK: - Voice state
@@ -95,7 +96,8 @@ struct MessageInputView: View {
             inputRow
             #endif
         }
-        .background(Color.AppBackground.primary)
+        .background(Color.CT.bg)
+        .ctBorderTop()
         .animation(.easeInOut(duration: 0.2), value: canSend)
         .animation(.easeInOut(duration: 0.2), value: replyingTo != nil)
         .animation(.easeInOut(duration: 0.2), value: editingMessage != nil)
@@ -162,21 +164,27 @@ struct MessageInputView: View {
 
     private var attachmentButton: some View {
         Button { showAttachmentMenu = true } label: {
-            Image(systemName: "plus.circle.fill")
-                .font(.system(size: 28))
-                .foregroundColor(Color.blue)
+            Text(CTSymbol.attach)
+                .font(CTFont.bold(15))
+                .foregroundColor(Color.CT.textDim)
         }
         #if os(iOS)
         .confirmationDialog(LocalizedStringKey("attach"), isPresented: $showAttachmentMenu) {
             Button { showPhotoPicker = true } label: {
                 Label(LocalizedStringKey("photos"), systemImage: "photo.on.rectangle")
             }
-            Button(LocalizedStringKey("camera")) {}   // TODO: camera
+            Button(LocalizedStringKey("camera")) { showCameraPicker = true }
             Button(LocalizedStringKey("files")) { showFilePicker = true }
             Button(LocalizedStringKey("cancel"), role: .cancel) {}
         }
         .photosPicker(isPresented: $showPhotoPicker, selection: $selectedPhotos,
                       maxSelectionCount: 10, matching: .images)
+        .sheet(isPresented: $showCameraPicker) {
+            CameraPickerView { image in
+                selectedImages.append(image)
+            }
+            .ignoresSafeArea()
+        }
         #else
         .popover(isPresented: $showAttachmentMenu, arrowEdge: .top) {
             VStack(alignment: .leading, spacing: 0) {
@@ -323,3 +331,40 @@ struct MessageInputView: View {
     }
     .background(Color(.systemBackground))
 }
+
+// MARK: - Camera Picker (iOS only)
+
+#if os(iOS)
+import UIKit
+
+struct CameraPickerView: UIViewControllerRepresentable {
+    let onCapture: (UIImage) -> Void
+
+    func makeCoordinator() -> Coordinator { Coordinator(onCapture: onCapture) }
+
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let picker = UIImagePickerController()
+        picker.sourceType = UIImagePickerController.isSourceTypeAvailable(.camera) ? .camera : .photoLibrary
+        picker.delegate = context.coordinator
+        return picker
+    }
+
+    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
+
+    final class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+        let onCapture: (UIImage) -> Void
+        init(onCapture: @escaping (UIImage) -> Void) { self.onCapture = onCapture }
+
+        func imagePickerController(_ picker: UIImagePickerController,
+                                   didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
+            let image = (info[.editedImage] ?? info[.originalImage]) as? UIImage
+            picker.dismiss(animated: true)
+            if let img = image { onCapture(img) }
+        }
+
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+            picker.dismiss(animated: true)
+        }
+    }
+}
+#endif

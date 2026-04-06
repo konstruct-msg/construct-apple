@@ -870,7 +870,14 @@ class ChatViewModel: NSObject {
                         preEncryptedFirst: firstComponents,
                         kemCiphertext: kemCiphertext,
                         kyberOtpkId: kyberOtpkId,
-                        replyToMessageId: replyTo?.id
+                        replyToMessageId: replyTo?.id,
+                        onWirePayloadEncoded: { chunkId, wire in
+                            OutgoingWirePayloadStore.shared.saveChunk(
+                                baseMessageId: messageId,
+                                chunkMessageId: chunkId,
+                                wirePayload: wire
+                            )
+                        }
                     )
                     let response = responses.first ?? SendMessageResponse(messageId: messageId, status: "sent")
 
@@ -906,14 +913,23 @@ class ChatViewModel: NSObject {
                             self.blockedByRecipient = true
                             Log.error("🚫 Message blocked by recipient — suppressing retry for \(messageId)", category: "ChatViewModel")
                         case "failed":
-                            deliveryStatus = .failed
-                            Log.error("❌ Server rejected message \(messageId): status=failed retryable=\(response.retryable)", category: "ChatViewModel")
+                            if response.retryable {
+                                deliveryStatus = .queued
+                                Log.error("❌ Server rejected message \(messageId): status=failed retryable=true — queued for retry", category: "ChatViewModel")
+                            } else {
+                                deliveryStatus = .failed
+                                OutgoingWirePayloadStore.shared.remove(baseMessageId: messageId)
+                                Log.error("❌ Server rejected message \(messageId): status=failed retryable=false", category: "ChatViewModel")
+                            }
                         default:
                             deliveryStatus = .sent
                             Log.info("⚠️ Unknown server status: \(response.status), using .sent", category: "ChatViewModel")
                         }
                         Log.info("🔄 Updating message status from sending → \(deliveryStatus) for \(messageId)", category: "ChatViewModel")
                         self.updateMessageStatus(messageId: messageId, status: deliveryStatus)
+                        if deliveryStatus == .sent || deliveryStatus == .delivered {
+                            OutgoingWirePayloadStore.shared.remove(baseMessageId: messageId)
+                        }
                         Log.info("✅ Message sent via gRPC: \(response.messageId), server status: \(response.status)", category: "ChatViewModel")
                         self.isSending = false
                     }
@@ -928,6 +944,7 @@ class ChatViewModel: NSObject {
                             Log.error("❌ Failed to send message: \(error)", category: "ChatViewModel")
                         }
                         self.updateMessageStatus(messageId: messageId, status: .failed)
+                        OutgoingWirePayloadStore.shared.remove(baseMessageId: messageId)
                         ErrorRouter.shared.report(error, recovery: { [weak self] in
                             self?.sendTextMessage(text: text, replyTo: replyTo, replyToContentOverride: replyToContentOverride, localThumbnails: localThumbnails)
                         })

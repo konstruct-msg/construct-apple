@@ -54,6 +54,8 @@ struct ChatView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            chatNavBar
+
             // Flood-burst banner — shown when this chat's sender is burst-suppressed
             floodBurstBanner
             
@@ -72,9 +74,9 @@ struct ChatView: View {
                                         viewModel.loadMoreMessages()
                                     } label: {
                                         Text(NSLocalizedString("load_older_messages", comment: "Load older messages button"))
-                                            .font(FontStyle.caption)
-                                            .foregroundColor(Color.AppText.accent)
-                                            .padding(.vertical, Spacing.small)
+                                            .font(CTFont.regular(12))
+                                            .foregroundColor(Color.CT.accentDim)
+                                            .padding(.vertical, 8)
                                     }
                                 }
                                 Spacer()
@@ -241,14 +243,9 @@ struct ChatView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         #endif
         #if os(iOS)
-        #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
-        .toolbarBackground(.visible, for: .navigationBar)
-        .toolbarBackground(Color.AppBackground.primary, for: .navigationBar)
         #endif
-        #endif
-        .toolbar(content: toolbarContent)
         .gesture(
             DragGesture(minimumDistance: 10)
                 .updating($dragState) { value, state, _ in
@@ -279,15 +276,16 @@ struct ChatView: View {
         }
         .overlay {
             if isChatDropTargeted {
-                RoundedRectangle(cornerRadius: 12)
-                    .strokeBorder(Color.accentColor, lineWidth: 3)
-                    .background(Color.accentColor.opacity(0.06).clipShape(RoundedRectangle(cornerRadius: 12)))
+                Rectangle()
+                    .strokeBorder(Color.CT.accent, lineWidth: 2)
+                    .background(Color.CT.accent.opacity(0.05))
                     .overlay(
-                        Label(LocalizedStringKey("drop_to_attach"), systemImage: "photo.badge.plus")
-                            .font(.title3.weight(.semibold))
-                            .foregroundColor(.accentColor)
+                        Text(LocalizedStringKey("drop_to_attach"))
+                            .font(CTFont.regular(16))
+                            .foregroundColor(Color.CT.accent)
                             .padding(16)
-                            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+                            .background(Color.CT.bgMsg)
+                            .overlay(Rectangle().stroke(Color.CT.accent.opacity(0.4), lineWidth: 1))
                     )
                     .allowsHitTesting(false)
                     .padding(8)
@@ -351,7 +349,8 @@ struct ChatView: View {
         let senderId = viewModel.chat.otherUser?.id ?? ""
         if floodGuard.suppressedSenders.contains(senderId) {
             HStack(spacing: 10) {
-                Image(systemName: "exclamationmark.shield.fill")
+                Text("[!]")
+                    .font(CTFont.regular(16))
                     .foregroundStyle(.orange)
 
                 VStack(alignment: .leading, spacing: 2) {
@@ -364,24 +363,26 @@ struct ChatView: View {
 
                 Spacer()
 
-                Button(LocalizedStringKey("allow")) {
+                Button {
                     IncomingFloodGuard.shared.unsuppress(senderId: senderId)
+                } label: {
+                    Text("[allow →]")
+                        .font(CTFont.regular(12))
+                        .foregroundStyle(.orange)
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.mini)
-                .tint(.green)
 
-                Button(LocalizedStringKey("block")) {
+                Button {
                     // Delegate to existing block flow
                     if let user = viewModel.chat.otherUser {
                         user.isBlocked = true
                         try? user.managedObjectContext?.save()
                     }
                     IncomingFloodGuard.shared.unsuppress(senderId: senderId)
+                } label: {
+                    Text("[block]")
+                        .font(CTFont.regular(12))
+                        .foregroundStyle(Color.CT.danger)
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.mini)
-                .tint(.red)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
@@ -398,19 +399,18 @@ struct ChatView: View {
                 Button(role: .destructive) {
                     deleteSelectedMessages()
                 } label: {
-                    HStack {
-                        Image(systemName: "trash")
-                        Text("delete_selected")
-                    }
-                    .foregroundColor(.red)
+                    Text("[\(NSLocalizedString("delete_selected", comment: "")) →]")
+                        .font(CTFont.regular(13))
+                        .foregroundStyle(Color.CT.danger)
                 }
                 Spacer()
                 Text("\(selectedMessages.count) \(selectedMessages.count == 1 ? "message_selected" : "messages_selected")")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                    .font(CTFont.regular(12))
+                    .foregroundStyle(Color.CT.textDim)
             }
             .padding()
-            .background(Color.secondary.opacity(0.12))
+            .background(Color.CT.bg)
+            .overlay(Rectangle().frame(height: 1).foregroundStyle(Color.CT.accent.opacity(0.3)), alignment: .top)
         }
     }
     
@@ -477,26 +477,20 @@ struct ChatView: View {
                     }
                 } label: {
                     HStack(spacing: 6) {
-                        Image(systemName: "arrow.down.circle.fill")
-                            .font(.system(size: 16, weight: .semibold))
+                        Text("↓")
+                            .font(CTFont.bold(14))
                         Text(viewModel.chat.unreadCount > 0
                              ? NSLocalizedString("new_messages", comment: "New messages below")
                              : NSLocalizedString("scroll_to_bottom", comment: "Scroll back to latest messages"))
-                            .font(.system(size: 14, weight: .medium))
+                            .font(CTFont.regular(13))
                     }
-                    .foregroundColor(Color.AppBackground.primary)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
+                    .foregroundColor(Color.CT.accent)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
                     .background(
-                        Capsule()
-                            .fill(
-                                LinearGradient(
-                                    colors: [Color.accentColor, Color.accentColor.opacity(0.8)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .shadow(color: .black.opacity(0.25), radius: 8, x: 0, y: 4)
+                        Rectangle()
+                            .fill(Color.CT.bgMsg)
+                            .overlay(Rectangle().strokeBorder(Color.CT.accent.opacity(0.5), lineWidth: 1))
                     )
                 }
                 .padding(.trailing, 16)
@@ -507,80 +501,71 @@ struct ChatView: View {
         }
     }
     
-    @ToolbarContentBuilder
-    private func toolbarContent() -> some ToolbarContent {
-        ToolbarItem(placement: .principal) {
-            Button {
-                showingUserProfile = true
-            } label: {
-                VStack(spacing: 1) {
-                    Text(viewModel.chat.otherUser?.resolvedDisplayName ?? NSLocalizedString("chat", comment: "Default chat title"))
-                        .font(.headline)
-                        .foregroundColor(.primary)
+    // MARK: - CT Navigation Bar
+
+    private var chatNavBar: some View {
+        HStack(spacing: 10) {
+            Button { dismiss() } label: {
+                Text(CTSymbol.back)
+                    .font(CTFont.bold(14))
+                    .foregroundColor(Color.CT.accent)
+            }
+
+            Button { showingUserProfile = true } label: {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text((viewModel.chat.otherUser?.resolvedDisplayName ?? NSLocalizedString("chat", comment: "")).uppercased())
+                        .font(CTFont.bold(13))
+                        .foregroundColor(Color.CT.text)
                     if let subtitle = navigationStatusSubtitle {
                         Text(subtitle)
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                            .transition(.opacity.combined(with: .move(edge: .top)))
+                            .font(CTFont.regular(10))
+                            .foregroundColor(Color.CT.accentDim)
+                            .transition(.opacity)
                     }
                 }
                 .animation(.easeInOut(duration: 0.25), value: navigationStatusSubtitle)
             }
-        }
+            .buttonStyle(.plain)
 
-        // Split into separate ToolbarItems to avoid NSToolbarItemGroup selectionMode warnings on macOS
-        if !isEditMode {
-            // Call button — only for 1-on-1 chats when calls are enabled
-            if CallsFeature.isEnabled, let otherUser = viewModel.chat.otherUser, case .idle = callManager.state {
-                ToolbarItem(placement: .automatic) {
+            Spacer()
+
+            if isEditMode {
+                Button {
+                    withAnimation { isEditMode = false; selectedMessages.removeAll() }
+                } label: {
+                    Text("[done]")
+                        .font(CTFont.bold(13))
+                        .foregroundColor(Color.CT.accent)
+                }
+            } else {
+                if CallsFeature.isEnabled, let otherUser = viewModel.chat.otherUser,
+                   case .idle = callManager.state {
                     Button {
-                        Task {
-                            await callManager.startOutgoingCall(
-                                to: otherUser.id,
-                                displayName: otherUser.resolvedDisplayName,
-                                hasVideo: false
-                            )
-                        }
+                        Task { await callManager.startOutgoingCall(
+                            to: otherUser.id,
+                            displayName: otherUser.resolvedDisplayName,
+                            hasVideo: false
+                        ) }
                     } label: {
-                        Image(systemName: "phone")
+                        Text(CTSymbol.tabCalls)
+                            .font(CTFont.bold(14))
+                            .foregroundColor(Color.CT.accent)
                     }
-                    .accessibilityLabel(NSLocalizedString("call_start", comment: ""))
                 }
-            }
-
-            ToolbarItem(placement: .automatic) {
                 Button {
-                    withAnimation {
-                        isSearchActive.toggle()
-                        if !isSearchActive { searchText = "" }
-                    }
+                    withAnimation { isSearchActive.toggle(); if !isSearchActive { searchText = "" } }
                 } label: {
-                    Image(systemName: isSearchActive ? "xmark.circle.fill" : "magnifyingglass")
-                }
-            }
-        } else {
-            ToolbarItem(placement: .automatic) {
-                Button {
-                    withAnimation {
-                        isSearchActive.toggle()
-                        if !isSearchActive { searchText = "" }
-                    }
-                } label: {
-                    Image(systemName: isSearchActive ? "xmark.circle.fill" : "magnifyingglass")
-                }
-            }
-            ToolbarItem(placement: .automatic) {
-                Button {
-                    withAnimation {
-                        isEditMode = false
-                        selectedMessages.removeAll()
-                    }
-                } label: {
-                    Text("done")
+                    Text(isSearchActive ? CTSymbol.close : CTSymbol.search)
+                        .font(CTFont.bold(14))
+                        .foregroundColor(Color.CT.accent)
                 }
             }
         }
-    }  // end toolbarContent()
+        .padding(.horizontal, 12)
+        .padding(.vertical, 11)
+        .ctBorderBottom()
+    }
+
 
     /// Returns a subtle subtitle for the navigation bar when connection or session state requires attention.
     /// Returns nil when everything is healthy (no subtitle shown).
@@ -601,25 +586,56 @@ struct ChatView: View {
     private func searchOverlay() -> some View {
         if isSearchActive {
             VStack(spacing: 0) {
-                HStack(spacing: 12) {
+                HStack(spacing: 8) {
+                    Text(">")
+                        .font(CTFont.regular(14))
+                        .foregroundStyle(Color.CT.accent)
+
                     TextField("search_messages", text: $searchText)
-                        .textFieldStyle(.roundedBorder)
+                        .font(CTFont.regular(14))
+                        .foregroundStyle(Color.CT.text)
+                        .tint(Color.CT.accent)
                         #if os(iOS)
                         .autocapitalization(.none)
                         .submitLabel(.search)
                         #endif
                         .autocorrectionDisabled()
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 6)
+                        .background(Color.CT.bgMsg)
+                        .overlay(Rectangle().stroke(Color.CT.accent.opacity(0.4)))
+
                     Button {
                         withAnimation {
                             isSearchActive = false
                             searchText = ""
                         }
                     } label: {
-                        Text("cancel")
+                        Text("[x]")
+                            .font(CTFont.regular(14))
+                            .foregroundStyle(Color.CT.accentDim)
                     }
                 }
-                .padding()
-                .background(Color.AppBackground.primary.shadow(color: .black.opacity(0.1), radius: 2, y: 1))
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(Color.CT.bg)
+
+                if !searchText.isEmpty {
+                    HStack {
+                        Text("[\(filteredMessages.count) results]")
+                            .font(CTFont.regular(12))
+                            .foregroundStyle(Color.CT.textDim)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.bottom, 6)
+                    .background(Color.CT.bg)
+                }
+
+                Rectangle()
+                    .frame(height: 1)
+                    .foregroundStyle(Color.CT.accent.opacity(0.3))
+
                 Spacer()
             }
         }
@@ -730,7 +746,7 @@ struct ChatView: View {
 
     // Add sample messages
     _ = PreviewHelpers.createSampleMessage(context: context, chat: chat, isSentByMe: false, text: "Hi! How are you?")
-    _ = PreviewHelpers.createSampleMessage(context: context, chat: chat, isSentByMe: true, text: "I'm good, thanks!")
+    _ = PreviewHelpers.createSampleMessage(context: context, chat: chat, isSentByMe: true, text: "I'm good, thanks! So what about you?")
     _ = PreviewHelpers.createSampleMessage(context: context, chat: chat, isSentByMe: false, text: "Great to hear!")
 
     try? context.save()

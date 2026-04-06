@@ -76,14 +76,21 @@ struct DesktopLinkRequestView: View {
         } else {
             // Error shown via alert — show a retry button as fallback
             VStack(spacing: 16) {
-                Image(systemName: "exclamationmark.triangle")
-                    .font(.system(size: 48))
+                Text("[!]")
+                    .font(CTFont.bold(48))
                     .foregroundStyle(.orange)
+                    .lineLimit(1).fixedSize()
                 Button(LocalizedStringKey("device_link_refresh")) {
                     vm.errorMessage = nil
                     Task { await vm.generateJoinRequestQR() }
+                } label: {
+                    Text(LocalizedStringKey("device_link_refresh"))
+                        .font(CTFont.regular(13))
+                        .foregroundColor(Color.CT.text)
+                        .padding(.horizontal, 16).padding(.vertical, 10)
+                        .background(Color.CT.bgMsg)
+                        .overlay(Rectangle().stroke(Color.CT.accent, lineWidth: 1))
                 }
-                .buttonStyle(.borderedProminent)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
@@ -95,9 +102,10 @@ struct DesktopLinkRequestView: View {
         VStack(spacing: 28) {
             // Header
             VStack(spacing: 10) {
-                Image(systemName: "iphone")
-                    .font(.system(size: 36, weight: .light))
-                    .foregroundStyle(.secondary)
+                Text("[iOS]")
+                    .font(CTFont.bold(32))
+                    .foregroundStyle(Color.CT.textDim)
+                    .lineLimit(1).fixedSize()
 
                 Text(LocalizedStringKey("device_link_request_instruction"))
                     .font(.title3.weight(.semibold))
@@ -119,8 +127,7 @@ struct DesktopLinkRequestView: View {
                     .frame(width: 220, height: 220)
                     .padding(16)
                     .background(Color.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
-                    .shadow(color: .black.opacity(0.08), radius: 8, y: 2)
+                    .clipShape(Rectangle())
             }
 
             // Waiting indicator

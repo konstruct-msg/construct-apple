@@ -41,15 +41,20 @@ class MessageRouter {
     var onEndSessionNeeded: ((String) -> Void)?
 
     /// Called when an END_SESSION *from* a peer has been processed (session cleared).
-    /// Receiver should re-initiate if it is the natural INITIATOR (lower userId).
-    var onEndSessionReceived: ((String) -> Void)?
+    /// Receiver should re-initiate if it is the natural INITIATOR (higher deviceId).
+    var onEndSessionReceived: ((String, UInt64) -> Void)?
+
+    /// Returns `true` if an END_SESSION from the given peer with the given server timestamp
+    /// should be discarded because it predates the currently-established session.
+    /// Set by SessionCoordinator; nil means "never stale" (safe default).
+    var isEndSessionStale: ((String, UInt64) -> Bool)?
 
     /// Called when an existing session failed to decrypt a `messageNumber==0` message.
     /// The remote peer re-keyed — caller should archive the current session and
     /// attempt `initReceivingSession` with the supplied message as the new X3DH init.
     var onSessionHealNeeded: ((String, ChatMessage) -> Void)?
 
-    /// Called when this device wins the tie-break (lower userId restores INITIATOR session).
+    /// Called when this device wins the tie-break (higher deviceId restores INITIATOR session).
     /// Receiver should send END_SESSION to the loser and then send a session establishment
     /// ping so the loser can immediately become RESPONDER without user action.
     var onTieBreakWin: ((String) -> Void)?
@@ -116,7 +121,7 @@ class MessageRouter {
         if message.isEndSession {
             PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
             Log.info("🛑 Received END_SESSION from \(otherUserId)", category: "MessageRouter")
-            handleEndSession(from: otherUserId, in: context, pendingMessages: &pendingMessages)
+            handleEndSession(from: otherUserId, messageTimestamp: message.timestamp, in: context, pendingMessages: &pendingMessages)
             // ACK so the server removes it from the pending queue
             onReceiptNeeded?([message.id], otherUserId, .delivered)
             return
@@ -664,19 +669,20 @@ class MessageRouter {
                 // Session was already archived by decryptMessage (reason: decryptionFailed).
                 //
                 // Tie-break: if BOTH sides re-inited as INITIATOR simultaneously, we must pick
-                // exactly one side to win. Lower userId = INITIATOR. Higher userId = RESPONDER.
+                // exactly one side to win. Higher deviceId = INITIATOR. Lower deviceId = RESPONDER.
                 // The winner restores its just-archived INITIATOR session; the loser heals.
                 let myUserId = SessionManager.shared.currentUserId ?? ""
                 let suiteIdBeforeTieBreak = UserDefaults.standard.integer(forKey: "construct.session.suite.\(userId)")
-                let tieBreakRole = (!myUserId.isEmpty && myUserId < userId) ? "INITIATOR" : "RESPONDER"
+                let iAmInitiator = (!myUserId.isEmpty && DeviceIdOrdering.isNaturalInitiator(myId: myUserId, peerId: userId))
+                let tieBreakRole = iAmInitiator ? "INITIATOR" : "RESPONDER"
                 Log.info("⚖️ SESSION_STATE[tie_break_decision]: my=\(myUserId.prefix(8))… vs peer=\(userId.prefix(8))… → role=\(tieBreakRole), suiteId_current=\(suiteIdBeforeTieBreak), kemCt=\(message.kemCiphertext.count)b, otpkId=\(message.oneTimePreKeyId)", category: "SessionInit")
-                if !myUserId.isEmpty && myUserId < userId {
-                    // We're lower userId → we are the INITIATOR. Try to restore our
+                if iAmInitiator {
+                    // We're higher deviceId → we are the INITIATOR. Try to restore our
                     // just-archived session so we keep the INITIATOR role.
                     let restored = CryptoManager.shared.restoreLatestArchive(for: userId)
                     if restored {
                         let suiteIdAfterRestore = UserDefaults.standard.integer(forKey: "construct.session.suite.\(userId)")
-                        Log.info("🏆 SESSION_STATE[tie_break_win]: kept INITIATOR (lower userId), ACKed X3DH from \(userId.prefix(8))…, suiteId_restored=\(suiteIdAfterRestore)", category: "SessionInit")
+                        Log.info("🏆 SESSION_STATE[tie_break_win]: kept INITIATOR (higher deviceId), ACKed X3DH from \(userId.prefix(8))…, suiteId_restored=\(suiteIdAfterRestore)", category: "SessionInit")
                         PersistentACKStore.shared.markProcessed(message.id, senderId: userId, in: context)
                         onReceiptNeeded?([message.id], userId, .delivered)
                         // Send END_SESSION to stop the loser's invalid message stream, then send a
@@ -691,8 +697,8 @@ class MessageRouter {
                         onSessionHealNeeded?(userId, message)
                     }
                 } else {
-                    // We're higher userId → become RESPONDER and heal from their X3DH init.
-                    Log.info("🩹 SESSION_STATE[heal_triggered]: msgNum=0, kemCiphertext=\(message.kemCiphertext.count)b from \(userId.prefix(8))… — healing (tie-break: we are RESPONDER)", category: "SessionInit")
+                    // We're lower deviceId → become RESPONDER and heal from their X3DH init.
+                    Log.info("🩹 SESSION_STATE[heal_triggered]: msgNum=0, kemCiphertext=\(message.kemCiphertext.count)b from \(userId.prefix(8))… — healing (tie-break: we are RESPONDER / lower deviceId)", category: "SessionInit")
                     SessionHealingService.shared.enqueue(message, in: context)
                     pendingMessages[userId, default: []].append(message)
                     onSessionHealNeeded?(userId, message)
@@ -774,9 +780,19 @@ class MessageRouter {
     /// existing Swift `archiveSession` to preserve existing behaviour.
     private func handleEndSession(
         from userId: String,
+        messageTimestamp: UInt64,
         in context: NSManagedObjectContext,
         pendingMessages: inout [String: [ChatMessage]]
     ) {
+        // Guard against stale END_SESSION messages: if the message's server timestamp
+        // predates our current active session, it was queued from a previous session
+        // cycle and re-delivered by the server. ACK it (already done) and stop here —
+        // tearing down a healthy session based on a stale END_SESSION causes cascades.
+        if isEndSessionStale?(userId, messageTimestamp) == true {
+            Log.info("🗑️ Discarding stale END_SESSION from \(userId.prefix(8))… (ts=\(messageTimestamp))", category: "MessageRouter")
+            return
+        }
+
         Log.info("🛑 Handling END_SESSION from \(userId)", category: "MessageRouter")
 
         // 1. Archive the session — prefer Rust-owned archiving.
@@ -818,7 +834,7 @@ class MessageRouter {
         SessionHealingService.shared.clearQueue(for: userId, in: context)
 
         // 4. Notify coordinator so the natural INITIATOR can prewarm immediately.
-        onEndSessionReceived?(userId)
+        onEndSessionReceived?(userId, messageTimestamp)
 
         Log.info("✅ END_SESSION handled for \(userId)", category: "MessageRouter")
     }
@@ -826,6 +842,8 @@ class MessageRouter {
     /// Marks outgoing messages that were sent to the server but never delivered as `.queued`,
     /// so they can be re-encrypted and re-sent under the fresh session after END_SESSION.
     /// Only considers messages sent in the past `requeueWindowSeconds` to avoid re-sending stale chat.
+    /// Messages that have already been re-queued `maxMessageRetryAttempts` times are permanently
+    /// marked as `.failed` to break infinite session-reset amplification cycles.
     private func requeueUndeliveredOutgoing(
         for userId: String,
         in context: NSManagedObjectContext,
@@ -847,12 +865,30 @@ class MessageRouter {
 
         guard let messages = try? context.fetch(msgFetch), !messages.isEmpty else { return }
 
+        let maxRetries = FeatureFlags.maxMessageRetryAttempts
+        var requeuedCount = 0
+        var droppedCount = 0
+
         for msg in messages {
-            msg.deliveryStatus = .queued
+            if msg.retryCount < maxRetries {
+                msg.deliveryStatus = .queued
+                requeuedCount += 1
+            } else {
+                // Message has survived maxRetries session resets without delivery receipt.
+                // Mark permanently failed to break re-queue amplification cycle.
+                msg.deliveryStatus = .failed
+                droppedCount += 1
+                Log.error("⛔ END_SESSION: dropping re-queue for \(msg.id.prefix(8))… after \(msg.retryCount) attempts — marking failed", category: "MessageRouter")
+            }
         }
         context.saveAndLog()
 
-        Log.info("♻️ END_SESSION: re-queued \(messages.count) sent-but-undelivered message(s) for \(userId.prefix(8))… — will resend under new session", category: "MessageRouter")
+        if requeuedCount > 0 {
+            Log.info("♻️ END_SESSION: re-queued \(requeuedCount) message(s) for \(userId.prefix(8))… — will resend under new session", category: "MessageRouter")
+        }
+        if droppedCount > 0 {
+            Log.error("⛔ END_SESSION: permanently failed \(droppedCount) message(s) for \(userId.prefix(8))… (exceeded retry limit)", category: "MessageRouter")
+        }
     }
 
     /// Add a system message to chat

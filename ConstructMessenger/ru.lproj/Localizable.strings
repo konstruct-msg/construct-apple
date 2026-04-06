@@ -4,25 +4,16 @@
 "cancel" = "Отмена";
 "done" = "Готово";
 "unknown" = "Неизвестно";
-"constrcut_title" = "КОНСТРУКТ";
 
 // MARK: - Main Tabs
 "chats" = "Чаты";
 "settings" = "Настройки";
 
 // MARK: - Auth
-"construct_messenger" = "Конструкт";
-"back_to_login" = "Назад к входу";
 "register" = "Регистрация";
 "username" = "Имя пользователя";
-"enter_username" = "Введите имя пользователя";
 "password" = "Пароль";
-"enter_password" = "Введите пароль";
 "login" = "Войти";
-"min_password_placeholder" = "Мин. %d символов";
-"confirm_password" = "Подтвердите пароль";
-"reenter_password" = "Повторите пароль";
-"please_check_all_fields" = "Пожалуйста, проверьте все поля";
 "logout" = "Выйти";
 "logout_confirmation" = "Вы уверены, что хотите выйти?";
 "password_strength_very_weak" = "Очень слабый";
@@ -32,16 +23,12 @@
 "password_strength_very_strong" = "Очень надёжный";
 
 // MARK: - Chats List
-"add_contact" = "Добавить контакт";
 "scan_qr_code_or_share_link" = "Отсканируйте QR-код или поделитесь ссылкой для добавления проверенных контактов";
 "scan_qr_code" = "Сканировать QR-код";
-"your_contact_link_is_in_account_settings" = "Ваша контактная ссылка находится в настройках идентичности";
 "new_contact" = "Новый контакт";
 
 // MARK: - Chat
 "sending" = "Отправка...";
-"initializing_secure_connection" = "Установка безопасного соединения...";
-"not_connected_to_server" = "Нет подключения к серверу";
 "status_connecting" = "Подключение...";
 "status_no_connection" = "Нет соединения";
 "status_encrypting" = "Шифрование...";
@@ -63,17 +50,14 @@
 "direction" = "Направление";
 "outgoing" = "Исходящее";
 "incoming" = "Входящее";
-"retry_count" = "Количество попыток";
 "delivery_information" = "Информация о доставке";
 "message_id" = "ID сообщения";
 "from" = "От";
 "to" = "Кому";
 "reply_to" = "Ответ на";
-"technical_details" = "Технические детали";
 "encryption" = "Шифрование";
 "end_to_end" = "Сквозное";
 "protocol" = "Протокол";
-"double_ratchet" = "Double Ratchet";
 "security" = "Безопасность";
 "message_info" = "Информация о сообщении";
 
@@ -96,15 +80,7 @@
 
 // MARK: - Settings -> Account
 "display_name" = "Отображаемое имя";
-"account_information" = "Идентичность";
-"current_password" = "Текущий пароль";
-"new_password" = "Новый пароль";
-"confirm_new_password" = "Подтвердите новый пароль";
-"change_password" = "Изменить пароль";
-"password_min_length_message" = "Пароль должен содержать не менее %d символов";
 "show_my_qr_code" = "Показать мой QR-код";
-"link_copied" = "Ссылка скопирована!";
-"copy_contact_link" = "Скопировать контактную ссылку";
 "share_contact" = "Поделиться контактом";
 "share_contact_footer" = "Поделитесь своим QR-кодом или ссылкой, чтобы другие могли добавить вас в контакты";
 
@@ -112,7 +88,6 @@
 "enable_pin_code" = "Включить ПИН-код";
 "disable_pin_code" = "Выключить ПИН-код";
 "change_pin_code" = "Сменить ПИН-код";
-"current_pin_code" = "Текущий ПИН-код";
 "enter_pin_code" = "Введите ПИН-код";
 "create_pin_code" = "Создать ПИН-код";
 "confirm_pin_code" = "Подтвердите ПИН-код";
@@ -129,72 +104,40 @@
 "continue" = "Продолжить";
 "enable_biometric" = "Включить %@?";
 "biometric_unavailable" = "Биометрия недоступна на этом устройстве.";
-"not_now" = "Не сейчас";
 "disable" = "Выключить";
 
 // MARK: - Settings -> My QR Code
-"my_qr_code" = "My QR Code";
 "failed_to_generate_qr_code" = "Failed to generate QR code";
 "show_this_code_to_someone_nearby" = "Show this code to someone nearby";
 "scan_with_camera_or_screenshot" = "They can scan this with their camera or take a screenshot";
 
 // MARK: - Settings -> Appearance
-"my_qr_code" = "Мой QR-код";
-"failed_to_generate_qr_code" = "Не удалось сгенерировать QR-код";
-"show_this_code_to_someone_nearby" = "Покажите этот код человеку рядом";
-"scan_with_camera_or_screenshot" = "Он может отсканировать его камерой или сделать скриншот";
 
 // MARK: - Settings -> Network
 "connected" = "Подключено";
 "disconnected" = "Отключено";
-"active_server" = "Активный сервер";
 "connection" = "Соединение";
-"grpc_stream" = "gRPC Поток";
 "subscriptions" = "Подписки";
 "last_heartbeat" = "Последний Heartbeat";
 "custom_server_debug" = "Сервер (Debug)";
-"use_custom_server" = "Использовать пользовательский сервер";
-"custom_server_placeholder" = "https://ваш-сервер.com";
 "apply_changes" = "Применить изменения";
-"server_configuration" = "Конфигурация сервера";
-"custom_server_prefix_warning" = "Адрес пользовательского сервера должен начинаться с https://";
 "environment" = "Окружение";
-"build_configuration" = "Конфигурация сборки";
 "debug" = "Отладка";
 "release" = "Релиз";
-"server_information" = "Информация о сервере";
 "server_settings_footer" = "Эти настройки автоматически настраиваются в зависимости от вашей конфигурации сборки.";
-"reconnect_required" = "Требуется переподключение";
-"reconnect_alert_message" = "Приложение переподключится к новому серверу.";
 "network_settings" = "Настройки сети";
-"current_server" = "Текущий сервер";
-"active_configuration" = "Активная конфигурация";
-"preauth_server_info" = "Вы можете изменить сервер перед входом. Это полезно, если сервер по умолчанию недоступен.";
 "default_server" = "Сервер по умолчанию";
-"default_configuration" = "Конфигурация по умолчанию";
 "reset_to_default" = "Сбросить на значения по умолчанию";
-"server_changed" = "Сервер изменён";
-"server_changed_message" = "Сервер изменён на: %@";
-"server_reset_message" = "Сервер сброшен на значение по умолчанию: %@";
-"error_empty_url" = "URL сервера не может быть пустым";
 "custom_server" = "Пользовательский сервер";
-"server_type" = "Тип сервера";
-"server_address" = "Адрес сервера";
-"default_server_info" = "Используется сервер по умолчанию, настроенный в параметрах приложения.";
-"current_active_server" = "Текущий активный сервер";
 
 // MARK: - Notifications Settings
-"notifications_settings" = "Настройки уведомлений";
 "enable_notifications" = "Включить уведомления";
 "notifications_footer" = "Управляйте тем, как и когда вы получаете уведомления";
 "message_notifications" = "Уведомления о сообщениях";
 "show_message_notifications" = "Показывать уведомления о сообщениях";
-"message_notifications_footer" = "Получайте уведомления при получении новых сообщений";
-"notification_preview" = "Превью уведомления";
 "preview_name_and_message" = "Имя и сообщение";
 "preview_name_only" = "Только имя";
 "preview_none" = "Без превью";
-"notification_preview_footer" = "Выберите, какая информация отображается в уведомлениях";
 "sound_and_haptics" = "Звук и вибрация";
 "notification_sound" = "Звук уведомления";
 "vibration" = "Вибрация";
@@ -217,7 +160,6 @@
 "construct_app_name" = "Construct";
 "construct_new_message" = "Новое сообщение";
 "construct_new_messages" = "Новые сообщения";
-"construct_new_message_from" = "Новое сообщение от %@";
 "construct_new_messages_count" = "У вас %d новое(ых) сообщение(ий)";
 "construct_new_messages_from_contacts" = "У вас %d новых сообщений от %d контактов";
 "construct_sync_completed" = "Сообщения синхронизированы";
@@ -229,7 +171,6 @@
 "background_fetch_disabled" = "Отключено";
 "background_fetch_enabled" = "Включено";
 "background_fetch_last_check" = "Последняя проверка: %@";
-"background_fetch_waiting" = "Включено, ожидание первой проверки";
 "background_fetch_interval" = "Интервал проверки";
 "background_fetch_interval_settings" = "Интервал проверки";
 "background_fetch_interval_footer" = "Как часто получать пропущенные сообщения, когда активный стрим не работает. iOS может корректировать это в зависимости от ваших шаблонов использования.";
@@ -272,12 +213,8 @@
 "message_selected" = "сообщение выбрано";
 "messages_selected" = "сообщений выбрано";
 "load_older_messages" = "Загрузить более старые сообщения";
-"network_reachability" = "Доступность сети";
 "reachable" = "Доступно";
 "unreachable" = "Недоступно";
-"connection_type" = "Тип соединения";
-"default_server" = "Сервер по умолчанию";
-"last_error" = "Последняя ошибка подключения";
 "delete_my_account" = "Удалить идентичность";
 "delete_account_warning" = "Удаляет вашу идентичность с сервера навсегда. После успешного удаления все локальные ключи шифрования и данные приложения будут автоматически очищены на этом устройстве.";
 "delete_account_warning_title" = "Удалить идентичность?";
@@ -286,7 +223,6 @@
 "delete_account_irreversible_warning" = "Это действие необратимо. Все ваши данные будут окончательно удалены с сервера и не могут быть восстановлены.";
 "delete_account" = "Удалить идентичность";
 "warning" = "Предупреждение";
-"DANGER_ZONE" = "Опасная зона";
 "profile_currently_shared" = "Профиль доступен для контакта";
 "stop_sharing_profile" = "Прекратить делиться профилем";
 "share_my_profile" = "Поделиться моим профилем";
@@ -297,21 +233,22 @@
 "username_available" = "Имя пользователя доступно.";
 "username_unavailable" = "Имя пользователя уже занято.";
 "username_check_failed" = "Не удалось проверить имя пользователя. Попробуйте ещё раз.";
+"username_hint" = "ваш уникальный публичный идентификатор. нажмите чтобы изменить.";
+"display_name_hint" = "видно вашим контактам. имя пользователя остаётся постоянным.";
 "new_messages" = "Новые сообщения";
 "scroll_to_bottom" = "К последнему";
 
 // Network Settings
-"last_contact" = "Последний контакт";
 "server" = "Сервер";
 "port" = "Порт";
 "server_applied_title" = "Сервер обновлён";
-"server_applied_message" = "Новый gRPC сервер будет использоваться для всех последующих подключений.";
+"server_applied_message" = "Новый сервер будет использоваться для всех последующих подключений.";
 "close" = "Закрыть";
 "change_avatar" = "Сменить фото";
 
 // Onboarding
 "onboarding_tagline" = "постмодерн мессенджер";
-"onboarding_username_placeholder" = "выберите публичный псевдоним (опционально)";
+"onboarding_username_placeholder" = "публичный псевдоним (опционально)";
 "onboarding_create_identity" = "Создать идентификатор устройства";
 "onboarding_restore" = "Восстановить из ключа восстановления";
 "onboarding_recovery_coming_soon" = "Восстановление скоро будет доступно";
@@ -384,7 +321,6 @@
 "this_device" = "Это устройство";
 
 // App Settings / Appearance
-"app_settings" = "Настройки приложения";
 "theme" = "Тема";
 "light" = "Светлая";
 "dark" = "Тёмная";
@@ -403,7 +339,6 @@
 "reset_session_title" = "Сбросить сессию?";
 "reset_session_message" = "Будет установлена новая зашифрованная сессия. Сообщения в пути могут быть потеряны.";
 
-
 // Account Recovery
 "try_again" = "Попробовать снова";
 "recovery_not_configured" = "Не настроено";
@@ -411,7 +346,7 @@
 "recovery_intro_body" = "Сгенерируйте фразу из 12 слов. Если вы потеряете устройство, используйте фразу для восстановления доступа.";
 "recovery_generate" = "Сгенерировать фразу";
 "recovery_write_down" = "Запишите эти 12 слов по порядку. Храните их в надёжном месте — никому не передавайте.";
-"recovery_never_share" = "⚠️ Никогда не передавайте свою фразу восстановления.";
+"recovery_never_share" = "Никогда не передавайте свою фразу восстановления.";
 "recovery_wrote_it_down" = "Я записал(а)";
 "recovery_quiz_title" = "Подтвердите фразу восстановления";
 "recovery_quiz_word_n" = "Слово №%d";
@@ -446,7 +381,6 @@
 
 // Шеринг профиля
 "failed_to_establish_session" = "Не удалось установить защищённое соединение. Попробуйте ещё раз.";
-"save" = "Сохранить";
 "saved" = "Сохранено";
 
 // Свайп-действия
@@ -456,9 +390,7 @@
 "mark_read" = "Отметить как прочитанное";
 
 // ICE — маскировка трафика
-"ice_section_header" = "Противодействие блокировкам";
 "ice_title" = "Лёд";
-"ice_subtitle" = "Максировка соединения";
 "ice_footer" = "Лёд защищает трафик, делая его неотличимым от обычного HTTPS. Конфигурация предоставляется сервером автоматически.";
 "ice_retry" = "Повторить подключение";
 "ice_unavailable" = "Недоступно на этом сервере";
@@ -494,7 +426,6 @@
 "edit_message_limit_reached" = "Достигнут лимит правок (максимум 20)";
 
 // MARK: - Network Settings — Connection Route
-"connection_route" = "Маршрут подключения";
 "endpoint" = "Эндпоинт";
 "mode" = "Режим";
 
@@ -532,13 +463,7 @@
 
 // MARK: - Settings & Diagnostics
 "diagnostics" = "Диагностика";
-"construct_logs" = "Журнал Construct";
-"exported_log_archive" = "Архив журнала";
-"diagnostics_and_logs" = "Диагностика и журналы";
 "tls" = "TLS";
-"build_debug" = "Отладка";
-"build_release" = "Релиз";
-"reset_to_default" = "Сбросить до стандартного";
 "interval" = "Интервал";
 "preview" = "Предпросмотр";
 
@@ -560,12 +485,7 @@
 "device_revoke" = "Удалить устройство";
 "device_revoke_confirm_title" = "Удалить устройство";
 "device_revoke_confirm" = "Это устройство будет удалено из вашего аккаунта.";
-"device_last_seen" = "Последний раз: %@";
-"device_current" = "Это устройство";
 "device_added_%@" = "Добавлено %@";
-"linked_devices" = "Привязанные устройства";
-"linked_devices_hint" = "Отсканируйте QR-код на новом устройстве при первом входе, чтобы привязать его к аккаунту.";
-"link_new_device" = "Привязать новое устройство";
 
 // MARK: - Device Join Request (Desktop onboarding)
 "device_link_request_title" = "Привязать к существующему аккаунту";
@@ -595,7 +515,6 @@
 "sign_out" = "Выйти";
 "device_scan_to_approve" = "Сканировать для одобрения";
 "device_revoke_confirm_message" = "Удалённо выйти с устройства «%@»? Оно будет отключено от вашего аккаунта.";
-"this_device" = "Это устройство";
 "other_devices" = "Другие устройства";
 "other_devices_hint" = "Нажмите − чтобы удалить устройство из аккаунта.";
 "device_active_now" = "Активно сейчас";
@@ -614,7 +533,6 @@
 
 // MARK: - Synaps
 "synaps" = "Синапсы";
-"synapses" = "СИНАПСЫ";
 "synaps_search_prompt" = "Поиск";
 "synaps_empty_title" = "Пока нет связей";
 "synaps_empty_subtitle" = "Люди с которыми вы общаетесь будут здесь, даже если вы удалили переписку.";
@@ -624,9 +542,6 @@
 "synaps_prune_message" = "Это навсегда удалит %@ из ваших синапсов и удалит переписку.";
 
 // MARK: - Connection Status Indicator
-"connection_status_secure" = "Соединение установлено";
-"connection_status_connecting" = "Подключение...";
-"connection_status_offline" = "Не в сети";
 
 // MARK: - Contact card crypto section
 "session_crypto_suite" = "Шифрование";
@@ -636,7 +551,6 @@
 "ice_auto_activated_footer" = "Лёд активирован автоматически — ваша сеть блокирует прямые подключения. Вы можете отключить его в настройках.";
 
 // MARK: - Calls
-"call_start" = "Аудиозвонок";
 "call_mute" = "Выкл. микрофон";
 "call_unmute" = "Вкл. микрофон";
 "call_speaker" = "Динамик";
@@ -647,7 +561,6 @@
 "call_decline" = "Отклонить";
 
 // MARK: - Call History
-"calls_tab" = "Звонки";
 "calls_recents" = "Недавние";
 "calls_clear" = "Очистить";
 "calls_clear_confirm" = "Очистить историю звонков?";
@@ -662,3 +575,30 @@
 "call_no_relay" = "Нет соединения (relay недоступен)";
 "call_dismiss" = "Закрыть";
 "call_call_back" = "Перезвонить";
+
+// MARK: - Account / Identity Settings
+"change_photo" = "изменить фото";
+"identity_section" = "идентичность";
+"account_section" = "аккаунт";
+"bio" = "био";
+"user_id" = "id пользователя";
+"joined" = "присоединился";
+"changes_encrypted_footer" = "> изменения защищены сквозным шифрованием";
+"delete_account_row" = "удалить аккаунт";
+"delete_action" = "удалить";
+"manage_action" = "управлять";
+"add_action" = "добавить";
+
+// MARK: - Profile / User
+"call_voice" = "голосовой звонок";
+"end_to_end_encrypted" = "изменения защищены сквозным шифрованием";
+
+// MARK: - QR / Invite
+"invite" = "пригласить";
+"qr_caption_trust" = "доверие вычисляется, а не предполагается.";
+"qr_scan_hint" = "покажи кому-то рядом или сделай скриншот";
+
+// MARK: - Device Link QR
+"device_link_section" = "связать реплику";
+"generating" = "генерация...";
+"device_link_scan_hint" = "отсканируй с другой реплики для связи";

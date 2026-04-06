@@ -32,59 +32,53 @@ struct ErrorToastView: View {
     @ViewBuilder
     private func toast(for error: AppError) -> some View {
         HStack(spacing: 10) {
-            Image(systemName: iconName(for: error))
+            Text(asciiIcon(for: error))
+                .font(CTFont.bold(14))
                 .foregroundColor(tintColor(for: error))
-                .font(.system(size: 15, weight: .semibold))
+                .lineLimit(1).fixedSize()
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(error.errorDescription ?? "An error occurred")
-                    .font(.subheadline.weight(.medium))
-                    .foregroundColor(.primary)
+                    .font(CTFont.regular(13))
+                    .foregroundColor(Color.CT.text)
                     .lineLimit(2)
 
                 if let suggestion = error.recoverySuggestion {
                     Text(suggestion)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                        .font(CTFont.regular(11))
+                        .foregroundColor(Color.CT.textDim)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
             if let actionTitle = error.recoveryActionTitle, router.recoveryHandler != nil {
-                // Show action button only when a recovery handler is registered
                 Button(actionTitle) {
                     router.executeRecovery()
                 }
-                .font(.subheadline.weight(.semibold))
+                .font(CTFont.regular(13))
                 .foregroundColor(tintColor(for: error))
             } else {
                 Button {
                     router.dismiss()
                 } label: {
-                    Image(systemName: "xmark")
-                        .font(.caption.weight(.semibold))
-                        .foregroundColor(.secondary)
-                        // Large tap target so the X is easy to hit on mobile
+                    Text("[x]")
+                        .font(CTFont.regular(13))
+                        .foregroundColor(Color.CT.textDim)
                         .frame(width: 36, height: 36)
                         .contentShape(Rectangle())
+                        .lineLimit(1).fixedSize()
                 }
             }
         }
         .padding(.vertical, 12)
         .padding(.horizontal, 14)
-        .background(
-            Color.AppBackground.primary
-                .opacity(0.97)
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .shadow(color: .black.opacity(0.12), radius: 8, x: 0, y: 4)
-        )
+        .background(Color.CT.bgMsg)
         .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(tintColor(for: error).opacity(0.25), lineWidth: 1)
+            Rectangle()
+                .stroke(tintColor(for: error).opacity(0.4), lineWidth: 1)
         )
         .padding(.horizontal, 16)
         .padding(.top, 8)
-        // Swipe up anywhere on the banner to dismiss
         .gesture(
             DragGesture(minimumDistance: 20)
                 .onEnded { value in
@@ -99,27 +93,27 @@ struct ErrorToastView: View {
 
     private func tintColor(for error: AppError) -> Color {
         switch error.severity {
-        case .info:     return .blue
+        case .info:     return Color.CT.accent
         case .warning:  return .orange
-        case .critical: return .red
+        case .critical: return Color.CT.danger
         }
     }
 
-    private func iconName(for error: AppError) -> String {
+    private func asciiIcon(for error: AppError) -> String {
         switch error {
-        case .network, .streamDisconnected:  return "wifi.slash"
-        case .sessionInitFailed,
-             .decryptionFailed,
-             .cryptoCoreUnavailable,
-             .keyOperationFailed:            return "lock.trianglebadge.exclamationmark"
-        case .mediaUploadFailed,
-             .mediaDownloadFailed,
-             .mediaOptimizationFailed:       return "photo.badge.exclamationmark"
-        case .validation:                    return "exclamationmark.triangle"
-        case .authFailed, .sessionExpired:   return "person.badge.key"
-        case .unknown:                       return "exclamationmark.circle"
+        case .network, .streamDisconnected:                     return "[~]"
+        case .sessionInitFailed, .decryptionFailed,
+             .cryptoCoreUnavailable, .keyOperationFailed:       return "[!]"
+        case .mediaUploadFailed, .mediaDownloadFailed,
+             .mediaOptimizationFailed:                          return "[!]"
+        case .validation:                                       return "[?]"
+        case .authFailed, .sessionExpired:                      return "[🔒]"
+        case .unknown:                                          return "[err]"
         }
     }
+
+    @available(*, unavailable)
+    private func iconName(for error: AppError) -> String { "" }
 }
 
 // MARK: - ViewModifier

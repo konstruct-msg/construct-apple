@@ -14,19 +14,128 @@ struct BackgroundFetchSettingsView: View {
     @State private var isLowPowerModeEnabled: Bool = false
     @State private var showingLowPowerModeAlert = false
     private var fetchManager = BackgroundFetchManager.shared
-    
+
     // MARK: - Body
     var body: some View {
-        List {
-            enableDisableSection
-            intervalSettingsSection
-            statusSection
-            lowPowerModeWarningSection
+        ScrollView {
+            VStack(spacing: 0) {
+
+                // MARK: - Enable/Disable section
+                CTSettingsSectionHeader(title: NSLocalizedString("enable_background_fetch", comment: "").uppercased())
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(LocalizedStringKey("enable_background_fetch"))
+                            .font(CTFont.regular(13))
+                            .foregroundColor(Color.CT.textDim)
+                        if isLowPowerModeEnabled {
+                            Text(LocalizedStringKey("background_fetch_low_power_mode_warning"))
+                                .font(CTFont.regular(11))
+                                .foregroundStyle(.orange)
+                        }
+                    }
+                    Spacer()
+                    Toggle("", isOn: $isEnabled)
+                        .labelsHidden()
+                        .tint(Color.CT.accent)
+                        .disabled(isLowPowerModeEnabled)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 12)
+                .onChange(of: isEnabled) { _, newValue in
+                    handleToggleChange(newValue)
+                }
+                Text(LocalizedStringKey("background_fetch_footer"))
+                    .font(CTFont.regular(11))
+                    .foregroundStyle(Color.CT.textDim)
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 8)
+                CTSep()
+
+                // MARK: - Interval Settings section
+                if isEnabled && !isLowPowerModeEnabled {
+                    CTSettingsSectionHeader(title: NSLocalizedString("background_fetch_interval_settings", comment: "").uppercased())
+                    VStack(alignment: .leading, spacing: 12) {
+                        intervalHeader
+                        intervalSlider
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 12)
+                    Text(LocalizedStringKey("background_fetch_interval_footer"))
+                        .font(CTFont.regular(11))
+                        .foregroundStyle(Color.CT.textDim)
+                        .padding(.horizontal, 12)
+                        .padding(.bottom, 8)
+                    CTSep()
+                }
+
+                // MARK: - Status section
+                CTSettingsSectionHeader(title: NSLocalizedString("status", comment: "").uppercased())
+                HStack {
+                    Text(LocalizedStringKey("background_fetch_status"))
+                        .font(CTFont.regular(13))
+                        .foregroundColor(Color.CT.textDim)
+                    Spacer()
+                    Text(statusIcon)
+                        .font(CTFont.regular(13))
+                        .foregroundColor(statusColor)
+                    Text(statusText)
+                        .font(CTFont.regular(13))
+                        .foregroundColor(Color.CT.textDim)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 12)
+
+                if let lastFetch = fetchManager.lastFetchDate {
+                    CTSep(style: .thin)
+                    HStack {
+                        Text(LocalizedStringKey("background_fetch_last_check"))
+                            .font(CTFont.regular(13))
+                            .foregroundColor(Color.CT.textDim)
+                        Spacer()
+                        Text(formatLastCheckDate(lastFetch))
+                            .font(CTFont.regular(13))
+                            .foregroundColor(Color.CT.textDim)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 12)
+                }
+                CTSep()
+
+                // MARK: - Low Power Mode Warning section
+                if isLowPowerModeEnabled {
+                    CTSettingsSectionHeader(title: NSLocalizedString("background_fetch_energy_saving", comment: "").uppercased())
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(LocalizedStringKey("background_fetch_low_power_mode_title"))
+                            .font(CTFont.regular(13))
+                            .foregroundColor(Color.CT.textDim)
+                        Text(LocalizedStringKey("background_fetch_low_power_mode_description"))
+                            .font(CTFont.regular(11))
+                            .foregroundColor(Color.CT.textDim)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 12)
+                    CTSep()
+                }
+            }
+            .padding(.vertical, 20)
         }
-        .navigationTitle("background_fetch")
+        .background(Color.CT.bg.ignoresSafeArea())
+        .navigationTitle("")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(Color.CT.bgMsg, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
+        .toolbarColorScheme(.dark, for: .navigationBar)
         #endif
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text(NSLocalizedString("background_fetch", comment: "").uppercased())
+                    .font(CTFont.bold(13))
+                    .foregroundStyle(Color.CT.text)
+                    .tracking(4)
+            }
+        }
         .onAppear {
             loadSettings()
             checkLowPowerMode()
@@ -40,79 +149,21 @@ struct BackgroundFetchSettingsView: View {
             Text("background_fetch_low_power_mode_alert_message")
         }
     }
-    
-    // MARK: - View Sections
-    
-    private var enableDisableSection: some View {
-        Section {
-            Toggle(isOn: $isEnabled) {
-                Label {
-                    toggleLabelContent
-                } icon: {
-                    Image(systemName: toggleIconName)
-                        .foregroundColor(toggleIconColor)
-                }
-            }
-            .disabled(isLowPowerModeEnabled)
-            .onChange(of: isEnabled) { _, newValue in
-                handleToggleChange(newValue)
-            }
-        } footer: {
-            Text("background_fetch_footer")
-                .font(.caption)
-        }
-    }
-    
-    private var toggleLabelContent: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("enable_background_fetch")
-            if isLowPowerModeEnabled {
-                Text("background_fetch_low_power_mode_warning")
-                    .font(.caption)
-                    .foregroundColor(.orange)
-            }
-        }
-    }
-    
-    private var toggleIconName: String {
-        isEnabled ? "arrow.clockwise.circle.fill" : "arrow.clockwise.circle"
-    }
-    
-    private var toggleIconColor: Color {
-        isEnabled ? Color.blue : .gray
-    }
-    
-    @ViewBuilder
-    private var intervalSettingsSection: some View {
-        if isEnabled && !isLowPowerModeEnabled {
-            Section {
-                intervalSettingsContent
-            } header: {
-                Text("background_fetch_interval_settings")
-            } footer: {
-                Text("background_fetch_interval_footer")
-                    .font(.caption)
-            }
-        }
-    }
-    
-    private var intervalSettingsContent: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            intervalHeader
-            intervalSlider
-        }
-        .padding(.vertical, 4)
-    }
-    
+
+    // MARK: - Sub-views
+
     private var intervalHeader: some View {
         HStack {
-            Text("background_fetch_interval")
+            Text(LocalizedStringKey("background_fetch_interval"))
+                .font(CTFont.bold(16))
+                .foregroundStyle(Color.CT.text)
             Spacer()
             Text(BackgroundFetchConfig.formatInterval(intervalMinutes))
-                .foregroundColor(.secondary)
+                .font(CTFont.regular(14))
+                .foregroundStyle(Color.CT.textDim)
         }
     }
-    
+
     private var intervalSlider: some View {
         Slider(
             value: Binding(
@@ -125,115 +176,40 @@ struct BackgroundFetchSettingsView: View {
             Text(LocalizedStringKey("interval"))
         } minimumValueLabel: {
             Text("\(BackgroundFetchConfig.minIntervalMinutes) min")
-                .font(.caption)
-                .foregroundColor(.secondary)
+                .font(CTFont.regular(11))
+                .foregroundStyle(Color.CT.textDim)
         } maximumValueLabel: {
             Text("\(BackgroundFetchConfig.maxIntervalMinutes) min")
-                .font(.caption)
-                .foregroundColor(.secondary)
+                .font(CTFont.regular(11))
+                .foregroundStyle(Color.CT.textDim)
         }
         .onChange(of: intervalMinutes) { _, newValue in
             handleIntervalChange(newValue)
         }
     }
-    
-    private var statusSection: some View {
-        Section {
-            statusHeader
-            lastCheckRow
-        } header: {
-            Text("status")
-        }
-    }
-    
-    private var statusHeader: some View {
-        HStack {
-            Label {
-                Text("background_fetch_status")
-            } icon: {
-                Image(systemName: statusIcon)
-                    .foregroundColor(statusColor)
-            }
-            
-            Spacer()
-            
-            Text(statusText)
-                .foregroundColor(.secondary)
-        }
-    }
-    
-    @ViewBuilder
-    private var lastCheckRow: some View {
-        if let lastFetch = fetchManager.lastFetchDate {
-            HStack {
-                Label {
-                    Text("background_fetch_last_check")
-                } icon: {
-                    Image(systemName: "clock")
-                        .foregroundColor(.secondary)
-                }
-                
-                Spacer()
-                
-                Text(formatLastCheckDate(lastFetch))
-                    .foregroundColor(.secondary)
-            }
-        }
-    }
-    
-    @ViewBuilder
-    private var lowPowerModeWarningSection: some View {
-        if isLowPowerModeEnabled {
-            Section {
-                lowPowerModeWarningContent
-            } header: {
-                Text("background_fetch_energy_saving")
-            }
-        }
-    }
-    
-    private var lowPowerModeWarningContent: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: "battery.25")
-                .foregroundColor(.orange)
-                .font(.title3)
-            
-            VStack(alignment: .leading, spacing: 4) {
-                Text("background_fetch_low_power_mode_title")
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                
-                Text("background_fetch_low_power_mode_description")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .padding(.vertical, 4)
-    }
-    
+
     // MARK: - Computed Properties
-    
+
     private var statusIcon: String {
         if isLowPowerModeEnabled {
-            return "battery.25"
+            return "[!]"
         } else if isEnabled {
-            return "checkmark.circle.fill"
+            return "[ok]"
         } else {
-            return "xmark.circle.fill"
+            return "[~]"
         }
     }
-    
+
     private var statusColor: Color {
         if isLowPowerModeEnabled {
             return .orange
         } else if isEnabled {
-            return Color.AppStatus.success
+            return Color.CT.accent
         } else {
-            return .gray
+            return Color.CT.textDim
         }
     }
-    
+
     private var statusText: LocalizedStringKey {
         if isLowPowerModeEnabled {
             return "background_fetch_disabled_low_power"
@@ -243,18 +219,18 @@ struct BackgroundFetchSettingsView: View {
             return "background_fetch_disabled"
         }
     }
-    
+
     // MARK: - Methods
-    
+
     private func loadSettings() {
         intervalMinutes = BackgroundFetchConfig.intervalMinutes
         isEnabled = BackgroundFetchConfig.isEnabled
     }
-    
+
     private func checkLowPowerMode() {
         let wasLowPowerMode = isLowPowerModeEnabled
         isLowPowerModeEnabled = ProcessInfo.processInfo.isLowPowerModeEnabled
-        
+
         // If Low Power Mode was just enabled, show alert and disable
         if isLowPowerModeEnabled && !wasLowPowerMode && isEnabled {
             showingLowPowerModeAlert = true
@@ -262,7 +238,7 @@ struct BackgroundFetchSettingsView: View {
             fetchManager.disableBackgroundFetch()
         }
     }
-    
+
     private func handleToggleChange(_ newValue: Bool) {
         if newValue {
             fetchManager.enableBackgroundFetch()
@@ -270,12 +246,12 @@ struct BackgroundFetchSettingsView: View {
             fetchManager.disableBackgroundFetch()
         }
     }
-    
+
     private func handleIntervalChange(_ newValue: Int) {
         BackgroundFetchConfig.intervalMinutes = newValue
         fetchManager.updateFetchInterval(newValue)
     }
-    
+
     private func formatLastCheckDate(_ date: Date) -> String {
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .full
@@ -289,18 +265,18 @@ struct QuickIntervalButton: View {
     let minutes: Int
     let current: Int
     let action: () -> Void
-    
+
     var body: some View {
         Button(action: action) {
             Text("\(minutes) min")
                 .font(.caption)
                 .fontWeight(current == minutes ? .semibold : .regular)
-                .foregroundColor(current == minutes ? .white : .primary)
+                .foregroundColor(current == minutes ? .white : Color.CT.text)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
                 .background(
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(current == minutes ? Color.blue : Color.gray.opacity(0.2))
+                    Rectangle()
+                        .fill(current == minutes ? Color.CT.accent : Color.CT.noise)
                 )
         }
     }
@@ -312,4 +288,5 @@ struct QuickIntervalButton: View {
     NavigationStack {
         BackgroundFetchSettingsView()
     }
+        .preferredColorScheme(.dark)
 }

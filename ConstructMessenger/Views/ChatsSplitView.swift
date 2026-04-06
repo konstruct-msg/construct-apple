@@ -50,7 +50,10 @@ struct ChatsSplitView: View {
                     Button {
                         showingQRScanner = true
                     } label: {
-                        Image(systemName: "qrcode.viewfinder")
+                        Text("[qr]")
+                            .font(CTFont.regular(13))
+                            .foregroundColor(Color.CT.accent)
+                            .lineLimit(1).fixedSize()
                     }
                 }
                 #else
@@ -58,7 +61,10 @@ struct ChatsSplitView: View {
                     Button {
                         showingQRScanner = true
                     } label: {
-                        Image(systemName: "qrcode.viewfinder")
+                        Text("[qr]")
+                            .font(CTFont.regular(13))
+                            .foregroundColor(Color.CT.accent)
+                            .lineLimit(1).fixedSize()
                     }
                 }
                 #endif
@@ -75,7 +81,10 @@ struct ChatsSplitView: View {
                             selectedChatId = nil
                         }
                     } label: {
-                        Image(systemName: activeTab == .settings ? "message" : "gear")
+                        Text(activeTab == .settings ? "[msg]" : "[⚙]")
+                            .font(CTFont.regular(13))
+                            .foregroundColor(Color.CT.accent)
+                            .lineLimit(1).fixedSize()
                     }
                 }
                 #endif
@@ -130,23 +139,23 @@ struct ChatsSplitView: View {
     @ViewBuilder
     private func sidebarTabButton(title: LocalizedStringKey, systemImage: String, tab: SidebarTab) -> some View {
         let selected = activeTab == tab
+        let ascii = systemImage == "message" ? "[msg]" : "[⚙]"
         Button {
             activeTab = tab
             if tab == .chats {
-                // Switching back to chats: deselect settings (detail shows selected chat)
-                selectedChatId = selectedChatId  // no-op, just refresh
+                selectedChatId = selectedChatId
             } else {
-                // Switching to settings: clear chat selection so detail shows SettingsView
                 selectedChatId = nil
             }
         } label: {
             VStack(spacing: 3) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 18, weight: selected ? .semibold : .regular))
+                Text(ascii)
+                    .font(CTFont.bold(selected ? 16 : 14))
+                    .lineLimit(1).fixedSize()
                 Text(title)
-                    .font(.caption2)
+                    .font(CTFont.regular(10))
             }
-            .foregroundStyle(selected ? Color.accentColor : .secondary)
+            .foregroundStyle(selected ? Color.CT.accent : Color.CT.textDim)
             .frame(maxWidth: .infinity)
         }
         .buttonStyle(.plain)

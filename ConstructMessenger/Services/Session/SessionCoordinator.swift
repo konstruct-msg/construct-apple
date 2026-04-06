@@ -48,7 +48,7 @@ final class SessionCoordinator {
     private var tieBreakWatchdogs: [String: Task<Void, Never>] = [:]
     private let tieBreakWatchdogTimeout: TimeInterval = 30.0
 
-    /// Fallback tasks started when we are the natural RESPONDER (higher userId) and receive
+    /// Fallback tasks started when we are the natural RESPONDER (lower deviceId) and receive
     /// END_SESSION from the INITIATOR. If the INITIATOR does not send a new session init within
     /// the timeout, we override the natural ordering and proactively initialize ourselves.
     /// This prevents a permanent session deadlock when the INITIATOR is itself broken/offline.
@@ -61,6 +61,10 @@ final class SessionCoordinator {
 
     /// Prevents parallel session-init attempts for the same peer.
     private var usersInitializingSession: Set<String> = []
+
+    /// Tracks when each session was last successfully established (Unix seconds).
+    /// Used to detect and discard stale END_SESSION messages that arrived late from the server.
+    private var sessionEstablishedAt: [String: UInt64] = [:]
 
     // MARK: - Injected references
 
@@ -125,14 +129,14 @@ final class SessionCoordinator {
     }
 
     /// Broadcast END_SESSION to all peers that have an active session (e.g., on logout).
-    /// Pre-warm sessions for contacts where we are the natural INITIATOR (lower userId).
+    /// Pre-warm sessions for contacts where we are the natural INITIATOR (higher deviceId).
     /// Called once per app launch after stream connects. Ensures first messages are instant.
     func prewarmSessions(for contactIds: [String], skipEndSessionNotification: Bool = false) {
         let myId = SessionManager.shared.currentUserId ?? ""
         guard !myId.isEmpty else { return }
 
         let toPrewarm = contactIds.filter {
-            myId < $0 && !CryptoManager.shared.hasSession(for: $0)
+            DeviceIdOrdering.isNaturalInitiator(myId: myId, peerId: $0) && !CryptoManager.shared.hasSession(for: $0)
         }
         guard !toPrewarm.isEmpty else { return }
 
@@ -251,19 +255,28 @@ final class SessionCoordinator {
             }
         }
 
+        // Filter out stale END_SESSION messages that predate the currently-established session.
+        // This prevents server re-deliveries of old END_SESSIONs from tearing down healthy sessions.
+        messageRouter.isEndSessionStale = { [weak self] userId, endSessionTimestamp in
+            guard let self else { return false }
+            guard let establishedAt = sessionEstablishedAt[userId] else { return false }
+            // Allow a 5-second grace window to handle near-simultaneous END_SESSION + session init.
+            return endSessionTimestamp + 5 < establishedAt
+        }
+
         // When we receive END_SESSION from a peer, prewarm if we are the natural INITIATOR
-        // (lower userId). This ensures the session re-establishes without user action,
+        // (higher deviceId). This ensures the session re-establishes without user action,
         // and prevents the RESPONDER from incorrectly acting as INITIATOR with stale OTPKs.
-        messageRouter.onEndSessionReceived = { [weak self] userId in
+        messageRouter.onEndSessionReceived = { [weak self] userId, endSessionTimestamp in
             guard let self else { return }
             let myId = SessionManager.shared.currentUserId ?? ""
             guard !myId.isEmpty else { return }
 
-            // Only the natural INITIATOR (lower userId) auto-resends and re-prewarms.
-            // If the END_SESSION came from a lower userId it means they are the tie-break
+            // Only the natural INITIATOR (higher deviceId) auto-resends and re-prewarms.
+            // If the END_SESSION came from a higher deviceId it means they are the tie-break
             // winner and have already restored their INITIATOR session — do NOT re-prewarm
             // or resend here; doing so would restart the tie-break loop.
-            guard myId < userId else {
+            guard DeviceIdOrdering.isNaturalInitiator(myId: myId, peerId: userId) else {
                 Log.info("🔇 END_SESSION from natural INITIATOR \(userId.prefix(8))… — waiting as RESPONDER (no resend, no prewarm)", category: "SessionInit")
                 startResponderFallback(for: userId)
                 return
@@ -378,6 +391,8 @@ final class SessionCoordinator {
                     let deviceId = KeychainManager.shared.loadDeviceID() ?? ""
                     await OtpkReplenishmentService.replenishIfNeeded(deviceId: deviceId)
                 }
+                // Record session establishment time so stale END_SESSIONs can be filtered.
+                sessionEstablishedAt[userId] = UInt64(Date().timeIntervalSince1970)
                 drainPendingQueue(for: userId, skippingFirst: true)
                 // Re-send messages that were re-queued on prior END_SESSION receipt.
                 sendSessionQueuedMessages(for: userId)
@@ -555,7 +570,7 @@ final class SessionCoordinator {
     // MARK: - Tie-break session establishment ping
 
     /// Encrypt and send an invisible session establishment ping to `userId`.
-    /// Called after a tie-break WIN so the loser (higher userId) can immediately
+    /// Called after a tie-break WIN so the loser (lower deviceId) can immediately
     /// call `initReceivingSession` and become RESPONDER without waiting for user action.
     /// The receiver's `saveMessage` filters out the ping content so it is never shown in chat.
     /// Retries up to `pingMaxAttempts` times with exponential back-off on network failure.
@@ -747,6 +762,8 @@ final class SessionCoordinator {
             // Cancel watchdog or fallback — RESPONDER proved they have a working session.
             cancelTieBreakWatchdog(for: peerId)
             cancelResponderFallback(for: peerId)
+            // Record session establishment time so stale END_SESSIONs can be filtered.
+            sessionEstablishedAt[peerId] = UInt64(Date().timeIntervalSince1970)
             // Mark session as confirmed so ChatViewModel stops buffering.
             SessionConfirmationTracker.shared.markConfirmed(peerId)
             // Flush any messages that were buffered while session was unconfirmed.

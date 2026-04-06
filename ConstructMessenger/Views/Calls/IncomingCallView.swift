@@ -17,9 +17,9 @@ struct IncomingCallView: View {
             Spacer()
 
             VStack(spacing: 20) {
-                // Header pill
-                Capsule()
-                    .fill(Color.Construct.dim)
+                // Header drag indicator
+                Rectangle()
+                    .fill(Color.CT.noise)
                     .frame(width: 36, height: 4)
                     .padding(.top, 10)
 
@@ -29,11 +29,11 @@ struct IncomingCallView: View {
 
                     Text(session.peerName)
                         .font(.title3.weight(.semibold))
-                        .foregroundStyle(Color.Construct.textBright)
+                        .foregroundStyle(Color.CT.text)
 
                     Text(NSLocalizedString("call_incoming_audio", comment: ""))
                         .font(.subheadline)
-                        .foregroundStyle(Color.Construct.textDim)
+                        .foregroundStyle(Color.CT.textDim)
                 }
 
                 // Answer / Decline row
@@ -43,16 +43,17 @@ struct IncomingCallView: View {
                         Button {
                             CallManager.shared.declineIncomingCall()
                         } label: {
-                            Image(systemName: "phone.down.fill")
-                                .font(.system(size: 24))
+                            Text(CTSymbol.callEnd)
+                                .font(CTFont.bold(18))
                                 .foregroundStyle(.white)
                                 .frame(width: 64, height: 64)
-                                .background(Color.red)
-                                .clipShape(Circle())
+                                .background(Color.CT.danger)
+                                .overlay(Rectangle().strokeBorder(Color.CT.danger, lineWidth: 1))
+                                .lineLimit(1).fixedSize()
                         }
                         Text(NSLocalizedString("call_decline", comment: ""))
-                            .font(.caption2)
-                            .foregroundStyle(Color.Construct.textDim)
+                            .font(CTFont.regular(10))
+                            .foregroundStyle(Color.CT.textDim)
                     }
 
                     // Answer
@@ -60,23 +61,24 @@ struct IncomingCallView: View {
                         Button {
                             CallManager.shared.answerIncomingCall()
                         } label: {
-                            Image(systemName: "phone.fill")
-                                .font(.system(size: 24))
+                            Text(CTSymbol.callAnswer)
+                                .font(CTFont.bold(18))
                                 .foregroundStyle(.white)
                                 .frame(width: 64, height: 64)
-                                .background(Color.Construct.green)
-                                .clipShape(Circle())
+                                .background(Color.CT.accent)
+                                .overlay(Rectangle().strokeBorder(Color.CT.accent, lineWidth: 1))
+                                .lineLimit(1).fixedSize()
                         }
                         Text(NSLocalizedString("call_answer", comment: ""))
-                            .font(.caption2)
-                            .foregroundStyle(Color.Construct.textDim)
+                            .font(CTFont.regular(10))
+                            .foregroundStyle(Color.CT.textDim)
                     }
                 }
                 .padding(.bottom, 32)
             }
             .frame(maxWidth: .infinity)
-            .background(Color.Construct.bg2)
-            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .background(Color.CT.bgMsg)
+            .overlay(Rectangle().strokeBorder(Color.CT.noise, lineWidth: 1))
             .padding(.horizontal, 12)
             .padding(.bottom, 8)
         }
@@ -87,7 +89,7 @@ struct IncomingCallView: View {
 
 #Preview {
     ZStack {
-        Color.Construct.bg.ignoresSafeArea()
+        Color.CT.bg.ignoresSafeArea()
         IncomingCallView(session: .init(
             id: UUID().uuidString,
             uuid: UUID(),

@@ -45,55 +45,46 @@ struct SynapsView: View {
 
     var body: some View {
         NavigationStack {
-            GeometryReader { geo in
-                ZStack {
-                    Color.Construct.bg.ignoresSafeArea()
+            VStack(spacing: 0) {
+                synapsNavBar
+                synapsSearchBar
+                GeometryReader { geo in
+                    ZStack {
+                        Color.CT.bg.ignoresSafeArea()
+                        CTMatrixBackground().ignoresSafeArea()
 
-                    if contacts.isEmpty {
-                        emptyState
-                    } else {
-                        ZoomableCloud(
-                            scale:    $canvasScale,
-                            offset:   $canvasOffset,
-                            minScale: 0.20,
-                            maxScale: 3.0
-                        ) {
-                            HoneycombCloud(
-                                contacts:     filtered,
-                                selected:     $selectedContact,
-                                canvasScale:  canvasScale,
-                                canvasOffset: canvasOffset,
-                                screenSize:   geo.size
-                            )
+                        if contacts.isEmpty {
+                            emptyState
+                        } else {
+                            ZoomableCloud(
+                                scale:    $canvasScale,
+                                offset:   $canvasOffset,
+                                minScale: 0.20,
+                                maxScale: 3.0
+                            ) {
+                                HoneycombCloud(
+                                    contacts:     filtered,
+                                    selected:     $selectedContact,
+                                    canvasScale:  canvasScale,
+                                    canvasOffset: canvasOffset,
+                                    screenSize:   geo.size
+                                )
+                            }
                         }
                     }
-                }
-                .onAppear {
-                    canvasScale = fitScale(contacts: Array(contacts), screenSize: geo.size)
+                    .onAppear {
+                        canvasScale = fitScale(contacts: Array(contacts), screenSize: geo.size)
+                    }
                 }
             }
-            .searchable(text: $searchText, prompt: LocalizedStringKey("synaps_search_prompt"))
             .onChange(of: searchText) { _, _ in
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                     canvasOffset = .zero
-                    // Recompute fit for the filtered list — need size; use a rough estimate
-                    // (exact recalc happens via the engine on next render)
                 }
             }
             #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(Color.Construct.bg2, for: .navigationBar)
-            .toolbarBackground(.visible, for: .navigationBar)
-            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbar(.hidden, for: .navigationBar)
             #endif
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Text("SYNAPSES")
-                        .font(ConstructFont.mono(13, weight: .semibold))
-                        .foregroundStyle(Color.Construct.textBright)
-                        .tracking(3)
-                }
-            }
             .sheet(item: $selectedContact) { user in
                 UserProfileView(
                     user: user,
@@ -137,19 +128,57 @@ struct SynapsView: View {
         return engine.initialScale
     }
 
+    // MARK: - Nav Bar
+
+    private var synapsNavBar: some View {
+        CTNavBar(title: NSLocalizedString("synaps", comment: ""))
+    }
+
+    // MARK: - Search Bar
+
+    private var synapsSearchBar: some View {
+        HStack(spacing: 6) {
+            Text("[")
+                .font(CTFont.regular(13))
+                .foregroundColor(Color.CT.textDim)
+            TextField("", text: $searchText, prompt: Text(LocalizedStringKey("synaps_search_prompt"))
+                .font(CTFont.regular(13))
+                .foregroundColor(Color.CT.textDim))
+                .font(CTFont.regular(13))
+                .foregroundColor(Color.CT.text)
+                .autocorrectionDisabled()
+                #if os(iOS)
+                .textInputAutocapitalization(.never)
+                #endif
+                .tint(Color.CT.accent)
+            if !searchText.isEmpty {
+                Button { searchText = "" } label: {
+                    Text("×")
+                        .font(CTFont.regular(13))
+                        .foregroundColor(Color.CT.textDim)
+                }
+            } else {
+                Text("]")
+                    .font(CTFont.regular(13))
+                    .foregroundColor(Color.CT.textDim)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .background(Color.CT.bgMsg)
+        .ctBorderBottom()
+    }
+
     // MARK: - Empty state
 
     private var emptyState: some View {
         VStack(spacing: 16) {
-            Image(systemName: "point.3.filled.connected.trianglepath.dotted")
-                .font(.system(size: 48, weight: .thin))
-                .foregroundStyle(Color.Construct.textDim)
             Text(LocalizedStringKey("synaps_empty_title"))
-                .font(ConstructFont.display(17, weight: .semibold))
-                .foregroundStyle(Color.Construct.textBright)
+                .font(CTFont.bold(17))
+                .foregroundStyle(Color.CT.text)
             Text(LocalizedStringKey("synaps_empty_subtitle"))
-                .font(ConstructFont.display(14))
-                .foregroundStyle(Color.Construct.textDim)
+                .font(CTFont.regular(14))
+                .foregroundStyle(Color.CT.textDim)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
         }
@@ -420,6 +449,8 @@ private struct ContactCircle: View {
     let screenSize:   CGSize
     var onTap: () -> Void
 
+    @State private var touchMoved = false
+
     // MARK: Size
     //
     // Frequency score drives rendered diameter in the range [0.55 … 0.75] × cellWidth.
@@ -431,26 +462,41 @@ private struct ContactCircle: View {
     }
 
     var body: some View {
-        Button(action: onTap) {
-            ZStack {
-                if let data = user.avatarData, let img = PlatformImage(data: data) {
-                    Image(platformImage: img)
-                        .resizable()
-                        .scaledToFill()
-                } else {
-                    Circle().fill(accentColor.opacity(0.18))
-                    Text(initials)
-                        .font(ConstructFont.mono(effectiveSize * 0.26, weight: .semibold))
-                        .foregroundStyle(accentColor)
-                }
+        ZStack {
+            if let data = user.avatarData, let img = PlatformImage(data: data) {
+                Image(platformImage: img)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                HexagonShape().fill(accentColor.opacity(0.18))
+                Text(initials)
+                    .font(CTFont.bold(effectiveSize * 0.26))
+                    .foregroundStyle(accentColor)
             }
-            .frame(width: effectiveSize, height: effectiveSize)
-            .clipShape(Circle())
-            .overlay(Circle().strokeBorder(borderColor, lineWidth: 1.5))
-            .scaleEffect(proximityScale)
-            .opacity(proximityOpacity)
         }
-        .buttonStyle(.plain)
+        .frame(width: effectiveSize, height: effectiveSize)
+        .clipShape(HexagonShape())
+        .overlay(HexagonShape().stroke(borderColor, lineWidth: 1.5))
+        .scaleEffect(proximityScale)
+        .opacity(proximityOpacity)
+        // Use DragGesture(minimumDistance: 0) so we can distinguish a stationary
+        // tap from a drag that happens to end over the contact. Only fire onTap
+        // when the finger hasn't moved more than 8 pt — matching the parent
+        // canvas drag threshold — so pan/zoom never triggers navigation.
+        .gesture(
+            DragGesture(minimumDistance: 0, coordinateSpace: .local)
+                .onChanged { value in
+                    if hypot(value.translation.width, value.translation.height) > 8 {
+                        touchMoved = true
+                    }
+                }
+                .onEnded { value in
+                    defer { touchMoved = false }
+                    guard !touchMoved else { return }
+                    guard hypot(value.translation.width, value.translation.height) <= 8 else { return }
+                    onTap()
+                }
+        )
     }
 
     // MARK: Proximity effect
@@ -491,7 +537,7 @@ private struct ContactCircle: View {
 
     private var accentColor: Color { .hexagonAccent(for: user.id) }
     private var borderColor: Color {
-        user.isBlocked ? Color.red.opacity(0.55) : Color.Construct.dim
+        user.isBlocked ? Color.red.opacity(0.55) : Color.CT.textDim.opacity(0.5)
     }
 
     private var initials: String {
@@ -514,16 +560,16 @@ private struct ContactCircle: View {
     let context = container.viewContext
 
     let users: [(String, String, String)] = [
-        ("u1", "alice",   "Alice Wonderland"),
-        ("u2", "bob",     "Bob Builder"),
-        ("u3", "charlie", "Charlie Chaplin"),
-        ("u4", "dave",    "Dave Villain"),
-        ("u5", "eve",     "Eve Listener"),
-        ("u6", "frank",   "Frank Ocean"),
-        ("u7", "grace",   "Grace Hopper"),
-        ("u8", "henry",   "Henry Ford"),
-        ("u9", "iris",    "Iris Chang"),
-        ("u10","james",   "James Webb"),
+        ("u1",  "alice",   "Alice Wonderland"),
+        ("u2",  "bob",     "Bob Builder"),
+        ("u3",  "charlie", "Charlie Chaplin"),
+        ("u4",  "dave",    "Dave Villain"),
+        ("u5",  "eva",     "Eva Elfie"),
+        ("u6",  "frank",   "Frank Ocean"),
+        ("u7",  "grace",   "Grace Hopper"),
+        ("u8",  "henry",   "Henry Ford"),
+        ("u9",  "iris",    "Iris Chang"),
+        ("u10", "james",   "James Webb"),
     ]
     for (id, username, name) in users {
         let user = PreviewHelpers.createSampleUser(context: context, id: id, username: username, displayName: name)
@@ -542,6 +588,7 @@ private struct ContactCircle: View {
     return SynapsView()
         .environment(\.managedObjectContext, context)
         .environment(chatsVM)
+        .preferredColorScheme(.dark)
 }
 
 #Preview("Empty") {
@@ -552,4 +599,5 @@ private struct ContactCircle: View {
     return SynapsView()
         .environment(\.managedObjectContext, context)
         .environment(chatsVM)
+        .preferredColorScheme(.dark)
 }

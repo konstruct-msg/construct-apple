@@ -23,64 +23,63 @@ struct QuoteSelectionSheet: View {
     private var fullText: String { message.decryptedContent ?? "" }
 
     var body: some View {
-        NavigationStack {
+        VStack(spacing: 0) {
+            CTNavBar(
+                title: NSLocalizedString("select_quote", comment: ""),
+                showBack: false,
+                trailingSymbol: NSLocalizedString("reply_with_selection", comment: ""),
+                trailingColor: selectedText.isEmpty ? Color.CT.textDim : Color.CT.accent,
+                backAction: { dismiss() },
+                trailingAction: {
+                    guard !selectedText.isEmpty else { return }
+                    onConfirm(selectedText)
+                    dismiss()
+                }
+            )
+
             VStack(alignment: .leading, spacing: 12) {
                 Text(NSLocalizedString("quote_selection_hint", comment: ""))
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .font(CTFont.regular(12))
+                    .foregroundColor(Color.CT.textDim)
                     .padding(.horizontal)
 
                 SelectableTextView(text: fullText, selectedText: $selectedText)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-#if canImport(UIKit)
-                    .background(Color(uiColor: .secondarySystemBackground))
-#else
-                    .background(Color(NSColor.textBackgroundColor))
-#endif
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .background(Color.CT.bgMsg)
+                    .overlay(Rectangle().stroke(Color.CT.noise, lineWidth: 1))
                     .padding(.horizontal)
 
                 if !selectedText.isEmpty {
                     HStack(spacing: 8) {
                         Rectangle()
-                            .fill(Color.accentColor)
-                            .frame(width: 3)
+                            .fill(Color.CT.accent)
+                            .frame(width: 2)
                         Text(selectedText)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                            .font(CTFont.regular(11))
+                            .foregroundColor(Color.CT.textDim)
                             .lineLimit(2)
                     }
                     .padding(.horizontal)
                     .padding(.vertical, 6)
-#if canImport(UIKit)
-                    .background(Color(uiColor: .systemGray6))
-#else
-                    .background(Color(NSColor.controlBackgroundColor))
-#endif
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .background(Color.CT.bgMsg)
+                    .overlay(Rectangle().stroke(Color.CT.noise, lineWidth: 1))
                     .padding(.horizontal)
                 }
             }
             .padding(.top, 8)
-            .navigationTitle(NSLocalizedString("select_quote", comment: ""))
-#if canImport(UIKit)
-            #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-            #endif
-#endif
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(NSLocalizedString("cancel", comment: "")) { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(NSLocalizedString("reply_with_selection", comment: "")) {
-                        onConfirm(selectedText.isEmpty ? fullText : selectedText)
-                        dismiss()
-                    }
-                    .fontWeight(.semibold)
-                }
+
+            HStack {
+                Button(NSLocalizedString("cancel", comment: "")) { dismiss() }
+                    .font(CTFont.regular(13))
+                    .foregroundColor(Color.CT.textDim)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
             }
+            .padding(.horizontal)
+            .padding(.bottom, 16)
+            .ctBorderTop()
         }
+        .background(Color.CT.bg)
     }
 }
 

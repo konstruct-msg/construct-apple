@@ -9,6 +9,9 @@
 import Foundation
 import os.signpost
 
+// MetricEvent must be defined in all build configs so call sites compile in Release.
+// The Release PerformanceMetrics stubs are @inline(__always) no-ops — zero overhead.
+
 // MARK: - Event Types
 
 enum MetricEvent: String {

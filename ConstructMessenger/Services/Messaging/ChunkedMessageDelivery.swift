@@ -26,7 +26,8 @@ final class ChunkedMessageSender {
         preEncryptedFirst: CryptoManager.EncryptedMessageComponents? = nil,
         kemCiphertext: Data? = nil,
         kyberOtpkId: UInt32 = 0,
-        replyToMessageId: String? = nil
+        replyToMessageId: String? = nil,
+        onWirePayloadEncoded: ((String, Data) -> Void)? = nil
     ) async throws -> [SendMessageResponse] {
         var responses: [SendMessageResponse] = []
 
@@ -48,6 +49,7 @@ final class ChunkedMessageSender {
                 kemCiphertext: index == 0 ? kemCiphertext : nil,
                 kyberOtpkId: index == 0 ? kyberOtpkId : 0
             )
+            onWirePayloadEncoded?(chunkMessageId, encryptedPayload)
 
             let response = try await MessagingServiceClient.shared.sendMessage(
                 messageId: chunkMessageId,

@@ -36,13 +36,12 @@ struct MessageBubbleRegularView: View {
         HStack(spacing: 8) {
             // Selection checkbox in edit mode - positioned based on message direction
             if isEditMode && !message.isSentByMe {
-                // Checkbox on LEFT for incoming messages
                 Button {
                     onSelect?(message)
                 } label: {
-                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                        .foregroundColor(isSelected ? Color.blue : .gray)
-                        .font(.title3)
+                    Text(isSelected ? "[✓]" : "[○]")
+                        .font(CTFont.bold(14))
+                        .foregroundColor(isSelected ? Color.CT.accent : Color.CT.textDim)
                 }
                 .buttonStyle(.plain)
             }
@@ -57,8 +56,8 @@ struct MessageBubbleRegularView: View {
                 {
                     ProfileShareBubbleView(profileData: profileData)
                         .overlay(
-                            RoundedRectangle(cornerRadius: 16)
-                                .stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2)
+                            Rectangle()
+                                .stroke(isSelected ? Color.CT.accent : Color.clear, lineWidth: 2)
                         )
                 } else if let mediaContent = MessageBubbleContentParsing.parseMediaMessage(message.decryptedContent) {
                     VStack(alignment: .leading, spacing: 0) {
@@ -75,8 +74,8 @@ struct MessageBubbleRegularView: View {
                         replyIndicatorView
                         FileAttachmentBubbleView(fileContent: fileContent, isSentByMe: message.isSentByMe)
                             .overlay(
-                                RoundedRectangle(cornerRadius: 16)
-                                    .stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2)
+                                Rectangle()
+                                    .stroke(isSelected ? Color.CT.accent : Color.clear, lineWidth: 2)
                             )
                     }
                 } else if let voiceContent = MessageBubbleContentParsing.parseVoiceMessage(message.decryptedContent) {
@@ -87,8 +86,8 @@ struct MessageBubbleRegularView: View {
                         onRetry: onRetry != nil ? { onRetry?(message) } : nil
                     )
                         .overlay(
-                            RoundedRectangle(cornerRadius: 16)
-                                .stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2)
+                            Rectangle()
+                                .stroke(isSelected ? Color.CT.accent : Color.clear, lineWidth: 2)
                         )
                 } else {
                     VStack(alignment: .leading, spacing: 0) {
@@ -96,18 +95,14 @@ struct MessageBubbleRegularView: View {
 
                         VStack(alignment: .leading, spacing: 4) {
                             if message.decryptedContent == nil {
-                                HStack(spacing: 5) {
-                                    Image(systemName: "lock.trianglebadge.exclamationmark")
-                                        .font(.caption)
-                                    Text(NSLocalizedString("message_unavailable", comment: ""))
-                                        .italic()
-                                }
-                                .font(.callout)
-                                .foregroundColor(.secondary)
+                                Text("[!] \(NSLocalizedString("message_unavailable", comment: ""))")
+                                    .font(CTFont.regular(13))
+                                    .foregroundColor(Color.CT.textDim)
+                                    .italic()
                             } else {
                                 LinkDetectingText(
                                     message.decryptedContent!,
-                                    color: message.isSentByMe ? .white : .primary
+                                    color: message.isSentByMe ? .white : Color.CT.text
                                 )
                             }
                         }
@@ -115,20 +110,20 @@ struct MessageBubbleRegularView: View {
                         .padding(.top, message.replyToContent != nil ? 4 : 8)
                         .padding(.bottom, 8)
                     }
-                    #if canImport(UIKit)
                     .background(
-                        isSelected
-                            ? (message.isSentByMe ? Color.accentColor.opacity(0.75) : Color.accentColor.opacity(0.15))
-                            : (message.isSentByMe ? Color.accentColor : Color(uiColor: .systemGray5))
+                        CTMessageBubbleTheme.regularBackground(
+                            isSentByMe: message.isSentByMe,
+                            isSelected: isSelected
+                        )
                     )
-                    #else
-                    .background(
-                        isSelected
-                            ? (message.isSentByMe ? Color.accentColor.opacity(0.75) : Color.accentColor.opacity(0.15))
-                            : (message.isSentByMe ? Color.accentColor : Color(nsColor: .controlBackgroundColor))
+                    .clipShape(Rectangle())
+                    .overlay(
+                        Group {
+                            if !message.isSentByMe {
+                                Rectangle().stroke(Color.CT.noise, lineWidth: 0.5)
+                            }
+                        }
                     )
-                    #endif
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
                 }
 
                 if isLastInGroup {
@@ -139,13 +134,13 @@ struct MessageBubbleRegularView: View {
 
                         if message.isEdited {
                             Text(NSLocalizedString("edited", comment: ""))
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
+                                .font(CTFont.regular(10))
+                                .foregroundColor(Color.CT.textDim)
                         }
 
                         Text(message.safeTimestamp, style: .time)
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
+                            .font(CTFont.regular(10))
+                            .foregroundColor(Color.CT.textDim)
                     }
                     .padding(.horizontal, 4)
                 }
@@ -153,7 +148,7 @@ struct MessageBubbleRegularView: View {
             .frame(maxWidth: containerWidth * 0.7, alignment: message.isSentByMe ? .trailing : .leading)
             .contentShape(.interaction, Rectangle())
             #if os(iOS)
-            .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 8))
+            .contentShape(.contextMenuPreview, Rectangle())
             #endif
             .onTapGesture {
                 if isEditMode {
@@ -224,14 +219,13 @@ struct MessageBubbleRegularView: View {
                 Spacer(minLength: 60)
             }
 
-            // Selection checkbox in edit mode - positioned based on message direction
             if isEditMode && message.isSentByMe {
                 Button {
                     onSelect?(message)
                 } label: {
-                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                        .foregroundColor(isSelected ? Color.blue : .gray)
-                        .font(.title3)
+                    Text(isSelected ? "[✓]" : "[○]")
+                        .font(CTFont.bold(14))
+                        .foregroundColor(isSelected ? Color.CT.accent : Color.CT.textDim)
                 }
                 .buttonStyle(.plain)
             }
@@ -242,43 +236,35 @@ struct MessageBubbleRegularView: View {
     private var deliveryStatusView: some View {
         switch message.deliveryStatus {
         case .sending:
-            Circle()
-                .stroke(Color.secondary.opacity(0.5), lineWidth: 1.5)
-                .frame(width: 10, height: 10)
+            Text("···")
+                .font(CTFont.regular(10))
+                .foregroundColor(Color.CT.textDim)
 
         case .sent:
-            Circle()
-                .fill(Color.secondary.opacity(0.6))
-                .frame(width: 10, height: 10)
+            Text("·")
+                .font(CTFont.bold(10))
+                .foregroundColor(Color.CT.textDim)
 
         case .delivered:
-            Circle()
-                .fill(Color.green)
-                .frame(width: 10, height: 10)
+            Text("[✓]")
+                .font(CTFont.regular(10))
+                .foregroundColor(Color.CT.accentDim)
 
         case .queued:
             Button { onRetry?(message) } label: {
-                HStack(spacing: 2) {
-                    Image(systemName: "tray")
-                        .font(.system(size: 10))
-                        .foregroundColor(.orange)
-                    Text("retry")
-                        .font(.caption2)
-                        .foregroundColor(.orange)
-                }
+                Text("[q] retry")
+                    .font(CTFont.regular(10))
+                    .foregroundColor(Color.CT.textDim)
             }
+            .buttonStyle(.plain)
 
         case .failed:
             Button { onRetry?(message) } label: {
-                HStack(spacing: 2) {
-                    Image(systemName: "exclamationmark.circle.fill")
-                        .font(.system(size: 10))
-                        .foregroundColor(.red)
-                    Text("retry")
-                        .font(.caption2)
-                        .foregroundColor(.red)
-                }
+                Text("[!] retry")
+                    .font(CTFont.bold(10))
+                    .foregroundColor(Color.CT.danger)
             }
+            .buttonStyle(.plain)
         }
     }
 
@@ -288,8 +274,8 @@ struct MessageBubbleRegularView: View {
         if hasReply {
             HStack(spacing: 4) {
                 Rectangle()
-                    .fill(Color.accentColor.opacity(0.6))
-                    .frame(width: 3)
+                    .fill(Color.CT.accentDim)
+                    .frame(width: 2)
 
                 if let replyContent = message.replyToContent {
                     ReplyPreviewContent(
@@ -302,8 +288,8 @@ struct MessageBubbleRegularView: View {
                     .padding(.trailing, 4)
                 } else {
                     Text("Original message")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                        .font(CTFont.regular(11))
+                        .foregroundColor(Color.CT.textDim)
                         .padding(.vertical, 4)
                         .padding(.trailing, 4)
                 }
@@ -340,9 +326,9 @@ struct MessageBubbleRegularView: View {
     @ViewBuilder
     private var swipeIndicatorOverlay: some View {
         if swipeOffset > 10 {
-            Image(systemName: "arrowshape.turn.up.left.fill")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(.accentColor)
+            Text("[←]")
+                .font(CTFont.bold(13))
+                .foregroundColor(Color.CT.accent)
                 .opacity(min(max(Double(swipeOffset / 40), 0), 1))
                 .offset(x: message.isSentByMe ? -swipeOffset - 8 : swipeOffset + 8)
                 .animation(.interactiveSpring(), value: swipeOffset)

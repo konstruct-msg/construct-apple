@@ -11,71 +11,101 @@ import CryptoKit
 
 /// Generates friendly, anonymous display names for users without usernames
 /// Format: "Adjective Animal" (e.g., "Silent Dolphin", "Happy Fox")
+/// ~20% chance: IT/office noun instead of animal (e.g., "Brave Printer", "Sad Protocol")
 struct DisplayNameGenerator {
     
     // MARK: - Word Lists
     
     private static let adjectives = [
-        "Silent", "Happy", "Swift", "Brave", "Gentle", "Calm", "Bright", "Bold", "Quick", "Quiet",
-        "Wise", "Noble", "Free", "Kind", "Pure", "Jolly", "Witty", "Fierce", "Proud", "Sly",
+        "silent", "happy", "swift", "brave", "gentle", "calm", "bright", "bold", "quick", "quiet",
+        "wise", "noble", "free", "kind", "pure", "jolly", "witty", "fierce", "proud", "sly",
         
-        "Lucky", "Cheerful", "Jovial", "Merry", "Clever", "Cunning", "Valiant", "Humble",
-        "Clear", "Cool", "Warm", "Soft", "Strong", "Wild", "Misty", "Sunny", "Cloudy", "Starry",
+        "lucky", "cheerful", "jovial", "merry", "clever", "cunning", "valiant", "humble",
+        "clear", "cool", "warm", "soft", "strong", "wild", "misty", "sunny", "cloudy", "starry",
         
-        "Frosty", "Stormy", "Ember", "Blazing", "Frozen", "Mountain", "Ocean", "River", "Forest",
-        "Desert", "Volcanic", "Thunder", "Solar", "Lunar", "Celestial", "Crystal", "Golden",
+        "frosty", "stormy", "ember", "blazing", "frozen", "mountain", "ocean", "river", "forest",
+        "desert", "volcanic", "thunder", "solar", "lunar", "celestial", "crystal", "golden",
         
-        "Silver", "Copper", "Iron", "Obsidian", "Amber", "Crimson", "Azure", "Verdant",
-        "Sleek", "Sharp", "Smooth", "Tall", "Deep", "Light", "Dark", "Ancient", "Agile",
+        "silver", "copper", "obsidian", "amber", "crimson", "azure", "verdant",
+        "sleek", "sharp", "smooth", "tall", "deep", "light", "dark", "ancient", "agile",
         
-        "Majestic", "Elegant", "Graceful", "Giant", "Tiny", "Nimble", "Radiant", "Gleaming",
-        "Shadowy", "Whispering", "Echoing", "Vivid", "Mystic", "Hidden", "Lonely", "Weathered"
+        "majestic", "elegant", "graceful", "giant", "tiny", "nimble", "radiant", "gleaming",
+        "shadowy", "whispering", "echoing", "vivid", "mystic", "hidden", "lonely", "weathered",
+
+        // bonus: for IT nouns these read even better
+        "deprecated", "recursive", "async", "frozen", "nested", "compiled", "broken",
+        "pending", "idle", "verbose", "headless", "orphaned", "forked", "stale", "cursed"
     ]
     
     private static let animals = [
-        "Fox", "Wolf", "Bear", "Lion", "Tiger", "Panda", "Jaguar", "Panther", "Leopard", "Cheetah",
-        "Lynx", "Cougar", "Hyena", "Jackal", "Dingo", "Wolverine", "Otter", "Seal", "Orca", "Dolphin",
-        "Whale", "Shark", "Ferret", "Mongoose", "Badger",
+        "fox", "wolf", "bear", "lion", "tiger", "panda", "jaguar", "panther", "leopard", "cheetah",
+        "lynx", "cougar", "hyena", "jackal", "dingo", "wolverine", "otter", "seal", "orca", "dolphin",
+        "whale", "shark", "ferret", "mongoose", "badger",
         
-        "Deer", "Moose", "Elk", "Bison", "Hare", "Rabbit", "Squirrel", "Beaver", "Hedgehog",
-        "Bat", "Boar", "Ox", "Ram", "Stag", "Marten", "Meerkat",
+        "deer", "moose", "elk", "bison", "hare", "rabbit", "squirrel", "beaver", "hedgehog",
+        "bat", "boar", "ox", "ram", "stag", "marten", "meerkat",
         
-        "Eagle", "Hawk", "Owl", "Raven", "Falcon", "Swan", "Dove", "Crane", "Heron", "Sparrow",
-        "Robin", "Finch", "Wren", "Phoenix", "Crow", "Vulture", "Albatross", "Kingfisher", "Kestrel",
-        "Harrier", "Gull", "Penguin", "Peacock", "Parrot", "Hornbill", "Nightjar",
+        "eagle", "hawk", "owl", "raven", "falcon", "swan", "dove", "crane", "heron", "sparrow",
+        "robin", "finch", "wren", "phoenix", "crow", "vulture", "albatross", "kingfisher", "kestrel",
+        "harrier", "gull", "penguin", "peacock", "parrot", "hornbill", "nightjar",
         
-        "Dragon", "Griffin", "Unicorn", "Pegasus", "Basilisk", "Chimera", "Kraken", "Hydra",
-        "Manticore", "Gryphon", "Yeti", "Kitsune", "Sphinx", "Serpent",
+        "dragon", "griffin", "unicorn", "pegasus", "basilisk", "chimera", "kraken", "hydra",
+        "manticore", "gryphon", "yeti", "kitsune", "sphinx", "serpent",
         
-        "Cobra", "Viper", "Python", "Rattler", "Gecko", "Iguana", "Scorpion", "Spider",
-        "Mantis", "Beetle", "Butterfly", "Moth", "Dragonfly",
+        "cobra", "viper", "python", "rattler", "gecko", "iguana", "scorpion", "spider",
+        "mantis", "beetle", "butterfly", "moth", "dragonfly",
         
-        "Mammoth", "Saber", "Raptor", "Tricera", "Rex", "Titan", "Direwolf"
+        "mammoth", "saber", "raptor", "tricera", "rex", "titan", "direwolf"
+    ]
+
+    /// IT / office nouns — used ~20% of the time for absurdist humour
+    private static let itNouns = [
+        // hardware
+        "printer", "keyboard", "monitor", "server", "router", "modem", "firewall",
+        "switch", "hub", "rack", "cable", "dongle", "cursor", "terminal",
+        // software / concepts
+        "daemon", "kernel", "process", "thread", "socket", "buffer", "pointer",
+        "callback", "semaphore", "mutex", "cron", "webhook", "pipeline", "protocol",
+        "endpoint", "payload", "namespace", "instance", "container", "cluster",
+        "registry", "proxy", "gateway", "runtime", "compiler", "debugger",
+        // office
+        "spreadsheet", "invoice", "deadline", "standup", "backlog", "ticket",
+        "milestone", "stakeholder", "deployment", "outage", "rollback", "hotfix",
+        "sprint", "retro", "roadmap", "handover", "escalation", "pivot",
     ]
     
     // MARK: - Generation
     
-    /// Generate a stable, anonymous display name from userId
-    /// - Parameter userId: User's UUID (or deviceId)
-    /// - Returns: Friendly name like "Silent Dolphin"
+    /// Generate a stable, anonymous display name from userId.
+    /// Returns "Adjective Animal" ~80% of the time,
+    /// or "Adjective ItNoun" ~20% of the time.
     static func generate(from userId: String) -> String {
-        // Hash userId to get deterministic indices
         let hash = SHA256.hash(data: Data(userId.utf8))
         let hashBytes = Array(hash)
         
         func getIndex(from bytes: ArraySlice<UInt8>, modulo: Int) -> Int {
-                    let slice = bytes.prefix(4)
-                    var value: UInt32 = 0
-                    for (i, byte) in slice.enumerated() {
-                        value |= UInt32(byte) << (24 - (i * 8))
-                    }
-                    return Int(value % UInt32(modulo))
-                }
-                
-                let adjIndex = getIndex(from: hashBytes[0...], modulo: adjectives.count)
-                let animalIndex = getIndex(from: hashBytes[4...], modulo: animals.count)
-                
-                return "\(adjectives[adjIndex]) \(animals[animalIndex])"
+            let slice = bytes.prefix(4)
+            var value: UInt32 = 0
+            for (i, byte) in slice.enumerated() {
+                value |= UInt32(byte) << (24 - (i * 8))
+            }
+            return Int(value % UInt32(modulo))
+        }
+
+        let adjIndex  = getIndex(from: hashBytes[0...], modulo: adjectives.count)
+        let nounByte  = Int(hashBytes[8])   // 3rd independent byte — decides noun category
+        let useITNoun = nounByte % 5 == 0   // ~20% probability
+
+        let noun: String
+        if useITNoun {
+            let nounIndex = getIndex(from: hashBytes[4...], modulo: itNouns.count)
+            noun = itNouns[nounIndex]
+        } else {
+            let animalIndex = getIndex(from: hashBytes[4...], modulo: animals.count)
+            noun = animals[animalIndex]
+        }
+
+        return "\(adjectives[adjIndex]) \(noun)"
     }
     
     /// Generate short ID (first 6 chars of hash) as fallback

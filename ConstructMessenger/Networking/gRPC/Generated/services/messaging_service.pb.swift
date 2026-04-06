@@ -305,6 +305,18 @@ public struct Shared_Proto_Services_V1_MessageStreamResponse: Sendable {
   /// Clears the value of `responseID`. Subsequent reads from it will return its default value.
   public mutating func clearResponseID() {self._responseID = nil}
 
+  /// Opaque server-assigned stream position cursor.
+  /// Clients SHOULD persist the latest value and pass it as SubscribeRequest.since_cursor
+  /// on the next reconnect to avoid re-reading already-delivered messages.
+  public var streamCursor: String {
+    get {_streamCursor ?? String()}
+    set {_streamCursor = newValue}
+  }
+  /// Returns true if `streamCursor` has been explicitly set.
+  public var hasStreamCursor: Bool {self._streamCursor != nil}
+  /// Clears the value of `streamCursor`. Subsequent reads from it will return its default value.
+  public mutating func clearStreamCursor() {self._streamCursor = nil}
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   /// Response type (determines which field is populated)
@@ -329,6 +341,7 @@ public struct Shared_Proto_Services_V1_MessageStreamResponse: Sendable {
   public init() {}
 
   fileprivate var _responseID: String? = nil
+  fileprivate var _streamCursor: String? = nil
 }
 
 /// SubscribeRequest - Subscribe to conversation updates
@@ -343,9 +356,25 @@ public struct Shared_Proto_Services_V1_SubscribeRequest: Sendable {
   /// Subscribe to presence updates for these users?
   public var includePresence: Bool = false
 
+  /// Resume cursor: last Redis stream ID received by the client on a previous
+  /// connection.  When present, the server will deliver only messages AFTER this
+  /// position, avoiding re-delivery of already-seen messages on reconnect.
+  /// Clients should persist the last stream_cursor value from MessageStreamResponse
+  /// and send it here when re-opening the stream after a disconnect.
+  public var sinceCursor: String {
+    get {_sinceCursor ?? String()}
+    set {_sinceCursor = newValue}
+  }
+  /// Returns true if `sinceCursor` has been explicitly set.
+  public var hasSinceCursor: Bool {self._sinceCursor != nil}
+  /// Clears the value of `sinceCursor`. Subsequent reads from it will return its default value.
+  public mutating func clearSinceCursor() {self._sinceCursor = nil}
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
+
+  fileprivate var _sinceCursor: String? = nil
 }
 
 /// UnsubscribeRequest - Unsubscribe from conversation updates
@@ -994,7 +1023,7 @@ extension Shared_Proto_Services_V1_MessageStreamRequest: SwiftProtobuf.Message, 
 
 extension Shared_Proto_Services_V1_MessageStreamResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".MessageStreamResponse"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}message\0\u{1}receipt\0\u{1}typing\0\u{1}ack\0\u{1}error\0\u{1}presence\0\u{3}heartbeat_ack\0\u{4}\u{3}response_id\0\u{c}\u{8}\u{2}\u{c}\u{b}\u{a}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}message\0\u{1}receipt\0\u{1}typing\0\u{1}ack\0\u{1}error\0\u{1}presence\0\u{3}heartbeat_ack\0\u{4}\u{3}response_id\0\u{3}stream_cursor\0\u{c}\u{8}\u{2}\u{c}\u{c}\u{9}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1094,6 +1123,7 @@ extension Shared_Proto_Services_V1_MessageStreamResponse: SwiftProtobuf.Message,
         }
       }()
       case 10: try { try decoder.decodeSingularStringField(value: &self._responseID) }()
+      case 11: try { try decoder.decodeSingularStringField(value: &self._streamCursor) }()
       default: break
       }
     }
@@ -1138,12 +1168,16 @@ extension Shared_Proto_Services_V1_MessageStreamResponse: SwiftProtobuf.Message,
     try { if let v = self._responseID {
       try visitor.visitSingularStringField(value: v, fieldNumber: 10)
     } }()
+    try { if let v = self._streamCursor {
+      try visitor.visitSingularStringField(value: v, fieldNumber: 11)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Shared_Proto_Services_V1_MessageStreamResponse, rhs: Shared_Proto_Services_V1_MessageStreamResponse) -> Bool {
     if lhs.response != rhs.response {return false}
     if lhs._responseID != rhs._responseID {return false}
+    if lhs._streamCursor != rhs._streamCursor {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -1151,7 +1185,7 @@ extension Shared_Proto_Services_V1_MessageStreamResponse: SwiftProtobuf.Message,
 
 extension Shared_Proto_Services_V1_SubscribeRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SubscribeRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}conversation_ids\0\u{3}include_presence\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}conversation_ids\0\u{3}include_presence\0\u{3}since_cursor\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1161,24 +1195,33 @@ extension Shared_Proto_Services_V1_SubscribeRequest: SwiftProtobuf.Message, Swif
       switch fieldNumber {
       case 1: try { try decoder.decodeRepeatedStringField(value: &self.conversationIds) }()
       case 2: try { try decoder.decodeSingularBoolField(value: &self.includePresence) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self._sinceCursor) }()
       default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
     if !self.conversationIds.isEmpty {
       try visitor.visitRepeatedStringField(value: self.conversationIds, fieldNumber: 1)
     }
     if self.includePresence != false {
       try visitor.visitSingularBoolField(value: self.includePresence, fieldNumber: 2)
     }
+    try { if let v = self._sinceCursor {
+      try visitor.visitSingularStringField(value: v, fieldNumber: 3)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Shared_Proto_Services_V1_SubscribeRequest, rhs: Shared_Proto_Services_V1_SubscribeRequest) -> Bool {
     if lhs.conversationIds != rhs.conversationIds {return false}
     if lhs.includePresence != rhs.includePresence {return false}
+    if lhs._sinceCursor != rhs._sinceCursor {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

@@ -19,160 +19,188 @@ struct SecurityView: View {
     @State private var showingDuressPinSetup = false
     @State private var showingDisableDuressAlert = false
     @State private var lockdown = LockdownManager.shared
-    
+
     var body: some View {
         @Bindable var securityViewModel = securityViewModel
-        List {
-            Section {
-                Button {
-                    showingPinSetup = true
-                } label: {
-                    Label {
-                        Text(securityViewModel.isPinEnabled ? "change_pin_code" : "enable_pin_code")
-                            .foregroundColor(.primary)
-                    } icon: {
-                        Image(systemName: "lock.fill")
-                            .foregroundColor(.gray)
+        ScrollView {
+            VStack(spacing: 20) {
+
+                // MARK: - PIN Code section
+                ConstructSection(header: NSLocalizedString("PIN_CODE", comment: "")) {
+                    ConstructButtonRow(
+                        icon: "[lock]",
+                        title: securityViewModel.isPinEnabled
+                            ? LocalizedStringKey("change_pin_code")
+                            : LocalizedStringKey("enable_pin_code"),
+                        iconColor: Color.CT.textDim
+                    ) {
+                        showingPinSetup = true
                     }
-                }
-                
-                if securityViewModel.isPinEnabled {
-                    Toggle(isOn: $securityViewModel.isBiometricEnabled) {
-                        Label {
+
+                    if securityViewModel.isPinEnabled {
+                        ConstructRowDivider(indent: 52)
+
+                        HStack(spacing: 14) {
+                            CTRowIcon(CTSymbol.biometric,
+                                      color: securityViewModel.isBiometricEnabled ? Color.CT.accent : Color.CT.textDim)
                             Text(String(format: NSLocalizedString("use_biometric", comment: ""), securityViewModel.biometricDisplayName))
-                        } icon: {
-                            Image(systemName: securityViewModel.biometricIconName)
-                                .foregroundColor(Color.blue)
+                                .font(CTFont.bold(16))
+                                .foregroundStyle(Color.CT.text)
+                            Spacer()
+                            Toggle("", isOn: $securityViewModel.isBiometricEnabled)
+                                .labelsHidden()
+                                .tint(Color.CT.accent)
                         }
-                    }
-                    .disabled(!securityViewModel.isBiometricAvailable)
-                    
-                    Button(role: .destructive) {
-                        showingDisablePinSheet = true
-                    } label: {
-                        Label {
-                            Text("disable_pin_code")
-                                .foregroundColor(.red)
-                        } icon: {
-                            Image(systemName: "lock.slash.fill")
-                                .foregroundColor(.red)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 14)
+                        .disabled(!securityViewModel.isBiometricAvailable)
+
+                        ConstructRowDivider(indent: 52)
+
+                        ConstructActionRow(
+                            icon: "[x]",
+                            title: LocalizedStringKey("disable_pin_code"),
+                            role: .destructive
+                        ) {
+                            showingDisablePinSheet = true
                         }
                     }
                 }
-            }
 
-            Section {
-                Button {
-                    showingRecoverySetup = true
-                } label: {
-                    Label {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("account_recovery_seed")
-                                .foregroundColor(.primary)
-                            if recoveryVM.isSetup, let fp = recoveryVM.fingerprint {
-                                Text(fp)
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                    .lineLimit(1)
-                                    .truncationMode(.middle)
-                            } else if recoveryVM.statusLoaded && !recoveryVM.isSetup {
-                                Text(NSLocalizedString("recovery_not_configured", comment: ""))
-                                    .font(.caption)
-                                    .foregroundColor(.orange)
+                // MARK: - Account Recovery section
+                VStack(alignment: .leading, spacing: 6) {
+                    ConstructSection(header: NSLocalizedString("ACCOUNT_RECOVERY", comment: "")) {
+                        Button { showingRecoverySetup = true } label: {
+                            HStack(spacing: 14) {
+                                CTRowIcon(recoveryVM.isSetup ? CTSymbol.ok : CTSymbol.key,
+                                          color: recoveryVM.isSetup ? Color.CT.accent : Color.CT.textDim)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(LocalizedStringKey("account_recovery_seed"))
+                                        .font(CTFont.bold(16))
+                                        .foregroundStyle(Color.CT.text)
+                                    if recoveryVM.isSetup, let fp = recoveryVM.fingerprint {
+                                        Text(fp)
+                                            .font(CTFont.regular(11))
+                                            .foregroundStyle(Color.CT.textDim)
+                                            .lineLimit(1)
+                                            .truncationMode(.middle)
+                                    } else if recoveryVM.statusLoaded && !recoveryVM.isSetup {
+                                        Text(NSLocalizedString("recovery_not_configured", comment: ""))
+                                            .font(CTFont.regular(11))
+                                            .foregroundStyle(.orange)
+                                    }
+                                }
+                                Spacer()
+                                Text("[→]")
+                                    .font(CTFont.regular(12))
+                                    .foregroundStyle(Color.CT.textDim)
                             }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 14)
+                            .contentShape(Rectangle())
                         }
-                    } icon: {
-                        Image(systemName: recoveryVM.isSetup ? "checkmark.shield.fill" : "key.fill")
-                            .foregroundColor(recoveryVM.isSetup ? .green : .gray)
+                        .buttonStyle(.plain)
                     }
+                    Text(LocalizedStringKey("account_recovery_seed_hint"))
+                        .font(CTFont.regular(11))
+                        .foregroundStyle(Color.CT.textDim)
+                        .padding(.horizontal, 20)
                 }
-            } footer: {
-                Text("account_recovery_seed_hint")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
 
-            Section {
-                if securityViewModel.isDuresspinEnabled {
-                    Button {
-                        showingDuressPinSetup = true
-                    } label: {
-                        Label {
-                            Text("duress_pin_change")
-                                .foregroundColor(.primary)
-                        } icon: {
-                            Image(systemName: "bolt.shield.fill")
-                                .foregroundColor(.red)
-                        }
-                    }
-
-                    Button(role: .destructive) {
-                        showingDisableDuressAlert = true
-                    } label: {
-                        Label {
-                            Text("disable_duress_pin")
-                                .foregroundColor(.red)
-                        } icon: {
-                            Image(systemName: "bolt.shield")
-                                .foregroundColor(.red)
-                        }
-                    }
-                } else {
-                    Button {
-                        showingDuressPinSetup = true
-                    } label: {
-                        Label {
-                            Text("enable_duress_pin")
-                                .foregroundColor(securityViewModel.isPinEnabled ? .primary : .secondary)
-                        } icon: {
-                            Image(systemName: "bolt.shield.fill")
-                                .foregroundColor(securityViewModel.isPinEnabled ? .gray : .gray.opacity(0.4))
-                        }
-                    }
-                    .disabled(!securityViewModel.isPinEnabled)
-                }
-            } footer: {
-                Text(securityViewModel.isPinEnabled
-                     ? "duress_pin_hint"
-                     : "duress_pin_requires_main_pin")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-
-            // MARK: - Lockdown mode
-            Section {
-                Toggle(isOn: Binding(
-                    get: { lockdown.isActive },
-                    set: { enabled in
-                        if enabled {
-                            let approvedIds = fetchCurrentContactIds()
-                            lockdown.enable(approvedIds: approvedIds)
+                // MARK: - Duress PIN section
+                VStack(alignment: .leading, spacing: 6) {
+                    ConstructSection(header: NSLocalizedString("DURESS_PIN", comment: "")) {
+                        if securityViewModel.isDuresspinEnabled {
+                            ConstructButtonRow(
+                                icon: "[⚡]",
+                                title: LocalizedStringKey("duress_pin_change"),
+                                iconColor: Color.CT.danger
+                            ) {
+                                showingDuressPinSetup = true
+                            }
+                            ConstructRowDivider(indent: 52)
+                            ConstructActionRow(
+                                icon: "[x]",
+                                title: LocalizedStringKey("disable_duress_pin"),
+                                role: .destructive
+                            ) {
+                                showingDisableDuressAlert = true
+                            }
                         } else {
-                            lockdown.disable()
-                        }
-                    }
-                )) {
-                    Label {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(LocalizedStringKey("lockdown_mode"))
-                                .foregroundColor(.primary)
-                            if lockdown.isActive, let since = lockdown.activatedAt {
-                                Text(String(format: NSLocalizedString("lockdown_active_since", comment: ""),
-                                            since.formatted(date: .abbreviated, time: .shortened)))
-                                    .font(.caption)
-                                    .foregroundColor(.orange)
+                            ConstructButtonRow(
+                                icon: "[⚡]",
+                                title: LocalizedStringKey("enable_duress_pin"),
+                                iconColor: securityViewModel.isPinEnabled ? Color.CT.textDim : Color.CT.textDim.opacity(0.4)
+                            ) {
+                                showingDuressPinSetup = true
                             }
+                            .disabled(!securityViewModel.isPinEnabled)
+                            .opacity(securityViewModel.isPinEnabled ? 1.0 : 0.5)
                         }
-                    } icon: {
-                        Image(systemName: lockdown.isActive ? "lock.shield.fill" : "lock.shield")
-                            .foregroundColor(lockdown.isActive ? .orange : .gray)
                     }
+                    Text(LocalizedStringKey(securityViewModel.isPinEnabled ? "duress_pin_hint" : "duress_pin_requires_main_pin"))
+                        .font(CTFont.regular(11))
+                        .foregroundStyle(Color.CT.textDim)
+                        .padding(.horizontal, 20)
                 }
-                .tint(.orange)
-            } footer: {
-                Text(LocalizedStringKey("lockdown_mode_hint"))
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+
+                // MARK: - Lockdown mode section
+                VStack(alignment: .leading, spacing: 6) {
+                    ConstructSection(header: NSLocalizedString("LOCKDOWN", comment: "")) {
+                        HStack(spacing: 14) {
+                            CTRowIcon(lockdown.isActive ? "[🔒]" : CTSymbol.lock,
+                                      color: lockdown.isActive ? .orange : Color.CT.textDim)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(LocalizedStringKey("lockdown_mode"))
+                                    .font(CTFont.bold(16))
+                                    .foregroundStyle(Color.CT.text)
+                                if lockdown.isActive, let since = lockdown.activatedAt {
+                                    Text(String(format: NSLocalizedString("lockdown_active_since", comment: ""),
+                                                since.formatted(date: .abbreviated, time: .shortened)))
+                                        .font(CTFont.regular(11))
+                                        .foregroundStyle(.orange)
+                                }
+                            }
+                            Spacer()
+                            Toggle("", isOn: Binding(
+                                get: { lockdown.isActive },
+                                set: { enabled in
+                                    if enabled {
+                                        let approvedIds = fetchCurrentContactIds()
+                                        lockdown.enable(approvedIds: approvedIds)
+                                    } else {
+                                        lockdown.disable()
+                                    }
+                                }
+                            ))
+                            .labelsHidden()
+                            .tint(.orange)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 14)
+                    }
+                    Text(LocalizedStringKey("lockdown_mode_hint"))
+                        .font(CTFont.regular(11))
+                        .foregroundStyle(Color.CT.textDim)
+                        .padding(.horizontal, 20)
+                }
+            }
+            .padding(.vertical, 20)
+        }
+        .background(Color.CT.bg.ignoresSafeArea())
+        .navigationTitle("")
+        #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(Color.CT.bgMsg, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
+        .toolbarColorScheme(.dark, for: .navigationBar)
+        #endif
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text(NSLocalizedString("security", comment: "").uppercased())
+                    .font(CTFont.bold(13))
+                    .foregroundStyle(Color.CT.text)
+                    .tracking(4)
             }
         }
         .sheet(isPresented: $showingPinSetup) {
@@ -216,3 +244,18 @@ struct SecurityView: View {
         return Set(chats.compactMap { $0.otherUser?.id })
     }
 }
+
+#if DEBUG
+#Preview {
+    let container = PreviewHelpers.createPreviewContainer()
+    let context = container.viewContext
+    return NavigationStack {
+        SecurityView()
+            .environment(\.managedObjectContext, context)
+            .environment(SecurityViewModel())
+            .environment(AccountRecoveryViewModel())
+            .environment(AuthViewModel(context: context))
+    }
+    .preferredColorScheme(.dark)
+}
+#endif

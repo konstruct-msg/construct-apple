@@ -74,8 +74,8 @@ struct RecoveryEntryView: View {
                         .textInputAutocapitalization(.never)
                         #endif
                         .padding(10)
-                        .background(Color.secondary.opacity(0.1))
-                        .cornerRadius(8)
+                        .background(Color.CT.bgMsg)
+                        .overlay(Rectangle().stroke(Color.CT.noise, lineWidth: 1))
                 }
                 .padding(.horizontal)
 
@@ -106,9 +106,13 @@ struct RecoveryEntryView: View {
                     Task { await vm.submitRecover() }
                 } label: {
                     Text(NSLocalizedString("recovery_restore_account", comment: ""))
+                        .font(CTFont.regular(13))
+                        .foregroundColor(Color.CT.text)
                         .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(Color.CT.bgMsg)
+                        .overlay(Rectangle().stroke(Color.CT.accent, lineWidth: 1))
                 }
-                .buttonStyle(.borderedProminent)
                 .disabled(!vm.enteredMnemonicValid || vm.recoverIdentifier.isEmpty)
                 .padding(.horizontal)
                 .padding(.bottom)
@@ -139,8 +143,8 @@ struct RecoveryEntryView: View {
         }
         .padding(.vertical, 6)
         .padding(.horizontal, 8)
-        .background(Color.secondary.opacity(0.1))
-        .cornerRadius(8)
+        .background(Color.CT.bgMsg)
+        .overlay(Rectangle().stroke(Color.CT.noise, lineWidth: 1))
     }
 
     // MARK: - Recovering
@@ -161,14 +165,16 @@ struct RecoveryEntryView: View {
     private var doneView: some View {
         VStack(spacing: 24) {
             Spacer()
-            Image(systemName: "checkmark.shield.fill")
-                .font(.system(size: 52))
-                .foregroundColor(.green)
+            Text("[✓]")
+                .font(CTFont.bold(48))
+                .foregroundColor(Color.CT.accent)
+                .lineLimit(1).fixedSize()
             Text(NSLocalizedString("recovery_restored_title", comment: ""))
-                .font(.title2.bold())
+                .font(CTFont.bold(18))
+                .foregroundColor(Color.CT.text)
             Text(NSLocalizedString("recovery_restored_body", comment: ""))
-                .font(.body)
-                .foregroundColor(.secondary)
+                .font(CTFont.regular(13))
+                .foregroundColor(Color.CT.textDim)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
             Spacer()
@@ -177,27 +183,31 @@ struct RecoveryEntryView: View {
                 dismiss()
             } label: {
                 Text(NSLocalizedString("done", comment: ""))
+                    .font(CTFont.regular(13))
+                    .foregroundColor(Color.CT.text)
                     .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(Color.CT.bgMsg)
+                    .overlay(Rectangle().stroke(Color.CT.accent, lineWidth: 1))
             }
-            .buttonStyle(.borderedProminent)
             .padding(.horizontal)
             .padding(.bottom)
         }
     }
 
-    // MARK: - Failed
-
     private func failedView(message: String) -> some View {
         VStack(spacing: 20) {
             Spacer()
-            Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 48))
+            Text("[!]")
+                .font(CTFont.bold(48))
                 .foregroundColor(.orange)
+                .lineLimit(1).fixedSize()
             Text(NSLocalizedString("recovery_error_title", comment: ""))
-                .font(.title3.bold())
+                .font(CTFont.bold(16))
+                .foregroundColor(Color.CT.text)
             Text(message)
-                .font(.body)
-                .foregroundColor(.secondary)
+                .font(CTFont.regular(13))
+                .foregroundColor(Color.CT.textDim)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
             Spacer()
@@ -205,9 +215,13 @@ struct RecoveryEntryView: View {
                 vm.recoverStep = .enterPhrase
             } label: {
                 Text(NSLocalizedString("try_again", comment: ""))
+                    .font(CTFont.regular(13))
+                    .foregroundColor(Color.CT.text)
                     .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(Color.CT.bgMsg)
+                    .overlay(Rectangle().stroke(Color.CT.accent, lineWidth: 1))
             }
-            .buttonStyle(.borderedProminent)
             .padding(.horizontal)
             .padding(.bottom)
         }

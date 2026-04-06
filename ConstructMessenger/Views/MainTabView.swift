@@ -8,31 +8,6 @@
 import SwiftUI
 import CoreData
 
-/// iOS 26 fix: wraps a tab's content so its body (and any @FetchRequest inside)
-/// is only constructed after the tab appears for the first time.
-/// Without this, iOS 26 TabView eagerly calls each child's body during layout,
-/// triggering @FetchRequest before managedObjectContext is in the environment.
-private struct LazyTabContent<Content: View>: View {
-    @State private var hasAppeared = false
-    private let content: () -> Content
-
-    init(@ViewBuilder content: @escaping () -> Content) {
-        self.content = content
-    }
-
-    var body: some View {
-        Group {
-            if hasAppeared {
-                content()
-            } else {
-                Color.clear
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .onAppear { hasAppeared = true }
-            }
-        }
-    }
-}
-
 struct MainTabView: View {
     @Environment(AuthViewModel.self) private var authViewModel
     @Environment(ChatsViewModel.self) private var chatsViewModel
@@ -43,6 +18,13 @@ struct MainTabView: View {
 
     // Call overlays
     @State private var callManager = CallManager.shared
+
+    /// Tracks which tab indices have been visited at least once.
+    /// A tab's content view is only inserted into the ZStack after its first visit,
+    /// preventing @FetchRequest from firing for every tab simultaneously at launch.
+    /// This was causing EXC_CRASH on iOS 26: _ZStackLayout.sizeThatFits triggers
+    /// @FetchRequest.update on ALL ZStack children (even opacity=0 ones) during layout.
+    @State private var visitedTabs: Set<Int> = [0]
 
     var body: some View {
         callContent
@@ -72,45 +54,75 @@ struct MainTabView: View {
                 .environment(chatsViewModel)
         } else {
             @Bindable var vm = chatsViewModel
-            TabView(selection: $vm.selectedTab) {
-                ChatsListView()
-                    .environment(chatsViewModel)
-                    .tabItem {
-                        Label("chats", systemImage: "message")
-                    }
-                    .tag(0)
-
-                // iOS 26: TabView eagerly initialises @FetchRequest for ALL tabs during
-                // layout, even unvisited ones. LazyTabContent defers mounting until
-                // the tab's onAppear fires (i.e. first visit), keeping CoreData safe.
-                LazyTabContent { SynapsView().environment(chatsViewModel) }
-                    .tabItem {
-                        Label("synaps", systemImage: "point.3.filled.connected.trianglepath.dotted")
-                    }
-                    .tag(1)
-
-                #if os(iOS)
-                if CallsFeature.isEnabled {
-                    LazyTabContent { CallHistoryView() }
-                        .tabItem {
-                            Label(NSLocalizedString("calls_tab", comment: ""), systemImage: "phone")
-                        }
-                        .tag(2)
+            VStack(spacing: 0) {
+                tabContent(vm: vm)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                if !vm.isInChat && !vm.isInSettings {
+                    CTTabBar(selected: $vm.selectedTab, items: tabItems)
+                        .background(Color.CT.bg)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
-
-                LazyTabContent { SettingsView().environment(chatsViewModel) }
-                    .tabItem {
-                        Label("settings", systemImage: "gear")
-                    }
-                    .tag(CallsFeature.isEnabled ? 3 : 2)
-                #endif
             }
+            .animation(.easeInOut(duration: 0.2), value: vm.isInChat || vm.isInSettings)
+            .ctBackground()
+        }
+    }
+
+    /// Renders tab views lazily: a tab's content is inserted into the ZStack only after
+    /// it is first selected. Once mounted it stays alive (preserving scroll/nav state).
+    /// Only tab 0 (ChatsListView) is rendered at startup to avoid @FetchRequest bursts.
+    @ViewBuilder
+    private func tabContent(vm: ChatsViewModel) -> some View {
+        ZStack {
+            // Tab 0: always rendered (initial tab).
+            ChatsListView()
+                .environment(chatsViewModel)
+                .opacity(vm.selectedTab == 0 ? 1 : 0)
+                .allowsHitTesting(vm.selectedTab == 0)
+
+            // Tab 1–N: mounted only after first visit.
+            if visitedTabs.contains(1) {
+                SynapsView()
+                    .environment(chatsViewModel)
+                    .opacity(vm.selectedTab == 1 ? 1 : 0)
+                    .allowsHitTesting(vm.selectedTab == 1)
+            }
+
             #if os(iOS)
-            .toolbarBackground(Color.Construct.bg, for: .tabBar)
-            .toolbarBackground(.visible, for: .tabBar)
-            .toolbarColorScheme(.dark, for: .tabBar)
+            if CallsFeature.isEnabled, visitedTabs.contains(2) {
+                CallHistoryView()
+                    .opacity(vm.selectedTab == 2 ? 1 : 0)
+                    .allowsHitTesting(vm.selectedTab == 2)
+            }
+
+            let settingsTab = CallsFeature.isEnabled ? 3 : 2
+            if visitedTabs.contains(settingsTab) {
+                SettingsView()
+                    .environment(chatsViewModel)
+                    .opacity(vm.selectedTab == settingsTab ? 1 : 0)
+                    .allowsHitTesting(vm.selectedTab == settingsTab)
+            }
             #endif
         }
+        .onChange(of: vm.selectedTab) { _, newTab in
+            visitedTabs.insert(newTab)
+        }
+    }
+
+    private var tabItems: [CTTabItem] {
+        #if os(iOS)
+        var items: [CTTabItem] = [
+            CTTabItem(symbol: CTSymbol.tabChats,  label: "MSG"),
+            CTTabItem(symbol: CTSymbol.tabSynaps, label: "SYN"),
+        ]
+        if CallsFeature.isEnabled {
+            items.append(CTTabItem(symbol: CTSymbol.tabCalls, label: "TEL"))
+        }
+        items.append(CTTabItem(symbol: CTSymbol.tabSettings, label: "CFG"))
+        return items
+        #else
+        return CTTabBar.defaultItems
+        #endif
     }
 
     // MARK: - Call state helpers
@@ -149,31 +161,36 @@ struct MainTabView: View {
 }
 
 #if DEBUG
-#Preview {
-    let container = PreviewHelpers.createPreviewContainer()
-    let context = container.viewContext
-    
-    guard context.persistentStoreCoordinator != nil else {
-        fatalError("Preview Core Data context not ready")
+/// Retains the Core Data container for the lifetime of the preview process.
+/// Using a class ensures ARC keeps the container alive even after the #Preview closure returns.
+@MainActor
+private final class MainTabPreviewState {
+    static let shared = MainTabPreviewState()
+    let container = PersistenceController(inMemory: true).container
+    let authViewModel: AuthViewModel
+    let chatsViewModel: ChatsViewModel
+
+    private init() {
+        let context = container.viewContext
+        authViewModel = AuthViewModel(context: context)
+        authViewModel.configureMockAuth()
+        chatsViewModel = ChatsViewModel()
+        chatsViewModel.setContext(context)
+
+        let user1 = PreviewHelpers.createSampleUser(context: context, id: "user1", username: "alice", displayName: "Alice")
+        let user2 = PreviewHelpers.createSampleUser(context: context, id: "user2", username: "bob", displayName: "Bob")
+        _ = PreviewHelpers.createSampleChat(context: context, with: user1)
+        _ = PreviewHelpers.createSampleChat(context: context, with: user2)
+        try? context.save()
     }
-    
-    let authViewModel = AuthViewModel(context: context)
-    authViewModel.configureMockAuth()
-    
-    let chatsViewModel = ChatsViewModel()
-    chatsViewModel.setContext(context)
+}
 
-    // Create sample chats
-    let user1 = PreviewHelpers.createSampleUser(context: context, id: "user1", username: "alice", displayName: "Alice")
-    let user2 = PreviewHelpers.createSampleUser(context: context, id: "user2", username: "bob", displayName: "Bob")
-    _ = PreviewHelpers.createSampleChat(context: context, with: user1)
-    _ = PreviewHelpers.createSampleChat(context: context, with: user2)
-    try? context.save()
-
+#Preview {
+    let state = MainTabPreviewState.shared
     return MainTabView()
-        .environment(\.managedObjectContext, context)
-        .environment(authViewModel)
-        .environment(chatsViewModel)
+        .environment(\.managedObjectContext, state.container.viewContext)
+        .environment(state.authViewModel)
+        .environment(state.chatsViewModel)
         .environment(SecurityViewModel())
 }
 #endif

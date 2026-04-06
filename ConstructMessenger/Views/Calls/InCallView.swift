@@ -23,7 +23,7 @@ struct InCallView: View {
 
     var body: some View {
         ZStack {
-            Color.Construct.bg
+            Color.CT.bg
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
@@ -40,11 +40,11 @@ struct InCallView: View {
 
                     Text(session.peerName)
                         .font(.title2.weight(.semibold))
-                        .foregroundStyle(Color.Construct.textBright)
+                        .foregroundStyle(Color.CT.text)
 
                     Text(statusText)
-                        .font(ConstructFont.mono(14))
-                        .foregroundStyle(isEnded ? Color.red.opacity(0.85) : Color.Construct.textDim)
+                        .font(CTFont.regular(14))
+                        .foregroundStyle(isEnded ? Color.red.opacity(0.85) : Color.CT.textDim)
                         .animation(.easeInOut(duration: 0.3), value: isConnecting)
                 }
 
@@ -54,16 +54,15 @@ struct InCallView: View {
                 // Control row
                 if isEnded {
                     Button {
-                        // state auto-resets after 3s; allow immediate dismiss via endCall no-op
                         CallManager.shared.endCall()
                     } label: {
-                        Text(NSLocalizedString("call_dismiss", comment: "Dismiss ended call"))
-                            .font(.body.weight(.medium))
-                            .foregroundStyle(.white)
+                        Text(NSLocalizedString("call_dismiss", comment: ""))
+                            .font(CTFont.regular(15))
+                            .foregroundStyle(Color.CT.textDim)
                             .padding(.horizontal, 36)
                             .padding(.vertical, 14)
-                            .background(Color.Construct.bg3)
-                            .clipShape(Capsule())
+                            .background(Color.CT.bgMsg)
+                            .overlay(Rectangle().strokeBorder(Color.CT.noise, lineWidth: 1))
                     }
                     .padding(.bottom, 52)
                 } else {
@@ -71,7 +70,7 @@ struct InCallView: View {
                         CallControlButton(
                             systemImage: isMuted ? "mic.slash.fill" : "mic.fill",
                             label: NSLocalizedString(isMuted ? "call_unmute" : "call_mute", comment: ""),
-                            tint: isMuted ? Color.Construct.accent : Color.Construct.textDim
+                            tint: isMuted ? Color.CT.accent : Color.CT.textDim
                         ) {
                             isMuted.toggle()
                             CallManager.shared.setMuted(isMuted)
@@ -81,19 +80,19 @@ struct InCallView: View {
                         Button {
                             CallManager.shared.endCall()
                         } label: {
-                            Image(systemName: "phone.down.fill")
-                                .font(.system(size: 26))
+                            Text(CTSymbol.callEnd)
+                                .font(CTFont.bold(18))
                                 .foregroundStyle(.white)
                                 .frame(width: 68, height: 68)
-                                .background(Color.red)
-                                .clipShape(Circle())
+                                .background(Color.CT.danger)
+                                .overlay(Rectangle().strokeBorder(Color.CT.danger, lineWidth: 1))
                         }
                         .accessibilityLabel(NSLocalizedString("call_end", comment: ""))
 
                         CallControlButton(
                             systemImage: isSpeaker ? "speaker.wave.3.fill" : "speaker.fill",
                             label: NSLocalizedString("call_speaker", comment: ""),
-                            tint: isSpeaker ? Color.Construct.accent : Color.Construct.textDim
+                            tint: isSpeaker ? Color.CT.accent : Color.CT.textDim
                         ) {
                             isSpeaker.toggle()
                             CallManager.shared.setSpeaker(isSpeaker)
@@ -172,7 +171,7 @@ private struct PulseRingView: View {
 
     var body: some View {
         Circle()
-            .stroke(Color.Construct.accent.opacity(opacity), lineWidth: 2)
+            .stroke(Color.CT.accent.opacity(opacity), lineWidth: 2)
             .scaleEffect(scale)
             .frame(width: size, height: size)
             .onAppear {
@@ -187,23 +186,36 @@ private struct PulseRingView: View {
 // MARK: - Call control button
 
 private struct CallControlButton: View {
-    let systemImage: String
+    let systemImage: String   // kept for accessibility, mapped to ASCII
     let label: String
     let tint: Color
     let action: () -> Void
 
+    // Map SF Symbol names to ASCII equivalents
+    private var asciiLabel: String {
+        switch systemImage {
+        case "mic.fill":            return "[mic]"
+        case "mic.slash.fill":      return "[mute]"
+        case "speaker.fill":        return "[ear]"
+        case "speaker.wave.3.fill": return "[spk]"
+        default:                    return "[\(systemImage)]"
+        }
+    }
+
     var body: some View {
         Button(action: action) {
             VStack(spacing: 6) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 22))
+                Text(asciiLabel)
+                    .font(CTFont.bold(15))
                     .foregroundStyle(tint)
                     .frame(width: 52, height: 52)
-                    .background(Color.Construct.bg3)
-                    .clipShape(Circle())
+                    .background(Color.CT.bgMsg)
+                    .overlay(Rectangle().strokeBorder(tint.opacity(0.4), lineWidth: 1))
+                    .lineLimit(1)
+                    .fixedSize()
                 Text(label)
-                    .font(.caption2)
-                    .foregroundStyle(Color.Construct.textDim)
+                    .font(CTFont.regular(10))
+                    .foregroundStyle(Color.CT.textDim)
             }
         }
         .accessibilityLabel(label)

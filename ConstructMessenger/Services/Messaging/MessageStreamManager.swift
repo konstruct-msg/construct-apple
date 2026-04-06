@@ -24,6 +24,24 @@ private enum StreamEvent: Sendable {
     case heartbeat                    // server heartbeat ack
 }
 
+// MARK: - Stream Cursor Persistence
+
+/// Persists the last Redis stream cursor so reconnects resume from the correct position.
+private enum StreamCursorStore {
+    private static let key = "construct.stream.cursor"
+
+    static func save(_ cursor: String) {
+        UserDefaults.standard.set(cursor, forKey: key)
+    }
+
+    static func load() -> String? {
+        UserDefaults.standard.string(forKey: key)
+    }
+
+    static func clear() {
+        UserDefaults.standard.removeObject(forKey: key)
+    }
+}
 @MainActor
 @Observable
 final class MessageStreamManager {
@@ -470,11 +488,16 @@ final class MessageStreamManager {
         self.outboundContinuation = continuation
         Log.info("⏳ MessageStream opening to \(host):\(port)", category: "MessageStream")
 
-        // Send initial subscribe
+        // Send initial subscribe — include last-known Redis stream cursor so the server
+        // resumes from the correct position instead of re-reading from the beginning.
         var subscribeReq = Shared_Proto_Services_V1_MessageStreamRequest()
         var subscribe = Shared_Proto_Services_V1_SubscribeRequest()
         subscribe.conversationIds = subscriptionUserIds
         subscribe.includePresence = true
+        if let cursor = StreamCursorStore.load() {
+            subscribe.sinceCursor = cursor
+            Log.debug("📤 MessageStream subscribe with cursor=\(cursor.prefix(16))…", category: "MessageStream")
+        }
         subscribeReq.request = .subscribe(subscribe)
         continuation.yield(subscribeReq)
         Log.debug("📤 MessageStream subscribe sent: \(subscriptionUserIds.count) conversation(s)", category: "MessageStream")
@@ -613,6 +636,10 @@ final class MessageStreamManager {
                 for try await part in contents.bodyParts {
                     switch part {
                     case .message(let streamResponse):
+                        // Persist the cursor on every response so reconnects resume cleanly.
+                        if streamResponse.hasStreamCursor {
+                            StreamCursorStore.save(streamResponse.streamCursor)
+                        }
                         if let msg = MessageStreamManager.convertStreamResponse(streamResponse) {
                             incomingContinuation.yield(msg)
                         }

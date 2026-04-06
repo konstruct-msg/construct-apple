@@ -34,6 +34,10 @@ class ChatsViewModel {
     // ✅ Chat ID to open programmatically (e.g., from deep link or Synaps)
     var chatToOpen: String?
 
+    // true when ChatView is on the navigation stack — hides CTTabBar
+    var isInChat: Bool = false
+    var isInSettings: Bool = false
+
     // ✅ Selected tab index — used to switch tabs programmatically (e.g., open chat from Synaps)
     var selectedTab: Int = 0
 
@@ -355,7 +359,7 @@ class ChatsViewModel {
             }
         }
 
-        // Pre-warm sessions for contacts where we're the natural INITIATOR (lower UUID)
+        // Pre-warm sessions for contacts where we're the natural INITIATOR (higher deviceId)
         // and already have message history. Contacts without history (e.g. just added via QR)
         // are prewarmed in startChat instead, guaranteeing fresh OTPKs after QR scan.
         sessionCoordinator.prewarmSessions(for: prewarmEligibleContactIds())
@@ -431,7 +435,7 @@ class ChatsViewModel {
         // and then clearing guarantees the subsequent prewarm fetches their current key bundle.
         CryptoManager.shared.archiveSession(for: user.id, reason: .manualReset)
         CryptoManager.shared.clearArchivedSessions(for: user.id)
-        // Prewarm session immediately: if we're the natural INITIATOR (lower UUID),
+        // Prewarm session immediately: if we're the natural INITIATOR (higher deviceId),
         // kick off X3DH init now so the first message is instant.
         sessionCoordinator.prewarmSessions(for: [user.id])
         return chat

@@ -23,7 +23,6 @@ struct ContactQRCodeView: View {
     private let timer = Timer.publish(every: InviteConfig.qrCountdownTickSeconds, on: .main, in: .common).autoconnect()
     private let generator = InviteGenerator()
     
-    /// Pass a pre-built payload only in Previews to skip Keychain/network calls.
     private let previewPayload: String?
     
     init(userId: String, username: String, previewPayload: String? = nil) {
@@ -32,100 +31,58 @@ struct ContactQRCodeView: View {
         self.previewPayload = previewPayload
     }
 
+    private var displayName: String {
+        username.isEmpty ? DisplayNameGenerator.generate(from: userId) : "@\(username)"
+    }
+
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 24) {
+        VStack(spacing: 0) {
+            // Nav bar
+            CTNavBar(
+                title: NSLocalizedString("invite", comment: ""),
+                showBack: true,
+                backAction: { dismiss() }
+            )
+            Rectangle().fill(Color.CT.noise).frame(height: 1)
 
-                // QR Code
-                if let payload = qrPayload, let qrImage = generateQRCode(from: payload) {
-                    Image(uiImage: qrImage)
-                        .interpolation(.none)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: QRCodeSize.standard(in: containerWidth), height: QRCodeSize.standard(in: containerWidth))
-                        .padding(QRCodeSize.padding)
-                        .background(Color.white)  // QR needs white bg for camera readability
-                        .cornerRadius(QRCodeSize.cornerRadius)
-                        .shadow(color: .black.opacity(0.12), radius: 8, x: 0, y: 2)
-                } else if let error = generationError {
-                    Rectangle()
-                        .fill(Color.gray.opacity(0.2))
-                        .frame(width: QRCodeSize.standard(in: containerWidth), height: QRCodeSize.standard(in: containerWidth))
-                        .cornerRadius(QRCodeSize.cornerRadius)
-                        .overlay {
-                            VStack(spacing: 8) {
-                                Image(systemName: "exclamationmark.triangle")
-                                    .font(.largeTitle)
-                                    .foregroundColor(.orange)
-                                Text(error)
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                    .multilineTextAlignment(.center)
-                                    .padding(.horizontal)
-                            }
-                        }
-                } else {
-                    ProgressView()
-                        .frame(width: QRCodeSize.standard(in: containerWidth), height: QRCodeSize.standard(in: containerWidth))
-                }
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 0) {
 
-                VStack(spacing: 8) {
-                    // Countdown timer
-                    if timeRemaining > 0 {
-                        HStack(spacing: 4) {
-                            Image(systemName: "clock")
-                                .font(.caption)
-                                    Text(String(format: NSLocalizedString("expires_in", comment: "QR code expiry countdown"), formatTime(timeRemaining)))
-                                .font(.caption)
-                        }
-                        .foregroundColor(timeRemaining < InviteConfig.qrWarningThresholdSeconds ? .orange : .secondary)
-                    } else {
-                        Text(LocalizedStringKey("code_expired"))
-                            .font(.caption)
-                            .foregroundColor(.red)
+                    // Identity header
+                    VStack(spacing: 6) {
+                        Text(displayName)
+                            .font(CTFont.bold(15))
+                            .foregroundStyle(Color.CT.text)
+                        Text(NSLocalizedString("qr_caption_trust", comment: ""))
+                            .font(CTFont.regular(11))
+                            .foregroundStyle(Color.CT.accent.opacity(0.5))
                     }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 20)
 
-                    Text("show_this_code_to_someone_nearby")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal)
-                }
+                    Rectangle().fill(Color.CT.noise).frame(height: 1)
 
-                // Regenerate button if expired
-                if timeRemaining <= 0 {
-                    Button {
-                        regenerateQRCode()
-                    } label: {
-                        Label(LocalizedStringKey("generate_new_code"), systemImage: "arrow.clockwise")
-                            .padding()
-                            .frame(maxWidth: .infinity)
-                            .background(Color.accentColor)
-                            .foregroundColor(.white)
-                            .cornerRadius(12)
+                    // QR block
+                    VStack(spacing: 20) {
+                        qrBlock
+                        timerBlock
                     }
-                    .padding(.horizontal, 32)
-                }
+                    .padding(.vertical, 28)
+                    .frame(maxWidth: .infinity)
 
-                Text("scan_with_camera_or_screenshot")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 32)
-            }
-            .padding(.vertical, 24)
-            .frame(maxWidth: .infinity)
-            .navigationTitle(username.isEmpty ? DisplayNameGenerator.generate(from: userId) : "@\(username)")
-            #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-            #endif
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("close") { dismiss() }
+                    Rectangle().fill(Color.CT.noise).frame(height: 1)
+
+                    // Footer hint
+                    Text("> \(NSLocalizedString("qr_scan_hint", comment: ""))")
+                        .font(CTFont.regular(11))
+                        .foregroundStyle(Color.CT.textDim)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 14)
                 }
             }
         }
-        // Catalyst preferred sheet window size
+        .background(Color.CT.bg.ignoresSafeArea())
         .frame(idealWidth: 400, idealHeight: 520)
         .onAppear {
             if let preview = previewPayload {
@@ -135,43 +92,111 @@ struct ContactQRCodeView: View {
                 generateInitialQRCode()
             }
         }
-        .onReceive(timer) { _ in
-            updateTimeRemaining()
+        .onReceive(timer) { _ in updateTimeRemaining() }
+    }
+
+    // MARK: - QR block
+
+    @ViewBuilder
+    private var qrBlock: some View {
+        let size = QRCodeSize.standard(in: containerWidth)
+
+        if let payload = qrPayload, let qrImage = generateQRCode(from: payload) {
+            // White bg required for camera readability; bordered with CT noise
+            Image(uiImage: qrImage)
+                .interpolation(.none)
+                .resizable()
+                .scaledToFit()
+                .frame(width: size, height: size)
+                .padding(QRCodeSize.padding)
+                .background(Color.white)
+                .overlay(Rectangle().strokeBorder(Color.CT.noise, lineWidth: 1))
+        } else if let error = generationError {
+            Rectangle()
+                .fill(Color.CT.bgMsg)
+                .frame(width: size, height: size)
+                .overlay(Rectangle().strokeBorder(Color.CT.noise, lineWidth: 1))
+                .overlay {
+                    VStack(spacing: 10) {
+                        Text("[!]")
+                            .font(CTFont.bold(20))
+                            .foregroundStyle(Color.CT.danger)
+                        Text(error)
+                            .font(CTFont.regular(11))
+                            .foregroundStyle(Color.CT.textDim)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 16)
+                    }
+                }
+        } else {
+            Rectangle()
+                .fill(Color.CT.bgMsg)
+                .frame(width: size, height: size)
+                .overlay(Rectangle().strokeBorder(Color.CT.noise, lineWidth: 1))
+                .overlay {
+                    Text(CTSymbol.loading)
+                        .font(CTFont.regular(16))
+                        .foregroundStyle(Color.CT.textDim)
+                }
+        }
+    }
+
+    // MARK: - Timer block
+
+    @ViewBuilder
+    private var timerBlock: some View {
+        if timeRemaining > 0 {
+            let isWarning = timeRemaining < InviteConfig.qrWarningThresholdSeconds
+            HStack(spacing: 6) {
+                Text(CTSymbol.ttl)
+                    .font(CTFont.regular(11))
+                    .foregroundStyle(isWarning ? Color.CT.danger : Color.CT.textDim)
+                Text(String(format: NSLocalizedString("expires_in", comment: ""), formatTime(timeRemaining)))
+                    .font(CTFont.regular(13))
+                    .foregroundStyle(isWarning ? Color.CT.danger : Color.CT.text)
+                    .monospacedDigit()
+            }
+        } else {
+            VStack(spacing: 14) {
+                Text("[ \(NSLocalizedString("code_expired", comment: "").lowercased()) ]")
+                    .font(CTFont.regular(14))
+                    .foregroundStyle(Color.CT.danger)
+
+                Button { regenerateQRCode() } label: {
+                    Text("[\(NSLocalizedString("generate_new_code", comment: "").lowercased())]")
+                        .font(CTFont.regular(13))
+                        .foregroundStyle(Color.CT.accent)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 10)
+                        .background(
+                            Rectangle()
+                                .fill(Color.CT.bgMsg)
+                                .overlay(Rectangle().strokeBorder(Color.CT.accent.opacity(0.4), lineWidth: 1))
+                        )
+                }
+                .buttonStyle(.plain)
+            }
         }
     }
 
     // MARK: - QR Code Generation
-    
+
     private func generateInitialQRCode() {
         Task { await generateInitialQRCodeAsync() }
     }
 
     @MainActor
     private func generateInitialQRCodeAsync() async {
-        Log.info("🔐 Starting QR code generation...", category: "ContactQRCodeView")
-        Log.info("   - userId: \(userId)", category: "ContactQRCodeView")
-        Log.info("   - username: \(username)", category: "ContactQRCodeView")
-        
-        // Check if device is registered
         if !KeychainManager.shared.isDeviceRegistered() {
             generationError = "Device not registered"
-            Log.error("❌ Cannot generate QR: Device not registered in Keychain", category: "ContactQRCodeView")
             return
         }
-        
         do {
-            // ✅ Use public invite host (.well-known lives here)
             let serverHostname = ServerConfig.inviteHost
-            Log.debug("🔐 Using server hostname for QR: \(serverHostname)", category: "ContactQRCodeView")
-            
-            // ✅ Get deviceId from Keychain
             guard let deviceId = KeychainManager.shared.loadDeviceID() else {
                 generationError = "Device ID not found"
-                Log.error("❌ Cannot generate QR: deviceId not found in Keychain", category: "ContactQRCodeView")
                 return
             }
-
-            // ✅ Generate deep link with both userId and deviceId
             let deepLink = try generator.generateDeepLink(
                 userId: userId,
                 deviceId: deviceId,
@@ -183,55 +208,39 @@ struct ContactQRCodeView: View {
             generatedAt = Date()
             timeRemaining = InviteConfig.ttlSeconds
             generationError = nil
-            Log.info("✅ Generated QR code for \(username): userId=\(userId.prefix(8))..., deviceId=\(deviceId)", category: "ContactQRCodeView")
         } catch {
             generationError = "Failed to generate code"
-            Log.error("❌ Failed to generate QR: \(error)", category: "ContactQRCodeView")
         }
     }
-    
+
     private func regenerateQRCode() {
         qrPayload = nil
         generationError = nil
         generatedAt = nil
         generateInitialQRCode()
     }
-    
+
     private func generateQRCode(from string: String) -> UIImage? {
         let context = CIContext()
         let filter = CIFilter.qrCodeGenerator()
-
         filter.message = Data(string.utf8)
         filter.correctionLevel = "M"
-
-        if let outputImage = filter.outputImage {
-            // Scale up the QR code
-            let transform = CGAffineTransform(scaleX: 10, y: 10)
-            let scaledImage = outputImage.transformed(by: transform)
-
-            if let cgImage = context.createCGImage(scaledImage, from: scaledImage.extent) {
-                return UIImage(cgImage: cgImage)
-            }
-        }
-
-        return nil
+        guard let outputImage = filter.outputImage else { return nil }
+        let scaled = outputImage.transformed(by: CGAffineTransform(scaleX: 10, y: 10))
+        guard let cgImage = context.createCGImage(scaled, from: scaled.extent) else { return nil }
+        return UIImage(cgImage: cgImage)
     }
-    
+
     private func formatTime(_ seconds: TimeInterval) -> String {
-        let minutes = Int(seconds) / 60
-        let secs = Int(seconds) % 60
-        return String(format: "%d:%02d", minutes, secs)
+        let m = Int(seconds) / 60
+        let s = Int(seconds) % 60
+        return String(format: "%d:%02d", m, s)
     }
 
     private func updateTimeRemaining() {
         guard let generatedAt else { return }
-        let elapsed = Date().timeIntervalSince(generatedAt)
-        let remaining = max(InviteConfig.ttlSeconds - elapsed, 0)
-        if remaining != timeRemaining {
-            timeRemaining = remaining
-            }
-}
-
+        timeRemaining = max(InviteConfig.ttlSeconds - Date().timeIntervalSince(generatedAt), 0)
+    }
 }
 
 #Preview {
@@ -240,4 +249,5 @@ struct ContactQRCodeView: View {
         username: "john_doe",
         previewPayload: "konstrukt://invite?userId=user123&username=john_doe&deviceId=device456&server=ams.konstruct.cc"
     )
+    .preferredColorScheme(.dark)
 }

@@ -12,6 +12,7 @@ import PhotosUI
 struct AccountSettingsView: View {
     @Environment(\.managedObjectContext) private var viewContext
     @Environment(AuthViewModel.self) private var authViewModel
+    @Environment(\.dismiss) private var dismiss
     @State private var viewModel = SettingsViewModel()
 
     @State private var showingImagePicker = false
@@ -21,27 +22,42 @@ struct AccountSettingsView: View {
     @State private var showingExportAlert = false
     @State private var imageToCrop: UIImage?
     @State private var showingCropView = false
+    @State private var isEditingDisplayName = false
+    @State private var isEditingUsername = false
 
     @State private var originalUsername: String = ""
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 20) {
-                avatarHeader
-                identitySection
-                privacySection
-                dangerSection
+        VStack(spacing: 0) {
+            CTNavBar(
+                title: NSLocalizedString("account", comment: ""),
+                showBack: true,
+                backAction: { dismiss() }
+            )
+            flatDivider(thick: true)
+
+            ScrollView {
+                VStack(spacing: 0) {
+                    avatarHeader
+                    flatDivider(thick: true)
+                    identitySection
+                    flatDivider(thick: true)
+                    accountSection
+                    flatDivider(thick: true)
+                    dangerSection
+                    flatDivider(thick: true)
+
+                    Text(NSLocalizedString("changes_encrypted_footer", comment: ""))
+                        .font(CTFont.regular(11))
+                        .foregroundStyle(Color.CT.accent.opacity(0.6))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 12)
+                }
             }
-            .padding(.vertical, 20)
         }
-        .background(Color.Construct.bg.ignoresSafeArea())
-        .navigationTitle(LocalizedStringKey("account"))
-        #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(Color.Construct.bg2, for: .navigationBar)
-        .toolbarBackground(.visible, for: .navigationBar)
-        .toolbarColorScheme(.dark, for: .navigationBar)
-        #endif
+        .background(Color.CT.bg.ignoresSafeArea())
+        .toolbar(.hidden, for: .navigationBar)
         .onAppear {
             viewModel.setContext(viewContext)
             viewModel.loadUserInfo(from: authViewModel)
@@ -94,147 +110,261 @@ struct AccountSettingsView: View {
     // MARK: - Avatar Header
 
     private var avatarHeader: some View {
-        VStack(spacing: 12) {
-            ZStack(alignment: .bottomTrailing) {
-                Group {
-                    if let image = viewModel.profileImage {
-                        Image(uiImage: image)
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: AvatarStyle.accountSize, height: AvatarStyle.accountSize)
-                            .clipShape(AvatarStyle.avatarShape(AvatarStyle.accountSize))
-                    } else {
-                        AvatarStyle.avatarShape(AvatarStyle.accountSize)
-                            .fill(Color.Construct.accent.opacity(0.15))
-                            .frame(width: AvatarStyle.accountSize, height: AvatarStyle.accountSize)
-                            .overlay {
-                                Text(viewModel.displayName.prefix(1).uppercased())
-                                    .font(.system(size: 40, weight: .semibold))
-                                    .foregroundColor(Color.Construct.accent)
-                            }
-                    }
-                }
-                .onTapGesture {
-                    if viewModel.profileImage != nil { showingAvatarViewer = true }
-                    else { showingImagePicker = true }
-                }
+        VStack(spacing: 14) {
+            HexagonAvatarView(
+                userId: viewModel.userId,
+                displayName: viewModel.displayName,
+                image: viewModel.profileImage,
+                size: AvatarStyle.accountSize,
+                isActive: false
+            )
+            .onTapGesture {
+                if viewModel.profileImage != nil { showingAvatarViewer = true }
+                else { showingImagePicker = true }
             }
 
-            if !viewModel.displayName.isEmpty {
-                Text(viewModel.displayName)
-                    .font(ConstructFont.display(20, weight: .semibold))
-                    .foregroundStyle(Color.Construct.textBright)
+            Button {
+                showingImagePicker = true
+            } label: {
+                Text("[\(NSLocalizedString("change_photo", comment: ""))]")
+                    .font(CTFont.regular(13))
+                    .foregroundStyle(Color.CT.accent)
             }
-
-            Text(viewModel.username.isEmpty
-                 ? DisplayNameGenerator.generate(from: viewModel.userId)
-                 : "@\(viewModel.username)")
-                .font(ConstructFont.mono(13))
-                .foregroundStyle(Color.Construct.textDim)
+            .buttonStyle(.plain)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 28)
-        .background(Color.Construct.bg2)
-        .overlay(
-            Rectangle()
-                .fill(Color.Construct.line)
-                .frame(height: 1),
-            alignment: .bottom
-        )
     }
 
     // MARK: - Identity Section
 
     private var identitySection: some View {
-        ConstructSection(header: NSLocalizedString("account_information", comment: "")) {
-            fieldRow(label: LocalizedStringKey("display_name")) {
-                TextField(LocalizedStringKey("display_name"), text: $viewModel.displayName)
-                    .font(ConstructFont.display(16))
-                    .foregroundStyle(Color.Construct.textBright)
-                    .onChange(of: viewModel.displayName) { _, newValue in
-                        viewModel.saveDisplayName(newValue, authViewModel: authViewModel)
-                    }
-            }
+        VStack(alignment: .leading, spacing: 0) {
+            sectionHeader(NSLocalizedString("identity_section", comment: ""))
+            flatRowDivider()
 
-            ConstructRowDivider(indent: 16)
-
-            fieldRow(label: LocalizedStringKey("username")) {
-                HStack {
-                    TextField(LocalizedStringKey("username"), text: $viewModel.username)
-                        .font(ConstructFont.mono(15))
-                        .foregroundStyle(Color.Construct.textBright)
-                        .autocorrectionDisabled()
-                        .textInputAutocapitalization(.never)
-                        .onSubmit {
-                            Task { await viewModel.saveUsername(viewModel.username, authViewModel: authViewModel) }
-                        }
-                    if viewModel.isSavingUsername {
-                        ProgressView().scaleEffect(0.8)
-                    } else if viewModel.username != originalUsername {
-                        Button(LocalizedStringKey("save")) {
-                            Task { await viewModel.saveUsername(viewModel.username, authViewModel: authViewModel) }
-                        }
-                        .font(ConstructFont.mono(13))
-                        .foregroundStyle(Color.Construct.accent)
-                    } else if viewModel.usernameSaved {
-                        Text(LocalizedStringKey("saved"))
-                            .font(ConstructFont.mono(12))
-                            .foregroundStyle(Color.Construct.textDim)
-                            .transition(.opacity)
-                    }
+            // username — editable, server-validated
+            profileEditRow(
+                label: NSLocalizedString("username", comment: ""),
+                isEditing: $isEditingUsername,
+                value: $viewModel.username,
+                hint: NSLocalizedString("username_hint", comment: ""),
+                isSaving: viewModel.isSavingUsername,
+                errorMessage: viewModel.usernameSaveError,
+                onCommit: {
+                    Task { await viewModel.saveUsername(viewModel.username, authViewModel: authViewModel) }
                 }
-            }
+            )
+            flatRowDivider()
 
-            if let error = viewModel.usernameSaveError {
-                Text(error)
-                    .font(ConstructFont.mono(11))
-                    .foregroundStyle(Color.red)
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 8)
+            // display name — local, shown to contacts
+            profileEditRow(
+                label: NSLocalizedString("display_name", comment: ""),
+                isEditing: $isEditingDisplayName,
+                value: $viewModel.displayName,
+                hint: NSLocalizedString("display_name_hint", comment: ""),
+                onCommit: { viewModel.saveDisplayName(viewModel.displayName, authViewModel: authViewModel) }
+            )
+            flatRowDivider()
+
+            // status — placeholder, not yet implemented
+            profileRow(label: NSLocalizedString("status", comment: "")) {
+                HStack(spacing: 8) {
+                    Text("[[ONLINE]]")
+                        .font(CTFont.regular(14))
+                        .foregroundStyle(Color.CT.accent)
+                    Text("[→]")
+                        .font(CTFont.regular(13))
+                        .foregroundStyle(Color.CT.accent.opacity(0.6))
+                }
             }
         }
     }
 
-    // MARK: - Data & Privacy
+    // MARK: - Account Section
 
-    private var privacySection: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            ConstructSection(header: NSLocalizedString("data_and_privacy", comment: "")) {
-                ConstructButtonRow(icon: "square.and.arrow.up", title: LocalizedStringKey("export_my_data")) {
-                    showingExportAlert = true
-                }
+    private var accountSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            sectionHeader(NSLocalizedString("account_section", comment: ""))
+            flatRowDivider()
+
+            // user ID
+            profileRow(label: NSLocalizedString("user_id", comment: "")) {
+                let uid = viewModel.userId
+                let short = uid.count > 12
+                    ? "\(uid.prefix(8))...\(uid.suffix(2))"
+                    : uid
+                Text(short)
+                    .font(CTFont.regular(14))
+                    .foregroundStyle(Color.CT.textDim)
             }
-            Text(LocalizedStringKey("export_my_data_footer"))
-                .font(ConstructFont.mono(11))
-                .foregroundStyle(Color.Construct.textDim)
+            flatRowDivider()
+
+            // linked devices
+            NavigationLink(destination: DevicesView()) {
+                HStack {
+                    Text(NSLocalizedString("linked_devices", comment: "").lowercased())
+                        .font(CTFont.regular(14))
+                        .foregroundStyle(Color.CT.textDim)
+                    Spacer()
+                    Text("[\(NSLocalizedString("manage_action", comment: "")) [→]]")
+                        .font(CTFont.regular(13))
+                        .foregroundStyle(Color.CT.accent)
+                }
                 .padding(.horizontal, 20)
+                .padding(.vertical, 14)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
         }
     }
 
     // MARK: - Danger Zone
 
     private var dangerSection: some View {
-        ConstructSection(header: NSLocalizedString("danger_zone", comment: "")) {
-            ConstructActionRow(icon: "trash", title: LocalizedStringKey("delete_my_account"), role: .destructive) {
+        VStack(alignment: .leading, spacing: 0) {
+            sectionHeader(NSLocalizedString("danger_zone", comment: ""), color: Color.CT.danger)
+            flatRowDivider()
+
+            Button {
                 showingDeleteConfirmation = true
+            } label: {
+                HStack {
+                    Text(NSLocalizedString("delete_account_row", comment: "").lowercased())
+                        .font(CTFont.regular(14))
+                        .foregroundStyle(Color.CT.danger)
+                    Spacer()
+                    Text("[\(NSLocalizedString("delete_action", comment: "")) →]")
+                        .font(CTFont.regular(13))
+                        .foregroundStyle(Color.CT.danger.opacity(0.7))
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 14)
+                .contentShape(Rectangle())
             }
-            .padding(3)
+            .buttonStyle(.plain)
         }
-        .padding(.bottom, 32)
     }
 
     // MARK: - Layout Helpers
 
-    private func fieldRow<Content: View>(label: LocalizedStringKey, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(label)
-                .font(ConstructFont.mono(10, weight: .semibold))
-                .foregroundStyle(Color.Construct.textDim)
-                .tracking(0.8)
-            content()
+    private func flatDivider(thick: Bool = false) -> some View {
+        Rectangle()
+            .fill(thick ? Color.CT.noise : Color.CT.noise.opacity(0.5))
+            .frame(height: 1)
+    }
+
+    private func flatRowDivider() -> some View {
+        Rectangle()
+            .fill(Color.CT.noise.opacity(0.35))
+            .frame(height: 1)
+            .padding(.horizontal, 20)
+    }
+
+    private func sectionHeader(_ title: String, color: Color = Color.CT.accent) -> some View {
+        HStack(spacing: 6) {
+            Text(">")
+                .font(CTFont.bold(12))
+                .foregroundStyle(color)
+            Text(title.uppercased())
+                .font(CTFont.bold(12))
+                .foregroundStyle(color)
+                .tracking(2)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 10)
+    }
+
+    private func profileRow<V: View>(label: String, @ViewBuilder value: () -> V) -> some View {
+        HStack {
+            Text(label.lowercased())
+                .font(CTFont.regular(14))
+                .foregroundStyle(Color.CT.textDim)
+            Spacer()
+            value()
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 14)
+    }
+
+    private func profileEditRow(
+        label: String,
+        isEditing: Binding<Bool>,
+        value: Binding<String>,
+        hint: String? = nil,
+        isSaving: Bool = false,
+        errorMessage: String? = nil,
+        onCommit: @escaping () -> Void
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Main row — entire row is a tap target
+            Button {
+                if !isEditing.wrappedValue { isEditing.wrappedValue = true }
+            } label: {
+                HStack {
+                    Text(label.lowercased())
+                        .font(CTFont.regular(14))
+                        .foregroundStyle(Color.CT.textDim)
+                    Spacer()
+                    if isEditing.wrappedValue {
+                        TextField("", text: value)
+                            .font(CTFont.regular(14))
+                            .foregroundStyle(Color.CT.text)
+                            .multilineTextAlignment(.trailing)
+                            .autocorrectionDisabled()
+                            .textInputAutocapitalization(.never)
+                            .onSubmit {
+                                onCommit()
+                                isEditing.wrappedValue = false
+                            }
+                            .frame(maxWidth: 180)
+                        Button {
+                            onCommit()
+                            isEditing.wrappedValue = false
+                        } label: {
+                            if isSaving {
+                                ProgressView()
+                                    .tint(Color.CT.accent)
+                                    .scaleEffect(0.8)
+                            } else {
+                                Text("[→]")
+                                    .font(CTFont.bold(13))
+                                    .foregroundStyle(Color.CT.accent)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    } else {
+                        HStack(spacing: 8) {
+                            Text(value.wrappedValue.isEmpty ? "—" : value.wrappedValue)
+                                .font(CTFont.regular(14))
+                                .foregroundStyle(Color.CT.text)
+                            Text("[edit]")
+                                .font(CTFont.regular(12))
+                                .foregroundStyle(Color.CT.accent.opacity(0.7))
+                        }
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 14)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            // Error or hint line
+            if let err = errorMessage, !err.isEmpty {
+                Text("> [!] \(err)")
+                    .font(CTFont.regular(11))
+                    .foregroundStyle(Color.CT.danger)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 8)
+            } else if !isEditing.wrappedValue, let hint {
+                Text("> \(hint)")
+                    .font(CTFont.regular(11))
+                    .foregroundStyle(Color.CT.textDim)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 8)
+            }
+        }
     }
 }
 
@@ -254,40 +384,29 @@ struct DeleteAccountConfirmationView: View {
         VStack(spacing: 0) {
             // Drag indicator
             Capsule()
-                .fill(Color.secondary.opacity(0.4))
+                .fill(Color.CT.noise)
                 .frame(width: 36, height: 4)
                 .padding(.top, 12)
                 .padding(.bottom, 24)
 
             Spacer()
 
-            Text("delete_my_account")
-                .font(.title2).fontWeight(.semibold)
+            Text(LocalizedStringKey("delete_my_account"))
+                .font(CTFont.bold(20))
+                .foregroundStyle(Color.CT.text)
                 .padding(.bottom, 8)
 
-            Text("delete_account_confirmation_message")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
+            Text(LocalizedStringKey("delete_account_confirmation_message"))
+                .font(CTFont.regular(14))
+                .foregroundStyle(Color.CT.textDim)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 32)
                 .padding(.bottom, 32)
 
-            // Countdown ring
+            // Retro digital countdown
             if countdown > 0 && !authViewModel.isLoading {
-                ZStack {
-                    Circle()
-                        .stroke(Color.red.opacity(0.15), lineWidth: 4)
-                    Circle()
-                        .trim(from: 0, to: CGFloat(7 - countdown) / 7.0)
-                        .stroke(Color.red.opacity(0.7), style: StrokeStyle(lineWidth: 4, lineCap: .round))
-                        .rotationEffect(.degrees(-90))
-                        .animation(.linear(duration: 1), value: countdown)
-                    Text("\(countdown)")
-                        .font(.system(size: 22, weight: .semibold, design: .monospaced))
-                        .foregroundColor(.red.opacity(0.8))
-                }
-                .frame(width: 64, height: 64)
-                .padding(.bottom, 28)
+                CTDigitalCountdown(value: countdown)
+                    .padding(.bottom, 28)
             }
 
             // Local-delete fallback — shown after a server-side deletion failure
@@ -295,10 +414,10 @@ struct DeleteAccountConfirmationView: View {
                 Button {
                     showLocalDeleteConfirm = true
                 } label: {
-                    Text("delete_account_local_only")
-                        .font(.footnote)
+                    Text(LocalizedStringKey("delete_account_local_only"))
+                        .font(CTFont.regular(12))
                         .underline()
-                        .foregroundColor(.red.opacity(0.75))
+                        .foregroundStyle(Color.CT.danger.opacity(0.75))
                 }
                 .padding(.bottom, 16)
             }
@@ -309,34 +428,45 @@ struct DeleteAccountConfirmationView: View {
             VStack(spacing: 12) {
                 if authViewModel.isLoading {
                     ProgressView()
+                        .tint(Color.CT.danger)
                         .frame(maxWidth: .infinity)
                         .frame(height: 50)
                 } else {
-                    Button(role: .destructive) {
+                    Button {
                         onDelete()
                     } label: {
-                        Text("delete_account")
-                            .font(.headline)
+                        Text(LocalizedStringKey("delete_account"))
+                            .font(CTFont.bold(16))
                             .frame(maxWidth: .infinity)
                             .frame(height: 50)
-                            .background(countdown > 0 ? Color.red.opacity(0.3) : Color.red)
-                            .foregroundColor(.white)
-                            .cornerRadius(14)
+                            .background(
+                                Rectangle()
+                                    .fill(countdown > 0 ? Color.CT.danger.opacity(0.08) : Color.CT.danger.opacity(0.15))
+                                    .overlay(
+                                        Rectangle()
+                                            .strokeBorder(countdown > 0 ? Color.CT.danger.opacity(0.2) : Color.CT.danger.opacity(0.5), lineWidth: 1)
+                                    )
+                            )
+                            .foregroundStyle(countdown > 0 ? Color.CT.danger.opacity(0.4) : Color.CT.danger)
                     }
                     .disabled(countdown > 0)
                     .animation(.easeInOut(duration: 0.25), value: countdown)
                 }
 
-                Button("cancel") {
+                Button {
                     onCancel()
                     dismiss()
+                } label: {
+                    Text(LocalizedStringKey("cancel"))
+                        .font(CTFont.regular(15))
+                        .foregroundStyle(Color.CT.textDim)
                 }
-                .foregroundColor(.secondary)
                 .disabled(authViewModel.isLoading)
             }
             .padding(.horizontal, 24)
             .padding(.bottom, 36)
         }
+        .background(Color.CT.bg)
         .presentationDetents([.medium])
         .presentationDragIndicator(.hidden)
         .alert("delete_account_local_only_title", isPresented: $showLocalDeleteConfirm) {
@@ -428,5 +558,6 @@ struct AvatarViewerSheet: View {
             .environment(\.managedObjectContext, context)
             .environment(authViewModel)
     }
+    .preferredColorScheme(.dark)
 }
 #endif

@@ -23,12 +23,15 @@ struct MessagePhotoPreviewBar: View {
                             .resizable()
                             .scaledToFill()
                             .frame(width: 80, height: 80)
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                            .clipShape(Rectangle())
 
                         Button { onRemove(index) } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundColor(.white)
-                                .background(Circle().fill(Color.black.opacity(0.5)))
+                            Text("[x]")
+                                .font(CTFont.bold(11))
+                                .foregroundColor(Color.CT.text)
+                                .padding(4)
+                                .background(Color.black.opacity(0.6))
+                                .lineLimit(1).fixedSize()
                         }
                         .offset(x: 4, y: -4)
                     }
@@ -37,11 +40,7 @@ struct MessagePhotoPreviewBar: View {
             .padding(.horizontal)
             .padding(.vertical, 8)
         }
-        #if canImport(UIKit)
-        .background(Color(uiColor: .systemGray6))
-        #else
-        .background(Color(nsColor: .windowBackgroundColor))
-        #endif
+        .background(Color.CT.bgMsg)
         .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 }
@@ -57,58 +56,56 @@ struct MessageFilePreviewBar: View {
             HStack(spacing: 8) {
                 ForEach(Array(fileURLs.enumerated()), id: \.offset) { index, url in
                     HStack(spacing: 6) {
-                        Image(systemName: fileIcon(for: url.pathExtension))
-                            .foregroundColor(.accentColor)
-                            .font(.system(size: 18))
+                        Text(asciiFileIcon(for: url.pathExtension))
+                            .font(CTFont.regular(16))
+                            .foregroundColor(Color.CT.accent)
+                            .lineLimit(1).fixedSize()
 
                         VStack(alignment: .leading, spacing: 1) {
                             Text(url.lastPathComponent)
-                                .font(.caption.weight(.medium))
+                                .font(CTFont.regular(11))
+                                .foregroundColor(Color.CT.text)
                                 .lineLimit(1)
                             if let size = fileSize(url) {
                                 Text(size)
-                                    .font(.caption2)
-                                    .foregroundColor(.secondary)
+                                    .font(CTFont.regular(10))
+                                    .foregroundColor(Color.CT.textDim)
                             }
                         }
 
                         Button { onRemove(index) } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundColor(.secondary)
-                                .font(.caption)
+                            Text("[x]")
+                                .font(CTFont.regular(11))
+                                .foregroundColor(Color.CT.textDim)
+                                .lineLimit(1).fixedSize()
                         }
                     }
                     .padding(.horizontal, 8)
                     .padding(.vertical, 6)
-                    #if canImport(UIKit)
-                    .background(Color(uiColor: .systemGray5), in: RoundedRectangle(cornerRadius: 8))
-                    #else
-                    .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
-                    #endif
+                    .background(Color.CT.bgMsg)
+                    .overlay(Rectangle().stroke(Color.CT.noise, lineWidth: 1))
                 }
             }
             .padding(.horizontal)
             .padding(.vertical, 8)
         }
-        #if canImport(UIKit)
-        .background(Color(uiColor: .systemGray6))
-        #else
-        .background(Color(nsColor: .windowBackgroundColor))
-        #endif
+        .background(Color.CT.bgMsg)
         .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 
-    private func fileIcon(for ext: String) -> String {
+    private func asciiFileIcon(for ext: String) -> String {
         switch ext.lowercased() {
-        case "pdf":               return "doc.richtext"
-        case "md", "markdown":    return "doc.text"
-        case "txt":               return "doc.text"
-        case "zip", "gz", "tar":  return "archivebox"
-        case "mp3", "aac", "m4a", "wav": return "music.note"
-        case "mp4", "mov", "avi": return "video"
-        default:                  return "doc"
+        case "pdf":               return "[pdf]"
+        case "md", "markdown", "txt": return "[txt]"
+        case "zip", "gz", "tar":  return "[zip]"
+        case "mp3", "aac", "m4a", "wav": return "[♪]"
+        case "mp4", "mov", "avi": return "[vid]"
+        default:                  return "[doc]"
         }
     }
+
+    @available(*, unavailable)
+    private func fileIcon(for ext: String) -> String { "" }
 
     private func fileSize(_ url: URL) -> String? {
         guard let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
