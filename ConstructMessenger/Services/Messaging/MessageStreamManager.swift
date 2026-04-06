@@ -455,7 +455,14 @@ final class MessageStreamManager {
         let port = GRPCChannelManager.shared.currentPort
         Log.info("📡 openStream → \(host):\(port) subscriptions=[\(subscriptionUserIds.joined(separator: ", "))]", category: "MessageStream")
 
-        let grpcClient = try GRPCChannelManager.shared.makeClient()
+        // Reuse the shared persistent channel — do NOT call makeClient() here.
+        // makeClient() opens a new TLS/HTTP-2 connection on every call; using the shared channel
+        // means the stream reuses the same HTTP-2 connection across reconnects, which is what
+        // the server expects (channel = singleton, stream can close/reopen freely).
+        // When routing changes (ICE failover), GRPCChannelManager.invalidatePersistentClient()
+        // is called externally, acquireChannel() creates a new channel, and the stream
+        // reconnects naturally via the retry loop — exactly one new handshake per routing change.
+        let grpcClient = try GRPCChannelManager.shared.acquireChannel()
         let msgClient = Shared_Proto_Services_V1_MessagingService.Client(wrapping: grpcClient)
 
         // Create outbound stream
@@ -523,21 +530,20 @@ final class MessageStreamManager {
             }
         )
 
-        // Run client connections in background
-        let connectTask = Task { try await grpcClient.runConnections() }
+        // NOTE: No local runConnections() task — the shared channel's runConnections() loop is
+        // already running in GRPCChannelManager. Cancelling the outer streamTask propagates
+        // cancellation into runMessageStream() (via its await point), which closes the stream RPC.
+        // The shared channel itself stays alive so the next openStream() reuses it without a
+        // TLS handshake.
 
         defer {
             hbTask.cancel()
             watchdogTask.cancel()
-            // Finish the outbound stream and request graceful shutdown BEFORE cancelling the
-            // connect task. connectTask.cancel() force-closes the NIO transport immediately;
-            // if the producer closure is mid-write at that moment, GRPCStreamStateMachine
-            // fires a preconditionFailure ("Client is closed, cannot send a message").
-            // Calling beginGracefulShutdown() first lets the HTTP/2 layer drain cleanly.
-            // connectTask.cancel() is kept as a backstop after shutdown is already signaled.
+            // Close the outbound AsyncStream so the producer closure exits cleanly.
+            // Do NOT call grpcClient.beginGracefulShutdown() — the shared channel must stay alive
+            // for subsequent streams and unary RPCs. Task cancellation (via streamTask.cancel())
+            // propagates into runMessageStream() and closes the streaming RPC naturally.
             continuation.finish()
-            grpcClient.beginGracefulShutdown()
-            connectTask.cancel()
             // Only tear down shared state if this is still the active stream.
             if self.activeStreamGeneration == generation {
                 self.isConnected = false
