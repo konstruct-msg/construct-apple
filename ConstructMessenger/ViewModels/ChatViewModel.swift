@@ -612,8 +612,17 @@ class ChatViewModel: NSObject {
             message,
             recipientId: recipientId,
             context: viewContext,
-            onError: { error in
-                ErrorRouter.shared.report(.unknown(error))
+            onError: { [weak self] error in
+                guard let self else { return }
+                if error == "payload_expired", let text = message.decryptedContent, !text.isEmpty {
+                    // The wire payload expired (>24h) or predates OutgoingWirePayloadStore.
+                    // Re-encrypting the same message ID would break Double Ratchet.
+                    // Send as a new message with a fresh ID and fresh encryption instead.
+                    Log.info("🔁 Retry: payload expired — sending '\(text.prefix(20))…' as fresh message", category: "ChatViewModel")
+                    self.sendTextMessage(text: text, replyTo: nil)
+                } else {
+                    ErrorRouter.shared.report(.unknown(error))
+                }
             }
         )
     }
@@ -861,8 +870,9 @@ class ChatViewModel: NSObject {
                         ? sessionInitService.consumeKemCiphertext(for: recipientId) : nil
                     let kyberOtpkId = firstComponents.messageNumber == 0
                         ? sessionInitService.consumeKyberOtpkId(for: recipientId) : 0
-                    let responses = try await ChunkedMessageSender.shared.sendChunks(
+                    let aggregated = try await OutboundMessagePipeline.shared.sendChunks(
                         plan: plan,
+                        baseMessageId: messageId,
                         senderId: currentUserId,
                         recipientId: recipientId,
                         conversationId: ConversationId.direct(myUserId: currentUserId, theirUserId: recipientId),
@@ -870,16 +880,8 @@ class ChatViewModel: NSObject {
                         preEncryptedFirst: firstComponents,
                         kemCiphertext: kemCiphertext,
                         kyberOtpkId: kyberOtpkId,
-                        replyToMessageId: replyTo?.id,
-                        onWirePayloadEncoded: { chunkId, wire in
-                            OutgoingWirePayloadStore.shared.saveChunk(
-                                baseMessageId: messageId,
-                                chunkMessageId: chunkId,
-                                wirePayload: wire
-                            )
-                        }
+                        replyToMessageId: replyTo?.id
                     )
-                    let response = responses.first ?? SendMessageResponse(messageId: messageId, status: "sent")
 
                     TrafficProtectionService.shared.recordRealMessageSent()
 
@@ -904,7 +906,7 @@ class ChatViewModel: NSObject {
 
                     await MainActor.run {
                         let deliveryStatus: DeliveryStatus
-                        switch response.status.lowercased() {
+                        switch aggregated.status.lowercased() {
                         case "delivered": deliveryStatus = .delivered
                         case "queued":    deliveryStatus = .queued
                         case "sent", "success": deliveryStatus = .sent
@@ -913,7 +915,7 @@ class ChatViewModel: NSObject {
                             self.blockedByRecipient = true
                             Log.error("🚫 Message blocked by recipient — suppressing retry for \(messageId)", category: "ChatViewModel")
                         case "failed":
-                            if response.retryable {
+                            if aggregated.retryable {
                                 deliveryStatus = .queued
                                 Log.error("❌ Server rejected message \(messageId): status=failed retryable=true — queued for retry", category: "ChatViewModel")
                             } else {
@@ -923,14 +925,14 @@ class ChatViewModel: NSObject {
                             }
                         default:
                             deliveryStatus = .sent
-                            Log.info("⚠️ Unknown server status: \(response.status), using .sent", category: "ChatViewModel")
+                            Log.info("⚠️ Unknown server status: \(aggregated.status), using .sent", category: "ChatViewModel")
                         }
                         Log.info("🔄 Updating message status from sending → \(deliveryStatus) for \(messageId)", category: "ChatViewModel")
                         self.updateMessageStatus(messageId: messageId, status: deliveryStatus)
                         if deliveryStatus == .sent || deliveryStatus == .delivered {
                             OutgoingWirePayloadStore.shared.remove(baseMessageId: messageId)
                         }
-                        Log.info("✅ Message sent via gRPC: \(response.messageId), server status: \(response.status)", category: "ChatViewModel")
+                        Log.info("✅ Message sent via gRPC: \(messageId), server status: \(aggregated.status)", category: "ChatViewModel")
                         self.isSending = false
                     }
                 } catch {

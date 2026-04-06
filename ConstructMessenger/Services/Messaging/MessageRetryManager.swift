@@ -54,8 +54,9 @@ class MessageRetryManager {
         if let chunks = OutgoingWirePayloadStore.shared.loadChunks(baseMessageId: capturedMessageId) {
             Task {
                 do {
+                    var finalStatus: DeliveryStatus = .sent
                     for (chunkId, wirePayload) in chunks {
-                        _ = try await MessagingServiceClient.shared.sendMessage(
+                        let response = try await MessagingServiceClient.shared.sendMessage(
                             messageId: chunkId,
                             recipientId: recipientId,
                             senderId: capturedSenderId,
@@ -64,16 +65,27 @@ class MessageRetryManager {
                             timestamp: capturedTimestamp,
                             replyToMessageId: chunkId == capturedMessageId ? capturedReplyToId : nil
                         )
+                        switch response.status.lowercased() {
+                        case "failed":
+                            finalStatus = response.retryable ? .queued : .failed
+                        case "queued":
+                            if finalStatus != .failed { finalStatus = .queued }
+                        default:
+                            break
+                        }
+                        if finalStatus == .failed { break }
                     }
                     await MainActor.run {
                         let fetchRequest = Message.fetchRequest()
                         fetchRequest.predicate = NSPredicate(format: "id == %@", capturedMessageId)
                         fetchRequest.fetchLimit = 1
                         guard let liveMsg = try? context.fetch(fetchRequest).first else { return }
-                        liveMsg.deliveryStatus = .sent
+                        liveMsg.deliveryStatus = finalStatus
                         context.saveAndLog()
-                        OutgoingWirePayloadStore.shared.remove(baseMessageId: capturedMessageId)
-                        Log.info("✅ Message retry successful: \(capturedMessageId), status: sent", category: "MessageRetryManager")
+                        if finalStatus == .sent || finalStatus == .delivered {
+                            OutgoingWirePayloadStore.shared.remove(baseMessageId: capturedMessageId)
+                        }
+                        Log.info("✅ Message retry completed: \(capturedMessageId), status: \(finalStatus)", category: "MessageRetryManager")
                     }
                 } catch {
                     await MainActor.run {
@@ -91,59 +103,15 @@ class MessageRetryManager {
             return
         }
 
-        // Fallback (legacy): re-encrypt and resend using the same message ID.
-        do {
-            let components = try CryptoManager.shared.encryptMessage(decryptedText, for: recipientId)
-            let encryptedPayload = try WirePayloadCoder.encode(components)
-
-            Task {
-                do {
-                    let response = try await MessagingServiceClient.shared.sendMessage(
-                        messageId: capturedMessageId,
-                        recipientId: recipientId,
-                        senderId: capturedSenderId,
-                        conversationId: ConversationId.direct(myUserId: capturedSenderId, theirUserId: recipientId),
-                        encryptedPayload: encryptedPayload,
-                        timestamp: capturedTimestamp,
-                        replyToMessageId: capturedReplyToId
-                    )
-
-                    await MainActor.run {
-                        let deliveryStatus: DeliveryStatus
-                        switch response.status.lowercased() {
-                        case "delivered": deliveryStatus = .delivered
-                        case "queued": deliveryStatus = .queued
-                        case "failed":
-                            deliveryStatus = response.retryable ? .queued : .failed
-                        default: deliveryStatus = .sent
-                        }
-                        let fetchRequest = Message.fetchRequest()
-                        fetchRequest.predicate = NSPredicate(format: "id == %@", capturedMessageId)
-                        fetchRequest.fetchLimit = 1
-                        guard let liveMsg = try? context.fetch(fetchRequest).first else { return }
-                        liveMsg.deliveryStatus = deliveryStatus
-                        context.saveAndLog()
-                        Log.info("✅ Message retry completed (legacy): \(response.messageId), status: \(deliveryStatus)", category: "MessageRetryManager")
-                    }
-                } catch {
-                    await MainActor.run {
-                        let fetchRequest = Message.fetchRequest()
-                        fetchRequest.predicate = NSPredicate(format: "id == %@", capturedMessageId)
-                        fetchRequest.fetchLimit = 1
-                        guard let liveMsg = try? context.fetch(fetchRequest).first else { return }
-                        liveMsg.deliveryStatus = .failed
-                        context.saveAndLog()
-                        Log.error("❌ Message retry failed (legacy): \(error.localizedDescription)", category: "MessageRetryManager")
-                        onError("Failed to send message: \(error.localizedDescription)")
-                    }
-                }
-            }
-        } catch {
-            message.deliveryStatus = .failed
-            context.saveAndLog()
-            onError("Failed to encrypt message: \(error.localizedDescription)")
-            Log.error("❌ Retry encryption failed (legacy): \(error.localizedDescription)", category: "MessageRetryManager")
-        }
+        // Wire payload not found — either it predates OutgoingWirePayloadStore or its
+        // 24h TTL has expired. Re-encrypting with the same message ID would advance the
+        // Double Ratchet on our side without the peer receiving the previous ciphertext,
+        // causing permanent ratchet desync. Mark as failed and signal the caller to
+        // send fresh content under a new message ID instead.
+        Log.error("❌ Retry: wire payload not found for \(capturedMessageId.prefix(8))… — payload expired, cannot re-send safely", category: "MessageRetryManager")
+        message.deliveryStatus = .failed
+        context.saveAndLog()
+        onError("payload_expired")
     }
     
     // MARK: - Queued Messages Processing
@@ -203,9 +171,10 @@ class MessageRetryManager {
         Task {
             for messageId in pendingIds {
                 do {
+                    var finalStatus: DeliveryStatus = .sent
                     if let chunks = OutgoingWirePayloadStore.shared.loadChunks(baseMessageId: messageId) {
                         for (chunkId, wirePayload) in chunks {
-                            _ = try await MessagingServiceClient.shared.sendMessage(
+                            let response = try await MessagingServiceClient.shared.sendMessage(
                                 messageId: chunkId,
                                 recipientId: recipientId,
                                 senderId: currentUserId,
@@ -221,37 +190,39 @@ class MessageRetryManager {
                                     }
                                     : nil
                             )
+                            switch response.status.lowercased() {
+                            case "failed":
+                                finalStatus = response.retryable ? .queued : .failed
+                            case "queued":
+                                if finalStatus != .failed { finalStatus = .queued }
+                            default:
+                                break
+                            }
+                            if finalStatus == .failed { break }
                         }
                     } else {
-                        // Legacy fallback: re-encrypt
-                        let decryptedText = await MainActor.run {
-                            let fr = Message.fetchRequest()
-                            fr.predicate = NSPredicate(format: "id == %@", messageId)
-                            fr.fetchLimit = 1
-                            return (try? context.fetch(fr).first)?.decryptedContent
-                        }
-                        guard let decryptedText, !decryptedText.isEmpty else { continue }
-                        let plan = ChunkedMessageSender.shared.buildPlan(
-                            plaintext: decryptedText,
-                            messageId: UUID(uuidString: messageId) ?? UUID()
-                        )
-                        _ = try await ChunkedMessageSender.shared.sendChunks(
-                            plan: plan,
-                            senderId: currentUserId,
-                            recipientId: recipientId,
-                            conversationId: ConversationId.direct(myUserId: currentUserId, theirUserId: recipientId),
-                            timestamp: UInt64(Date().timeIntervalSince1970)
-                        )
+                        // Wire payload not found — message predates OutgoingWirePayloadStore
+                        // or its 24h TTL expired. Cannot re-encrypt: doing so would advance
+                        // the Double Ratchet without the peer receiving the previous
+                        // ciphertext, causing permanent desync. Mark failed; the user can
+                        // manually resend via the retry button, which sends fresh content
+                        // under a new message ID.
+                        Log.error("⚠️ sendQueuedMessages: no wire payload for \(messageId.prefix(8))… — skipping (payload expired)", category: "MessageRetryManager")
+                        finalStatus = .failed
                     }
                     await MainActor.run {
                         let fr = Message.fetchRequest()
                         fr.predicate = NSPredicate(format: "id == %@", messageId)
                         fr.fetchLimit = 1
                         guard let liveMsg = try? context.fetch(fr).first else { return }
-                        liveMsg.deliveryStatus = .sent
+                        liveMsg.deliveryStatus = finalStatus
                         context.saveAndLog()
-                        OutgoingWirePayloadStore.shared.remove(baseMessageId: messageId)
-                        Log.debug("📮 Re-sent queued message via gRPC: \(messageId) (attempt \(liveMsg.retryCount))", category: "MessageRetryManager")
+                        if finalStatus == .sent || finalStatus == .delivered {
+                            OutgoingWirePayloadStore.shared.remove(baseMessageId: messageId)
+                        } else if finalStatus == .failed {
+                            OutgoingWirePayloadStore.shared.remove(baseMessageId: messageId)
+                        }
+                        Log.debug("📮 Re-sent queued message via gRPC: \(messageId) status=\(finalStatus) (attempt \(liveMsg.retryCount))", category: "MessageRetryManager")
                     }
                 } catch {
                     await MainActor.run {
