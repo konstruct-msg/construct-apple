@@ -86,16 +86,36 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     // MARK: - Silent Push (background wakeup)
 
     /// Called when a silent push arrives (content-available: 1).
-    /// Server sends one whenever a new message is waiting.
-    /// We fetch pending messages immediately and show a local notification banner,
-    /// then signal completion. The OS allows up to 30 seconds for this work.
+    /// The payload may carry an `activity_type` field for directed actions:
+    ///   - "replenish_prekeys" → generate and upload new OTPKs in background
+    ///   - (default)           → fetch pending messages and show local notification
     func application(
         _ application: UIApplication,
         didReceiveRemoteNotification userInfo: [AnyHashable: Any],
         fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
     ) {
-        Log.info("📱 Silent push received", category: "Push")
+        let activityType = userInfo["activity_type"] as? String
+        Log.info("📱 Silent push received — activity_type: \(activityType ?? "nil")", category: "Push")
         PushNotificationManager.shared.signalSilentPush()
+
+        if activityType == "replenish_prekeys" {
+            Task {
+                await withTaskGroup(of: Void.self) { group in
+                    group.addTask {
+                        guard let deviceId = KeychainManager.shared.loadDeviceID() else {
+                            Log.error("📱 OTPK push: no deviceId in Keychain", category: "Push")
+                            return
+                        }
+                        await OtpkReplenishmentService.replenishForPush(deviceId: deviceId)
+                    }
+                    group.addTask { try? await Task.sleep(nanoseconds: 27_000_000_000) }
+                    await group.next()
+                    group.cancelAll()
+                }
+                completionHandler(.newData)
+            }
+            return
+        }
 
         // Race the fetch against a 27-second safety timeout so we always call
         // the completion handler before iOS's 30-second hard deadline.

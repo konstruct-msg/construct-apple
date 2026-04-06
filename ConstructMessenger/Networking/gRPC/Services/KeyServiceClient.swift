@@ -214,6 +214,21 @@ final class KeyServiceClient: Sendable {
         }
     }
 
+    /// Returns both the current count and the server-recommended minimum.
+    func getPreKeyCountFull(deviceId: String) async throws -> (count: UInt32, recommendedMinimum: UInt32) {
+        try await GRPCChannelManager.shared.performRPC { grpcClient in
+            let keyClient = Shared_Proto_Services_V1_KeyService.Client(wrapping: grpcClient)
+
+            var request = Shared_Proto_Services_V1_GetPreKeyCountRequest()
+            request.deviceID = deviceId
+
+            let response = try await keyClient.getPreKeyCount(
+                request: .init(message: request)
+            )
+            return (count: response.count, recommendedMinimum: response.recommendedMinimum)
+        }
+    }
+
     // MARK: - Rotate Signed Pre-Key
 
     /// Atomically rotate both the classical (X25519) and Kyber signed pre-keys.

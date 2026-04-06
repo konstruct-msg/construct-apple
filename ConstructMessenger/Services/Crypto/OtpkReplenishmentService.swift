@@ -17,9 +17,12 @@ enum OtpkReplenishmentService {
 
     /// Minimum number of OTPKs to keep on the server. Replenish if below this.
     static let lowWaterMark: UInt32 = 20
-    /// Batch size for replenishment uploads.
+    /// Default batch for force-replace uploads (registration, session-init failure).
     static let replenishBatchSize: UInt32 = 50
+    /// Minimum seconds between replenishment calls (race condition dedup).
+    private static let cooldownSeconds: TimeInterval = 60
     private nonisolated(unsafe) static var isReplenishing = false
+    private nonisolated(unsafe) static var lastReplenishDate: Date?
 
     // MARK: - Initial upload (called once at registration)
 
@@ -73,21 +76,44 @@ enum OtpkReplenishmentService {
     // MARK: - Replenishment (called after Bob receives a session-init message)
 
     /// Check server-side OTPK count; upload a batch if below the low-water mark.
+    /// Uses smart upload count: `max(0, recommendedMinimum - serverCount)`, minimum 20.
     /// Non-fatal — logs errors instead of throwing.
     static func replenishIfNeeded(deviceId: String) async {
-        guard !isReplenishing else { return }
+        await replenishInternal(deviceId: deviceId, source: "startup/session")
+    }
+
+    /// Called from background push handler (activity_type = "replenish_prekeys").
+    /// Identical to replenishIfNeeded but skips the cooldown once to ensure the push
+    /// always results in at least one check. Subsequent pushes within the cooldown window
+    /// are dropped to prevent simultaneous-writer race conditions.
+    static func replenishForPush(deviceId: String) async {
+        if let last = lastReplenishDate, Date().timeIntervalSince(last) < cooldownSeconds {
+            Log.info("🔑 OTPK replenish push skipped — cooldown active (\(Int(cooldownSeconds))s)", category: "OTPK")
+            return
+        }
+        await replenishInternal(deviceId: deviceId, source: "push")
+    }
+
+    private static func replenishInternal(deviceId: String, source: String) async {
+        guard !isReplenishing else {
+            Log.debug("🔑 OTPK replenishment already in progress, skipping (\(source))", category: "OTPK")
+            return
+        }
         isReplenishing = true
+        lastReplenishDate = Date()
         defer { isReplenishing = false }
         do {
-            let serverCount = try await KeyServiceClient.shared.getPreKeyCount(deviceId: deviceId)
-            Log.debug("🔑 OTPK server count: \(serverCount)", category: "OTPK")
+            let (serverCount, recommendedMin) = try await KeyServiceClient.shared.getPreKeyCountFull(deviceId: deviceId)
+            let effective = max(recommendedMin, lowWaterMark)
+            Log.debug("🔑 OTPK server count: \(serverCount) / recommended min: \(effective) [\(source)]", category: "OTPK")
 
-            guard serverCount < lowWaterMark else { return }
+            guard serverCount < effective else { return }
 
-            Log.info("🔑 OTPK count \(serverCount) < \(lowWaterMark) — replenishing \(replenishBatchSize)...", category: "OTPK")
-            try await generateAndUpload(count: replenishBatchSize, deviceId: deviceId)
+            let uploadCount = max(lowWaterMark, effective - serverCount)
+            Log.info("🔑 OTPK \(serverCount) < \(effective) — uploading \(uploadCount) keys [\(source)]...", category: "OTPK")
+            try await generateAndUpload(count: uploadCount, deviceId: deviceId)
         } catch {
-            Log.error("⚠️ OTPK replenishment failed (non-fatal): \(error)", category: "OTPK")
+            Log.error("⚠️ OTPK replenishment failed (non-fatal) [\(source)]: \(error)", category: "OTPK")
         }
     }
 }
