@@ -327,6 +327,12 @@ final class SessionCoordinator {
                         Log.error("❌ SESSION_STATE[tie_break_reinit_fail]: \(err.localizedDescription)", category: "SessionInit")
                     }
                 )
+                // ── Tie-break ordering fix (#3.4) ─────────────────────────────
+                // END_SESSION and session_ping are sent separately. If the network
+                // delivers ping before END_SESSION, RESPONDER will try to decrypt
+                // it with the old (incompatible) session and fail. A 200 ms buffer
+                // gives END_SESSION enough time to arrive and be processed first.
+                try? await Task.sleep(nanoseconds: 200_000_000)
                 await self.sendSessionPing(to: userId)
                 // Phase 1 of two-phase handshake: session is now "unconfirmed" until
                 // RESPONDER sends back __session_ready__. ChatViewModel will buffer any
@@ -675,6 +681,8 @@ final class SessionCoordinator {
                     Log.error("❌ SESSION_STATE[watchdog_reinit_fail]: \(err.localizedDescription)", category: "SessionInit")
                 }
             )
+            // Allow END_SESSION (sent on previous attempt) to be processed before ping.
+            try? await Task.sleep(nanoseconds: 200_000_000)
             await self.sendSessionPing(to: userId)
         }
     }
