@@ -611,3 +611,21 @@
 "recovery_not_configured_title" = "Резервный ключ не настроен";
 "developer" = "Разработчик";
 "share" = "Поделиться";
+
+// MARK: - Keys Recovery
+"keys_recovery_title" = "ключи устройства недоступны";
+"keys_recovery_warning_title" = "⚠ КРИПТОКЛЮЧИ НЕ НАЙДЕНЫ";
+"keys_recovery_warning_body" = "Криптографические ключи устройства не удалось загрузить из Keychain. Это может быть временная проблема системы или ключи утеряны безвозвратно.\n\nДоступ к сообщениям и сессиям невозможен до устранения проблемы.";
+"keys_recovery_section_retry" = "повторить попытку";
+"keys_recovery_retry_hint" = "Ключи могут быть временно недоступны из-за системной проблемы. Попробуйте перечитать Keychain.";
+"keys_recovery_retry_action" = "перечитать keychain [→]";
+"keys_recovery_retry_failed" = "всё ещё недоступно";
+"keys_recovery_section_seed" = "восстановить из сид-фразы";
+"keys_recovery_seed_hint" = "Если вы сохранили 12-слов seed-фразу, используйте её для восстановления доступа к своей идентичности.";
+"keys_recovery_seed_action" = "ввести seed-фразу [→]";
+"keys_recovery_section_new" = "создать новый аккаунт";
+"keys_recovery_new_hint" = "Создать полностью новую идентичность. Существующий аккаунт и сообщения будут утеряны безвозвратно.";
+"keys_recovery_new_action" = "создать новый аккаунт [→]";
+"keys_recovery_wipe_confirm_title" = "создать новый аккаунт?";
+"keys_recovery_wipe_confirm_body" = "Это действие безвозвратно удалит вашу текущую идентичность и все локальные данные. Отменить невозможно.";
+"keys_recovery_wipe_confirm_action" = "удалить и продолжить";

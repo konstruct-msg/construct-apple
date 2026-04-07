@@ -24,6 +24,11 @@ struct ContentView: View {
                 // This happens on cold launch AND when coming to foreground with a locked
                 // device (SecurityGateView sits in ZStack so onAppear fires immediately).
                 SplashView()
+            } else if authViewModel.deviceKeysUnavailable {
+                // Authenticated but crypto keys couldn't be loaded — show recovery screen.
+                // Keys are NOT wiped; user can retry, recover via seed phrase, or register new.
+                KeysRecoveryView()
+                    .environment(authViewModel)
             } else if authViewModel.isAuthenticated || authViewModel.hasRegisteredDeviceKeys == true {
                 // Authenticated OR definitively registered — show main app.
                 // Checking isAuthenticated here prevents a flash to OnboardingView when

@@ -18,6 +18,10 @@ class AuthViewModel {
     /// Tracks whether device keys are registered in Keychain (drives ContentView routing)
     var hasRegisteredDeviceKeys: Bool? = nil
 
+    /// True when the user is authenticated but device crypto keys couldn't be loaded
+    /// from Keychain. Drives a dedicated recovery screen instead of the main app.
+    var deviceKeysUnavailable = false
+
     func refreshDeviceKeyState() {
         // If already authenticated, don't re-read Keychain — it may be temporarily
         // inaccessible (WhenUnlockedThisDeviceOnly items while device is locked via
@@ -362,14 +366,40 @@ class AuthViewModel {
     }
 
     /// Handles the critical case where the user is authenticated (has a session token) but
-    /// device crypto keys are missing from Keychain — typically caused by Keychain migration
-    /// failures, device restore/backup issues, or iOS beta bugs.
-    /// Recovery: clear all local state so the user goes through onboarding and re-registers.
+    /// device crypto keys couldn't be loaded from Keychain (partial state or iOS Keychain bug).
+    ///
+    /// We do NOT wipe keys automatically — they may be temporarily inaccessible (iOS beta bugs,
+    /// device locked at launch, etc.). Instead we set `deviceKeysUnavailable` which routes to a
+    /// dedicated recovery screen giving the user three options:
+    ///   1. Retry — re-read Keychain (handles transient accessibility issues)
+    ///   2. Recover with seed phrase — preserves userId, generates new device keys
+    ///   3. Create new account — explicit user choice, then we wipe and re-register
     private func handleLostDeviceKeys(userId: String, reason: String) {
-        Log.error("🚨 [Auth] Device keys lost — forcing re-registration. Reason: \(reason). userId: \(userId.prefix(8))", category: "Auth")
+        Log.error("⚠️ [Auth] Device keys unavailable — showing recovery screen. Reason: \(reason). userId: \(userId.prefix(8))", category: "Auth")
+        deviceKeysUnavailable = true
+    }
+
+    /// Called from KeysRecoveryView "Try Again" button — re-reads Keychain and attempts
+    /// to recreate OrchestratorCore. Clears `deviceKeysUnavailable` on success.
+    func retryLoadingDeviceKeys() {
+        guard let userId = currentUserId else { return }
+        CryptoManager.shared.setLocalUserId(userId)
+        if CryptoManager.shared.isInitialized {
+            Log.info("✅ [Auth] Keys recovered on retry — core initialized", category: "Auth")
+            deviceKeysUnavailable = false
+        } else {
+            Log.error("❌ [Auth] Keys still unavailable on retry", category: "Auth")
+        }
+    }
+
+    /// Called from KeysRecoveryView "Create New Account" button — explicit user action.
+    /// Wipes ALL local state so the user goes through fresh onboarding.
+    func wipeAndReregister() {
+        Log.info("🗑️ [Auth] User chose to wipe and re-register", category: "Auth")
         cancelTimeouts()
         SessionManager.shared.clearSession()
         KeychainManager.shared.deleteDeviceKeys()
+        deviceKeysUnavailable = false
         isAuthenticated = false
         hasRegisteredDeviceKeys = false
         currentUserId = nil

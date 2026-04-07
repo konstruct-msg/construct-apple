@@ -601,3 +601,21 @@
 "device_link_section" = "link replica";
 "generating" = "generating...";
 "device_link_scan_hint" = "scan with another replica to link";
+
+// MARK: - Keys Recovery
+"keys_recovery_title" = "device keys unavailable";
+"keys_recovery_warning_title" = "⚠ CRYPTO KEYS NOT FOUND";
+"keys_recovery_warning_body" = "Your device crypto keys could not be loaded from Keychain. This may be a temporary system issue, or the keys may be permanently lost.\n\nYour messages and sessions cannot be accessed until this is resolved.";
+"keys_recovery_section_retry" = "retry";
+"keys_recovery_retry_hint" = "Keys may be temporarily unavailable due to a system issue. Try reloading.";
+"keys_recovery_retry_action" = "retry keychain read [→]";
+"keys_recovery_retry_failed" = "still unavailable";
+"keys_recovery_section_seed" = "restore from seed phrase";
+"keys_recovery_seed_hint" = "If you saved your 12-word recovery phrase, use it to restore access to your existing identity.";
+"keys_recovery_seed_action" = "enter recovery phrase [→]";
+"keys_recovery_section_new" = "create new account";
+"keys_recovery_new_hint" = "Create a completely new identity. Your existing account and messages will be permanently lost.";
+"keys_recovery_new_action" = "create new account [→]";
+"keys_recovery_wipe_confirm_title" = "create new account?";
+"keys_recovery_wipe_confirm_body" = "This will permanently delete your current identity and all local data. This cannot be undone.";
+"keys_recovery_wipe_confirm_action" = "delete and continue";
