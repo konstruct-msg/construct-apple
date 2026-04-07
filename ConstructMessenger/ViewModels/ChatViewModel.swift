@@ -918,7 +918,18 @@ class ChatViewModel: NSObject {
                             self.blockedByRecipient = true
                             Log.error("🚫 Message blocked by recipient — suppressing retry for \(messageId)\(traceTag)", category: "ChatViewModel")
                         case "failed":
-                            if aggregated.retryable {
+                            if aggregated.errorCode == "encryptionFailed" {
+                                // Server rejected our ciphertext — our DR state is desynced.
+                                // Trigger END_SESSION so both sides re-init from scratch.
+                                deliveryStatus = .failed
+                                OutgoingWirePayloadStore.shared.remove(baseMessageId: messageId)
+                                Log.error("🔐 encryptionFailed from server — triggering END_SESSION for \(self.chat.otherUser?.id.prefix(8) ?? "?")\(traceTag)", category: "ChatViewModel")
+                                if let peerId = self.chat.otherUser?.id {
+                                    Task {
+                                        try? await SessionCoordinator().sendEndSession(to: peerId, reason: "server_encryption_rejected")
+                                    }
+                                }
+                            } else if aggregated.retryable {
                                 deliveryStatus = .queued
                                 Log.error("❌ Server rejected message \(messageId): retryable=true\(ecStr)\(raStr)\(traceTag) — queued for retry", category: "ChatViewModel")
                             } else {

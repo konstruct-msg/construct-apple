@@ -476,6 +476,31 @@ class KeychainManager {
         delete(forKey: suiteIdKey(for: userId))
     }
 
+    // MARK: - SPK Rotation Epoch (per-peer anti-replay)
+    // Tracks the highest observed SPK rotation epoch for each peer contact.
+    // Security-relevant: if this were in UserDefaults and wiped, SPK replay
+    // attacks would go undetected until the peer rotates again.
+
+    private func spkEpochKey(for userId: String) -> String {
+        "construct.spk_epoch.\(userId)"
+    }
+
+    func saveSpkEpoch(_ epoch: UInt32, for userId: String) {
+        var value = epoch
+        let data = Data(bytes: &value, count: MemoryLayout<UInt32>.size)
+        _ = save(data, forKey: spkEpochKey(for: userId), accessible: kSecAttrAccessibleAfterFirstUnlock)
+    }
+
+    func loadSpkEpoch(for userId: String) -> UInt32 {
+        guard let data = load(forKey: spkEpochKey(for: userId)),
+              data.count == MemoryLayout<UInt32>.size else { return 0 }
+        return data.withUnsafeBytes { $0.load(as: UInt32.self) }
+    }
+
+    func deleteSpkEpoch(for userId: String) {
+        delete(forKey: spkEpochKey(for: userId))
+    }
+
     // MARK: - Generic Helpers
     private func save(_ data: Data, forKey key: String, accessible: CFString) -> Bool {
         guard !data.isEmpty else {

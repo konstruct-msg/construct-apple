@@ -30,6 +30,9 @@ class ChatsViewModel {
 
     // 🔑 OTPK replenishment: check server count once per app session on stream connect
     private var hasPerformedStartupOtpkCheck = false
+    // Timestamp of last foreground key-health check to avoid hammering the server.
+    private var lastForegroundKeyCheckAt: TimeInterval = 0
+    private static let foregroundKeyCheckCooldownSeconds: TimeInterval = 300  // 5 min
 
     // ✅ Chat ID to open programmatically (e.g., from deep link or Synaps)
     var chatToOpen: String?
@@ -262,6 +265,9 @@ class ChatsViewModel {
                     Log.info("📱 App became active — stream is down, reconnecting", category: "ChatsViewModel")
                     self.forceReconnectStream()
                 }
+
+                // Check key health on every foreground return (non-blocking, throttled internally).
+                await self.checkKeyHealthInBackground()
             }
         }
         observationTasks.append(activeTask)
@@ -368,10 +374,6 @@ class ChatsViewModel {
     /// Cancel any in-progress backoff and reconnect immediately.
     /// Called when app returns to foreground to skip any pending retry delay.
     private func forceReconnectStream() {
-        guard SessionManager.shared.sessionToken != nil else {
-            Log.info("📱 No session — skipping reconnect", category: "ChatsViewModel")
-            return
-        }
         // Debounce: if multiple triggers fire within 300 ms (e.g. networkPathChanged +
         // appDidBecomeActive + reachabilityChanged all at once), only the last one runs.
         // This prevents 80+ concurrent connectLoop tasks each creating a gRPC channel.
@@ -390,6 +392,23 @@ class ChatsViewModel {
             }
             self.sessionCoordinator.prewarmSessions(for: self.prewarmEligibleContactIds())
         }
+    }
+
+    /// Check OTPK pool and SPK rotation on foreground return.
+    /// Throttled to once per 5 minutes to avoid hammering the server on rapid switches.
+    private func checkKeyHealthInBackground() async {
+        let now = Date().timeIntervalSince1970
+        guard now - lastForegroundKeyCheckAt >= Self.foregroundKeyCheckCooldownSeconds else {
+            Log.debug("🔑 Key health check skipped — cooldown active", category: "OTPK")
+            return
+        }
+        guard SessionManager.shared.sessionToken != nil else { return }
+        let deviceId = KeychainManager.shared.loadDeviceID() ?? ""
+        guard !deviceId.isEmpty else { return }
+        lastForegroundKeyCheckAt = now
+
+        await OtpkReplenishmentService.replenishIfNeeded(deviceId: deviceId)
+        await PreKeyRotationService.shared.rotateIfNeeded(deviceId: deviceId)
     }
 
     private func currentContactIds() -> [String] {

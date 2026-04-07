@@ -115,12 +115,12 @@ class SessionInitializationService {
         // rotation counter has not advanced beyond what we last saw for this contact.
         // (Skip when epoch == 0, which means the server hasn't migrated yet.)
         if bundle.spkRotationEpoch > 0 {
-            let knownEpoch = UInt32(UserDefaults.standard.integer(forKey: "construct.spk_epoch.\(userId)"))
+            let knownEpoch = KeychainManager.shared.loadSpkEpoch(for: userId)
             if bundle.spkRotationEpoch < knownEpoch {
                 Log.error("⚠️ SESSION_STATE[spk_replay_rejected]: epoch=\(bundle.spkRotationEpoch) < known=\(knownEpoch) for \(userId.prefix(8))… — possible SPK replay attack", category: "SessionInit")
                 throw SessionError.staleSPKBundle(epoch: bundle.spkRotationEpoch, knownEpoch: knownEpoch)
             }
-            UserDefaults.standard.set(Int(bundle.spkRotationEpoch), forKey: "construct.spk_epoch.\(userId)")
+            KeychainManager.shared.saveSpkEpoch(bundle.spkRotationEpoch, for: userId)
         }
 
         let bundleWithSuite = (
