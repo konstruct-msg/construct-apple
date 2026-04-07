@@ -405,31 +405,7 @@ class CryptoManager {
 
     // MARK: - Registration
 
-    /// Generates a compact RegistrationBundle struct for display / compatibility purposes.
-    /// Use `generateRegistrationBundle() throws` (FFI version) for new registrations.
-    func generateLegacyRegistrationBundle() -> RegistrationBundle? {
-        guard let bundle = registrationBundleService.generateRegistrationBundle(core: orchestratorCore) else {
-            Log.error("❌ Failed to generate registration bundle", category: "CryptoManager")
-            return nil
-        }
-        Log.info("✅ Registration bundle generated successfully", category: "CryptoManager")
-        return bundle
-    }
-    
-    /// Sign BundleData JSON with Ed25519 signing key
-    /// This creates the signature for UploadableKeyBundle.bundleData
-    func signBundleData(_ bundleDataJSON: Data) throws -> String {
-        do {
-            let signatureBase64 = try bundleSignatureService.signBundleData(bundleDataJSON, core: orchestratorCore)
-            Log.debug("✅ BundleData signed successfully", category: "CryptoManager")
-            return signatureBase64
-        } catch {
-            Log.error("❌ Failed to sign BundleData: \(error)", category: "CryptoManager")
-            throw CryptoManagerError.invalidKeyData
-        }
-    }
-
-    // MARK: - Session Management
+        // MARK: - Session Management
 
     /// Initializes a secure session with a recipient using the Rust core.
     @discardableResult
