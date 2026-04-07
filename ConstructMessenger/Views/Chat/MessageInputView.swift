@@ -308,7 +308,7 @@ struct MessageInputView: View {
             onCancelEdit: {}
         )
     }
-    .background(Color(.systemBackground))
+    .background(Color.platformBackground)
 }
 
 #Preview("Input — with text") {
@@ -329,7 +329,7 @@ struct MessageInputView: View {
             onCancelEdit: {}
         )
     }
-    .background(Color(.systemBackground))
+    .background(Color.platformBackground)
 }
 
 // MARK: - Camera Picker (iOS only)

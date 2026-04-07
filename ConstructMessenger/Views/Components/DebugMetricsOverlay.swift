@@ -14,8 +14,8 @@ import SwiftUI
 
 struct DebugMetricsOverlay: View {
 
-    @StateObject private var vm = DebugMetricsViewModel()
-    @Binding var isPresented: Bool
+    @State private var vm = DebugMetricsViewModel()
+@Binding var isPresented: Bool
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -143,21 +143,22 @@ struct DebugMetricsOverlay: View {
 // MARK: - ViewModel
 
 @MainActor
-final class DebugMetricsViewModel: ObservableObject {
+@Observable
+final class DebugMetricsViewModel {
 
-    @Published var recentSamples: [LatencySample] = []
-    @Published var avgReceiveDisplay: Double? = nil
-    @Published var p95ReceiveDisplay: Double? = nil
-    @Published var avgDecrypt: Double? = nil
-    @Published var p95Decrypt: Double? = nil
-    @Published var avgSessionInit: Double? = nil
-    @Published var p95SessionInit: Double? = nil
-    @Published var avgGRPCConnect: Double? = nil
-    @Published var avgICEStart: Double? = nil
-    @Published var streamFastFailoverCount: Int = 0
-    @Published var rpcFastFallbackCount: Int = 0
+    var recentSamples: [LatencySample] = []
+    var avgReceiveDisplay: Double? = nil
+    var p95ReceiveDisplay: Double? = nil
+    var avgDecrypt: Double? = nil
+    var p95Decrypt: Double? = nil
+    var avgSessionInit: Double? = nil
+    var p95SessionInit: Double? = nil
+    var avgGRPCConnect: Double? = nil
+    var avgICEStart: Double? = nil
+    var streamFastFailoverCount: Int = 0
+    var rpcFastFallbackCount: Int = 0
 
-    private var refreshTimer: Timer?
+    nonisolated(unsafe) private var refreshTimer: Timer?
 
     init() {
         refreshTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
@@ -219,6 +220,7 @@ extension View {
 
 // MARK: - Shake gesture
 
+#if os(iOS)
 extension UIWindow {
     open override func motionEnded(_ motion: UIEvent.EventSubtype, with event: UIEvent?) {
         if motion == .motionShake {
@@ -226,6 +228,7 @@ extension UIWindow {
         }
     }
 }
+#endif
 
 extension Notification.Name {
     static let deviceShook = Notification.Name("cc.konstruct.messenger.deviceShook")

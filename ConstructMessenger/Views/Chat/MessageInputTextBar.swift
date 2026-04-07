@@ -138,7 +138,7 @@ struct MessageInputTextBar: View {
         )
         .padding(.horizontal)
     }
-    .background(Color(.systemBackground))
+    .background(Color.platformBackground)
 }
 
 #Preview("Input bar — text") {
@@ -153,5 +153,5 @@ struct MessageInputTextBar: View {
         )
         .padding(.horizontal)
     }
-    .background(Color(.systemBackground))
+    .background(Color.platformBackground)
 }

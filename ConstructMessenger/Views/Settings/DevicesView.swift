@@ -122,7 +122,9 @@ struct DevicesView: View {
         } // ScrollView
         } // VStack
         .background(Color.CT.bg.ignoresSafeArea())
+        #if os(iOS)
         .toolbar(.hidden, for: .navigationBar)
+        #endif
         .refreshable { await loadDevices() }
         .task { await loadDevices() }
 

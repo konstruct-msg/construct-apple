@@ -269,7 +269,9 @@ struct NetworkSettingsView: View {
                 #endif
             }
             .padding(.vertical, 20)
+            #if os(iOS)
             .toolbar(.hidden, for: .navigationBar)
+            #endif
         }
         .alert("server_applied_title", isPresented: $showingAppliedAlert) {
             Button("ok") { }

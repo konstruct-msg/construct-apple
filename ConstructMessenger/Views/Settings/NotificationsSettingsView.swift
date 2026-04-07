@@ -217,7 +217,9 @@ struct NotificationsSettingsView: View {
                 }
             }
             .padding(.vertical, 20)
+            #if os(iOS)
             .toolbar(.hidden, for: .navigationBar)
+            #endif
         }
         .onAppear {
             checkNotificationAuthorization()

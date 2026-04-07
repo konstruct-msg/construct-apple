@@ -136,7 +136,9 @@ struct OnboardingView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .ctBackground()
+            #if os(iOS)
             .toolbar(.hidden, for: .navigationBar)
+            #endif
             .navigationDestination(isPresented: $showingRegistration) {
                 RegistrationFlowView(username: username.isEmpty ? nil : username)
             }

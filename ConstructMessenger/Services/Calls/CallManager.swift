@@ -8,6 +8,7 @@
 
 import Foundation
 import GRPCCore
+import SwiftProtobuf
 
 @MainActor
 @Observable
@@ -60,6 +61,9 @@ final class CallManager {
         /// Whether CallKit successfully registered this call (requestStartCall succeeded).
         /// Only true calls should have reportCallEnded called on them.
         var callKitRegistered: Bool = false
+        /// Number of signaling stream reconnect attempts (timeout-triggered). Capped at maxStreamRetries.
+        var streamRetryCount: Int = 0
+        static let maxStreamRetries = 3
 
         init(session: CallSession) {
             self.session = session
@@ -372,7 +376,13 @@ final class CallManager {
                 guard self.active === active, active.stream === stream else { return }
                 active.stream?.close()
                 active.stream = nil
-                try? self.openStreamIfNeeded()
+                active.streamRetryCount += 1
+                if active.streamRetryCount <= ActiveCall.maxStreamRetries {
+                    Log.info("📞 Retrying signal stream (attempt \(active.streamRetryCount)/\(ActiveCall.maxStreamRetries))", category: "Calls")
+                    try? self.openStreamIfNeeded()
+                } else {
+                    Log.error("📞 Signal stream failed after \(ActiveCall.maxStreamRetries) retries — falling back to E2EE-only mode", category: "Calls")
+                }
             } catch is CancellationError {
                 PerformanceMetrics.shared.cancelStart(.callSignalOpenStart, label: metricsLabel)
             } catch {
@@ -534,12 +544,18 @@ final class CallManager {
 
     private func sendHangup(reason: Shared_Proto_Signaling_V1_HangupReason) {
         guard let active else { return }
-        let msg = Self.makeRoutedSignal(
-            callId: active.session.id,
-            deviceId: Self.currentDeviceId(),
-            signal: .hangup(Self.makeCallHangup(deviceId: Self.currentDeviceId(), timestampMs: Self.nowMs(), reason: reason))
-        )
-        active.stream?.send(msg)
+        var sig = Shared_Proto_Signaling_V1_WebRTCSignal()
+        sig.callID = active.session.id
+        sig.senderDeviceID = Self.currentDeviceId()
+        sig.timestamp = Self.nowMs()
+        sig.signal = .hangup(Self.makeCallHangup(deviceId: Self.currentDeviceId(), timestampMs: Self.nowMs(), reason: reason))
+        if let stream = active.stream {
+            stream.send(Self.makeRoutedSignal(callId: active.session.id, deviceId: Self.currentDeviceId(), signal: .hangup(Self.makeCallHangup(deviceId: Self.currentDeviceId(), timestampMs: Self.nowMs(), reason: reason))))
+        } else {
+            // Stream not available (E2EE-only call path) — send hangup via DR-encrypted message.
+            sendCallSignalProto(sig, to: active.session.peerUserId)
+            Log.info("📞 Hangup sent via E2EE (no stream) to \(active.session.peerUserId.prefix(8))…", category: "Calls")
+        }
     }
 
     // MARK: - WebRTC (Phase 3)
@@ -811,7 +827,7 @@ final class CallManager {
         Log.info("📞 Offer (proto) sent via E2EE to \(toUserId.prefix(8))… call_id=\(active.session.id.prefix(8))…", category: "Calls")
     }
 
-    /// ICE candidates still travel via Signal stream (encrypted with CallSignalCrypto).
+    /// ICE candidates travel via Signal stream when available; fall back to E2EE when stream is absent (incoming E2EE call path).
     private func sendIceCandidate(_ c: WebRTCIceCandidate) {
         guard let active else { return }
         let peerUserId = active.session.peerUserId
@@ -824,8 +840,17 @@ final class CallManager {
         }
         ice.sdpMid = c.sdpMid
         ice.sdpMLineIndex = UInt32(max(0, c.sdpMLineIndex))
-        let msg = Self.makeRoutedSignal(callId: active.session.id, deviceId: Self.currentDeviceId(), signal: .iceCandidate(ice))
-        active.stream?.send(msg)
+        if let stream = active.stream {
+            stream.send(Self.makeRoutedSignal(callId: active.session.id, deviceId: Self.currentDeviceId(), signal: .iceCandidate(ice)))
+        } else {
+            // No stream (E2EE-only call path) — send ICE via DR-encrypted message.
+            var sig = Shared_Proto_Signaling_V1_WebRTCSignal()
+            sig.callID = active.session.id
+            sig.senderDeviceID = Self.currentDeviceId()
+            sig.timestamp = Self.nowMs()
+            sig.signal = .iceCandidate(ice)
+            sendCallSignalProto(sig, to: peerUserId)
+        }
     }
 
     // MARK: - Message Builders

@@ -80,7 +80,7 @@ struct DesktopLinkRequestView: View {
                     .font(CTFont.bold(48))
                     .foregroundStyle(.orange)
                     .lineLimit(1).fixedSize()
-                Button(LocalizedStringKey("device_link_refresh")) {
+                Button {
                     vm.errorMessage = nil
                     Task { await vm.generateJoinRequestQR() }
                 } label: {

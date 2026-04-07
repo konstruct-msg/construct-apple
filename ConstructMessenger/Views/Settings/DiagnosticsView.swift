@@ -173,7 +173,9 @@ struct DiagnosticsView: View {
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
         #endif
+        #if os(iOS)
         .toolbar(.hidden, for: .navigationBar)
+        #endif
         .onAppear { refresh() }
     }
 

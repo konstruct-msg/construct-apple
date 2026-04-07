@@ -227,8 +227,10 @@ struct RegistrationFlowView: View {
             onDismiss: { dismiss() }
         )
         .ctBackground()
+        #if os(iOS)
         .toolbar(.hidden, for: .navigationBar)
         .navigationBarBackButtonHidden(true)
+        #endif
         .task {
             guard !hasStarted else { return }
             // Guard against re-running if keys were already saved (e.g. view recreated during dismiss)

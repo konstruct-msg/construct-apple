@@ -31,7 +31,9 @@ struct DeviceLinkScanView: View {
                     Task { await vm.scanAndLink(scannedURL: scannedURL) }
                 }
                 .ignoresSafeArea()
+                #if os(iOS)
                 .navigationBarHidden(true)
+                #endif
 
                 if vm.isLinking {
                     Color.black.opacity(0.55).ignoresSafeArea()

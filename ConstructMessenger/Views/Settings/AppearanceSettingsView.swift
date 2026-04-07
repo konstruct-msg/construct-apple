@@ -68,7 +68,9 @@ struct AppearanceSettingsView: View {
             .padding(.vertical, 20)
         }
         .background(Color.CT.bg.ignoresSafeArea())
+        #if os(iOS)
         .toolbar(.hidden, for: .navigationBar)
+        #endif
         .onAppear {
             // If user previously selected an unavailable theme, reset to dark
             if !appTheme.isAvailable { appTheme = .dark }

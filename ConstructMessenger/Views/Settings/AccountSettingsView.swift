@@ -57,7 +57,9 @@ struct AccountSettingsView: View {
             }
         }
         .background(Color.CT.bg.ignoresSafeArea())
+        #if os(iOS)
         .toolbar(.hidden, for: .navigationBar)
+        #endif
         .onAppear {
             viewModel.setContext(viewContext)
             viewModel.loadUserInfo(from: authViewModel)

@@ -159,7 +159,9 @@ struct DataStorageSettingsView: View {
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
 #endif
+        #if os(iOS)
         .toolbar(.hidden, for: .navigationBar)
+        #endif
         
         .task { cacheSize = MediaManager.shared.diskCacheSize() }
         .confirmationDialog("storage_clear_confirm_title",

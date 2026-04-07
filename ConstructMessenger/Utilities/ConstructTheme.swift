@@ -58,19 +58,38 @@ extension Color {
 // MARK: - Dynamic color helper (dark/light)
 
 private extension Color {
+    /// Creates a `Color` from a 24-bit RGB hex value.
+    init(rgb hex: UInt32) {
+        self.init(
+            red:   Double((hex >> 16) & 0xff) / 255,
+            green: Double((hex >>  8) & 0xff) / 255,
+            blue:  Double( hex        & 0xff) / 255
+        )
+    }
+
     /// Creates a `Color` that adapts to the system's user interface style.
     /// - Parameters:
     ///   - dark:  24-bit RGB hex used in dark mode (e.g. `0x090909`)
     ///   - light: 24-bit RGB hex used in light mode (e.g. `0xF2F2F2`)
     init(dark: UInt32, light: UInt32) {
+        #if os(iOS)
         self.init(uiColor: UIColor(dynamicProvider: { traits in
             traits.userInterfaceStyle == .dark
                 ? UIColor(rgb: dark)
                 : UIColor(rgb: light)
         }))
+        #else
+        // macOS: honour the effective appearance of the current NSApp
+        self.init(nsColor: NSColor(name: nil) { appearance in
+            appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+                ? NSColor(rgb: dark)
+                : NSColor(rgb: light)
+        })
+        #endif
     }
 }
 
+#if os(iOS)
 private extension UIColor {
     convenience init(rgb hex: UInt32) {
         self.init(
@@ -81,6 +100,18 @@ private extension UIColor {
         )
     }
 }
+#else
+private extension NSColor {
+    convenience init(rgb hex: UInt32) {
+        self.init(
+            red:   CGFloat((hex >> 16) & 0xff) / 255,
+            green: CGFloat((hex >>  8) & 0xff) / 255,
+            blue:  CGFloat( hex        & 0xff) / 255,
+            alpha: 1
+        )
+    }
+}
+#endif
 
 // MARK: - Typography
 
@@ -89,6 +120,19 @@ enum CTFont {
     static func regular(_ size: CGFloat) -> Font { ConstructFont.mono(size, weight: .regular) }
     static func medium(_ size: CGFloat)  -> Font { ConstructFont.mono(size, weight: .medium)  }
     static func bold(_ size: CGFloat)    -> Font { ConstructFont.mono(size, weight: .bold)    }
+}
+
+// MARK: - Cross-platform helpers
+
+extension Color {
+    /// System background color — `systemBackground` on iOS, `windowBackgroundColor` on macOS.
+    static var platformBackground: Color {
+        #if os(iOS)
+        Color(.systemBackground)
+        #else
+        Color(.windowBackgroundColor)
+        #endif
+    }
 }
 
 // MARK: - Symbol Table
