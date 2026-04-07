@@ -171,7 +171,20 @@ private func makeRelay(address: String, bridgeCert: String) -> IceRelay {
 @MainActor
 final class IceProxyManager: ObservableObject {
     static let shared = IceProxyManager()
-    private init() {}
+    private init() {
+        // Restart the ICE proxy whenever the network interface changes.
+        // After a cellular ↔ WiFi switch the old TCP tunnel to the relay is dead;
+        // the Rust proxy process is still "running" but silently broken.
+        // We restart proactively so the next RPC finds a healthy proxy immediately.
+        NotificationCenter.default.addObserver(
+            forName: .networkPathChanged,
+            object: nil,
+            queue: nil
+        ) { [weak self] _ in
+            guard let self, self.isRunning else { return }
+            Task { await self.handleNetworkPathChange() }
+        }
+    }
 
     // MARK: - Published state
 
@@ -355,9 +368,7 @@ final class IceProxyManager: ObservableObject {
     func stop() {
         guard isRunning else { return }
         ice_proxy_stop()
-        isRunning   = false
-        proxyPort   = 0
-        activeRelay = nil
+        resetAllProxyState()
     }
 
     // MARK: - Relay list
@@ -680,11 +691,9 @@ final class IceProxyManager: ObservableObject {
     /// Does NOT enter cooldown (cooldown is for relay/cert failures, not local process death).
     func restartAfterCrash() async {
         Log.info("🧊 ICE proxy crashed (ECONNREFUSED on local port) — force-restarting", category: "ICE")
-        // Force-stop even if isRunning=true; the Rust side is dead.
+        // Force-stop both primary and secondary; the Rust side is dead.
         ice_proxy_stop()
-        isRunning = false
-        proxyPort = 0
-        activeRelay = nil
+        resetAllProxyState()
         // Clear any cooldown that was set due to this crash; we want to retry immediately.
         clearCooldown()
         isStartingOnDemand = false
@@ -695,6 +704,39 @@ final class IceProxyManager: ObservableObject {
         } else {
             Log.error("🧊 ICE proxy restart failed after crash", category: "ICE")
         }
+    }
+
+    /// Called when the network interface changes (cellular ↔ WiFi, VPN on/off).
+    /// The existing TCP tunnel to the relay is dead even if `ice_proxy_is_running()` still
+    /// returns 1 (the Rust goroutine hasn't discovered the broken connection yet).
+    /// We force-restart proactively so the next RPC finds a healthy proxy immediately.
+    @MainActor
+    func handleNetworkPathChange() async {
+        Log.info("🧊 Network path changed — restarting ICE proxy for new interface", category: "ICE")
+        // Stop both proxies; their underlying TCP sockets are dead.
+        ice_proxy_stop()
+        resetAllProxyState()
+        clearCooldown()
+        isStartingOnDemand = false
+        let cert = await getIceBridgeCert()
+        if await startWithRelayFallback(cert: cert) {
+            Log.info("🧊 ICE proxy restarted after network path change", category: "ICE")
+            Task { await IceCertFetcher.shared.fetchAndCacheRelayList() }
+        } else {
+            Log.error("🧊 ICE proxy restart failed after network path change", category: "ICE")
+        }
+    }
+
+    /// Resets all proxy state fields to idle for both primary and secondary proxies.
+    /// Call before any restart path (crash, network switch, manual stop).
+    @MainActor
+    private func resetAllProxyState() {
+        isRunning           = false
+        proxyPort           = 0
+        activeRelay         = nil
+        isSecondaryRunning  = false
+        secondaryProxyPort  = 0
+        secondaryRelay      = nil
     }
 
     /// Called when DNS resolution fails on the direct TLS path (VPN intercepting DNS).
@@ -729,9 +771,7 @@ final class IceProxyManager: ObservableObject {
             Log.info("🧊 ICE proxy found dead on foreground — restarting", category: "ICE")
             // Always call stop() to flush any leftover Rust state even when the proxy died.
             ice_proxy_stop()
-            isRunning = false
-            proxyPort = 0
-            activeRelay = nil
+            resetAllProxyState()
             clearCooldown()
             // Brief pause to let the OS release the socket before we re-bind.
             try? await Task.sleep(nanoseconds: 200_000_000) // 200 ms
