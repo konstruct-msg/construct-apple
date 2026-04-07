@@ -53,6 +53,15 @@ final class PersistentACKStore {
         }
     }
 
+    /// Async variant for Rust orchestrator `CheckAckInDb` callbacks.
+    /// Queries Core Data on a background context without requiring the caller to supply one.
+    func isProcessed(messageId: String) async -> Bool {
+        let context = PersistenceController.shared.container.newBackgroundContext()
+        return await context.perform {
+            self.isProcessed(messageId, in: context)
+        }
+    }
+
     // MARK: - Mark
 
     /// Immediately marks `messageId` as processed **in the in-memory Rust cache only** (no IO).

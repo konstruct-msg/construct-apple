@@ -358,6 +358,19 @@ class MessageRouter {
                     Log.error("❌ callSignalDecrypted: failed to decode WebRTCSignal proto from \(contactId.prefix(8))…", category: "MessageRouter")
                 }
 
+            case .checkAckInDb(let messageId):
+                // Rust cache miss after restart — check Core Data and report back.
+                Task {
+                    let isProcessed = await PersistentACKStore.shared.isProcessed(messageId: messageId)
+                    let result = CfeIncomingEvent.ackDbResult(messageId: messageId, isProcessed: isProcessed)
+                    _ = try? CryptoManager.shared.orchestratorCore?.handleEvent(event: result)
+                }
+
+            case .healSuppressed(let contactId, let retryAfterMs):
+                // Heal was rate-limited — do NOT ACK so server re-delivers after cooldown.
+                Log.debug("⏳ Heal suppressed for \(contactId.prefix(8))… retry in \(retryAfterMs)ms", category: "MessageRouter")
+                // Intentionally no ACK sent.
+
             case .notifyError(let code, let msg):
                 Log.error("❌ Rust orchestrator error [\(code)]: \(msg)", category: "MessageRouter")
 
