@@ -14,6 +14,9 @@ import UniformTypeIdentifiers
 
 extension Notification.Name {
     static let desktopShowAddContact = Notification.Name("desktopShowAddContact")
+    static let desktopSelectNextChat = Notification.Name("desktopSelectNextChat")
+    static let desktopSelectPrevChat = Notification.Name("desktopSelectPrevChat")
+    static let desktopJumpToChat     = Notification.Name("desktopJumpToChat")
 }
 
 struct DesktopRootView: View {
@@ -21,6 +24,7 @@ struct DesktopRootView: View {
     @Environment(ChatsViewModel.self) private var chatsViewModel
     @Environment(DeepLinkHandler.self) private var deepLinkHandler
     @Environment(\.managedObjectContext) private var viewContext
+    @Environment(\.commandBridge) private var commandBridge
     @AppStorage("appTheme") private var appTheme: AppTheme = .automatic
 
     // Sidebar column visibility (user can hide sidebar with toggle)
@@ -45,13 +49,37 @@ struct DesktopRootView: View {
         .preferredColorScheme(appTheme.colorScheme)
         .onAppear {
             authViewModel.refreshDeviceKeyState()
+            wireCommandBridge()
         }
         .onReceive(NotificationCenter.default.publisher(for: .desktopShowAddContact)) { _ in
             showAddContact = true
         }
-        // Update Dock badge with unread count
         .onChange(of: chatsViewModel.totalUnreadCount) { _, count in
             NSApplication.shared.dockTile.badgeLabel = count > 0 ? "\(count)" : nil
+        }
+    }
+
+    // Wire keyboard commands → ViewModels
+
+    private func wireCommandBridge() {
+        commandBridge.onNewConversation = { chatsViewModel.showNewChat = true }
+        commandBridge.onAddContact      = { showAddContact = true }
+        commandBridge.onFocusSearch     = { chatsViewModel.sidebarSearchFocused = true }
+        commandBridge.onGlobalSearch    = { chatsViewModel.sidebarSearchFocused = true }
+        commandBridge.onSelectNext      = {
+            NotificationCenter.default.post(name: .desktopSelectNextChat, object: nil)
+        }
+        commandBridge.onSelectPrev      = {
+            NotificationCenter.default.post(name: .desktopSelectPrevChat, object: nil)
+        }
+        commandBridge.onJumpToIndex     = { idx in
+            NotificationCenter.default.post(name: .desktopJumpToChat, object: idx)
+        }
+        commandBridge.onBack            = { chatsViewModel.chatToOpen = nil }
+        commandBridge.onCopyNodeId      = {
+            guard let id = chatsViewModel.chatToOpen else { return }
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(id, forType: .string)
         }
     }
 
@@ -93,25 +121,27 @@ struct DesktopRootView: View {
                 .environment(\.managedObjectContext, viewContext)
                 .frame(minWidth: 400, minHeight: 300)
         }
-        // Toolbar button — sidebar header
+        // Toolbar — CT ASCII style
         .toolbar {
-            // Leading: Add Contact (left of sidebar toggle)
             ToolbarItem(placement: .navigation) {
                 Button {
                     showAddContact = true
                 } label: {
-                    Label("Add Contact", systemImage: "person.badge.plus")
+                    Text("[+] NODE")
+                        .font(CTFont.regular(11))
+                        .foregroundStyle(Color.CT.accent)
                 }
                 .help("Add Contact (⌥⌘N)")
                 .keyboardShortcut("n", modifiers: [.command, .option])
             }
 
-            // Trailing: QR scanner
             ToolbarItem(placement: .primaryAction) {
                 Button {
                     showAddContact = true
                 } label: {
-                    Image(systemName: "qrcode.viewfinder")
+                    Text("[QR]")
+                        .font(CTFont.regular(11))
+                        .foregroundStyle(Color.CT.textDim)
                 }
                 .help("Scan QR code to add contact")
             }

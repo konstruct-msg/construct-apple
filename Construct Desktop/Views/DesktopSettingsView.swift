@@ -2,44 +2,100 @@
 //  DesktopSettingsView.swift
 //  Construct Desktop
 //
-//  macOS Settings window (Cmd+,).
+//  CT-terminal-style Settings window (⌘,).
+//  Sidebar list of ASCII-labelled sections + content pane.
 //
 
 import SwiftUI
 import UserNotifications
 
 struct DesktopSettingsView: View {
+
+    enum Section: String, CaseIterable, Identifiable {
+        case account      = "> IDENTITY"
+        case general      = "> GENERAL"
+        case security     = "> SECURITY"
+        case notifications = "> NOTIFICATIONS"
+        case storage      = "> STORAGE"
+        case network      = "> NETWORK"
+        case diagnostics  = "> DIAGNOSTICS"
+
+        var id: String { rawValue }
+    }
+
+    @State private var selected: Section = .account
+
     var body: some View {
-        TabView {
-            DesktopAccountSettingsTab()
-                .tabItem { Label("Account", systemImage: "person.circle") }
-                .tag("account")
+        HStack(spacing: 0) {
+            // MARK: Sidebar
+            VStack(alignment: .leading, spacing: 0) {
+                Text("> SETTINGS")
+                    .font(CTFont.bold(11))
+                    .foregroundStyle(Color.CT.accent)
+                    .tracking(3)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 20)
+                    .padding(.bottom, 14)
 
-            DesktopGeneralSettingsTab()
-                .tabItem { Label("General", systemImage: "gearshape") }
-                .tag("general")
+                Rectangle()
+                    .fill(Color.CT.noise)
+                    .frame(height: 1)
+                    .padding(.bottom, 6)
 
-            DesktopSecuritySettingsTab()
-                .tabItem { Label("Security", systemImage: "lock.shield") }
-                .tag("security")
+                ForEach(Section.allCases) { section in
+                    sidebarRow(section)
+                }
 
-            DesktopNotificationsSettingsTab()
-                .tabItem { Label("Notifications", systemImage: "bell") }
-                .tag("notifications")
+                Spacer()
+            }
+            .frame(width: 180)
+            .ctBackground()
 
-            DesktopStorageSettingsTab()
-                .tabItem { Label("Storage", systemImage: "internaldrive") }
-                .tag("storage")
+            // Separator
+            Rectangle()
+                .fill(Color.CT.noise)
+                .frame(width: 1)
 
-            DesktopNetworkSettingsTab()
-                .tabItem { Label("Network", systemImage: "network") }
-                .tag("network")
-
-            DesktopDiagnosticsSettingsTab()
-                .tabItem { Label("Diagnostics", systemImage: "waveform.path.ecg") }
-                .tag("diagnostics")
+            // MARK: Content pane
+            Group {
+                switch selected {
+                case .account:       DesktopAccountSettingsTab()
+                case .general:       DesktopGeneralSettingsTab()
+                case .security:      DesktopSecuritySettingsTab()
+                case .notifications: DesktopNotificationsSettingsTab()
+                case .storage:       DesktopStorageSettingsTab()
+                case .network:       DesktopNetworkSettingsTab()
+                case .diagnostics:   DesktopDiagnosticsSettingsTab()
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .ctBackground()
         }
-        .frame(width: 580, height: 460)
+        .frame(width: 660, height: 500)
+    }
+
+    private func sidebarRow(_ section: Section) -> some View {
+        let isActive = selected == section
+        return Button {
+            selected = section
+        } label: {
+            HStack(spacing: 8) {
+                if isActive {
+                    Rectangle()
+                        .fill(Color.CT.accent)
+                        .frame(width: 2, height: 14)
+                }
+                Text(section.rawValue)
+                    .font(CTFont.regular(12))
+                    .foregroundStyle(isActive ? Color.CT.accent : Color.CT.textDim)
+                    .tracking(isActive ? 1 : 0)
+                Spacer()
+            }
+            .padding(.leading, isActive ? 12 : 16)
+            .padding(.vertical, 8)
+            .background(isActive ? Color.CT.accent.opacity(0.07) : Color.clear)
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -61,7 +117,7 @@ private struct DesktopAccountSettingsTab: View {
                 Button(role: .destructive) {
                     showSignOutConfirm = true
                 } label: {
-                    Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
+                    Text("[→] SIGN OUT")
                         .foregroundStyle(DesktopTheme.destructive)
                 }
             } header: {
@@ -184,11 +240,11 @@ private struct DesktopNotificationsSettingsTab: View {
     @ViewBuilder private var statusBadge: some View {
         switch authStatus {
         case .authorized, .provisional:
-            Label("Enabled", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+            Text("[✓] ENABLED").font(CTFont.regular(12)).foregroundStyle(Color.CT.accent)
         case .denied:
-            Label("Denied", systemImage: "xmark.circle.fill").foregroundStyle(DesktopTheme.destructive)
+            Text("[✗] DENIED").font(CTFont.regular(12)).foregroundStyle(Color.CT.danger)
         default:
-            Label("Not set", systemImage: "questionmark.circle").foregroundStyle(.secondary)
+            Text("[?] NOT SET").font(CTFont.regular(12)).foregroundStyle(Color.CT.textDim)
         }
     }
 

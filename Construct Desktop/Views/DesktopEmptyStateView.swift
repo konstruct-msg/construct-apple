@@ -2,10 +2,8 @@
 //  DesktopEmptyStateView.swift
 //  Construct Desktop
 //
-//  The first thing an authenticated user sees.
-//  Communicates the technology stack without being gimmicky:
-//  three protocol cards arranged as a security chain, monospaced
-//  labels, accent glow — precision-tool aesthetic.
+//  Empty-state panel — CT terminal aesthetic.
+//  Three protocol cards connected by ASCII lines; sharp borders, JetBrains Mono.
 //
 
 import SwiftUI
@@ -16,183 +14,137 @@ struct DesktopEmptyStateView: View {
             Spacer()
 
             // Wordmark
-            VStack(spacing: 6) {
+            VStack(spacing: 4) {
                 Text("CONSTRUCT")
-                    .font(.system(size: 22, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(DesktopTheme.textPrimary)
+                    .font(CTFont.bold(20))
+                    .foregroundStyle(Color.CT.text)
                     .tracking(8)
 
                 Text("post-quantum secure messaging")
-                    .font(.system(size: 11, weight: .regular, design: .monospaced))
-                    .foregroundStyle(DesktopTheme.textTertiary)
+                    .font(CTFont.regular(10))
+                    .foregroundStyle(Color.CT.textDim)
                     .tracking(2)
             }
-            .padding(.bottom, 44)
+            .padding(.bottom, 40)
 
-            // Protocol stack — three cards connected by lines
+            // Protocol stack — three ASCII cards connected by lines
             HStack(alignment: .top, spacing: 0) {
                 protocolCard(
                     label: "TRANSPORT",
-                    rows: [
-                        ("PROTOCOL", "gRPC"),
-                        ("SECURITY", "TLS 1.3"),
-                        ("DELIVERY", "BiDi Stream"),
-                    ]
+                    rows: [("PROTOCOL", "gRPC"), ("SECURITY", "TLS 1.3"), ("DELIVERY", "BiDi Stream")],
+                    isAccent: false
                 )
-
                 connectorLine
-
                 protocolCard(
                     label: "KEY EXCHANGE",
-                    rows: [
-                        ("ALGORITHM", "PQXDH"),
-                        ("CLASSICAL", "X25519"),
-                        ("POST-QUANTUM", "Kyber-1024"),
-                    ],
-                    isCenter: true
+                    rows: [("ALGORITHM", "PQXDH"), ("CLASSICAL", "X25519"), ("PQ", "Kyber-1024")],
+                    isAccent: true
                 )
-
                 connectorLine
-
                 protocolCard(
                     label: "MESSAGING",
-                    rows: [
-                        ("RATCHET", "Double Ratchet"),
-                        ("CIPHER", "AES-256-GCM"),
-                        ("FWD. SECRECY", "Per-message"),
-                    ]
+                    rows: [("RATCHET", "Double Ratchet"), ("CIPHER", "AES-256-GCM"), ("FWD. SECRECY", "Per-msg")],
+                    isAccent: false
                 )
             }
 
             Spacer()
 
-            // Bottom hint
-            HStack(spacing: 6) {
-                shortcutKey("⌘N")
-                Text("New conversation")
-                    .font(.system(size: 12))
-                    .foregroundStyle(DesktopTheme.textTertiary)
-
-                Text("·")
-                    .foregroundStyle(DesktopTheme.textTertiary)
-
-                shortcutKey("⌘F")
-                Text("Find chat")
-                    .font(.system(size: 12))
-                    .foregroundStyle(DesktopTheme.textTertiary)
-
-                Text("·")
-                    .foregroundStyle(DesktopTheme.textTertiary)
-
-                shortcutKey("⌘,")
-                Text("Settings")
-                    .font(.system(size: 12))
-                    .foregroundStyle(DesktopTheme.textTertiary)
+            // Bottom shortcut hint row
+            HStack(spacing: 12) {
+                shortcutHint("⌘N",  "new conversation")
+                Text("·").foregroundStyle(Color.CT.textDim)
+                shortcutHint("⌘K",  "quick open")
+                Text("·").foregroundStyle(Color.CT.textDim)
+                shortcutHint("⌘⌥N", "add contact")
+                Text("·").foregroundStyle(Color.CT.textDim)
+                shortcutHint("⌘,",  "settings")
             }
+            .font(CTFont.regular(11))
+            .foregroundStyle(Color.CT.textDim)
             .padding(.bottom, 28)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(DesktopTheme.backgroundPrimary)
+        .ctBackground()
     }
 
-    // MARK: - Protocol card
+    // MARK: - ASCII protocol card
 
     private func protocolCard(
         label: String,
         rows: [(String, String)],
-        isCenter: Bool = false
+        isAccent: Bool
     ) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Card header
-            HStack(spacing: 6) {
-                if isCenter {
-                    Circle()
-                        .fill(DesktopTheme.accent)
-                        .frame(width: 6, height: 6)
-                        .shadow(color: DesktopTheme.accent.opacity(0.5), radius: 4)
-                } else {
-                    Circle()
-                        .fill(DesktopTheme.textTertiary)
-                        .frame(width: 5, height: 5)
-                }
-                Text(label)
-                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(isCenter ? DesktopTheme.accent : DesktopTheme.textSecondary)
-                    .tracking(2)
+            // Header line: ┌── LABEL ──┐
+            HStack(spacing: 0) {
+                Text(isAccent ? "[" : "╔")
+                    .font(CTFont.bold(9))
+                    .foregroundStyle(isAccent ? Color.CT.accent : Color.CT.noise)
+                Text(" \(label) ")
+                    .font(CTFont.bold(9))
+                    .foregroundStyle(isAccent ? Color.CT.accent : Color.CT.textDim)
+                    .tracking(1.5)
+                Text(isAccent ? "]" : "╗")
+                    .font(CTFont.bold(9))
+                    .foregroundStyle(isAccent ? Color.CT.accent : Color.CT.noise)
             }
             .padding(.bottom, 10)
 
-            // Rows — vertical: key label above value
-            VStack(alignment: .leading, spacing: 12) {
+            // Rows
+            VStack(alignment: .leading, spacing: 11) {
                 ForEach(rows, id: \.0) { key, value in
-                    VStack(alignment: .leading, spacing: 3) {
+                    VStack(alignment: .leading, spacing: 2) {
                         Text(key)
-                            .font(.system(size: 8, weight: .semibold, design: .monospaced))
-                            .foregroundStyle(DesktopTheme.textTertiary)
+                            .font(CTFont.regular(8))
+                            .foregroundStyle(Color.CT.textDim.opacity(0.6))
                             .tracking(1.5)
                         Text(value)
-                            .font(.system(size: 12, weight: .medium, design: .monospaced))
-                            .foregroundStyle(isCenter ? DesktopTheme.accent.opacity(0.9) : DesktopTheme.textSecondary)
+                            .font(CTFont.regular(11))
+                            .foregroundStyle(isAccent ? Color.CT.accent : Color.CT.text)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 18)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(DesktopTheme.backgroundElevated)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .strokeBorder(
-                            isCenter
-                                ? DesktopTheme.accent.opacity(0.2)
-                                : DesktopTheme.separator,
-                            lineWidth: 1
-                        )
-                )
-                .shadow(
-                    color: isCenter ? DesktopTheme.accent.opacity(0.06) : .clear,
-                    radius: 16
-                )
-        )
+        .padding(.horizontal, 14)
+        .padding(.vertical, 16)
         .frame(width: 148)
+        .background(
+            Rectangle()
+                .fill(isAccent ? Color.CT.accent.opacity(0.04) : Color.CT.bgMsg)
+        )
+        .overlay(
+            Rectangle()
+                .stroke(isAccent ? Color.CT.accent.opacity(0.35) : Color.CT.noise, lineWidth: 1)
+        )
     }
-
-    // MARK: - Connector
 
     private var connectorLine: some View {
-        HStack(spacing: 0) {
-            Rectangle()
-                .fill(DesktopTheme.separator)
-                .frame(height: 1)
-                .frame(maxWidth: .infinity)
-        }
-        .padding(.top, 23)
-        .frame(width: 16)
+        Rectangle()
+            .fill(Color.CT.noise)
+            .frame(width: 16, height: 1)
+            .padding(.top, 22)
     }
 
-    // MARK: - Keyboard shortcut badge
+    // MARK: - Shortcut badge
 
-    private func shortcutKey(_ text: String) -> some View {
-        Text(text)
-            .font(.system(size: 11, weight: .medium, design: .monospaced))
-            .foregroundStyle(DesktopTheme.textSecondary)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(
-                RoundedRectangle(cornerRadius: 4)
-                    .fill(DesktopTheme.backgroundElevated)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 4)
-                            .strokeBorder(DesktopTheme.separator, lineWidth: 1)
-                    )
-            )
+    private func shortcutHint(_ key: String, _ label: String) -> some View {
+        HStack(spacing: 5) {
+            Text("[\(key)]")
+                .font(CTFont.regular(11))
+                .foregroundStyle(Color.CT.accent)
+            Text(label)
+                .font(CTFont.regular(11))
+                .foregroundStyle(Color.CT.textDim)
+        }
     }
 }
 
 #Preview {
     DesktopEmptyStateView()
-        .frame(width: 600, height: 500)
+        .frame(width: 640, height: 520)
 }
+
+
+

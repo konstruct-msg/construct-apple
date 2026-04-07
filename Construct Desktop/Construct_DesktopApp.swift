@@ -13,11 +13,14 @@ import UserNotifications
 @main
 struct Construct_DesktopApp: App {
 
-    @State private var authViewModel = AuthViewModel(context: PersistenceController.shared.container.viewContext)
-    @State private var chatsViewModel = ChatsViewModel()
+    @State private var authViewModel     = AuthViewModel(context: PersistenceController.shared.container.viewContext)
+    @State private var chatsViewModel    = ChatsViewModel()
     @State private var securityViewModel = SecurityViewModel()
     @State private var recoveryViewModel = AccountRecoveryViewModel()
-    @State private var deepLinkHandler = DeepLinkHandler()
+    @State private var deepLinkHandler   = DeepLinkHandler()
+
+    // Command bridge — owned here, wired up in DesktopRootView
+    @State private var commandBridge = DesktopCommandBridge()
 
     var body: some Scene {
         // MARK: - Main window
@@ -29,8 +32,8 @@ struct Construct_DesktopApp: App {
                 .environment(securityViewModel)
                 .environment(recoveryViewModel)
                 .environment(deepLinkHandler)
+                .environment(\.commandBridge, commandBridge)
                 .task {
-                    // Force dark appearance — NSApp is guaranteed ready here
                     NSApp.appearance = NSAppearance(named: .darkAqua)
                     chatsViewModel.setContext(PersistenceController.shared.container.viewContext)
                     await IceProxyManager.shared.startIfEnabled()
@@ -38,31 +41,11 @@ struct Construct_DesktopApp: App {
                        let deviceId = KeychainManager.shared.loadDeviceID() {
                         await PQCKeyManager.migrateIfNeeded(deviceId: deviceId)
                     }
-                    // Request local notification permission for macOS desktop alerts
                     _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
                 }
         }
         .commands {
-            // Replace default "New Window" with "New Chat" (⌘N)
-            CommandGroup(replacing: .newItem) {
-                Button("New Chat") {
-                    chatsViewModel.showNewChat = true
-                }
-                .keyboardShortcut("n", modifiers: .command)
-
-                Button("Add Contact…") {
-                    NotificationCenter.default.post(name: .desktopShowAddContact, object: nil)
-                }
-                .keyboardShortcut("n", modifiers: [.command, .option])
-            }
-
-            // Add Find in sidebar (⌘F)
-            CommandGroup(after: .sidebar) {
-                Button("Find Chat") {
-                    chatsViewModel.sidebarSearchFocused = true
-                }
-                .keyboardShortcut("f", modifiers: .command)
-            }
+            ConstructCommands(bridge: commandBridge)
         }
 
         // MARK: - macOS Settings window (⌘,)
