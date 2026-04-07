@@ -80,14 +80,14 @@ struct DesktopEmptyStateView: View {
             HStack(spacing: 0) {
                 Text(isAccent ? "[" : "╔")
                     .font(CTFont.bold(9))
-                    .foregroundStyle(isAccent ? Color.CT.accent : Color.CT.noise)
+                    .foregroundStyle(isAccent ? Color.CT.accent : Color.CT.textDim)
                 Text(" \(label) ")
                     .font(CTFont.bold(9))
-                    .foregroundStyle(isAccent ? Color.CT.accent : Color.CT.textDim)
+                    .foregroundStyle(isAccent ? Color.CT.accent : Color.CT.text)
                     .tracking(1.5)
                 Text(isAccent ? "]" : "╗")
                     .font(CTFont.bold(9))
-                    .foregroundStyle(isAccent ? Color.CT.accent : Color.CT.noise)
+                    .foregroundStyle(isAccent ? Color.CT.accent : Color.CT.textDim)
             }
             .padding(.bottom, 10)
 
@@ -97,7 +97,7 @@ struct DesktopEmptyStateView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(key)
                             .font(CTFont.regular(8))
-                            .foregroundStyle(Color.CT.textDim.opacity(0.6))
+                            .foregroundStyle(Color.CT.textDim)
                             .tracking(1.5)
                         Text(value)
                             .font(CTFont.regular(11))
@@ -116,7 +116,7 @@ struct DesktopEmptyStateView: View {
         )
         .overlay(
             Rectangle()
-                .stroke(isAccent ? Color.CT.accent.opacity(0.35) : Color.CT.noise, lineWidth: 1)
+                .stroke(isAccent ? Color.CT.accent.opacity(0.5) : Color.CT.textDim.opacity(0.35), lineWidth: 1)
         )
     }
 
