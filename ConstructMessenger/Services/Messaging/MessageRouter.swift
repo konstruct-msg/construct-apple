@@ -179,7 +179,6 @@ class MessageRouter {
         let hasSession = CryptoManager.shared.hasSession(for: otherUserId)
         Log.info("🔐 SESSION_STATE[incoming_message]: userId=\(otherUserId.prefix(8))..., hasSession=\(hasSession), messageId=\(message.id.prefix(8))...", category: "SessionInit")
         
-        let decryptedContent: String
         if !hasSession {
             // First message from this user - need to initialize receiving session
             handleFirstMessage(
@@ -191,57 +190,65 @@ class MessageRouter {
                 pendingMessages: &pendingMessages
             )
             return
-        } else {
-            // M5: Try routing through Rust orchestrator first
-            if let core = CryptoManager.shared.orchestratorCore,
-               let event = buildIncomingEvent(message: message, otherUserId: otherUserId) {
-                do {
-                    PerformanceMetrics.shared.messageDecryptStart(messageId: message.id)
-                    let actions = try core.handleEvent(event: event)
-                    PerformanceMetrics.shared.messageDecryptEnd(messageId: message.id)
-                    if actions.contains(where: { if case .messageDecrypted = $0 { return true }; return false }) {
-                        executeRustActions(actions, for: message, chat: chat, otherUserId: otherUserId, in: context)
-                        return
-                    }
-                    // No MessageDecrypted — fall through to Swift path (tie-break, heal, archive restore)
-                    Log.debug("⚠️ handleEvent returned no MessageDecrypted for \(message.id.prefix(8))… — falling back to Swift path", category: "MessageRouter")
-                } catch {
-                    Log.error("❌ handleEvent failed for \(message.id.prefix(8))…: \(error) — falling back to Swift path", category: "MessageRouter")
-                }
-            }
+        }
 
-            // Swift fallback: handles tie-break, heal, archived-session decrypt
-            decryptedContent = handleMessageWithSession(
-                message,
-                from: otherUserId,
-                chat: chat,
-                in: context,
-                pendingMessages: &pendingMessages
-            ) ?? ""
-            
-            if decryptedContent.isEmpty {
+        // Rust orchestrator is the SINGLE decrypt path — no Swift fallback.
+        guard let core = CryptoManager.shared.orchestratorCore else {
+            Log.error("❌ OrchestratorCore nil — requesting END_SESSION from \(otherUserId.prefix(8))…", category: "MessageRouter")
+            onEndSessionNeeded?(otherUserId)
+            if isNewChat { context.delete(chat) }
+            return
+        }
+        guard let event = buildIncomingEvent(message: message, otherUserId: otherUserId) else {
+            Log.error("❌ Cannot build incoming event for \(message.id.prefix(8))… — skipping", category: "MessageRouter")
+            if isNewChat { context.delete(chat) }
+            return
+        }
+
+        let actions: [CfeAction]
+        do {
+            PerformanceMetrics.shared.messageDecryptStart(messageId: message.id)
+            actions = try core.handleEvent(event: event)
+            PerformanceMetrics.shared.messageDecryptEnd(messageId: message.id)
+        } catch {
+            Log.error("❌ handleEvent threw for \(message.id.prefix(8))…: \(error) — sending END_SESSION", category: "MessageRouter")
+            onEndSessionNeeded?(otherUserId)
+            if isNewChat { context.delete(chat) }
+            return
+        }
+
+        for action in actions {
+            switch action {
+            case .messageDecrypted:
+                executeRustActions(actions, for: message, chat: chat, otherUserId: otherUserId, in: context)
+                return
+            case .sessionHealNeeded(let contactId, let role):
+                handleRustHealDecision(role: role, contactId: contactId, message: message, in: context, pendingMessages: &pendingMessages)
                 if isNewChat { context.delete(chat) }
                 return
+            case .sendEndSession(let contactId):
+                Log.info("🔄 SESSION_STATE[rust_end_session]: DR diverged for \(contactId.prefix(8))… — sending END_SESSION", category: "SessionInit")
+                onReceiptNeeded?([message.id], contactId, .failed)
+                pendingMessages.removeValue(forKey: contactId)
+                SessionHealingService.shared.clearQueue(for: contactId, in: context)
+                onEndSessionNeeded?(contactId)
+                if isNewChat { context.delete(chat) }
+                return
+            case .fetchPublicKeyBundle(let userId):
+                Log.info("⚠️ SESSION_STATE[rust_session_lost]: re-queuing \(message.id.prefix(8))… for \(userId.prefix(8))…", category: "SessionInit")
+                pendingMessages[userId, default: []].append(message)
+                onPublicKeyBundleNeeded?(userId, message)
+                return
+            default:
+                break
             }
         }
 
-        switch chunkReassembler.process(decryptedText: decryptedContent) {
-        case .legacy(let text), .complete(let text):
-            return handleResolvedMessage(
-                text,
-                for: message,
-                from: otherUserId,
-                chat: chat,
-                in: context
-            )
-        case .incomplete:
-            Log.debug("🧩 Chunked message incomplete, waiting for more chunks", category: "MessageRouter")
-            return
-        case .invalid(let reason):
-            Log.error("❌ Invalid chunked message: \(reason)", category: "MessageRouter")
-            onReceiptNeeded?([message.id], otherUserId, .delivered)
-            return
-        }
+        // No actionable routing decision (e.g. duplicate, cooldown) — ACK and skip.
+        Log.debug("⚠️ handleEvent produced no routing decision for \(message.id.prefix(8))… — ACKing as delivered", category: "MessageRouter")
+        onReceiptNeeded?([message.id], otherUserId, .delivered)
+        if isNewChat { context.delete(chat) }
+        return
     }
 
     // MARK: - Rust Orchestrator Routing (M5)
@@ -697,90 +704,47 @@ class MessageRouter {
     
     // MARK: - Session Message Handling
     
-    /// Handle message when session exists
-    /// - Returns: Decrypted content or nil if failed
-    private func handleMessageWithSession(
-        _ message: ChatMessage,
-        from userId: String,
-        chat: Chat,
+    // MARK: - Rust Heal Decision
+
+    /// Dispatch a `SessionHealNeeded` action returned by the Rust orchestrator.
+    ///
+    /// - `role == "Initiator"` (WE WIN): our session is intact (Rust DR rollback). ACK peer's
+    ///   X3DH init and send END_SESSION + ping so they become RESPONDER.
+    /// - `role == "Responder"` (WE LOSE): archive our desynchronised session so the peer (INITIATOR)
+    ///   can establish a fresh one, then trigger the RESPONDER heal path.
+    private func handleRustHealDecision(
+        role: String,
+        contactId: String,
+        message: ChatMessage,
         in context: NSManagedObjectContext,
         pendingMessages: inout [String: [ChatMessage]]
-    ) -> String? {
-        Log.info("🔐 SESSION_STATE[decrypt_attempt]: userId=\(userId.prefix(8))..., hasSession=true", category: "SessionInit")
-        
-        guard let content = try? CryptoManager.shared.decryptMessage(message) else {
-            Log.error("❌ Failed to decrypt incoming message \(message.id)", category: "MessageRouter")
-            Log.error("🔐 SESSION_STATE[decrypt_failed]: userId=\(userId.prefix(8))..., messageId=\(message.id.prefix(8))..., messageNumber=\(message.messageNumber)", category: "SessionInit")
+    ) {
+        let myUserId = SessionManager.shared.currentUserId ?? ""
+        let suiteId = Int(KeychainManager.shared.loadSessionSuiteId(userId: contactId) ?? 0)
 
-            // A genuine X3DH re-init must have at least one of:
-            //   kemCiphertext.count > 0  → PQXDH (Kyber ciphertext is included)
-            //   oneTimePreKeyId > 0      → classic X3DH with a one-time prekey
-            // msgNum=0 alone is insufficient: it also occurs at DR ratchet epoch boundaries
-            // (new DH ratchet step resets the sending chain counter to 0). Attempting
-            // initReceivingSession in that case derives a completely wrong root key and
-            // deepens the divergence. When neither signal is present we fall through to
-            // heal_impossible, which sends END_SESSION and forces a clean re-handshake.
-            let isLikelyX3DHInit = message.kemCiphertext.count > 0 || message.oneTimePreKeyId > 0
-            if SessionHealingService.shared.canHeal(message) && isLikelyX3DHInit {
-                // messageNumber == 0 → X3DH re-init from sender (classic or PQXDH).
-                // Session was already archived by decryptMessage (reason: decryptionFailed).
-                //
-                // Tie-break: if BOTH sides re-inited as INITIATOR simultaneously, we must pick
-                // exactly one side to win. Higher deviceId = INITIATOR. Lower deviceId = RESPONDER.
-                // The winner restores its just-archived INITIATOR session; the loser heals.
-                let myUserId = SessionManager.shared.currentUserId ?? ""
-                let suiteIdBeforeTieBreak = Int(KeychainManager.shared.loadSessionSuiteId(userId: userId) ?? 0)
-                let iAmInitiator = (!myUserId.isEmpty && DeviceIdOrdering.isNaturalInitiator(myId: myUserId, peerId: userId))
-                let tieBreakRole = iAmInitiator ? "INITIATOR" : "RESPONDER"
-                Log.info("⚖️ SESSION_STATE[tie_break_decision]: my=\(myUserId.prefix(8))… vs peer=\(userId.prefix(8))… → role=\(tieBreakRole), suiteId_current=\(suiteIdBeforeTieBreak), kemCt=\(message.kemCiphertext.count)b, otpkId=\(message.oneTimePreKeyId)", category: "SessionInit")
-                if iAmInitiator {
-                    // We're higher deviceId → we are the INITIATOR. Try to restore our
-                    // just-archived session so we keep the INITIATOR role.
-                    let restored = CryptoManager.shared.restoreLatestArchive(for: userId)
-                    if restored {
-                        let suiteIdAfterRestore = Int(KeychainManager.shared.loadSessionSuiteId(userId: userId) ?? 0)
-                        Log.info("🏆 SESSION_STATE[tie_break_win]: kept INITIATOR (higher deviceId), ACKed X3DH from \(userId.prefix(8))…, suiteId_restored=\(suiteIdAfterRestore)", category: "SessionInit")
-                        PersistentACKStore.shared.markProcessed(message.id, senderId: userId, in: context)
-                        onReceiptNeeded?([message.id], userId, .delivered)
-                        // Send END_SESSION to stop the loser's invalid message stream, then send a
-                        // session establishment ping so the loser can immediately become RESPONDER.
-                        onTieBreakWin?(userId)
-                    } else {
-                        // Archive missing or corrupt — can't restore INITIATOR role.
-                        // Fall through to RESPONDER heal instead of silently losing the message.
-                        Log.info("⚠️ SESSION_STATE[tie_break_fallback]: no archive to restore for \(userId.prefix(8))… — healing as RESPONDER instead", category: "SessionInit")
-                        SessionHealingService.shared.enqueue(message, in: context)
-                        pendingMessages[userId, default: []].append(message)
-                        onSessionHealNeeded?(userId, message)
-                    }
-                } else {
-                    // We're lower deviceId → become RESPONDER and heal from their X3DH init.
-                    Log.info("🩹 SESSION_STATE[heal_triggered]: msgNum=0, kemCiphertext=\(message.kemCiphertext.count)b from \(userId.prefix(8))… — healing (tie-break: we are RESPONDER / lower deviceId)", category: "SessionInit")
-                    SessionHealingService.shared.enqueue(message, in: context)
-                    pendingMessages[userId, default: []].append(message)
-                    onSessionHealNeeded?(userId, message)
-                }
-            } else {
-                // DR ratchet diverged (messageNumber > 0), OR msgNum=0 with no X3DH init signals
-                // (kemCiphertext=0 + oneTimePreKeyId=0 → ambiguous, treated as diverged DR epoch).
-                // Send FAILED receipt: server automatically relays SESSION_RESET to sender (server-side item 12).
-                // Also send explicit END_SESSION message for defense-in-depth (sender handles both idempotently).
-                Log.info("🔄 SESSION_STATE[heal_impossible]: messageNumber=\(message.messageNumber), kemCt=\(message.kemCiphertext.count)b, otpkId=\(message.oneTimePreKeyId) — ratchet diverged, requesting END_SESSION", category: "SessionInit")
-                onReceiptNeeded?([message.id], userId, .failed)
-                pendingMessages.removeValue(forKey: userId)
-                SessionHealingService.shared.clearQueue(for: userId, in: context)
-                onEndSessionNeeded?(userId)
+        if role == "Initiator" {
+            // We are INITIATOR (higher deviceId) — WE WIN the tie-break.
+            // The Rust session is already intact thanks to the DR snapshot/rollback.
+            Log.info("🏆 SESSION_STATE[tie_break_win]: kept INITIATOR (my=\(myUserId.prefix(8))… > peer=\(contactId.prefix(8))…), suiteId=\(suiteId)", category: "SessionInit")
+            PersistentACKStore.shared.markProcessed(message.id, senderId: contactId, in: context)
+            onReceiptNeeded?([message.id], contactId, .delivered)
+            onTieBreakWin?(contactId)
+        } else {
+            // We are RESPONDER (lower deviceId) — peer WINS. Archive our session and heal.
+            guard SessionHealingService.shared.canHeal(message) else {
+                Log.error("❌ SESSION_STATE[heal_limit_exceeded]: too many heal attempts for \(contactId.prefix(8))… — sending END_SESSION", category: "SessionInit")
+                onReceiptNeeded?([message.id], contactId, .failed)
+                onEndSessionNeeded?(contactId)
+                return
             }
-
-            return nil
+            Log.info("🩹 SESSION_STATE[heal_triggered]: becoming RESPONDER (my=\(myUserId.prefix(8))… < peer=\(contactId.prefix(8))…), suiteId=\(suiteId)", category: "SessionInit")
+            CryptoManager.shared.archiveSession(for: contactId, reason: .manualReset)
+            SessionHealingService.shared.enqueue(message, in: context)
+            pendingMessages[contactId, default: []].append(message)
+            onSessionHealNeeded?(contactId, message)
         }
-
-        // Check if username is still UUID - request update if needed
-        checkUsernameUpdate(for: userId, chat: chat, in: context)
-
-        return content
     }
-    
+
     /// Check if username needs updating
     private func checkUsernameUpdate(
         for userId: String,
