@@ -28,6 +28,7 @@ struct ChatsListView: View {
     }
 
     var body: some View {
+        #if os(iOS)
         NavigationStack(path: $navigationPath) {
             VStack(spacing: 0) {
                 navBar
@@ -35,9 +36,7 @@ struct ChatsListView: View {
                 chatList
             }
             .ctBackground()
-            #if os(iOS)
             .toolbar(.hidden, for: .navigationBar)
-            #endif
             .navigationDestination(for: String.self) { chatId in
                 if let chat = chats.first(where: { $0.id == chatId }) {
                     ChatView(chat: chat, context: viewContext)
@@ -71,6 +70,30 @@ struct ChatsListView: View {
                 chatsViewModel.totalUnreadCount = total
             }
         }
+        #else
+        // macOS: no NavigationStack — chat selection drives the detail column
+        // in NavigationSplitView via chatsViewModel.chatToOpen.
+        VStack(spacing: 0) {
+            navBar
+            searchBar
+            chatList
+        }
+        .ctBackground()
+        .sheet(isPresented: $showingQRScanner) {
+            QRScannerView { contactURL in handleScannedContact(contactURL) }
+        }
+        .onAppear {
+            chatsViewModel.setContext(viewContext)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .deleteChat)) { note in
+            guard let chatId = note.object as? String,
+                  let chat = chats.first(where: { $0.id == chatId }) else { return }
+            Task { await chatsViewModel.deleteChatWithEndSession(chat: chat) }
+        }
+        .onChange(of: chats.reduce(0, { $0 + Int($1.unreadCount) })) { _, total in
+            chatsViewModel.totalUnreadCount = total
+        }
+        #endif
     }
 
     // MARK: - Search Bar
@@ -141,7 +164,13 @@ struct ChatsListView: View {
     private var chatList: some View {
         List {
             ForEach(filteredChats) { chat in
-                Button { navigationPath.append(chat.id) } label: {
+                Button {
+                    #if os(iOS)
+                    navigationPath.append(chat.id)
+                    #else
+                    chatsViewModel.chatToOpen = chat.id
+                    #endif
+                } label: {
                     ChatRowView(chat: chat)
                 }
                 .buttonStyle(.plain)
