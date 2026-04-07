@@ -54,6 +54,9 @@ final class CallManager {
         var answeredAt: Date? = nil
         /// SDP offer received via MessagingService before the user answered.
         var pendingRemoteOfferSdp: String? = nil
+        /// ICE candidates received via E2EE before the remote offer was applied.
+        /// Applied automatically when pendingRemoteOfferSdp is consumed in answer().
+        var pendingIceCandidates: [WebRTCIceCandidate] = []
         /// Whether CallKit successfully registered this call (requestStartCall succeeded).
         /// Only true calls should have reportCallEnded called on them.
         var callKitRegistered: Bool = false
@@ -216,6 +219,42 @@ final class CallManager {
                     Log.info("📞 TURN unavailable — proceeding STUN-only (incoming)", category: "Calls")
                 }
                 try self.ensureWebRTC(role: .callee)
+
+                // If the offer arrived via E2EE before the user answered, apply it now
+                // and immediately send back an answer so the caller can proceed with ICE.
+                if let pendingSdp = self.active?.pendingRemoteOfferSdp, !pendingSdp.isEmpty {
+                    guard let webrtc = self.active?.webrtc else {
+                        throw WebRTCSessionError.invalidState("WebRTC not ready after ensureWebRTC")
+                    }
+                    try await webrtc.setRemoteOffer(sdp: pendingSdp)
+                    self.active?.pendingRemoteOfferSdp = nil
+                    Log.info("📞 Applied pending E2EE offer SDP", category: "Calls")
+
+                    // Drain ICE candidates that arrived before the offer was applied.
+                    let buffered = self.active?.pendingIceCandidates ?? []
+                    if !buffered.isEmpty {
+                        Log.info("📞 Draining \(buffered.count) buffered ICE candidate(s)", category: "Calls")
+                        for ice in buffered {
+                            try? await webrtc.addRemoteIceCandidate(ice)
+                        }
+                        self.active?.pendingIceCandidates = []
+                    }
+
+                    let answerSdp = try await webrtc.createAnswer()
+                    guard !answerSdp.isEmpty else {
+                        throw WebRTCSessionError.invalidState("createAnswer returned empty SDP")
+                    }
+                    sendAnswer(sdp: answerSdp)
+                    self.active?.answeredAt = Date()
+                    self.state = .active(active.session)
+                    Log.info("📞 E2EE incoming call answered: SDP exchanged", category: "Calls")
+                    #if os(iOS)
+                    CallKitProvider.shared.reportOutgoingCallConnected(uuid: active.session.uuid)
+                    #endif
+                    return  // Skip stream-based ringing — answer already sent
+                }
+
+                // No pending E2EE offer → signal stream path: open stream, wait for offer.
                 try openStreamIfNeeded()
                 sendRinging()
             } catch {
@@ -524,8 +563,14 @@ final class CallManager {
         do {
             let sdp = try CallSignalCrypto.shared.decryptField(offer.sdp, from: session.peerUserId)
             try ensureWebRTC(role: .callee)
-            try await active.webrtc?.setRemoteOffer(sdp: sdp)
-            let answerSdp = try await active.webrtc?.createAnswer() ?? ""
+            guard let webrtc = active.webrtc else {
+                throw WebRTCSessionError.invalidState("WebRTC nil after ensureWebRTC")
+            }
+            try await webrtc.setRemoteOffer(sdp: sdp)
+            let answerSdp = try await webrtc.createAnswer()
+            guard !answerSdp.isEmpty else {
+                throw WebRTCSessionError.invalidState("createAnswer returned empty SDP")
+            }
             sendAnswer(sdp: answerSdp)
             active.answeredAt = Date()
             state = .active(session)
@@ -669,12 +714,26 @@ final class CallManager {
         case .iceCandidate(let ice):
             guard let active, active.session.id == signal.callID else { return }
             let c = WebRTCIceCandidate(sdp: ice.candidate, sdpMid: ice.sdpMid, sdpMLineIndex: Int32(ice.sdpMLineIndex))
-            Task { try? await active.webrtc?.addRemoteIceCandidate(c) }
+            // Buffer ICE candidates until the remote offer has been applied.
+            // addRemoteIceCandidate silently fails when there's no remote description.
+            if active.pendingRemoteOfferSdp != nil {
+                active.pendingIceCandidates.append(c)
+                Log.debug("📞 Buffered E2EE ICE candidate (pending SDP)", category: "Calls")
+            } else {
+                Task { try? await active.webrtc?.addRemoteIceCandidate(c) }
+            }
         case .iceCandidates(let batch):
             guard let active, active.session.id == signal.callID else { return }
             for ice in batch.candidates {
                 let c = WebRTCIceCandidate(sdp: ice.candidate, sdpMid: ice.sdpMid, sdpMLineIndex: Int32(ice.sdpMLineIndex))
-                Task { try? await active.webrtc?.addRemoteIceCandidate(c) }
+                if active.pendingRemoteOfferSdp != nil {
+                    active.pendingIceCandidates.append(c)
+                } else {
+                    Task { try? await active.webrtc?.addRemoteIceCandidate(c) }
+                }
+            }
+            if active.pendingRemoteOfferSdp != nil {
+                Log.debug("📞 Buffered \(batch.candidates.count) E2EE ICE candidates (pending SDP)", category: "Calls")
             }
         case .hangup(let hangup):
             guard active?.session.id == signal.callID else { return }
