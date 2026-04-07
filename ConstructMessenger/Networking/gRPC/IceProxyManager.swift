@@ -183,6 +183,22 @@ final class IceProxyManager: ObservableObject {
     /// changes to this property cause the Network settings view to re-render.
     @Published private(set) var isOnCooldown: Bool = false
 
+    // MARK: - Happy Eyeballs dual-proxy state
+    //
+    // In dual-proxy mode both PROXY_TLS (primary AMS) and PROXY (secondary relay, e.g. MSK)
+    // run simultaneously on different localhost ports.  GRPCChannelManager races all three
+    // legs — direct, ICE-TLS, ICE-plain — and uses whichever connects first.
+    //
+    // `isRunning` and `proxyPort` track the primary (TLS) proxy.
+    // `isSecondaryRunning` and `secondaryProxyPort` track the secondary (plain) proxy.
+
+    /// True when the plain-obfs4 secondary relay proxy is running in dual-proxy mode.
+    @Published private(set) var isSecondaryRunning = false
+    /// Local port of the plain-obfs4 secondary proxy, or 0 when not running.
+    @Published private(set) var secondaryProxyPort: UInt16 = 0
+    /// The secondary relay configuration (MSK relay or next fastest relay).
+    @Published private(set) var secondaryRelay: IceRelay?
+
     private var cooldownTask: Task<Void, Never>?
 
     // MARK: - Persistence keys
@@ -396,18 +412,42 @@ final class IceProxyManager: ObservableObject {
 
     /// Probes all `addresses` concurrently and returns them sorted by TCP latency (fastest first).
     /// Unreachable endpoints (probe timed out) are placed at the end so they are still tried.
+    ///
+    /// Early-exit optimisation: once the first reachable result arrives, a grace timer of
+    /// `NetworkTiming.ICE.sortByLatencyEarlyExitDelay` starts. Any probes that haven't
+    /// responded by the deadline are treated as unreachable and appended at the end —
+    /// they are still tried, just last. This prevents waiting the full `relayLatencyProbeTimeout`
+    /// for blocked endpoints (e.g. AMS unreachable in RU) when a relay already responded.
     private static func sortByLatency(_ addresses: [String], timeout: TimeInterval = NetworkTiming.ICE.relayLatencyProbeTimeout) async -> [String] {
+        guard !addresses.isEmpty else { return [] }
+        var results: [(String, TimeInterval?)] = []
+        var earlyExitAfter: Date? = nil
+
         await withTaskGroup(of: (String, TimeInterval?).self) { group in
             for address in addresses {
                 group.addTask { (address, await probeLatency(address: address, timeout: timeout)) }
             }
-            var reachable: [(String, TimeInterval)] = []
-            var unreachable: [String] = []
             for await (addr, lat) in group {
-                if let lat { reachable.append((addr, lat)) } else { unreachable.append(addr) }
+                results.append((addr, lat))
+                if lat != nil, earlyExitAfter == nil {
+                    earlyExitAfter = Date().addingTimeInterval(NetworkTiming.ICE.sortByLatencyEarlyExitDelay)
+                }
+                // Once every address has responded, or the early-exit deadline has passed, stop.
+                if results.count == addresses.count { break }
+                if let deadline = earlyExitAfter, Date() >= deadline {
+                    group.cancelAll()
+                    break
+                }
             }
-            return reachable.sorted { $0.1 < $1.1 }.map(\.0) + unreachable
         }
+
+        // Addresses whose probes were cancelled (didn't make it into `results`) are treated
+        // as unreachable — appended last so they're still attempted as a final fallback.
+        let probedSet = Set(results.map(\.0))
+        let cancelled = addresses.filter { !probedSet.contains($0) }
+        let reachable  = results.filter { $0.1 != nil }.sorted { $0.1! < $1.1! }.map(\.0)
+        let unreachable = results.filter { $0.1 == nil }.map(\.0) + cancelled
+        return reachable + unreachable
     }
 
     // MARK: - Multi-endpoint startup
@@ -452,6 +492,98 @@ final class IceProxyManager: ObservableObject {
 
         Log.error("🧊 ICE start failed on all \(ordered.count) endpoint(s)", category: "ICE")
         return false
+    }
+
+    /// Starts **both** the primary (TLS) and secondary (plain) ICE proxies simultaneously
+    /// for Happy Eyeballs 3-way race mode.
+    ///
+    /// - The primary proxy targets the fastest latency-probed relay (TLS preferred).
+    /// - The secondary proxy targets the next fastest relay using plain obfs4.
+    /// - GRPCChannelManager can then race `direct`, `ICE-TLS`, and `ICE-plain` in parallel.
+    /// - If the secondary relay fails to start, the function still succeeds if primary started.
+    ///
+    /// Returns `true` if at least one proxy started.
+    @MainActor
+    @discardableResult
+    func startBothRelaysForHappyEyeballs(cert: String) async -> Bool {
+        let host    = GRPCChannelManager.shared.currentHost
+        let iceHost = "ice.\(host)"
+
+        var seen = Set<String>()
+        var candidates: [String] = []
+        let allAddresses = ["\(iceHost):443"] + ICEConfig.hardcodedRelayAddresses
+            + (UserDefaults.standard.stringArray(forKey: ICEConfig.cachedRelayListKey) ?? [])
+        for addr in allAddresses where seen.insert(addr).inserted { candidates.append(addr) }
+
+        let ordered = await Self.sortByLatency(candidates)
+        guard !ordered.isEmpty else { return false }
+
+        let primaryAddress   = ordered[0]
+        let secondaryAddress = ordered.count > 1 ? ordered[1] : nil
+
+        // Build relays
+        func makeHERelay(_ address: String) -> IceRelay {
+            if address == "\(iceHost):443" {
+                return IceRelay(address: address, bridgeCert: cert, iatMode: .none, tlsServerName: iceHost)
+            }
+            return makeRelay(address: address, bridgeCert: cert)
+        }
+
+        let primaryRelay = makeHERelay(primaryAddress)
+
+        // Start primary (this maps to PROXY_TLS when address has tlsServerName, else PROXY).
+        let primaryPort = start(relay: primaryRelay)
+        if let p = primaryPort {
+            isRunning  = true
+            proxyPort  = p
+            activeRelay = primaryRelay
+            saveRelay(primaryRelay)
+            Log.info("🧊 HE primary started on :\(p) via \(primaryAddress)", category: "ICE")
+        } else {
+            Log.error("🧊 HE primary failed (\(primaryAddress))", category: "ICE")
+        }
+
+        // Start secondary without calling stop() first (we own two separate Rust statics).
+        if let secondaryAddress {
+            let secondaryRelay = makeHERelay(secondaryAddress)
+            let secondaryPort = startSecondary(relay: secondaryRelay)
+            if let sp = secondaryPort {
+                isSecondaryRunning = true
+                self.secondaryProxyPort = sp
+                self.secondaryRelay    = secondaryRelay
+                Log.info("🧊 HE secondary started on :\(sp) via \(secondaryAddress)", category: "ICE")
+            } else {
+                Log.info("🧊 HE secondary failed (\(secondaryAddress)) — single-proxy fallback", category: "ICE")
+            }
+        }
+
+        return primaryPort != nil || secondaryProxyPort > 0
+    }
+
+    /// Starts a proxy instance for use as the *secondary* (plain obfs4) leg in dual-proxy
+    /// happy-eyeballs mode. Unlike `start(relay:)`, this always targets the `PROXY` (plain)
+    /// static — so it won't collide with a concurrently running PROXY_TLS instance.
+    ///
+    /// If a plain proxy is already running its port is returned immediately (idempotent).
+    @MainActor
+    private func startSecondary(relay: IceRelay) -> UInt16? {
+        // For a plain-obfs4 secondary we always use ice_proxy_start (not _tls).
+        // If the caller accidentally passes a TLS relay, strip tlsServerName.
+        var host = ""
+        var port: UInt16 = 0
+        guard let comps = relay.address.split(separator: ":").map(String.init) as [String]?,
+              comps.count == 2,
+              let p = UInt16(comps[1]) else { return nil }
+        host = comps[0]; port = p
+
+        var outPort: UInt16 = 0
+        let result = host.withCString { hostPtr in
+            relay.bridgeCert.withCString { certPtr in
+                ice_proxy_start(certPtr, hostPtr, &outPort)
+            }
+        }
+        guard result == 0, outPort > 0 else { return nil }
+        return outPort
     }
 
     // MARK: - App-lifecycle entry points

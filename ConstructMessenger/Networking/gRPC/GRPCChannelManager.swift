@@ -282,6 +282,121 @@ final class GRPCChannelManager: Sendable {
         )
     }
 
+    // MARK: - Happy Eyeballs helpers
+
+    /// Returns the secondary (plain-obfs4) proxy port when running in dual-proxy mode, or nil.
+    func secondaryICEProxyPort() -> UInt16? {
+        guard !isICEOnCooldownInternal() else { return nil }
+        let port = ice_proxy_port_plain()
+        return port > 0 ? port : nil
+    }
+
+    /// Creates a one-shot gRPC client targeting the Construct server directly over TLS.
+    /// Used for the "direct" leg of a happy-eyeballs 3-way race.
+    func makeDirectClient() throws -> GRPCClient<HTTP2ClientTransport.Posix> {
+        let host = currentHost
+        let port = currentPort
+        let transport = try HTTP2ClientTransport.Posix(
+            target: .dns(host: host, port: port),
+            transportSecurity: .tls,
+            config: .defaults {
+                $0.connection = .init(
+                    maxIdleTime: .seconds(NetworkTiming.GRPC.maxIdleTimeSeconds),
+                    keepalive: .init(
+                        time: .seconds(NetworkTiming.GRPC.keepaliveTimeDirectSeconds),
+                        timeout: .seconds(NetworkTiming.GRPC.keepaliveTimeoutSeconds),
+                        allowWithoutCalls: true
+                    )
+                )
+            }
+        )
+        return GRPCClient(transport: transport, interceptors: [AuthInterceptor()])
+    }
+
+    /// Creates a one-shot gRPC client targeting a local ICE proxy port over plaintext.
+    /// Used for the ICE legs of a happy-eyeballs 3-way race.
+    func makeICEClient(port: UInt16) throws -> GRPCClient<HTTP2ClientTransport.Posix> {
+        let transport = try HTTP2ClientTransport.Posix(
+            target: .ipv4(address: "127.0.0.1", port: Int(port)),
+            transportSecurity: .plaintext,
+            config: .defaults {
+                $0.connection = .init(
+                    maxIdleTime: .seconds(NetworkTiming.GRPC.maxIdleTimeSeconds),
+                    keepalive: .init(
+                        time: .seconds(NetworkTiming.GRPC.keepaliveTimeIceSeconds),
+                        timeout: .seconds(NetworkTiming.GRPC.keepaliveTimeoutSeconds),
+                        allowWithoutCalls: true
+                    )
+                )
+            }
+        )
+        return GRPCClient(transport: transport, interceptors: [AuthInterceptor()])
+    }
+
+    /// Executes `operation` via a 3-way happy-eyeballs race:
+    ///   1. Direct gRPC (TLS to Construct server)
+    ///   2. ICE-TLS proxy (primary relay, AMS)                  [250 ms staggered start]
+    ///   3. ICE-plain proxy (secondary relay, e.g. MSK)         [450 ms staggered start]
+    ///
+    /// The first leg to succeed wins; the others are cancelled.  The winning routing
+    /// key is stored so the persistent connection is updated on the next `performRPC` call.
+    ///
+    /// Requires both proxy ports to already be running (or starting).
+    /// Use `IceProxyManager.startBothRelaysForHappyEyeballs()` first.
+    func happyEyeballsRace<Result: Sendable>(
+        _ operation: @Sendable @escaping (GRPCClient<HTTP2ClientTransport.Posix>) async throws -> Result
+    ) async throws -> Result {
+        return try await withThrowingTaskGroup(of: Result.self) { group in
+            // Leg 1: direct TLS
+            let directClient = try makeDirectClient()
+            group.addTask {
+                let connTask = Task { try await directClient.runConnections() }
+                defer {
+                    directClient.beginGracefulShutdown()
+                    connTask.cancel()
+                }
+                return try await operation(directClient)
+            }
+
+            // Leg 2: ICE-TLS (staggered by happyEyeballsICEStaggerMs)
+            let iceTLSPort = ice_proxy_port_tls()
+            if iceTLSPort > 0 {
+                let iceTLSClient = try makeICEClient(port: iceTLSPort)
+                group.addTask {
+                    try await Task.sleep(nanoseconds: NetworkTiming.ICE.happyEyeballsICEStaggerMs * 1_000_000)
+                    let connTask = Task { try await iceTLSClient.runConnections() }
+                    defer {
+                        iceTLSClient.beginGracefulShutdown()
+                        connTask.cancel()
+                    }
+                    return try await operation(iceTLSClient)
+                }
+            }
+
+            // Leg 3: ICE-plain (staggered further)
+            let icePlainPort = ice_proxy_port_plain()
+            if icePlainPort > 0 {
+                let icePlainClient = try makeICEClient(port: icePlainPort)
+                group.addTask {
+                    let stagger = NetworkTiming.ICE.happyEyeballsICEStaggerMs + NetworkTiming.ICE.happyEyeballsRelayStaggerMs
+                    try await Task.sleep(nanoseconds: stagger * 1_000_000)
+                    let connTask = Task { try await icePlainClient.runConnections() }
+                    defer {
+                        icePlainClient.beginGracefulShutdown()
+                        connTask.cancel()
+                    }
+                    return try await operation(icePlainClient)
+                }
+            }
+
+            guard let result = try await group.next() else {
+                throw RPCError(code: .unavailable, message: "All transport legs failed")
+            }
+            group.cancelAll()
+            return result
+        }
+    }
+
     /// Execute a gRPC operation with automatic client lifecycle management.
     /// Creates a client, runs connections in background, executes the operation, then shuts down.
     /// If the operation fails while ICE is active, records the failure so future calls bypass ICE.
@@ -351,6 +466,22 @@ final class GRPCChannelManager: Sendable {
 
         var lastError: Error?
         var iceAutoStartedThisCall = false   // true once we DPI-auto-started ICE in this call
+
+        // Happy Eyeballs pre-warm: fire ICE startup concurrently at t=0 while the direct
+        // attempt is in flight.  When `fastICEFallback` is true and we're not yet on ICE,
+        // we launch `startEphemeralOnDemandIfNeeded()` in a background Task so ICE is
+        // warming up in parallel.  If the direct attempt succeeds, we just never use the
+        // proxy.  If it times out (~4 s), the proxy is already ready to take over with
+        // virtually no additional delay (vs. the old 4s direct + 2s ICE probe = 6s stall).
+        if fastICEFallback, iceProxyPort() == nil {
+            Task {
+                let hasCert = await IceProxyManager.shared.hasCert
+                if hasCert {
+                    await IceProxyManager.shared.startEphemeralOnDemandIfNeeded()
+                }
+            }
+        }
+
         for attempt in 0..<3 {
             let usingICE = iceProxyPort() != nil
             let effectiveTimeout: TimeInterval? = {

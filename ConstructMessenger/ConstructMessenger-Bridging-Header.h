@@ -20,5 +20,9 @@ int32_t ice_proxy_start_tls(const char *bridge_line, const char *relay_addr,
 int32_t ice_proxy_stop(void);
 int32_t ice_proxy_is_running(void);
 uint16_t ice_proxy_port(void);
+/// TLS proxy port specifically (dual-proxy happy-eyeballs mode).
+uint16_t ice_proxy_port_tls(void);
+/// Plain obfs4 proxy port specifically (dual-proxy happy-eyeballs mode).
+uint16_t ice_proxy_port_plain(void);
 
 #endif /* ConstructMessenger_Bridging_Header_h */

@@ -132,6 +132,18 @@ enum NetworkTiming {
         static let onDemandStartJoinPollInterval: TimeInterval = 0.1
         static let relayLatencyProbeTimeout: TimeInterval = 2.0
         static let certFetchTimeoutHTTPS: TimeInterval = 8.0
+
+        // Happy Eyeballs — transparent failover
+        /// After the first reachable relay probe result arrives, wait this long for
+        /// additional results before proceeding with the sorted order.
+        /// Prevents waiting for unreachable endpoints (e.g. AMS blocked in RU)
+        /// when a relay has already responded.
+        static let sortByLatencyEarlyExitDelay: TimeInterval = 0.3
+        /// Stagger between starting the direct gRPC leg and the ICE leg
+        /// in the 3-way happy-eyeballs race. Direct always starts first.
+        static let happyEyeballsICEStaggerMs: UInt64 = 250
+        /// Stagger between starting the ICE-TLS leg and the ICE-plain (relay) leg.
+        static let happyEyeballsRelayStaggerMs: UInt64 = 200
     }
 
     // MARK: - Stream
