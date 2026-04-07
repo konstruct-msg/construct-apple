@@ -588,22 +588,21 @@ final class SessionCoordinator {
             do {
                 let pingContent = "__session_ping_\(UUID().uuidString)__"
                 let pingId = UUID()
-                let plan = ChunkedMessageSender.shared.buildPlan(plaintext: pingContent, messageId: pingId)
-                guard let firstPayload = plan.payloads.first else { return }
-                let components = try CryptoManager.shared.encryptMessage(firstPayload, for: userId)
-                let kemCiphertext = components.messageNumber == 0 ? sessionInitService.consumeKemCiphertext(for: userId) : nil
-                let kyberOtpkId = components.messageNumber == 0 ? sessionInitService.consumeKyberOtpkId(for: userId) : 0
-                let _ = try await ChunkedMessageSender.shared.sendChunks(
-                    plan: plan,
-                    senderId: myId,
+                let pingMessageId = pingId.uuidString.lowercased()
+                let _ = try await MessagingServiceClient.shared.sendMessage(
+                    messageId: pingMessageId,
                     recipientId: userId,
+                    senderId: myId,
                     conversationId: ConversationId.direct(myUserId: myId, theirUserId: userId),
+                    encryptedPayload: try MessageRouter.shared.encryptSessionControl(
+                        plaintext: pingContent,
+                        messageId: pingMessageId,
+                        recipientId: userId
+                    ),
                     timestamp: UInt64(Date().timeIntervalSince1970),
-                    preEncryptedFirst: components,
-                    kemCiphertext: kemCiphertext,
-                    kyberOtpkId: kyberOtpkId
+                    replyToMessageId: nil
                 )
-                Log.info("🏓 SESSION_STATE[tie_break_ping]: sent to \(userId.prefix(8))… (attempt \(attempt)) suiteId=\(components.suiteId) msgNum=\(components.messageNumber) — loser can now init as RESPONDER", category: "SessionInit")
+                Log.info("🏓 SESSION_STATE[tie_break_ping]: sent to \(userId.prefix(8))… (attempt \(attempt)) — loser can now init as RESPONDER", category: "SessionInit")
                 return
             } catch {
                 Log.error("❌ SESSION_STATE[tie_break_ping_fail]: attempt \(attempt)/\(pingMaxAttempts): \(error.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
@@ -631,23 +630,21 @@ final class SessionCoordinator {
 
         do {
             let readyContent = "__session_ready_\(UUID().uuidString)__"
-            let readyId = UUID()
-            let plan = ChunkedMessageSender.shared.buildPlan(plaintext: readyContent, messageId: readyId)
-            guard let firstPayload = plan.payloads.first else { return }
-            let components = try CryptoManager.shared.encryptMessage(firstPayload, for: userId)
-            let kemCiphertext = components.messageNumber == 0 ? sessionInitService.consumeKemCiphertext(for: userId) : nil
-            let kyberOtpkId = components.messageNumber == 0 ? sessionInitService.consumeKyberOtpkId(for: userId) : 0
-            let _ = try await ChunkedMessageSender.shared.sendChunks(
-                plan: plan,
-                senderId: myId,
+            let readyMessageId = UUID().uuidString.lowercased()
+            let _ = try await MessagingServiceClient.shared.sendMessage(
+                messageId: readyMessageId,
                 recipientId: userId,
+                senderId: myId,
                 conversationId: ConversationId.direct(myUserId: myId, theirUserId: userId),
+                encryptedPayload: try MessageRouter.shared.encryptSessionControl(
+                    plaintext: readyContent,
+                    messageId: readyMessageId,
+                    recipientId: userId
+                ),
                 timestamp: UInt64(Date().timeIntervalSince1970),
-                preEncryptedFirst: components,
-                kemCiphertext: kemCiphertext,
-                kyberOtpkId: kyberOtpkId
+                replyToMessageId: nil
             )
-            Log.info("🤝 SESSION_STATE[session_ready_sent]: RESPONDER notified INITIATOR \(userId.prefix(8))… msgNum=\(components.messageNumber)", category: "SessionInit")
+            Log.info("🤝 SESSION_STATE[session_ready_sent]: RESPONDER notified INITIATOR \(userId.prefix(8))…", category: "SessionInit")
         } catch {
             Log.error("❌ SESSION_STATE[session_ready_fail]: \(error.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
         }
@@ -862,16 +859,12 @@ final class SessionCoordinator {
                 do {
                     let messageUUID = UUID(uuidString: msg.id) ?? UUID()
                     let plan = ChunkedMessageSender.shared.buildPlan(plaintext: plaintext, messageId: messageUUID)
-                    guard let firstPayload = plan.payloads.first, !plan.payloads.isEmpty else {
+                    guard !plan.payloads.isEmpty else {
                         Log.error("❌ Auto-resend: message too large to build chunk plan: \(msg.id.prefix(8))…", category: "SessionInit")
                         msg.deliveryStatus = .failed
                         context.saveAndLog()
                         continue
                     }
-
-                    let firstComponents = try CryptoManager.shared.encryptMessage(firstPayload, for: userId)
-                    let kemCiphertext = firstComponents.messageNumber == 0 ? sessionInitService.consumeKemCiphertext(for: userId) : nil
-                    let kyberOtpkId = firstComponents.messageNumber == 0 ? sessionInitService.consumeKyberOtpkId(for: userId) : 0
 
                     let responses = try await ChunkedMessageSender.shared.sendChunks(
                         plan: plan,
@@ -879,9 +872,6 @@ final class SessionCoordinator {
                         recipientId: userId,
                         conversationId: ConversationId.direct(myUserId: myId, theirUserId: userId),
                         timestamp: UInt64(msg.timestamp.timeIntervalSince1970),
-                        preEncryptedFirst: firstComponents,
-                        kemCiphertext: kemCiphertext,
-                        kyberOtpkId: kyberOtpkId,
                         replyToMessageId: msg.replyToMessageId.map { $0.isEmpty ? nil : $0 } ?? nil
                     )
 

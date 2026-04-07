@@ -16,6 +16,8 @@ import UIKit
 /// Routes and processes incoming messages
 @MainActor
 class MessageRouter {
+
+    static let shared = MessageRouter()
     
     // MARK: - Core Data
     
@@ -359,6 +361,61 @@ class MessageRouter {
     }
 
     /// Execute only storage actions from a typed Rust action list (no ChatMessage context needed).
+    // MARK: - Outgoing Message Encryption via Rust Orchestrator
+
+    /// Encrypt a plaintext message through the Rust orchestrator (single source of truth for DR).
+    ///
+    /// Returns binary WirePayload ready to pass as `encryptedPayload` in the gRPC `SendMessage` call.
+    /// Persists updated DR session state as a side-effect.
+    ///
+    /// - Parameters:
+    ///   - plaintext: Raw UTF-8 message text.
+    ///   - messageId: Unique message UUID (used for ACK tracking).
+    ///   - recipientId: Contact user ID.
+    ///   - contentType: Proto ContentType (0 = regular message, default).
+    func encryptOutgoing(
+        plaintext: String,
+        messageId: String,
+        recipientId: String,
+        contentType: UInt8 = 0
+    ) throws -> Data {
+        let event = CfeIncomingEvent.outgoingMessage(
+            contactId: recipientId,
+            messageId: messageId,
+            plaintextUtf8: plaintext,
+            contentType: contentType
+        )
+        let actions = try CryptoManager.shared.orchestratorCore?.handleEvent(event: event)
+            ?? { throw NSError(domain: "MessageRouter", code: 1000, userInfo: [NSLocalizedDescriptionKey: "OrchestratorCore not initialized"]) }()
+        executeStorageActions(actions)
+        for action in actions {
+            if case .sendEncryptedMessage(let to, let payload, _, _) = action, to == recipientId {
+                return Data(payload)
+            }
+        }
+        throw NSError(
+            domain: "MessageRouter",
+            code: 1001,
+            userInfo: [NSLocalizedDescriptionKey: "Orchestrator returned no SendEncryptedMessage for \(recipientId.prefix(8))…"]
+        )
+    }
+
+    /// Encrypt a session control message (e.g. session ping, END_SESSION) through the orchestrator.
+    ///
+    /// Identical to `encryptOutgoing` but marked separately for clarity in call sites.
+    func encryptSessionControl(
+        plaintext: String,
+        messageId: String,
+        recipientId: String
+    ) throws -> Data {
+        try encryptOutgoing(
+            plaintext: plaintext,
+            messageId: messageId,
+            recipientId: recipientId,
+            contentType: 0
+        )
+    }
+
     private func executeStorageActions(_ actions: [CfeAction]) {
         for action in actions {
             if case .saveSessionToSecureStore(let key, let data) = action {

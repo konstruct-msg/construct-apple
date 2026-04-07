@@ -122,26 +122,9 @@ class ProfileShareViewModel {
             
             // Encrypt and send via E2E message
             do {
-                Log.debug("🔐 Encrypting profile message for user \(userId), JSON size: \(jsonSize) bytes", category: "ProfileShare")
+                Log.debug("🔐 Sending profile message for user \(userId), JSON size: \(jsonSize) bytes", category: "ProfileShare")
                 let messageId = UUID().uuidString
                 let plan = ChunkedMessageSender.shared.buildPlan(plaintext: jsonString, messageId: UUID(uuidString: messageId) ?? UUID())
-                let firstPayload = plan.payloads.first ?? jsonString
-                let firstComponents = try CryptoManager.shared.encryptMessage(firstPayload, for: userId)
-
-                Log.debug("✅ Profile message encrypted successfully, messageNumber: \(firstComponents.messageNumber)", category: "ProfileShare")
-
-                let message = ChatMessage(
-                    id: messageId,
-                    from: currentUserId,
-                    to: userId,
-                    messageType: nil,  // Will be set by server
-                    ephemeralPublicKey: firstComponents.ephemeralPublicKey,
-                    messageNumber: firstComponents.messageNumber,
-                content: firstComponents.content.base64EncodedString(),
-                    suiteId: firstComponents.suiteId,
-                    timestamp: UInt64(Date().timeIntervalSince1970),
-                    oneTimePreKeyId: firstComponents.oneTimePreKeyId
-                )
 
                 // ✅ Send via gRPC
                 do {
@@ -151,10 +134,9 @@ class ProfileShareViewModel {
                         senderId: currentUserId,
                         recipientId: userId,
                         conversationId: conversationId,
-                        timestamp: message.timestamp,
-                        preEncryptedFirst: firstComponents
+                        timestamp: UInt64(Date().timeIntervalSince1970)
                     )
-                    let response = responses.first ?? SendMessageResponse(messageId: message.id, status: "sent")
+                    let response = responses.first ?? SendMessageResponse(messageId: messageId, status: "sent")
                     if response.status.lowercased() == "blocked" {
                         Log.error("🚫 Profile share rejected — sender is blocked by \(userId.prefix(8))…", category: "ProfileShare")
                         await MainActor.run { completion(false, "blocked") }

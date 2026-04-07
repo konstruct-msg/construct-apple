@@ -408,10 +408,9 @@ class CryptoManager {
         // MARK: - Session Management
 
     /// Initializes a secure session with a recipient using the Rust core.
-    @discardableResult
-    func initializeSession(for userId: String, recipientBundle: (identityPublic: Data, signedPrekeyPublic: Data, signature: Data, verifyingKey: Data, suiteId: String), oneTimePreKeyPublic: Data? = nil, oneTimePreKeyId: UInt32? = nil, kyberPreKeyPublic: Data? = nil, kyberOneTimePreKeyPublic: Data? = nil, kyberOneTimePreKeyId: UInt32? = nil, spkUploadedAt: UInt64 = 0, spkRotationEpoch: UInt32 = 0, kyberSpkUploadedAt: UInt64 = 0, kyberSpkRotationEpoch: UInt32 = 0) throws -> (kemCiphertext: Data?, kyberOtpkId: UInt32) {
+    func initializeSession(for userId: String, recipientBundle: (identityPublic: Data, signedPrekeyPublic: Data, signature: Data, verifyingKey: Data, suiteId: String), oneTimePreKeyPublic: Data? = nil, oneTimePreKeyId: UInt32? = nil, kyberPreKeyPublic: Data? = nil, kyberOneTimePreKeyPublic: Data? = nil, kyberOneTimePreKeyId: UInt32? = nil, spkUploadedAt: UInt64 = 0, spkRotationEpoch: UInt32 = 0, kyberSpkUploadedAt: UInt64 = 0, kyberSpkRotationEpoch: UInt32 = 0) throws {
         do {
-            let result = try sessionInitService.initializeSession(
+            try sessionInitService.initializeSession(
                 for: userId,
                 recipientBundle: recipientBundle,
                 oneTimePreKeyPublic: oneTimePreKeyPublic,
@@ -433,7 +432,6 @@ class CryptoManager {
                 }
             )
             Log.info("✅ Session initialized for user: \(userId)", category: "CryptoManager")
-            return result
         } catch CryptoManagerError.invalidKeyData {
             Log.error("Failed to decode base64-encoded keys from bundle", category: "CryptoManager")
             throw CryptoManagerError.invalidKeyData

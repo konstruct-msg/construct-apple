@@ -23,31 +23,21 @@ final class ChunkedMessageSender {
         recipientId: String,
         conversationId: String,
         timestamp: UInt64,
-        preEncryptedFirst: CryptoManager.EncryptedMessageComponents? = nil,
-        kemCiphertext: Data? = nil,
-        kyberOtpkId: UInt32 = 0,
         replyToMessageId: String? = nil,
         onWirePayloadEncoded: ((String, Data) -> Void)? = nil
     ) async throws -> [SendMessageResponse] {
         var responses: [SendMessageResponse] = []
 
         for (index, payload) in plan.payloads.enumerated() {
-            let components: CryptoManager.EncryptedMessageComponents
-            if index == 0, let preEncryptedFirst {
-                components = preEncryptedFirst
-            } else {
-                components = try CryptoManager.shared.encryptMessage(payload, for: recipientId)
-            }
-
-            // Each chunk gets a unique message ID derived from plan + chunk index
             let chunkMessageId = index == 0 ? plan.messageId.uuidString.lowercased()
                 : "\(plan.messageId.uuidString.lowercased())-c\(index)"
 
-            // Attach KEM ciphertext only to the first chunk (session-establishing message)
-            let encryptedPayload = try WirePayloadCoder.encode(
-                components,
-                kemCiphertext: index == 0 ? kemCiphertext : nil,
-                kyberOtpkId: index == 0 ? kyberOtpkId : 0
+            // All encryption goes through the Rust orchestrator — PQXDH, DR state,
+            // and wire-payload packing are handled inside handleEvent(.outgoingMessage).
+            let encryptedPayload = try await MessageRouter.shared.encryptOutgoing(
+                plaintext: payload,
+                messageId: chunkMessageId,
+                recipientId: recipientId
             )
             onWirePayloadEncoded?(chunkMessageId, encryptedPayload)
 
@@ -58,7 +48,6 @@ final class ChunkedMessageSender {
                 conversationId: conversationId,
                 encryptedPayload: encryptedPayload,
                 timestamp: timestamp,
-                // Only the first chunk carries reply metadata
                 replyToMessageId: index == 0 ? replyToMessageId : nil
             )
             responses.append(response)

@@ -29,44 +29,6 @@ class SessionInitializationService {
     static let shared = SessionInitializationService()
     private init() {}
 
-    // MARK: - PQC pending KEM ciphertexts
-
-    /// Keyed by userId; holds the kem_ciphertext from a fresh PQXDH handshake
-    /// until it can be attached to the outgoing first message.
-    private var pendingKemCiphertexts: [String: Data] = [:]
-
-    /// Keyed by userId; holds the Kyber OTPK ID used in a fresh PQXDH handshake.
-    private var pendingKyberOtpkIds: [String: UInt32] = [:]
-
-    /// Consume (and remove) the pending KEM ciphertext for a contact, if any.
-    /// Also applies the deferred PQXDH contribution to the DR session — msg0 was
-    /// already encrypted with classic-only state, so this is the correct moment.
-    /// Returns nil (skipping PQ entirely) if the contribution cannot be applied,
-    /// so both sides stay in sync: neither applies PQXDH.
-    func consumeKemCiphertext(for userId: String) -> Data? {
-        guard let kem = pendingKemCiphertexts.removeValue(forKey: userId) else { return nil }
-        guard let core = CryptoManager.shared.orchestratorCore else {
-            Log.error("⚠️ PQC: Core nil at KEM consumption — skipping PQ for \(userId.prefix(8))...", category: "SessionInit")
-            PQCKeyManager.shared.clearPendingContribution(for: userId)
-            return nil  // Don't send kem; receiver won't apply PQ either → both stay classic
-        }
-        do {
-            try PQCKeyManager.shared.applyDeferredPQContribution(contactId: userId, core: core)
-            CryptoManager.shared.saveSessionToKeychainPublic(for: userId)
-            return kem
-        } catch {
-            Log.error("⚠️ PQC: Failed to apply deferred PQ for \(userId.prefix(8))...: \(error) — skipping PQ", category: "SessionInit")
-            PQCKeyManager.shared.clearPendingContribution(for: userId)
-            return nil  // Don't send kem; receiver won't apply PQ either → both stay classic
-        }
-    }
-
-    /// Consume (and remove) the pending Kyber OTPK ID for a contact (0 if none).
-    func consumeKyberOtpkId(for userId: String) -> UInt32 {
-        defer { pendingKyberOtpkIds.removeValue(forKey: userId) }
-        return pendingKyberOtpkIds[userId] ?? 0
-    }
-    
     // MARK: - Public Methods
     
     /// Fetch public key bundle with exponential backoff retry
@@ -107,7 +69,7 @@ class SessionInitializationService {
         userId: String,
         bundle: PublicKeyBundleData,
         deleteExisting: Bool = true
-    ) throws -> Data? {
+    ) throws -> Void {
         // Proactively delete stale session if requested
         if deleteExisting {
             if CryptoManager.shared.hasSession(for: userId) {
@@ -141,7 +103,7 @@ class SessionInitializationService {
 
         do {
             PerformanceMetrics.shared.start(.sessionInitStart, label: String(userId.prefix(8)))
-            let result = try CryptoManager.shared.initializeSession(
+            try CryptoManager.shared.initializeSession(
                 for: userId,
                 recipientBundle: bundleWithSuite,
                 oneTimePreKeyPublic: otpkPublic,
@@ -156,13 +118,6 @@ class SessionInitializationService {
             )
             PerformanceMetrics.shared.end(.sessionInitStart, endEvent: .sessionInitEnd, label: String(userId.prefix(8)))
             Log.info("✅ Session initialized as INITIATOR for \(userId)", category: "SessionInit")
-            if let kem = result.kemCiphertext {
-                pendingKemCiphertexts[userId] = kem
-            }
-            if result.kyberOtpkId > 0 {
-                pendingKyberOtpkIds[userId] = result.kyberOtpkId
-            }
-            return result.kemCiphertext
         } catch {
             let desc = "\(error)"
             // Rust rejects SPK bundles older than 14 days. Parse the age from the error message
@@ -196,8 +151,8 @@ class SessionInitializationService {
             // Fetch bundle with retry
             let bundle = try await fetchPublicKeyWithRetry(userId: userId)
             
-            // Initialize sending session (also stores pending KEM/OTPK IDs internally)
-            _ = try initializeSession(userId: userId, bundle: bundle, deleteExisting: true)
+            // Initialize sending session
+            try initializeSession(userId: userId, bundle: bundle, deleteExisting: true)
 
             Log.info("✅ SESSION_STATE[proactive_init_success]: userId=\(userId.prefix(8))...", category: "SessionInit")
             

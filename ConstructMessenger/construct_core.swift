@@ -4043,6 +4043,8 @@ public enum CfeIncomingEvent: Equatable, Hashable {
     
     case messageReceived(messageId: String, from: String, data: Data, msgNum: UInt32, kemCt: Data, otpkId: UInt32, isControl: Bool, contentType: UInt8
     )
+    case outgoingMessage(contactId: String, messageId: String, plaintextUtf8: String, contentType: UInt8
+    )
     case outgoingCallSignal(contactId: String, messageId: String, protoBytes: Data
     )
     case sessionInitCompleted(contactId: String, sessionData: Data
@@ -4079,26 +4081,29 @@ public struct FfiConverterTypeCfeIncomingEvent: FfiConverterRustBuffer {
         case 1: return .messageReceived(messageId: try FfiConverterString.read(from: &buf), from: try FfiConverterString.read(from: &buf), data: try FfiConverterData.read(from: &buf), msgNum: try FfiConverterUInt32.read(from: &buf), kemCt: try FfiConverterData.read(from: &buf), otpkId: try FfiConverterUInt32.read(from: &buf), isControl: try FfiConverterBool.read(from: &buf), contentType: try FfiConverterUInt8.read(from: &buf)
         )
         
-        case 2: return .outgoingCallSignal(contactId: try FfiConverterString.read(from: &buf), messageId: try FfiConverterString.read(from: &buf), protoBytes: try FfiConverterData.read(from: &buf)
+        case 2: return .outgoingMessage(contactId: try FfiConverterString.read(from: &buf), messageId: try FfiConverterString.read(from: &buf), plaintextUtf8: try FfiConverterString.read(from: &buf), contentType: try FfiConverterUInt8.read(from: &buf)
         )
         
-        case 3: return .sessionInitCompleted(contactId: try FfiConverterString.read(from: &buf), sessionData: try FfiConverterData.read(from: &buf)
+        case 3: return .outgoingCallSignal(contactId: try FfiConverterString.read(from: &buf), messageId: try FfiConverterString.read(from: &buf), protoBytes: try FfiConverterData.read(from: &buf)
         )
         
-        case 4: return .ackReceived(messageId: try FfiConverterString.read(from: &buf)
+        case 4: return .sessionInitCompleted(contactId: try FfiConverterString.read(from: &buf), sessionData: try FfiConverterData.read(from: &buf)
         )
         
-        case 5: return .sessionLoaded(key: try FfiConverterString.read(from: &buf), data: try FfiConverterOptionData.read(from: &buf)
+        case 5: return .ackReceived(messageId: try FfiConverterString.read(from: &buf)
         )
         
-        case 6: return .keyBundleFetched(userId: try FfiConverterString.read(from: &buf), bundleJson: try FfiConverterString.read(from: &buf)
+        case 6: return .sessionLoaded(key: try FfiConverterString.read(from: &buf), data: try FfiConverterOptionData.read(from: &buf)
         )
         
-        case 7: return .networkReconnected
+        case 7: return .keyBundleFetched(userId: try FfiConverterString.read(from: &buf), bundleJson: try FfiConverterString.read(from: &buf)
+        )
         
-        case 8: return .appLaunched
+        case 8: return .networkReconnected
         
-        case 9: return .timerFired(timerId: try FfiConverterString.read(from: &buf)
+        case 9: return .appLaunched
+        
+        case 10: return .timerFired(timerId: try FfiConverterString.read(from: &buf)
         )
         
         default: throw UniffiInternalError.unexpectedEnumCase
@@ -4121,46 +4126,54 @@ public struct FfiConverterTypeCfeIncomingEvent: FfiConverterRustBuffer {
             FfiConverterUInt8.write(contentType, into: &buf)
             
         
-        case let .outgoingCallSignal(contactId,messageId,protoBytes):
+        case let .outgoingMessage(contactId,messageId,plaintextUtf8,contentType):
             writeInt(&buf, Int32(2))
+            FfiConverterString.write(contactId, into: &buf)
+            FfiConverterString.write(messageId, into: &buf)
+            FfiConverterString.write(plaintextUtf8, into: &buf)
+            FfiConverterUInt8.write(contentType, into: &buf)
+            
+        
+        case let .outgoingCallSignal(contactId,messageId,protoBytes):
+            writeInt(&buf, Int32(3))
             FfiConverterString.write(contactId, into: &buf)
             FfiConverterString.write(messageId, into: &buf)
             FfiConverterData.write(protoBytes, into: &buf)
             
         
         case let .sessionInitCompleted(contactId,sessionData):
-            writeInt(&buf, Int32(3))
+            writeInt(&buf, Int32(4))
             FfiConverterString.write(contactId, into: &buf)
             FfiConverterData.write(sessionData, into: &buf)
             
         
         case let .ackReceived(messageId):
-            writeInt(&buf, Int32(4))
+            writeInt(&buf, Int32(5))
             FfiConverterString.write(messageId, into: &buf)
             
         
         case let .sessionLoaded(key,data):
-            writeInt(&buf, Int32(5))
+            writeInt(&buf, Int32(6))
             FfiConverterString.write(key, into: &buf)
             FfiConverterOptionData.write(data, into: &buf)
             
         
         case let .keyBundleFetched(userId,bundleJson):
-            writeInt(&buf, Int32(6))
+            writeInt(&buf, Int32(7))
             FfiConverterString.write(userId, into: &buf)
             FfiConverterString.write(bundleJson, into: &buf)
             
         
         case .networkReconnected:
-            writeInt(&buf, Int32(7))
-        
-        
-        case .appLaunched:
             writeInt(&buf, Int32(8))
         
         
-        case let .timerFired(timerId):
+        case .appLaunched:
             writeInt(&buf, Int32(9))
+        
+        
+        case let .timerFired(timerId):
+            writeInt(&buf, Int32(10))
             FfiConverterString.write(timerId, into: &buf)
             
         }

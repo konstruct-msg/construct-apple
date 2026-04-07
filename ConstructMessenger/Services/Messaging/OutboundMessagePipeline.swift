@@ -15,9 +15,6 @@ final class OutboundMessagePipeline {
         recipientId: String,
         conversationId: String,
         timestamp: UInt64,
-        preEncryptedFirst: CryptoManager.EncryptedMessageComponents,
-        kemCiphertext: Data?,
-        kyberOtpkId: UInt32,
         replyToMessageId: String?
     ) async throws -> SendMessageResponse {
         let responses = try await ChunkedMessageSender.shared.sendChunks(
@@ -26,9 +23,6 @@ final class OutboundMessagePipeline {
             recipientId: recipientId,
             conversationId: conversationId,
             timestamp: timestamp,
-            preEncryptedFirst: preEncryptedFirst,
-            kemCiphertext: kemCiphertext,
-            kyberOtpkId: kyberOtpkId,
             replyToMessageId: replyToMessageId,
             onWirePayloadEncoded: { chunkId, wire in
                 OutgoingWirePayloadStore.shared.saveChunk(

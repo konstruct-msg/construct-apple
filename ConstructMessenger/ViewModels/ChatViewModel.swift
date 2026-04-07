@@ -842,26 +842,22 @@ class ChatViewModel: NSObject {
                 ErrorRouter.shared.report(.validation(.textTooLarge(currentSize: text.count, maxSize: MessageSizeLimits.maxTextCharacters)))
                 return
             }
-            let firstPayload = plan.payloads.first ?? text
-            let firstComponents = try CryptoManager.shared.encryptMessage(firstPayload, for: recipientId)
             let message = ChatMessage(
                 id: messageId,
                 from: currentUserId,
                 to: recipientId,
                 messageType: nil,
-                ephemeralPublicKey: firstComponents.ephemeralPublicKey,
-                messageNumber: firstComponents.messageNumber,
-                content: firstComponents.content.base64EncodedString(),
-                suiteId: firstComponents.suiteId,
+                ephemeralPublicKey: Data(),
+                messageNumber: 0,
+                content: "",
+                suiteId: 0,
                 timestamp: UInt64(Date().timeIntervalSince1970),
-                oneTimePreKeyId: firstComponents.oneTimePreKeyId
+                oneTimePreKeyId: 0
             )
 
             Log.debug("📤 Sending message with ID: \(messageId)", category: "ChatViewModel")
-            Log.debug("   Message number: \(firstComponents.messageNumber)", category: "ChatViewModel")
-            Log.debug("   Content length: \(message.content.count) bytes", category: "ChatViewModel")
 
-            saveMessage(message, decryptedContent: text, isSentByMe: true, status: .sending, replyTo: replyTo, replyToContentOverride: replyToContentOverride, localThumbnails: localThumbnails, suiteId: firstComponents.suiteId)
+            saveMessage(message, decryptedContent: text, isSentByMe: true, status: .sending, replyTo: replyTo, replyToContentOverride: replyToContentOverride, localThumbnails: localThumbnails, suiteId: 0)
 
             Log.info("📮 Sending message via gRPC: \(messageId)", category: "ChatViewModel")
             Task { [weak self] in
@@ -872,11 +868,6 @@ class ChatViewModel: NSObject {
                 }
 
                 do {
-                    // Attach PQXDH KEM ciphertext to first message if this opened a new session
-                    let kemCiphertext = firstComponents.messageNumber == 0
-                        ? sessionInitService.consumeKemCiphertext(for: recipientId) : nil
-                    let kyberOtpkId = firstComponents.messageNumber == 0
-                        ? sessionInitService.consumeKyberOtpkId(for: recipientId) : 0
                     let aggregated = try await OutboundMessagePipeline.shared.sendChunks(
                         plan: plan,
                         baseMessageId: messageId,
@@ -884,9 +875,6 @@ class ChatViewModel: NSObject {
                         recipientId: recipientId,
                         conversationId: ConversationId.direct(myUserId: currentUserId, theirUserId: recipientId),
                         timestamp: message.timestamp,
-                        preEncryptedFirst: firstComponents,
-                        kemCiphertext: kemCiphertext,
-                        kyberOtpkId: kyberOtpkId,
                         replyToMessageId: replyTo?.id
                     )
 
@@ -1012,8 +1000,11 @@ class ChatViewModel: NSObject {
 
         Task {
             do {
-                let components = try CryptoManager.shared.encryptMessage(newText, for: recipientId)
-                let wirePayload = try WirePayloadCoder.encode(components)
+                let wirePayload = try MessageRouter.shared.encryptOutgoing(
+                    plaintext: newText,
+                    messageId: message.id,
+                    recipientId: recipientId
+                )
                 let response = try await MessagingServiceClient.shared.editMessage(
                     messageId: message.id,
                     conversationId: conversationId,

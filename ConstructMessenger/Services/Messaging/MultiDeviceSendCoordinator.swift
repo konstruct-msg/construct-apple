@@ -182,18 +182,10 @@ final class MultiDeviceSendCoordinator {
                 )
             }
 
-            let components = try CryptoManager.shared.encryptMessage(plaintext, for: contactId)
-
-            // Attach PQXDH KEM ciphertext on session-opening message (messageNumber == 0).
-            let kemCiphertext = components.messageNumber == 0
-                ? SessionInitializationService.shared.consumeKemCiphertext(for: contactId) : nil
-            let kyberOtpkId = components.messageNumber == 0
-                ? SessionInitializationService.shared.consumeKyberOtpkId(for: contactId) : 0
-
-            let encPayload = try WirePayloadCoder.encode(
-                components,
-                kemCiphertext: kemCiphertext,
-                kyberOtpkId: kyberOtpkId
+            let encPayload = try MessageRouter.shared.encryptOutgoing(
+                plaintext: plaintext,
+                messageId: messageId,
+                recipientId: contactId
             )
 
             _ = try await MessagingServiceClient.shared.sendMessage(
