@@ -152,6 +152,10 @@ class AuthViewModel {
             self.isAuthenticated = true
             scheduleTokenRefresh()
             CryptoManager.shared.setLocalUserId(userId)
+            if !CryptoManager.shared.isInitialized {
+                handleLostDeviceKeys(userId: userId, reason: "keys missing after session token restore")
+                return
+            }
             loadUserFromCoreData(userId: userId)
             return
         }
@@ -182,6 +186,10 @@ class AuthViewModel {
                 self.isAuthenticated = true
                 scheduleTokenRefresh()
                 CryptoManager.shared.setLocalUserId(userId)
+                if !CryptoManager.shared.isInitialized {
+                    handleLostDeviceKeys(userId: userId, reason: "keys missing after token refresh")
+                    return
+                }
                 loadUserFromCoreData(userId: userId)
                 Log.info("✅ Session refreshed successfully", category: "Auth")
                 return
@@ -351,6 +359,21 @@ class AuthViewModel {
         isAuthenticated = true
         scheduleTokenRefresh()
         loadUserFromCoreData(userId: userId, username: username)
+    }
+
+    /// Handles the critical case where the user is authenticated (has a session token) but
+    /// device crypto keys are missing from Keychain — typically caused by Keychain migration
+    /// failures, device restore/backup issues, or iOS beta bugs.
+    /// Recovery: clear all local state so the user goes through onboarding and re-registers.
+    private func handleLostDeviceKeys(userId: String, reason: String) {
+        Log.error("🚨 [Auth] Device keys lost — forcing re-registration. Reason: \(reason). userId: \(userId.prefix(8))", category: "Auth")
+        cancelTimeouts()
+        SessionManager.shared.clearSession()
+        KeychainManager.shared.deleteDeviceKeys()
+        isAuthenticated = false
+        hasRegisteredDeviceKeys = false
+        currentUserId = nil
+        currentUser = nil
     }
 
     func logout() {

@@ -26,6 +26,10 @@ class CryptoManager {
     // orchestratorCore is created in setLocalUserId() once userId is available.
     // ⚠️ Internal access for InviteGenerator (needs to export keys)
     internal var orchestratorCore: OrchestratorCore?
+
+    /// True once OrchestratorCore has been successfully created from Keychain keys.
+    /// False when the user is authenticated but device keys are missing (partial Keychain state).
+    var isInitialized: Bool { orchestratorCore != nil }
     private var _bootstrapCore: ClassicCryptoCore?
     private var _cachedKeysJson: String?
     private var _cachedUserId: String?

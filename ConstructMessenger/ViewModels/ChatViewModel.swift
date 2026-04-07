@@ -427,6 +427,13 @@ class ChatViewModel: NSObject {
             onFailure: { [weak self] error in
                 guard let self = self else { return }
                 self.isInitializingSession = false
+                // coreNotInitialized is fatal — no recovery until the user re-registers.
+                if case CryptoManagerError.coreNotInitialized = error {
+                    Log.error("🚨 coreNotInitialized in initializeSessionProactively — OrchestratorCore missing", category: "ChatViewModel")
+                    ErrorRouter.shared.report(error)
+                    self.failQueuedMessages(reason: error.userFacingMessage)
+                    return
+                }
                 ErrorRouter.shared.report(.sessionInitFailed(contactId: userId), recovery: { [weak self] in
                     self?.fetchRecipientPublicKey()
                 })
@@ -970,6 +977,14 @@ class ChatViewModel: NSObject {
             }
 
         } catch {
+            // coreNotInitialized is fatal — OrchestratorCore was never created (lost device keys).
+            // Retrying will never succeed. Surface as non-recoverable error.
+            if case CryptoManagerError.coreNotInitialized = error {
+                Log.error("🚨 coreNotInitialized in sendTextMessage — OrchestratorCore missing, not retrying", category: "ChatViewModel")
+                ErrorRouter.shared.report(error)
+                isSending = false
+                return
+            }
             // Encryption failure = session likely corrupted; re-initialize and re-queue
             Log.debug("🔄 Encryption failed, session was deleted. Reinitializing...", category: "ChatViewModel")
             guard let toUserId = chat.otherUser?.id else {
