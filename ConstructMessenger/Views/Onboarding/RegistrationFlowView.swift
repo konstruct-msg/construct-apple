@@ -373,6 +373,8 @@ struct RegistrationFlowView: View {
             await MainActor.run {
                 authViewModel.finalizeDeviceRegistration(userId: registerData.userId, username: username)
             }
+            // Record the SPK upload timestamp so PreKeyRotationService can track SPK age.
+            PreKeyRotationService.shared.recordSpkUpload()
             
             // 6. Upload initial one-time prekeys (100 OTPKs for full Signal Protocol)
             Log.info("6️⃣ Uploading initial one-time prekeys...", category: "Registration")

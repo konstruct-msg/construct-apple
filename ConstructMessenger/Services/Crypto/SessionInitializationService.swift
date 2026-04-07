@@ -6,11 +6,16 @@ enum SessionError: Error, LocalizedError {
     /// Server returned a bundle whose SPK rotation epoch is older than the last
     /// seen epoch for this contact — possible replay attack.
     case staleSPKBundle(epoch: UInt32, knownEpoch: UInt32)
+    /// Peer's SPK is older than the Rust core's staleness limit.
+    /// The peer must open their app to trigger SPK rotation before a session can be established.
+    case peerSPKStale(ageDays: Double)
 
     var errorDescription: String? {
         switch self {
         case .staleSPKBundle(let epoch, let knownEpoch):
             return "SPK bundle replay: received epoch \(epoch) ≤ known epoch \(knownEpoch)"
+        case .peerSPKStale(let days):
+            return "Contact's encryption keys are \(String(format: "%.0f", days)) days old and need to be refreshed — ask them to open the app"
         }
     }
 }
@@ -159,6 +164,20 @@ class SessionInitializationService {
             }
             return result.kemCiphertext
         } catch {
+            let desc = "\(error)"
+            // Rust rejects SPK bundles older than 14 days. Parse the age from the error message
+            // and surface as peerSPKStale so callers can show a human-readable message.
+            if desc.contains("SPK bundle is stale") || desc.contains("spk bundle is stale") {
+                let ageDays: Double
+                if let match = desc.range(of: #"age=(\d+)s"#, options: .regularExpression) {
+                    let ageSecs = Double(desc[match].dropFirst(4).dropLast(1)) ?? 0
+                    ageDays = ageSecs / 86400
+                } else {
+                    ageDays = 14
+                }
+                Log.error("⚠️ Peer SPK stale for \(userId.prefix(8))… — age ≈ \(String(format: "%.1f", ageDays))d", category: "SessionInit")
+                throw SessionError.peerSPKStale(ageDays: ageDays)
+            }
             Log.error("❌ Session init failed for \(userId): \(error)", category: "SessionInit")
             Log.error("   bundle.suiteId=\(bundle.suiteId), identityPublic.len=\(bundle.identityPublic.count), signedPrekeyPublic.len=\(bundle.signedPrekeyPublic.count)", category: "SessionInit")
             throw error

@@ -8,7 +8,7 @@
 //  updates them transactionally, preventing desynchronization where one key
 //  is replaced on the server but the other is not.
 //
-//  Rotation schedule: monthly (30 days) by default.
+//  Rotation schedule: 7 days by default.
 //  Called from ChatsViewModel on app launch after authentication.
 //
 
@@ -21,19 +21,31 @@ final class PreKeyRotationService {
 
     // MARK: - Constants
 
-    private static let lastRotationKey = "construct.spk.lastRotationTimestamp"
+    private static let lastRotationKey    = "construct.spk.lastRotationTimestamp"
+    /// Tracks when the SPK was first uploaded (set at registration AND updated on each rotation).
+    /// Used to detect SPK age independently from the rotation timer, so we can force-rotate
+    /// before the Rust core's staleness limit rejects the bundle on the peer side.
+    private static let spkUploadKey       = "construct.spk.uploadTimestamp"
     /// Must be strictly less than SPK_MAX_AGE_SECS in the Rust core (currently 14 days).
     /// 7 days = weekly rotation; gives a full rotation-period grace buffer before
     /// the Rust peer-side check rejects the bundle as stale.
     private static let rotationIntervalDays: Double = 7
+    /// Force rotation when the actual SPK age approaches the Rust staleness limit.
+    /// 12 days = 2-day safety margin before the Rust 14-day hard rejection.
+    private static let spkMaxAgeDays: Double = 12
 
     // MARK: - Public API
 
     /// Check whether SPK rotation is due and perform it if so.
     ///
     /// Call on every app launch after the user is authenticated and a gRPC
-    /// channel is available. No-op if the last rotation was < 30 days ago.
+    /// channel is available. No-op if the last rotation was < 7 days ago
+    /// AND the SPK is < 12 days old.
     func rotateIfNeeded(deviceId: String) async {
+        guard !deviceId.isEmpty else {
+            Log.error("❌ SPK rotation skipped — deviceId is empty (Keychain unavailable?)", category: "SPKRotation")
+            return
+        }
         guard isRotationDue() else {
             Log.debug("🔑 SPK rotation not due yet", category: "SPKRotation")
             return
@@ -50,6 +62,22 @@ final class PreKeyRotationService {
     func forceRotate(deviceId: String, reason: Shared_Proto_Services_V1_SignedPreKeyRotationReason) async throws {
         Log.info("🔑 Force SPK rotation requested (reason: \(reason))", category: "SPKRotation")
         try await performAtomicRotation(deviceId: deviceId, reason: reason)
+    }
+
+    /// Convenience overload — reads deviceId from Keychain.
+    /// Use from diagnostic UI where callers don't have direct access to deviceId.
+    func forceRotate() async {
+        let deviceId = KeychainManager.shared.loadDeviceID() ?? ""
+        guard !deviceId.isEmpty else {
+            Log.error("❌ forceRotate: deviceId not available", category: "SPKRotation")
+            return
+        }
+        do {
+            try await forceRotate(deviceId: deviceId, reason: .user)
+            Log.info("✅ Force SPK rotation complete", category: "SPKRotation")
+        } catch {
+            Log.error("❌ Force SPK rotation failed: \(error)", category: "SPKRotation")
+        }
     }
 
     // MARK: - Core Rotation Logic
@@ -137,14 +165,40 @@ final class PreKeyRotationService {
     // MARK: - Schedule Helpers
 
     private func isRotationDue() -> Bool {
+        let now = Date().timeIntervalSince1970
+
+        // 1. Timer-based check: rotate every 7 days
         let last = UserDefaults.standard.double(forKey: Self.lastRotationKey)
-        guard last > 0 else { return true }  // Never rotated
-        let daysSince = (Date().timeIntervalSince1970 - last) / 86400
-        return daysSince >= Self.rotationIntervalDays
+        if last <= 0 { return true }  // Never rotated
+        let daysSinceRotation = (now - last) / 86400
+        if daysSinceRotation >= Self.rotationIntervalDays { return true }
+
+        // 2. Age-based check: force-rotate if SPK is approaching the Rust staleness limit.
+        // This catches cases where the timer was reset (app reinstall, UserDefaults cleared)
+        // but the server's SPK was uploaded long ago and would soon be rejected by peers.
+        let uploadedAt = UserDefaults.standard.double(forKey: Self.spkUploadKey)
+        if uploadedAt > 0 {
+            let spkAgeDays = (now - uploadedAt) / 86400
+            if spkAgeDays >= Self.spkMaxAgeDays {
+                Log.info("🔑 SPK age \(String(format: "%.1f", spkAgeDays))d ≥ \(Self.spkMaxAgeDays)d limit — forcing rotation", category: "SPKRotation")
+                return true
+            }
+        }
+
+        return false
+    }
+
+    /// Call when an SPK is first uploaded (registration, recovery, device link).
+    /// Establishes the age baseline independently from the rotation timer.
+    func recordSpkUpload() {
+        UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: Self.spkUploadKey)
+        Log.debug("🔑 SPK upload timestamp recorded", category: "SPKRotation")
     }
 
     private func recordRotation() {
-        UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: Self.lastRotationKey)
+        let now = Date().timeIntervalSince1970
+        UserDefaults.standard.set(now, forKey: Self.lastRotationKey)
+        UserDefaults.standard.set(now, forKey: Self.spkUploadKey)
     }
 }
 

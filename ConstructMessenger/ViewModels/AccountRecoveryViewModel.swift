@@ -232,6 +232,7 @@ final class AccountRecoveryViewModel {
             }
 
             enteredWords = Array(repeating: "", count: 12)  // clear sensitive data
+            PreKeyRotationService.shared.recordSpkUpload()
             recoverStep = .done
         } catch {
             recoverStep = .failed(errorMessage(from: error))

@@ -137,6 +137,11 @@ struct DiagnosticsView: View {
                 // MARK: - Dev Tools (Debug only)
                 VStack(alignment: .leading, spacing: 6) {
                     ConstructSection(header: NSLocalizedString("DEVELOPER", comment: "")) {
+                        ConstructActionRow(icon: "[↻]", title: LocalizedStringKey("Force SPK Rotation"), role: .secondary) {
+                            Task {
+                                await PreKeyRotationService.shared.forceRotate()
+                            }
+                        }
                         ConstructActionRow(icon: "[!]", title: LocalizedStringKey("Reset local data & Keychain"), role: .destructive) {
                             resetLocalData()
                         }
