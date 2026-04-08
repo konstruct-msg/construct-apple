@@ -875,25 +875,23 @@ class MessageRouter {
     
     /// Marks outgoing messages that were sent to the server but never delivered as `.queued`,
     /// so they can be re-encrypted and re-sent under the fresh session after END_SESSION.
-    /// Only considers messages sent in the past `requeueWindowSeconds` to avoid re-sending stale chat.
+    /// All `.sent` messages for the contact are considered — the time window is not capped,
+    /// because the user may have been offline longer than any fixed window.
     /// Messages that have already been re-queued `maxMessageRetryAttempts` times are permanently
     /// marked as `.failed` to break infinite session-reset amplification cycles.
     private func requeueUndeliveredOutgoing(
         for userId: String,
-        in context: NSManagedObjectContext,
-        requeueWindowSeconds: TimeInterval = NetworkTiming.Messaging.resendWindowSeconds
+        in context: NSManagedObjectContext
     ) {
         let chatFetch = Chat.fetchRequest()
         chatFetch.predicate = NSPredicate(format: "otherUser.id == %@", userId)
         guard let chat = (try? context.fetch(chatFetch))?.first else { return }
 
-        let since = Date().addingTimeInterval(-requeueWindowSeconds)
         let msgFetch = Message.fetchRequest()
         msgFetch.predicate = NSPredicate(
-            format: "chat == %@ AND isSentByMe == YES AND deliveryStatusRaw == %d AND timestamp >= %@",
+            format: "chat == %@ AND isSentByMe == YES AND deliveryStatusRaw == %d",
             chat,
-            DeliveryStatus.sent.rawValue,
-            since as NSDate
+            DeliveryStatus.sent.rawValue
         )
         msgFetch.sortDescriptors = [NSSortDescriptor(key: "timestamp", ascending: true)]
 

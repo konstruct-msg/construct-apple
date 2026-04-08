@@ -17,7 +17,6 @@ enum NetworkTiming {
         static let messageAckTimeout: TimeInterval = 15.0
         static let messageSendTimeout: TimeInterval = 20.0
         static let queueCheckInterval: TimeInterval = 5.0
-        static let resendWindowSeconds: TimeInterval = 5 * 60
     }
 
     // MARK: - Long Polling
