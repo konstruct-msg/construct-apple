@@ -27,9 +27,11 @@ struct DesktopRootView: View {
     @Environment(\.commandBridge) private var commandBridge
     @AppStorage("appTheme") private var appTheme: AppTheme = .automatic
 
-    // Sidebar column visibility (user can hide sidebar with toggle)
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var showAddContact = false
+    @State private var sidebarMode: SidebarMode = .chats
+
+    private enum SidebarMode { case chats, synaps }
 
     var body: some View {
         Group {
@@ -87,22 +89,27 @@ struct DesktopRootView: View {
 
     private var mainContent: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
-            // Sidebar: chats list with search
-            ChatsListView()
-                .environment(chatsViewModel)
-                .navigationSplitViewColumnWidth(min: 210, ideal: 260, max: 320)
-        } content: {
-            // Middle: Synaps node network
-            DesktopSynapsView()
-                .environment(chatsViewModel)
-                .environment(\.managedObjectContext, viewContext)
-                .navigationSplitViewColumnWidth(min: 270, ideal: 340, max: 460)
+            // Sidebar: mode toggle + either chats list or synaps grid
+            VStack(spacing: 0) {
+                sidebarModeBar
+                Rectangle().fill(Color.CT.noise).frame(height: 1)
+
+                if sidebarMode == .chats {
+                    ChatsListView()
+                        .environment(chatsViewModel)
+                } else {
+                    DesktopSynapsView()
+                        .environment(chatsViewModel)
+                        .environment(\.managedObjectContext, viewContext)
+                }
+            }
+            .background(Color.CT.bg)
+            .navigationSplitViewColumnWidth(min: 230, ideal: 280, max: 360)
         } detail: {
             // Detail: active chat or placeholder
             if let chatId = chatsViewModel.chatToOpen,
                let chat = fetchChat(id: chatId) {
                 ChatView(chat: chat, context: viewContext)
-                    // Accept dropped images/files directly into the chat
                     .onDrop(of: [.image, .fileURL], isTargeted: nil) { providers in
                         handleDrop(providers: providers, into: chat)
                     }
@@ -111,7 +118,7 @@ struct DesktopRootView: View {
                     .onDrop(of: [.fileURL], isTargeted: nil) { _ in false }
             }
         }
-        .frame(minWidth: 860, minHeight: 500)
+        .frame(minWidth: 700, minHeight: 480)
         // Add Contact sheet (⌘⌥N)
         .sheet(isPresented: $showAddContact) {
             DesktopAddContactView()
@@ -130,15 +137,13 @@ struct DesktopRootView: View {
         // Toolbar — CT ASCII style
         .toolbar {
             ToolbarItem(placement: .navigation) {
-                Button {
-                    showAddContact = true
-                } label: {
-                    Text("[+] NODE")
+                HStack(spacing: 2) {
+                    modeButton("CHATS", mode: .chats)
+                    Text("·")
                         .font(CTFont.regular(11))
-                        .foregroundStyle(Color.CT.accent)
+                        .foregroundStyle(Color.CT.noise)
+                    modeButton("SYNAPS", mode: .synaps)
                 }
-                .help("Add Contact (⌥⌘N)")
-                .keyboardShortcut("n", modifiers: [.command, .option])
             }
 
             ToolbarItem(placement: .primaryAction) {
@@ -152,6 +157,69 @@ struct DesktopRootView: View {
                 .help("Scan QR code to add contact")
             }
         }
+    }
+
+    // MARK: - Sidebar mode toggle bar
+
+    private var sidebarModeBar: some View {
+        HStack(spacing: 0) {
+            sidebarTab(label: "CHATS", mode: .chats)
+            Rectangle().fill(Color.CT.noise).frame(width: 1)
+            sidebarTab(label: "SYNAPS", mode: .synaps)
+
+            Spacer()
+
+            // Contextual action: [+] in Synaps mode, [+] new chat in Chats mode
+            Button {
+                if sidebarMode == .synaps {
+                    NotificationCenter.default.post(name: .desktopShowAddContact, object: nil)
+                } else {
+                    chatsViewModel.showNewChat = true
+                }
+            } label: {
+                Text("[+]")
+                    .font(CTFont.regular(12))
+                    .foregroundStyle(Color.CT.accent)
+                    .padding(.horizontal, 12)
+            }
+            .buttonStyle(.plain)
+            .help(sidebarMode == .synaps ? "Add contact" : "New conversation (⌘N)")
+        }
+        .frame(height: 34)
+        .background(Color.CT.bg)
+    }
+
+    private func sidebarTab(label: String, mode: SidebarMode) -> some View {
+        let isActive = sidebarMode == mode
+        return Button {
+            withAnimation(.easeInOut(duration: 0.15)) { sidebarMode = mode }
+        } label: {
+            VStack(spacing: 0) {
+                Text(label)
+                    .font(CTFont.bold(10))
+                    .tracking(3)
+                    .foregroundStyle(isActive ? Color.CT.accent : Color.CT.textDim)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 33)
+                // Active underline
+                Rectangle()
+                    .fill(isActive ? Color.CT.accent : Color.clear)
+                    .frame(height: 1)
+            }
+        }
+        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity)
+    }
+
+    private func modeButton(_ label: String, mode: SidebarMode) -> some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.15)) { sidebarMode = mode }
+        } label: {
+            Text("[\(label)]")
+                .font(CTFont.regular(11))
+                .foregroundStyle(sidebarMode == mode ? Color.CT.accent : Color.CT.textDim)
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Drag & Drop into chat

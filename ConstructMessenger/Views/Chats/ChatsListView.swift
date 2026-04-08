@@ -137,11 +137,13 @@ struct ChatsListView: View {
         HStack(spacing: 10) {
             ConnectionStatusIndicator()
             Spacer()
+            #if os(iOS)
             Button { showingQRScanner = true } label: {
                 Text(CTSymbol.scan)
                     .font(CTFont.bold(14))
                     .foregroundColor(Color.CT.accent)
             }
+            #endif
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 11)
