@@ -296,30 +296,16 @@ final class SessionCoordinator {
             }
         }
 
-        // When this device wins the tie-break, notify the loser via END_SESSION and then
-        // send a session establishment ping so the loser can immediately become RESPONDER.
+        // When this device wins the tie-break, send SESSION_RESET_INIT — a single atomic
+        // message that carries both END_SESSION signal and the new X3DH init payload.
+        // Eliminates the 200 ms ordering hack from the old two-step sequence.
         messageRouter.onTieBreakWin = { [weak self] userId in
             guard let self else { return }
             let suiteIdAtWin = Int(KeychainManager.shared.loadSessionSuiteId(userId: userId) ?? 0)
-            Log.info("🏆 SESSION_STATE[tie_break_outcome]: INITIATOR role confirmed, peer=\(userId.prefix(8))… suiteId=\(suiteIdAtWin), sending END_SESSION+ping", category: "SessionInit")
+            Log.info("🏆 SESSION_STATE[tie_break_outcome]: INITIATOR role confirmed, peer=\(userId.prefix(8))… suiteId=\(suiteIdAtWin), sending SESSION_RESET_INIT", category: "SessionInit")
             Task {
-                var endSessionOk = false
-                do {
-                    // Send END_SESSION directly to the network — do NOT call
-                    // SessionCoordinator.sendEndSession because that would archive and clear
-                    // our just-restored INITIATOR session.
-                    let _ = try await MessagingServiceClient.shared.sendEndSession(to: userId, reason: "tie_break_win")
-                    endSessionOk = true
-                    Log.info("📤 SESSION_STATE[tie_break_end_session]: sent to \(userId.prefix(8))… suiteId=\(suiteIdAtWin)", category: "SessionInit")
-                } catch {
-                    Log.error("❌ SESSION_STATE[tie_break_end_session_fail]: peer=\(userId.prefix(8))… error=\(error.localizedDescription)", category: "SessionInit")
-                }
-                // The RESPONDER already wiped their session when they sent us the X3DH init
-                // (their healing attempt). The DR-ratchet ping encoded in the restored session
-                // (msgNum > 0) is unreachable by them — they have no matching state.
                 // Re-initialize from scratch: fetch RESPONDER's bundle → new outgoing session
-                // (msgNum=0). The subsequent sendSessionPing then carries a fresh X3DH init
-                // that RESPONDER can accept via initReceivingSession.
+                // (msgNum=0). SESSION_RESET_INIT then carries that X3DH init payload atomically.
                 await self.sessionInitService.initializeSessionProactively(
                     userId: userId,
                     onSuccess: { },
@@ -327,19 +313,14 @@ final class SessionCoordinator {
                         Log.error("❌ SESSION_STATE[tie_break_reinit_fail]: \(err.localizedDescription)", category: "SessionInit")
                     }
                 )
-                // ── Tie-break ordering fix (#3.4) ─────────────────────────────
-                // END_SESSION and session_ping are sent separately. If the network
-                // delivers ping before END_SESSION, RESPONDER will try to decrypt
-                // it with the old (incompatible) session and fail. A 200 ms buffer
-                // gives END_SESSION enough time to arrive and be processed first.
-                try? await Task.sleep(nanoseconds: 200_000_000)
-                await self.sendSessionPing(to: userId)
+                // Single atomic message: RESPONDER archives old session + inits in one pass.
+                await self.sendSessionResetInit(to: userId)
                 // Phase 1 of two-phase handshake: session is now "unconfirmed" until
                 // RESPONDER sends back __session_ready__. ChatViewModel will buffer any
                 // outgoing messages as .queued until confirmation is received.
                 SessionConfirmationTracker.shared.markPending(userId)
-                let suiteIdAtPing = Int(KeychainManager.shared.loadSessionSuiteId(userId: userId) ?? 0)
-                Log.info("🏓 SESSION_STATE[tie_break_seq]: peer=\(userId.prefix(8))… endSession=\(endSessionOk ? "✓" : "✗") ping=sent suiteId=\(suiteIdAtPing)", category: "SessionInit")
+                let suiteIdAfter = Int(KeychainManager.shared.loadSessionSuiteId(userId: userId) ?? 0)
+                Log.info("🔄 SESSION_STATE[tie_break_sri_sent]: peer=\(userId.prefix(8))… suiteId=\(suiteIdAfter)", category: "SessionInit")
             }
             // Start watchdog: if RESPONDER has not replied within timeout, re-send ping.
             self.startTieBreakWatchdog(for: userId)
@@ -583,6 +564,54 @@ final class SessionCoordinator {
     private let pingMaxAttempts = 3
     private let pingRetryBaseDelay: UInt64 = 1_000_000_000 // 1 s
 
+    /// Send SESSION_RESET_INIT — atomic replacement for `sendEndSession` + `sendSessionPing`.
+    ///
+    /// Encodes the X3DH init payload (`msgNum=0`) with `contentType: .sessionResetInit`.
+    /// RESPONDER atomically archives old session and inits as RESPONDER in one `handleEvent` pass,
+    /// eliminating the 200 ms ordering window from the legacy two-step tie-break sequence.
+    ///
+    /// Falls back to the legacy two-step sequence if all attempts fail (backward compat).
+    private func sendSessionResetInit(to userId: String) async {
+        guard CryptoManager.shared.hasSession(for: userId) else {
+            Log.info("⚠️ SESSION_STATE[sri_skip]: no INITIATOR session for \(userId.prefix(8))…", category: "SessionInit")
+            return
+        }
+        guard let myId = SessionManager.shared.currentUserId, !myId.isEmpty else { return }
+
+        for attempt in 1...pingMaxAttempts {
+            do {
+                let sriContent = "__session_reset_init_\(UUID().uuidString)__"
+                let sriId = UUID().uuidString.lowercased()
+                let _ = try await MessagingServiceClient.shared.sendMessage(
+                    messageId: sriId,
+                    recipientId: userId,
+                    senderId: myId,
+                    conversationId: ConversationId.direct(myUserId: myId, theirUserId: userId),
+                    encryptedPayload: try MessageRouter.shared.encryptSessionControl(
+                        plaintext: sriContent,
+                        messageId: sriId,
+                        recipientId: userId
+                    ),
+                    timestamp: UInt64(Date().timeIntervalSince1970),
+                    contentType: .sessionResetInit,
+                    replyToMessageId: nil
+                )
+                Log.info("🔄 SESSION_STATE[sri_sent]: SESSION_RESET_INIT to \(userId.prefix(8))… (attempt \(attempt))", category: "SessionInit")
+                return
+            } catch {
+                Log.error("❌ SESSION_STATE[sri_fail]: attempt \(attempt)/\(pingMaxAttempts): \(error.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
+                if attempt < pingMaxAttempts {
+                    try? await Task.sleep(nanoseconds: pingRetryBaseDelay * UInt64(attempt))
+                } else {
+                    Log.info("⚠️ SESSION_STATE[sri_fallback]: SESSION_RESET_INIT exhausted, falling back to two-step for \(userId.prefix(8))…", category: "SessionInit")
+                    let _ = try? await MessagingServiceClient.shared.sendEndSession(to: userId, reason: "sri_fallback")
+                    try? await Task.sleep(nanoseconds: 300_000_000)
+                    await sendSessionPing(to: userId)
+                }
+            }
+        }
+    }
+
     private func sendSessionPing(to userId: String) async {
         guard CryptoManager.shared.hasSession(for: userId) else {
             Log.info("⚠️ SESSION_STATE[tie_break_ping_skip]: no INITIATOR session for \(userId.prefix(8))…", category: "SessionInit")
@@ -681,9 +710,7 @@ final class SessionCoordinator {
                     Log.error("❌ SESSION_STATE[watchdog_reinit_fail]: \(err.localizedDescription)", category: "SessionInit")
                 }
             )
-            // Allow END_SESSION (sent on previous attempt) to be processed before ping.
-            try? await Task.sleep(nanoseconds: 200_000_000)
-            await self.sendSessionPing(to: userId)
+            await self.sendSessionResetInit(to: userId)
         }
     }
 

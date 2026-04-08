@@ -213,6 +213,32 @@ final class MessagingServiceClient: Sendable {
 
         var failed: [FailedMessage] = []
         let chatMessages = response.messages.compactMap { msg -> ChatMessage? in
+            // SESSION_RESET_INIT: atomic END_SESSION + new X3DH init — must be checked first
+            // (has a real payload, would be mis-classified by the END_SESSION size heuristic).
+            if msg.contentType == .sessionResetInit {
+                guard let decoded = try? WirePayloadCoder.decode(msg.encryptedPayload) else {
+                    Log.debug("⚠️ Failed to decode SESSION_RESET_INIT payload \(msg.messageID) — queuing failed ACK", category: "MessagingServiceClient")
+                    failed.append(FailedMessage(id: msg.messageID, senderId: msg.senderID))
+                    return nil
+                }
+                Log.debug("🔄 SESSION_RESET_INIT pending from \(msg.senderID.prefix(8))… id=\(msg.messageID.prefix(8))…", category: "MessagingServiceClient")
+                return ChatMessage(
+                    id: msg.messageID,
+                    from: msg.senderID,
+                    to: "",
+                    messageType: "SESSION_RESET_INIT",
+                    ephemeralPublicKey: Data(decoded.ephemeralPublicKey),
+                    messageNumber: decoded.messageNumber,
+                    content: decoded.content,
+                    suiteId: 1,
+                    timestamp: UInt64(msg.timestamp),
+                    oneTimePreKeyId: decoded.oneTimePreKeyId,
+                    kemCiphertext: decoded.kemCiphertext ?? Data(),
+                    contentType: 24,
+                    kyberOtpkId: decoded.kyberOtpkId,
+                    rawPayload: msg.encryptedPayload
+                )
+            }
             // END_SESSION: detect by contentType OR sentinel payload size (server may strip contentType).
             let isEndSession = msg.contentType == .sessionReset ||
                 (!msg.encryptedPayload.isEmpty && msg.encryptedPayload.count < WirePayloadCoder.headerSize)

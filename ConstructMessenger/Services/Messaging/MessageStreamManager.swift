@@ -737,6 +737,31 @@ final class MessageStreamManager {
                 Log.info("🔑 KEY_SYNC envelope from \(envelope.sender.userID.prefix(8))…", category: "MessageStream")
                 return .keySyncRequest(envelope.sender.userID)
             }
+            // SESSION_RESET_INIT: atomic END_SESSION + new X3DH session init in one delivery.
+            // Must be checked BEFORE the END_SESSION payload-size heuristic (it has a real payload).
+            if envelope.contentType == .sessionResetInit {
+                guard let decoded = try? WirePayloadCoder.decode(envelope.encryptedPayload) else {
+                    Log.info("⚠️ Failed to decode SESSION_RESET_INIT payload for message \(envelope.messageID)", category: "MessageStream")
+                    return nil
+                }
+                Log.info("🔄 SESSION_RESET_INIT from \(envelope.sender.userID.prefix(8))… id=\(envelope.messageID.prefix(8))…", category: "MessageStream")
+                return .message(ChatMessage(
+                    id: envelope.messageID,
+                    from: envelope.sender.userID,
+                    to: envelope.recipient.userID,
+                    messageType: "SESSION_RESET_INIT",
+                    ephemeralPublicKey: Data(decoded.ephemeralPublicKey),
+                    messageNumber: decoded.messageNumber,
+                    content: decoded.content,
+                    suiteId: 1,
+                    timestamp: UInt64(envelope.timestamp),
+                    oneTimePreKeyId: decoded.oneTimePreKeyId,
+                    kemCiphertext: decoded.kemCiphertext ?? Data(),
+                    contentType: 24,
+                    kyberOtpkId: decoded.kyberOtpkId,
+                    rawPayload: envelope.encryptedPayload
+                ))
+            }
             // END_SESSION: detect by contentType OR by payload size.
             // Servers may strip contentType when relaying — fall back to payload size:
             // real WirePayload is always ≥ WirePayloadCoder.headerSize (46) bytes;

@@ -72,6 +72,11 @@ struct ChatMessage: Codable, Identifiable {
         messageType == "SENDER_SYNC"
     }
 
+    /// Check if this is a SESSION_RESET_INIT message (atomic END_SESSION + new X3DH init).
+    var isSessionResetInit: Bool {
+        messageType == "SESSION_RESET_INIT"
+    }
+
     /// Check if this is a regular encrypted message
     var isRegularMessage: Bool {
         messageType == "DIRECT_MESSAGE" || messageType == nil  // nil for legacy messages

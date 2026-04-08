@@ -119,6 +119,16 @@ class MessageRouter {
             return
         }
 
+        // 3a. SESSION_RESET_INIT: atomic archive of old session + RESPONDER init in one step.
+        //     Must be checked BEFORE the END_SESSION path (it carries a real X3DH payload).
+        if message.isSessionResetInit {
+            PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
+            Log.info("🔄 SESSION_RESET_INIT from \(otherUserId.prefix(8))…", category: "MessageRouter")
+            handleSessionResetInit(message: message, from: otherUserId, in: context, pendingMessages: &pendingMessages)
+            onReceiptNeeded?([message.id], otherUserId, .delivered)
+            return
+        }
+
         // 3. Check if this is an END_SESSION control message
         if message.isEndSession {
             PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
@@ -856,6 +866,63 @@ class MessageRouter {
     }
     
     // MARK: - END_SESSION Handling
+
+    /// Handle SESSION_RESET_INIT — atomic archive of old session + RESPONDER init in a single pass.
+    ///
+    /// Replaces the two-step `END_SESSION` → 200 ms delay → `msgNum=0` sequence used in the
+    /// tie-break WIN path. The INITIATOR sends one message with `CONTENT_TYPE_SESSION_RESET_INIT=24`
+    /// whose payload is the X3DH init (`msgNum=0`). RESPONDER:
+    /// 1. Archives the old session (same as `handleEndSession`)
+    /// 2. Routes the X3DH payload through `handleFirstMessage` (normal RESPONDER init)
+    private func handleSessionResetInit(
+        message: ChatMessage,
+        from userId: String,
+        in context: NSManagedObjectContext,
+        pendingMessages: inout [String: [ChatMessage]]
+    ) {
+        // 1. Archive old session via Rust orchestrator (canonical path); Swift fallback otherwise.
+        var rustHandled = false
+        if let core = CryptoManager.shared.orchestratorCore {
+            let endSessionData = Data("__END_SESSION__".utf8)
+            let event = CfeIncomingEvent.messageReceived(
+                messageId: "sri_archive_\(userId)_\(Int(Date().timeIntervalSince1970))",
+                from: userId,
+                data: endSessionData,
+                msgNum: 0,
+                kemCt: Data(),
+                otpkId: 0,
+                isControl: true,
+                contentType: 0
+            )
+            if let actions = try? core.handleEvent(event: event) {
+                executeStorageActions(actions)
+                rustHandled = true
+            }
+        }
+        if !rustHandled {
+            CryptoManager.shared.archiveSession(for: userId, reason: .endSessionReceived)
+        }
+
+        // 2. Re-queue outgoing messages sent under the old session (cannot be decrypted by peer).
+        requeueUndeliveredOutgoing(for: userId, in: context)
+
+        // 3. Remove stale pending messages and clear heal queue.
+        pendingMessages.removeValue(forKey: userId)
+        SessionHealingService.shared.clearQueue(for: userId, in: context)
+
+        // 4. Route the X3DH payload as a fresh msgNum=0 — triggers normal RESPONDER init path.
+        let (chat, isNewChat) = findOrCreateChat(for: userId, in: context)
+        handleFirstMessage(
+            message,
+            from: userId,
+            chat: chat,
+            isNewChat: isNewChat,
+            in: context,
+            pendingMessages: &pendingMessages
+        )
+
+        Log.info("✅ SESSION_RESET_INIT: old session archived, RESPONDER init triggered for \(userId.prefix(8))…", category: "MessageRouter")
+    }
 
     /// Handle END_SESSION message.
     ///
