@@ -223,7 +223,7 @@ class MessageRouter {
             return
         }
 
-        let actions: [CfeAction]
+        var actions: [CfeAction]
         do {
             PerformanceMetrics.shared.messageDecryptStart(messageId: message.id)
             actions = try core.handleEvent(event: event)
@@ -233,6 +233,17 @@ class MessageRouter {
             onEndSessionNeeded?(otherUserId)
             if isNewChat { context.delete(chat) }
             return
+        }
+
+        // Handle checkAckInDb round-trip synchronously (Rust ACK cache miss after restart).
+        // Rust returns [checkAckInDb(id)] when its in-memory cache misses; Swift checks Core Data
+        // and feeds back ackDbResult so Rust can decide whether to decrypt or drop the message.
+        if actions.count == 1, case .checkAckInDb(let ackMsgId) = actions[0] {
+            let isProcessed = PersistentACKStore.shared.isProcessed(ackMsgId, in: context)
+            let ackResult = CfeIncomingEvent.ackDbResult(messageId: ackMsgId, isProcessed: isProcessed)
+            if let followup = try? core.handleEvent(event: ackResult), !followup.isEmpty {
+                actions = followup
+            }
         }
 
         for action in actions {
