@@ -110,7 +110,7 @@ actor IceCertFetcher {
     @discardableResult
     func fetchAndCacheRelayConfig() async -> [RelayInfo]? {
         let urlString = "https://\(ServerConfig.inviteHost)/.well-known/construct-server"
-        guard let url = URL(string: urlString) else { return cachedRelayInfos() }
+        guard let url = URL(string: urlString) else { return Self.cachedRelayInfosSync() }
 
         var request = URLRequest(url: url, timeoutInterval: timeout)
         request.cachePolicy = .reloadIgnoringLocalCacheData
@@ -119,17 +119,17 @@ actor IceCertFetcher {
             let (data, response) = try await URLSession.shared.data(for: request)
             guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
                 Log.debug("🧊 construct-server returned non-200", category: "ICE")
-                return cachedRelayInfos()
+                return Self.cachedRelayInfosSync()
             }
 
             guard try verifySignature(data) else {
                 Log.error("🧊 construct-server signature invalid — ignoring response", category: "ICE")
-                return cachedRelayInfos()
+                return Self.cachedRelayInfosSync()
             }
 
             let parsed = try JSONDecoder().decode(ConstructServerWellKnown.self, from: data)
             guard let relays = parsed.ice?.relays, !relays.isEmpty else {
-                return cachedRelayInfos()
+                return Self.cachedRelayInfosSync()
             }
 
             // Persist to UserDefaults
@@ -145,7 +145,7 @@ actor IceCertFetcher {
             return relays
         } catch {
             Log.debug("🧊 construct-server fetch error: \(error)", category: "ICE")
-            return cachedRelayInfos()
+            return Self.cachedRelayInfosSync()
         }
     }
 
@@ -172,32 +172,6 @@ actor IceCertFetcher {
     /// Synchronous SNI lookup for non-async contexts.
     static func sniSync(for address: String) -> String? {
         if let relay = cachedRelayInfosSync()?.first(where: { $0.addressWithPort == address }) {
-            return relay.sni.isEmpty ? nil : relay.sni
-        }
-        return ICEConfig.hardcodedRelaySNIs[address]
-    }
-        guard let data = UserDefaults.standard.data(forKey: Self.cachedRelayInfosKey),
-              let relays = try? JSONDecoder().decode([RelayInfo].self, from: data),
-              !relays.isEmpty else { return nil }
-        return relays
-    }
-
-    /// Returns the SPKI pin for a given relay address (e.g. "158.160.140.67:443"),
-    /// looking first in the cached relay config, then falling back to hardcoded ICEConfig values.
-    func spkiPin(for address: String) -> String? {
-        if let relay = cachedRelayInfos()?.first(where: { $0.addressWithPort == address }) {
-            return relay.spkiSha256.isEmpty ? nil : relay.spkiSha256
-        }
-        // Hardcoded fallback for Moscow relay
-        if address == ICEConfig.mskRelayAddress {
-            return ICEConfig.mskRelayPinnedSPKI.isEmpty ? nil : ICEConfig.mskRelayPinnedSPKI
-        }
-        return nil
-    }
-
-    /// Returns the fake SNI for a given relay address, from cache or hardcoded config.
-    func sni(for address: String) -> String? {
-        if let relay = cachedRelayInfos()?.first(where: { $0.addressWithPort == address }) {
             return relay.sni.isEmpty ? nil : relay.sni
         }
         return ICEConfig.hardcodedRelaySNIs[address]
