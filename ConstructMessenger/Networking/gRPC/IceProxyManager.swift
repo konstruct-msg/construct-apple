@@ -110,29 +110,36 @@ enum IceIATMode: Int, CaseIterable, Identifiable {
 /// Relay configuration — a single obfs4 bridge endpoint.
 struct IceRelay: Codable, Identifiable {
     let id: UUID
-    let address: String     // "relay.example.com:443" (TLS mode) or ":9443" (legacy)
+    let address: String     // "158.160.140.67:443" (TLS mode) or ":9443" (legacy)
     let bridgeCert: String  // base64 cert received from server
     let iatMode: IceIATMode
     /// When set: outer TLS connection is established first using this SNI before
     /// the obfs4 handshake. nil = legacy plain-TCP obfs4 (no outer TLS).
+    /// Empty string = TLS but no SNI extension (IP-based ServerName).
+    /// Non-empty = SNI sent in ClientHello (use fake domain for REALITY-style evasion).
     let tlsServerName: String?
+    /// SHA-256 of DER SubjectPublicKeyInfo (hex). When set, cert is verified by pin
+    /// instead of CA chain. Enables use of fake SNI without chain validation errors.
+    let pinnedSpki: String?
 
     /// Full bridge line string passed to Rust: "cert=<cert> iat-mode=<n>"
     var bridgeLine: String {
         "cert=\(bridgeCert) iat-mode=\(iatMode.rawValue)"
     }
 
-    init(address: String, bridgeCert: String, iatMode: IceIATMode = .none, tlsServerName: String? = nil) {
+    init(address: String, bridgeCert: String, iatMode: IceIATMode = .none,
+         tlsServerName: String? = nil, pinnedSpki: String? = nil) {
         self.id            = UUID()
         self.address       = address
         self.bridgeCert    = bridgeCert
         self.iatMode       = iatMode
         self.tlsServerName = tlsServerName
+        self.pinnedSpki    = pinnedSpki
     }
 
     // Codable conformance for IceIATMode (stored as rawValue Int)
     enum CodingKeys: String, CodingKey {
-        case id, address, bridgeCert, iatMode, tlsServerName
+        case id, address, bridgeCert, iatMode, tlsServerName, pinnedSpki
     }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -142,6 +149,7 @@ struct IceRelay: Codable, Identifiable {
         let raw       = (try? c.decode(Int.self, forKey: .iatMode)) ?? 0
         iatMode       = IceIATMode(rawValue: raw) ?? .none
         tlsServerName = try? c.decode(String.self, forKey: .tlsServerName)
+        pinnedSpki    = try? c.decode(String.self, forKey: .pinnedSpki)
     }
     func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
@@ -150,21 +158,39 @@ struct IceRelay: Codable, Identifiable {
         try c.encode(bridgeCert, forKey: .bridgeCert)
         try c.encode(iatMode.rawValue, forKey: .iatMode)
         try? c.encode(tlsServerName, forKey: .tlsServerName)
+        try? c.encode(pinnedSpki, forKey: .pinnedSpki)
     }
 }
 
-/// Builds an `IceRelay` from a server-pushed address string, automatically
-/// detecting TLS mode by port: `:443` → TLS-wrapped obfs4 (SNI = hostname),
-/// any other port → legacy plain-obfs4.
+/// Builds an `IceRelay` from an address string, automatically detecting TLS mode:
+/// `:443` → TLS-wrapped obfs4, any other port → legacy plain-obfs4.
+///
+/// SNI + pinning priority for `:443` addresses:
+/// 1. `IceCertFetcher` cached relay config (fetched from signed construct-server) → preferred.
+/// 2. `ICEConfig.hardcodedRelaySNIs[address]` + `ICEConfig.mskRelayPinnedSPKI` → hardcoded fallback.
+/// 3. Hostname extracted from address → domain-based relay (no pinning).
 private func makeRelay(address: String, bridgeCert: String) -> IceRelay {
-    // "host:port" — extract hostname to use as SNI for port-443 endpoints.
     let sni: String?
+    let pin: String?
     if address.hasSuffix(":443") {
-        sni = address.components(separatedBy: ":").first.flatMap { $0.isEmpty ? nil : $0 }
+        if let s = IceCertFetcher.sniSync(for: address), !s.isEmpty {
+            sni = s
+            pin = IceCertFetcher.spkiPinSync(for: address)
+        } else if let explicitSNI = ICEConfig.hardcodedRelaySNIs[address] {
+            // Hardcoded fallback: IP-based relay with fake SNI for REALITY-style DPI evasion.
+            sni = explicitSNI
+            pin = ICEConfig.mskRelayPinnedSPKI.isEmpty ? nil : ICEConfig.mskRelayPinnedSPKI
+        } else {
+            // Server-pushed relay (domain-based): derive SNI from hostname, no pinning.
+            sni = address.components(separatedBy: ":").first.flatMap { $0.isEmpty ? nil : $0 }
+            pin = nil
+        }
     } else {
         sni = nil
+        pin = nil
     }
-    return IceRelay(address: address, bridgeCert: bridgeCert, iatMode: .none, tlsServerName: sni)
+    return IceRelay(address: address, bridgeCert: bridgeCert, iatMode: .none,
+                    tlsServerName: sni, pinnedSpki: pin)
 }
 
 /// Manages the construct-ice local TCP proxy for gRPC obfuscation.
@@ -333,13 +359,27 @@ final class IceProxyManager: ObservableObject {
         PerformanceMetrics.shared.start(.iceProxyStartBegin, label: relay.address)
 
         if let sni = relay.tlsServerName {
-            // TLS-over-obfs4 mode: outer TLS (SecureTransport, SNI=sni) before obfs4.
-            // DPI sees a normal TLS ClientHello on port 443.
-            Log.info("🧊 ICE TLS mode → \(relay.address) (SNI: \(sni))", category: "ICE")
-            result = relay.bridgeLine.withCString { bridgePtr in
-                relay.address.withCString { addrPtr in
-                    sni.withCString { sniPtr in
-                        ice_proxy_start_tls(bridgePtr, addrPtr, sniPtr, &port)
+            if let spki = relay.pinnedSpki {
+                // Pinned mode: fake/empty SNI + SPKI cert verification (no CA chain).
+                // DPI sees: TLS to IP:443 with Yandex Cloud SNI — looks like CDN traffic.
+                Log.info("🧊 ICE TLS+pinned → \(relay.address) (SNI: \(sni.isEmpty ? "<none>" : sni))", category: "ICE")
+                result = relay.bridgeLine.withCString { bridgePtr in
+                    relay.address.withCString { addrPtr in
+                        sni.withCString { sniPtr in
+                            spki.withCString { spkiPtr in
+                                ice_proxy_start_tls_pinned(bridgePtr, addrPtr, sniPtr, spkiPtr, &port)
+                            }
+                        }
+                    }
+                }
+            } else {
+                // Unpinned TLS mode (server-pushed domain relays): CA-chain validation.
+                Log.info("🧊 ICE TLS mode → \(relay.address) (SNI: \(sni))", category: "ICE")
+                result = relay.bridgeLine.withCString { bridgePtr in
+                    relay.address.withCString { addrPtr in
+                        sni.withCString { sniPtr in
+                            ice_proxy_start_tls(bridgePtr, addrPtr, sniPtr, &port)
+                        }
                     }
                 }
             }

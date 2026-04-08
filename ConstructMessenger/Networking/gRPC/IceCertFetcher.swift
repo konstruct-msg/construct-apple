@@ -2,22 +2,40 @@
 //  IceCertFetcher.swift
 //  Construct Messenger
 //
-//  Fetches the ICE bridge cert and relay list from .well-known endpoints.
-//  Used as level 3 in the cert fallback chain:
-//
+//  Fetches the ICE bridge cert and relay config from .well-known endpoints.
+//  Cert fallback chain (level 3):
 //    1. AuthTokensResponse (after login) → saved to Keychain by IceProxyManager
 //    2. Keychain cache                   → IceProxyManager.getIceBridgeCert()
-//    3. https://<inviteHost>/.well-known/ice-cert   ← this file
+//    3. https://konstruct.cc/.well-known/ice-cert   ← this file
 //    4. Hardcoded in binary              → ICEConfig.hardcodedBridgeCert
 //
-//  The cert endpoint returns: {"cert":"<base64>","iat_mode":0}
-//
-//  Relay list is fetched from:
-//    https://ams.konstruct.cc/.well-known/construct-server
-//  Response: {"ice":{"primary":"ice.ams.konstruct.cc:443","relays":["ice.msk.konstruct.cc:9443"]}}
-//  Result is cached in UserDefaults under ICEConfig.cachedRelayListKey.
+//  Relay config (with SPKI pins) fallback chain:
+//    1. https://konstruct.cc/.well-known/construct-server (Ed25519 signed)
+//    2. UserDefaults cache (last valid fetch)
+//    3. Hardcoded in ICEConfig
 
+import CryptoKit
 import Foundation
+
+// MARK: - Relay config model
+
+struct RelayInfo: Codable {
+    let id: String
+    let addr: String
+    let port: Int
+    let domain: String
+    let sni: String
+    let spkiSha256: String
+
+    var addressWithPort: String { "\(addr):\(port)" }
+
+    enum CodingKeys: String, CodingKey {
+        case id, addr, port, domain, sni
+        case spkiSha256 = "spki_sha256"
+    }
+}
+
+// MARK: - Private wire types
 
 private struct IceCertWellKnown: Decodable {
     let cert: String
@@ -30,19 +48,22 @@ private struct IceCertWellKnown: Decodable {
 }
 
 private struct ConstructServerWellKnown: Decodable {
-    struct ICEEndpoints: Decodable {
+    struct ICESection: Decodable {
         let primary: String?
-        let relays: [String]?
-        let relayRegions: [ICERelayRegion]?
-
-        enum CodingKeys: String, CodingKey {
-            case primary
-            case relays
-            case relayRegions = "relay_regions"
-        }
+        let relays: [RelayInfo]?
     }
-    let ice: ICEEndpoints?
+    let version: String?
+    let ice: ICESection?
+    let signedAt: String?
+    let signature: String?
+
+    enum CodingKeys: String, CodingKey {
+        case version, ice, signature
+        case signedAt = "signed_at"
+    }
 }
+
+// MARK: - IceCertFetcher
 
 actor IceCertFetcher {
     static let shared = IceCertFetcher()
@@ -50,7 +71,12 @@ actor IceCertFetcher {
 
     private let timeout: TimeInterval = NetworkTiming.ICE.certFetchTimeoutHTTPS
 
-    /// Fetch the ICE bridge cert from `https://<inviteHost>/.well-known/ice-cert`.
+    // UserDefaults key for cached relay infos (JSON-encoded [RelayInfo])
+    private static let cachedRelayInfosKey = "construct.ice_relay_infos"
+
+    // MARK: - Bridge cert
+
+    /// Fetch the ICE bridge cert from `https://konstruct.cc/.well-known/ice-cert`.
     /// Returns nil on any network or parse error.
     func fetchFromHTTPS() async -> String? {
         let urlString = "https://\(ServerConfig.inviteHost)/.well-known/ice-cert"
@@ -75,17 +101,16 @@ actor IceCertFetcher {
         }
     }
 
-    /// Fetch the relay list and relay-region config from `https://ams.konstruct.cc/.well-known/construct-server`.
-    ///
-    /// On success, updates UserDefaults caches:
-    ///   - `ICEConfig.cachedRelayListKey`    → relay address strings
-    ///   - `ICEConfig.cachedRelayRegionsKey` → JSON-encoded `[ICERelayRegion]` (optional field)
-    ///
-    /// Returns the relay address strings, or nil if the server is unreachable or unparseable.
+    // MARK: - Relay config (signed)
+
+    /// Fetch, verify, and cache the relay config from `.well-known/construct-server`.
+    /// The config is signed with Ed25519; invalid signatures are rejected.
+    /// On success, caches `[RelayInfo]` in UserDefaults.
+    /// Returns cached relays on network failure, nil if no cache exists.
     @discardableResult
-    func fetchAndCacheRelayList() async -> [String]? {
-        let urlString = "https://ams.konstruct.cc/.well-known/construct-server"
-        guard let url = URL(string: urlString) else { return nil }
+    func fetchAndCacheRelayConfig() async -> [RelayInfo]? {
+        let urlString = "https://\(ServerConfig.inviteHost)/.well-known/construct-server"
+        guard let url = URL(string: urlString) else { return cachedRelayInfos() }
 
         var request = URLRequest(url: url, timeoutInterval: timeout)
         request.cachePolicy = .reloadIgnoringLocalCacheData
@@ -93,28 +118,163 @@ actor IceCertFetcher {
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
             guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-                Log.debug("🧊 construct-server .well-known returned non-200", category: "ICE")
-                return nil
+                Log.debug("🧊 construct-server returned non-200", category: "ICE")
+                return cachedRelayInfos()
             }
+
+            guard try verifySignature(data) else {
+                Log.error("🧊 construct-server signature invalid — ignoring response", category: "ICE")
+                return cachedRelayInfos()
+            }
+
             let parsed = try JSONDecoder().decode(ConstructServerWellKnown.self, from: data)
-            guard let relays = parsed.ice?.relays, !relays.isEmpty else { return nil }
-
-            // Cache relay list.
-            UserDefaults.standard.set(relays, forKey: ICEConfig.cachedRelayListKey)
-            Log.info("🧊 ICE relay list updated: \(relays)", category: "ICE")
-
-            // Cache relay-region rules (optional — server may not include them yet).
-            if let regions = parsed.ice?.relayRegions, !regions.isEmpty {
-                if let encoded = try? JSONEncoder().encode(regions) {
-                    UserDefaults.standard.set(encoded, forKey: ICEConfig.cachedRelayRegionsKey)
-                    Log.info("🧊 ICE relay regions updated: \(regions.count) rule(s)", category: "ICE")
-                }
+            guard let relays = parsed.ice?.relays, !relays.isEmpty else {
+                return cachedRelayInfos()
             }
 
+            // Persist to UserDefaults
+            if let encoded = try? JSONEncoder().encode(relays) {
+                UserDefaults.standard.set(encoded, forKey: Self.cachedRelayInfosKey)
+            }
+
+            // Keep old relay-list key in sync for code that hasn't migrated yet
+            let addressList = relays.map(\.addressWithPort)
+            UserDefaults.standard.set(addressList, forKey: ICEConfig.cachedRelayListKey)
+
+            Log.info("🧊 Relay config updated: \(relays.count) relay(s)", category: "ICE")
             return relays
         } catch {
-            Log.debug("🧊 construct-server .well-known fetch error: \(error)", category: "ICE")
-            return nil
+            Log.debug("🧊 construct-server fetch error: \(error)", category: "ICE")
+            return cachedRelayInfos()
         }
     }
+
+    /// Synchronous read of cached relay infos directly from UserDefaults.
+    /// Safe to call from non-async contexts (UserDefaults reads are thread-safe).
+    static func cachedRelayInfosSync() -> [RelayInfo]? {
+        guard let data = UserDefaults.standard.data(forKey: cachedRelayInfosKey),
+              let relays = try? JSONDecoder().decode([RelayInfo].self, from: data),
+              !relays.isEmpty else { return nil }
+        return relays
+    }
+
+    /// Synchronous SPKI pin lookup for non-async contexts (e.g. makeRelay).
+    static func spkiPinSync(for address: String) -> String? {
+        if let relay = cachedRelayInfosSync()?.first(where: { $0.addressWithPort == address }) {
+            return relay.spkiSha256.isEmpty ? nil : relay.spkiSha256
+        }
+        if address == ICEConfig.mskRelayAddress {
+            return ICEConfig.mskRelayPinnedSPKI.isEmpty ? nil : ICEConfig.mskRelayPinnedSPKI
+        }
+        return nil
+    }
+
+    /// Synchronous SNI lookup for non-async contexts.
+    static func sniSync(for address: String) -> String? {
+        if let relay = cachedRelayInfosSync()?.first(where: { $0.addressWithPort == address }) {
+            return relay.sni.isEmpty ? nil : relay.sni
+        }
+        return ICEConfig.hardcodedRelaySNIs[address]
+    }
+        guard let data = UserDefaults.standard.data(forKey: Self.cachedRelayInfosKey),
+              let relays = try? JSONDecoder().decode([RelayInfo].self, from: data),
+              !relays.isEmpty else { return nil }
+        return relays
+    }
+
+    /// Returns the SPKI pin for a given relay address (e.g. "158.160.140.67:443"),
+    /// looking first in the cached relay config, then falling back to hardcoded ICEConfig values.
+    func spkiPin(for address: String) -> String? {
+        if let relay = cachedRelayInfos()?.first(where: { $0.addressWithPort == address }) {
+            return relay.spkiSha256.isEmpty ? nil : relay.spkiSha256
+        }
+        // Hardcoded fallback for Moscow relay
+        if address == ICEConfig.mskRelayAddress {
+            return ICEConfig.mskRelayPinnedSPKI.isEmpty ? nil : ICEConfig.mskRelayPinnedSPKI
+        }
+        return nil
+    }
+
+    /// Returns the fake SNI for a given relay address, from cache or hardcoded config.
+    func sni(for address: String) -> String? {
+        if let relay = cachedRelayInfos()?.first(where: { $0.addressWithPort == address }) {
+            return relay.sni.isEmpty ? nil : relay.sni
+        }
+        return ICEConfig.hardcodedRelaySNIs[address]
+    }
+
+    // MARK: - Legacy shim (backward compat)
+
+    /// Deprecated: use `fetchAndCacheRelayConfig()`. Kept for callers not yet migrated.
+    @discardableResult
+    func fetchAndCacheRelayList() async -> [String]? {
+        let relays = await fetchAndCacheRelayConfig()
+        return relays?.map(\.addressWithPort)
+    }
+
+    // MARK: - Ed25519 signature verification
+
+    private func verifySignature(_ data: Data) throws -> Bool {
+        // 1. Parse as JSON object
+        guard var jsonObject = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let sigField = jsonObject["signature"] as? String,
+              sigField.hasPrefix("ed25519:") else {
+            Log.debug("🧊 construct-server: missing or malformed signature field", category: "ICE")
+            return false
+        }
+
+        // 2. Extract base64url signature bytes
+        let b64url = String(sigField.dropFirst("ed25519:".count))
+        guard let sigData = Data(base64URLEncoded: b64url) else {
+            Log.debug("🧊 construct-server: failed to decode signature", category: "ICE")
+            return false
+        }
+
+        // 3. Remove signature field, produce canonical JSON (sorted keys, compact)
+        jsonObject.removeValue(forKey: "signature")
+        let canonical = try JSONSerialization.data(
+            withJSONObject: jsonObject,
+            options: [.sortedKeys, .withoutEscapingSlashes]
+        )
+
+        // 4. Load public key
+        guard let pubKeyData = Data(hexString: ICEConfig.relayConfigSigningKey) else {
+            Log.error("🧊 relayConfigSigningKey is not valid hex", category: "ICE")
+            return false
+        }
+        let publicKey = try Curve25519.Signing.PublicKey(rawRepresentation: pubKeyData)
+
+        // 5. Verify
+        return publicKey.isValidSignature(sigData, for: canonical)
+    }
 }
+
+// MARK: - Data helpers
+
+private extension Data {
+    /// Decode base64url (no padding) string to Data.
+    init?(base64URLEncoded string: String) {
+        var base64 = string
+            .replacingOccurrences(of: "-", with: "+")
+            .replacingOccurrences(of: "_", with: "/")
+        let remainder = base64.count % 4
+        if remainder > 0 { base64 += String(repeating: "=", count: 4 - remainder) }
+        self.init(base64Encoded: base64)
+    }
+
+    /// Decode a lowercase hex string to Data.
+    init?(hexString: String) {
+        let hex = hexString.lowercased()
+        guard hex.count % 2 == 0 else { return nil }
+        var data = Data(capacity: hex.count / 2)
+        var index = hex.startIndex
+        while index < hex.endIndex {
+            let nextIndex = hex.index(index, offsetBy: 2)
+            guard let byte = UInt8(hex[index..<nextIndex], radix: 16) else { return nil }
+            data.append(byte)
+            index = nextIndex
+        }
+        self = data
+    }
+}
+
