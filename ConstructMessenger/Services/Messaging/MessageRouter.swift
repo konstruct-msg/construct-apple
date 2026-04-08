@@ -193,8 +193,16 @@ class MessageRouter {
         }
 
         // Rust orchestrator is the SINGLE decrypt path — no Swift fallback.
-        guard let core = CryptoManager.shared.orchestratorCore else {
-            Log.error("❌ OrchestratorCore nil — requesting END_SESSION from \(otherUserId.prefix(8))…", category: "MessageRouter")
+        // Изъян 4: If orchestratorCore is nil (e.g. Keychain locked after reboot),
+        // attempt a one-shot reload before giving up and triggering END_SESSION.
+        var core = CryptoManager.shared.orchestratorCore
+        if core == nil {
+            Log.info("⚠️ OrchestratorCore nil — attempting reload before END_SESSION", category: "MessageRouter")
+            CryptoManager.shared.reloadCoreFromKeychain()
+            core = CryptoManager.shared.orchestratorCore
+        }
+        guard let core else {
+            Log.error("❌ OrchestratorCore still nil after reload — requesting END_SESSION from \(otherUserId.prefix(8))…", category: "MessageRouter")
             onEndSessionNeeded?(otherUserId)
             if isNewChat { context.delete(chat) }
             return
@@ -371,6 +379,16 @@ class MessageRouter {
                 Log.debug("⏳ Heal suppressed for \(contactId.prefix(8))… retry in \(retryAfterMs)ms", category: "MessageRouter")
                 // Intentionally no ACK sent.
 
+            case .sendHeartbeat(let contactId):
+                // Изъян 7: heartbeat requested — send encrypted heartbeat payload to contact.
+                Log.debug("💓 Sending heartbeat to \(contactId.prefix(8))…", category: "MessageRouter")
+                Task { await MessageRouter.shared.sendSessionHeartbeat(to: contactId) }
+
+            case .notifyLinkedDevicesOfSessionReset(let contactId):
+                // Изъян 8: notify own linked devices that session with contactId was reset.
+                Log.debug("📡 Notifying linked devices of session reset with \(contactId.prefix(8))…", category: "MessageRouter")
+                Task { await MultiDeviceSendCoordinator.shared.broadcastSessionReset(contactId: contactId) }
+
             case .notifyError(let code, let msg):
                 Log.error("❌ Rust orchestrator error [\(code)]: \(msg)", category: "MessageRouter")
 
@@ -434,6 +452,39 @@ class MessageRouter {
             recipientId: recipientId,
             contentType: 0
         )
+    }
+
+    /// Изъян 7 — session health heartbeat.
+    ///
+    /// Encrypts and sends a small heartbeat payload to `contactId` using content_type=13 (HEARTBEAT).
+    /// The peer will attempt to decrypt it; a decrypt failure triggers proactive heal before
+    /// the user sends their next real message.
+    func sendSessionHeartbeat(to contactId: String) async {
+        guard let myId = SessionManager.shared.currentUserId, !myId.isEmpty else { return }
+        guard CryptoManager.shared.hasSession(for: contactId) else {
+            Log.debug("💓 Heartbeat skip for \(contactId.prefix(8))… — no active session", category: "MessageRouter")
+            return
+        }
+        let heartbeatId = UUID().uuidString.lowercased()
+        do {
+            let payload = try encryptOutgoing(
+                plaintext: "__heartbeat__",
+                messageId: heartbeatId,
+                recipientId: contactId,
+                contentType: 13
+            )
+            _ = try await MessagingServiceClient.shared.sendMessage(
+                messageId: heartbeatId,
+                recipientId: contactId,
+                senderId: myId,
+                conversationId: ConversationId.direct(myUserId: myId, theirUserId: contactId),
+                encryptedPayload: payload,
+                timestamp: UInt64(Date().timeIntervalSince1970)
+            )
+            Log.debug("💓 Heartbeat sent to \(contactId.prefix(8))…", category: "MessageRouter")
+        } catch {
+            Log.error("❌ Heartbeat failed to \(contactId.prefix(8))…: \(error.localizedDescription)", category: "MessageRouter")
+        }
     }
 
     private func executeStorageActions(_ actions: [CfeAction]) {

@@ -3804,6 +3804,16 @@ public enum CfeAction: Equatable, Hashable {
      */
     case checkAckInDb(messageId: String
     )
+    /**
+     * Platform should encrypt and send a heartbeat to this contact.
+     */
+    case sendHeartbeat(contactId: String
+    )
+    /**
+     * Platform should notify all linked devices of session reset with this contact.
+     */
+    case notifyLinkedDevicesOfSessionReset(contactId: String
+    )
 
 
 
@@ -3896,6 +3906,12 @@ public struct FfiConverterTypeCfeAction: FfiConverterRustBuffer {
         )
         
         case 25: return .checkAckInDb(messageId: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 26: return .sendHeartbeat(contactId: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 27: return .notifyLinkedDevicesOfSessionReset(contactId: try FfiConverterString.read(from: &buf)
         )
         
         default: throw UniffiInternalError.unexpectedEnumCase
@@ -4049,6 +4065,16 @@ public struct FfiConverterTypeCfeAction: FfiConverterRustBuffer {
             writeInt(&buf, Int32(25))
             FfiConverterString.write(messageId, into: &buf)
             
+        
+        case let .sendHeartbeat(contactId):
+            writeInt(&buf, Int32(26))
+            FfiConverterString.write(contactId, into: &buf)
+            
+        
+        case let .notifyLinkedDevicesOfSessionReset(contactId):
+            writeInt(&buf, Int32(27))
+            FfiConverterString.write(contactId, into: &buf)
+            
         }
     }
 }
@@ -4101,6 +4127,16 @@ public enum CfeIncomingEvent: Equatable, Hashable {
      */
     case ackDbResult(messageId: String, isProcessed: Bool
     )
+    /**
+     * Signal that the user opened or closed a chat — controls heartbeat scheduling.
+     */
+    case activeChatChanged(contactId: String, isActive: Bool
+    )
+    /**
+     * A heartbeat message was received from the peer.
+     */
+    case heartbeatReceived(contactId: String, messageId: String, data: Data, msgNum: UInt32
+    )
 
 
 
@@ -4149,6 +4185,12 @@ public struct FfiConverterTypeCfeIncomingEvent: FfiConverterRustBuffer {
         )
         
         case 11: return .ackDbResult(messageId: try FfiConverterString.read(from: &buf), isProcessed: try FfiConverterBool.read(from: &buf)
+        )
+        
+        case 12: return .activeChatChanged(contactId: try FfiConverterString.read(from: &buf), isActive: try FfiConverterBool.read(from: &buf)
+        )
+        
+        case 13: return .heartbeatReceived(contactId: try FfiConverterString.read(from: &buf), messageId: try FfiConverterString.read(from: &buf), data: try FfiConverterData.read(from: &buf), msgNum: try FfiConverterUInt32.read(from: &buf)
         )
         
         default: throw UniffiInternalError.unexpectedEnumCase
@@ -4226,6 +4268,20 @@ public struct FfiConverterTypeCfeIncomingEvent: FfiConverterRustBuffer {
             writeInt(&buf, Int32(11))
             FfiConverterString.write(messageId, into: &buf)
             FfiConverterBool.write(isProcessed, into: &buf)
+            
+        
+        case let .activeChatChanged(contactId,isActive):
+            writeInt(&buf, Int32(12))
+            FfiConverterString.write(contactId, into: &buf)
+            FfiConverterBool.write(isActive, into: &buf)
+            
+        
+        case let .heartbeatReceived(contactId,messageId,data,msgNum):
+            writeInt(&buf, Int32(13))
+            FfiConverterString.write(contactId, into: &buf)
+            FfiConverterString.write(messageId, into: &buf)
+            FfiConverterData.write(data, into: &buf)
+            FfiConverterUInt32.write(msgNum, into: &buf)
             
         }
     }
