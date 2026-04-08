@@ -90,7 +90,13 @@ struct DesktopRootView: View {
             // Sidebar: chats list with search
             ChatsListView()
                 .environment(chatsViewModel)
-                .navigationSplitViewColumnWidth(min: 240, ideal: 300, max: 360)
+                .navigationSplitViewColumnWidth(min: 210, ideal: 260, max: 320)
+        } content: {
+            // Middle: Synaps node network
+            DesktopSynapsView()
+                .environment(chatsViewModel)
+                .environment(\.managedObjectContext, viewContext)
+                .navigationSplitViewColumnWidth(min: 270, ideal: 340, max: 460)
         } detail: {
             // Detail: active chat or placeholder
             if let chatId = chatsViewModel.chatToOpen,
@@ -105,7 +111,7 @@ struct DesktopRootView: View {
                     .onDrop(of: [.fileURL], isTargeted: nil) { _ in false }
             }
         }
-        .frame(minWidth: 760, minHeight: 500)
+        .frame(minWidth: 860, minHeight: 500)
         // Add Contact sheet (⌘⌥N)
         .sheet(isPresented: $showAddContact) {
             DesktopAddContactView()
