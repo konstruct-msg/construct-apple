@@ -232,7 +232,15 @@ final class AccountRecoveryViewModel {
             }
 
             enteredWords = Array(repeating: "", count: 12)  // clear sensitive data
-            PreKeyRotationService.shared.recordSpkUpload()
+            // Force-rotate SPK after recovery: the server still holds the original
+            // device's SPK (which may be stale). Upload a fresh SPK so peers can
+            // init sessions without hitting the Rust 14-day staleness rejection.
+            Task {
+                try? await PreKeyRotationService.shared.forceRotate(
+                    deviceId: deviceId,
+                    reason: .reinstall
+                )
+            }
             recoverStep = .done
         } catch {
             recoverStep = .failed(errorMessage(from: error))

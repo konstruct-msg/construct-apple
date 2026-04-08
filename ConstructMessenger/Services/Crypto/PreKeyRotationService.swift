@@ -188,11 +188,27 @@ final class PreKeyRotationService {
         return false
     }
 
-    /// Call when an SPK is first uploaded (registration, recovery, device link).
-    /// Establishes the age baseline independently from the rotation timer.
+    /// Call when an SPK is first uploaded (registration only — NOT recovery/device link).
+    /// Recovery must use forceRotate() instead to upload a fresh key.
     func recordSpkUpload() {
         UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: Self.spkUploadKey)
         Log.debug("🔑 SPK upload timestamp recorded", category: "SPKRotation")
+    }
+
+    /// Sync the local SPK upload timestamp with the value the server reports.
+    /// Call this whenever a bundle fetch returns our own SPK metadata.
+    /// If the server timestamp is older than the local one, the local record was
+    /// set incorrectly (e.g. from recovery without a real SPK upload) and we
+    /// overwrite it so the age-based rotation check fires correctly.
+    func syncSpkUploadTimestamp(serverUploadedAt: TimeInterval) {
+        guard serverUploadedAt > 0 else { return }
+        let local = UserDefaults.standard.double(forKey: Self.spkUploadKey)
+        // Local says "newer" than server — this is the staleness bug: local was set
+        // to Date.now during recovery while the server still has the old key.
+        if local <= 0 || serverUploadedAt < local {
+            UserDefaults.standard.set(serverUploadedAt, forKey: Self.spkUploadKey)
+            Log.info("🔑 SPK upload timestamp synced from server: \(Int(serverUploadedAt)) (was \(Int(local)))", category: "SPKRotation")
+        }
     }
 
     private func recordRotation() {

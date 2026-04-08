@@ -155,6 +155,15 @@ final class MultiDeviceSendCoordinator {
         }
         let all = try await KeyServiceClient.shared.getPreKeyBundles(userId: myUserId)
         ownDeviceCache = DeviceCache(bundles: all, fetchedAt: Date())
+        // Sync our own SPK upload timestamp from the server-reported value.
+        // This corrects stale local UserDefaults (e.g. set to Date.now during
+        // account recovery while the server still holds an older key).
+        if let own = all.first(where: { $0.deviceId == myDeviceId }),
+           own.bundle.spkUploadedAt > 0 {
+            PreKeyRotationService.shared.syncSpkUploadTimestamp(
+                serverUploadedAt: TimeInterval(own.bundle.spkUploadedAt)
+            )
+        }
         return all.filter { $0.deviceId != myDeviceId }
     }
 
