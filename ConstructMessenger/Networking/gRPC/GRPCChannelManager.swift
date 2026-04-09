@@ -75,6 +75,7 @@ final class GRPCChannelManager: Sendable {
                 // next RPC/stream reconnect. An extra invalidation here would create a third
                 // TLS handshake in rapid succession during failure→recovery cycling.
                 Log.info("🧊 ICE recovered via relay failover — cooldown cleared, routing via new relay", category: "gRPC")
+                NotificationCenter.default.post(name: .iceRelayRecovered, object: nil)
             }
         }
     }
@@ -426,7 +427,8 @@ final class GRPCChannelManager: Sendable {
                 switch rpc.code {
                 // These are application-level errors — the relay delivered the response fine.
                 case .unauthenticated, .permissionDenied, .invalidArgument, .notFound,
-                     .alreadyExists, .resourceExhausted, .unimplemented, .cancelled:
+                     .alreadyExists, .resourceExhausted, .unimplemented, .cancelled,
+                     .internalError:
                     return false
                 case .unavailable, .deadlineExceeded, .unknown:
                     // Distinguish relay failures (TCP/TLS errors) from non-relay failures
@@ -438,6 +440,10 @@ final class GRPCChannelManager: Sendable {
                     if msg.contains("channel is closed")                 { return false }
                     if msg.contains("cancellation")                      { return false }
                     if msg.contains("cancelled")                         { return false }
+                    // "The server accepted the TCP connection but closed the connection before
+                    // completing the HTTP/2 connection preface." — TCP got through (relay is fine),
+                    // the server itself reset the connection. Not a relay failure.
+                    if msg.contains("connection preface")                { return false }
                     return true
                 default:
                     return true
@@ -452,6 +458,11 @@ final class GRPCChannelManager: Sendable {
             if let rpc = error as? RPCError {
                 switch rpc.code {
                 case .unavailable, .deadlineExceeded:
+                    // "The server accepted the TCP connection but closed before HTTP/2 preface" —
+                    // the server received our bytes (not DPI-blocked), it reset the connection
+                    // itself. ICE won't help; don't trigger auto-start.
+                    let msg = rpc.message.lowercased()
+                    if msg.contains("connection preface") { return false }
                     return true
                 default:
                     return false
@@ -687,4 +698,7 @@ final class GRPCChannelManager: Sendable {
 
 extension Notification.Name {
     static let grpcServerChanged = Notification.Name("grpcServerChanged")
+    /// Posted when the ICE relay recovers after a cooldown (routing switches back from direct → relay).
+    /// Observers should retry any startup RPCs that may have timed out during the direct-routing window.
+    static let iceRelayRecovered = Notification.Name("iceRelayRecovered")
 }
