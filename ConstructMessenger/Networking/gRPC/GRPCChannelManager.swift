@@ -60,6 +60,11 @@ final class GRPCChannelManager: Sendable {
         Log.info("⚠️ ICE relay failure recorded — bypassing ICE for \(Int(Self.iceCooldown))s", category: "gRPC")
         Task { @MainActor [weak self] in
             guard self != nil else { return }
+            // Blacklist the relay that just failed so startWithRelayFallback() picks a
+            // different one instead of re-selecting the same broken relay by TCP latency.
+            if let failedAddress = IceProxyManager.shared.activeRelay?.address {
+                IceProxyManager.shared.recordRelayFailure(address: failedAddress)
+            }
             // Notify IceProxyManager so the UI reflects cooldown state immediately.
             IceProxyManager.shared.enterCooldown(duration: Self.iceCooldown)
             // Try to recover by switching endpoints (cert refresh + relay fallback).

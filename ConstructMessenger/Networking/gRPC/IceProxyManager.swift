@@ -311,6 +311,41 @@ final class IceProxyManager: ObservableObject {
     /// RPC calls all fail at the same moment and each tries to start ICE).
     private var isStartingOnDemand = false
 
+    // MARK: - Failed relay tracking
+    //
+    // When a relay fails in production (obfs4 tunnel times out), its address is
+    // blacklisted so the next startWithRelayFallback() picks a different relay
+    // instead of re-selecting the same broken one based on TCP latency alone.
+    // Entries auto-expire after `relayFailureTTL`.
+
+    /// Maps relay address → failure timestamp. Deprioritized in startWithRelayFallback().
+    private var recentlyFailedRelays: [String: Date] = [:]
+    /// How long a failed relay stays deprioritized before becoming eligible again.
+    private static let relayFailureTTL: TimeInterval = 300  // 5 minutes
+
+    /// Mark a relay address as recently failed. Called from GRPCChannelManager.recordICEFailure()
+    /// before the restart cycle begins.
+    func recordRelayFailure(address: String) {
+        recentlyFailedRelays[address] = Date()
+        // Prune expired entries.
+        let now = Date()
+        recentlyFailedRelays = recentlyFailedRelays.filter { now.timeIntervalSince($0.value) < Self.relayFailureTTL }
+        Log.info("🧊 Relay \(address) blacklisted for \(Int(Self.relayFailureTTL))s", category: "ICE")
+    }
+
+    /// Whether a relay has failed recently and should be tried last.
+    private func isRelayRecentlyFailed(_ address: String) -> Bool {
+        guard let failedAt = recentlyFailedRelays[address] else { return false }
+        return Date().timeIntervalSince(failedAt) < Self.relayFailureTTL
+    }
+
+    /// Clear all relay failure tracking (e.g. on network path change — new network may work fine).
+    private func clearRelayFailures() {
+        guard !recentlyFailedRelays.isEmpty else { return }
+        recentlyFailedRelays.removeAll()
+        Log.info("🧊 Relay failure blacklist cleared", category: "ICE")
+    }
+
     // MARK: - ICE Mode (tri-state)
 
     /// The current ICE operation mode. Persists across launches via UserDefaults.
@@ -613,7 +648,17 @@ final class IceProxyManager: ObservableObject {
         for addr in allAddresses where seen.insert(addr).inserted { candidates.append(addr) }
 
         // Probe all endpoints concurrently and sort by TCP latency (fastest first).
-        let ordered = await Self.sortByLatency(candidates)
+        var ordered = await Self.sortByLatency(candidates)
+
+        // Deprioritize relays that failed recently in production — move them to the end.
+        // They're still tried as a last resort in case all others fail.
+        let notFailed = ordered.filter { !isRelayRecentlyFailed($0) }
+        let failed    = ordered.filter { isRelayRecentlyFailed($0) }
+        if !failed.isEmpty {
+            ordered = notFailed + failed
+            Log.info("🧊 Deprioritized recently-failed relay(s): \(failed.joined(separator: ", "))", category: "ICE")
+        }
+
         Log.info("🧊 Relay probe order: \(ordered.joined(separator: " → "))", category: "ICE")
 
         for address in ordered {
@@ -656,8 +701,15 @@ final class IceProxyManager: ObservableObject {
             + (UserDefaults.standard.stringArray(forKey: ICEConfig.cachedRelayListKey) ?? [])
         for addr in allAddresses where seen.insert(addr).inserted { candidates.append(addr) }
 
-        let ordered = await Self.sortByLatency(candidates)
+        var ordered = await Self.sortByLatency(candidates)
         guard !ordered.isEmpty else { return false }
+
+        // Deprioritize recently-failed relays (same as startWithRelayFallback).
+        let notFailed = ordered.filter { !isRelayRecentlyFailed($0) }
+        let failed    = ordered.filter { isRelayRecentlyFailed($0) }
+        if !failed.isEmpty {
+            ordered = notFailed + failed
+        }
 
         let primaryAddress   = ordered[0]
         let secondaryAddress = ordered.count > 1 ? ordered[1] : nil
@@ -968,6 +1020,7 @@ final class IceProxyManager: ObservableObject {
         ice_proxy_stop()
         resetAllProxyState()
         clearCooldown()
+        clearRelayFailures()  // new network = clean slate for relay selection
         isStartingOnDemand = false
 
         // In AUTO mode, reset DPI flag — the new network may not have DPI.
