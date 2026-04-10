@@ -131,6 +131,9 @@ enum NetworkTiming {
         static let onDemandStartJoinPollInterval: TimeInterval = 0.1
         static let relayLatencyProbeTimeout: TimeInterval = 2.0
         static let certFetchTimeoutHTTPS: TimeInterval = 8.0
+        /// Short RPC timeout for an unverified ICE relay. Catches DPI-blocked obfs4
+        /// tunnels without making the user wait 15–30s for the full RPC deadline.
+        static let unverifiedRelayTimeout: TimeInterval = 5.0
 
         // Happy Eyeballs — transparent failover
         /// After the first reachable relay probe result arrives, wait this long for

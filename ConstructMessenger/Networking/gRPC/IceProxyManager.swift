@@ -323,6 +323,26 @@ final class IceProxyManager: ObservableObject {
     /// How long a failed relay stays deprioritized before becoming eligible again.
     private static let relayFailureTTL: TimeInterval = 300  // 5 minutes
 
+    /// Address of the relay that has successfully completed at least one gRPC RPC
+    /// this session. In-memory only — resets on app restart.
+    /// When the active relay matches, performRPC trusts its obfs4 tunnel and uses
+    /// the full RPC timeout. Otherwise a short "probe" timeout detects DPI-blocked
+    /// tunnels quickly and triggers inline relay rotation.
+    private(set) var verifiedRelayAddress: String?
+
+    /// Whether the currently active relay has been verified by a successful RPC.
+    var isCurrentRelayVerified: Bool {
+        guard let active = activeRelay?.address else { return false }
+        return active == verifiedRelayAddress
+    }
+
+    /// Mark the active relay as verified after a successful RPC through ICE.
+    func markCurrentRelayVerified() {
+        guard let addr = activeRelay?.address, addr != verifiedRelayAddress else { return }
+        verifiedRelayAddress = addr
+        Log.info("🧊 Relay \(addr) verified (first successful RPC)", category: "ICE")
+    }
+
     /// Mark a relay address as recently failed. Called from GRPCChannelManager.recordICEFailure()
     /// before the restart cycle begins.
     func recordRelayFailure(address: String) {
@@ -341,9 +361,10 @@ final class IceProxyManager: ObservableObject {
 
     /// Clear all relay failure tracking (e.g. on network path change — new network may work fine).
     private func clearRelayFailures() {
-        guard !recentlyFailedRelays.isEmpty else { return }
+        guard !recentlyFailedRelays.isEmpty || verifiedRelayAddress != nil else { return }
         recentlyFailedRelays.removeAll()
-        Log.info("🧊 Relay failure blacklist cleared", category: "ICE")
+        verifiedRelayAddress = nil
+        Log.info("🧊 Relay failure blacklist + verification cleared", category: "ICE")
     }
 
     // MARK: - ICE Mode (tri-state)
@@ -469,6 +490,17 @@ final class IceProxyManager: ObservableObject {
             return await startWithRelayFallback(cert: freshCert)
         }
         return false
+    }
+
+    /// Rotates to the next available relay without re-fetching the certificate.
+    /// Used for inline relay rotation in performRPC when a relay's obfs4 tunnel
+    /// is DPI-blocked but the cert itself is still valid.
+    /// Returns true if a different relay was started successfully.
+    @discardableResult
+    func rotateToNextRelay() async -> Bool {
+        stop()
+        let cert = await getIceBridgeCert()
+        return await startWithRelayFallback(cert: cert)
     }
 
     // MARK: - Start / Stop

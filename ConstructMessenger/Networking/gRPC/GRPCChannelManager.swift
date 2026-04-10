@@ -548,8 +548,14 @@ final class GRPCChannelManager: Sendable {
 
         for attempt in 0..<3 {
             let usingICE = iceProxyPort() != nil
+            let iceRelayVerified = usingICE ? await IceProxyManager.shared.isCurrentRelayVerified : true
             let effectiveTimeout: TimeInterval? = {
                 guard let timeout else { return nil }
+                // Unverified ICE relay: use a short timeout so DPI-blocked obfs4 tunnels
+                // are detected in ~5s instead of 15–30s, enabling fast relay rotation.
+                if usingICE, !iceRelayVerified {
+                    return min(timeout, NetworkTiming.ICE.unverifiedRelayTimeout)
+                }
                 // "Happy eyeballs" for routing: on the first direct attempt, prefer a short
                 // deadline so we can quickly try ICE instead of waiting 20–30 seconds.
                 guard fastICEFallback, !usingICE, attempt == 0 else { return timeout }
@@ -648,6 +654,9 @@ final class GRPCChannelManager: Sendable {
                 }
 
                 PerformanceMetrics.shared.end(.grpcConnectStart, endEvent: .grpcConnectEnd, label: routingKey())
+                if usingICE, !iceRelayVerified {
+                    await IceProxyManager.shared.markCurrentRelayVerified()
+                }
                 return result
             } catch {
                 lastError = error
@@ -689,6 +698,21 @@ final class GRPCChannelManager: Sendable {
                         continue
                     }
                 } else if usingICE, !iceAutoStartedThisCall, shouldRecordIceFailure(error) {
+                    // Relay tunnel broken (DPI-blocked or unreachable). Rotate to the next
+                    // relay INLINE so the retry loop can use it immediately — unlike the old
+                    // async recordICEFailure() path which started recovery in a detached Task
+                    // that didn't finish before the retry loop exhausted all attempts.
+                    if let failedAddr = await IceProxyManager.shared.activeRelay?.address {
+                        await IceProxyManager.shared.recordRelayFailure(address: failedAddr)
+                    }
+                    let rotated = await IceProxyManager.shared.rotateToNextRelay()
+                    if rotated {
+                        invalidatePersistentClient()
+                        await waitForProxyReady()
+                        Log.info("🧊 Relay rotated inline — retrying via new relay", category: "gRPC")
+                        continue
+                    }
+                    // All relays exhausted — enter cooldown for direct fallback.
                     recordICEFailure()
                 }
 
