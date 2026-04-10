@@ -355,6 +355,8 @@ final class IceProxyManager: ObservableObject {
             UserDefaults.standard.set(mode.rawValue, forKey: IceMode.defaultsKey)
             // Also keep legacy key in sync for iceProxyPort() fast-path reads.
             UserDefaults.standard.set(mode == .on, forKey: enabledKey)
+            // User explicitly changed mode — give relay selection a clean slate.
+            clearRelayFailures()
         }
     }
 
