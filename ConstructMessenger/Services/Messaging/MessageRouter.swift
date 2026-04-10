@@ -373,7 +373,7 @@ class MessageRouter {
             "ciphertext": ciphertext.map { Int($0) },
             "nonce": nonce.map { Int($0) },
             "previous_chain_length": 0,
-            "suite_id": 1
+            "suite_id": Int(message.suiteId)
         ]
         guard let wireJsonData = try? JSONSerialization.data(withJSONObject: wireMessage) else { return nil }
 
