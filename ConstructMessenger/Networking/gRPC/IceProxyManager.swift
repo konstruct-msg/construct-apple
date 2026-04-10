@@ -498,7 +498,11 @@ final class IceProxyManager: ObservableObject {
     /// Returns true if a different relay was started successfully.
     @discardableResult
     func rotateToNextRelay() async -> Bool {
-        stop()
+        // Don't call stop() — it clears DPI detection, which would break .auto mode
+        // routing (iceProxyPort() would return nil). We're rotating precisely because
+        // DPI IS present on the current relay.
+        ice_proxy_stop()
+        resetAllProxyState()
         let cert = await getIceBridgeCert()
         return await startWithRelayFallback(cert: cert)
     }
