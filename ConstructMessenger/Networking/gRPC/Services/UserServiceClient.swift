@@ -146,4 +146,41 @@ final class UserServiceClient: Sendable {
             throw error
         }
     }
+
+    // MARK: - Contact Requests
+
+    func sendContactRequest(toUserId: String) async throws -> String {
+        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.getUserProfile) { grpcClient in
+            let client = Shared_Proto_Services_V1_UserService.Client(wrapping: grpcClient)
+            var request = Shared_Proto_Services_V1_SendContactRequestRequest()
+            request.toUserID = toUserId
+            let response = try await client.sendContactRequest(request: .init(message: request))
+            return response.requestID
+        }
+    }
+
+    func getContactRequests() async throws -> (
+        incoming: [Shared_Proto_Services_V1_IncomingContactRequest],
+        sent: [Shared_Proto_Services_V1_SentContactRequest]
+    ) {
+        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.getUserProfile) { grpcClient in
+            let client = Shared_Proto_Services_V1_UserService.Client(wrapping: grpcClient)
+            let request = Shared_Proto_Services_V1_GetContactRequestsRequest()
+            let response = try await client.getContactRequests(request: .init(message: request))
+            return (incoming: response.incoming, sent: response.sent)
+        }
+    }
+
+    func respondToContactRequest(
+        requestId: String,
+        action: Shared_Proto_Services_V1_ContactRequestAction
+    ) async throws {
+        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.getUserProfile) { grpcClient in
+            let client = Shared_Proto_Services_V1_UserService.Client(wrapping: grpcClient)
+            var request = Shared_Proto_Services_V1_RespondToContactRequestRequest()
+            request.requestID = requestId
+            request.action = action
+            _ = try await client.respondToContactRequest(request: .init(message: request))
+        }
+    }
 }

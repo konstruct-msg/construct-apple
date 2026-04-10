@@ -666,3 +666,16 @@
 "synaps_remote_result_header" = "найдено в construct";
 "synaps_searching" = "поиск...";
 "synaps_not_found" = "не найдено";
+
+// Contact Requests
+"contact_requests_section" = "запросы";
+"contact_request_from" = "от";
+"contact_request_confirm" = "[✓] принять";
+"contact_request_decline_block" = "[✗] отклонить + заблокировать";
+"contact_request_spam_block" = "[⚠] спам + заблокировать";
+"contact_request_sent" = "запрос отправлен";
+"contact_request_pending" = "[ожидание]";
+"contact_request_send_action" = "[→ отправить запрос]";
+"contact_request_sheet_title" = "запрос на переписку";
+"contact_request_from_title" = "хочет начать переписку";
+"contact_request_empty_inbox" = "нет входящих запросов";

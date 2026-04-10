@@ -45,6 +45,10 @@ struct SynapsView: View {
     @State private var remoteState: RemoteSearchState = .idle
     @State private var searchTask: Task<Void, Never>? = nil
 
+    // MARK: - Contact requests
+    @State private var contactRequestsVM: ContactRequestsViewModel? = nil
+    @State private var selectedRequest: ContactRequestsViewModel.IncomingRequest? = nil
+
     private var filtered: [User] {
         guard !searchText.isEmpty else { return Array(contacts) }
         let q = searchText.lowercased()
@@ -61,6 +65,9 @@ struct SynapsView: View {
                 synapsSearchBar
                 if !searchText.isEmpty, filtered.isEmpty {
                     remoteSearchCard
+                }
+                if let vm = contactRequestsVM, !vm.incomingRequests.isEmpty, searchText.isEmpty {
+                    requestsSection(vm: vm)
                 }
                 GeometryReader { geo in
                     ZStack {
@@ -104,6 +111,11 @@ struct SynapsView: View {
                     await performRemoteSearch(username: newValue)
                 }
             }
+            .task {
+                let vm = ContactRequestsViewModel(viewContext: context)
+                contactRequestsVM = vm
+                await vm.load()
+            }
             #if os(iOS)
             .toolbar(.hidden, for: .navigationBar)
             #endif
@@ -120,6 +132,18 @@ struct SynapsView: View {
                 .environment(\.managedObjectContext, context)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
+            }
+            .sheet(item: $selectedRequest) { request in
+                if let vm = contactRequestsVM {
+                    ContactRequestSheet(
+                        request: request,
+                        onAccept: { try await vm.accept(requestId: request.id) },
+                        onDeclineBlock: { try await vm.declineAndBlock(requestId: request.id) },
+                        onSpamBlock: { try await vm.reportSpamAndBlock(requestId: request.id) }
+                    )
+                    .presentationDetents([.medium])
+                    .presentationDragIndicator(.visible)
+                }
             }
         }
         .confirmationDialog(
@@ -241,8 +265,14 @@ struct SynapsView: View {
                 .padding(.vertical, 12)
 
             case .found(let profile):
+                let alreadySent = contactRequestsVM.map {
+                    $0.hasPendingSentRequest(toUserId: profile.userID)
+                } ?? false
+
                 Button {
-                    Task { await addRemoteUserAndChat(profile: profile) }
+                    if !alreadySent {
+                        Task { await sendContactRequest(to: profile) }
+                    }
                 } label: {
                     HStack(spacing: 12) {
                         Text("[@]")
@@ -261,14 +291,17 @@ struct SynapsView: View {
                             }
                         }
                         Spacer()
-                        Text(CTSymbol.forward)
-                            .font(CTFont.regular(13))
-                            .foregroundStyle(Color.CT.accent)
+                        Text(alreadySent
+                             ? NSLocalizedString("contact_request_pending", comment: "")
+                             : NSLocalizedString("contact_request_send_action", comment: ""))
+                            .font(CTFont.regular(12))
+                            .foregroundStyle(alreadySent ? Color.CT.textDim : Color.CT.accent)
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 12)
                 }
                 .buttonStyle(.plain)
+                .disabled(alreadySent)
 
             case .notFound:
                 HStack {
@@ -302,6 +335,70 @@ struct SynapsView: View {
         } catch {
             remoteState = .notFound
         }
+    }
+
+    /// Sends a contact request to a discoverable user found via remote search.
+    @MainActor
+    private func sendContactRequest(to profile: Shared_Proto_Services_V1_UserProfile) async {
+        guard let vm = contactRequestsVM else { return }
+        do {
+            _ = try await vm.sendRequest(toUserId: profile.userID)
+            vm.markSentRequest(toUserId: profile.userID)
+            // Refresh UI to show [pending] state.
+            remoteState = .found(profile)
+        } catch {
+            // Silently ignore — UI stays as-is; user can retry.
+        }
+    }
+
+    // MARK: - Requests Section
+
+    @ViewBuilder
+    private func requestsSection(vm: ContactRequestsViewModel) -> some View {
+        VStack(spacing: 0) {
+            CTSettingsSectionHeader(title: NSLocalizedString("contact_requests_section", comment: ""))
+
+            Rectangle().fill(Color.CT.noise).frame(height: 1)
+
+            ForEach(vm.incomingRequests) { request in
+                Button {
+                    selectedRequest = request
+                } label: {
+                    HStack(spacing: 10) {
+                        Text("[@]")
+                            .font(CTFont.bold(13))
+                            .foregroundStyle(Color.CT.accent)
+                        VStack(alignment: .leading, spacing: 2) {
+                            if let name = request.displayName, !name.isEmpty {
+                                Text(name)
+                                    .font(CTFont.regular(13))
+                                    .foregroundStyle(Color.CT.text)
+                            } else if let username = request.username, !username.isEmpty {
+                                Text("@\(username)")
+                                    .font(CTFont.regular(13))
+                                    .foregroundStyle(Color.CT.text)
+                            } else {
+                                Text(request.fromUserId)
+                                    .font(CTFont.regular(12))
+                                    .foregroundStyle(Color.CT.textDim)
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                            }
+                        }
+                        Spacer()
+                        Text(CTSymbol.forward)
+                            .font(CTFont.regular(13))
+                            .foregroundStyle(Color.CT.accent)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 11)
+                }
+                .buttonStyle(.plain)
+
+                Rectangle().fill(Color.CT.noise).frame(height: 1).padding(.horizontal, 14)
+            }
+        }
+        .background(Color.CT.bg)
     }
 
     /// Upserts the remote user in Core Data (marking as contact) and opens a chat.
