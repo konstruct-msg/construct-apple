@@ -244,6 +244,10 @@ final class IceProxyManager: ObservableObject {
 
     private let enabledKey = "ice_enabled"
     private let relayKey   = "iceActiveRelay"
+    /// Tracks whether `isEnabled` was set by DPI auto-detection (true) or user toggle (false).
+    private static let autoDetectedKey = "ice_auto_detected_dpi"
+    /// Bump this version to trigger another one-time reset of stale DPI state.
+    private static let dpiResetVersion = 1
 
     /// Prevents duplicate concurrent on-demand start attempts (e.g. when several
     /// RPC calls all fail at the same moment and each tries to start ICE).
@@ -639,9 +643,28 @@ final class IceProxyManager: ObservableObject {
 
     // MARK: - App-lifecycle entry points
 
+    /// One-time migration: clear stale DPI auto-detection caused by server-side
+    /// "connection preface" RSTs being misclassified as DPI blocking.
+    /// After reset, legitimate DPI users re-trigger ICE on their first connection
+    /// via the happy-eyeballs 4s timeout — no permanent impact.
+    private func resetStaleDPIStateIfNeeded() {
+        #if os(iOS)
+        let key = "ice_dpi_reset_v\(Self.dpiResetVersion)"
+        guard !UserDefaults.standard.bool(forKey: key) else { return }
+        UserDefaults.standard.set(true, forKey: key)
+
+        if isEnabled {
+            isEnabled = false
+            UserDefaults.standard.set(false, forKey: Self.autoDetectedKey)
+            Log.info("🧊 Cleared stale ICE auto-detection (migration v\(Self.dpiResetVersion))", category: "ICE")
+        }
+        #endif
+    }
+
     /// Start with the stored relay (called at app launch if `isEnabled`).
     /// Tries primary TLS → relay fallback → fresh cert → retry, in that order.
     func startIfEnabled() async {
+        resetStaleDPIStateIfNeeded()
         guard isEnabled else { return }
 
         // Restore cooldown state from previous session (persisted in UserDefaults by GRPCChannelManager).
@@ -714,10 +737,9 @@ final class IceProxyManager: ObservableObject {
         Log.info("🧊 Auto-starting ICE proxy (DPI auto-detection)", category: "ICE")
         let cert = await getIceBridgeCert()
         if await startWithRelayFallback(cert: cert) {
-            // Persist the enabled state only for definitive DPI detection. Ephemeral start
-            // is a performance optimization and shouldn't change user settings.
             if persistEnabled {
                 isEnabled = true
+                UserDefaults.standard.set(true, forKey: Self.autoDetectedKey)
             }
             Task { await IceCertFetcher.shared.fetchAndCacheRelayList() }
             Log.info("🧊 ICE auto-started via DPI detection", category: "ICE")
