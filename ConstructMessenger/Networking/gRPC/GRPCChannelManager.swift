@@ -458,22 +458,36 @@ final class GRPCChannelManager: Sendable {
         }
 
         /// Network-level errors that suggest DPI interference — worth retrying through ICE.
+        /// Only true for errors that look like network-level blocking (timeouts, TLS resets).
+        /// False for server-side issues, auth errors, and client-side channel state problems.
         func shouldTryICEFallback(_ error: Error) -> Bool {
             if error is CancellationError { return false }
             if let rpc = error as? RPCError {
                 switch rpc.code {
-                case .unavailable, .deadlineExceeded:
-                    // "The server accepted the TCP connection but closed before HTTP/2 preface" —
-                    // the server received our bytes (not DPI-blocked), it reset the connection
-                    // itself. ICE won't help; don't trigger auto-start.
+                case .unavailable:
                     let msg = rpc.message.lowercased()
+                    // Server accepted TCP but rejected HTTP/2 — server-side issue, not DPI.
                     if msg.contains("connection preface") { return false }
+                    // Client-side channel lifecycle — not a network error.
+                    if msg.contains("channel is closed") { return false }
+                    // Server port not listening — server down, not DPI.
+                    if msg.contains("connection refused") { return false }
+                    // DNS failure — resolver issue, not DPI.
+                    if msg.contains("name resolution") || msg.contains("dns") { return false }
+                    // Local ICE proxy died — handled by isStaleLocalProxy().
+                    if msg.contains("127.0.0.1") { return false }
+                    return true
+                case .deadlineExceeded:
                     return true
                 default:
                     return false
                 }
             }
-            // Raw connection failure (NIO transport error) — not an RPC-level response
+            // Raw NIO transport error — only treat as DPI if it's a genuine connection failure,
+            // not a client-side state issue (closed channel, cancelled, etc.)
+            let desc = String(describing: error).lowercased()
+            if desc.contains("cancelled") || desc.contains("channel") || desc.contains("closed")
+                || desc.contains("refused") { return false }
             return true
         }
 
@@ -680,7 +694,7 @@ final class GRPCChannelManager: Sendable {
                     if fastICEFallback {
                         PerformanceMetrics.shared.record(.rpcFastICEFallbackTriggered, label: routingKey())
                     }
-                    Log.info("🧊 Direct connection failed — auto-starting ICE (DPI detected)", category: "GRPCChannel")
+                    Log.info("🧊 Direct connection failed — auto-starting ICE (DPI detected) error=\(error)", category: "GRPCChannel")
                     await IceProxyManager.shared.startOnDemandIfNeeded()
                     await waitForProxyReady()
                     if iceProxyPort() != nil {
