@@ -15,14 +15,6 @@ struct NetworkSettingsView: View {
     @State private var customPort = "\(GRPCChannelManager.shared.currentPort)"
     @State private var showingAppliedAlert = false
 
-    // On macOS, ICE is on by default; on iOS, off by default
-    @AppStorage(UserDefaultsKey.iceEnabled.key) private var iceEnabled = {
-        #if os(macOS)
-        return true
-        #else
-        return false
-        #endif
-    }()
     @StateObject private var iceManager = IceProxyManager.shared
 
     var body: some View {
@@ -85,31 +77,43 @@ struct NetworkSettingsView: View {
 
                 // MARK: - Traffic Protection (ICE)
                 CTSettingsSectionHeader(title: NSLocalizedString("traffic_protection", comment: "").uppercased())
+
+                // Tri-state mode selector
                 HStack {
                     Text(LocalizedStringKey("ice_title"))
                         .font(CTFont.regular(13))
                         .foregroundColor(iceManager.hasCert ? Color.CT.textDim : Color.CT.textDim.opacity(0.5))
                     Spacer()
-                    Toggle("", isOn: Binding(
-                        get: { iceEnabled },
-                        set: { newValue in
-                            iceEnabled = newValue
-                            iceManager.isEnabled = newValue
-                            if newValue {
-                                Task { await iceManager.startIfEnabled() }
-                            } else {
-                                iceManager.stop()
+                    CTModeSelector(
+                        selection: Binding(
+                            get: { iceManager.mode },
+                            set: { newMode in
+                                let oldMode = iceManager.mode
+                                iceManager.mode = newMode
+                                switch newMode {
+                                case .off:
+                                    iceManager.stop()
+                                case .auto:
+                                    // Switching to auto: stop proxy, let DPI detection handle it.
+                                    if oldMode == .on { iceManager.stop() }
+                                case .on:
+                                    Task { await iceManager.startIfEnabled() }
+                                }
                             }
-                        }
-                    ))
-                    .labelsHidden()
-                    .tint(Color.CT.accent)
+                        ),
+                        options: IceMode.allCases,
+                        labels: [
+                            .off:  NSLocalizedString("ice_mode_off", comment: ""),
+                            .auto: NSLocalizedString("ice_mode_auto", comment: ""),
+                            .on:   NSLocalizedString("ice_mode_on", comment: "")
+                        ]
+                    )
                     .disabled(!iceManager.hasCert)
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 12)
 
-                if (iceEnabled || iceManager.isRunning) && iceManager.hasCert {
+                if (iceManager.mode != .off || iceManager.isRunning) && iceManager.hasCert {
                     if iceManager.isOnCooldown {
                         CTSep(style: .thin)
                         HStack {
@@ -155,7 +159,27 @@ struct NetworkSettingsView: View {
                         }
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
-                    } else if !iceManager.isRunning {
+
+                        // Direct probe status in AUTO mode
+                        if iceManager.mode == .auto, iceManager.dpiDetectedThisSession {
+                            CTSep(style: .thin)
+                            HStack {
+                                if let lastSuccess = iceManager.lastDirectProbeSuccess {
+                                    Text(String(format: NSLocalizedString("ice_direct_probe_ok", comment: ""),
+                                                lastSuccess.formatted(.relative(presentation: .named))))
+                                        .font(CTFont.regular(11))
+                                        .foregroundStyle(Color.CT.accent)
+                                } else {
+                                    Text(LocalizedStringKey("ice_direct_probe_blocked"))
+                                        .font(CTFont.regular(11))
+                                        .foregroundStyle(Color.CT.danger)
+                                }
+                                Spacer()
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                        }
+                    } else if iceManager.mode != .off && !iceManager.isRunning {
                         CTSep(style: .thin)
                         Text(iceManager.lastError ?? NSLocalizedString("ice_unavailable", comment: ""))
                             .font(CTFont.regular(11))
@@ -165,32 +189,30 @@ struct NetworkSettingsView: View {
                     }
                 }
 
+                // Footer — mode-specific
                 if !iceManager.hasCert {
                     Text(LocalizedStringKey("ice_unavailable"))
                         .font(CTFont.regular(11))
                         .foregroundStyle(Color.CT.textDim)
                         .padding(.horizontal, 12)
                         .padding(.bottom, 8)
-                } else if iceManager.isRunning && !iceEnabled {
-                    Text(LocalizedStringKey("ice_auto_activated_footer"))
+                } else if iceManager.mode == .auto && iceManager.dpiDetectedThisSession {
+                    Text(LocalizedStringKey("ice_auto_active"))
+                        .font(CTFont.regular(11))
+                        .foregroundStyle(.orange)
+                        .padding(.horizontal, 12)
+                        .padding(.bottom, 4)
+                    Text(LocalizedStringKey("ice_footer_auto"))
                         .font(CTFont.regular(11))
                         .foregroundStyle(Color.CT.textDim)
                         .padding(.horizontal, 12)
                         .padding(.bottom, 8)
                 } else {
-                    #if os(macOS)
-                    (Text(LocalizedStringKey("ice_footer_short")) + Text(" ") + Text("Enabled by default on macOS."))
+                    Text(LocalizedStringKey(iceFooterKey))
                         .font(CTFont.regular(11))
                         .foregroundStyle(Color.CT.textDim)
                         .padding(.horizontal, 12)
                         .padding(.bottom, 8)
-                    #else
-                    Text(LocalizedStringKey("ice_footer_short"))
-                        .font(CTFont.regular(11))
-                        .foregroundStyle(Color.CT.textDim)
-                        .padding(.horizontal, 12)
-                        .padding(.bottom, 8)
-                    #endif
                 }
                 CTSep()
 
@@ -292,6 +314,14 @@ struct NetworkSettingsView: View {
     }
 
     // MARK: - Helpers
+
+    private var iceFooterKey: String {
+        switch iceManager.mode {
+        case .off:  return "ice_footer_off"
+        case .auto: return "ice_footer_auto"
+        case .on:   return "ice_footer_on"
+        }
+    }
 
     private var statusColor: Color {
         switch connectionManager.connectionStatus {

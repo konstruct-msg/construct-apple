@@ -346,6 +346,7 @@ enum UserDefaultsKey: String {
 
     // ICE — traffic obfuscation (Intrusion Countermeasures Electronics)
     case iceEnabled = "ice_enabled"
+    case iceMode = "ice_mode"
 
     // Background Fetch
     case backgroundFetchEnabled = "backgroundFetch_enabled"

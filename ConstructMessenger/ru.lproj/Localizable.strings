@@ -397,6 +397,17 @@
 "traffic_protection" = "Защита трафика";
 "ice_footer_short" = "Лёд маскирует трафик под обычный HTTPS. Конфигурация предоставляется автоматически.";
 
+// ICE mode (tri-state)
+"ice_mode_off" = "выкл";
+"ice_mode_auto" = "авто";
+"ice_mode_on" = "вкл";
+"ice_footer_off" = "Защита трафика отключена. Только прямое подключение.";
+"ice_footer_auto" = "ICE активируется автоматически при обнаружении блокировки.";
+"ice_footer_on" = "Весь трафик проходит через ICE.";
+"ice_auto_active" = "Авто-активирован — обнаружена блокировка";
+"ice_direct_probe_ok" = "Прямое: ОК (%@)";
+"ice_direct_probe_blocked" = "Прямое: заблокировано";
+
 // Data & Storage
 "data_and_storage" = "Данные и память";
 "storage_media_cache" = "Медиакэш";
@@ -629,3 +640,17 @@
 "keys_recovery_wipe_confirm_title" = "создать новый аккаунт?";
 "keys_recovery_wipe_confirm_body" = "Это действие безвозвратно удалит вашу текущую идентичность и все локальные данные. Отменить невозможно.";
 "keys_recovery_wipe_confirm_action" = "удалить и продолжить";
+
+// MARK: - Logout
+"logout_row" = "выйти";
+"logout_all_row" = "выйти на всех устройствах";
+"logout_confirm_title" = "Выйти?";
+"logout_confirm_message" = "Вы выйдете с этого устройства. Для входа снова потребуется сид-фраза.";
+"logout_confirm_action" = "Выйти";
+"logout_all_confirm_title" = "Выйти на всех устройствах?";
+"logout_all_confirm_message" = "Все сессии на всех ваших устройствах будут немедленно аннулированы. Для повторного входа на каждом устройстве потребуется сид-фраза.";
+"logout_all_confirm_action" = "Выйти везде";
+"logout_no_backup_title" = "Сид-фраза не сохранена";
+"logout_no_backup_message" = "Вы ещё не сохранили сид-фразу. Если выйти без неё, вы навсегда потеряете доступ к аккаунту и сообщениям.";
+"logout_no_backup_setup_action" = "Сначала сохранить фразу";
+"logout_no_backup_proceed_action" = "Выйти всё равно";

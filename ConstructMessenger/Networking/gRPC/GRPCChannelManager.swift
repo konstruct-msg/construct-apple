@@ -90,14 +90,26 @@ final class GRPCChannelManager: Sendable {
         return elapsed < Self.iceCooldown
     }
 
-    /// Returns the local proxy port if ICE is running AND the relay is not on cooldown, nil otherwise.
+    /// Returns the local proxy port if ICE is running AND should be used for routing, nil otherwise.
+    /// Mode-aware:
+    ///   `.off`  → always nil (no ICE routing)
+    ///   `.auto` → only when DPI confirmed this session (prevents EU users on ICE)
+    ///   `.on`   → always returns port when proxy running
     private func iceProxyPort() -> UInt16? {
         guard ice_proxy_is_running() != 0 else { return nil }
-        // Only route through ICE when explicitly enabled (user toggle or DPI auto-detection).
-        // Ephemeral pre-warms (happy eyeballs) keep the proxy warm but don't capture routing —
-        // this prevents EU users from being routed through a relay they don't need.
-        // Read directly from UserDefaults to avoid @MainActor isolation requirement.
-        guard UserDefaults.standard.bool(forKey: "ice_enabled") else { return nil }
+        // Read mode from UserDefaults for fast nonisolated access.
+        let rawMode = UserDefaults.standard.string(forKey: IceMode.defaultsKey) ?? IceMode.platformDefault.rawValue
+        let mode = IceMode(rawValue: rawMode) ?? .auto
+        switch mode {
+        case .off:
+            return nil
+        case .auto:
+            // Only route through ICE when DPI was confirmed this session.
+            // Read the legacy key which is kept in sync by isEnabled setter.
+            guard UserDefaults.standard.bool(forKey: "ice_enabled") else { return nil }
+        case .on:
+            break // Always route through ICE
+        }
         guard !isICEOnCooldownInternal() else {
             Log.debug("🧊 ICE on cooldown — using direct TLS", category: "gRPC")
             return nil
@@ -460,7 +472,12 @@ final class GRPCChannelManager: Sendable {
         /// Network-level errors that suggest DPI interference — worth retrying through ICE.
         /// Only true for errors that look like network-level blocking (timeouts, TLS resets).
         /// False for server-side issues, auth errors, and client-side channel state problems.
+        /// Always returns false in `.off` mode (user explicitly disabled ICE).
         func shouldTryICEFallback(_ error: Error) -> Bool {
+            // Respect user's explicit choice: OFF means no fallback.
+            let rawMode = UserDefaults.standard.string(forKey: IceMode.defaultsKey) ?? IceMode.platformDefault.rawValue
+            if IceMode(rawValue: rawMode) == .off { return false }
+
             if error is CancellationError { return false }
             if let rpc = error as? RPCError {
                 switch rpc.code {
@@ -511,17 +528,17 @@ final class GRPCChannelManager: Sendable {
         var lastError: Error?
         var iceAutoStartedThisCall = false   // true once we DPI-auto-started ICE in this call
 
-        // Happy Eyeballs pre-warm: fire ICE startup concurrently at t=0 while the direct
-        // attempt is in flight.  When `fastICEFallback` is true and we're not yet on ICE,
-        // we launch `startEphemeralOnDemandIfNeeded()` in a background Task so ICE is
-        // warming up in parallel.  If the direct attempt succeeds, we just never use the
-        // proxy.  If it times out (~4 s), the proxy is already ready to take over with
-        // virtually no additional delay (vs. the old 4s direct + 2s ICE probe = 6s stall).
+        // Happy Eyeballs pre-warm: only in AUTO mode. In OFF mode, no ICE at all.
+        // In ON mode, ICE is already running from app launch.
+        // Fire ICE startup concurrently at t=0 while the direct attempt is in flight.
         if fastICEFallback, iceProxyPort() == nil {
-            Task {
-                let hasCert = await IceProxyManager.shared.hasCert
-                if hasCert {
-                    await IceProxyManager.shared.startEphemeralOnDemandIfNeeded()
+            let currentMode = IceMode(rawValue: UserDefaults.standard.string(forKey: IceMode.defaultsKey) ?? "") ?? .auto
+            if currentMode == .auto {
+                Task {
+                    let hasCert = await IceProxyManager.shared.hasCert
+                    if hasCert {
+                        await IceProxyManager.shared.startEphemeralOnDemandIfNeeded()
+                    }
                 }
             }
         }

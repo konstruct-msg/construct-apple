@@ -358,6 +358,39 @@ struct CTNoise: View {
 
 // MARK: - Separators
 
+// MARK: - Mode Selector (tri-state segmented control)
+
+/// A CT-styled segmented control for selecting between modes.
+/// No rounded corners, accent color on selected segment, ASCII aesthetic.
+struct CTModeSelector<T: Hashable>: View {
+    @Binding var selection: T
+    let options: [T]
+    let labels: [T: String]
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(options, id: \.self) { option in
+                let isSelected = selection == option
+                Button {
+                    selection = option
+                } label: {
+                    Text(labels[option] ?? "")
+                        .font(CTFont.regular(12))
+                        .foregroundColor(isSelected ? Color.CT.bg : Color.CT.textDim)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 6)
+                        .background(isSelected ? Color.CT.accent : Color.clear)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .overlay(Rectangle().stroke(Color.CT.accent.opacity(0.4), lineWidth: 0.5))
+        .frame(width: 180)
+    }
+}
+
+// MARK: - Separator
+
 struct CTSep: View {
     enum Style { case thin, thick }
     var style: Style = .thin

@@ -395,6 +395,17 @@
 "traffic_protection" = "Traffic Protection";
 "ice_footer_short" = "ICE masks traffic as standard HTTPS. Configuration is provided automatically.";
 
+// ICE mode (tri-state)
+"ice_mode_off" = "off";
+"ice_mode_auto" = "auto";
+"ice_mode_on" = "on";
+"ice_footer_off" = "Traffic protection disabled. Direct connection only.";
+"ice_footer_auto" = "ICE activates automatically when network blocking is detected.";
+"ice_footer_on" = "All traffic routed through ICE relay.";
+"ice_auto_active" = "Auto-activated — network blocking detected";
+"ice_direct_probe_ok" = "Direct: OK (%@)";
+"ice_direct_probe_blocked" = "Direct: blocked";
+
 // Data & Storage
 "data_and_storage" = "Data & Storage";
 "storage_media_cache" = "Media Cache";
@@ -619,3 +630,17 @@
 "keys_recovery_wipe_confirm_title" = "create new account?";
 "keys_recovery_wipe_confirm_body" = "This will permanently delete your current identity and all local data. This cannot be undone.";
 "keys_recovery_wipe_confirm_action" = "delete and continue";
+
+// MARK: - Logout
+"logout_row" = "sign out";
+"logout_all_row" = "sign out all devices";
+"logout_confirm_title" = "Sign Out?";
+"logout_confirm_message" = "You will be signed out on this device. You can sign back in with your seed phrase.";
+"logout_confirm_action" = "Sign Out";
+"logout_all_confirm_title" = "Sign Out All Devices?";
+"logout_all_confirm_message" = "All sessions on all your devices will be invalidated immediately. You will need to re-authenticate on every device using your seed phrase.";
+"logout_all_confirm_action" = "Sign Out All";
+"logout_no_backup_title" = "No Recovery Phrase Saved";
+"logout_no_backup_message" = "You haven't saved your recovery phrase yet. If you sign out without it, you will permanently lose access to your account and messages.";
+"logout_no_backup_setup_action" = "Set Up Recovery First";
+"logout_no_backup_proceed_action" = "Sign Out Anyway";
