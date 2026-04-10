@@ -28,8 +28,12 @@ class NetworkReachabilityManager {
 
     private var monitor: NWPathMonitor?
     private var queue: DispatchQueue?
-    /// Tracks the previous connection type to detect interface changes (e.g. VPN → WiFi).
+    /// Tracks the previous connection type to detect interface changes (e.g. WiFi → cellular).
     private var prevConnectionType: ConnectionType = .unknown
+    /// Fingerprint of the previous NWPath interface set (sorted interface names, e.g. "en0,utun3").
+    /// Detects VPN on/off, interface additions/removals that don't change the high-level
+    /// ConnectionType but still invalidate existing TCP connections.
+    private var prevPathFingerprint: String = ""
     
     private init() {
         // Always set default values first
@@ -84,9 +88,20 @@ class NetworkReachabilityManager {
                 }
                 
                 // Notify subscribers if reachability changed OR if the network interface
-                // changed while still reachable (e.g. VPN off → direct WiFi).
+                // changed while still reachable (e.g. VPN on/off, cellular ↔ WiFi).
                 // In both cases existing TCP connections are dead and must be reopened.
-                let interfaceSwitched = self.isReachable && self.connectionType != self.prevConnectionType && self.prevConnectionType != .unknown
+                let interfaceTypeSwitched = self.isReachable && self.connectionType != self.prevConnectionType && self.prevConnectionType != .unknown
+
+                // Detect VPN and other path changes that don't alter the high-level
+                // ConnectionType. VPN creates a utun interface; enabling/disabling it
+                // changes the available interface set without changing wifi/cellular.
+                let fingerprint = path.availableInterfaces.map(\.name).sorted().joined(separator: ",")
+                let pathTopologyChanged = self.isReachable
+                    && !self.prevPathFingerprint.isEmpty
+                    && fingerprint != self.prevPathFingerprint
+                self.prevPathFingerprint = fingerprint
+
+                let interfaceSwitched = interfaceTypeSwitched || pathTopologyChanged
                 self.prevConnectionType = self.connectionType
                 if wasReachable != self.isReachable || interfaceSwitched {
                     Log.info("🌐 Network reachability changed: \(self.isReachable ? "ONLINE" : "OFFLINE") (\(self.connectionType))", category: "NetworkReachability")
@@ -139,7 +154,7 @@ class NetworkReachabilityManager {
 // MARK: - Notifications
 extension Notification.Name {
     static let networkReachabilityChanged = Notification.Name("networkReachabilityChanged")
-    /// Fired when network interface switches (e.g. VPN off → WiFi) while remaining reachable.
+    /// Fired when network interface switches (e.g. VPN on/off, cellular ↔ WiFi) while remaining reachable.
     /// Stale TCP connections bound to the old interface must be closed and reopened.
     static let networkPathChanged = Notification.Name("networkPathChanged")
 }
