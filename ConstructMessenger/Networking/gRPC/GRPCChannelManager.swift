@@ -93,6 +93,11 @@ final class GRPCChannelManager: Sendable {
     /// Returns the local proxy port if ICE is running AND the relay is not on cooldown, nil otherwise.
     private func iceProxyPort() -> UInt16? {
         guard ice_proxy_is_running() != 0 else { return nil }
+        // Only route through ICE when explicitly enabled (user toggle or DPI auto-detection).
+        // Ephemeral pre-warms (happy eyeballs) keep the proxy warm but don't capture routing —
+        // this prevents EU users from being routed through a relay they don't need.
+        // Read directly from UserDefaults to avoid @MainActor isolation requirement.
+        guard UserDefaults.standard.bool(forKey: "ice_enabled") else { return nil }
         guard !isICEOnCooldownInternal() else {
             Log.debug("🧊 ICE on cooldown — using direct TLS", category: "gRPC")
             return nil
