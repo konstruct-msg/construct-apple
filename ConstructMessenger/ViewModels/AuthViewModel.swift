@@ -70,8 +70,8 @@ class AuthViewModel {
         refreshDeviceKeyState()        // Sync Keychain state into @Published
         
         // ✅ Device-based auth: Try to restore session OR authenticate with device keys
-        Task {
-            await restoreOrAuthenticateDevice()
+        Task { [weak self] in
+            await self?.restoreOrAuthenticateDevice()
         }
     }
     
@@ -286,8 +286,8 @@ class AuthViewModel {
     
     /// Legacy method - kept for backward compatibility
     func restoreSession() {
-        Task {
-            await restoreOrAuthenticateDevice()
+        Task { [weak self] in
+            await self?.restoreOrAuthenticateDevice()
         }
     }
 
@@ -407,8 +407,8 @@ class AuthViewModel {
     }
 
     func logout() {
-        Task {
-            // 0. Send END_SESSION to all contacts
+        Task { [weak self] in
+            guard let self else { return }
             await SessionCoordinator().sendEndSessionToAllContacts(reason: "logout")
             Log.info("✅ END_SESSION sent to all contacts on logout", category: "Auth")
             
@@ -442,8 +442,8 @@ class AuthViewModel {
     /// Signs out of ALL devices simultaneously (invalidates all refresh tokens server-side),
     /// then performs local logout. Use when a device may have been compromised.
     func logoutAllDevices() {
-        Task {
-            await SessionCoordinator().sendEndSessionToAllContacts(reason: "logout")
+        Task { [weak self] in
+            guard let self else { return }
             if SessionManager.shared.sessionToken != nil {
                 do {
                     try await AuthServiceClient.shared.logout(allDevices: true)
@@ -469,7 +469,8 @@ class AuthViewModel {
         
         Log.info("🗑️ Requesting account deletion", category: "AuthViewModel")
         
-        Task {
+        Task { [weak self] in
+            guard let self else { return }
             do {
                 try await deleteAccountWithDeviceSignature()
                 await MainActor.run { handleDeleteAccountSuccess() }
@@ -505,7 +506,7 @@ class AuthViewModel {
     /// Immediately wipes all local data; attempts server deletion best-effort in background.
     func triggerDuressWipe() {
         Log.info("🚨 Duress PIN triggered — initiating silent wipe", category: "AuthViewModel")
-        Task {
+        Task { [weak self] in
             _ = try? await UserServiceClient.shared.deleteAccount(
                 confirmation: "DELETE",
                 reason: "duress"
@@ -607,7 +608,8 @@ class AuthViewModel {
         // Request push permission (first login) or ensure the token is on the server
         // (subsequent logins where permission is already granted). Both paths end with
         // the device token reliably registered in the backend DB.
-        Task {
+        Task { [weak self] in
+            _ = self // suppress unused warning; services are singletons
             #if canImport(UIKit)
             let granted = await PushNotificationManager.shared.requestPermission()
             if granted {
@@ -615,8 +617,6 @@ class AuthViewModel {
             } else {
                 Log.info("📱 Push notifications declined by user", category: "Auth")
             }
-            // requestPermission() may return immediately if already granted without
-            // triggering a new APNs token delivery, so explicitly ensure registration.
             await PushNotificationManager.shared.ensureTokenRegistered()
             #endif
         }
@@ -655,48 +655,65 @@ class AuthViewModel {
         CryptoManager.shared.deleteAllCryptoKeys()
         KeychainManager.shared.deleteDeviceKeys()
         
+        // Clear all UserDefaults keys
+        let userDefaultsKeys: [String] = [
+            "biometricEnabled",
+            "pinLength",
+            "is_discoverable",
+            "recovery_is_setup",
+            "recovery_banner_dismissed",
+            UserDefaultsKey.iceEnabled.rawValue,
+            UserDefaultsKey.iceMode.rawValue,
+            UserDefaultsKey.trafficProtectionEnabled.rawValue,
+            UserDefaultsKey.backgroundFetchEnabled.rawValue,
+            UserDefaultsKey.backgroundFetchIntervalMinutes.rawValue,
+            UserDefaultsKey.sessionExpires.rawValue,
+            "construct.lastMessageId",
+            "construct.spk.lastRotationTimestamp",
+            "construct.spk.uploadTimestamp",
+        ]
+        userDefaultsKeys.forEach { UserDefaults.standard.removeObject(forKey: $0) }
+        // Remove all construct.contact_request_seen.* keys
+        UserDefaults.standard.dictionaryRepresentation().keys
+            .filter { $0.hasPrefix("construct.contact_request_seen.") }
+            .forEach { UserDefaults.standard.removeObject(forKey: $0) }
+        
         // Clear CoreData - delete all user's data
         let context = viewContext
         
-        // ✅ FIX: Check if persistent store coordinator is ready before accessing entities
         guard context.persistentStoreCoordinator != nil else {
             Log.info("⚠️ Core Data persistent store coordinator not ready, skipping data deletion", category: "AuthViewModel")
-            // Continue with logout even if Core Data isn't ready
             isAuthenticated = false
             currentUserId = nil
-            currentUser = nil  // ✅ REFACTOR Phase 1.2
+            currentUser = nil
             hasRegisteredDeviceKeys = false
             return
         }
         
-        // Delete all chats and messages
-        let chatFetchRequest: NSFetchRequest<Chat> = Chat.fetchRequest()
-        if let chats = try? context.fetch(chatFetchRequest) {
-            for chat in chats {
-                context.delete(chat)
+        // Delete all entities using batch delete for efficiency
+        let entityNames = ["Message", "HealingMessage", "ProcessedMessage", "CallRecord", "Chat", "User"]
+        for entityName in entityNames {
+            let fetchRequest = NSFetchRequest<NSFetchRequestResult>(entityName: entityName)
+            let batchDelete = NSBatchDeleteRequest(fetchRequest: fetchRequest)
+            batchDelete.resultType = .resultTypeObjectIDs
+            do {
+                let result = try context.execute(batchDelete) as? NSBatchDeleteResult
+                if let objectIDs = result?.result as? [NSManagedObjectID], !objectIDs.isEmpty {
+                    NSManagedObjectContext.mergeChanges(
+                        fromRemoteContextSave: [NSDeletedObjectsKey: objectIDs],
+                        into: [context]
+                    )
+                }
+            } catch {
+                Log.error("❌ Failed to delete \(entityName) from CoreData: \(error)", category: "AuthViewModel")
             }
         }
-        
-        // Delete all users
-        let userFetchRequest: NSFetchRequest<User> = User.fetchRequest()
-        if let users = try? context.fetch(userFetchRequest) {
-            for user in users {
-                context.delete(user)
-            }
-        }
-        
-        // Save changes
-        do {
-            try context.save()
-            Log.info("✅ All user data deleted from CoreData", category: "AuthViewModel")
-        } catch {
-            Log.error("❌ Failed to delete user data from CoreData: \(error)", category: "AuthViewModel")
-        }
+        Log.info("✅ All user data deleted from CoreData", category: "AuthViewModel")
 
         // Reset auth state
         isAuthenticated = false
         currentUserId = nil
-        currentUser = nil  // ✅ REFACTOR Phase 1.2
+        currentUser = nil
         hasRegisteredDeviceKeys = false
 
         Log.info("✅ Account deletion complete - user logged out", category: "AuthViewModel")

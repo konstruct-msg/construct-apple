@@ -54,7 +54,8 @@ class ProfileShareViewModel {
         isSharingProfile = true
         
         // Upload avatar via Media Upload API if available
-        Task {
+        Task { [weak self] in
+            guard let self else { return }
             defer { isSharingProfile = false }
 
             // Check if session is ready; if not, initialize it on-demand
@@ -178,7 +179,8 @@ class ProfileShareViewModel {
            let avatarMediaUrl = profileData.avatarMediaUrl,
            let avatarMediaKey = profileData.avatarMediaKey {
             // New format: download and decrypt media from Media Upload API
-            Task {
+            Task { [weak self] in
+                guard let self else { return }
                 do {
                     Log.info("📥 Downloading avatar from Media Upload API: \(avatarMediaId)", category: "ProfileShare")
                     
@@ -259,7 +261,8 @@ class ProfileShareViewModel {
         Log.info("📤 Rebroadcasting profile to \(contactIds.count) contact(s)", category: "ProfileShare")
 
         for contactId in contactIds {
-            Task {
+            Task { [weak self] in
+                guard let self else { return }
                 await withCheckedContinuation { continuation in
                     shareProfile(with: contactId) { success, error in
                         if success {

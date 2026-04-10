@@ -43,7 +43,7 @@ final class CallManager {
     private(set) var state: CallState = .idle
     private var active: ActiveCall?
 
-    private final class ActiveCall: @unchecked Sendable {
+    private final class ActiveCall {
         let session: CallSession
         var stream: SignalStream?
         var turn: Shared_Proto_Signaling_V1_TurnCredentials?
@@ -224,7 +224,8 @@ final class CallManager {
 
         state = .connecting(active.session)
 
-        Task {
+        Task { [weak self] in
+            guard let self else { return }
             do {
                 let turn = try? await SignalingServiceClient.shared.getTurnCredentials(callId: active.session.id)
                 if let turn {

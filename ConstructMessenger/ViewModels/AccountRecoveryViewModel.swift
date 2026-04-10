@@ -222,8 +222,8 @@ final class AccountRecoveryViewModel {
             )
             IceProxyManager.shared.configureFromServer(cert: response.iceBridgeCert ?? "")
 
-            // 6. Upload new OTPKs (force replace)
-            Task {
+            Task { [weak self] in
+                _ = self
                 try? await OtpkReplenishmentService.generateAndUpload(
                     count: 100,
                     deviceId: deviceId,
@@ -235,7 +235,8 @@ final class AccountRecoveryViewModel {
             // Force-rotate SPK after recovery: the server still holds the original
             // device's SPK (which may be stale). Upload a fresh SPK so peers can
             // init sessions without hitting the Rust 14-day staleness rejection.
-            Task {
+            Task { [weak self] in
+                _ = self
                 try? await PreKeyRotationService.shared.forceRotate(
                     deviceId: deviceId,
                     reason: .reinstall

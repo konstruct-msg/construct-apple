@@ -101,7 +101,8 @@ final class SessionCoordinator {
         }
         usersInitializingSession.insert(userId)
         Log.info("🔑 SESSION_STATE[key_sync]: re-keying sending session for \(userId.prefix(8))…", category: "SessionInit")
-        Task {
+        Task { [weak self] in
+            guard let self else { return }
             defer { usersInitializingSession.remove(userId) }
             do {
                 let bundle = try await publicKeyBundleHandler.fetchPublicKeyWithRetry(userId: userId)

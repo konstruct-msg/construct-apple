@@ -158,7 +158,7 @@ final class DebugMetricsViewModel {
     var streamFastFailoverCount: Int = 0
     var rpcFastFallbackCount: Int = 0
 
-    nonisolated(unsafe) private var refreshTimer: Timer?
+    private var refreshTimer: Timer?
 
     init() {
         refreshTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
@@ -167,7 +167,7 @@ final class DebugMetricsViewModel {
     }
 
     deinit {
-        refreshTimer?.invalidate()
+        MainActor.assumeIsolated { refreshTimer?.invalidate() }
     }
 
     func refresh() {

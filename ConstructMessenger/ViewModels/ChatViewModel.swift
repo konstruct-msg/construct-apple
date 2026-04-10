@@ -420,8 +420,8 @@ class ChatViewModel: NSObject {
                 self.isInitializingSession = false
 
                 // Send queued messages
-                Task {
-                    await self.sendQueuedMessages(userId: userId)
+                Task { [weak self] in
+                    await self?.sendQueuedMessages(userId: userId)
                 }
             },
             onFailure: { [weak self] error in
@@ -510,8 +510,8 @@ class ChatViewModel: NSObject {
             queuedMessages.append(queued)
             isInitializingSession = true
             Log.info("📝 SESSION_STATE[queue_message]: userId=\(recipientId.prefix(8))..., queueSize=\(queuedMessages.count)", category: "SessionInit")
-            Task {
-                await initializeSessionProactively(userId: recipientId)
+            Task { [weak self] in
+                await self?.initializeSessionProactively(userId: recipientId)
             }
             return
         }
@@ -883,7 +883,8 @@ class ChatViewModel: NSObject {
                     // SenderSync: fire-and-forget copy to own other devices.
                     // Fan-out to other recipient devices is handled in the coordinator.
                     if let myDeviceId = SessionManager.shared.currentDeviceId, !myDeviceId.isEmpty {
-                        Task {
+                        Task { [weak self] in
+                            _ = self
                             await MultiDeviceSendCoordinator.shared.sendSenderSync(
                                 plaintext: text,
                                 messageId: messageId,
@@ -920,9 +921,10 @@ class ChatViewModel: NSObject {
                                 OutgoingWirePayloadStore.shared.remove(baseMessageId: messageId)
                                 Log.error("🔐 encryptionFailed from server — triggering END_SESSION for \(self.chat.otherUser?.id.prefix(8) ?? "?")\(traceTag)", category: "ChatViewModel")
                                 if let peerId = self.chat.otherUser?.id {
-                                    Task {
-                                        try? await SessionCoordinator().sendEndSession(to: peerId, reason: "server_encryption_rejected")
-                                    }
+                        Task { [weak self] in
+                            guard let self else { return }
+                            try? await SessionCoordinator().sendEndSession(to: peerId, reason: "server_encryption_rejected")
+                        }
                                 }
                             } else if aggregated.retryable {
                                 deliveryStatus = .queued
@@ -987,7 +989,7 @@ class ChatViewModel: NSObject {
             isInitializingSession = true
             isSending = false
             Log.info("📝 Message queued for retry after session reinitialization", category: "ChatViewModel")
-            Task { await initializeSessionProactively(userId: toUserId) }
+            Task { [weak self] in await self?.initializeSessionProactively(userId: toUserId) }
         }
     }
 
@@ -998,7 +1000,8 @@ class ChatViewModel: NSObject {
               let currentUserId = SessionManager.shared.currentUserId else { return }
         let conversationId = ConversationId.direct(myUserId: currentUserId, theirUserId: recipientId)
 
-        Task {
+        Task { [weak self] in
+            guard let self else { return }
             do {
                 let wirePayload = try MessageRouter.shared.encryptOutgoing(
                     plaintext: newText,
