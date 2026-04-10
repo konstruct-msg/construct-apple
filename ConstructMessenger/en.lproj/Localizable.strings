@@ -644,3 +644,15 @@
 "logout_no_backup_message" = "You haven't saved your recovery phrase yet. If you sign out without it, you will permanently lose access to your account and messages.";
 "logout_no_backup_setup_action" = "Set Up Recovery First";
 "logout_no_backup_proceed_action" = "Sign Out Anyway";
+
+// MARK: - Discoverable / User Search
+"searchable_toggle_title" = "searchable by username";
+"searchable_toggle_footer" = "When enabled, anyone who knows your exact username can find you. This cannot be used to guess or enumerate usernames — only 100% exact matches work. Off by default.";
+"searchable_confirm_title" = "enable search?";
+"searchable_confirm_message" = "Your username will be findable by anyone who types it exactly. Disable at any time in Security settings.";
+"searchable_confirm_action" = "enable";
+"searchable_no_username_hint" = "set a username first to enable search";
+"searchable_indicator" = "[⊙] searchable";
+"synaps_remote_result_header" = "found on construct";
+"synaps_searching" = "searching...";
+"synaps_not_found" = "not found";

@@ -316,7 +316,7 @@ struct ChatView: View {
             viewModel.onViewAppear()
             // Изъян 7: notify Rust orchestrator that this chat is now active (enables heartbeat scheduling).
             if let contactId = viewModel.chat.otherUser?.id, !contactId.isEmpty {
-                try? CryptoManager.shared.orchestratorCore?.handleEvent(
+                _ = try? CryptoManager.shared.orchestratorCore?.handleEvent(
                     event: .activeChatChanged(contactId: contactId, isActive: true)
                 )
             }
@@ -324,7 +324,7 @@ struct ChatView: View {
         .onDisappear {
             // Изъян 7: cancel heartbeat scheduling when chat is closed.
             if let contactId = viewModel.chat.otherUser?.id, !contactId.isEmpty {
-                try? CryptoManager.shared.orchestratorCore?.handleEvent(
+                _ = try? CryptoManager.shared.orchestratorCore?.handleEvent(
                     event: .activeChatChanged(contactId: contactId, isActive: false)
                 )
             }

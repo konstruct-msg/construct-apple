@@ -241,9 +241,15 @@ class PushNotificationManager: NSObject {
                 Log.info("✅ Device token registered with server: success=\(response.success)", category: "Push")
                 return
             } catch {
-                if let rpcError = error as? RPCError, rpcError.code == .unavailable, attempt < 2 {
+                let shouldRetry: Bool
+                if let rpcError = error as? RPCError {
+                    shouldRetry = rpcError.code == .unavailable || rpcError.code == .deadlineExceeded
+                } else {
+                    shouldRetry = false
+                }
+                if shouldRetry && attempt < 2 {
                     let delay = Double(attempt + 1) * 2.0
-                    Log.info("🔄 Push token registration unavailable (attempt \(attempt + 1)/3), retrying in \(Int(delay))s", category: "Push")
+                    Log.info("🔄 Push token registration failed (attempt \(attempt + 1)/3), retrying in \(Int(delay))s", category: "Push")
                     try? await Task.sleep(for: .seconds(delay))
                 } else {
                     Log.error("❌ Failed to register device token with server: \(error)", category: "Push")

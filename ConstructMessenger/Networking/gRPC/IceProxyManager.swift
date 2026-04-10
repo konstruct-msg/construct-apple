@@ -261,8 +261,10 @@ final class IceProxyManager: ObservableObject {
             object: nil,
             queue: nil
         ) { [weak self] _ in
-            guard let self, self.isRunning else { return }
-            Task { await self.handleNetworkPathChange() }
+            Task { @MainActor in
+                guard let self, self.isRunning else { return }
+                await self.handleNetworkPathChange()
+            }
         }
     }
 
@@ -709,11 +711,10 @@ final class IceProxyManager: ObservableObject {
         // For a plain-obfs4 secondary we always use ice_proxy_start (not _tls).
         // If the caller accidentally passes a TLS relay, strip tlsServerName.
         var host = ""
-        var port: UInt16 = 0
         guard let comps = relay.address.split(separator: ":").map(String.init) as [String]?,
               comps.count == 2,
-              let p = UInt16(comps[1]) else { return nil }
-        host = comps[0]; port = p
+              let _ = UInt16(comps[1]) else { return nil }
+        host = comps[0]
 
         var outPort: UInt16 = 0
         let result = host.withCString { hostPtr in

@@ -104,4 +104,46 @@ final class UserServiceClient: Sendable {
             )
         }
     }
+
+    // MARK: - Set Discoverable
+
+    /// Opts the authenticated user in or out of username search.
+    /// The user must have a username set to opt in — server enforces this.
+    func setDiscoverable(enabled: Bool) async throws {
+        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.setDiscoverable) { grpcClient in
+            let client = Shared_Proto_Services_V1_UserService.Client(wrapping: grpcClient)
+
+            var request = Shared_Proto_Services_V1_SetDiscoverableRequest()
+            request.discoverable = enabled
+
+            _ = try await client.setDiscoverable(request: .init(message: request))
+        }
+    }
+
+    // MARK: - Find User
+
+    /// Searches for a user by exact username match.
+    /// Returns the userId if found and discoverable, nil otherwise (NOT_FOUND or rate-limited).
+    /// Never distinguishes "no such user" from "user not discoverable" — server intentionally returns
+    /// identical NOT_FOUND for both to prevent username enumeration attacks.
+    func findUser(username: String) async throws -> String? {
+        do {
+            return try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.findUser) { grpcClient in
+                let client = Shared_Proto_Services_V1_UserService.Client(wrapping: grpcClient)
+
+                var request = Shared_Proto_Services_V1_FindUserRequest()
+                request.username = username.trimmingCharacters(in: .whitespaces).lowercased()
+
+                let response = try await client.findUser(request: .init(message: request))
+                return response.userID
+            }
+        } catch {
+            // NOT_FOUND and RESOURCE_EXHAUSTED (rate limit) both map to nil — caller never learns why.
+            let desc = error.localizedDescription.lowercased()
+            if desc.contains("not found") || desc.contains("resource exhausted") || desc.contains("unavailable") {
+                return nil
+            }
+            throw error
+        }
+    }
 }

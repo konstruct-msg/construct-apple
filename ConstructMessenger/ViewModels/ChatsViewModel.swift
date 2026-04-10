@@ -179,6 +179,11 @@ class ChatsViewModel {
         observationTasks.append(streamTask)
     }
     
+    /// Tracks whether the previous polling state had a session token.
+    /// Used to detect the transition from unauthenticated → authenticated and
+    /// cancel any in-progress backoff so the stream connects immediately.
+    private var pollingStateHadToken = false
+
     private func handlePollingState(_ state: PollingState) {
         if state.hasToken && state.status != ConnectionStatusManager.ConnectionStatus.disconnected {
             if state.pushEnabled {
@@ -186,8 +191,18 @@ class ChatsViewModel {
             } else {
                 Log.info("📡 Connecting message stream", category: "ChatsViewModel")
             }
-            startMessageStream()
+            // If we just got a token (registration/login just completed), the stream
+            // may already be in exponential backoff from pre-auth connection attempts.
+            // Use forceReconnect to cancel the backoff and connect immediately instead
+            // of waiting for the next retry window (up to 18+ seconds).
+            if !pollingStateHadToken {
+                pollingStateHadToken = true
+                forceReconnectStream()
+            } else {
+                startMessageStream()
+            }
         } else {
+            pollingStateHadToken = false
             if !state.hasToken {
                 Log.info("📡 No session — stream stopped", category: "ChatsViewModel")
             } else {
@@ -287,6 +302,23 @@ class ChatsViewModel {
             }
         }
         observationTasks.append(pathTask)
+
+        // Retry startup RPCs that may have timed out while ICE was on cooldown and direct
+        // gRPC was used (DPI blocks new TLS handshakes, so unary RPCs time out even though
+        // the existing stream socket keeps heartbeating).
+        let iceRecoveryTask = Task { [weak self] in
+            for await _ in NotificationCenter.default.notifications(named: .iceRelayRecovered) {
+                guard let self else { return }
+                Log.info("🧊 ICE recovered — retrying key health check and token registration", category: "ChatsViewModel")
+                // Reset the 5-min cooldown so the health check runs immediately.
+                self.lastForegroundKeyCheckAt = 0
+                await self.checkKeyHealthInBackground()
+                // Re-register push tokens in case they failed during the cooldown window.
+                await PushNotificationManager.shared.ensureTokenRegistered()
+                await VoIPPushManager.shared.ensureTokenRegistered()
+            }
+        }
+        observationTasks.append(iceRecoveryTask)
 
         // Wake up when silent push arrives (app is in background)
         let silentPushTask = Task { [weak self] in

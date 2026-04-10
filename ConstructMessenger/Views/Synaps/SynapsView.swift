@@ -10,6 +10,7 @@
 
 import SwiftUI
 import CoreData
+import GRPCCore
 
 // MARK: - SynapsView
 
@@ -34,6 +35,16 @@ struct SynapsView: View {
     @State private var canvasScale:  CGFloat  = 1.0   // recalculated on appear
     @State private var canvasOffset: CGSize   = .zero
 
+    // MARK: - Remote search state
+    enum RemoteSearchState {
+        case idle
+        case searching
+        case found(Shared_Proto_Services_V1_UserProfile)
+        case notFound
+    }
+    @State private var remoteState: RemoteSearchState = .idle
+    @State private var searchTask: Task<Void, Never>? = nil
+
     private var filtered: [User] {
         guard !searchText.isEmpty else { return Array(contacts) }
         let q = searchText.lowercased()
@@ -48,6 +59,9 @@ struct SynapsView: View {
             VStack(spacing: 0) {
                 synapsNavBar
                 synapsSearchBar
+                if !searchText.isEmpty, filtered.isEmpty {
+                    remoteSearchCard
+                }
                 GeometryReader { geo in
                     ZStack {
                         Color.CT.bg.ignoresSafeArea()
@@ -77,9 +91,17 @@ struct SynapsView: View {
                     }
                 }
             }
-            .onChange(of: searchText) { _, _ in
+            .onChange(of: searchText) { _, newValue in
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                     canvasOffset = .zero
+                }
+                searchTask?.cancel()
+                remoteState = .idle
+                guard !newValue.isEmpty else { return }
+                searchTask = Task {
+                    try? await Task.sleep(nanoseconds: 500_000_000)  // 0.5s debounce
+                    guard !Task.isCancelled else { return }
+                    await performRemoteSearch(username: newValue)
                 }
             }
             #if os(iOS)
@@ -183,6 +205,134 @@ struct SynapsView: View {
                 .padding(.horizontal, 40)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    // MARK: - Remote Search Card
+
+    @ViewBuilder
+    private var remoteSearchCard: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text(LocalizedStringKey("synaps_remote_result_header"))
+                    .font(CTFont.bold(10))
+                    .foregroundStyle(Color.CT.accent)
+                    .tracking(2)
+                Spacer()
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 10)
+            .padding(.bottom, 6)
+
+            Rectangle().fill(Color.CT.noise).frame(height: 1)
+
+            switch remoteState {
+            case .idle:
+                EmptyView()
+
+            case .searching:
+                HStack {
+                    Text(LocalizedStringKey("synaps_searching"))
+                        .font(CTFont.regular(13))
+                        .foregroundStyle(Color.CT.textDim)
+                    Spacer()
+                    ProgressView().tint(Color.CT.accent).scaleEffect(0.7)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 12)
+
+            case .found(let profile):
+                Button {
+                    Task { await addRemoteUserAndChat(profile: profile) }
+                } label: {
+                    HStack(spacing: 12) {
+                        Text("[@]")
+                            .font(CTFont.bold(14))
+                            .foregroundStyle(Color.CT.accent)
+                        VStack(alignment: .leading, spacing: 2) {
+                            if profile.hasDisplayName {
+                                Text(profile.displayName)
+                                    .font(CTFont.bold(14))
+                                    .foregroundStyle(Color.CT.text)
+                            }
+                            if profile.hasUsername {
+                                Text("@\(profile.username)")
+                                    .font(CTFont.regular(12))
+                                    .foregroundStyle(Color.CT.textDim)
+                            }
+                        }
+                        Spacer()
+                        Text(CTSymbol.forward)
+                            .font(CTFont.regular(13))
+                            .foregroundStyle(Color.CT.accent)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 12)
+                }
+                .buttonStyle(.plain)
+
+            case .notFound:
+                HStack {
+                    Text(LocalizedStringKey("synaps_not_found"))
+                        .font(CTFont.regular(13))
+                        .foregroundStyle(Color.CT.textDim)
+                    Spacer()
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 12)
+            }
+
+            Rectangle().fill(Color.CT.noise).frame(height: 1)
+        }
+        .background(Color.CT.bg)
+    }
+
+    // MARK: - Remote Search Logic
+
+    private func performRemoteSearch(username: String) async {
+        guard filtered.isEmpty else { return }
+        remoteState = .searching
+
+        do {
+            guard let userId = try await UserServiceClient.shared.findUser(username: username) else {
+                remoteState = .notFound
+                return
+            }
+            let profile = try await UserServiceClient.shared.getUserProfile(userId: userId)
+            remoteState = .found(profile)
+        } catch {
+            remoteState = .notFound
+        }
+    }
+
+    /// Upserts the remote user in Core Data (marking as contact) and opens a chat.
+    @MainActor
+    private func addRemoteUserAndChat(profile: Shared_Proto_Services_V1_UserProfile) async {
+        let userId = profile.userID
+        guard !userId.isEmpty else { return }
+
+        let fetchRequest = User.fetchRequest()
+        fetchRequest.predicate = NSPredicate(format: "id == %@", userId)
+        fetchRequest.fetchLimit = 1
+
+        let user: User
+        if let existing = try? context.fetch(fetchRequest).first {
+            user = existing
+        } else {
+            user = User(context: context)
+            user.id = userId
+            user.addedAt = Date()
+            user.isBlocked = false
+            user.isSharingWithMe = false
+            user.amISharingWith = false
+        }
+        user.isContact = true
+        user.username = profile.hasUsername ? profile.username : ""
+        user.displayName = profile.hasDisplayName ? profile.displayName : DisplayNameGenerator.generate(from: userId)
+        try? context.save()
+
+        searchText = ""
+        remoteState = .idle
+        chatsViewModel.openOrCreateChat(with: user)
     }
 }
 

@@ -30,7 +30,8 @@ class MessageRetryManager {
             return
         }
 
-        guard let decryptedText = message.decryptedContent else {
+        // Ensure decrypted content exists before proceeding
+        guard message.decryptedContent != nil else {
             Log.error("Cannot retry - no decrypted content", category: "MessageRetryManager")
             return
         }

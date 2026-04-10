@@ -66,7 +66,61 @@ class MessageRouter {
     var onReceiptNeeded: (([String], String, Shared_Proto_Signaling_V1_ReceiptStatus) -> Void)?
 
     private let chunkReassembler = ChunkedMessageReassembler.shared
-    
+
+    // MARK: - Rust Timer Support (R-C2)
+    // When Rust emits scheduleTimer, Swift must fire timerFired after the given delay.
+    // Keys are timerId strings; values are in-flight Task handles for cancellation.
+    private var rustTimers: [String: Task<Void, Never>] = [:]
+    private let rustTimersLock = NSLock()
+
+    /// Schedule (or reschedule) a Rust-requested timer. Fires `timerFired` to the orchestrator after `delayMs`.
+    func scheduleRustTimer(timerId: String, delayMs: UInt64) {
+        cancelRustTimer(timerId: timerId)
+        let task = Task { [weak self] in
+            let ns = UInt64(delayMs) * 1_000_000
+            try? await Task.sleep(nanoseconds: ns)
+            guard !Task.isCancelled, let self else { return }
+            let event = CfeIncomingEvent.timerFired(timerId: timerId)
+            if let actions = try? CryptoManager.shared.orchestratorCore?.handleEvent(event: event), !actions.isEmpty {
+                self.executeRustTimerActions(actions)
+            }
+            _ = self.rustTimersLock.withLock { self.rustTimers.removeValue(forKey: timerId) }
+        }
+        rustTimersLock.withLock { rustTimers[timerId] = task }
+        Log.debug("⏲ Rust timer scheduled: \(timerId) in \(delayMs)ms", category: "MessageRouter")
+    }
+
+    /// Cancel a pending Rust-requested timer.
+    func cancelRustTimer(timerId: String) {
+        rustTimersLock.withLock {
+            if let existing = rustTimers.removeValue(forKey: timerId) {
+                existing.cancel()
+                Log.debug("⏲ Rust timer cancelled: \(timerId)", category: "MessageRouter")
+            }
+        }
+    }
+
+    /// Execute actions returned after a timerFired event (heal retries etc.).
+    private func executeRustTimerActions(_ actions: [CfeAction]) {
+        for action in actions {
+            switch action {
+            case .scheduleTimer(let id, let delay):
+                scheduleRustTimer(timerId: id, delayMs: delay)
+            case .cancelTimer(let id):
+                cancelRustTimer(timerId: id)
+            case .notifyError(let code, let msg):
+                Log.error("❌ Rust timer action error [\(code)]: \(msg)", category: "MessageRouter")
+            default:
+                // Route storage actions through the storage pipeline; log others.
+                if case .saveSessionToSecureStore = action {
+                    executeStorageActions([action])
+                } else {
+                    Log.debug("🔷 Unhandled Rust timer action: \(action)", category: "MessageRouter")
+                }
+            }
+        }
+    }
+
     // MARK: - Message Routing
     
     /// Route incoming message to appropriate handler
@@ -412,6 +466,12 @@ class MessageRouter {
 
             case .notifyError(let code, let msg):
                 Log.error("❌ Rust orchestrator error [\(code)]: \(msg)", category: "MessageRouter")
+
+            case .scheduleTimer(let timerId, let delayMs):
+                scheduleRustTimer(timerId: timerId, delayMs: delayMs)
+
+            case .cancelTimer(let timerId):
+                cancelRustTimer(timerId: timerId)
 
             default:
                 Log.debug("🔷 Unhandled Rust action in M5 path: \(action)", category: "MessageRouter")

@@ -37,7 +37,10 @@ struct SettingsView: View {
 
                         // MARK: Profile
                         CTSettingsSectionHeader(title: NSLocalizedString("account", comment: ""))
-                        NavigationLink(destination: AccountSettingsView().environment(authViewModel)) {
+                        NavigationLink(destination: AccountSettingsView()
+                            .environment(authViewModel)
+                            .environment(recoveryVM)
+                            .environment(viewModel)) {
                             profileRow
                         }
                         .buttonStyle(.plain)
@@ -74,7 +77,8 @@ struct SettingsView: View {
                         }
                         .buttonStyle(.plain)
                         CTSep()
-                        NavigationLink(destination: SecurityView()) {
+                        NavigationLink(destination: SecurityView()
+                            .environment(viewModel)) {
                             CTSettingsRow(label: NSLocalizedString("security", comment: "").uppercased(), value: CTSymbol.forward)
                         }
                         .buttonStyle(.plain)

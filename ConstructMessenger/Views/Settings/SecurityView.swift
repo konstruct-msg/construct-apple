@@ -9,6 +9,7 @@ import SwiftUI
 
 struct SecurityView: View {
     @Environment(SecurityViewModel.self) private var securityViewModel
+    @Environment(SettingsViewModel.self) private var settingsViewModel
     @Environment(AccountRecoveryViewModel.self) private var recoveryVM
     @Environment(AuthViewModel.self) private var authVM
     @Environment(\.managedObjectContext) private var viewContext
@@ -19,6 +20,7 @@ struct SecurityView: View {
     @State private var showingRecoverySetup = false
     @State private var showingDuressPinSetup = false
     @State private var showingDisableDuressAlert = false
+    @State private var showingDiscoverableConfirm = false
     @State private var lockdown = LockdownManager.shared
 
     var body: some View {
@@ -191,8 +193,60 @@ struct SecurityView: View {
                         .foregroundStyle(Color.CT.textDim)
                         .padding(.horizontal, 20)
                 }
+
+                // MARK: - Discovery section
+                ConstructSection(header: NSLocalizedString("DISCOVERY", comment: "")) {
+                    let hasUsername = !authVM.currentUsername.isEmpty
+                    HStack(spacing: 14) {
+                        CTRowIcon("[⊙]", color: settingsViewModel.isDiscoverable ? Color.CT.accent : Color.CT.textDim)
+                        Text(LocalizedStringKey("searchable_toggle_title"))
+                            .font(CTFont.bold(16))
+                            .foregroundStyle(hasUsername ? Color.CT.text : Color.CT.textDim)
+                        Spacer()
+                        if settingsViewModel.isLoadingDiscoverable {
+                            ProgressView()
+                                .tint(Color.CT.accent)
+                                .scaleEffect(0.8)
+                        } else {
+                            Toggle("", isOn: Binding(
+                                get: { settingsViewModel.isDiscoverable },
+                                set: { newValue in
+                                    if newValue {
+                                        showingDiscoverableConfirm = true
+                                    } else {
+                                        Task { await settingsViewModel.setDiscoverable(false) }
+                                    }
+                                }
+                            ))
+                            .labelsHidden()
+                            .tint(Color.CT.accent)
+                            .disabled(!hasUsername)
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 14)
+                }
+                if !authVM.currentUsername.isEmpty {
+                    Text(LocalizedStringKey("searchable_toggle_footer"))
+                        .font(CTFont.regular(11))
+                        .foregroundStyle(Color.CT.textDim)
+                        .padding(.horizontal, 20)
+                } else {
+                    Text(LocalizedStringKey("searchable_no_username_hint"))
+                        .font(CTFont.regular(11))
+                        .foregroundStyle(Color.CT.textDim.opacity(0.6))
+                        .padding(.horizontal, 20)
+                }
             }
             .padding(.vertical, 20)
+        }
+        .alert("searchable_confirm_title", isPresented: $showingDiscoverableConfirm) {
+            Button(LocalizedStringKey("searchable_confirm_action")) {
+                Task { await settingsViewModel.setDiscoverable(true) }
+            }
+            Button("cancel", role: .cancel) {}
+        } message: {
+            Text(LocalizedStringKey("searchable_confirm_message"))
         }
         .sheet(isPresented: $showingPinSetup) {
             PinSetupView(isChanging: securityViewModel.isPinEnabled)
@@ -251,6 +305,7 @@ struct SecurityView: View {
             .environment(SecurityViewModel())
             .environment(AccountRecoveryViewModel())
             .environment(AuthViewModel(context: context))
+            .environment(SettingsViewModel())
     }
     .preferredColorScheme(.dark)
 }

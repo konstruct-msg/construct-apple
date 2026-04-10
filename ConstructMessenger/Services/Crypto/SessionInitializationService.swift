@@ -64,7 +64,6 @@ class SessionInitializationService {
     }
     
     /// Initialize a session with a recipient using their public key bundle
-    @discardableResult
     func initializeSession(
         userId: String,
         bundle: PublicKeyBundleData,

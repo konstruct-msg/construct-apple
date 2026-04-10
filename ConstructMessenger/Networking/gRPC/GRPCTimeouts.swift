@@ -38,6 +38,8 @@ enum GRPCTimeouts {
     static let getUserProfile: TimeInterval = NetworkTiming.GRPC.Timeouts.getUserProfile
     static let updateUserProfile: TimeInterval = NetworkTiming.GRPC.Timeouts.updateUserProfile
     static let usernameAvailability: TimeInterval = NetworkTiming.GRPC.Timeouts.usernameAvailability
+    static let setDiscoverable: TimeInterval = NetworkTiming.GRPC.Timeouts.getUserProfile   // same tier
+    static let findUser: TimeInterval = NetworkTiming.GRPC.Timeouts.getUserProfile           // same tier
     static let deleteAccount: TimeInterval = NetworkTiming.GRPC.Timeouts.deleteAccount
     static let blockUser: TimeInterval = NetworkTiming.GRPC.Timeouts.blockUser
     static let unblockUser: TimeInterval = NetworkTiming.GRPC.Timeouts.unblockUser

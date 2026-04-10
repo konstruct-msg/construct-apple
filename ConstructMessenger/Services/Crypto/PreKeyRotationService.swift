@@ -190,8 +190,14 @@ final class PreKeyRotationService {
 
     /// Call when an SPK is first uploaded (registration only — NOT recovery/device link).
     /// Recovery must use forceRotate() instead to upload a fresh key.
+    ///
+    /// Sets BOTH the upload timestamp AND the last-rotation timestamp to `now`.
+    /// Without this, `isRotationDue()` sees `lastRotationKey == 0` (never rotated)
+    /// and fires SPK rotation immediately after every fresh registration.
     func recordSpkUpload() {
-        UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: Self.spkUploadKey)
+        let now = Date().timeIntervalSince1970
+        UserDefaults.standard.set(now, forKey: Self.spkUploadKey)
+        UserDefaults.standard.set(now, forKey: Self.lastRotationKey)
         Log.debug("🔑 SPK upload timestamp recorded", category: "SPKRotation")
     }
 

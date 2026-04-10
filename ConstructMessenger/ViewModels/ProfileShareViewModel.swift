@@ -153,13 +153,6 @@ class ProfileShareViewModel {
                     }
                     return
                 }
-            } catch {
-                Log.error("❌ Failed to share profile: \(error)", category: "ProfileShare")
-                let appError = AppError.from(error)
-                await MainActor.run {
-                    ErrorRouter.shared.report(appError)
-                    completion(false, appError.errorDescription)
-                }
             }
         }
     }

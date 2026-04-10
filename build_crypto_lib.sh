@@ -80,9 +80,14 @@ build_target() {
   local arch="$1"
   info "Сборка для $arch ($BUILD_DIR)…"
   cd "$CORE_PATH"
-  # touch x3dh.rs чтобы гарантировать пересборку при повторном запуске
   touch src/crypto/handshake/x3dh.rs
-  cargo build --lib --target "$arch" --features "$FEATURES" $CARGO_FLAGS 2>&1 \
+  local deploy_env=""
+  case "$arch" in
+    aarch64-apple-ios)          deploy_env="IPHONEOS_DEPLOYMENT_TARGET=18.0" ;;
+    aarch64-apple-ios-sim|x86_64-apple-ios) deploy_env="IPHONEOS_DEPLOYMENT_TARGET=18.0" ;;
+    aarch64-apple-darwin)       deploy_env="MACOSX_DEPLOYMENT_TARGET=15.0" ;;
+  esac
+  env $deploy_env cargo build --lib --target "$arch" --features "$FEATURES" $CARGO_FLAGS 2>&1 \
     | grep -E "^error|^warning\[|Compiling|Finished" || true
   ok "Собрано: $arch"
 }

@@ -36,6 +36,11 @@ class SettingsViewModel {
     var usernameSaveError: String?
     var usernameSaved = false
 
+    // Discoverable state — cached in UserDefaults, synced with server on load/toggle
+    var isDiscoverable: Bool = UserDefaults.standard.bool(forKey: "is_discoverable")
+    var isLoadingDiscoverable: Bool = false
+    var discoverableError: String?
+
     private var viewContext: NSManagedObjectContext?
 
     /// Exposed read-only for platform-specific views (e.g. Desktop avatar removal).
@@ -208,6 +213,34 @@ class SettingsViewModel {
             }
         } catch {
             print("⚠️ Failed to save display name: \(error)")
+        }
+    }
+
+    // MARK: - Discoverable
+
+    /// Syncs the discoverable flag from local cache.
+    /// The server doesn't currently expose the searchable field in GetUserProfile,
+    /// so UserDefaults is the source of truth (set explicitly by the user on this device).
+    func loadDiscoverableFromProfile() async {
+        isDiscoverable = UserDefaults.standard.bool(forKey: "is_discoverable")
+    }
+
+    /// Sends the discoverable toggle to the server and updates local cache.
+    func setDiscoverable(_ enabled: Bool) async {
+        guard !enabled || !username.isEmpty else {
+            discoverableError = "searchable_no_username_hint"
+            return
+        }
+        isLoadingDiscoverable = true
+        discoverableError = nil
+        defer { isLoadingDiscoverable = false }
+
+        do {
+            try await UserServiceClient.shared.setDiscoverable(enabled: enabled)
+            isDiscoverable = enabled
+            UserDefaults.standard.set(enabled, forKey: "is_discoverable")
+        } catch {
+            discoverableError = error.userFacingMessage
         }
     }
 }

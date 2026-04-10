@@ -12,8 +12,9 @@ import PhotosUI
 struct AccountSettingsView: View {
     @Environment(\.managedObjectContext) private var viewContext
     @Environment(AuthViewModel.self) private var authViewModel
+    @Environment(AccountRecoveryViewModel.self) private var recoveryVM
+    @Environment(SettingsViewModel.self) private var viewModel
     @Environment(\.dismiss) private var dismiss
-    @State private var viewModel = SettingsViewModel()
 
     @State private var showingImagePicker = false
     @State private var selectedPhotoItem: PhotosPickerItem?
@@ -27,7 +28,15 @@ struct AccountSettingsView: View {
 
     @State private var originalUsername: String = ""
 
+    // Logout flow
+    @State private var showingLogoutConfirm = false
+    @State private var showingLogoutAllConfirm = false
+    @State private var showingNoBackupWarning = false
+    @State private var showingRecoverySetup = false
+    @State private var pendingLogoutAll = false  // which logout action was requested before backup check
+
     var body: some View {
+        @Bindable var viewModel = viewModel
         VStack(spacing: 0) {
             CTNavBar(
                 title: NSLocalizedString("account", comment: ""),
@@ -107,6 +116,42 @@ struct AccountSettingsView: View {
                 )
             }
         }
+        // Sign out this device
+        .alert(LocalizedStringKey("logout_confirm_title"), isPresented: $showingLogoutConfirm) {
+            Button(LocalizedStringKey("logout_confirm_action"), role: .destructive) {
+                authViewModel.logout()
+            }
+            Button(LocalizedStringKey("cancel"), role: .cancel) { }
+        } message: {
+            Text(LocalizedStringKey("logout_confirm_message"))
+        }
+        // Sign out all devices
+        .alert(LocalizedStringKey("logout_all_confirm_title"), isPresented: $showingLogoutAllConfirm) {
+            Button(LocalizedStringKey("logout_all_confirm_action"), role: .destructive) {
+                authViewModel.logoutAllDevices()
+            }
+            Button(LocalizedStringKey("cancel"), role: .cancel) { }
+        } message: {
+            Text(LocalizedStringKey("logout_all_confirm_message"))
+        }
+        // No backup warning
+        .alert(LocalizedStringKey("logout_no_backup_title"), isPresented: $showingNoBackupWarning) {
+            Button(LocalizedStringKey("logout_no_backup_setup_action")) {
+                showingRecoverySetup = true
+            }
+            Button(LocalizedStringKey("logout_no_backup_proceed_action"), role: .destructive) {
+                if pendingLogoutAll { authViewModel.logoutAllDevices() }
+                else { authViewModel.logout() }
+            }
+            Button(LocalizedStringKey("cancel"), role: .cancel) { }
+        } message: {
+            Text(LocalizedStringKey("logout_no_backup_message"))
+        }
+        .sheet(isPresented: $showingRecoverySetup) {
+            RecoverySetupView()
+                .environment(recoveryVM)
+                .environment(authViewModel)
+        }
     }
 
     // MARK: - Avatar Header
@@ -141,7 +186,8 @@ struct AccountSettingsView: View {
     // MARK: - Identity Section
 
     private var identitySection: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        @Bindable var viewModel = viewModel
+        return VStack(alignment: .leading, spacing: 0) {
             sectionHeader(NSLocalizedString("identity_section", comment: ""))
             flatRowDivider()
 
@@ -157,6 +203,16 @@ struct AccountSettingsView: View {
                     Task { await viewModel.saveUsername(viewModel.username, authViewModel: authViewModel) }
                 }
             )
+            if viewModel.isDiscoverable {
+                flatRowDivider()
+                HStack(spacing: 8) {
+                    Text(NSLocalizedString("searchable_indicator", comment: ""))
+                        .font(CTFont.regular(12))
+                        .foregroundStyle(Color.CT.accent)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+            }
             flatRowDivider()
 
             // display name — local, shown to contacts
@@ -218,6 +274,26 @@ struct AccountSettingsView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            flatRowDivider()
+
+            // sign out this device
+            Button {
+                handleLogoutTap(allDevices: false)
+            } label: {
+                HStack {
+                    Text(NSLocalizedString("logout_row", comment: "").lowercased())
+                        .font(CTFont.regular(14))
+                        .foregroundStyle(Color.CT.text)
+                    Spacer()
+                    Text("[→]")
+                        .font(CTFont.regular(13))
+                        .foregroundStyle(Color.CT.accent)
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 14)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
         }
     }
 
@@ -228,6 +304,27 @@ struct AccountSettingsView: View {
             sectionHeader(NSLocalizedString("danger_zone", comment: ""), color: Color.CT.danger)
             flatRowDivider()
 
+            // sign out ALL devices
+            Button {
+                handleLogoutTap(allDevices: true)
+            } label: {
+                HStack {
+                    Text(NSLocalizedString("logout_all_row", comment: "").lowercased())
+                        .font(CTFont.regular(14))
+                        .foregroundStyle(Color.CT.danger.opacity(0.85))
+                    Spacer()
+                    Text("[→]")
+                        .font(CTFont.regular(13))
+                        .foregroundStyle(Color.CT.danger.opacity(0.7))
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 14)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            flatRowDivider()
+
+            // delete account
             Button {
                 showingDeleteConfirmation = true
             } label: {
@@ -245,6 +342,20 @@ struct AccountSettingsView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+        }
+    }
+
+    // MARK: - Logout Logic
+
+    private func handleLogoutTap(allDevices: Bool) {
+        pendingLogoutAll = allDevices
+        // Guard: if recovery phrase not yet set up, warn before proceeding.
+        if recoveryVM.statusLoaded && !recoveryVM.isSetup {
+            showingNoBackupWarning = true
+        } else if allDevices {
+            showingLogoutAllConfirm = true
+        } else {
+            showingLogoutConfirm = true
         }
     }
 

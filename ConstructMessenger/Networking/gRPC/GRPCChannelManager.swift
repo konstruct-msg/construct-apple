@@ -59,7 +59,7 @@ final class GRPCChannelManager: Sendable {
         invalidatePersistentClient()  // routing will change (ICE → direct)
         Log.info("⚠️ ICE relay failure recorded — bypassing ICE for \(Int(Self.iceCooldown))s", category: "gRPC")
         Task { @MainActor [weak self] in
-            guard let self else { return }
+            guard self != nil else { return }
             // Notify IceProxyManager so the UI reflects cooldown state immediately.
             IceProxyManager.shared.enterCooldown(duration: Self.iceCooldown)
             // Try to recover by switching endpoints (cert refresh + relay fallback).
@@ -216,9 +216,7 @@ final class GRPCChannelManager: Sendable {
             // has advanced, this client was already shut down — calling runConnections()
             // here would throw "clientIsStopped".
             guard let self else { return }
-            self._connLock.lock()
-            let valid = self._connGeneration == gen
-            self._connLock.unlock()
+            let valid = self._connLock.withLock { self._connGeneration == gen }
             guard valid else {
                 Log.debug("🔌 Persistent client gen=\(gen) already superseded — skipping runConnections()", category: "GRPCChannel")
                 return

@@ -57,8 +57,21 @@ final class PersistentACKStore {
     /// Queries Core Data on a background context without requiring the caller to supply one.
     func isProcessed(messageId: String) async -> Bool {
         let context = PersistenceController.shared.container.newBackgroundContext()
-        return await context.perform {
-            self.isProcessed(messageId, in: context)
+        let rustAckCopy = rustAck
+        return await context.perform { [rustAck = rustAckCopy] in
+            switch rustAck.isProcessed(messageId: messageId) {
+            case .inCache:
+                return true
+            case .needDbCheck, .notProcessed:
+                let fetch = ProcessedMessage.fetchRequest()
+                fetch.predicate = NSPredicate(format: "messageId == %@", messageId)
+                fetch.fetchLimit = 1
+                let found = (try? context.fetch(fetch))?.isEmpty == false
+                if found {
+                    _ = rustAck.markProcessed(messageId: messageId)
+                }
+                return found
+            }
         }
     }
 

@@ -17,6 +17,13 @@
 int32_t ice_proxy_start(const char *bridge_line, const char *relay_addr, uint16_t *port_out);
 int32_t ice_proxy_start_tls(const char *bridge_line, const char *relay_addr,
                             const char *tls_server_name, uint16_t *port_out);
+/// TLS proxy with SPKI cert pinning + fake/empty SNI (DPI evasion).
+/// tls_sni: SNI for ClientHello — empty string = no SNI (IP-mode, no domain leaked).
+///          Set to e.g. "storage.yandexcloud.net" for REALITY-style fake SNI.
+/// spki_hex: lowercase hex SHA-256 of DER SubjectPublicKeyInfo — empty = no pinning.
+int32_t ice_proxy_start_tls_pinned(const char *bridge_line, const char *relay_addr,
+                                   const char *tls_sni, const char *spki_hex,
+                                   uint16_t *port_out);
 int32_t ice_proxy_stop(void);
 int32_t ice_proxy_is_running(void);
 uint16_t ice_proxy_port(void);

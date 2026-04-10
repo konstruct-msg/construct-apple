@@ -8,6 +8,7 @@
 
 #if os(iOS)
 import Foundation
+import GRPCCore
 import PushKit
 
 @MainActor
@@ -92,14 +93,30 @@ final class VoIPPushManager: NSObject {
             return
         }
 
-        do {
-            let ok = try await NotificationServiceClient.shared.registerVoipToken(voipToken: token)
-            isRegisteredWithServer = ok
-            if ok { registeredDeviceId = KeychainManager.shared.loadDeviceID() }
-            Log.info("📞 VoIP token registered with server: \(ok)", category: "Calls")
-        } catch {
-            isRegisteredWithServer = false
-            Log.error("📞 VoIP token registration failed: \(error)", category: "Calls")
+        for attempt in 0..<3 {
+            do {
+                let ok = try await NotificationServiceClient.shared.registerVoipToken(voipToken: token)
+                isRegisteredWithServer = ok
+                if ok { registeredDeviceId = KeychainManager.shared.loadDeviceID() }
+                Log.info("📞 VoIP token registered with server: \(ok)", category: "Calls")
+                return
+            } catch {
+                let shouldRetry: Bool
+                if let rpcError = error as? RPCError {
+                    shouldRetry = rpcError.code == .unavailable || rpcError.code == .deadlineExceeded
+                } else {
+                    shouldRetry = false
+                }
+                if shouldRetry && attempt < 2 {
+                    let delay = Double(attempt + 1) * 2.0
+                    Log.info("📞 VoIP token registration failed (attempt \(attempt + 1)/3), retrying in \(Int(delay))s", category: "Calls")
+                    try? await Task.sleep(for: .seconds(delay))
+                } else {
+                    isRegisteredWithServer = false
+                    Log.error("📞 VoIP token registration failed: \(error)", category: "Calls")
+                    return
+                }
+            }
         }
     }
 

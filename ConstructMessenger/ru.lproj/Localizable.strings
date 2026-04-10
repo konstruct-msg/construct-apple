@@ -654,3 +654,15 @@
 "logout_no_backup_message" = "Вы ещё не сохранили сид-фразу. Если выйти без неё, вы навсегда потеряете доступ к аккаунту и сообщениям.";
 "logout_no_backup_setup_action" = "Сначала сохранить фразу";
 "logout_no_backup_proceed_action" = "Выйти всё равно";
+
+// MARK: - Discoverable / User Search
+"searchable_toggle_title" = "видимость в поиске";
+"searchable_toggle_footer" = "Когда включено, любой, кто знает ваш точный username, может вас найти. Угадать или перебрать username невозможно — срабатывает только 100% совпадение. По умолчанию выключено.";
+"searchable_confirm_title" = "включить поиск?";
+"searchable_confirm_message" = "Ваш username станет доступен для поиска всем, кто введёт его точно. Отключить можно в любой момент в настройках безопасности.";
+"searchable_confirm_action" = "включить";
+"searchable_no_username_hint" = "сначала задайте username";
+"searchable_indicator" = "[⊙] в поиске";
+"synaps_remote_result_header" = "найдено в construct";
+"synaps_searching" = "поиск...";
+"synaps_not_found" = "не найдено";
