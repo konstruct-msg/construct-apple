@@ -115,12 +115,24 @@ public struct Shared_Proto_Services_V1_SendBlindNotificationRequest: Sendable {
   /// Clears the value of `activityType`. Subsequent reads from it will return its default value.
   public mutating func clearActivityType() {self._activityType = nil}
 
+  /// Опционально: opaque UUID чата для deep-link на конкретный чат.
+  /// Не раскрывает контент или участников.
+  public var conversationID: String {
+    get {_conversationID ?? String()}
+    set {_conversationID = newValue}
+  }
+  /// Returns true if `conversationID` has been explicitly set.
+  public var hasConversationID: Bool {self._conversationID != nil}
+  /// Clears the value of `conversationID`. Subsequent reads from it will return its default value.
+  public mutating func clearConversationID() {self._conversationID = nil}
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
   fileprivate var _badgeCount: Int32? = nil
   fileprivate var _activityType: String? = nil
+  fileprivate var _conversationID: String? = nil
 }
 
 /// Ответ после постановки уведомления в очередь
@@ -373,7 +385,7 @@ extension Shared_Proto_Services_V1_NotificationFilter: SwiftProtobuf._ProtoNameP
 
 extension Shared_Proto_Services_V1_SendBlindNotificationRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SendBlindNotificationRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}user_id\0\u{3}badge_count\0\u{3}activity_type\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}user_id\0\u{3}badge_count\0\u{3}activity_type\0\u{3}conversation_id\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -384,6 +396,7 @@ extension Shared_Proto_Services_V1_SendBlindNotificationRequest: SwiftProtobuf.M
       case 1: try { try decoder.decodeSingularStringField(value: &self.userID) }()
       case 2: try { try decoder.decodeSingularInt32Field(value: &self._badgeCount) }()
       case 3: try { try decoder.decodeSingularStringField(value: &self._activityType) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self._conversationID) }()
       default: break
       }
     }
@@ -403,6 +416,9 @@ extension Shared_Proto_Services_V1_SendBlindNotificationRequest: SwiftProtobuf.M
     try { if let v = self._activityType {
       try visitor.visitSingularStringField(value: v, fieldNumber: 3)
     } }()
+    try { if let v = self._conversationID {
+      try visitor.visitSingularStringField(value: v, fieldNumber: 4)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -410,6 +426,7 @@ extension Shared_Proto_Services_V1_SendBlindNotificationRequest: SwiftProtobuf.M
     if lhs.userID != rhs.userID {return false}
     if lhs._badgeCount != rhs._badgeCount {return false}
     if lhs._activityType != rhs._activityType {return false}
+    if lhs._conversationID != rhs._conversationID {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

@@ -94,7 +94,8 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         didReceiveRemoteNotification userInfo: [AnyHashable: Any],
         fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
     ) {
-        let activityType = userInfo["activity_type"] as? String
+        let construct = userInfo["construct"] as? [AnyHashable: Any]
+        let activityType = construct?["type"] as? String
         Log.info("📱 Silent push received — activity_type: \(activityType ?? "nil")", category: "Push")
         PushNotificationManager.shared.signalSilentPush()
 

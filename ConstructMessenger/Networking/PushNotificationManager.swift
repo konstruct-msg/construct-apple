@@ -293,11 +293,13 @@ extension PushNotificationManager: UNUserNotificationCenterDelegate {
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
         let userInfo = notification.request.content.userInfo
+        let aps = userInfo["aps"] as? [AnyHashable: Any]
+        let construct = userInfo["construct"] as? [AnyHashable: Any]
 
         // Silent push — wake the app but don't show a banner; our
         // didReceiveRemoteNotification handler fetches messages and posts
         // its own local notification.
-        if userInfo["content-available"] as? Int == 1 {
+        if aps?["content-available"] as? Int == 1 && aps?["alert"] == nil {
             Log.debug("📱 Silent push received in foreground — suppressed", category: "Push")
             completionHandler([])
             return
@@ -307,7 +309,7 @@ extension PushNotificationManager: UNUserNotificationCenterDelegate {
         // contain raw ciphertext. Replace with a privacy-safe local notification.
         if notification.request.trigger is UNPushNotificationTrigger {
             Log.debug("📱 APNs alert push in foreground — replacing with local banner", category: "Push")
-            let chatId = userInfo["conversation_id"] as? String
+            let chatId = construct?["conversation_id"] as? String
             LocalNotificationManager.shared.showNewMessageNotification(chatId: chatId)
             completionHandler([])   // suppress the raw push
             return

@@ -164,7 +164,18 @@ final class CallManager {
 
         let callId = (payload["call_id"] as? String) ?? UUID().uuidString
         let callerId = (payload["caller_id"] as? String) ?? "Unknown"
-        let callerName = (payload["caller_name"] as? String) ?? "Incoming Call"
+        // Privacy: do NOT use caller_name from push payload (exposed to APNs infrastructure).
+        // Look up display name from local CoreData; fall back to generic app name.
+        let callerName: String = {
+            let ctx = PersistenceController.shared.container.viewContext
+            let req = User.fetchRequest()
+            req.predicate = NSPredicate(format: "id == %@", callerId)
+            req.fetchLimit = 1
+            if let user = (try? ctx.fetch(req))?.first {
+                return user.displayName ?? NSLocalizedString("construct_app_name", comment: "")
+            }
+            return NSLocalizedString("construct_app_name", comment: "")
+        }()
 
         let uuid: UUID = {
             if let parsed = UUID(uuidString: callId) { return parsed }

@@ -55,49 +55,18 @@ final class InAppNotificationService {
     // MARK: - Incoming message
 
     /// Called from MessageRouter after saving an incoming message.
-    /// Shows a local notification banner:
-    ///   - Foreground: sender name + preview (for the currently visible UI)
-    ///   - Background: privacy-preserving generic banner (no sender/content)
-    ///   - Skipped if: chat is muted, or the chat is currently open
+    /// Privacy: always generic text — no sender name, no content preview.
     func handle(chatId: String, isMuted: Bool, senderName: String, preview: String) {
         guard !isMuted else { return }
         guard chatId != activeChatId else { return }
 
-        #if canImport(UIKit)
-        let appState = UIApplication.shared.applicationState
-
-        if appState != .active {
-            // App is backgrounded — silent push woke us up, now post a local banner.
-            // Use a stable identifier so multiple messages collapse into one notification
-            // rather than flooding the lock screen.
-            LocalNotificationManager.shared.showNewMessageNotification(chatId: chatId)
-            return
-        }
-        #endif
-
-        // App is active — show in-app banner with sender name + message preview
-        let content = UNMutableNotificationContent()
-        content.title = senderName.isEmpty ? NSLocalizedString("construct_app_name", comment: "") : senderName
-        content.body = preview.isEmpty ? NSLocalizedString("construct_new_message", comment: "") : String(preview.prefix(120))
-        content.sound = .default
-        content.userInfo = ["chatID": chatId]
-
-        let request = UNNotificationRequest(
-            identifier: "inapp-\(UUID().uuidString)",
-            content: content,
-            trigger: nil
-        )
-        UNUserNotificationCenter.current().add(request) { error in
-            if let error {
-                Log.error("❌ InAppNotification: failed to schedule — \(error)", category: "Notifications")
-            }
-        }
+        LocalNotificationManager.shared.showNewMessageNotification(chatId: chatId)
     }
 
     // MARK: - Flood alert
 
     /// Called when the burst detector fires for the first time for a sender.
-    /// Posts a single special banner instead of the individual message preview.
+    /// Privacy: generic title — no sender name exposed in notification.
     func handleFloodAlert(chatId: String, senderName: String, messageCount: Int) {
         guard chatId != activeChatId else { return }
 
@@ -106,7 +75,7 @@ final class InAppNotificationService {
         #endif
 
         let content = UNMutableNotificationContent()
-        content.title = "⚠️ \(senderName)"
+        content.title = NSLocalizedString("construct_app_name", comment: "")
         content.body  = String(format: NSLocalizedString("flood_alert_body", comment: ""), messageCount)
         content.sound = .defaultCritical
         content.userInfo = ["chatID": chatId, "floodAlert": true]
