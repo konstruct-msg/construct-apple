@@ -4,13 +4,15 @@
 //
 //  Encodes/decodes the encrypted_payload blob sent to/from the server.
 //
-//  Wire format (little-endian):
-//    [4 bytes]  message_number      (UInt32 LE)
-//    [32 bytes] dh_public_key       (X25519 ephemeral public key)
-//    [4 bytes]  one_time_prekey_id  (UInt32 LE; 0 = no OTPK / fallback 3-DH mode)
-//    [4 bytes]  kyber_otpk_id       (UInt32 LE; 0 = Kyber SPK used; >0 = Kyber OTPK ID)
-//    [2 bytes]  kem_ciphertext_len  (UInt16 LE; 0 = no PQC)
-//    [N bytes]  kem_ciphertext      (optional)
+//  Wire format (little-endian) — must match wire_payload.rs HEADER_SIZE = 52:
+//    [4 bytes]  message_number        (UInt32 LE)
+//    [32 bytes] dh_public_key         (X25519 ephemeral public key)
+//    [4 bytes]  one_time_prekey_id    (UInt32 LE; 0 = no OTPK / fallback 3-DH mode)
+//    [4 bytes]  kyber_otpk_id         (UInt32 LE; 0 = Kyber SPK used; >0 = Kyber OTPK ID)
+//    [2 bytes]  kem_ciphertext_len    (UInt16 LE; 0 = no PQC)
+//    [4 bytes]  previous_chain_length (UInt32 LE; DR PN field for out-of-order recovery)
+//    [2 bytes]  suite_id              (UInt16 LE; crypto-suite identifier)
+//    [N bytes]  kem_ciphertext        (optional)
 //    [rest]     nonce || ciphertext || auth_tag  (ChaCha20-Poly1305 sealed box)
 //
 //  The server stores and forwards this blob opaquely — it never parses the contents.
@@ -27,8 +29,10 @@ enum WirePayloadCoder {
     private static let otpkIdSize = 4
     private static let kyberOtpkIdSize = 4
     private static let kemCiphertextLenSize = 2
-    /// Minimum fixed header: msgNum + dhKey + otpkId + kyberOtpkId + kemLen (46 bytes).
-    static let headerSize = messageNumberSize + dhPublicKeySize + otpkIdSize + kyberOtpkIdSize + kemCiphertextLenSize  // 46 bytes
+    private static let previousChainLengthSize = 4
+    private static let suiteIdSize = 2
+    /// Fixed header: msgNum + dhKey + otpkId + kyberOtpkId + kemLen + prevChainLen + suiteId (52 bytes).
+    static let headerSize = messageNumberSize + dhPublicKeySize + otpkIdSize + kyberOtpkIdSize + kemCiphertextLenSize + previousChainLengthSize + suiteIdSize  // 52 bytes
 
     // MARK: - Encode
 
@@ -67,6 +71,14 @@ enum WirePayloadCoder {
         var kemLenField = UInt16(kemLen).littleEndian
         withUnsafeBytes(of: &kemLenField) { payload.append(contentsOf: $0) }
 
+        // 4 bytes: previous_chain_length (LE); always 0 from Swift (Rust orchestrator sets the real value)
+        var prevChainLen = UInt32(0).littleEndian
+        withUnsafeBytes(of: &prevChainLen) { payload.append(contentsOf: $0) }
+
+        // 2 bytes: suite_id (LE); 1 = Classic Curve25519+Ed25519
+        var suiteIdField = UInt16(1).littleEndian
+        withUnsafeBytes(of: &suiteIdField) { payload.append(contentsOf: $0) }
+
         // N bytes: kem_ciphertext (only present if kemLen > 0)
         if let kem = kemCiphertext { payload.append(kem) }
 
@@ -83,6 +95,8 @@ enum WirePayloadCoder {
         let ephemeralPublicKey: [UInt8]   // 32 bytes
         let oneTimePreKeyId: UInt32       // 0 = no OTPK
         let kyberOtpkId: UInt32           // 0 = Kyber SPK used; >0 = Kyber OTPK ID
+        let previousChainLength: UInt32   // DR PN field
+        let suiteId: UInt16               // crypto-suite identifier
         let kemCiphertext: Data?          // nil if no PQC
         let content: String               // Base64(nonce || ciphertext || auth_tag)
     }
@@ -117,6 +131,18 @@ enum WirePayloadCoder {
             .withUnsafeBytes { $0.load(as: UInt16.self) }
             .littleEndian)
 
+        // 4 bytes: previous_chain_length (LE)
+        let prevChainLenOffset = kemLenOffset + kemCiphertextLenSize
+        let previousChainLength = data[prevChainLenOffset ..< (prevChainLenOffset + previousChainLengthSize)]
+            .withUnsafeBytes { $0.load(as: UInt32.self) }
+            .littleEndian
+
+        // 2 bytes: suite_id (LE)
+        let suiteIdOffset = prevChainLenOffset + previousChainLengthSize
+        let suiteId = data[suiteIdOffset ..< (suiteIdOffset + suiteIdSize)]
+            .withUnsafeBytes { $0.load(as: UInt16.self) }
+            .littleEndian
+
         let sealedBoxStart = headerSize + kemLen
         guard data.count > sealedBoxStart else {
             throw WirePayloadError.payloadTooShort(data.count)
@@ -132,6 +158,8 @@ enum WirePayloadCoder {
             ephemeralPublicKey: ephemeralPublicKey,
             oneTimePreKeyId: oneTimePreKeyId,
             kyberOtpkId: kyberOtpkId,
+            previousChainLength: previousChainLength,
+            suiteId: suiteId,
             kemCiphertext: kemCiphertext,
             content: content
         )
