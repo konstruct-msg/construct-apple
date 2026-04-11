@@ -921,10 +921,12 @@ class ChatViewModel: NSObject {
                                 OutgoingWirePayloadStore.shared.remove(baseMessageId: messageId)
                                 Log.error("🔐 encryptionFailed from server — triggering END_SESSION for \(self.chat.otherUser?.id.prefix(8) ?? "?")\(traceTag)", category: "ChatViewModel")
                                 if let peerId = self.chat.otherUser?.id {
-                        Task { [weak self] in
-                            guard let self else { return }
-                            try? await SessionCoordinator().sendEndSession(to: peerId, reason: "server_encryption_rejected")
-                        }
+                                    Task {
+                                        try? await SessionCoordinator().sendEndSession(
+                                            to: peerId,
+                                            reason: "server_encryption_rejected"
+                                        )
+                                    }
                                 }
                             } else if aggregated.retryable {
                                 deliveryStatus = .queued
@@ -1000,8 +1002,7 @@ class ChatViewModel: NSObject {
               let currentUserId = SessionManager.shared.currentUserId else { return }
         let conversationId = ConversationId.direct(myUserId: currentUserId, theirUserId: recipientId)
 
-        Task { [weak self] in
-            guard let self else { return }
+        Task {
             do {
                 let wirePayload = try MessageRouter.shared.encryptOutgoing(
                     plaintext: newText,
@@ -1017,14 +1018,14 @@ class ChatViewModel: NSObject {
                 guard response.success else { return }
                 await MainActor.run {
                     let editedDate = Date(timeIntervalSince1970: TimeInterval(response.editedAt))
-                    persistenceService.updateMessageContent(
+                    self.persistenceService.updateMessageContent(
                         messageId: message.id,
                         newContent: newText,
                         isEdited: true,
                         editedAt: editedDate,
-                        in: viewContext
+                        in: self.viewContext
                     )
-                    editingMessage = nil
+                    self.editingMessage = nil
                 }
             } catch {
                 await MainActor.run {

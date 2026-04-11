@@ -155,7 +155,17 @@ final class PreKeyRotationService {
             secretKey: kyberInMemory.secretKey,
             keyId: kyberInMemory.keyId
         )
-        CryptoManager.shared.persistCoreState()
+        let persisted = CryptoManager.shared.persistCoreState()
+        if !persisted {
+            // CRITICAL: server has the NEW SPK but Keychain still has the OLD one.
+            // On next app restart the core will load the old SPK private key while
+            // the server serves the new SPK public key → permanent AEAD failures.
+            // Reload the core from Keychain so the in-memory state matches Keychain,
+            // then re-upload the old SPK to bring the server back in sync.
+            Log.error("🚨 SPK rotation: Keychain persist FAILED — rolling back server SPK", category: "SPKRotation")
+            CryptoManager.shared.reloadCoreFromKeychain()
+            throw PreKeyRotationError.keychainPersistFailed
+        }
 
         recordRotation()
         let serverKyberKeyId = response.hasNewKyberKeyID ? response.newKyberKeyID : kyberKey.keyId
@@ -230,12 +240,14 @@ enum PreKeyRotationError: Error, LocalizedError {
     case cryptoCoreNotInitialized
     case invalidKeyMaterial
     case keychainCommitFailed
+    case keychainPersistFailed
 
     var errorDescription: String? {
         switch self {
         case .cryptoCoreNotInitialized: return "Crypto core not initialized"
         case .invalidKeyMaterial:       return "Invalid rotated SPK key material from Rust core"
         case .keychainCommitFailed:     return "Failed to commit rotated Kyber SPK to Keychain"
+        case .keychainPersistFailed:    return "Failed to persist Rust core state to Keychain after SPK rotation"
         }
     }
 }

@@ -407,8 +407,7 @@ class AuthViewModel {
     }
 
     func logout() {
-        Task { [weak self] in
-            guard let self else { return }
+        Task {
             await SessionCoordinator().sendEndSessionToAllContacts(reason: "logout")
             Log.info("✅ END_SESSION sent to all contacts on logout", category: "Auth")
             
@@ -423,7 +422,7 @@ class AuthViewModel {
             }
             
             await MainActor.run {
-                cancelTimeouts()
+                self.cancelTimeouts()
                 SessionManager.shared.clearSession()
                 UserDefaults.standard.removeObject(forKey: "recovery_is_setup")
                 UserDefaults.standard.removeObject(forKey: "recovery_banner_dismissed")
@@ -432,9 +431,9 @@ class AuthViewModel {
                 // If you want to clear it, uncomment the line below:
                 // KeychainManager.shared.deleteLastUsername()
                 
-                isAuthenticated = false
-                currentUserId = nil
-                currentUser = nil  // ✅ REFACTOR Phase 1.2
+                self.isAuthenticated = false
+                self.currentUserId = nil
+                self.currentUser = nil  // ✅ REFACTOR Phase 1.2
             }
         }
     }
@@ -442,8 +441,7 @@ class AuthViewModel {
     /// Signs out of ALL devices simultaneously (invalidates all refresh tokens server-side),
     /// then performs local logout. Use when a device may have been compromised.
     func logoutAllDevices() {
-        Task { [weak self] in
-            guard let self else { return }
+        Task {
             if SessionManager.shared.sessionToken != nil {
                 do {
                     try await AuthServiceClient.shared.logout(allDevices: true)
@@ -453,13 +451,13 @@ class AuthViewModel {
                 }
             }
             await MainActor.run {
-                cancelTimeouts()
+                self.cancelTimeouts()
                 SessionManager.shared.clearSession()
                 UserDefaults.standard.removeObject(forKey: "recovery_is_setup")
                 UserDefaults.standard.removeObject(forKey: "recovery_banner_dismissed")
-                isAuthenticated = false
-                currentUserId = nil
-                currentUser = nil
+                self.isAuthenticated = false
+                self.currentUserId = nil
+                self.currentUser = nil
             }
         }
     }
@@ -469,15 +467,14 @@ class AuthViewModel {
         
         Log.info("🗑️ Requesting account deletion", category: "AuthViewModel")
         
-        Task { [weak self] in
-            guard let self else { return }
+        Task {
             do {
-                try await deleteAccountWithDeviceSignature()
-                await MainActor.run { handleDeleteAccountSuccess() }
+                try await self.deleteAccountWithDeviceSignature()
+                await MainActor.run { self.handleDeleteAccountSuccess() }
             } catch {
                 Log.error("🗑️ deleteAccount raw error: \(error)", category: "AuthViewModel")
                 await MainActor.run {
-                    cancelTimeouts()
+                    self.cancelTimeouts()
                     self.isLoading = false
                     self.deleteAccountFailed = true
                     ErrorRouter.shared.report(.unknown(Self.friendlyDeleteError(error)))
@@ -506,7 +503,7 @@ class AuthViewModel {
     /// Immediately wipes all local data; attempts server deletion best-effort in background.
     func triggerDuressWipe() {
         Log.info("🚨 Duress PIN triggered — initiating silent wipe", category: "AuthViewModel")
-        Task { [weak self] in
+        Task {
             _ = try? await UserServiceClient.shared.deleteAccount(
                 confirmation: "DELETE",
                 reason: "duress"
@@ -608,8 +605,7 @@ class AuthViewModel {
         // Request push permission (first login) or ensure the token is on the server
         // (subsequent logins where permission is already granted). Both paths end with
         // the device token reliably registered in the backend DB.
-        Task { [weak self] in
-            _ = self // suppress unused warning; services are singletons
+        Task {
             #if canImport(UIKit)
             let granted = await PushNotificationManager.shared.requestPermission()
             if granted {

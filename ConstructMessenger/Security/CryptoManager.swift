@@ -220,10 +220,16 @@ class CryptoManager {
     ///
     /// Call after in-core mutations (e.g., SPK rotation via `rotateSignedPrekey()`)
     /// so the updated state survives app restarts.
-    func persistCoreState() {
+    /// Persist the current Rust core state (private keys incl. SPK) to Keychain.
+    ///
+    /// - Returns: `true` if the Keychain write succeeded; `false` on any failure.
+    ///   Callers that MUST NOT proceed with a stale Keychain (e.g. SPK rotation)
+    ///   should check the return value and roll back if `false`.
+    @discardableResult
+    func persistCoreState() -> Bool {
         guard let core = orchestratorCore else {
             Log.error("❌ persistCoreState: core not initialized", category: "CryptoManager")
-            return
+            return false
         }
         do {
             let data = Data(try core.exportPrivateKeys())
@@ -233,8 +239,10 @@ class CryptoManager {
             } else {
                 Log.error("❌ Failed to persist Rust core state — Keychain save returned false", category: "CryptoManager")
             }
+            return saved
         } catch {
             Log.error("❌ persistCoreState: export failed: \(error)", category: "CryptoManager")
+            return false
         }
     }
 
@@ -664,10 +672,95 @@ class CryptoManager {
             throw CryptoManagerError.invalidKeyData
         } catch CryptoManagerError.sessionInitializationFailed {
             Log.error("❌ Failed to initialize receiving session", category: "CryptoManager")
+            logLocalKeyDiagnostics()
             throw CryptoManagerError.sessionInitializationFailed
         } catch {
             Log.error("❌ Unexpected error initializing receiving session: \(error)", category: "CryptoManager")
+            logLocalKeyDiagnostics()
             throw CryptoManagerError.sessionInitializationFailed
+        }
+    }
+
+    // MARK: - Key Diagnostics
+
+    /// Log local public key prefixes for post-mortem analysis when session init fails.
+    /// Allows comparing with what the server served to the INITIATOR.
+    private func logLocalKeyDiagnostics() {
+        guard let core = orchestratorCore else { return }
+        do {
+            let bundleJson = try core.exportRegistrationBundleJson()
+            if let data = bundleJson.data(using: .utf8),
+               let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                func hexPrefix(_ base64: String) -> String {
+                    guard let d = Data(base64Encoded: base64) else { return "?" }
+                    return d.prefix(8).map { String(format: "%02x", $0) }.joined()
+                }
+                let ik = (dict["identity_public"] as? String).map(hexPrefix) ?? "?"
+                let spk = (dict["signed_prekey_public"] as? String).map(hexPrefix) ?? "?"
+                let vk = (dict["verifying_key"] as? String).map(hexPrefix) ?? "?"
+                Log.error("🔍 LOCAL KEY DIAGNOSTICS — identity=\(ik)… spk=\(spk)… vk=\(vk)…", category: "CryptoManager")
+            }
+        } catch {
+            Log.error("🔍 LOCAL KEY DIAGNOSTICS: export failed: \(error)", category: "CryptoManager")
+        }
+    }
+
+    /// Compare our local public keys with what the server serves.
+    /// Returns `true` if keys match, `false` if a desync is detected.
+    /// When a mismatch is found, forces an SPK re-upload to repair the desync.
+    func verifyKeyConsistencyWithServer() async -> Bool {
+        guard let core = orchestratorCore,
+              let localUserId = _cachedUserId else {
+            Log.error("🔍 Key consistency check skipped — core or userId unavailable", category: "CryptoManager")
+            return true
+        }
+
+        do {
+            let bundleJson = try core.exportRegistrationBundleJson()
+            guard let data = bundleJson.data(using: .utf8),
+                  let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let localIkB64 = dict["identity_public"] as? String,
+                  let localSpkB64 = dict["signed_prekey_public"] as? String,
+                  let localIk = Data(base64Encoded: localIkB64),
+                  let localSpk = Data(base64Encoded: localSpkB64) else {
+                Log.error("🔍 Key consistency: failed to parse local bundle", category: "CryptoManager")
+                return true
+            }
+
+            let serverBundle = try await KeyServiceClient.shared.getPreKeyBundle(userId: localUserId)
+
+            let ikMatch = localIk == serverBundle.identityPublic
+            let spkMatch = localSpk == serverBundle.signedPrekeyPublic
+
+            if ikMatch && spkMatch {
+                Log.info("🔍 Key consistency ✅ identity and SPK match server", category: "CryptoManager")
+                return true
+            }
+
+            func hexPrefix(_ d: Data) -> String {
+                d.prefix(8).map { String(format: "%02x", $0) }.joined()
+            }
+
+            if !ikMatch {
+                Log.error("🚨 KEY DESYNC: identity_public LOCAL=\(hexPrefix(localIk))… SERVER=\(hexPrefix(serverBundle.identityPublic))…", category: "CryptoManager")
+            }
+            if !spkMatch {
+                Log.error("🚨 KEY DESYNC: signed_prekey LOCAL=\(hexPrefix(localSpk))… SERVER=\(hexPrefix(serverBundle.signedPrekeyPublic))…", category: "CryptoManager")
+                // SPK desync is repairable: force-rotate to upload the current local SPK.
+                let deviceId = KeychainManager.shared.loadDeviceID() ?? ""
+                if !deviceId.isEmpty {
+                    Log.info("🔧 Attempting SPK re-upload to repair desync…", category: "CryptoManager")
+                    try await PreKeyRotationService.shared.forceRotate(
+                        deviceId: deviceId,
+                        reason: .security
+                    )
+                    Log.info("🔧 SPK re-upload complete — next session init should succeed", category: "CryptoManager")
+                }
+            }
+            return false
+        } catch {
+            Log.error("🔍 Key consistency check failed: \(error)", category: "CryptoManager")
+            return true
         }
     }
 
