@@ -486,8 +486,10 @@ final class GRPCChannelManager: Sendable {
                 switch rpc.code {
                 case .unavailable:
                     let msg = rpc.message.lowercased()
-                    // Server accepted TCP but rejected HTTP/2 — server-side issue, not DPI.
-                    if msg.contains("connection preface") { return false }
+                    // "connection preface" on the DIRECT path means DPI: the middlebox accepted
+                    // TCP but reset before HTTP/2 handshake — exactly when ICE is needed.
+                    // (isRelayFailure() also checks this string, but there it means the relay
+                    //  itself worked fine and the remote server reset — different context.)
                     // Client-side channel lifecycle — not a network error.
                     if msg.contains("channel is closed") { return false }
                     // Server port not listening — server down, not DPI.
