@@ -183,6 +183,8 @@ final class MessageStreamManager {
         heartbeatTask = nil
         heartbeatWatchdogTask?.cancel()
         heartbeatWatchdogTask = nil
+        backgroundFetchTask?.cancel()
+        backgroundFetchTask = nil
         retryCount = 0
         connect(contactUserIds: contactUserIds, onMessageReceived: onMessageReceived)
     }
@@ -646,6 +648,13 @@ final class MessageStreamManager {
                 metricsLabel: metricsLabel
             )
         }
+        // Ensure the inner (unstructured) runMessageStream task is always cancelled
+        // when openStream() exits — whether cleanly, via error, or via outer task
+        // cancellation.  Without this, a stale stream outlives the connectLoop
+        // iteration and can still hold a gRPC writer open; rapid forceReconnect()
+        // calls then race against it, producing the "Client is closed, cannot send
+        // a message" assertionFailure in GRPCStreamStateMachine.
+        defer { streamTask.cancel() }
 
         // Fast ICE failover for stream open: if the RPC isn't accepted quickly, we retry
         // through ICE instead of waiting for long TCP/TLS timeouts on DPI-blocked networks.
