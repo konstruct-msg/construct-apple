@@ -107,8 +107,10 @@ enum WirePayloadCoder {
             throw WirePayloadError.payloadTooShort(data.count)
         }
 
+        // Use loadUnaligned throughout — gRPC Data slices may start at any byte offset,
+        // so load(as:) (which requires pointer alignment) can crash on non-aligned payloads.
         let messageNumber = data.prefix(messageNumberSize)
-            .withUnsafeBytes { $0.load(as: UInt32.self) }
+            .withUnsafeBytes { $0.loadUnaligned(as: UInt32.self) }
             .littleEndian
 
         let dhPubKeyRange = messageNumberSize ..< (messageNumberSize + dhPublicKeySize)
@@ -116,31 +118,31 @@ enum WirePayloadCoder {
 
         let otpkIdOffset = messageNumberSize + dhPublicKeySize
         let oneTimePreKeyId = data[otpkIdOffset ..< (otpkIdOffset + otpkIdSize)]
-            .withUnsafeBytes { $0.load(as: UInt32.self) }
+            .withUnsafeBytes { $0.loadUnaligned(as: UInt32.self) }
             .littleEndian
 
         // 4 bytes: kyber_otpk_id (LE)
         let kyberOtpkIdOffset = otpkIdOffset + otpkIdSize
         let kyberOtpkId = data[kyberOtpkIdOffset ..< (kyberOtpkIdOffset + kyberOtpkIdSize)]
-            .withUnsafeBytes { $0.load(as: UInt32.self) }
+            .withUnsafeBytes { $0.loadUnaligned(as: UInt32.self) }
             .littleEndian
 
         // 2 bytes: kem_ciphertext_len (LE)
         let kemLenOffset = messageNumberSize + dhPublicKeySize + otpkIdSize + kyberOtpkIdSize
         let kemLen = Int(data[kemLenOffset ..< (kemLenOffset + kemCiphertextLenSize)]
-            .withUnsafeBytes { $0.load(as: UInt16.self) }
+            .withUnsafeBytes { $0.loadUnaligned(as: UInt16.self) }
             .littleEndian)
 
         // 4 bytes: previous_chain_length (LE)
         let prevChainLenOffset = kemLenOffset + kemCiphertextLenSize
         let previousChainLength = data[prevChainLenOffset ..< (prevChainLenOffset + previousChainLengthSize)]
-            .withUnsafeBytes { $0.load(as: UInt32.self) }
+            .withUnsafeBytes { $0.loadUnaligned(as: UInt32.self) }
             .littleEndian
 
         // 2 bytes: suite_id (LE)
         let suiteIdOffset = prevChainLenOffset + previousChainLengthSize
         let suiteId = data[suiteIdOffset ..< (suiteIdOffset + suiteIdSize)]
-            .withUnsafeBytes { $0.load(as: UInt16.self) }
+            .withUnsafeBytes { $0.loadUnaligned(as: UInt16.self) }
             .littleEndian
 
         let sealedBoxStart = headerSize + kemLen

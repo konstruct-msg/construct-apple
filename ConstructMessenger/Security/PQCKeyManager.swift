@@ -439,6 +439,6 @@ private extension Data {
 
     func toUInt32() -> UInt32? {
         guard count == 4 else { return nil }
-        return withUnsafeBytes { $0.load(as: UInt32.self) }
+        return withUnsafeBytes { $0.loadUnaligned(as: UInt32.self) }
     }
 }

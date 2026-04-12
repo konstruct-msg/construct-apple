@@ -469,7 +469,7 @@ class KeychainManager {
     func loadSessionSuiteId(userId: String) -> UInt16? {
         guard let data = load(forKey: suiteIdKey(for: userId)),
               data.count == MemoryLayout<UInt16>.size else { return nil }
-        return data.withUnsafeBytes { $0.load(as: UInt16.self) }
+        return data.withUnsafeBytes { $0.loadUnaligned(as: UInt16.self) }
     }
 
     func deleteSessionSuiteId(userId: String) {
@@ -494,7 +494,7 @@ class KeychainManager {
     func loadSpkEpoch(for userId: String) -> UInt32 {
         guard let data = load(forKey: spkEpochKey(for: userId)),
               data.count == MemoryLayout<UInt32>.size else { return 0 }
-        return data.withUnsafeBytes { $0.load(as: UInt32.self) }
+        return data.withUnsafeBytes { $0.loadUnaligned(as: UInt32.self) }
     }
 
     func deleteSpkEpoch(for userId: String) {
