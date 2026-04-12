@@ -157,10 +157,21 @@ class MessageRouter {
         
         // 1. Skip if already processed — applies to ALL messages including END_SESSION.
         //    Without this, the same END_SESSION is processed twice (pending queue + stream).
+        //
+        //    Exception: if this is a session init (msgNum=0) and we have no active session
+        //    for the sender, re-process it. This handles the crash-recovery scenario where
+        //    the init was ACKed before the session was persisted (e.g., app crashed mid-init).
         if PersistentACKStore.shared.isProcessed(message.id, in: context) {
-            Log.debug("⏭️ Skipping already-processed message \(message.id.prefix(8))… (ACK store)", category: "MessageRouter")
-            onReceiptNeeded?([message.id], otherUserId, .delivered)
-            return
+            let isOrphanedInit = message.messageNumber == 0
+                && !message.isEndSession
+                && !message.isSenderSync
+                && !CryptoManager.shared.hasSession(for: otherUserId)
+            if !isOrphanedInit {
+                Log.debug("⏭️ Skipping already-processed message \(message.id.prefix(8))… (ACK store)", category: "MessageRouter")
+                onReceiptNeeded?([message.id], otherUserId, .delivered)
+                return
+            }
+            Log.info("🔄 Re-processing orphaned session init \(message.id.prefix(8))… (no active session for \(otherUserId.prefix(8))…)", category: "MessageRouter")
         }
 
         // 2. SENDER_SYNC — copy of own outgoing message from another device.
