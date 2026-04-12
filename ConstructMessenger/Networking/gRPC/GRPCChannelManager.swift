@@ -679,9 +679,13 @@ final class GRPCChannelManager: Sendable {
                             continue
                         }
                     } catch {
-                        // Fall through to throw the original unauthenticated error.
+                        // Fall through to trigger device re-auth below.
                         Log.error("⚠️ Token refresh failed during RPC retry: \(error)", category: "GRPCChannel")
                     }
+                    // Refresh token is expired or server-rejected (e.g. JWT secret rotation).
+                    // Trigger device signing-key re-auth — this is transparent to the user.
+                    Log.info("🔑 Refresh failed — triggering device re-auth", category: "GRPCChannel")
+                    SessionManager.shared.invalidateTokensForReauth()
                 }
 
                 // If the call failed while routing through ICE, record relay failure only for

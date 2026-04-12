@@ -21,11 +21,24 @@ class SessionManager {
     // ✅ User ID from server (UUID)
     private(set) var userId: String?
 
-    // Signals that the session was invalidated due to an unsupported token algorithm
+    // Signals that the session was invalidated and device re-auth is needed.
+    // Set when tokens expire/are rejected server-side AND token refresh fails.
     private(set) var isSessionInvalidated: Bool = false
 
     func resetSessionInvalidated() {
         isSessionInvalidated = false
+    }
+
+    /// Clears stored tokens so restoreOrAuthenticateDevice() will fall through to device
+    /// signing-key auth. Does NOT remove device keys, userId, or deviceId — identity is preserved.
+    func invalidateTokensForReauth() {
+        KeychainManager.shared.deleteSessionToken()
+        KeychainManager.shared.deleteRefreshToken()
+        UserDefaults.standard.removeObject(forKey: UserDefaultsKey.sessionExpires.key)
+        self.sessionToken = nil
+        self.refreshToken = nil
+        isSessionInvalidated = true
+        Log.info("🔑 Tokens invalidated — device re-auth will be triggered", category: "SessionManager")
     }
     
     // ✅ Get userId (prefer stored userId, fallback to deviceId for compatibility)

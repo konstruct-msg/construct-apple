@@ -322,6 +322,9 @@ final class MessageStreamManager {
                     } catch {
                         Log.error("❌ Token refresh failed for MessageStream: \(error)", category: "MessageStream")
                     }
+                    // Refresh failed — trigger device signing-key re-auth.
+                    Log.info("🔑 MessageStream refresh failed — triggering device re-auth", category: "MessageStream")
+                    SessionManager.shared.invalidateTokensForReauth()
                 }
                 // Fast ICE failover path: openStream() intentionally throws this sentinel
                 // error to force an immediate reconnect without exponential backoff.
