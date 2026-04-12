@@ -74,6 +74,7 @@ final class MessageStreamManager {
     // MARK: - Private State
 
     private var streamTask: Task<Void, Never>?
+    private var backgroundFetchTask: Task<Void, Never>?
     private var heartbeatTask: Task<Void, Never>?
     private var heartbeatWatchdogTask: Task<Void, Never>?
     private var serverChangedObserver: NSObjectProtocol?
@@ -203,6 +204,8 @@ final class MessageStreamManager {
         heartbeatTask = nil
         heartbeatWatchdogTask?.cancel()
         heartbeatWatchdogTask = nil
+        backgroundFetchTask?.cancel()
+        backgroundFetchTask = nil
         activeStreamGeneration = 0
         streamTask?.cancel()
         streamTask = nil
@@ -278,18 +281,26 @@ final class MessageStreamManager {
         Log.info("🔄 MessageStream connectLoop started → \(host):\(port)", category: "MessageStream")
 
         while !Task.isCancelled {
-            // Fetch any messages that arrived while we were disconnected.
-            // Capped at 12 s so openStream() is always reached quickly even when
-            // the server's getPendingMessages RPC is slow or unresponsive after a
-            // server update.  fetchMissedMessages() is cancellation-safe; any
-            // messages it didn't retrieve will arrive via the live stream.
+            // Cancel any background fetch left over from the previous iteration.
+            backgroundFetchTask?.cancel()
+
+            // Fetch messages that arrived while disconnected. Run as an independent
+            // Task so the wall-clock cap doesn't cancel it: pending messages live in
+            // the server's queue and are NOT replayed via the live stream cursor.
+            // The background task continues delivering them after openStream() starts.
+            let fetchTask = Task { await self.fetchMissedMessages() }
+            backgroundFetchTask = fetchTask
+
             await withTaskGroup(of: Void.self) { group in
-                group.addTask { await self.fetchMissedMessages() }
+                // Mirror the fetch's completion into the group without owning it.
+                group.addTask { _ = await fetchTask.value }
                 group.addTask {
                     try? await Task.sleep(for: .seconds(NetworkTiming.Stream.fetchMissedMessagesWallClockCap))
                     Log.debug("⏰ fetchMissedMessages wall-clock cap reached — proceeding to stream", category: "MessageStream")
                 }
                 _ = await group.next()
+                // Cancels only the group child tasks — fetchTask is NOT in this
+                // group and continues running alongside the live stream.
                 group.cancelAll()
             }
 
