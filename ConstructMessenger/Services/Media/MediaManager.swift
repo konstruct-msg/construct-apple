@@ -204,7 +204,7 @@ class MediaManager {
         let delays: [UInt64] = [3_000_000_000, 6_000_000_000]
 
         var lastError: Error?
-        for delay in ([0] + delays.map { Optional($0) }) as [UInt64?] {
+        for (index, delay) in ([0] + delays.map { Optional($0) }).enumerated() {
             do {
                 if let ns = delay {
                     try await Task.sleep(nanoseconds: ns)
@@ -213,6 +213,15 @@ class MediaManager {
             } catch let error as GRPCCore.RPCError where retryableCodes.contains(error.code) {
                 lastError = error
                 Log.info("🔄 Download dropped (code=\(error.code)) — will retry", category: "MediaManager")
+                // If ICE is in AUTO and not currently routing through a proxy, attempt to start it
+                // on the first transient failure. This keeps media resilient even though
+                // MediaServiceClient disables fastICEFallback (long-running RPC).
+                if index == 0, error.code == .unavailable || error.code == .deadlineExceeded {
+                    let rawMode = UserDefaults.standard.string(forKey: IceMode.defaultsKey) ?? IceMode.platformDefault.rawValue
+                    if IceMode(rawValue: rawMode) == .auto, GRPCChannelManager.shared.isICEOnCooldown == false {
+                        await IceProxyManager.shared.startOnDemandIfNeeded()
+                    }
+                }
             }
         }
         throw lastError!

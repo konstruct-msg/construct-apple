@@ -1,5 +1,5 @@
 //
-//  CallRecord+Extension.swift
+//  CTCallRecord+Extension.swift
 //  Construct Messenger
 //
 //  Typed accessors for the CallRecord Core Data entity.
@@ -8,7 +8,7 @@
 import Foundation
 import CoreData
 
-extension CallRecord {
+extension CTCallRecord {
 
     enum Direction: Int16 {
         case outgoing = 0
@@ -53,8 +53,8 @@ extension CallRecord {
         endedAt: Date?,
         durationSeconds: Int32,
         in context: NSManagedObjectContext
-    ) -> CallRecord {
-        let record = CallRecord(context: context)
+    ) -> CTCallRecord {
+        let record = CTCallRecord(context: context)
         record.id = id
         record.peerUserId = peerUserId
         record.peerName = peerName
@@ -68,8 +68,8 @@ extension CallRecord {
 
     // MARK: - Fetch
 
-    static func fetchRecent(limit: Int = 200, in context: NSManagedObjectContext) throws -> [CallRecord] {
-        let req = NSFetchRequest<CallRecord>(entityName: "CallRecord")
+    static func fetchRecent(limit: Int = 200, in context: NSManagedObjectContext) throws -> [CTCallRecord] {
+        let req = NSFetchRequest<CTCallRecord>(entityName: "CallRecord")
         req.sortDescriptors = [NSSortDescriptor(key: "startedAt", ascending: false)]
         req.fetchLimit = limit
         return try context.fetch(req)

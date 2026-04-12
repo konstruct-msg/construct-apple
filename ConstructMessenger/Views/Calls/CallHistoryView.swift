@@ -12,11 +12,11 @@ import CoreData
 struct CallHistoryView: View {
     @Environment(\.managedObjectContext) private var viewContext
 
-    // iOS 26: @FetchRequest(keyPath:) calls CallRecord.entity() during property wrapper
+    // iOS 26: @FetchRequest(keyPath:) calls entity(). Using a plain @State array +
     // initialisation, which triggers the "unique match" CoreData crash on iOS 26 when
     // the NSManagedObjectModel is not yet fully settled. Using a plain @State array +
     // manual NSFetchRequest(entityName:) avoids the class-introspection path entirely.
-    @State private var records: [CallRecord] = []
+    @State private var records: [CTCallRecord] = []
     @State private var showClearConfirm = false
 
     var body: some View {
@@ -54,14 +54,12 @@ struct CallHistoryView: View {
     // MARK: - Data
 
     private func loadRecords() {
-        // Fetch as NSManagedObject to avoid the iOS 26 "Expected CallRecord but found
-        // CallRecord" Swift bridging cast failure caused by dual class registration.
-        // compactMap { $0 as? CallRecord } safely filters to the correct type.
+        // Fetch as NSManagedObject to avoid Swift bridging casting pitfalls on iOS 26.
         let req = NSFetchRequest<NSManagedObject>(entityName: "CallRecord")
         req.sortDescriptors = [NSSortDescriptor(key: "startedAt", ascending: false)]
         req.fetchLimit = 200
         let objects = (try? viewContext.fetch(req)) ?? []
-        records = objects.compactMap { $0 as? CallRecord }
+        records = objects.compactMap { $0 as? CTCallRecord }
     }
 
     // MARK: - List
@@ -97,13 +95,13 @@ struct CallHistoryView: View {
 
     // MARK: - Actions
 
-    private func deleteRecord(_ record: CallRecord) {
+    private func deleteRecord(_ record: CTCallRecord) {
         viewContext.delete(record)
         try? viewContext.save()
         // loadRecords() will be called automatically via NSManagedObjectContextDidSave
     }
 
-    private func callBack(_ record: CallRecord) {
+    private func callBack(_ record: CTCallRecord) {
         guard CallsFeature.isEnabled else { return }
         Task {
             await CallManager.shared.startOutgoingCall(
@@ -118,7 +116,7 @@ struct CallHistoryView: View {
 // MARK: - Row
 
 private struct CallHistoryRow: View {
-    let record: CallRecord
+    let record: CTCallRecord
     var onDelete: () -> Void
     var onCallBack: () -> Void
 

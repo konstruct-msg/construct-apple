@@ -141,10 +141,10 @@ final class PQCKeyManager {
 
         // Attempt 0: generate key in Keychain + upload
         do {
-            guard let core = CryptoManager.shared.orchestratorCore else { return }
+            guard CryptoManager.shared.orchestratorCore != nil else { return }
             let spkId = shared.kyberSPKId()
             let (spkPublicKey, _) = try shared.generateAndStoreKyberSPK(keyId: spkId)
-            let spkSig = try signKyberKey(publicKey: spkPublicKey, core: core)
+            let spkSig = try signKyberKey(publicKey: spkPublicKey)
             _ = try await generateAndUploadKyberOtpks(
                 count: 20,
                 deviceId: deviceId,
@@ -163,14 +163,14 @@ final class PQCKeyManager {
 
         // Attempts 1-2: key is already stored, retry upload with fresh OTPKs
         // (uploadKyberSPK alone is rejected by server — pre_keys/kyber_pre_keys must not both be empty)
-        guard let core = CryptoManager.shared.orchestratorCore else { return }
+        guard CryptoManager.shared.orchestratorCore != nil else { return }
         for attempt in 1...2 {
             let delay = Double(attempt) * 2.0
             try? await Task.sleep(for: .seconds(delay))
             do {
                 let spkId = shared.kyberSPKId()
                 let spkPublicKey = try shared.kyberSPKPublic()
-                let spkSig = try signKyberKey(publicKey: spkPublicKey, core: core)
+                let spkSig = try signKyberKey(publicKey: spkPublicKey)
                 _ = try await generateAndUploadKyberOtpks(
                     count: 20,
                     deviceId: deviceId,
@@ -191,7 +191,7 @@ final class PQCKeyManager {
     ///
     /// Called at registration (new users) and by `migrateIfNeeded` (existing users).
     static func uploadKyberSPK(deviceId: String) async throws {
-        guard let core = CryptoManager.shared.orchestratorCore else {
+        guard CryptoManager.shared.orchestratorCore != nil else {
             throw PQCError.coreNotInitialized
         }
 
@@ -199,7 +199,7 @@ final class PQCKeyManager {
         let (publicKey, _) = try shared.generateAndStoreKyberSPK(keyId: keyId)
 
         // Sign the public key with correct prologue
-        let sigData = try signKyberKey(publicKey: publicKey, core: core)
+        let sigData = try signKyberKey(publicKey: publicKey)
 
         _ = try await KeyServiceClient.shared.uploadPreKeys(
             deviceId: deviceId,
@@ -219,7 +219,13 @@ final class PQCKeyManager {
         return [UInt8](msg)
     }
 
-    /// Sign a Kyber public key with the device Ed25519 identity key.
+    /// Sign a Kyber public key with the device Ed25519 identity key (serialized via coreLock).
+    static func signKyberKey(publicKey: Data) throws -> Data {
+        try CryptoManager.shared.signBundleData(kyberSignMessage(publicKey: publicKey))
+    }
+
+    /// Deprecated overload retained for the registration path that already holds a core reference.
+    /// Prefer `signKyberKey(publicKey:)` which acquires the coreLock automatically.
     static func signKyberKey(publicKey: Data, core: OrchestratorCore) throws -> Data {
         let sigBase64 = try core.signBundleData(bundleDataJson: kyberSignMessage(publicKey: publicKey))
         guard let sigData = Data(base64Encoded: sigBase64) else { throw PQCError.signatureFailed }
@@ -260,7 +266,7 @@ final class PQCKeyManager {
         deviceId: String,
         kyberSignedPreKey: (keyId: UInt32, publicKey: Data, signature: Data)? = nil
     ) async throws -> UInt32 {
-        guard let core = CryptoManager.shared.orchestratorCore else { throw PQCError.coreNotInitialized }
+        guard CryptoManager.shared.orchestratorCore != nil else { throw PQCError.coreNotInitialized }
         let keyIds = allocateKeyIds(count: count)
         var uploadBatch: [(keyId: UInt32, publicKey: Data, signature: Data)] = []
         for keyId in keyIds {
@@ -270,7 +276,7 @@ final class PQCKeyManager {
                 Log.error("⚠️ PQC: failed to save Kyber OTPK secret keyId=\(keyId)", category: "PQC")
                 continue
             }
-            let sigData = try signKyberKey(publicKey: pubKeyData, core: core)
+            let sigData = try signKyberKey(publicKey: pubKeyData)
             uploadBatch.append((keyId: keyId, publicKey: pubKeyData, signature: sigData))
         }
         guard !uploadBatch.isEmpty else { throw PQCError.keychainSaveFailed }
@@ -315,19 +321,16 @@ final class PQCKeyManager {
     /// so it survives app crashes between encapsulation and application.
     ///
     /// Call `applyDeferredPQContribution` after msg0 has been encrypted.
-    func encapsulateAndDefer(kyberSPKPublic: Data, contactId: String, core: OrchestratorCore? = nil) throws -> Data {
+    func encapsulateAndDefer(kyberSPKPublic: Data, contactId: String) throws -> Data {
         let encapsulation = try mlkem768Encapsulate(publicKey: [UInt8](kyberSPKPublic))
         rustContributions.storeDeferred(contactId: contactId, sharedSecret: encapsulation.sharedSecret)
         // Register with OrchestratorCore's PQContributionManager (single source of truth for CFE).
-        if let core = core {
-            _ = core.registerPqDeferred(
-                contactId: contactId,
-                otpkId: 0,   // otpk_id not tracked at this layer; 0 = unknown
-                sharedSecret: encapsulation.sharedSecret
-            )
-            PQCKeyManager.saveCFESnapshot(to: core)
-        } else {
-            // Fallback: per-entry Keychain backup when core is unavailable.
+        // Falls back to per-entry Keychain backup if core is unavailable.
+        if CryptoManager.shared.registerPqDeferred(
+            contactId: contactId,
+            otpkId: 0,   // otpk_id not tracked at this layer; 0 = unknown
+            sharedSecret: encapsulation.sharedSecret
+        ) == nil {
             _ = KeychainManager.shared.saveData(
                 Data(encapsulation.sharedSecret),
                 forKey: "construct.pq_deferred.\(contactId)"
@@ -337,10 +340,10 @@ final class PQCKeyManager {
         return Data(encapsulation.ciphertext)
     }
 
-    /// Apply the deferred Kyber shared secret to the DR session.
+    /// Apply the deferred Kyber shared secret to the DR session (serialized via coreLock).
     /// Must be called after msg0 is encrypted, before msg1 is encrypted.
     /// Recovers from Keychain if the in-memory cache was lost (e.g., after a crash).
-    func applyDeferredPQContribution(contactId: String, core: OrchestratorCore) throws {
+    func applyDeferredPQContribution(contactId: String) throws {
         let key = "construct.pq_deferred.\(contactId)"
         // Prefer in-memory cache; fall back to Keychain if cache was lost (e.g., after a crash).
         var ss = rustContributions.takeDeferred(contactId: contactId)
@@ -351,17 +354,17 @@ final class PQCKeyManager {
         guard let sharedSecret = ss else { return }
         // Delete per-entry Keychain backup regardless — contribution is consumed exactly once.
         KeychainManager.shared.deleteData(forKey: key)
-        try core.applyPqContribution(contactId: contactId, kemSharedSecret: sharedSecret)
-        // Remove from OrchestratorCore's manager and persist updated CFE snapshot.
-        PQCKeyManager.saveCFESnapshot(to: core)
+        try CryptoManager.shared.applyPqContribution(contactId: contactId, kemSharedSecret: sharedSecret)
+        // Persist updated CFE snapshot after contribution is consumed.
+        CryptoManager.shared.savePQCSnapshot()
         Log.info("🔐 PQC: Deferred PQXDH applied for \(contactId.prefix(8))...", category: "PQC")
     }
 
     /// Discard any pending PQ contribution (e.g., when kem cannot be included in the message).
-    func clearPendingContribution(for contactId: String, core: OrchestratorCore? = nil) {
+    func clearPendingContribution(for contactId: String) {
         rustContributions.clear(contactId: contactId)
         KeychainManager.shared.deleteData(forKey: "construct.pq_deferred.\(contactId)")
-        if let core = core { PQCKeyManager.saveCFESnapshot(to: core) }
+        CryptoManager.shared.savePQCSnapshot()
     }
 
     // MARK: - CFE Snapshot Persistence
@@ -394,17 +397,15 @@ final class PQCKeyManager {
 
     /// Perform receiver-side PQXDH: decapsulate the received KEM ciphertext using
     /// our Kyber SPK secret key (or an OTPK secret key override), then strengthen
-    /// the Double Ratchet session.
+    /// the Double Ratchet session (serialized via coreLock).
     ///
     /// - Parameters:
     ///   - kemCiphertext: The `PreKeySignalMessage.kemCiphertext` from the sender
     ///   - contactId: Session contact ID
-    ///   - core: The active `ClassicCryptoCore` instance
     ///   - secretKeyOverride: Optional OTPK secret key; nil = use Kyber SPK
     func decapsulateAndStrengthen(
         kemCiphertext: Data,
         contactId: String,
-        core: OrchestratorCore,
         secretKeyOverride: Data? = nil
     ) throws {
         let spkSecret = try secretKeyOverride ?? kyberSPKSecret()
@@ -412,10 +413,7 @@ final class PQCKeyManager {
             secretKey: [UInt8](spkSecret),
             ciphertext: [UInt8](kemCiphertext)
         )
-        try core.applyPqContribution(
-            contactId: contactId,
-            kemSharedSecret: sharedSecret
-        )
+        try CryptoManager.shared.applyPqContribution(contactId: contactId, kemSharedSecret: sharedSecret)
         Log.info("🔐 PQC: PQXDH decapsulated for \(contactId.prefix(8))...", category: "PQC")
     }
 }

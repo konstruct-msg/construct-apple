@@ -30,7 +30,7 @@ struct PersistenceController {
         // iOS 26 bug: NSPersistentContainer(name:) searches ALL bundles for the momd
         // file and may find it in multiple locations (e.g. main bundle + xcframework),
         // registering NSEntityDescriptions twice. This causes "Expected X but found X"
-        // type-cast crashes when fetching entities like CallRecord.
+        // type-cast crashes when fetching entities like CallRecord/CTCallRecord.
         // Fix: explicitly load the model from Bundle.main so only one copy is registered.
         guard let modelURL = Bundle.main.url(forResource: "ConstructMessenger", withExtension: "momd"),
               let model = NSManagedObjectModel(contentsOf: modelURL) else {

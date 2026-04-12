@@ -37,8 +37,9 @@ class CryptoManager {
     
     // Serializes all access to orchestratorCore and _bootstrapCore so that
     // callers on different threads (e.g. BackgroundFetchManager, MessageRouter)
-    // don't race on Rust FFI state.
-    private let coreLock = NSLock()
+    // don't race on Rust FFI state. Recursive to allow safe nested calls
+    // (e.g. encrypt/decrypt → saveSessionToKeychain).
+    private let coreLock = NSRecursiveLock()
 
     // MARK: - Session Archive
     private let archiveManager = SessionArchiveManager()
@@ -197,6 +198,8 @@ class CryptoManager {
 
     /// Save session to Keychain after state change
     private func saveSessionToKeychain(for userId: String) {
+        coreLock.lock()
+        defer { coreLock.unlock() }
         guard let core = orchestratorCore else { return }
         do {
             let sessionData = Data(try core.exportSession(contactId: userId))
@@ -287,6 +290,8 @@ class CryptoManager {
     /// init locks, archive index) to Keychain as a CFE blob.
     /// Call after any significant state change in the orchestrator.
     func saveOrchestratorStateCFE() {
+        coreLock.lock()
+        defer { coreLock.unlock() }
         guard let core = orchestratorCore else { return }
         do {
             let blob = try core.exportOrchestratorState()
@@ -321,6 +326,239 @@ class CryptoManager {
         KeychainManager.shared.deleteData(forKey: Self.orchestratorStateCFEKey)
         Log.debug("🗑️ Orchestrator state CFE cleared", category: "CryptoManager")
     }
+
+    /// Mark an ACK as processed inside the Rust orchestrator cache (serialized).
+    func markAckProcessedInOrchestrator(messageId: String) {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        _ = orchestratorCore?.ackMarkProcessed(messageId: messageId)
+    }
+
+    // MARK: - Orchestrator Event Bridge
+
+    /// Single, serialized entry point for all `OrchestratorCore.handleEvent` calls.
+    ///
+    /// Why: The Rust orchestrator mutates DR state (ratchets, ACK cache, healing queue).
+    /// Calling it concurrently (even from different Swift Tasks) can corrupt session state
+    /// and manifest as "session out of sync" without obvious triggers.
+    @discardableResult
+    func handleOrchestratorEvent(
+        _ event: CfeIncomingEvent,
+        tag: String? = nil
+    ) throws -> [CfeAction] {
+        if !Thread.isMainThread {
+            Log.fault(
+                "🚨 Orchestrator event off main thread: \(orchestratorEventSummary(event))" + (tag.map { " tag=\($0)" } ?? ""),
+                category: "CryptoOrchestrator"
+            )
+        }
+
+        coreLock.lock()
+        defer { coreLock.unlock() }
+
+        guard let core = orchestratorCore else {
+            throw CryptoManagerError.coreNotInitialized
+        }
+
+        let actions = try core.handleEvent(event: event)
+        logOrchestratorEvent(event, actions: actions, tag: tag)
+        return actions
+    }
+
+    private func logOrchestratorEvent(_ event: CfeIncomingEvent, actions: [CfeAction], tag: String?) {
+        // Keep this log terse: file logging is always enabled (Diagnostics).
+        // Only log at debug level unless it looks like a session-health transition.
+        let summary = orchestratorEventSummary(event)
+        let actionSummary = orchestratorActionSummary(actions)
+        let full = summary + " actions=\(actions.count)" + (actionSummary.isEmpty ? "" : " \(actionSummary)") + (tag.map { " tag=\($0)" } ?? "")
+
+        if actions.contains(where: { action in
+            switch action {
+            case .sendEndSession, .sessionHealNeeded, .fetchPublicKeyBundle:
+                return true
+            default:
+                return false
+            }
+        }) {
+            Log.info("🔷 ORCH_EVENT: \(full)", category: "CryptoOrchestrator")
+        } else {
+            Log.debug("🔷 ORCH_EVENT: \(full)", category: "CryptoOrchestrator")
+        }
+    }
+
+    private func orchestratorEventSummary(_ event: CfeIncomingEvent) -> String {
+        switch event {
+        case .messageReceived(let messageId, let from, let data, let msgNum, _, let otpkId, let isControl, let contentType):
+            return "messageReceived from=\(from.prefix(8))… msgId=\(messageId.prefix(8))… msgNum=\(msgNum) ct=\(contentType) control=\(isControl) data=\(data.count)B otpkId=\(otpkId)"
+        case .outgoingMessage(let contactId, let messageId, let plaintextUtf8, let contentType):
+            return "outgoingMessage to=\(contactId.prefix(8))… msgId=\(messageId.prefix(8))… ct=\(contentType) plaintext=\(plaintextUtf8.count)ch"
+        case .outgoingCallSignal(let contactId, let messageId, let protoBytes):
+            return "outgoingCallSignal to=\(contactId.prefix(8))… msgId=\(messageId.prefix(8))… proto=\(protoBytes.count)B"
+        case .sessionInitCompleted(let contactId, let sessionData):
+            return "sessionInitCompleted contactId=\(contactId.prefix(8))… session=\(sessionData.count)B"
+        case .ackReceived(let messageId):
+            return "ackReceived msgId=\(messageId.prefix(8))…"
+        case .sessionLoaded(let key, let data):
+            return "sessionLoaded key=\(key.prefix(24))… data=\(data?.count ?? 0)B"
+        case .keyBundleFetched(let userId, _):
+            return "keyBundleFetched userId=\(userId.prefix(8))…"
+        case .networkReconnected:
+            return "networkReconnected"
+        case .appLaunched:
+            return "appLaunched"
+        case .timerFired(let timerId):
+            return "timerFired id=\(timerId.prefix(24))…"
+        case .ackDbResult(let messageId, let isProcessed):
+            return "ackDbResult msgId=\(messageId.prefix(8))… processed=\(isProcessed)"
+        case .activeChatChanged(let contactId, let isActive):
+            return "activeChatChanged contactId=\(contactId.prefix(8))… active=\(isActive)"
+        case .heartbeatReceived(let contactId, let messageId, let data, let msgNum):
+            return "heartbeatReceived from=\(contactId.prefix(8))… msgId=\(messageId.prefix(8))… msgNum=\(msgNum) data=\(data.count)B"
+        }
+    }
+
+    private func orchestratorActionSummary(_ actions: [CfeAction]) -> String {
+        if actions.isEmpty { return "" }
+        var hasDecrypt = false
+        var hasSend = false
+        var hasSave = false
+        var hasHeal = false
+        var hasEnd = false
+        var hasFetch = false
+        var errors: [(String, String)] = []
+
+        for action in actions {
+            switch action {
+            case .messageDecrypted:
+                hasDecrypt = true
+            case .sendEncryptedMessage:
+                hasSend = true
+            case .saveSessionToSecureStore:
+                hasSave = true
+            case .sessionHealNeeded:
+                hasHeal = true
+            case .sendEndSession:
+                hasEnd = true
+            case .fetchPublicKeyBundle:
+                hasFetch = true
+            case .notifyError(let code, let msg):
+                errors.append((code, msg))
+            default:
+                break
+            }
+        }
+
+        var parts: [String] = []
+        if hasDecrypt { parts.append("decrypted") }
+        if hasSend { parts.append("send") }
+        if hasSave { parts.append("save") }
+        if hasHeal { parts.append("heal") }
+        if hasEnd { parts.append("end_session") }
+        if hasFetch { parts.append("fetch_bundle") }
+        if !errors.isEmpty {
+            let first = errors[0]
+            parts.append("error[\(first.0)]=\(first.1.prefix(80))")
+        }
+        return parts.isEmpty ? "" : "flags=\(parts.joined(separator: ","))"
+    }
+
+    // MARK: - Locked Core Operation Wrappers
+
+    // All methods below acquire coreLock before touching orchestratorCore.
+    // External callers MUST use these instead of accessing orchestratorCore directly.
+
+    /// Sign binary data using the device Ed25519 identity key.
+    func signBundleData(_ bundleDataJson: [UInt8]) throws -> Data {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        guard let core = orchestratorCore else { throw CryptoManagerError.coreNotInitialized }
+        let sigBase64 = try core.signBundleData(bundleDataJson: bundleDataJson)
+        guard let data = Data(base64Encoded: sigBase64) else { throw CryptoManagerError.invalidSignature }
+        return data
+    }
+
+    /// Apply a Kyber KEM shared secret to the named DR session.
+    func applyPqContribution(contactId: String, kemSharedSecret: [UInt8]) throws {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        guard let core = orchestratorCore else { throw CryptoManagerError.coreNotInitialized }
+        try core.applyPqContribution(contactId: contactId, kemSharedSecret: kemSharedSecret)
+    }
+
+    /// Register a Kyber KEM shared secret for deferred application and persist CFE snapshot.
+    @discardableResult
+    func registerPqDeferred(contactId: String, otpkId: UInt32, sharedSecret: [UInt8]) -> String? {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        guard let core = orchestratorCore else { return nil }
+        let result = core.registerPqDeferred(contactId: contactId, otpkId: otpkId, sharedSecret: sharedSecret)
+        PQCKeyManager.saveCFESnapshot(to: core)
+        return result
+    }
+
+    /// Export the Kyber session state as a CFE blob.
+    func exportKyberSessionState() -> [UInt8]? {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        return try? orchestratorCore?.exportKyberSessionState()
+    }
+
+    /// Import Kyber session state from a CFE blob.
+    func importKyberSessionState(_ data: [UInt8]) throws {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        guard let core = orchestratorCore else { throw CryptoManagerError.coreNotInitialized }
+        try core.importKyberSessionState(data: data)
+    }
+
+    /// Persist the current Kyber CFE snapshot to Keychain.
+    func savePQCSnapshot() {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        guard let core = orchestratorCore else { return }
+        PQCKeyManager.saveCFESnapshot(to: core)
+    }
+
+    /// Rotate the signed pre-key and return the new public material.
+    func rotateSignedPrekey() throws -> RotatedSpkBundle {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        guard let core = orchestratorCore else { throw CryptoManagerError.coreNotInitialized }
+        return try core.rotateSignedPrekey()
+    }
+
+    /// Generate a batch of fresh X25519 OTPKs.
+    func generateOneTimePrekeys(count: UInt32) throws -> [OtpkPair] {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        guard let core = orchestratorCore else { throw CryptoManagerError.coreNotInitialized }
+        return try core.generateOneTimePrekeys(count: count)
+    }
+
+    /// Export all OTPK private keys as a CFE blob.
+    func exportOneTimePrekeys() throws -> [UInt8] {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        guard let core = orchestratorCore else { throw CryptoManagerError.coreNotInitialized }
+        return try core.exportOneTimePrekeys()
+    }
+
+    /// Number of OTPKs currently held in the Rust core.
+    func oneTimePrekeyCount() -> UInt32 {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        return orchestratorCore?.oneTimePrekeyCount() ?? 0
+    }
+
+    /// Export a session's wire bytes (for session init completed notification).
+    func exportSession(contactId: String) throws -> [UInt8] {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        guard let core = orchestratorCore else { throw CryptoManagerError.coreNotInitialized }
+        return try core.exportSession(contactId: contactId)
+    }
+
+    // MARK: - Archive management
 
     /// Clear all archived sessions for a user
     func clearArchivedSessions(for userId: String) {
@@ -969,6 +1207,7 @@ enum CryptoManagerError: Error, LocalizedError {
     /// Throwing this forces session init to fail, which triggers END_SESSION + clean re-init
     /// instead of silently establishing a PQ-diverged session that will break on msg1+.
     case pqxdhOtpkMissing(UInt32)
+    case invalidSignature
 
     var errorDescription: String? {
         switch self {
@@ -988,6 +1227,8 @@ enum CryptoManagerError: Error, LocalizedError {
             return "Invalid key data"
         case .pqxdhOtpkMissing(let id):
             return "Kyber OTPK id=\(id) not found locally — session init failed to prevent PQ root key divergence"
+        case .invalidSignature:
+            return "Invalid signature data from Rust core (expected base64)"
         }
     }
 }

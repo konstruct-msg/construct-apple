@@ -22,15 +22,15 @@ final class CallHistoryService {
 
     func record(
         session: CallManager.CallSession,
-        status: CallRecord.Status,
+        status: CTCallRecord.Status,
         startedAt: Date,
         durationSeconds: Int32
     ) {
         guard let ctx = context else { return }
-        let direction: CallRecord.Direction = session.direction == .outgoing ? .outgoing : .incoming
+        let direction: CTCallRecord.Direction = session.direction == .outgoing ? .outgoing : .incoming
 
         ctx.perform {
-            CallRecord.create(
+            CTCallRecord.create(
                 id: session.id,
                 peerUserId: session.peerUserId,
                 peerName: session.peerName,

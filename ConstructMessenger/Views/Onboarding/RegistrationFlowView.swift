@@ -393,8 +393,7 @@ struct RegistrationFlowView: View {
             do {
                 let spkId = PQCKeyManager.shared.kyberSPKId()
                 let (spkPublicKey, _) = try PQCKeyManager.shared.generateAndStoreKyberSPK(keyId: spkId)
-                guard let core = CryptoManager.shared.orchestratorCore else { throw PQCError.coreNotInitialized }
-                let spkSig = try PQCKeyManager.signKyberKey(publicKey: spkPublicKey, core: core)
+                let spkSig = try PQCKeyManager.signKyberKey(publicKey: spkPublicKey)
                 let spkTuple = (keyId: spkId, publicKey: spkPublicKey, signature: spkSig)
                 let capturedDeviceId = deviceId
                 Task.detached(priority: .utility) {

@@ -1,6 +1,7 @@
 import Foundation
 import CoreData
 import os.log
+import GRPCCore
 
 /// Manages message retry logic for failed and queued messages
 @MainActor
@@ -107,10 +108,16 @@ class MessageRetryManager {
                         fetchRequest.predicate = NSPredicate(format: "id == %@", capturedMessageId)
                         fetchRequest.fetchLimit = 1
                         guard let liveMsg = try? context.fetch(fetchRequest).first else { return }
-                        liveMsg.deliveryStatus = .failed
+                        let code = (error as? RPCError).map { String(describing: $0.code).lowercased() } ?? ""
+                        let isRetryableTransport = code == "deadlineexceeded" || code == "unavailable" || code == "cancelled"
+                        liveMsg.deliveryStatus = isRetryableTransport ? .queued : .failed
                         context.saveAndLog()
-                        Log.error("❌ Message retry failed: \(error.localizedDescription)", category: "MessageRetryManager")
-                        onError("Failed to send message: \(error.localizedDescription)")
+                        if isRetryableTransport {
+                            Log.info("⏸️ Retry transport failure — queued \(capturedMessageId.prefix(8))… for later", category: "MessageRetryManager")
+                        } else {
+                            Log.error("❌ Message retry failed: \(error.localizedDescription)", category: "MessageRetryManager")
+                            onError("Failed to send message: \(error.localizedDescription)")
+                        }
                     }
                 }
             }
@@ -245,7 +252,9 @@ class MessageRetryManager {
                         fr.predicate = NSPredicate(format: "id == %@", messageId)
                         fr.fetchLimit = 1
                         guard let liveMsg = try? context.fetch(fr).first else { return }
-                        liveMsg.deliveryStatus = .failed
+                        let code = (error as? RPCError).map { String(describing: $0.code).lowercased() } ?? ""
+                        let isRetryableTransport = code == "deadlineexceeded" || code == "unavailable" || code == "cancelled"
+                        liveMsg.deliveryStatus = isRetryableTransport ? .queued : .failed
                         context.saveAndLog()
                     }
                 }

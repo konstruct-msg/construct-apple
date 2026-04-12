@@ -76,12 +76,12 @@ class MessageRouter {
     /// Schedule (or reschedule) a Rust-requested timer. Fires `timerFired` to the orchestrator after `delayMs`.
     func scheduleRustTimer(timerId: String, delayMs: UInt64) {
         cancelRustTimer(timerId: timerId)
-        let task = Task { [weak self] in
+        let task = Task { @MainActor [weak self] in
             let ns = UInt64(delayMs) * 1_000_000
             try? await Task.sleep(nanoseconds: ns)
             guard !Task.isCancelled, let self else { return }
             let event = CfeIncomingEvent.timerFired(timerId: timerId)
-            if let actions = try? CryptoManager.shared.orchestratorCore?.handleEvent(event: event), !actions.isEmpty {
+            if let actions = try? CryptoManager.shared.handleOrchestratorEvent(event, tag: "rust_timer"), !actions.isEmpty {
                 self.executeRustTimerActions(actions)
             }
             _ = self.rustTimersLock.withLock { self.rustTimers.removeValue(forKey: timerId) }
@@ -270,13 +270,11 @@ class MessageRouter {
         // Rust orchestrator is the SINGLE decrypt path — no Swift fallback.
         // Изъян 4: If orchestratorCore is nil (e.g. Keychain locked after reboot),
         // attempt a one-shot reload before giving up and triggering END_SESSION.
-        var core = CryptoManager.shared.orchestratorCore
-        if core == nil {
+        if CryptoManager.shared.orchestratorCore == nil {
             Log.info("⚠️ OrchestratorCore nil — attempting reload before END_SESSION", category: "MessageRouter")
             CryptoManager.shared.reloadCoreFromKeychain()
-            core = CryptoManager.shared.orchestratorCore
         }
-        guard let core else {
+        guard CryptoManager.shared.orchestratorCore != nil else {
             Log.error("❌ OrchestratorCore still nil after reload — requesting END_SESSION from \(otherUserId.prefix(8))…", category: "MessageRouter")
             onEndSessionNeeded?(otherUserId)
             if isNewChat { context.delete(chat) }
@@ -291,7 +289,7 @@ class MessageRouter {
         var actions: [CfeAction]
         do {
             PerformanceMetrics.shared.messageDecryptStart(messageId: message.id)
-            actions = try core.handleEvent(event: event)
+            actions = try CryptoManager.shared.handleOrchestratorEvent(event, tag: "incoming_message")
             PerformanceMetrics.shared.messageDecryptEnd(messageId: message.id)
         } catch {
             Log.error("❌ handleEvent threw for \(message.id.prefix(8))…: \(error) — sending END_SESSION", category: "MessageRouter")
@@ -306,7 +304,7 @@ class MessageRouter {
         if actions.count == 1, case .checkAckInDb(let ackMsgId) = actions[0] {
             let isProcessed = PersistentACKStore.shared.isProcessed(ackMsgId, in: context)
             let ackResult = CfeIncomingEvent.ackDbResult(messageId: ackMsgId, isProcessed: isProcessed)
-            if let followup = try? core.handleEvent(event: ackResult), !followup.isEmpty {
+            if let followup = try? CryptoManager.shared.handleOrchestratorEvent(ackResult, tag: "ack_db_result"), !followup.isEmpty {
                 actions = followup
             }
         }
@@ -437,7 +435,7 @@ class MessageRouter {
                 // Rust core signals that this message should be persisted to the ACK store.
                 // Swift-side PersistentACKStore already handles this in handleResolvedMessage,
                 // but we also pre-populate the Rust cache on the M5 path.
-                _ = CryptoManager.shared.orchestratorCore?.ackMarkProcessed(messageId: messageId)
+                CryptoManager.shared.markAckProcessedInOrchestrator(messageId: messageId)
 
             case .pruneAckStore:
                 // Platform prunes its own ACK store on the gc_sweep timer.
@@ -454,10 +452,10 @@ class MessageRouter {
 
             case .checkAckInDb(let messageId):
                 // Rust cache miss after restart — check Core Data and report back.
-                Task {
+                Task { @MainActor in
                     let isProcessed = await PersistentACKStore.shared.isProcessed(messageId: messageId)
                     let result = CfeIncomingEvent.ackDbResult(messageId: messageId, isProcessed: isProcessed)
-                    _ = try? CryptoManager.shared.orchestratorCore?.handleEvent(event: result)
+                    _ = try? CryptoManager.shared.handleOrchestratorEvent(result, tag: "ack_db_result_async")
                 }
 
             case .healSuppressed(let contactId, let retryAfterMs):
@@ -515,8 +513,7 @@ class MessageRouter {
             plaintextUtf8: plaintext,
             contentType: contentType
         )
-        let actions = try CryptoManager.shared.orchestratorCore?.handleEvent(event: event)
-            ?? { throw NSError(domain: "MessageRouter", code: 1000, userInfo: [NSLocalizedDescriptionKey: "OrchestratorCore not initialized"]) }()
+        let actions = try CryptoManager.shared.handleOrchestratorEvent(event, tag: "outgoing_message")
         executeStorageActions(actions)
         for action in actions {
             if case .sendEncryptedMessage(let to, let payload, _, _) = action, to == recipientId {
@@ -964,7 +961,7 @@ class MessageRouter {
     ) {
         // 1. Archive old session via Rust orchestrator (canonical path); Swift fallback otherwise.
         var rustHandled = false
-        if let core = CryptoManager.shared.orchestratorCore {
+        if CryptoManager.shared.orchestratorCore != nil {
             let endSessionData = Data("__END_SESSION__".utf8)
             let event = CfeIncomingEvent.messageReceived(
                 messageId: "sri_archive_\(userId)_\(Int(Date().timeIntervalSince1970))",
@@ -976,7 +973,7 @@ class MessageRouter {
                 isControl: true,
                 contentType: 0
             )
-            if let actions = try? core.handleEvent(event: event) {
+            if let actions = try? CryptoManager.shared.handleOrchestratorEvent(event, tag: "sri_archive") {
                 executeStorageActions(actions)
                 rustHandled = true
             }
@@ -1031,7 +1028,7 @@ class MessageRouter {
 
         // 1. Archive the session — prefer Rust-owned archiving.
         var rustHandled = false
-        if let core = CryptoManager.shared.orchestratorCore {
+        if CryptoManager.shared.orchestratorCore != nil {
             let endSessionData = Data("__END_SESSION__".utf8)
             let event = CfeIncomingEvent.messageReceived(
                 messageId: "end_session_\(userId)_\(Int(Date().timeIntervalSince1970))",
@@ -1043,7 +1040,7 @@ class MessageRouter {
                 isControl: true,
                 contentType: 0
             )
-            if let actions = try? core.handleEvent(event: event) {
+            if let actions = try? CryptoManager.shared.handleOrchestratorEvent(event, tag: "end_session_archive") {
                 executeStorageActions(actions)
                 rustHandled = true
                 Log.debug("✅ END_SESSION: session archived via Rust orchestrator for \(userId.prefix(8))…", category: "MessageRouter")

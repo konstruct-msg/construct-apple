@@ -950,6 +950,26 @@ class ChatViewModel: NSObject {
                     }
                 } catch {
                     await MainActor.run {
+                        // Transport failures are ambiguous: the server may have accepted the message
+                        // even if the client didn't receive the response (e.g. deadlineExceeded).
+                        // Never re-encrypt on retry — instead queue and re-send the exact same wire
+                        // payload bytes using the SAME messageId (OutgoingWirePayloadStore).
+                        let isRetryableTransportFailure: Bool = {
+                            if let rpcError = error as? RPCError {
+                                let code = String(describing: rpcError.code).lowercased()
+                                return code == "deadlineexceeded" || code == "unavailable" || code == "cancelled"
+                            }
+                            if let networkError = error as? NetworkError {
+                                switch networkError {
+                                case .connectionFailed, .disconnected, .notConnected:
+                                    return true
+                                default:
+                                    return false
+                                }
+                            }
+                            return false
+                        }()
+
                         if let networkError = error as? NetworkError,
                            case .serverError(let message, let responseBody) = networkError {
                             Log.error("❌ Failed to send message via gRPC: \(message)\nResponse: \(responseBody ?? "empty")", category: "ChatViewModel")
@@ -958,11 +978,17 @@ class ChatViewModel: NSObject {
                         } else {
                             Log.error("❌ Failed to send message: \(error)", category: "ChatViewModel")
                         }
-                        self.updateMessageStatus(messageId: messageId, status: .failed)
-                        OutgoingWirePayloadStore.shared.remove(baseMessageId: messageId)
-                        ErrorRouter.shared.report(error, recovery: { [weak self] in
-                            self?.sendTextMessage(text: text, replyTo: replyTo, replyToContentOverride: replyToContentOverride, localThumbnails: localThumbnails)
-                        })
+
+                        if isRetryableTransportFailure {
+                            Log.info("⏸️ Transport failure — queueing \(messageId.prefix(8))… for safe retry (same messageId, same wire payload)", category: "ChatViewModel")
+                            self.updateMessageStatus(messageId: messageId, status: .queued)
+                        } else {
+                            self.updateMessageStatus(messageId: messageId, status: .failed)
+                            OutgoingWirePayloadStore.shared.remove(baseMessageId: messageId)
+                            ErrorRouter.shared.report(error, recovery: { [weak self] in
+                                self?.sendTextMessage(text: text, replyTo: replyTo, replyToContentOverride: replyToContentOverride, localThumbnails: localThumbnails)
+                            })
+                        }
                         self.isSending = false
                     }
                 }

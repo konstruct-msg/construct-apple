@@ -264,7 +264,6 @@ final class CryptoSessionInitializationService {
                         try PQCKeyManager.shared.decapsulateAndStrengthen(
                             kemCiphertext: firstMessage.kemCiphertext,
                             contactId: userId,
-                            core: core,
                             secretKeyOverride: otpkSecret
                         )
                         PQCKeyManager.deleteKyberOtpk(keyId: kyberOtpkId)
@@ -273,8 +272,7 @@ final class CryptoSessionInitializationService {
                         // kyberOtpkId == 0 → sender used Kyber SPK
                         try PQCKeyManager.shared.decapsulateAndStrengthen(
                             kemCiphertext: firstMessage.kemCiphertext,
-                            contactId: userId,
-                            core: core
+                            contactId: userId
                         )
                         Log.info("🔐 PQC: PQXDH Kyber SPK for \(userId.prefix(8))...", category: "CryptoManager")
                     }

@@ -16,6 +16,16 @@
 import Foundation
 import CoreData
 
+/// Formal session lifecycle state for a single peer contact.
+/// Used by `SessionCoordinator.sessionStates` to replace the ad-hoc
+/// `usersInitializingSession: Set<String>` + `sessionEstablishedAt: [String: UInt64]` pair.
+private enum ContactSessionState: Equatable {
+    /// Session init (X3DH, heal, key-sync, fallback) is in flight.
+    case initializing
+    /// Session is established. `establishedAt` is Unix seconds.
+    case active(establishedAt: UInt64)
+}
+
 @MainActor
 final class SessionCoordinator {
 
@@ -59,12 +69,39 @@ final class SessionCoordinator {
     private var cooldownPurgeTimer: Timer?
     private let cooldownPurgeInterval: TimeInterval = 5 * 60 // every 5 minutes
 
-    /// Prevents parallel session-init attempts for the same peer.
-    private var usersInitializingSession: Set<String> = []
+    /// Formal session state machine for each peer contact.
+    /// Replaces both `usersInitializingSession: Set<String>` and `sessionEstablishedAt: [String: UInt64]`.
+    private var sessionStates: [String: ContactSessionState] = [:]
 
-    /// Tracks when each session was last successfully established (Unix seconds).
-    /// Used to detect and discard stale END_SESSION messages that arrived late from the server.
-    private var sessionEstablishedAt: [String: UInt64] = [:]
+    /// Returns true if a session init (or heal) is currently in progress for `userId`.
+    private func isInitializing(_ userId: String) -> Bool {
+        if case .initializing = sessionStates[userId] { return true }
+        return false
+    }
+
+    /// Mark `userId` as initializing and return a `defer` block that clears the state.
+    @discardableResult
+    private func beginInit(_ userId: String) -> () -> Void {
+        sessionStates[userId] = .initializing
+        return { [weak self] in
+            // Only clear if still in .initializing — don't clobber .active set by a success path.
+            if case .initializing = self?.sessionStates[userId] {
+                self?.sessionStates[userId] = nil
+            }
+        }
+    }
+
+    /// Mark `userId` as having an active session established right now.
+    private func markActive(_ userId: String) {
+        sessionStates[userId] = .active(establishedAt: UInt64(Date().timeIntervalSince1970))
+    }
+
+    /// Return the timestamp (Unix seconds) when the active session for `userId` was established,
+    /// or nil if there is no active session record.
+    private func establishedAt(for userId: String) -> UInt64? {
+        if case .active(let t) = sessionStates[userId] { return t }
+        return nil
+    }
 
     // MARK: - Injected references
 
@@ -95,15 +132,15 @@ final class SessionCoordinator {
 
     /// Called when the stream receives a KEY_SYNC control message.
     func handleKeySyncRequest(for userId: String) {
-        guard !usersInitializingSession.contains(userId) else {
+        guard !isInitializing(userId) else {
             Log.info("⏸️ KEY_SYNC skipped — session init already in progress for \(userId.prefix(8))…", category: "SessionInit")
             return
         }
-        usersInitializingSession.insert(userId)
+        let endInit = beginInit(userId)
         Log.info("🔑 SESSION_STATE[key_sync]: re-keying sending session for \(userId.prefix(8))…", category: "SessionInit")
         Task { [weak self] in
             guard let self else { return }
-            defer { usersInitializingSession.remove(userId) }
+            defer { endInit() }
             do {
                 let bundle = try await publicKeyBundleHandler.fetchPublicKeyWithRetry(userId: userId)
                 try sessionInitService.initializeSession(userId: userId, bundle: bundle, deleteExisting: true)
@@ -152,12 +189,12 @@ final class SessionCoordinator {
                 // would slip past the guard, race through fetchBundle, and the second
                 // would delete the session just created by the first.
                 guard !CryptoManager.shared.hasSession(for: contactId),
-                      !usersInitializingSession.contains(contactId) else {
+                      !isInitializing(contactId) else {
                     Log.info("⏸️ Prewarm skipped — session exists or init in progress for \(contactId.prefix(8))…", category: "SessionInit")
                     continue
                 }
-                usersInitializingSession.insert(contactId)
-                defer { usersInitializingSession.remove(contactId) }
+                let endInit = beginInit(contactId)
+                defer { endInit() }
 
                 // Notify the peer that our session is missing ONLY when this prewarm
                 // was triggered proactively (startup / stream-connect). When triggered
@@ -260,7 +297,7 @@ final class SessionCoordinator {
         // This prevents server re-deliveries of old END_SESSIONs from tearing down healthy sessions.
         messageRouter.isEndSessionStale = { [weak self] userId, endSessionTimestamp in
             guard let self else { return false }
-            guard let establishedAt = sessionEstablishedAt[userId] else { return false }
+            guard let establishedAt = self.establishedAt(for: userId) else { return false }
             // Allow a 5-second grace window to handle near-simultaneous END_SESSION + session init.
             return endSessionTimestamp + 5 < establishedAt
         }
@@ -331,11 +368,11 @@ final class SessionCoordinator {
     // MARK: - RECEIVER session init
 
     private func handlePublicKeyBundleNeeded(userId: String, message: ChatMessage) async {
-        if usersInitializingSession.contains(userId) {
+        if isInitializing(userId) {
             Log.info("⏸️ Session init already in progress for \(userId.prefix(8))..., skipping duplicate attempt", category: "SessionInit")
             return
         }
-        usersInitializingSession.insert(userId)
+        let endInit = beginInit(userId)
         Log.debug("🔒 Locked session init for \(userId.prefix(8))...", category: "SessionInit")
 
         do {
@@ -365,13 +402,12 @@ final class SessionCoordinator {
                 // Rust clears its init_lock for this contactId. We ignore returned
                 // SaveSessionToSecureStore actions — the session was already persisted
                 // by initReceivingSession above.
-                if let core = CryptoManager.shared.orchestratorCore,
-                   let sessionBytes = try? core.exportSession(contactId: userId) {
+                if let sessionBytes = try? CryptoManager.shared.exportSession(contactId: userId) {
                     let event = CfeIncomingEvent.sessionInitCompleted(
                         contactId: userId,
                         sessionData: Data(sessionBytes)
                     )
-                    let _ = try? core.handleEvent(event: event)
+                    try? CryptoManager.shared.handleOrchestratorEvent(event, tag: "session_init_completed_responder")
                 }
 
                 // Replenish OTPKs — Bob consumed one OTPK for this X3DH session init.
@@ -379,8 +415,8 @@ final class SessionCoordinator {
                     let deviceId = KeychainManager.shared.loadDeviceID() ?? ""
                     await OtpkReplenishmentService.replenishIfNeeded(deviceId: deviceId)
                 }
-                // Record session establishment time so stale END_SESSIONs can be filtered.
-                sessionEstablishedAt[userId] = UInt64(Date().timeIntervalSince1970)
+                // Transition to .active — records establishment time for stale END_SESSION filtering.
+                markActive(userId)
                 drainPendingQueue(for: userId, skippingFirst: true)
                 // Re-send messages that were re-queued on prior END_SESSION receipt.
                 sendSessionQueuedMessages(for: userId)
@@ -409,22 +445,22 @@ final class SessionCoordinator {
             Log.error("🔐 SESSION_STATE[bundle_fetch_failed]: userId=\(userId.prefix(8))..., error=\(error.localizedDescription)", category: "SessionInit")
         }
 
-        usersInitializingSession.remove(userId)
+        endInit()
         Log.debug("🔓 Unlocked session init for \(userId.prefix(8))...", category: "SessionInit")
     }
 
     // MARK: - Session healing
 
     private func handleSessionHealNeeded(userId: String, failedMessage: ChatMessage) async {
-        if usersInitializingSession.contains(userId) {
+        if isInitializing(userId) {
             Log.info("⏸️ Heal skipped — session init already in progress for \(userId.prefix(8))…", category: "SessionInit")
             return
         }
-        usersInitializingSession.insert(userId)
+        let endInit = beginInit(userId)
         Log.info("🩹 SESSION_STATE[heal_start]: fetching fresh bundle for \(userId.prefix(8))…", category: "SessionInit")
 
         defer {
-            usersInitializingSession.remove(userId)
+            endInit()
             Log.debug("🔓 Heal lock released for \(userId.prefix(8))…", category: "SessionInit")
         }
 
@@ -733,14 +769,14 @@ final class SessionCoordinator {
             guard !Task.isCancelled else { return }
             await MainActor.run {
                 guard !CryptoManager.shared.hasSession(for: userId),
-                      !self.usersInitializingSession.contains(userId) else {
+                      !self.isInitializing(userId) else {
                     Log.debug("⏸️ RESPONDER fallback: session already established for \(userId.prefix(8))… — skipping", category: "SessionInit")
                     return
                 }
                 Log.info("⚡ RESPONDER fallback: no init from \(userId.prefix(8))… after \(Int(self.responderFallbackTimeout))s — taking INITIATOR role", category: "SessionInit")
-                self.usersInitializingSession.insert(userId)
+                let endInit = self.beginInit(userId)
                 Task {
-                    defer { Task { @MainActor in self.usersInitializingSession.remove(userId) } }
+                    defer { Task { @MainActor in endInit() } }
                     await self.sessionInitService.initializeSessionProactively(
                         userId: userId,
                         onSuccess: { Log.info("⚡ RESPONDER fallback ✅ \(userId.prefix(8))…", category: "SessionInit") },
@@ -795,8 +831,8 @@ final class SessionCoordinator {
             // Cancel watchdog or fallback — RESPONDER proved they have a working session.
             cancelTieBreakWatchdog(for: peerId)
             cancelResponderFallback(for: peerId)
-            // Record session establishment time so stale END_SESSIONs can be filtered.
-            sessionEstablishedAt[peerId] = UInt64(Date().timeIntervalSince1970)
+            // Transition to .active — records establishment time for stale END_SESSION filtering.
+            markActive(peerId)
             // Mark session as confirmed so ChatViewModel stops buffering.
             SessionConfirmationTracker.shared.markConfirmed(peerId)
             // Flush any messages that were buffered while session was unconfirmed.

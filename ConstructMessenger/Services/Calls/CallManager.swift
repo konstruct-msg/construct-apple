@@ -507,7 +507,7 @@ final class CallManager {
         PerformanceMetrics.shared.cancelStart(.callSignalOpenStart, label: metricsLabel)
 
         // Determine call status for history
-        let historyStatus: CallRecord.Status
+        let historyStatus: CTCallRecord.Status
         switch reason {
         case .hangup(let r):
             switch r {
@@ -656,7 +656,7 @@ final class CallManager {
             Log.error("📞 Failed to serialize WebRTCSignal proto", category: "Calls")
             return
         }
-        guard let core = CryptoManager.shared.orchestratorCore else {
+        guard CryptoManager.shared.orchestratorCore != nil else {
             Log.error("📞 No orchestratorCore — cannot send call signal", category: "Calls")
             return
         }
@@ -667,7 +667,7 @@ final class CallManager {
             protoBytes: protoData
         )
         do {
-            let actions = try core.handleEvent(event: event)
+            let actions = try CryptoManager.shared.handleOrchestratorEvent(event, tag: "outgoing_call_signal")
             // sendEncryptedMessage action is handled by MessageRouter.executeRustActions;
             // here we execute it directly since we're outside the normal message routing path.
             for action in actions {

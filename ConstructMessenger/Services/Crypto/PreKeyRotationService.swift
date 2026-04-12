@@ -96,16 +96,16 @@ final class PreKeyRotationService {
         deviceId: String,
         reason: Shared_Proto_Services_V1_SignedPreKeyRotationReason
     ) async throws {
-        guard let core = CryptoManager.shared.orchestratorCore else {
+        guard CryptoManager.shared.orchestratorCore != nil else {
             throw PreKeyRotationError.cryptoCoreNotInitialized
         }
 
         // ── Phase 1: generate both keys ──────────────────────────────────────
 
-        // Classic SPK: Rust core rotates internally and returns new public material.
+        // Classic SPK: Rust core rotates internally (serialized via coreLock).
         // NOTE: rotateSignedPrekey() mutates the Rust core in memory immediately.
         // If Phase 2 (RPC) fails, we MUST reload from Keychain to roll back.
-        let rotatedSpk = try core.rotateSignedPrekey()
+        let rotatedSpk = try CryptoManager.shared.rotateSignedPrekey()
         guard let classicPubData = Data(base64Encoded: rotatedSpk.publicKey),
               let classicSigData = Data(base64Encoded: rotatedSpk.signature) else {
             CryptoManager.shared.reloadCoreFromKeychain()
@@ -118,7 +118,7 @@ final class PreKeyRotationService {
         let kyberKey: (keyId: UInt32, publicKey: Data, signature: Data)
         do {
             kyberInMemory = try PQCKeyManager.shared.generateKyberSPKInMemory()
-            let kyberSig = try PQCKeyManager.signKyberKey(publicKey: kyberInMemory.publicKey, core: core)
+            let kyberSig = try PQCKeyManager.signKyberKey(publicKey: kyberInMemory.publicKey)
             kyberKey = (keyId: kyberInMemory.keyId, publicKey: kyberInMemory.publicKey, signature: kyberSig)
         } catch {
             CryptoManager.shared.reloadCoreFromKeychain()

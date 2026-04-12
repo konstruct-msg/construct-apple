@@ -1,14 +1,14 @@
 //
-//  CallRecord+CoreDataProperties.swift
+//  CTCallRecord+CoreDataProperties.swift
 //  Construct Messenger
 
 import Foundation
 import CoreData
 
-extension CallRecord {
+extension CTCallRecord {
 
-    @nonobjc public class func fetchRequest() -> NSFetchRequest<CallRecord> {
-        return NSFetchRequest<CallRecord>(entityName: "CallRecord")
+    @nonobjc public class func fetchRequest() -> NSFetchRequest<CTCallRecord> {
+        return NSFetchRequest<CTCallRecord>(entityName: "CallRecord")
     }
 
     @NSManaged public var id: String
@@ -21,4 +21,4 @@ extension CallRecord {
     @NSManaged public var durationSeconds: Int32
 }
 
-extension CallRecord: Identifiable {}
+extension CTCallRecord: Identifiable {}

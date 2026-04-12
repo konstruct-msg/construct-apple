@@ -376,8 +376,7 @@ class ChatsViewModel {
                 // (either first run after migration, or Keychain OTPK data was lost).
                 // Replace all server OTPKs with freshly generated ones to guarantee sync.
                 if crypto.wasRestoredFromKeychain,
-                   let core = crypto.orchestratorCore,
-                   core.oneTimePrekeyCount() == 0 {
+                   crypto.oneTimePrekeyCount() == 0 {
                     Log.info("🔑 Core restored but no local OTPKs — replacing all server OTPKs (fallback sync)", category: "OTPK")
                     do {
                         try await OtpkReplenishmentService.generateAndUpload(count: 50, deviceId: deviceId, replaceExisting: true)

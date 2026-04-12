@@ -41,7 +41,10 @@ extension MediaServiceClient {
     // MARK: - Download Media (server streaming)
 
     nonisolated func downloadEncryptedFile(mediaId: String) async throws -> Data {
-        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.downloadMedia, fastICEFallback: true) { grpcClient in
+        // Media downloads are long-running server-streaming RPCs. Do NOT arm the 4s
+        // fast-fallback direct timeout here — it causes false .deadlineExceeded on
+        // healthy but high-latency/slow links.
+        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.downloadMedia, fastICEFallback: false) { grpcClient in
             let client = Shared_Proto_Services_V1_MediaService.Client(wrapping: grpcClient)
 
             var request = Shared_Proto_Services_V1_DownloadMediaRequest()
@@ -103,7 +106,8 @@ extension MediaServiceClient {
         // separate performRPC calls (two separate channels) causes the server to
         // cancel the upload stream (RPCError code 1 = CANCELLED).
         let capturedEncryptedData = encryptedData
-        let (mediaId, downloadUrl) = try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.uploadMedia, fastICEFallback: true) { grpcClient in
+        // Upload is also long-running; avoid the 4s fast-fallback direct timeout.
+        let (mediaId, downloadUrl) = try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.uploadMedia, fastICEFallback: false) { grpcClient in
             let client = Shared_Proto_Services_V1_MediaService.Client(wrapping: grpcClient)
 
             // 3a. Generate upload token
