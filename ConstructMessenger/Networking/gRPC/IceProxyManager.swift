@@ -1061,10 +1061,42 @@ final class IceProxyManager: ObservableObject {
         clearRelayFailures()  // new network = clean slate for relay selection
         isStartingOnDemand = false
 
-        // In AUTO mode, reset DPI flag — the new network may not have DPI.
-        // Direct will be tried first; if DPI is still present, it re-detects within 4s.
+        // In AUTO mode: if DPI was active on the previous interface, quickly probe
+        // the new interface instead of blindly resetting to direct mode.
+        // A 2s TCP+TLS probe is enough to distinguish DPI (RST in <100ms) from a
+        // working path.  This eliminates the 4s "dead window" (direct-fail → ICE
+        // start) that caused intermittent OTPK/fetchMissedMessages timeouts after
+        // every network handover.
         if mode == .auto {
-            clearDPIDetection()
+            if dpiDetectedThisSession {
+                Log.info("🧊 DPI was active — probing direct path on new interface (2s)", category: "ICE")
+                let directWorks = await Self.probeDirectTLS(
+                    host: GRPCChannelManager.shared.currentHost,
+                    port: UInt16(GRPCChannelManager.shared.currentPort),
+                    timeout: 2.0
+                )
+                if directWorks {
+                    // New network has no DPI — switch back to direct routing.
+                    clearDPIDetection()
+                    Log.info("🧊 Direct path works on new interface — deactivating ICE", category: "ICE")
+                } else {
+                    // DPI still present — restart ICE immediately without waiting for
+                    // the normal 4s fast-fallback re-detection round-trip.
+                    Log.info("🧊 Direct path blocked on new interface — restarting ICE immediately", category: "ICE")
+                    let cert = await getIceBridgeCert()
+                    if await startWithRelayFallback(cert: cert) {
+                        Task { await IceCertFetcher.shared.fetchAndCacheRelayList() }
+                        Log.info("🧊 ICE restarted for new interface", category: "ICE")
+                    } else {
+                        // All relays unreachable on new interface — fall back to standard
+                        // re-detection so the next performRPC can try direct again.
+                        clearDPIDetection()
+                        Log.error("🧊 ICE restart failed on new interface — falling back to direct re-detection", category: "ICE")
+                    }
+                }
+            } else {
+                clearDPIDetection()
+            }
             return
         }
 
