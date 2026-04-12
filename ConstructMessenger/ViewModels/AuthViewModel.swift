@@ -212,9 +212,9 @@ class AuthViewModel {
         print("🔑 Device keys found - authenticating with device ID: \(deviceId)")
         
         do {
-            // Create signature: Sign("KonstruktAuth-v1\n{device_id}\n{timestamp}") with Ed25519
+            // Create signature: Sign("{device_id}{timestamp}") with Ed25519 — must match server format
             let timestamp = Int64(Date().timeIntervalSince1970)
-            let message = "KonstruktAuth-v1\n\(deviceId)\n\(timestamp)"
+            let message = "\(deviceId)\(timestamp)"
             guard let messageData = message.data(using: .utf8) else {
                 throw NetworkError.encodingFailed
             }
