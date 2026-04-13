@@ -654,6 +654,7 @@
 "searchable_no_username_hint" = "set a username first to enable search";
 "username_not_set" = "no username";
 "searchable_indicator" = "[⊙] searchable";
+"searchable_indicator_off" = "[ ] searchable";
 "synaps_remote_result_header" = "found on construct";
 "synaps_searching" = "searching...";
 "synaps_not_found" = "not found";

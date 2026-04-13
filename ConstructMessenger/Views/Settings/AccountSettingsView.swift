@@ -203,16 +203,16 @@ struct AccountSettingsView: View {
                     Task { await viewModel.saveUsername(viewModel.username, authViewModel: authViewModel) }
                 }
             )
-            if viewModel.isDiscoverable {
-                flatRowDivider()
-                HStack(spacing: 8) {
-                    Text(NSLocalizedString("searchable_indicator", comment: ""))
-                        .font(CTFont.regular(12))
-                        .foregroundStyle(Color.CT.accent)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
+            flatRowDivider()
+            HStack(spacing: 8) {
+                Text(viewModel.isDiscoverable
+                    ? NSLocalizedString("searchable_indicator", comment: "")
+                    : NSLocalizedString("searchable_indicator_off", comment: ""))
+                    .font(CTFont.regular(12))
+                    .foregroundStyle(viewModel.isDiscoverable ? Color.CT.accent : Color.CT.noise)
             }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
             flatRowDivider()
 
             // display name — local, shown to contacts

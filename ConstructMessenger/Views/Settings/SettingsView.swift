@@ -177,7 +177,9 @@ struct SettingsView: View {
                 Text(viewModel.username.isEmpty ? NSLocalizedString("username_not_set", comment: "") : "@\(viewModel.username)")
                     .font(CTFont.regular(11))
                     .foregroundColor(Color.CT.textDim)
-                Text(NSLocalizedString("searchable_indicator", comment: ""))
+                Text(viewModel.isDiscoverable
+                    ? NSLocalizedString("searchable_indicator", comment: "")
+                    : NSLocalizedString("searchable_indicator_off", comment: ""))
                     .font(CTFont.regular(11))
                     .foregroundColor(viewModel.isDiscoverable ? Color.CT.accent : Color.CT.noise)
             }

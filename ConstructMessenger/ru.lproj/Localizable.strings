@@ -664,6 +664,7 @@
 "searchable_no_username_hint" = "сначала задайте username";
 "username_not_set" = "username не задан";
 "searchable_indicator" = "[⊙] в поиске";
+"searchable_indicator_off" = "[ ] в поиске";
 "synaps_remote_result_header" = "найдено в construct";
 "synaps_searching" = "поиск...";
 "synaps_not_found" = "не найдено";
