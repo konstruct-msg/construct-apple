@@ -811,6 +811,16 @@ final class SessionCoordinator {
             plaintext = decryptedContent
         }
 
+        // Silently discard SESSION_RESET_INIT control payloads — they are sent as the X3DH
+        // carrier for an atomic session reset and must never appear as chat bubbles.
+        // iOS format: "__session_reset_init_<UUID>__"; other clients may omit the markers.
+        if plaintext.hasPrefix("__session_reset_init") || plaintext.hasPrefix("session_reset_init_") {
+            Log.info("🔄 SESSION_RESET_INIT payload discarded (not user-visible)", category: "SessionCoordinator")
+            cancelTieBreakWatchdog(for: messageData.from)
+            cancelResponderFallback(for: messageData.from)
+            return
+        }
+
         // Silently discard session establishment pings — they are sent after a tie-break win
         // purely to trigger RESPONDER session init on the peer and must not appear in chat.
         // Format: "__session_ping_<UUID>__" (legacy: "__session_ping__").
