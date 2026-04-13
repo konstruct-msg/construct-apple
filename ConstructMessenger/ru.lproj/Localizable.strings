@@ -662,6 +662,7 @@
 "searchable_confirm_message" = "Ваш username станет доступен для поиска всем, кто введёт его точно. Отключить можно в любой момент в настройках безопасности.";
 "searchable_confirm_action" = "включить";
 "searchable_no_username_hint" = "сначала задайте username";
+"username_not_set" = "username не задан";
 "searchable_indicator" = "[⊙] в поиске";
 "synaps_remote_result_header" = "найдено в construct";
 "synaps_searching" = "поиск...";

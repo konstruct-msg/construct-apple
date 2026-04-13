@@ -652,6 +652,7 @@
 "searchable_confirm_message" = "Your username will be findable by anyone who types it exactly. Disable at any time in Security settings.";
 "searchable_confirm_action" = "enable";
 "searchable_no_username_hint" = "set a username first to enable search";
+"username_not_set" = "no username";
 "searchable_indicator" = "[⊙] searchable";
 "synaps_remote_result_header" = "found on construct";
 "synaps_searching" = "searching...";

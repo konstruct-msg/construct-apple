@@ -174,16 +174,12 @@ struct SettingsView: View {
                 Text(profileDisplayName.uppercased())
                     .font(CTFont.bold(13))
                     .foregroundColor(Color.CT.text)
-                if !viewModel.username.isEmpty {
-                    Text("@\(viewModel.username)")
-                        .font(CTFont.regular(11))
-                        .foregroundColor(Color.CT.textDim)
-                }
-                if viewModel.isDiscoverable {
-                    Text(NSLocalizedString("searchable_indicator", comment: ""))
-                        .font(CTFont.regular(11))
-                        .foregroundColor(Color.CT.accent)
-                }
+                Text(viewModel.username.isEmpty ? NSLocalizedString("username_not_set", comment: "") : "@\(viewModel.username)")
+                    .font(CTFont.regular(11))
+                    .foregroundColor(Color.CT.textDim)
+                Text(NSLocalizedString("searchable_indicator", comment: ""))
+                    .font(CTFont.regular(11))
+                    .foregroundColor(viewModel.isDiscoverable ? Color.CT.accent : Color.CT.noise)
             }
             Spacer()
             Text(CTSymbol.forward)
