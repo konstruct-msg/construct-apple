@@ -132,7 +132,7 @@ final class GRPCChannelManager: Sendable {
     /// falls back to a direct channel — defeating ICE entirely.
     ///
     /// In practice the Rust goroutine initializes in <50 ms; the 2-second timeout is generous.
-    private func waitForProxyReady(timeout: TimeInterval = NetworkTiming.ICE.proxyReadyWaitTimeout) async {
+    func waitForProxyReady(timeout: TimeInterval = NetworkTiming.ICE.proxyReadyWaitTimeout) async {
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
             if ice_proxy_is_running() != 0, ice_proxy_port() > 0 { return }

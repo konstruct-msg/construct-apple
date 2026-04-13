@@ -198,10 +198,16 @@ class MediaManager {
         throw lastError!
     }
 
-    /// Downloads encrypted media data with up to 2 automatic retries on transient ICE/stream failures.
+    /// Downloads encrypted media data with up to 3 automatic retries on transient ICE/stream failures.
     private static func downloadWithRetry(mediaId: String) async throws -> Data {
         let retryableCodes: Set<RPCError.Code> = [.cancelled, .unavailable, .deadlineExceeded, .unknown]
-        let delays: [UInt64] = [3_000_000_000, 6_000_000_000]
+        // Generous delays: media downloads take 40 s to fail under DPI; ICE needs ~1–2 s to come up.
+        let delays: [UInt64] = [3_000_000_000, 8_000_000_000, 15_000_000_000]
+
+        // Pre-flight: if DPI was confirmed this session and ICE proxy isn't routing yet,
+        // start it and wait before the first download attempt.  Without this, a long-running
+        // streaming RPC goes direct and gets silently blocked by the middlebox.
+        await ensureICEForMedia()
 
         var lastError: Error?
         for (index, delay) in ([0] + delays.map { Optional($0) }).enumerated() {
@@ -213,18 +219,31 @@ class MediaManager {
             } catch let error as GRPCCore.RPCError where retryableCodes.contains(error.code) {
                 lastError = error
                 Log.info("🔄 Download dropped (code=\(error.code)) — will retry", category: "MediaManager")
-                // If ICE is in AUTO and not currently routing through a proxy, attempt to start it
-                // on the first transient failure. This keeps media resilient even though
-                // MediaServiceClient disables fastICEFallback (long-running RPC).
-                if index == 0, error.code == .unavailable || error.code == .deadlineExceeded {
-                    let rawMode = UserDefaults.standard.string(forKey: IceMode.defaultsKey) ?? IceMode.platformDefault.rawValue
-                    if IceMode(rawValue: rawMode) == .auto, GRPCChannelManager.shared.isICEOnCooldown == false {
-                        await IceProxyManager.shared.startOnDemandIfNeeded()
-                    }
+                // Start ICE after any transient failure and wait for it to be ready so the
+                // next attempt uses the obfs4 tunnel instead of the blocked direct path.
+                if error.code == .unavailable || error.code == .deadlineExceeded {
+                    await ensureICEForMedia()
                 }
+                _ = index  // suppress unused-variable warning
             }
         }
         throw lastError!
+    }
+
+    /// Ensures the ICE proxy is running and ready when DPI has been confirmed this session.
+    /// No-op when ICE mode is `.off`, DPI has not been detected, or the relay is on cooldown.
+    private static func ensureICEForMedia() async {
+        let rawMode = UserDefaults.standard.string(forKey: IceMode.defaultsKey) ?? IceMode.platformDefault.rawValue
+        let mode = IceMode(rawValue: rawMode) ?? .auto
+        guard mode != .off else { return }
+        // In .auto mode only act if DPI was already confirmed; in .on mode always ensure ICE is up.
+        if mode == .auto, !UserDefaults.standard.bool(forKey: "ice_enabled") { return }
+        guard !GRPCChannelManager.shared.isICEOnCooldown else { return }
+        if ice_proxy_is_running() == 0 {
+            Log.info("🧊 Pre-flight: starting ICE before media download", category: "MediaManager")
+            await IceProxyManager.shared.startOnDemandIfNeeded()
+            await GRPCChannelManager.shared.waitForProxyReady()
+        }
     }
 
     /// Upload a file (document, PDF, etc.) for a chat message.
