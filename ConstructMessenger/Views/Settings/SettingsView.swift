@@ -179,6 +179,11 @@ struct SettingsView: View {
                         .font(CTFont.regular(11))
                         .foregroundColor(Color.CT.textDim)
                 }
+                if viewModel.isDiscoverable {
+                    Text(NSLocalizedString("searchable_indicator", comment: ""))
+                        .font(CTFont.regular(11))
+                        .foregroundColor(Color.CT.accent)
+                }
             }
             Spacer()
             Text(CTSymbol.forward)
