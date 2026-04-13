@@ -140,21 +140,40 @@ class PublicKeyBundleHandler {
             Log.info("✅ Receiving session initialized for \(data.userId), message decrypted", category: "PublicKeyBundleHandler")
             Log.info("🔐 SESSION_STATE[init_receiving_success]: userId=\(data.userId.prefix(8))..., duration=\(String(format: "%.2f", initDuration))s", category: "SessionInit")
             
-            // Find chat for this user
+            // Find chat for this user; recreate it if the user deleted it locally while
+            // the remote side still had a valid session and sent a fresh X3DH init.
             let chatFetchRequest = Chat.fetchRequest()
             chatFetchRequest.predicate = NSPredicate(format: "otherUser.id == %@", data.userId)
-            
-            if let chat = try? context.fetch(chatFetchRequest).first {
-                // Call success callback with the decrypted data
-                onSuccess(chat, message, decryptedContent)
-                // Note: chat.lastMessageText is updated by onSuccess (saveMessage) with correct plaintext
-                context.saveAndLog()
-                Log.info("✅ Successfully saved decrypted pending message", category: "PublicKeyBundleHandler")
-                return true
+
+            let chat: Chat
+            if let existing = try? context.fetch(chatFetchRequest).first {
+                chat = existing
             } else {
-                Log.error("❌ Chat not found for userId: \(data.userId)", category: "PublicKeyBundleHandler")
-                return false
+                // Chat was deleted locally but crypto succeeded — recreate it silently.
+                // The user deleted the chat on their side; the remote party initiated a new
+                // valid session. We must NOT send END_SESSION here (that causes an
+                // endless reset loop). Just re-open the conversation.
+                Log.info("♻️ Chat not found for \(data.userId.prefix(8))… — recreating after delete", category: "PublicKeyBundleHandler")
+                let userFetchRequest = User.fetchRequest()
+                userFetchRequest.predicate = NSPredicate(format: "id == %@", data.userId)
+                let user: User
+                if let existingUser = try? context.fetch(userFetchRequest).first {
+                    user = existingUser
+                } else {
+                    user = User(context: context)
+                    user.id = data.userId
+                }
+                let newChat = Chat(context: context)
+                newChat.id = UUID().uuidString
+                newChat.otherUser = user
+                newChat.lastMessageTime = Date()
+                chat = newChat
             }
+
+            onSuccess(chat, message, decryptedContent)
+            context.saveAndLog()
+            Log.info("✅ Successfully saved decrypted pending message", category: "PublicKeyBundleHandler")
+            return true
             
         } catch CryptoError.SessionInitializationFailed(let message) {
             // Log detailed error from Rust core

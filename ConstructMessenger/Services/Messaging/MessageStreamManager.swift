@@ -173,12 +173,17 @@ final class MessageStreamManager {
     /// Use when returning from background or recovering from a known-bad state.
     func forceReconnect(contactUserIds: [String], onMessageReceived: @escaping (ChatMessage) -> Void) {
         Log.info("🔁 Force reconnecting stream", category: "MessageStream")
-        // Cancel current task even if it's sleeping in backoff
-        streamTask?.cancel()
-        streamTask = nil
+        // Finish the outbound stream BEFORE cancelling the task.
+        // Cancelling the Task first while the producer is mid-write triggers an
+        // assertionFailure inside GRPCStreamStateMachine ("Client is closed, cannot send a
+        // message.") because NIO force-closes the stream before the write completes.
+        // Finishing the continuation first lets the producer's `for await` drain naturally;
+        // task cancellation then only aborts a sleeping backoff or an idle await point.
         isConnected = false
         outboundContinuation?.finish()
         outboundContinuation = nil
+        streamTask?.cancel()
+        streamTask = nil
         heartbeatTask?.cancel()
         heartbeatTask = nil
         heartbeatWatchdogTask?.cancel()
@@ -585,7 +590,18 @@ final class MessageStreamManager {
             metadata: [],
             producer: { writer in
                 for await msg in outboundStream {
-                    try await writer.write(msg)
+                    // Guard against writing to a stream that's being torn down. Task
+                    // cancellation propagates into this producer task; checking it before
+                    // write prevents the assertionFailure in GRPCStreamStateMachine when
+                    // the underlying NIO client is already in a closed state.
+                    guard !Task.isCancelled else { return }
+                    do {
+                        try await writer.write(msg)
+                    } catch {
+                        // Stream was closed mid-write (release builds throw instead of
+                        // assertionFailure). Exit producer cleanly.
+                        return
+                    }
                 }
             }
         )
