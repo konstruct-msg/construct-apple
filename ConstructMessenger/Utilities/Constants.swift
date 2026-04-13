@@ -417,7 +417,7 @@ struct ICEConfig {
     /// Hardcoded fallback SPKI pin for the Moscow relay — used only when the signed
     /// relay config from `.well-known/construct-server` has not been fetched yet.
     /// Update via sign-config.sh + git push; this value is the last-resort safety net.
-    static let mskRelayPinnedSPKI = "13b9accc06c95ecf9600173dcd574b3b41227de496702b6e8f388e540bff2a19"
+    static let mskRelayPinnedSPKI = "ce2bbfcac1fffab1f4f41ee540aee2dea92c523f7768264aeb87184bf8bfa723"
 
     /// Moscow relay address: IP:port so Tokio/NWConnection connects directly without DNS.
     static let mskRelayAddress = "\(mskRelayIP):443"
