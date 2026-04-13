@@ -461,9 +461,13 @@ final class GRPCChannelManager: Sendable {
                     if msg.contains("cancellation")                      { return false }
                     if msg.contains("cancelled")                         { return false }
                     // "The server accepted the TCP connection but closed the connection before
-                    // completing the HTTP/2 connection preface." — TCP got through (relay is fine),
-                    // the server itself reset the connection. Not a relay failure.
-                    if msg.contains("connection preface")                { return false }
+                    // completing the HTTP/2 connection preface."
+                    // When this function is called, usingICE is always true (call-site guard).
+                    // This error occurs because the local ICE proxy accepted the gRPC socket but
+                    // immediately dropped it when the remote relay refused the connection.
+                    // That IS a relay failure — record it so the relay gets blacklisted.
+                    // (On the direct path this would mean the gRPC server itself reset the
+                    // connection, but shouldRecordIceFailure is never called on the direct path.)
                     return true
                 default:
                     return true
@@ -675,19 +679,34 @@ final class GRPCChannelManager: Sendable {
                    allowAuthRetry,
                    attempt == 0 {
                     // Try to refresh access token once, then retry the RPC.
+                    var refreshError: Error?
                     do {
                         let refreshed = try await TokenRefreshCoordinator.shared.refreshIfPossible()
                         if refreshed {
                             continue
                         }
                     } catch {
-                        // Fall through to trigger device re-auth below.
+                        refreshError = error
                         Log.error("⚠️ Token refresh failed during RPC retry: \(error)", category: "GRPCChannel")
                     }
-                    // Refresh token is expired or server-rejected (e.g. JWT secret rotation).
-                    // Trigger device signing-key re-auth — this is transparent to the user.
-                    Log.info("🔑 Refresh failed — triggering device re-auth", category: "GRPCChannel")
-                    SessionManager.shared.invalidateTokensForReauth()
+                    // Only wipe the refresh token if the server explicitly rejected it
+                    // (unauthenticated / permission denied = token is genuinely invalid).
+                    // Network errors (unavailable, deadline) mean the refresh endpoint was
+                    // unreachable — the existing token may still be valid once connectivity
+                    // returns, so keep it rather than forcing a full device re-auth offline.
+                    let serverRejected: Bool
+                    if let rpcErr = refreshError as? RPCError {
+                        serverRejected = rpcErr.code == .unauthenticated || rpcErr.code == .permissionDenied
+                    } else {
+                        // refreshIfPossible() returned false (no refresh token stored).
+                        serverRejected = refreshError == nil
+                    }
+                    if serverRejected {
+                        Log.info("🔑 Refresh rejected by server — triggering device re-auth", category: "GRPCChannel")
+                        SessionManager.shared.invalidateTokensForReauth()
+                    } else {
+                        Log.info("🔑 Refresh failed (network error) — keeping tokens for retry when online", category: "GRPCChannel")
+                    }
                 }
 
                 // If the call failed while routing through ICE, record relay failure only for

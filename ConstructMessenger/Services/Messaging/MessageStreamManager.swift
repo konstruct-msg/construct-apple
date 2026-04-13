@@ -331,6 +331,7 @@ final class MessageStreamManager {
                 // (skip exponential backoff to reduce perceived downtime).
                 if let rpcError = error as? RPCError, rpcError.code == .unauthenticated {
                     Log.info("🔐 MessageStream unauthenticated — attempting token refresh", category: "MessageStream")
+                    var refreshError: Error?
                     do {
                         let refreshed = try await TokenRefreshCoordinator.shared.refreshIfPossible()
                         if refreshed {
@@ -338,11 +339,23 @@ final class MessageStreamManager {
                             continue
                         }
                     } catch {
+                        refreshError = error
                         Log.error("❌ Token refresh failed for MessageStream: \(error)", category: "MessageStream")
                     }
-                    // Refresh failed — trigger device signing-key re-auth.
-                    Log.info("🔑 MessageStream refresh failed — triggering device re-auth", category: "MessageStream")
-                    SessionManager.shared.invalidateTokensForReauth()
+                    // Only wipe tokens if the server explicitly rejected the refresh token.
+                    // Network errors mean the refresh was unreachable, not that the token is invalid.
+                    let serverRejected: Bool
+                    if let rpcErr = refreshError as? RPCError {
+                        serverRejected = rpcErr.code == .unauthenticated || rpcErr.code == .permissionDenied
+                    } else {
+                        serverRejected = refreshError == nil  // returned false = no refresh token
+                    }
+                    if serverRejected {
+                        Log.info("🔑 MessageStream refresh rejected by server — triggering device re-auth", category: "MessageStream")
+                        SessionManager.shared.invalidateTokensForReauth()
+                    } else {
+                        Log.info("🔑 MessageStream refresh failed (network error) — keeping tokens, will retry later", category: "MessageStream")
+                    }
                 }
                 // Fast ICE failover path: openStream() intentionally throws this sentinel
                 // error to force an immediate reconnect without exponential backoff.
