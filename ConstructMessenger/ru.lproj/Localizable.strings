@@ -693,3 +693,16 @@
 "safety_numbers_mismatch_header" = "если числа не совпадают";
 "safety_numbers_mismatch_body" = "Прекратите общение и проверьте соединение. Несовпадение может означать, что кто-то перехватывает ваши сообщения.";
 "safety_numbers_unavailable" = "недоступно — личность не инициализирована";
+
+// Stealth mode
+"stealth_section" = "стелс";
+"stealth_toggle_title" = "режим стелс";
+"stealth_toggle_active_hint" = "активен — личность отправителя скрыта от construct";
+"stealth_hint" = "личность отправителя не раскрывается серверу. сообщения проходят через анонимные токены — сервер не может связать исходящий трафик с вашей личностью.";
+"stealth_scope_stream" = "на поток (рекомендуется)";
+"stealth_scope_stream_hint" = "один токен на активный поток в день";
+"stealth_scope_message" = "на сообщение";
+"stealth_scope_message_hint" = "один токен на сообщение — максимальная анонимность";
+"stealth_token_wallet" = "кошелёк токенов";
+"stealth_token_wallet_pending" = "[ещё не активно]";
+"stealth_token_wallet_hint" = "токены добываются в фоне на зарядке. требует поддержки privacy pass на сервере.";
