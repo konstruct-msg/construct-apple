@@ -233,6 +233,8 @@
 "delete_account_local_only_warning" = "Your account may still exist on the server. All local encryption keys and app data will be permanently deleted from this device. You will no longer be able to use this account from here.";
 "delete_account_local_only_confirm" = "Delete locally";
 "warning" = "Warning";"DANGER_ZONE" = "Danger Zone";
+"account_recovery" = "Account Recovery";
+"discovery" = "Discovery";
 "account_recovery_seed" = "Identity Recovery (Seed Phrase)";
 "account_recovery_seed_hint" = "Restore access using your recovery seed phrase.";
 "account_recovery_seed_coming_soon" = "Seed phrase recovery will be available in a future update.";

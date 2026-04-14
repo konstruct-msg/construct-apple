@@ -295,6 +295,8 @@
 "select_chat_description" = "Выберите разговор на боковой панели, чтобы начать общение.";
 
 // Security — Recovery & Duress (from EN)
+"account_recovery" = "Восстановление аккаунта";
+"discovery" = "Обнаруживаемость";
 "account_recovery_seed" = "Восстановление аккаунта (Seed-фраза)";
 "account_recovery_seed_hint" = "Восстановите доступ с помощью резервной seed-фразы.";
 "account_recovery_seed_coming_soon" = "Восстановление по seed-фразе появится в одном из следующих обновлений.";
