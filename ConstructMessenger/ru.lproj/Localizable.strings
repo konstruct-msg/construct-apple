@@ -683,3 +683,13 @@
 "contact_request_sheet_title" = "запрос на переписку";
 "contact_request_from_title" = "хочет начать переписку";
 "contact_request_empty_inbox" = "нет входящих запросов";
+
+// Safety Numbers
+"safety_numbers" = "защитные числа";
+"safety_numbers_verify_title" = "проверить личность";
+"safety_numbers_instruction" = "Сравните эти числа с %@ устно или при личной встрече. Если числа совпадают, ваш канал безопасен и не перехвачен.";
+"safety_numbers_copy" = "скопировать в буфер";
+"safety_numbers_copied" = "скопировано";
+"safety_numbers_mismatch_header" = "если числа не совпадают";
+"safety_numbers_mismatch_body" = "Прекратите общение и проверьте соединение. Несовпадение может означать, что кто-то перехватывает ваши сообщения.";
+"safety_numbers_unavailable" = "недоступно — личность не инициализирована";

@@ -673,3 +673,13 @@
 "contact_request_sheet_title" = "contact request";
 "contact_request_from_title" = "wants to connect";
 "contact_request_empty_inbox" = "no pending requests";
+
+// Safety Numbers
+"safety_numbers" = "safety numbers";
+"safety_numbers_verify_title" = "verify identity";
+"safety_numbers_instruction" = "Compare these numbers with %@ verbally or in person. If the numbers match, your connection is secure and has not been intercepted.";
+"safety_numbers_copy" = "copy to clipboard";
+"safety_numbers_copied" = "copied";
+"safety_numbers_mismatch_header" = "if numbers don't match";
+"safety_numbers_mismatch_body" = "Stop communicating and verify your connection. A mismatch may indicate that someone is intercepting your messages.";
+"safety_numbers_unavailable" = "unavailable — identity not initialized";
