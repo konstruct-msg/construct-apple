@@ -520,6 +520,7 @@ struct CTSettingsSectionHeader: View {
             Text(title.uppercased())
                 .font(CTFont.bold(11))
                 .foregroundColor(color)
+            Spacer()
         }
         .padding(.horizontal, 12)
         .padding(.top, 16)
