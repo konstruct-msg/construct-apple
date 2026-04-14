@@ -419,6 +419,17 @@ struct ICEConfig {
     /// Update via sign-config.sh + git push; this value is the last-resort safety net.
     static let mskRelayPinnedSPKI = "ce2bbfcac1fffab1f4f41ee540aee2dea92c523f7768264aeb87184bf8bfa723"
 
+    /// obfs4 bridge cert for the Moscow relay — different from the AMS cert because
+    /// construct-relay runs its own obfs4 listener with its own keypair.
+    /// Update when the relay container is recreated (new keypair in /data/relay.obfs4).
+    static let mskRelayBridgeCert = "IZKOsDNS5gld2g1PH4Uo4Yna/ltepGKpzDQTbSJll9OqzMin6yZaNx4gFbiLTvuGbABpcA"
+
+    /// Per-relay obfs4 bridge certs, keyed by relay address (IP:port).
+    /// Used by makeRelay() to override the AMS cert for relays with their own obfs4 keypair.
+    static let hardcodedRelayCerts: [String: String] = [
+        mskRelayAddress: mskRelayBridgeCert,
+    ]
+
     /// Moscow relay address: IP:port so Tokio/NWConnection connects directly without DNS.
     static let mskRelayAddress = "\(mskRelayIP):443"
 

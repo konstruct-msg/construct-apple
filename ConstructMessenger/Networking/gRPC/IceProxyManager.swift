@@ -216,6 +216,9 @@ struct IceRelay: Codable, Identifiable {
 /// 2. `ICEConfig.hardcodedRelaySNIs[address]` + `ICEConfig.mskRelayPinnedSPKI` → hardcoded fallback.
 /// 3. Hostname extracted from address → domain-based relay (no pinning).
 private func makeRelay(address: String, bridgeCert: String) -> IceRelay {
+    // Use relay-specific cert if hardcoded (relays with their own obfs4 keypair),
+    // otherwise fall back to the server-fetched cert (AMS primary).
+    let resolvedCert = ICEConfig.hardcodedRelayCerts[address] ?? bridgeCert
     let sni: String?
     let pin: String?
     if address.hasSuffix(":443") {
@@ -235,7 +238,7 @@ private func makeRelay(address: String, bridgeCert: String) -> IceRelay {
         sni = nil
         pin = nil
     }
-    return IceRelay(address: address, bridgeCert: bridgeCert, iatMode: .none,
+    return IceRelay(address: address, bridgeCert: resolvedCert, iatMode: .none,
                     tlsServerName: sni, pinnedSpki: pin)
 }
 
