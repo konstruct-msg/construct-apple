@@ -402,7 +402,7 @@
 "ice_footer_off" = "Traffic protection disabled. Direct connection only.";
 "ice_footer_auto" = "ICE activates automatically when network blocking is detected.";
 "ice_footer_on" = "All traffic routed through ICE relay.";
-"ice_auto_active" = "Auto-activated — network blocking detected";
+"ice_auto_active" = "Auto-activated · direct blocked";
 "ice_direct_probe_ok" = "Direct: OK (%@)";
 "ice_direct_probe_blocked" = "Direct: blocked";
 

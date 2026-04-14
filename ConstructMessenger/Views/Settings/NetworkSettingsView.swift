@@ -194,101 +194,25 @@ struct NetworkSettingsView: View {
                     Text(LocalizedStringKey("ice_unavailable"))
                         .font(CTFont.regular(11))
                         .foregroundStyle(Color.CT.textDim)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 12)
                         .padding(.bottom, 8)
                 } else if iceManager.mode == .auto && iceManager.dpiDetectedThisSession {
                     Text(LocalizedStringKey("ice_auto_active"))
                         .font(CTFont.regular(11))
                         .foregroundStyle(.orange)
-                        .padding(.horizontal, 12)
-                        .padding(.bottom, 4)
-                    Text(LocalizedStringKey("ice_footer_auto"))
-                        .font(CTFont.regular(11))
-                        .foregroundStyle(Color.CT.textDim)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 12)
                         .padding(.bottom, 8)
                 } else {
                     Text(LocalizedStringKey(iceFooterKey))
                         .font(CTFont.regular(11))
                         .foregroundStyle(Color.CT.textDim)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 12)
                         .padding(.bottom, 8)
                 }
                 CTSep()
-
-                // MARK: - Server
-                CTSettingsSectionHeader(title: NSLocalizedString("server", comment: "").uppercased())
-                HStack {
-                    Text(GRPCChannelManager.shared.currentHost)
-                        .font(.system(size: 13, design: .monospaced))
-                        .foregroundStyle(Color.CT.text)
-                        .textSelection(.enabled)
-                    Spacer()
-                    Text("TLS")
-                        .font(CTFont.regular(10))
-                        .foregroundColor(Color.CT.accentDim)
-                        .padding(.horizontal, 5).padding(.vertical, 2)
-                        .overlay(Rectangle().stroke(Color.CT.accent.opacity(0.4), lineWidth: 0.5))
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 12)
-                CTSep()
-
-                // MARK: - Custom Server (Debug only)
-                #if DEBUG
-                CTSettingsSectionHeader(title: NSLocalizedString("custom_server_debug", comment: "").uppercased())
-                VStack(alignment: .leading, spacing: 8) {
-                    TextField("Host (e.g. dev.konstruct.cc)", text: $customHost)
-                        #if canImport(UIKit)
-                        .autocapitalization(.none)
-                        .keyboardType(.URL)
-                        #endif
-                        .textFieldStyle(.roundedBorder)
-
-                    TextField("Port (e.g. 443)", text: $customPort)
-                        #if canImport(UIKit)
-                        .keyboardType(.numberPad)
-                        #endif
-                        .textFieldStyle(.roundedBorder)
-
-                    HStack {
-                        Button(role: .destructive) {
-                            GRPCChannelManager.shared.resetToDefaultServer()
-                            customHost = GRPCChannelManager.shared.currentHost
-                            customPort = "\(GRPCChannelManager.shared.currentPort)"
-                        } label: {
-                            Text(LocalizedStringKey("reset_to_default"))
-                                .font(CTFont.regular(13))
-                                .foregroundColor(Color.CT.danger)
-                                .padding(.horizontal, 12).padding(.vertical, 8)
-                                .background(Color.CT.bgMsg)
-                                .overlay(Rectangle().stroke(Color.CT.danger.opacity(0.4), lineWidth: 1))
-                        }
-
-                        Spacer()
-
-                        Button {
-                            applyCustomServer()
-                        } label: {
-                            Text(LocalizedStringKey("apply_changes"))
-                                .font(CTFont.regular(13))
-                                .foregroundColor(Color.CT.text)
-                                .padding(.horizontal, 12).padding(.vertical, 8)
-                                .background(Color.CT.bgMsg)
-                                .overlay(Rectangle().stroke(Color.CT.accent, lineWidth: 1))
-                        }
-                        .disabled(customHost.trimmingCharacters(in: .whitespaces).isEmpty)
-                    }
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 12)
-                Text(LocalizedStringKey("server_settings_footer"))
-                    .font(CTFont.regular(11))
-                    .foregroundStyle(Color.CT.textDim)
-                    .padding(.horizontal, 12)
-                    .padding(.bottom, 8)
-                CTSep()
-                #endif
             }
             .padding(.vertical, 20)
             #if os(iOS)
