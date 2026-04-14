@@ -169,6 +169,18 @@ actor IceCertFetcher {
         return nil
     }
 
+    /// Remove a single relay from the UserDefaults SPKI/config cache.
+    /// Forces the next call to spkiPinSync to fall back to the hardcoded pin.
+    /// Use this when a relay's TLS cert was rotated and the cached SPKI is stale.
+    static func evictRelayFromCache(_ address: String) {
+        guard var relays = cachedRelayInfosSync() else { return }
+        relays.removeAll { $0.addressWithPort == address }
+        if let encoded = try? JSONEncoder().encode(relays) {
+            UserDefaults.standard.set(encoded, forKey: cachedRelayInfosKey)
+            Log.info("🧊 Evicted relay \(address) from SPKI cache", category: "ICE")
+        }
+    }
+
     /// Synchronous SNI lookup for non-async contexts.
     static func sniSync(for address: String) -> String? {
         if let relay = cachedRelayInfosSync()?.first(where: { $0.addressWithPort == address }) {

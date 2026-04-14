@@ -356,6 +356,14 @@ final class IceProxyManager: ObservableObject {
         Log.info("🧊 Relay \(address) blacklisted for \(Int(Self.relayFailureTTL))s", category: "ICE")
     }
 
+    /// Remove a relay from the failure blacklist so it can be retried immediately.
+    /// Used after a successful config refresh when the SPKI may have been updated.
+    func unblacklistRelay(address: String) {
+        guard recentlyFailedRelays[address] != nil else { return }
+        recentlyFailedRelays.removeValue(forKey: address)
+        Log.info("🧊 Relay \(address) removed from blacklist after config refresh", category: "ICE")
+    }
+
     /// Whether a relay has failed recently and should be tried last.
     private func isRelayRecentlyFailed(_ address: String) -> Bool {
         guard let failedAt = recentlyFailedRelays[address] else { return false }
@@ -477,14 +485,32 @@ final class IceProxyManager: ObservableObject {
         return ICEConfig.hardcodedBridgeCert
     }
 
-    /// Called when ICE handshake fails repeatedly (stale cert after server key rotation).
-    /// Clears Keychain cache, fetches fresh cert via .well-known, restarts proxy via fallback chain.
+    /// Called when ICE handshake fails repeatedly (stale cert or SPKI after server key rotation).
+    /// Clears Keychain cache, fetches fresh obfs4 cert AND relay TLS config (SPKI pins) from .well-known,
+    /// unblacklists any relay whose config was refreshed, then restarts proxy via fallback chain.
     /// Returns true if a new cert was obtained and proxy was restarted successfully.
     @discardableResult
     func refreshCertAndRestart() async -> Bool {
-        Log.info("🧊 ICE cert stale — clearing cache and re-fetching via .well-known", category: "ICE")
+        Log.info("🧊 ICE recovery — refreshing cert + relay config via .well-known", category: "ICE")
         KeychainManager.shared.deleteIceBridgeCert()
-        guard let freshCert = await IceCertFetcher.shared.fetchFromHTTPS() else {
+
+        // Fetch both obfs4 cert AND relay TLS config (SPKI pins) concurrently.
+        async let certTask = IceCertFetcher.shared.fetchFromHTTPS()
+        async let configTask = IceCertFetcher.shared.fetchAndCacheRelayConfig()
+        let (freshCert, freshRelays) = await (certTask, configTask)
+
+        // Unblacklist any relay that appears in the fresh config.
+        // If a relay failed due to stale SPKI, the cache is now updated; a retry is warranted.
+        if let relays = freshRelays {
+            let failedAddresses = recentlyFailedRelays.keys
+            for address in failedAddresses {
+                if relays.contains(where: { $0.addressWithPort == address }) {
+                    unblacklistRelay(address: address)
+                }
+            }
+        }
+
+        guard let freshCert else {
             Log.error("🧊 Failed to fetch fresh ICE cert — proxy not restarted", category: "ICE")
             return false
         }
