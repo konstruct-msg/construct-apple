@@ -184,6 +184,7 @@ struct NetworkSettingsView: View {
                         Text(iceManager.lastError ?? NSLocalizedString("ice_unavailable", comment: ""))
                             .font(CTFont.regular(11))
                             .foregroundStyle(Color.CT.textDim)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 10)
                     }
