@@ -139,11 +139,54 @@ public struct Shared_Proto_Services_V1_GetPreKeyBundleResponse: Sendable {
   /// Ed25519 public key for verifying device signatures
   public var verifyingKey: Data = Data()
 
+  /// Key Transparency inclusion proof for the device's identity key.
+  /// Absent in dev/test environments where the KT log is not populated.
+  /// Clients SHOULD verify this when non-empty (see KeyTransparencyVerifier).
+  public var ktProof: Shared_Proto_Services_V1_KtInclusionProof {
+    get {_ktProof ?? Shared_Proto_Services_V1_KtInclusionProof()}
+    set {_ktProof = newValue}
+  }
+  /// Returns true if `ktProof` has been explicitly set.
+  public var hasKtProof: Bool {self._ktProof != nil}
+  /// Clears the value of `ktProof`. Subsequent reads from it will return its default value.
+  public mutating func clearKtProof() {self._ktProof = nil}
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
   fileprivate var _bundle: Shared_Proto_Services_V1_PreKeyBundle? = nil
+  fileprivate var _ktProof: Shared_Proto_Services_V1_KtInclusionProof? = nil
+}
+
+/// RFC 6962-style inclusion proof for a device's identity key in the KT log.
+/// The proof allows a client to verify that the identity key it received is
+/// permanently recorded in the server's append-only Merkle log.
+public struct Shared_Proto_Services_V1_KtInclusionProof: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// 0-based position of this device's leaf in the Merkle log
+  public var leafIndex: UInt64 = 0
+
+  /// Total number of leaves in the tree at the time of proof generation
+  public var treeSize: UInt64 = 0
+
+  /// Merkle root hash (32 bytes, SHA-256)
+  public var rootHash: Data = Data()
+
+  /// Sibling hashes on the path from this leaf to the root (leaf-to-root order).
+  /// Each element is 32 bytes (SHA-256).
+  public var proofHashes: [Data] = []
+
+  /// Ed25519 signature over: "ConstructKT-v1" || tree_size (8 BE) || root_hash (32)
+  /// Signed with the server's bundle signing key (same key as bundle_signature).
+  public var treeHeadSignature: Data = Data()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
 }
 
 /// Pre-key bundle for X3DH key agreement
@@ -299,6 +342,14 @@ public struct Shared_Proto_Services_V1_PreKeyBundle: @unchecked Sendable {
   /// Clears the value of `kyberSpkRotationEpoch`. Subsequent reads from it will return its default value.
   public mutating func clearKyberSpkRotationEpoch() {_uniqueStorage()._kyberSpkRotationEpoch = nil}
 
+  /// Ed25519 signature over the canonical bundle bytes, signed by the server's bundle signing key.
+  /// Empty when bundle signing is not configured on the server (dev/test environments).
+  /// Clients SHOULD verify this when non-empty using the public key from /.well-known/construct-server.
+  public var bundleSignature: Data {
+    get {_storage._bundleSignature}
+    set {_uniqueStorage()._bundleSignature = newValue}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -371,11 +422,22 @@ public struct Shared_Proto_Services_V1_DevicePreKeyBundle: Sendable {
   /// Device platform (for UI hints)
   public var platform: Shared_Proto_Core_V1_DevicePlatform = .unspecified
 
+  /// Key Transparency inclusion proof (absent in dev/test environments).
+  public var ktProof: Shared_Proto_Services_V1_KtInclusionProof {
+    get {_ktProof ?? Shared_Proto_Services_V1_KtInclusionProof()}
+    set {_ktProof = newValue}
+  }
+  /// Returns true if `ktProof` has been explicitly set.
+  public var hasKtProof: Bool {self._ktProof != nil}
+  /// Clears the value of `ktProof`. Subsequent reads from it will return its default value.
+  public mutating func clearKtProof() {self._ktProof = nil}
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
   fileprivate var _bundle: Shared_Proto_Services_V1_PreKeyBundle? = nil
+  fileprivate var _ktProof: Shared_Proto_Services_V1_KtInclusionProof? = nil
 }
 
 public struct Shared_Proto_Services_V1_UploadPreKeysRequest: Sendable {
@@ -834,7 +896,7 @@ extension Shared_Proto_Services_V1_GetPreKeyBundleRequest: SwiftProtobuf.Message
 
 extension Shared_Proto_Services_V1_GetPreKeyBundleResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetPreKeyBundleResponse"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}bundle\0\u{3}device_id\0\u{3}has_one_time_key\0\u{4}\u{8}verifying_key\0\u{c}\u{4}\u{7}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}bundle\0\u{3}device_id\0\u{3}has_one_time_key\0\u{4}\u{8}verifying_key\0\u{4}\u{9}kt_proof\0\u{c}\u{4}\u{7}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -846,6 +908,7 @@ extension Shared_Proto_Services_V1_GetPreKeyBundleResponse: SwiftProtobuf.Messag
       case 2: try { try decoder.decodeSingularStringField(value: &self.deviceID) }()
       case 3: try { try decoder.decodeSingularBoolField(value: &self.hasOneTimeKey_p) }()
       case 11: try { try decoder.decodeSingularBytesField(value: &self.verifyingKey) }()
+      case 20: try { try decoder.decodeSingularMessageField(value: &self._ktProof) }()
       default: break
       }
     }
@@ -868,6 +931,9 @@ extension Shared_Proto_Services_V1_GetPreKeyBundleResponse: SwiftProtobuf.Messag
     if !self.verifyingKey.isEmpty {
       try visitor.visitSingularBytesField(value: self.verifyingKey, fieldNumber: 11)
     }
+    try { if let v = self._ktProof {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 20)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -876,6 +942,57 @@ extension Shared_Proto_Services_V1_GetPreKeyBundleResponse: SwiftProtobuf.Messag
     if lhs.deviceID != rhs.deviceID {return false}
     if lhs.hasOneTimeKey_p != rhs.hasOneTimeKey_p {return false}
     if lhs.verifyingKey != rhs.verifyingKey {return false}
+    if lhs._ktProof != rhs._ktProof {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Shared_Proto_Services_V1_KtInclusionProof: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".KtInclusionProof"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}leaf_index\0\u{3}tree_size\0\u{3}root_hash\0\u{3}proof_hashes\0\u{3}tree_head_signature\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularUInt64Field(value: &self.leafIndex) }()
+      case 2: try { try decoder.decodeSingularUInt64Field(value: &self.treeSize) }()
+      case 3: try { try decoder.decodeSingularBytesField(value: &self.rootHash) }()
+      case 4: try { try decoder.decodeRepeatedBytesField(value: &self.proofHashes) }()
+      case 5: try { try decoder.decodeSingularBytesField(value: &self.treeHeadSignature) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.leafIndex != 0 {
+      try visitor.visitSingularUInt64Field(value: self.leafIndex, fieldNumber: 1)
+    }
+    if self.treeSize != 0 {
+      try visitor.visitSingularUInt64Field(value: self.treeSize, fieldNumber: 2)
+    }
+    if !self.rootHash.isEmpty {
+      try visitor.visitSingularBytesField(value: self.rootHash, fieldNumber: 3)
+    }
+    if !self.proofHashes.isEmpty {
+      try visitor.visitRepeatedBytesField(value: self.proofHashes, fieldNumber: 4)
+    }
+    if !self.treeHeadSignature.isEmpty {
+      try visitor.visitSingularBytesField(value: self.treeHeadSignature, fieldNumber: 5)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Services_V1_KtInclusionProof, rhs: Shared_Proto_Services_V1_KtInclusionProof) -> Bool {
+    if lhs.leafIndex != rhs.leafIndex {return false}
+    if lhs.treeSize != rhs.treeSize {return false}
+    if lhs.rootHash != rhs.rootHash {return false}
+    if lhs.proofHashes != rhs.proofHashes {return false}
+    if lhs.treeHeadSignature != rhs.treeHeadSignature {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -883,7 +1000,7 @@ extension Shared_Proto_Services_V1_GetPreKeyBundleResponse: SwiftProtobuf.Messag
 
 extension Shared_Proto_Services_V1_PreKeyBundle: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".PreKeyBundle"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}registration_id\0\u{3}identity_key\0\u{3}signed_pre_key\0\u{3}signed_pre_key_id\0\u{3}signed_pre_key_signature\0\u{3}one_time_pre_key\0\u{3}one_time_pre_key_id\0\u{3}crypto_suite\0\u{3}generated_at\0\u{3}kyber_pre_key\0\u{3}kyber_pre_key_id\0\u{3}kyber_pre_key_signature\0\u{3}kyber_one_time_pre_key\0\u{3}kyber_one_time_pre_key_id\0\u{3}spk_uploaded_at\0\u{3}spk_rotation_epoch\0\u{3}kyber_spk_uploaded_at\0\u{3}kyber_spk_rotation_epoch\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}registration_id\0\u{3}identity_key\0\u{3}signed_pre_key\0\u{3}signed_pre_key_id\0\u{3}signed_pre_key_signature\0\u{3}one_time_pre_key\0\u{3}one_time_pre_key_id\0\u{3}crypto_suite\0\u{3}generated_at\0\u{3}kyber_pre_key\0\u{3}kyber_pre_key_id\0\u{3}kyber_pre_key_signature\0\u{3}kyber_one_time_pre_key\0\u{3}kyber_one_time_pre_key_id\0\u{3}spk_uploaded_at\0\u{3}spk_rotation_epoch\0\u{3}kyber_spk_uploaded_at\0\u{3}kyber_spk_rotation_epoch\0\u{3}bundle_signature\0")
 
   fileprivate class _StorageClass {
     var _registrationID: UInt32 = 0
@@ -904,6 +1021,7 @@ extension Shared_Proto_Services_V1_PreKeyBundle: SwiftProtobuf.Message, SwiftPro
     var _spkRotationEpoch: UInt32 = 0
     var _kyberSpkUploadedAt: Int64? = nil
     var _kyberSpkRotationEpoch: UInt32? = nil
+    var _bundleSignature: Data = Data()
 
       // This property is used as the initial default value for new instances of the type.
       // The type itself is protecting the reference to its storage via CoW semantics.
@@ -932,6 +1050,7 @@ extension Shared_Proto_Services_V1_PreKeyBundle: SwiftProtobuf.Message, SwiftPro
       _spkRotationEpoch = source._spkRotationEpoch
       _kyberSpkUploadedAt = source._kyberSpkUploadedAt
       _kyberSpkRotationEpoch = source._kyberSpkRotationEpoch
+      _bundleSignature = source._bundleSignature
     }
   }
 
@@ -968,6 +1087,7 @@ extension Shared_Proto_Services_V1_PreKeyBundle: SwiftProtobuf.Message, SwiftPro
         case 16: try { try decoder.decodeSingularUInt32Field(value: &_storage._spkRotationEpoch) }()
         case 17: try { try decoder.decodeSingularInt64Field(value: &_storage._kyberSpkUploadedAt) }()
         case 18: try { try decoder.decodeSingularUInt32Field(value: &_storage._kyberSpkRotationEpoch) }()
+        case 19: try { try decoder.decodeSingularBytesField(value: &_storage._bundleSignature) }()
         default: break
         }
       }
@@ -1034,6 +1154,9 @@ extension Shared_Proto_Services_V1_PreKeyBundle: SwiftProtobuf.Message, SwiftPro
       try { if let v = _storage._kyberSpkRotationEpoch {
         try visitor.visitSingularUInt32Field(value: v, fieldNumber: 18)
       } }()
+      if !_storage._bundleSignature.isEmpty {
+        try visitor.visitSingularBytesField(value: _storage._bundleSignature, fieldNumber: 19)
+      }
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -1061,6 +1184,7 @@ extension Shared_Proto_Services_V1_PreKeyBundle: SwiftProtobuf.Message, SwiftPro
         if _storage._spkRotationEpoch != rhs_storage._spkRotationEpoch {return false}
         if _storage._kyberSpkUploadedAt != rhs_storage._kyberSpkUploadedAt {return false}
         if _storage._kyberSpkRotationEpoch != rhs_storage._kyberSpkRotationEpoch {return false}
+        if _storage._bundleSignature != rhs_storage._bundleSignature {return false}
         return true
       }
       if !storagesAreEqual {return false}
@@ -1151,7 +1275,7 @@ extension Shared_Proto_Services_V1_GetPreKeyBundlesResponse: SwiftProtobuf.Messa
 
 extension Shared_Proto_Services_V1_DevicePreKeyBundle: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".DevicePreKeyBundle"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0\u{1}bundle\0\u{1}platform\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0\u{1}bundle\0\u{1}platform\0\u{3}kt_proof\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1162,6 +1286,7 @@ extension Shared_Proto_Services_V1_DevicePreKeyBundle: SwiftProtobuf.Message, Sw
       case 1: try { try decoder.decodeSingularStringField(value: &self.deviceID) }()
       case 2: try { try decoder.decodeSingularMessageField(value: &self._bundle) }()
       case 3: try { try decoder.decodeSingularEnumField(value: &self.platform) }()
+      case 4: try { try decoder.decodeSingularMessageField(value: &self._ktProof) }()
       default: break
       }
     }
@@ -1181,6 +1306,9 @@ extension Shared_Proto_Services_V1_DevicePreKeyBundle: SwiftProtobuf.Message, Sw
     if self.platform != .unspecified {
       try visitor.visitSingularEnumField(value: self.platform, fieldNumber: 3)
     }
+    try { if let v = self._ktProof {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1188,6 +1316,7 @@ extension Shared_Proto_Services_V1_DevicePreKeyBundle: SwiftProtobuf.Message, Sw
     if lhs.deviceID != rhs.deviceID {return false}
     if lhs._bundle != rhs._bundle {return false}
     if lhs.platform != rhs.platform {return false}
+    if lhs._ktProof != rhs._ktProof {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

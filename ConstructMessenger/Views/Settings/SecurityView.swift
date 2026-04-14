@@ -334,6 +334,11 @@ struct SecurityView: View {
 
                 CTSep()
 
+                // MARK: - Key Transparency
+                KTStatusSection()
+
+                CTSep()
+
                 // MARK: - Discovery
                 CTSettingsSectionHeader(title: NSLocalizedString("discovery", comment: ""))
 
@@ -436,6 +441,58 @@ struct SecurityView: View {
         let req = Chat.fetchRequest()
         let chats = (try? viewContext.fetch(req)) ?? []
         return Set(chats.compactMap { $0.otherUser?.id })
+    }
+}
+
+// MARK: - KT Status Section
+
+/// Displays the current Key Transparency aggregate status in SecurityView.
+/// Reads from `KTStore` — updated automatically each time a bundle is fetched.
+private struct KTStatusSection: View {
+    @State private var verifiedCount = 0
+    @State private var failureCount = 0
+
+    private var statusText: String {
+        if failureCount > 0 { return NSLocalizedString("kt_warning", comment: "") }
+        if verifiedCount > 0 { return NSLocalizedString("kt_verified", comment: "") }
+        return NSLocalizedString("kt_no_data", comment: "")
+    }
+
+    private var statusColor: Color {
+        if failureCount > 0 { return Color.CT.danger }
+        if verifiedCount > 0 { return Color.CT.accent }
+        return Color.CT.textDim
+    }
+
+    var body: some View {
+        CTSettingsSectionHeader(title: NSLocalizedString("kt_section", comment: ""))
+
+        HStack(spacing: 10) {
+            CTRowIcon("[#]", color: statusColor)
+            Text(LocalizedStringKey("kt_status"))
+                .font(CTFont.regular(13))
+                .foregroundStyle(Color.CT.text)
+            Spacer()
+            Text(statusText)
+                .font(CTFont.regular(11))
+                .foregroundStyle(statusColor)
+                .padding(.trailing, 4)
+        }
+        .padding(.horizontal, 16).padding(.vertical, 10)
+        .onAppear {
+            verifiedCount = KTStore.shared.verifiedCount
+            failureCount  = KTStore.shared.failureCount
+        }
+
+        Text(failureCount > 0
+             ? LocalizedStringKey("kt_failure_hint")
+             : LocalizedStringKey("kt_hint"))
+            .font(CTFont.regular(11))
+            .foregroundStyle(failureCount > 0
+                             ? Color.CT.danger
+                             : Color.CT.textDim.opacity(0.6))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 12).padding(.top, 2).padding(.bottom, 10)
     }
 }
 

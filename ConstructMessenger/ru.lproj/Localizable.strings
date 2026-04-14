@@ -706,3 +706,12 @@
 "stealth_token_wallet" = "кошелёк токенов";
 "stealth_token_wallet_pending" = "[ещё не активно]";
 "stealth_token_wallet_hint" = "токены добываются в фоне на зарядке. требует поддержки privacy pass на сервере.";
+
+// Key Transparency
+"kt_section" = "прозрачность ключей";
+"kt_status" = "merkle-лог";
+"kt_verified" = "[✓] подтверждено";
+"kt_warning" = "[!] внимание";
+"kt_no_data" = "[–] нет данных";
+"kt_hint" = "каждый ключ идентификации постоянно записывается в append-only merkle-лог. подделка криптографически обнаруживаема.";
+"kt_failure_hint" = "проверка прозрачности ключей не прошла — возможна подделка.";

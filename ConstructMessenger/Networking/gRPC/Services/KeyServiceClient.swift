@@ -9,6 +9,42 @@ import Foundation
 import GRPCCore
 import GRPCNIOTransportHTTP2
 
+// MARK: - Key Transparency result store
+
+/// Persists the most recent Key Transparency verification outcome so SecurityView
+/// can show an aggregate status without re-verifying every time.
+final class KTStore {
+    static let shared = KTStore()
+    private init() {}
+
+    private let lastVerifiedAtKey = "construct.kt_last_verified_at"
+    private let failureCountKey   = "construct.kt_failure_count"
+    private let verifiedCountKey  = "construct.kt_verified_count"
+
+    func recordVerified() {
+        UserDefaults.standard.set(Date(), forKey: lastVerifiedAtKey)
+        let count = UserDefaults.standard.integer(forKey: verifiedCountKey)
+        UserDefaults.standard.set(count + 1, forKey: verifiedCountKey)
+    }
+
+    func recordFailure() {
+        let count = UserDefaults.standard.integer(forKey: failureCountKey)
+        UserDefaults.standard.set(count + 1, forKey: failureCountKey)
+    }
+
+    var lastVerifiedAt: Date? {
+        UserDefaults.standard.object(forKey: lastVerifiedAtKey) as? Date
+    }
+
+    var verifiedCount: Int {
+        UserDefaults.standard.integer(forKey: verifiedCountKey)
+    }
+
+    var failureCount: Int {
+        UserDefaults.standard.integer(forKey: failureCountKey)
+    }
+}
+
 
 final class KeyServiceClient: Sendable {
     static let shared = KeyServiceClient()
@@ -104,6 +140,32 @@ final class KeyServiceClient: Sendable {
                 ? bundle.kyberOneTimePreKey : nil
             let kyberOtpkId: UInt32? = bundle.hasKyberOneTimePreKeyID && bundle.kyberOneTimePreKeyID > 0
                 ? bundle.kyberOneTimePreKeyID : nil
+
+            // KT verification (non-blocking: failure is logged but does not reject the bundle)
+            if response.hasKtProof {
+                let p = response.ktProof
+                let serverKey = UserDefaults.standard.data(forKey: IceCertFetcher.cachedBundleSigningKeyKey)
+                let result = KeyTransparencyVerifier.verify(
+                    leafIndex: p.leafIndex,
+                    treeSize: p.treeSize,
+                    rootHash: p.rootHash,
+                    proofHashes: p.proofHashes,
+                    treeHeadSignature: p.treeHeadSignature,
+                    deviceId: response.deviceID,
+                    identityKey: bundle.identityKey,
+                    serverBundleSigningPublicKey: serverKey
+                )
+                switch result {
+                case .verified:
+                    KTStore.shared.recordVerified()
+                    Log.info("🔐 KT: inclusion proof verified for device \(response.deviceID)", category: "KT")
+                case .failed(let e):
+                    KTStore.shared.recordFailure()
+                    Log.error("🔐 KT: proof FAILED for device \(response.deviceID) — \(e)", category: "KT")
+                case .unavailable:
+                    break
+                }
+            }
 
             return PublicKeyBundleData(
                 userId: userId,
