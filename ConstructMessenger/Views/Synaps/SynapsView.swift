@@ -71,7 +71,6 @@ struct SynapsView: View {
                 }
                 GeometryReader { geo in
                     ZStack {
-                        Color.CT.bg.ignoresSafeArea()
                         CTMatrixBackground().ignoresSafeArea()
 
                         if contacts.isEmpty {
@@ -98,6 +97,7 @@ struct SynapsView: View {
                     }
                 }
             }
+            .ctBackground()
             .onChange(of: searchText) { _, newValue in
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                     canvasOffset = .zero
