@@ -740,7 +740,7 @@ final class MessageStreamManager {
     }
 
     private nonisolated func runMessageStream(
-        client: Shared_Proto_Services_V1_MessagingService.Client<HTTP2ClientTransport.Posix>,
+        client: Shared_Proto_Services_V1_MessagingService.Client<HTTP2ClientTransport.TransportServices>,
         request: StreamingClientRequest<Shared_Proto_Services_V1_MessageStreamRequest>,
         incomingContinuation: AsyncStream<StreamEvent>.Continuation,
         metricsLabel: String
