@@ -900,6 +900,12 @@ public struct Shared_Proto_Services_V1_PendingMessage: Sendable {
   /// For regular E2EE messages this will be CONTENT_TYPE_E2EE_SIGNAL (= 11).
   public var contentType: Shared_Proto_Core_V1_ContentType = .unspecified
 
+  /// ConstructSEALED (sealed sender): raw SealedInner proto bytes.
+  /// Populated only when the message was sent with stealth mode enabled.
+  /// When non-empty, sender_id is empty and encrypted_payload is empty.
+  /// The recipient must decrypt this field to recover sender identity and payload.
+  public var sealedInnerData: Data = Data()
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -2025,7 +2031,7 @@ extension Shared_Proto_Services_V1_GetPendingMessagesRequest: SwiftProtobuf.Mess
 
 extension Shared_Proto_Services_V1_PendingMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".PendingMessage"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}message_id\0\u{3}sender_id\0\u{4}\u{5}encrypted_payload\0\u{1}timestamp\0\u{3}content_type\0\u{c}\u{3}\u{1}\u{c}\u{4}\u{1}\u{c}\u{5}\u{1}\u{c}\u{6}\u{1}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}message_id\0\u{3}sender_id\0\u{4}\u{5}encrypted_payload\0\u{1}timestamp\0\u{3}content_type\0\u{3}sealed_inner_data\0\u{c}\u{3}\u{1}\u{c}\u{4}\u{1}\u{c}\u{5}\u{1}\u{c}\u{6}\u{1}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -2038,6 +2044,7 @@ extension Shared_Proto_Services_V1_PendingMessage: SwiftProtobuf.Message, SwiftP
       case 7: try { try decoder.decodeSingularBytesField(value: &self.encryptedPayload) }()
       case 8: try { try decoder.decodeSingularInt64Field(value: &self.timestamp) }()
       case 9: try { try decoder.decodeSingularEnumField(value: &self.contentType) }()
+      case 10: try { try decoder.decodeSingularBytesField(value: &self.sealedInnerData) }()
       default: break
       }
     }
@@ -2059,6 +2066,9 @@ extension Shared_Proto_Services_V1_PendingMessage: SwiftProtobuf.Message, SwiftP
     if self.contentType != .unspecified {
       try visitor.visitSingularEnumField(value: self.contentType, fieldNumber: 9)
     }
+    if !self.sealedInnerData.isEmpty {
+      try visitor.visitSingularBytesField(value: self.sealedInnerData, fieldNumber: 10)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -2068,6 +2078,7 @@ extension Shared_Proto_Services_V1_PendingMessage: SwiftProtobuf.Message, SwiftP
     if lhs.encryptedPayload != rhs.encryptedPayload {return false}
     if lhs.timestamp != rhs.timestamp {return false}
     if lhs.contentType != rhs.contentType {return false}
+    if lhs.sealedInnerData != rhs.sealedInnerData {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

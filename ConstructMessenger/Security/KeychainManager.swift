@@ -501,6 +501,21 @@ class KeychainManager {
         delete(forKey: spkEpochKey(for: userId))
     }
 
+    // MARK: - Generic Data Storage (for non-crypto app data that needs Keychain protection)
+
+    @discardableResult
+    func saveRawData(_ data: Data, forKey key: String) -> Bool {
+        save(data, forKey: key, accessible: kSecAttrAccessibleAfterFirstUnlock)
+    }
+
+    func loadRawData(forKey key: String) -> Data? {
+        load(forKey: key)
+    }
+
+    func deleteRawData(forKey key: String) {
+        delete(forKey: key)
+    }
+
     // MARK: - Generic Helpers
     private func save(_ data: Data, forKey key: String, accessible: CFString) -> Bool {
         guard !data.isEmpty else {

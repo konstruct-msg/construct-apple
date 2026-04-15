@@ -11,6 +11,10 @@ enum GRPCTimeouts {
     static let refreshToken: TimeInterval = NetworkTiming.GRPC.Timeouts.refreshToken
     static let logout: TimeInterval = NetworkTiming.GRPC.Timeouts.logout
     static let recovery: TimeInterval = NetworkTiming.GRPC.Timeouts.recovery
+    static let getSenderCertificate: TimeInterval = NetworkTiming.GRPC.Timeouts.recovery
+
+    // Privacy Pass
+    static let issueTokens: TimeInterval = NetworkTiming.GRPC.Timeouts.recovery
 
     // Device linking
     static let initiateDeviceLink: TimeInterval = NetworkTiming.GRPC.Timeouts.initiateDeviceLink

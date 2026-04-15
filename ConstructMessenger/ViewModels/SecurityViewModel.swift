@@ -8,6 +8,7 @@
 import Foundation
 import LocalAuthentication
 import CryptoKit
+import CommonCrypto
 import Security
 import Observation
 
@@ -27,9 +28,16 @@ final class SecurityViewModel {
     private static let pinHashKey = "app_pin_hash"
     private static let pinSaltKey = "app_pin_salt"
     private static let pinLengthKey = "app_pin_length"
+    private static let pinHashVersionKey = "app_pin_hash_version"
     private static let biometricEnabledKey = "security.useBiometrics"
     private static let duressPinHashKey = "app_duress_pin_hash"
     private static let duressPinSaltKey = "app_duress_pin_salt"
+    private static let duressPinHashVersionKey = "app_duress_pin_hash_version"
+
+    /// Hash version 1 = SHA-256(salt || pin) — legacy, migrated on first unlock
+    /// Hash version 2 = PBKDF2-SHA256, 100k iterations, 32-byte salt
+    private static let currentHashVersion = 2
+    private static let pbkdf2Iterations: UInt32 = 100_000
 
     init() {
         let hasPin = SecurityViewModel.hasSavedPin()
@@ -83,10 +91,11 @@ final class SecurityViewModel {
     }
 
     func setPin(_ pin: String) {
-        let salt = randomSalt()
-        let hash = hashPin(pin, salt: salt)
+        let salt = randomSalt(bytes: 32)
+        let hash = hashPinPBKDF2(pin, salt: salt)
         _ = KeychainManager.shared.saveData(hash, forKey: Self.pinHashKey)
         _ = KeychainManager.shared.saveData(salt, forKey: Self.pinSaltKey)
+        _ = KeychainManager.shared.saveData(Data([UInt8(Self.currentHashVersion)]), forKey: Self.pinHashVersionKey)
         UserDefaults.standard.set(pin.count, forKey: Self.pinLengthKey)
         isPinEnabled = true
         isUnlocked = true
@@ -109,10 +118,11 @@ final class SecurityViewModel {
     @discardableResult
     func setDuressPin(_ pin: String) -> Bool {
         guard !verifyPin(pin) else { return false } // must differ from main PIN
-        let salt = randomSalt()
-        let hash = hashPin(pin, salt: salt)
+        let salt = randomSalt(bytes: 32)
+        let hash = hashPinPBKDF2(pin, salt: salt)
         _ = KeychainManager.shared.saveData(hash, forKey: Self.duressPinHashKey)
         _ = KeychainManager.shared.saveData(salt, forKey: Self.duressPinSaltKey)
+        _ = KeychainManager.shared.saveData(Data([UInt8(Self.currentHashVersion)]), forKey: Self.duressPinHashVersionKey)
         isDuresspinEnabled = true
         return true
     }
@@ -128,8 +138,12 @@ final class SecurityViewModel {
               let salt = KeychainManager.shared.loadData(forKey: Self.duressPinSaltKey) else {
             return false
         }
-        let hash = hashPin(pin, salt: salt)
-        return hash == savedHash
+        return verifyAndMigrateIfNeeded(
+            pin: pin, savedHash: savedHash, salt: salt,
+            versionKey: Self.duressPinHashVersionKey,
+            hashKey: Self.duressPinHashKey,
+            saltKey: Self.duressPinSaltKey
+        )
     }
 
     func isDuressPinSameAsMain(_ pin: String) -> Bool {
@@ -141,8 +155,43 @@ final class SecurityViewModel {
               let salt = KeychainManager.shared.loadData(forKey: Self.pinSaltKey) else {
             return false
         }
-        let hash = hashPin(pin, salt: salt)
-        return hash == savedHash
+        return verifyAndMigrateIfNeeded(
+            pin: pin, savedHash: savedHash, salt: salt,
+            versionKey: Self.pinHashVersionKey,
+            hashKey: Self.pinHashKey,
+            saltKey: Self.pinSaltKey
+        )
+    }
+
+    /// Verifies PIN against saved hash. If hash is legacy (v1 SHA-256), transparently
+    /// re-hashes with PBKDF2 on success so next unlock uses the stronger algorithm.
+    private func verifyAndMigrateIfNeeded(
+        pin: String,
+        savedHash: Data,
+        salt: Data,
+        versionKey: String,
+        hashKey: String,
+        saltKey: String
+    ) -> Bool {
+        let versionData = KeychainManager.shared.loadData(forKey: versionKey)
+        let version = versionData.flatMap { $0.first }.map(Int.init) ?? 1
+
+        if version >= Self.currentHashVersion {
+            let hash = hashPinPBKDF2(pin, salt: salt)
+            return hash == savedHash
+        }
+
+        // Legacy v1: SHA-256(salt || pin)
+        let legacyHash = hashPinLegacy(pin, salt: salt)
+        guard legacyHash == savedHash else { return false }
+
+        // Migrate: re-hash with PBKDF2 and overwrite stored hash
+        let newSalt = randomSalt(bytes: 32)
+        let newHash = hashPinPBKDF2(pin, salt: newSalt)
+        _ = KeychainManager.shared.saveData(newHash, forKey: hashKey)
+        _ = KeychainManager.shared.saveData(newSalt, forKey: saltKey)
+        _ = KeychainManager.shared.saveData(Data([UInt8(Self.currentHashVersion)]), forKey: versionKey)
+        return true
     }
 
     var pinLength: Int? {
@@ -179,7 +228,31 @@ final class SecurityViewModel {
         }
     }
 
-    private func hashPin(_ pin: String, salt: Data) -> Data {
+    private func hashPinPBKDF2(_ pin: String, salt: Data) -> Data {
+        let pinData = pin.data(using: .utf8) ?? Data()
+        var derivedKey = Data(repeating: 0, count: 32)
+        derivedKey.withUnsafeMutableBytes { derivedPtr in
+            salt.withUnsafeBytes { saltPtr in
+                pinData.withUnsafeBytes { pinPtr in
+                    _ = CCKeyDerivationPBKDF(
+                        CCPBKDFAlgorithm(kCCPBKDF2),
+                        pinPtr.baseAddress?.assumingMemoryBound(to: Int8.self),
+                        pinData.count,
+                        saltPtr.baseAddress?.assumingMemoryBound(to: UInt8.self),
+                        salt.count,
+                        CCPseudoRandomAlgorithm(kCCPRFHmacAlgSHA256),
+                        Self.pbkdf2Iterations,
+                        derivedPtr.baseAddress?.assumingMemoryBound(to: UInt8.self),
+                        32
+                    )
+                }
+            }
+        }
+        return derivedKey
+    }
+
+    /// Legacy SHA-256 hash — only used for migrating existing stored PINs.
+    private func hashPinLegacy(_ pin: String, salt: Data) -> Data {
         var data = Data()
         data.append(salt)
         data.append(pin.data(using: .utf8) ?? Data())
@@ -187,10 +260,10 @@ final class SecurityViewModel {
         return Data(digest)
     }
 
-    private func randomSalt() -> Data {
-        var bytes = [UInt8](repeating: 0, count: 16)
-        _ = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
-        return Data(bytes)
+    private func randomSalt(bytes: Int = 32) -> Data {
+        var buf = [UInt8](repeating: 0, count: bytes)
+        _ = SecRandomCopyBytes(kSecRandomDefault, bytes, &buf)
+        return Data(buf)
     }
 
     private static func hasSavedPin() -> Bool {

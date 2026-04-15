@@ -41,6 +41,7 @@ struct UserProfileView: View {
     @State private var showingShareAlert = false
     @State private var shareAlertMessage = ""
     @State private var isSharingInProgress = false
+    @State private var showingSafetyNumbers = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -103,6 +104,12 @@ struct UserProfileView: View {
             Button(LocalizedStringKey("cancel"), role: .cancel) {}
         } message: {
             Text(LocalizedStringKey("reset_session_message"))
+        }
+        .sheet(isPresented: $showingSafetyNumbers) {
+            SafetyNumberView(
+                theirDeviceId: user.id,
+                theirDisplayName: user.resolvedDisplayName
+            )
         }
     }
 
@@ -249,6 +256,18 @@ struct UserProfileView: View {
                     .font(CTFont.regular(13))
                     .foregroundStyle(hasSession ? Color.CT.text : Color.CT.textDim)
             }
+            flatRowDivider()
+
+            Button {
+                showingSafetyNumbers = true
+            } label: {
+                profileRow(label: NSLocalizedString("safety_numbers", comment: "")) {
+                    Text(CTSymbol.forward)
+                        .font(CTFont.regular(13))
+                        .foregroundStyle(Color.CT.textDim)
+                }
+            }
+            .buttonStyle(.plain)
         }
     }
 

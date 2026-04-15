@@ -363,6 +363,9 @@ public struct Shared_Proto_Sentinel_V1_CheckSendPermissionRequest: Sendable {
   /// device the caller wants to send to
   public var targetDeviceID: String = String()
 
+  /// user-level aggregate rate-limit check (optional; skipped if empty)
+  public var senderUserID: String = String()
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -852,7 +855,7 @@ extension Shared_Proto_Sentinel_V1_GetTrustStatusResponse: SwiftProtobuf.Message
 
 extension Shared_Proto_Sentinel_V1_CheckSendPermissionRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".CheckSendPermissionRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}target_device_id\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}target_device_id\0\u{3}sender_user_id\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -861,6 +864,7 @@ extension Shared_Proto_Sentinel_V1_CheckSendPermissionRequest: SwiftProtobuf.Mes
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.targetDeviceID) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.senderUserID) }()
       default: break
       }
     }
@@ -870,11 +874,15 @@ extension Shared_Proto_Sentinel_V1_CheckSendPermissionRequest: SwiftProtobuf.Mes
     if !self.targetDeviceID.isEmpty {
       try visitor.visitSingularStringField(value: self.targetDeviceID, fieldNumber: 1)
     }
+    if !self.senderUserID.isEmpty {
+      try visitor.visitSingularStringField(value: self.senderUserID, fieldNumber: 2)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Shared_Proto_Sentinel_V1_CheckSendPermissionRequest, rhs: Shared_Proto_Sentinel_V1_CheckSendPermissionRequest) -> Bool {
     if lhs.targetDeviceID != rhs.targetDeviceID {return false}
+    if lhs.senderUserID != rhs.senderUserID {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

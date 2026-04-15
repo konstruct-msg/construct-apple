@@ -56,10 +56,13 @@ private struct ConstructServerWellKnown: Decodable {
     let ice: ICESection?
     let signedAt: String?
     let signature: String?
+    /// Ed25519 public key (base64) used to sign pre-key bundles and KT Signed Tree Heads.
+    let bundleSigningKey: String?
 
     enum CodingKeys: String, CodingKey {
         case version, ice, signature
         case signedAt = "signed_at"
+        case bundleSigningKey = "bundle_signing_key"
     }
 }
 
@@ -73,6 +76,8 @@ actor IceCertFetcher {
 
     // UserDefaults key for cached relay infos (JSON-encoded [RelayInfo])
     private static let cachedRelayInfosKey = "construct.ice_relay_infos"
+    /// UserDefaults key for cached server Ed25519 bundle-signing public key (raw Data, 32 bytes).
+    static let cachedBundleSigningKeyKey = "construct.bundle_signing_key"
 
     // MARK: - Bridge cert
 
@@ -135,6 +140,12 @@ actor IceCertFetcher {
             // Persist to UserDefaults
             if let encoded = try? JSONEncoder().encode(relays) {
                 UserDefaults.standard.set(encoded, forKey: Self.cachedRelayInfosKey)
+            }
+
+            // Cache bundle signing key for KT verification
+            if let keyB64 = parsed.bundleSigningKey,
+               let keyData = Data(base64Encoded: keyB64) {
+                UserDefaults.standard.set(keyData, forKey: Self.cachedBundleSigningKeyKey)
             }
 
             // Keep old relay-list key in sync for code that hasn't migrated yet

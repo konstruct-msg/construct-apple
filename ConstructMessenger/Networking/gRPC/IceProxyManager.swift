@@ -928,6 +928,20 @@ final class IceProxyManager: ObservableObject {
         await startOnDemandInternal(confirmDPI: false)
     }
 
+    /// Stops an ephemeral ICE proxy that was started as a pre-warm probe (confirmDPI=false).
+    /// Called by the happy-eyeballs race when the direct path wins, meaning DPI is not active
+    /// and the background ICE warm-up is no longer needed.
+    ///
+    /// Safe to call unconditionally: if DPI was already confirmed before the race, this is a
+    /// no-op — confirmed DPI sessions must not be interrupted.
+    func stopEphemeral() {
+        guard isRunning, !dpiDetectedThisSession else { return }
+        Log.info("🧊 Direct won happy-eyeballs race — stopping ephemeral ICE pre-warm", category: "ICE")
+        ice_proxy_stop()
+        resetAllProxyState()
+        // Deliberately do NOT call clearDPIDetection() — dpiDetectedThisSession is already false here.
+    }
+
     private func startOnDemandInternal(confirmDPI: Bool = true) async {
         // If ICE proxy is running but on cooldown, DPI blocking has been confirmed on the direct
         // path — clear the cooldown so `iceProxyPort()` returns a valid port and the caller

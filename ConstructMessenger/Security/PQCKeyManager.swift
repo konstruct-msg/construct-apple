@@ -224,14 +224,6 @@ final class PQCKeyManager {
         try CryptoManager.shared.signBundleData(kyberSignMessage(publicKey: publicKey))
     }
 
-    /// Deprecated overload retained for the registration path that already holds a core reference.
-    /// Prefer `signKyberKey(publicKey:)` which acquires the coreLock automatically.
-    static func signKyberKey(publicKey: Data, core: OrchestratorCore) throws -> Data {
-        let sigBase64 = try core.signBundleData(bundleDataJson: kyberSignMessage(publicKey: publicKey))
-        guard let sigData = Data(base64Encoded: sigBase64) else { throw PQCError.signatureFailed }
-        return sigData
-    }
-
     // MARK: - Kyber OTPK Management
 
     private static let otpkNextKeyIdKey = "construct.kyber.otpk.nextKeyId"
@@ -289,29 +281,6 @@ final class PQCKeyManager {
         return kyberCount
     }
 
-
-    /// Perform sender-side PQXDH: encapsulate to recipient's Kyber SPK, then
-    /// strengthen the Double Ratchet session with the KEM shared secret.
-    ///
-    /// - Parameters:
-    ///   - kyberSPKPublic: Recipient's Kyber SPK public key from their `PreKeyBundle`
-    ///   - contactId: Session contact ID (used to apply KEM contribution to the session)
-    ///   - core: The active `ClassicCryptoCore` instance
-    /// - Returns: KEM ciphertext to include in `PreKeySignalMessage.kemCiphertext`
-    @available(*, deprecated, message: "Use encapsulateAndDefer + applyDeferredPQContribution instead")
-    func encapsulateAndStrengthen(
-        kyberSPKPublic: Data,
-        contactId: String,
-        core: OrchestratorCore
-    ) throws -> Data {
-        let encapsulation = try mlkem768Encapsulate(publicKey: [UInt8](kyberSPKPublic))
-        try core.applyPqContribution(
-            contactId: contactId,
-            kemSharedSecret: encapsulation.sharedSecret
-        )
-        Log.info("🔐 PQC: PQXDH encapsulated for \(contactId.prefix(8))..., ct=\(encapsulation.ciphertext.count)B", category: "PQC")
-        return Data(encapsulation.ciphertext)
-    }
 
     /// Encapsulate to recipient's Kyber SPK and store the shared secret for later.
     /// The actual `applyPqContribution` is deferred until after msg0 is encrypted,

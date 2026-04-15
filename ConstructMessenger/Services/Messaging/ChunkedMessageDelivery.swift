@@ -24,6 +24,7 @@ final class ChunkedMessageSender {
         conversationId: String,
         timestamp: UInt64,
         replyToMessageId: String? = nil,
+        recipientIdentityKey: Data? = nil,
         onWirePayloadEncoded: ((String, Data) -> Void)? = nil
     ) async throws -> [SendMessageResponse] {
         var responses: [SendMessageResponse] = []
@@ -41,6 +42,20 @@ final class ChunkedMessageSender {
             )
             onWirePayloadEncoded?(chunkMessageId, encryptedPayload)
 
+            // Build sealed inner bytes if STEALTH is active and recipient identity key is known
+            var sealedInner: Data? = nil
+            if let recipientIK = recipientIdentityKey {
+                do {
+                    sealedInner = try await StealthSenderService.buildSealedInner(
+                        recipientUserId: recipientId,
+                        recipientIdentityKey: recipientIK,
+                        encryptedPayload: encryptedPayload
+                    )
+                } catch {
+                    Log.error("⚠️ STEALTH: seal failed, sending without stealth: \(error)", category: "ChunkedDelivery")
+                }
+            }
+
             let response = try await MessagingServiceClient.shared.sendMessage(
                 messageId: chunkMessageId,
                 recipientId: recipientId,
@@ -48,7 +63,8 @@ final class ChunkedMessageSender {
                 conversationId: conversationId,
                 encryptedPayload: encryptedPayload,
                 timestamp: timestamp,
-                replyToMessageId: index == 0 ? replyToMessageId : nil
+                replyToMessageId: index == 0 ? replyToMessageId : nil,
+                sealedInnerBytes: sealedInner
             )
             responses.append(response)
 

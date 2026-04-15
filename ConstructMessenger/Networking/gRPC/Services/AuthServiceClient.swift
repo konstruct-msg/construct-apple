@@ -413,4 +413,23 @@ final class AuthServiceClient: Sendable {
             }
         }
     }
+
+    func getSenderCertificate() async throws -> Shared_Proto_Services_V1_GetSenderCertificateResponse {
+        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.getSenderCertificate) { grpcClient in
+            let authClient = Shared_Proto_Services_V1_AuthService.Client(wrapping: grpcClient)
+            let request = Shared_Proto_Services_V1_GetSenderCertificateRequest()
+            return try await authClient.getSenderCertificate(request: .init(message: request))
+        }
+    }
+
+    // MARK: - Privacy Pass — issue blind tokens
+
+    func issueTokens(blindedPoints: [Data]) async throws -> Shared_Proto_Services_V1_IssueTokensResponse {
+        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.issueTokens) { grpcClient in
+            let authClient = Shared_Proto_Services_V1_AuthService.Client(wrapping: grpcClient)
+            var request = Shared_Proto_Services_V1_IssueTokensRequest()
+            request.blindedPoints = blindedPoints
+            return try await authClient.issueTokens(request: .init(message: request))
+        }
+    }
 }

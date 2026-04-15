@@ -23,6 +23,10 @@ struct SecurityView: View {
     @State private var showingDiscoverableConfirm = false
     @State private var lockdown = LockdownManager.shared
 
+    @AppStorage("stealth_mode_enabled") private var stealthEnabled = false
+    @AppStorage("stealth_per_message") private var stealthPerMessage = false
+    private var tokenWallet = TokenWalletService.shared
+
     var body: some View {
         @Bindable var securityViewModel = securityViewModel
         VStack(spacing: 0) {
@@ -226,6 +230,116 @@ struct SecurityView: View {
 
                 CTSep()
 
+                // MARK: - Stealth
+                CTSettingsSectionHeader(title: NSLocalizedString("stealth_section", comment: ""))
+
+                HStack(spacing: 10) {
+                    CTRowIcon(stealthEnabled ? "[~]" : CTSymbol.lock, color: stealthEnabled ? Color.CT.accent : Color.CT.textDim)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(LocalizedStringKey("stealth_toggle_title"))
+                            .font(CTFont.regular(13))
+                            .foregroundStyle(Color.CT.text)
+                        if stealthEnabled {
+                            Text(LocalizedStringKey("stealth_toggle_active_hint"))
+                                .font(CTFont.regular(11))
+                                .foregroundStyle(Color.CT.accent.opacity(0.8))
+                        }
+                    }
+                    Spacer()
+                    Toggle("", isOn: $stealthEnabled)
+                        .labelsHidden()
+                        .tint(Color.CT.accent)
+                }
+                .padding(.horizontal, 12).padding(.vertical, 10)
+
+                Text(LocalizedStringKey("stealth_hint"))
+                    .font(CTFont.regular(11))
+                    .foregroundStyle(Color.CT.textDim)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 12).padding(.top, 2).padding(.bottom, 10)
+
+                if stealthEnabled {
+                    Rectangle()
+                        .fill(Color.CT.noise.opacity(0.4))
+                        .frame(height: 1)
+                        .padding(.horizontal, 12)
+
+                    // Per-stream (default) vs per-message
+                    Button {
+                        stealthPerMessage = false
+                    } label: {
+                        HStack(spacing: 10) {
+                            CTRowIcon(stealthPerMessage ? "[ ]" : "[•]", color: stealthPerMessage ? Color.CT.textDim : Color.CT.accent)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(LocalizedStringKey("stealth_scope_stream"))
+                                    .font(CTFont.regular(13))
+                                    .foregroundStyle(Color.CT.text)
+                                Text(LocalizedStringKey("stealth_scope_stream_hint"))
+                                    .font(CTFont.regular(11))
+                                    .foregroundStyle(Color.CT.textDim)
+                            }
+                            Spacer()
+                        }
+                        .padding(.horizontal, 12).padding(.vertical, 10)
+                    }
+                    .buttonStyle(.plain)
+
+                    Rectangle()
+                        .fill(Color.CT.noise.opacity(0.4))
+                        .frame(height: 1)
+                        .padding(.horizontal, 12)
+
+                    Button {
+                        stealthPerMessage = true
+                    } label: {
+                        HStack(spacing: 10) {
+                            CTRowIcon(stealthPerMessage ? "[•]" : "[ ]", color: stealthPerMessage ? Color.CT.accent : Color.CT.textDim)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(LocalizedStringKey("stealth_scope_message"))
+                                    .font(CTFont.regular(13))
+                                    .foregroundStyle(Color.CT.text)
+                                Text(LocalizedStringKey("stealth_scope_message_hint"))
+                                    .font(CTFont.regular(11))
+                                    .foregroundStyle(Color.CT.textDim)
+                            }
+                            Spacer()
+                        }
+                        .padding(.horizontal, 12).padding(.vertical, 10)
+                    }
+                    .buttonStyle(.plain)
+
+                    Rectangle()
+                        .fill(Color.CT.noise.opacity(0.4))
+                        .frame(height: 1)
+                        .padding(.horizontal, 12)
+
+                    // Token wallet balance
+                    HStack(spacing: 10) {
+                        CTRowIcon("[T]", color: tokenWallet.balance > 0 ? Color.CT.accent : Color.CT.textDim)
+                        Text(LocalizedStringKey("stealth_token_wallet"))
+                            .font(CTFont.regular(13))
+                            .foregroundStyle(Color.CT.textDim)
+                        Spacer()
+                        Text(String(format: NSLocalizedString("stealth_token_count", comment: ""), tokenWallet.balance))
+                            .font(CTFont.regular(12))
+                            .foregroundStyle(tokenWallet.balance > 0 ? Color.CT.accent : Color.CT.textDim.opacity(0.6))
+                    }
+                    .padding(.horizontal, 12).padding(.vertical, 10)
+
+                    Text(LocalizedStringKey("stealth_token_wallet_hint"))
+                        .font(CTFont.regular(11))
+                        .foregroundStyle(Color.CT.textDim.opacity(0.6))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 12).padding(.top, 2).padding(.bottom, 10)
+                }
+
+                CTSep()
+
+                // MARK: - Key Transparency
+                KTStatusSection()
+
+                CTSep()
+
                 // MARK: - Discovery
                 CTSettingsSectionHeader(title: NSLocalizedString("discovery", comment: ""))
 
@@ -328,6 +442,58 @@ struct SecurityView: View {
         let req = Chat.fetchRequest()
         let chats = (try? viewContext.fetch(req)) ?? []
         return Set(chats.compactMap { $0.otherUser?.id })
+    }
+}
+
+// MARK: - KT Status Section
+
+/// Displays the current Key Transparency aggregate status in SecurityView.
+/// Reads from `KTStore` — updated automatically each time a bundle is fetched.
+private struct KTStatusSection: View {
+    @State private var verifiedCount = 0
+    @State private var failureCount = 0
+
+    private var statusText: String {
+        if failureCount > 0 { return NSLocalizedString("kt_warning", comment: "") }
+        if verifiedCount > 0 { return NSLocalizedString("kt_verified", comment: "") }
+        return NSLocalizedString("kt_no_data", comment: "")
+    }
+
+    private var statusColor: Color {
+        if failureCount > 0 { return Color.CT.danger }
+        if verifiedCount > 0 { return Color.CT.accent }
+        return Color.CT.textDim
+    }
+
+    var body: some View {
+        CTSettingsSectionHeader(title: NSLocalizedString("kt_section", comment: ""))
+
+        HStack(spacing: 10) {
+            CTRowIcon("[#]", color: statusColor)
+            Text(LocalizedStringKey("kt_status"))
+                .font(CTFont.regular(13))
+                .foregroundStyle(Color.CT.text)
+            Spacer()
+            Text(statusText)
+                .font(CTFont.regular(11))
+                .foregroundStyle(statusColor)
+                .padding(.trailing, 4)
+        }
+        .padding(.horizontal, 16).padding(.vertical, 10)
+        .onAppear {
+            verifiedCount = KTStore.shared.verifiedCount
+            failureCount  = KTStore.shared.failureCount
+        }
+
+        Text(failureCount > 0
+             ? LocalizedStringKey("kt_failure_hint")
+             : LocalizedStringKey("kt_hint"))
+            .font(CTFont.regular(11))
+            .foregroundStyle(failureCount > 0
+                             ? Color.CT.danger
+                             : Color.CT.textDim.opacity(0.6))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 12).padding(.top, 2).padding(.bottom, 10)
     }
 }
 

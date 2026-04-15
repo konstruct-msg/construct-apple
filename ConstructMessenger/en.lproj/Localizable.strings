@@ -673,3 +673,36 @@
 "contact_request_sheet_title" = "contact request";
 "contact_request_from_title" = "wants to connect";
 "contact_request_empty_inbox" = "no pending requests";
+
+// Safety Numbers
+"safety_numbers" = "safety numbers";
+"safety_numbers_verify_title" = "verify identity";
+"safety_numbers_instruction" = "Compare these numbers with %@ verbally or in person. If the numbers match, your connection is secure and has not been intercepted.";
+"safety_numbers_copy" = "copy to clipboard";
+"safety_numbers_copied" = "copied";
+"safety_numbers_mismatch_header" = "if numbers don't match";
+"safety_numbers_mismatch_body" = "Stop communicating and verify your connection. A mismatch may indicate that someone is intercepting your messages.";
+"safety_numbers_unavailable" = "unavailable — identity not initialized";
+
+// Stealth mode
+"stealth_section" = "stealth";
+"stealth_toggle_title" = "stealth mode";
+"stealth_toggle_active_hint" = "active — sender identity concealed from the construct";
+"stealth_hint" = "sender identity is not disclosed to the construct. messages are routed through anonymous tokens — the server cannot link outgoing traffic to your identity.";
+"stealth_scope_stream" = "per stream (recommended)";
+"stealth_scope_stream_hint" = "one token per active stream per day";
+"stealth_scope_message" = "per message";
+"stealth_scope_message_hint" = "one token per message — maximum unlinkability";
+"stealth_token_wallet" = "token wallet";
+"stealth_token_wallet_pending" = "[not yet active]";
+"stealth_token_count" = "%d tokens";
+"stealth_token_wallet_hint" = "tokens are minted in the background while charging. requires privacy pass support on the construct.";
+
+// Key Transparency
+"kt_section" = "key transparency";
+"kt_status" = "merkle log";
+"kt_verified" = "[✓] verified";
+"kt_warning" = "[!] warning";
+"kt_no_data" = "[–] no data";
+"kt_hint" = "every identity key is permanently recorded in an append-only merkle log. tampering is cryptographically detectable.";
+"kt_failure_hint" = "key transparency verification failed — possible tampering detected.";

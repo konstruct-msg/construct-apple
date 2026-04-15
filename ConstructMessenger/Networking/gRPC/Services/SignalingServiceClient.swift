@@ -164,13 +164,13 @@ final class SignalStream: @unchecked Sendable {
     let accepted: AsyncStream<Void>
     let incoming: AsyncStream<Shared_Proto_Signaling_V1_SignalResponse>
 
-    private let grpcClient: GRPCClient<HTTP2ClientTransport.Posix>
+    private let grpcClient: GRPCClient<HTTP2ClientTransport.TransportServices>
     private let connectTask: Task<Void, Error>
     private let streamTask: Task<Void, Error>
     private let outboundContinuation: AsyncStream<Shared_Proto_Signaling_V1_SignalRequest>.Continuation
 
     init(
-        grpcClient: GRPCClient<HTTP2ClientTransport.Posix>,
+        grpcClient: GRPCClient<HTTP2ClientTransport.TransportServices>,
         connectTask: Task<Void, Error>,
         streamTask: Task<Void, Error>,
         outboundContinuation: AsyncStream<Shared_Proto_Signaling_V1_SignalRequest>.Continuation,

@@ -170,7 +170,7 @@ final class GRPCChannelManager: Sendable {
     //   • the underlying transport throws a fatal error
 
     private struct PersistentConn: @unchecked Sendable {
-        let client: GRPCClient<HTTP2ClientTransport.Posix>
+        let client: GRPCClient<HTTP2ClientTransport.TransportServices>
         let task:   Task<Void, Never>
         let key:    String   // routing identity — "ice:<port>" or "direct:<host>:<port>"
     }
@@ -193,8 +193,17 @@ final class GRPCChannelManager: Sendable {
     /// Exposes the current routing key for debug metrics and logging.
     var currentRoutingKey: String { routingKey() }
 
+    /// True when a valid persistent connection exists for the current routing key.
+    /// Used by performRPC to decide whether to use the hot path or a cold race.
+    private var hasPersistentConnection: Bool {
+        _connLock.withLock {
+            guard let conn = _conn else { return false }
+            return conn.key == routingKey() && !conn.task.isCancelled
+        }
+    }
+
     /// Returns a reusable persistent client, creating/replacing it when routing changes.
-    private func acquirePersistentClient() throws -> GRPCClient<HTTP2ClientTransport.Posix> {
+    private func acquirePersistentClient() throws -> GRPCClient<HTTP2ClientTransport.TransportServices> {
         _connLock.lock()
         defer { _connLock.unlock() }
 
@@ -261,17 +270,17 @@ final class GRPCChannelManager: Sendable {
     /// Long-lived streaming RPCs (MessageStream) should use this instead of makeClient()
     /// so the HTTP/2 connection is NOT torn down on every stream reconnect.
     /// The stream itself can close/reopen freely; the channel stays alive.
-    func acquireChannel() throws -> GRPCClient<HTTP2ClientTransport.Posix> {
+    func acquireChannel() throws -> GRPCClient<HTTP2ClientTransport.TransportServices> {
         try acquirePersistentClient()
     }
 
     /// Creates a new `GRPCClient` with TLS transport.
     /// Caller is responsible for running the client via `runConnections()` in a Task.
-    func makeClient() throws -> GRPCClient<HTTP2ClientTransport.Posix> {
+    func makeClient() throws -> GRPCClient<HTTP2ClientTransport.TransportServices> {
         // ICE mode: connect to local proxy with plaintext, proxy handles obfs4 to relay
         if let icePort = iceProxyPort() {
             Log.info("🧊 gRPC via ICE proxy → 127.0.0.1:\(icePort) (obfs4 → relay)", category: "gRPC")
-            let transport = try HTTP2ClientTransport.Posix(
+            let transport = try HTTP2ClientTransport.TransportServices(
                 target: .ipv4(address: "127.0.0.1", port: Int(icePort)),
                 transportSecurity: .plaintext,
                 config: .defaults {
@@ -294,7 +303,7 @@ final class GRPCChannelManager: Sendable {
         let port = currentPort
         Log.debug("🔌 gRPC creating channel → \(host):\(port) TLS=true", category: "gRPC")
 
-        let transport = try HTTP2ClientTransport.Posix(
+        let transport = try HTTP2ClientTransport.TransportServices(
             target: .dns(host: host, port: port),
             transportSecurity: .tls,
             config: .defaults {
@@ -328,10 +337,10 @@ final class GRPCChannelManager: Sendable {
 
     /// Creates a one-shot gRPC client targeting the Construct server directly over TLS.
     /// Used for the "direct" leg of a happy-eyeballs 3-way race.
-    func makeDirectClient() throws -> GRPCClient<HTTP2ClientTransport.Posix> {
+    func makeDirectClient() throws -> GRPCClient<HTTP2ClientTransport.TransportServices> {
         let host = currentHost
         let port = currentPort
-        let transport = try HTTP2ClientTransport.Posix(
+        let transport = try HTTP2ClientTransport.TransportServices(
             target: .dns(host: host, port: port),
             transportSecurity: .tls,
             config: .defaults {
@@ -350,8 +359,8 @@ final class GRPCChannelManager: Sendable {
 
     /// Creates a one-shot gRPC client targeting a local ICE proxy port over plaintext.
     /// Used for the ICE legs of a happy-eyeballs 3-way race.
-    func makeICEClient(port: UInt16) throws -> GRPCClient<HTTP2ClientTransport.Posix> {
-        let transport = try HTTP2ClientTransport.Posix(
+    func makeICEClient(port: UInt16) throws -> GRPCClient<HTTP2ClientTransport.TransportServices> {
+        let transport = try HTTP2ClientTransport.TransportServices(
             target: .ipv4(address: "127.0.0.1", port: Int(port)),
             transportSecurity: .plaintext,
             config: .defaults {
@@ -373,15 +382,26 @@ final class GRPCChannelManager: Sendable {
     ///   2. ICE-TLS proxy (primary relay, AMS)                  [250 ms staggered start]
     ///   3. ICE-plain proxy (secondary relay, e.g. MSK)         [450 ms staggered start]
     ///
-    /// The first leg to succeed wins; the others are cancelled.  The winning routing
-    /// key is stored so the persistent connection is updated on the next `performRPC` call.
+    /// The first leg to succeed wins; the others are cancelled.  After the race, the
+    /// persistent connection is committed to the winning path so subsequent RPCs reuse it
+    /// without repeating the race.
     ///
     /// Requires both proxy ports to already be running (or starting).
     /// Use `IceProxyManager.startBothRelaysForHappyEyeballs()` first.
     func happyEyeballsRace<Result: Sendable>(
-        _ operation: @Sendable @escaping (GRPCClient<HTTP2ClientTransport.Posix>) async throws -> Result
+        _ operation: @Sendable @escaping (GRPCClient<HTTP2ClientTransport.TransportServices>) async throws -> Result
     ) async throws -> Result {
-        return try await withThrowingTaskGroup(of: Result.self) { group in
+        let iceTLSPort  = ice_proxy_port_tls()
+        let icePlainPort = ice_proxy_port_plain()
+        let raceLegs = 1 + (iceTLSPort  > 0 ? 1 : 0)
+                         + (icePlainPort > 0 ? 1 : 0)
+        Log.info("🏁 Happy-eyeballs race: \(raceLegs) leg(s) (direct + ICE-TLS:\(iceTLSPort) + ICE-plain:\(icePlainPort))", category: "gRPC")
+        PerformanceMetrics.shared.start(.grpcConnectStart, label: "race:\(raceLegs)-legs")
+
+        // nonisolated(unsafe): written exactly once (first-write-wins), always before any read.
+        nonisolated(unsafe) var winnerLabel: String = "direct"
+
+        let result: Result = try await withThrowingTaskGroup(of: Result.self) { group in
             // Leg 1: direct TLS
             let directClient = try makeDirectClient()
             group.addTask {
@@ -390,11 +410,12 @@ final class GRPCChannelManager: Sendable {
                     directClient.beginGracefulShutdown()
                     connTask.cancel()
                 }
-                return try await operation(directClient)
+                let r = try await operation(directClient)
+                winnerLabel = "direct"
+                return r
             }
 
             // Leg 2: ICE-TLS (staggered by happyEyeballsICEStaggerMs)
-            let iceTLSPort = ice_proxy_port_tls()
             if iceTLSPort > 0 {
                 let iceTLSClient = try makeICEClient(port: iceTLSPort)
                 group.addTask {
@@ -404,12 +425,13 @@ final class GRPCChannelManager: Sendable {
                         iceTLSClient.beginGracefulShutdown()
                         connTask.cancel()
                     }
-                    return try await operation(iceTLSClient)
+                    let r = try await operation(iceTLSClient)
+                    winnerLabel = "ice-tls:\(iceTLSPort)"
+                    return r
                 }
             }
 
             // Leg 3: ICE-plain (staggered further)
-            let icePlainPort = ice_proxy_port_plain()
             if icePlainPort > 0 {
                 let icePlainClient = try makeICEClient(port: icePlainPort)
                 group.addTask {
@@ -420,16 +442,36 @@ final class GRPCChannelManager: Sendable {
                         icePlainClient.beginGracefulShutdown()
                         connTask.cancel()
                     }
-                    return try await operation(icePlainClient)
+                    let r = try await operation(icePlainClient)
+                    winnerLabel = "ice-plain:\(icePlainPort)"
+                    return r
                 }
             }
 
-            guard let result = try await group.next() else {
+            guard let first = try await group.next() else {
                 throw RPCError(code: .unavailable, message: "All transport legs failed")
             }
             group.cancelAll()
-            return result
+            return first
         }
+
+        PerformanceMetrics.shared.end(.grpcConnectStart, endEvent: .grpcConnectEnd, label: "race:\(raceLegs)-legs")
+        Log.info("🏁 Happy-eyeballs race winner: \(winnerLabel)", category: "gRPC")
+
+        // Commit the winning routing to the persistent connection:
+        // - If ICE won: iceProxyPort() is already non-nil → acquirePersistentClient() will
+        //   route through ICE on the next call. No action needed.
+        // - If direct won: ICE proxy may still be running (auto-mode warm-up). Invalidate
+        //   the persistent connection so the next acquirePersistentClient() re-evaluates routing.
+        //   (iceProxyPort() routing is based on ICE mode + cooldown; direct win means DPI is
+        //   not active so the ICE auto-start task can be discarded.)
+        if winnerLabel == "direct" {
+            // Clear any ICE auto-warm that started in the background — direct is faster.
+            await IceProxyManager.shared.stopEphemeral()
+            invalidatePersistentClient()
+        }
+
+        return result
     }
 
     /// Execute a gRPC operation with automatic client lifecycle management.
@@ -439,7 +481,7 @@ final class GRPCChannelManager: Sendable {
         timeout: TimeInterval? = nil,
         allowAuthRetry: Bool = true,
         fastICEFallback: Bool = false,
-        _ operation: @Sendable @escaping (GRPCClient<HTTP2ClientTransport.Posix>) async throws -> Result
+        _ operation: @Sendable @escaping (GRPCClient<HTTP2ClientTransport.TransportServices>) async throws -> Result
     ) async throws -> Result {
         func shouldRecordIceFailure(_ error: Error) -> Bool {
             if error is CancellationError { return false }
@@ -552,6 +594,31 @@ final class GRPCChannelManager: Sendable {
             }
         }
 
+        // True happy-eyeballs race: fire all available paths simultaneously on cold start.
+        // Conditions:
+        //   1. fastICEFallback is enabled (caller requests ICE fallback support)
+        //   2. No persistent connection exists yet (cold start or after reconnect)
+        //   3. ICE proxy is already warm (port > 0) — at least one leg has started
+        //   4. Auto mode — in .on mode ICE is always preferred; no need to race direct
+        // The first path to return a result wins; all others are cancelled.
+        // On direct win: the ephemeral ICE pre-warm is stopped (no confirmed DPI).
+        // On ICE win: persistent routing switches to ICE automatically via iceProxyPort().
+        if fastICEFallback, !hasPersistentConnection {
+            let iceTLSPort  = ice_proxy_port_tls()
+            let icePlainPort = ice_proxy_port_plain()
+            let rawMode = UserDefaults.standard.string(forKey: IceMode.defaultsKey) ?? IceMode.platformDefault.rawValue
+            let iceMode = IceMode(rawValue: rawMode) ?? .auto
+            if iceMode == .auto, iceTLSPort > 0 || icePlainPort > 0 {
+                do {
+                    Log.info("🏁 Cold start — entering happy-eyeballs race (ICE-TLS:\(iceTLSPort) ICE-plain:\(icePlainPort))", category: "gRPC")
+                    return try await happyEyeballsRace(operation)
+                } catch {
+                    Log.info("🏁 Happy-eyeballs race failed — falling through to sequential retry: \(error)", category: "gRPC")
+                    lastError = error
+                }
+            }
+        }
+
         for attempt in 0..<3 {
             let usingICE = iceProxyPort() != nil
             let iceRelayVerified = usingICE ? await IceProxyManager.shared.isCurrentRelayVerified : true
@@ -583,7 +650,7 @@ final class GRPCChannelManager: Sendable {
             // Fall back to a per-call client only when persistence isn't available.
             // ------------------------------------------------------------------
             let usingPersistent: Bool
-            let client: GRPCClient<HTTP2ClientTransport.Posix>
+            let client: GRPCClient<HTTP2ClientTransport.TransportServices>
             if let pc = try? acquirePersistentClient() {
                 client = pc
                 usingPersistent = true

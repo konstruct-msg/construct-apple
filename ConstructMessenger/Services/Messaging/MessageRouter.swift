@@ -134,7 +134,40 @@ class MessageRouter {
         pendingMessages: inout [String: [ChatMessage]]
     ) {
         guard let currentUserId = SessionManager.shared.currentUserId else { return }
-        
+
+        // STEALTH: resolve sender from sealed inner before any routing.
+        // `from` is empty for ConstructSEALED messages — decrypt to recover sender ID.
+        var message = message
+        if message.from.isEmpty && !message.sealedInnerData.isEmpty {
+            if let senderId = StealthSenderService.shared.resolveSender(sealedInnerBytes: message.sealedInnerData) {
+                message = ChatMessage(
+                    id: message.id,
+                    from: senderId,
+                    to: message.to.isEmpty ? currentUserId : message.to,
+                    messageType: message.messageType,
+                    ephemeralPublicKey: message.ephemeralPublicKey,
+                    messageNumber: message.messageNumber,
+                    content: message.content,
+                    suiteId: message.suiteId,
+                    timestamp: message.timestamp,
+                    oneTimePreKeyId: message.oneTimePreKeyId,
+                    editsMessageId: message.editsMessageId,
+                    kemCiphertext: message.kemCiphertext,
+                    contentType: message.contentType,
+                    kyberOtpkId: message.kyberOtpkId,
+                    senderDeviceId: message.senderDeviceId,
+                    conversationId: message.conversationId,
+                    replyToMessageId: message.replyToMessageId,
+                    rawPayload: message.rawPayload
+                    // sealedInnerData intentionally omitted — sender resolved
+                )
+                Log.debug("🕶️ STEALTH: resolved sender → \(senderId.prefix(8))…", category: "MessageRouter")
+            } else {
+                Log.error("❌ STEALTH: could not resolve sender for message \(message.id.prefix(8))… — dropping", category: "MessageRouter")
+                return
+            }
+        }
+
         let otherUserId = message.from == currentUserId ? message.to : message.from
         
         #if DEBUG

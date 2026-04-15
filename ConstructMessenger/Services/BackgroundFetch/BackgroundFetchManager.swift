@@ -559,14 +559,14 @@ class BackgroundFetchManager: NSObject {
         Log.info("Cleaning up fetch resources", category: "BackgroundFetch")
     }
     
-    /// Perform maintenance operations (cache cleanup, etc.)
+    /// Perform maintenance operations (cache cleanup, token minting, etc.)
     private func performMaintenance(completion: @escaping (Bool) -> Void) {
-        // TODO: Implement maintenance operations
-        // - Clean old messages from Core Data
-        // - Clear image cache
-        // - Optimize database
-        
-        DispatchQueue.global().asyncAfter(deadline: .now() + 1) {
+        DispatchQueue.global().async {
+            Task { @MainActor in
+                // Replenish blind tokens during maintenance window (up to 15 per cycle).
+                // BlindTokenService enforces 1-hour cooldown to respect server rate limit.
+                await BlindTokenService.shared.replenish(count: 15)
+            }
             completion(true)
         }
     }
