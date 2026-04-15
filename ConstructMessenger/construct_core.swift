@@ -3805,12 +3805,13 @@ public enum CfeAction: Equatable, Hashable {
     case checkAckInDb(messageId: String
     )
     /**
-     * Platform should encrypt and send a heartbeat to this contact.
+     * Encrypt and send a heartbeat to `contact_id` using the current DR session.
+     * If no session exists, treat as a desync signal and trigger heal.
      */
     case sendHeartbeat(contactId: String
     )
     /**
-     * Platform should notify all linked devices of session reset with this contact.
+     * Broadcast to all linked devices that the session with `contact_id` was reset.
      */
     case notifyLinkedDevicesOfSessionReset(contactId: String
     )
@@ -5050,6 +5051,14 @@ public func computePowWithProgress(challenge: String, difficulty: UInt32, progre
     )
 })
 }
+public func computeSafetyNumber(myDeviceId: String, theirDeviceId: String) -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+    uniffi_construct_core_fn_func_compute_safety_number(
+        FfiConverterString.lower(myDeviceId),
+        FfiConverterString.lower(theirDeviceId),$0
+    )
+})
+}
 public func createCryptoCore()throws  -> ClassicCryptoCore  {
     return try  FfiConverterTypeClassicCryptoCore_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_func_create_crypto_core($0
@@ -5193,6 +5202,48 @@ public func mnemonicToSeed(mnemonic: String)throws  -> [UInt8]  {
     )
 })
 }
+/**
+ * Blind a 32-byte nonce for OPRF token issuance.
+ * Returns packed 64 bytes: blinded_point[0..32] || blind_factor[32..64].
+ * blinded_point is sent to server; blind_factor is kept secret until finalize().
+ */
+public func ppBlindToken(nonce: [UInt8])throws  -> [UInt8]  {
+    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_func_pp_blind_token(
+        FfiConverterSequenceUInt8.lower(nonce),$0
+    )
+})
+}
+/**
+ * Finalize a blind token after server evaluation.
+ * evaluated_bytes  — 32-byte Ristretto point returned by server (Z = k * blinded)
+ * blind_factor     — the second 32 bytes from pp_blind_token output
+ * nonce            — original 32-byte nonce passed to pp_blind_token
+ * Returns 32-byte token to store in the wallet.
+ */
+public func ppFinalizeToken(evaluatedBytes: [UInt8], blindFactorBytes: [UInt8], nonce: [UInt8])throws  -> [UInt8]  {
+    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_func_pp_finalize_token(
+        FfiConverterSequenceUInt8.lower(evaluatedBytes),
+        FfiConverterSequenceUInt8.lower(blindFactorBytes),
+        FfiConverterSequenceUInt8.lower(nonce),$0
+    )
+})
+}
+/**
+ * Verify the evaluated point is a valid Ristretto255 curve point.
+ * server_pubkey_bytes is reserved for future DLEQ batch proof verification.
+ * Returns false if evaluated_bytes cannot be decompressed.
+ */
+public func ppVerifyClient(evaluatedBytes: [UInt8], nonce: [UInt8], serverPubkeyBytes: [UInt8]) -> Bool  {
+    return try!  FfiConverterBool.lift(try! rustCall() {
+    uniffi_construct_core_fn_func_pp_verify_client(
+        FfiConverterSequenceUInt8.lower(evaluatedBytes),
+        FfiConverterSequenceUInt8.lower(nonce),
+        FfiConverterSequenceUInt8.lower(serverPubkeyBytes),$0
+    )
+})
+}
 public func randomSendDelayMs(maxDelayMs: UInt64) -> UInt64  {
     return try!  FfiConverterUInt64.lift(try! rustCall() {
     uniffi_construct_core_fn_func_random_send_delay_ms(
@@ -5297,6 +5348,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_func_compute_pow_with_progress() != 63236) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_func_compute_safety_number() != 13109) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_func_create_crypto_core() != 59945) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -5349,6 +5403,15 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_mnemonic_to_seed() != 53142) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_pp_blind_token() != 34290) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_pp_finalize_token() != 38839) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_pp_verify_client() != 14654) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_random_send_delay_ms() != 9943) {
