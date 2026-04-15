@@ -99,7 +99,7 @@ final class BlindTokenService {
             throw BlindTokenError.responseMismatch(expected: count, got: response.evaluatedPoints.count)
         }
 
-        let serverPubkey = response.hasServerPubkey ? Array(response.serverPubkey) : [UInt8](repeating: 0, count: 32)
+        let serverPubkey = response.serverPubkey.isEmpty ? [UInt8](repeating: 0, count: 32) : Array(response.serverPubkey)
 
         // 3. Finalize each evaluated point.
         var tokens: [BlindToken] = []

@@ -70,10 +70,14 @@ struct DuressPinSetupView: View {
         }
     }
 
+    // Duress PIN must be exactly the same length as the main PIN so that
+    // PinLockView (which stops input at pinLength) can accept it.
+    private var pinLength: Int { securityViewModel.pinLength ?? 6 }
+
     private var canProceed: Bool {
         switch step {
-        case .enter:   return newPin.count >= 4
-        case .confirm: return confirmPin.count >= 4
+        case .enter:   return newPin.count == pinLength
+        case .confirm: return confirmPin.count == pinLength
         }
     }
 
@@ -92,7 +96,9 @@ struct DuressPinSetupView: View {
                     .foregroundColor(Color.CT.textDim)
                     .multilineTextAlignment(.center)
 
-                PinDotsField(length: 6, pin: $newPin, shake: $shake)
+                PinDotsField(length: pinLength, pin: $newPin, shake: $shake) { _ in
+                    handlePrimary()
+                }
             }
 
         case .confirm:
