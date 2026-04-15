@@ -900,9 +900,10 @@ public struct Shared_Proto_Services_V1_PendingMessage: Sendable {
   /// For regular E2EE messages this will be CONTENT_TYPE_E2EE_SIGNAL (= 11).
   public var contentType: Shared_Proto_Core_V1_ContentType = .unspecified
 
-  /// Sealed inner bytes for STEALTH (ConstructSEALED) messages.
-  /// Present only when is_sealed_sender=true. Client must decrypt to recover sender identity.
-  /// Empty for regular (non-STEALTH) messages.
+  /// ConstructSEALED (sealed sender): raw SealedInner proto bytes.
+  /// Populated only when the message was sent with stealth mode enabled.
+  /// When non-empty, sender_id is empty and encrypted_payload is empty.
+  /// The recipient must decrypt this field to recover sender identity and payload.
   public var sealedInnerData: Data = Data()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -2030,7 +2031,7 @@ extension Shared_Proto_Services_V1_GetPendingMessagesRequest: SwiftProtobuf.Mess
 
 extension Shared_Proto_Services_V1_PendingMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".PendingMessage"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}message_id\0\u{3}sender_id\0\u{4}\u{5}encrypted_payload\0\u{1}timestamp\0\u{3}content_type\0\u{c}\u{3}\u{1}\u{c}\u{4}\u{1}\u{c}\u{5}\u{1}\u{c}\u{6}\u{1}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}message_id\0\u{3}sender_id\0\u{4}\u{5}encrypted_payload\0\u{1}timestamp\0\u{3}content_type\0\u{3}sealed_inner_data\0\u{c}\u{3}\u{1}\u{c}\u{4}\u{1}\u{c}\u{5}\u{1}\u{c}\u{6}\u{1}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {

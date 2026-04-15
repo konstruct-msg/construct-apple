@@ -1244,6 +1244,44 @@ public struct Shared_Proto_Services_V1_ApproveJoinRequestRequest: Sendable {
   public init() {}
 }
 
+/// IssueTokensRequest - Client sends blinded Ristretto255 points for OPRF evaluation.
+/// All blinded points must be valid compressed Ristretto255 encodings (32 bytes each).
+/// Maximum 20 points per request (enforced server-side; excess → RESOURCE_EXHAUSTED).
+public struct Shared_Proto_Services_V1_IssueTokensRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// Each entry is a 32-byte compressed Ristretto255 point: blinded = r * T.
+  /// r = random scalar (client secret), T = hash_to_ristretto255(nonce).
+  public var blindedPoints: [Data] = []
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// IssueTokensResponse - Server returns evaluated Ristretto255 points.
+/// Each evaluated_point[i] = k * blinded_points[i], where k = TOKEN_ISSUER_KEY.
+/// Returned in the same order as the request.
+public struct Shared_Proto_Services_V1_IssueTokensResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// Each entry is a 32-byte compressed Ristretto255 point: Z = k * blinded.
+  /// Client unblinds: N = r_inv * Z = k * T, then derives token via HKDF.
+  public var evaluatedPoints: [Data] = []
+
+  /// 32-byte compressed Ristretto255 public key: K = k * G.
+  /// Client uses this to verify the evaluation (DLEQ proof in future version).
+  public var serverPubkey: Data = Data()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
 fileprivate let _protobuf_package = "shared.proto.services.v1"
@@ -2976,6 +3014,71 @@ extension Shared_Proto_Services_V1_ApproveJoinRequestRequest: SwiftProtobuf.Mess
   public static func ==(lhs: Shared_Proto_Services_V1_ApproveJoinRequestRequest, rhs: Shared_Proto_Services_V1_ApproveJoinRequestRequest) -> Bool {
     if lhs.pendingDeviceID != rhs.pendingDeviceID {return false}
     if lhs.cryptoSuite != rhs.cryptoSuite {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Shared_Proto_Services_V1_IssueTokensRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".IssueTokensRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}blinded_points\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedBytesField(value: &self.blindedPoints) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.blindedPoints.isEmpty {
+      try visitor.visitRepeatedBytesField(value: self.blindedPoints, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Services_V1_IssueTokensRequest, rhs: Shared_Proto_Services_V1_IssueTokensRequest) -> Bool {
+    if lhs.blindedPoints != rhs.blindedPoints {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Shared_Proto_Services_V1_IssueTokensResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".IssueTokensResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}evaluated_points\0\u{3}server_pubkey\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedBytesField(value: &self.evaluatedPoints) }()
+      case 2: try { try decoder.decodeSingularBytesField(value: &self.serverPubkey) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.evaluatedPoints.isEmpty {
+      try visitor.visitRepeatedBytesField(value: self.evaluatedPoints, fieldNumber: 1)
+    }
+    if !self.serverPubkey.isEmpty {
+      try visitor.visitSingularBytesField(value: self.serverPubkey, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Services_V1_IssueTokensResponse, rhs: Shared_Proto_Services_V1_IssueTokensResponse) -> Bool {
+    if lhs.evaluatedPoints != rhs.evaluatedPoints {return false}
+    if lhs.serverPubkey != rhs.serverPubkey {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

@@ -140,6 +140,18 @@ public enum Shared_Proto_Services_V1_AuthService: Sendable {
                 method: "GetSenderCertificate"
             )
         }
+        /// Namespace for "IssueTokens" metadata.
+        public enum IssueTokens: Sendable {
+            /// Request type for "IssueTokens".
+            public typealias Input = Shared_Proto_Services_V1_IssueTokensRequest
+            /// Response type for "IssueTokens".
+            public typealias Output = Shared_Proto_Services_V1_IssueTokensResponse
+            /// Descriptor for "IssueTokens".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.AuthService"),
+                method: "IssueTokens"
+            )
+        }
         /// Namespace for "ApproveJoinRequest" metadata.
         public enum ApproveJoinRequest: Sendable {
             /// Request type for "ApproveJoinRequest".
@@ -164,6 +176,7 @@ public enum Shared_Proto_Services_V1_AuthService: Sendable {
             GetRecoveryStatus.descriptor,
             RecoverAccount.descriptor,
             GetSenderCertificate.descriptor,
+            IssueTokens.descriptor,
             ApproveJoinRequest.descriptor
         ]
     }
@@ -424,6 +437,33 @@ extension Shared_Proto_Services_V1_AuthService {
             deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_GetSenderCertificateResponse>,
             options: GRPCCore.CallOptions,
             onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_GetSenderCertificateResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "IssueTokens" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > IssueTokens - Issue Privacy Pass blind tokens (OPRF Ristretto255)
+        /// > Authenticated via JWT. Client sends blinded Ristretto points; server evaluates
+        /// > k * blinded for each, where k = TOKEN_ISSUER_KEY scalar.
+        /// > Client unblinds to derive unlinkable one-time tokens for anonymous STEALTH sends.
+        /// > Rate limited: 20 tokens/hour per user.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_IssueTokensRequest` message.
+        ///   - serializer: A serializer for `Shared_Proto_Services_V1_IssueTokensRequest` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_IssueTokensResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response, the result of which is
+        ///       returned to the caller. Returning from the closure will cancel the RPC if it
+        ///       hasn't already finished.
+        /// - Returns: The result of `handleResponse`.
+        func issueTokens<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_IssueTokensRequest>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_IssueTokensRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_IssueTokensResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_IssueTokensResponse>) async throws -> Result
         ) async throws -> Result where Result: Sendable
 
         /// Call the "ApproveJoinRequest" method.
@@ -820,6 +860,44 @@ extension Shared_Proto_Services_V1_AuthService {
             )
         }
 
+        /// Call the "IssueTokens" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > IssueTokens - Issue Privacy Pass blind tokens (OPRF Ristretto255)
+        /// > Authenticated via JWT. Client sends blinded Ristretto points; server evaluates
+        /// > k * blinded for each, where k = TOKEN_ISSUER_KEY scalar.
+        /// > Client unblinds to derive unlinkable one-time tokens for anonymous STEALTH sends.
+        /// > Rate limited: 20 tokens/hour per user.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_IssueTokensRequest` message.
+        ///   - serializer: A serializer for `Shared_Proto_Services_V1_IssueTokensRequest` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_IssueTokensResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response, the result of which is
+        ///       returned to the caller. Returning from the closure will cancel the RPC if it
+        ///       hasn't already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func issueTokens<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_IssueTokensRequest>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_IssueTokensRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_IssueTokensResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_IssueTokensResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Shared_Proto_Services_V1_AuthService.Method.IssueTokens.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
         /// Call the "ApproveJoinRequest" method.
         ///
         /// > Source IDL Documentation:
@@ -1154,6 +1232,39 @@ extension Shared_Proto_Services_V1_AuthService.ClientProtocol {
             request: request,
             serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_GetSenderCertificateRequest>(),
             deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_GetSenderCertificateResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "IssueTokens" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > IssueTokens - Issue Privacy Pass blind tokens (OPRF Ristretto255)
+    /// > Authenticated via JWT. Client sends blinded Ristretto points; server evaluates
+    /// > k * blinded for each, where k = TOKEN_ISSUER_KEY scalar.
+    /// > Client unblinds to derive unlinkable one-time tokens for anonymous STEALTH sends.
+    /// > Rate limited: 20 tokens/hour per user.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Shared_Proto_Services_V1_IssueTokensRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response, the result of which is
+    ///       returned to the caller. Returning from the closure will cancel the RPC if it
+    ///       hasn't already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func issueTokens<Result>(
+        request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_IssueTokensRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_IssueTokensResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.issueTokens(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_IssueTokensRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_IssueTokensResponse>(),
             options: options,
             onResponse: handleResponse
         )
@@ -1526,6 +1637,43 @@ extension Shared_Proto_Services_V1_AuthService.ClientProtocol {
             metadata: metadata
         )
         return try await self.getSenderCertificate(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "IssueTokens" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > IssueTokens - Issue Privacy Pass blind tokens (OPRF Ristretto255)
+    /// > Authenticated via JWT. Client sends blinded Ristretto points; server evaluates
+    /// > k * blinded for each, where k = TOKEN_ISSUER_KEY scalar.
+    /// > Client unblinds to derive unlinkable one-time tokens for anonymous STEALTH sends.
+    /// > Rate limited: 20 tokens/hour per user.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response, the result of which is
+    ///       returned to the caller. Returning from the closure will cancel the RPC if it
+    ///       hasn't already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func issueTokens<Result>(
+        _ message: Shared_Proto_Services_V1_IssueTokensRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_IssueTokensResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Shared_Proto_Services_V1_IssueTokensRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.issueTokens(
             request: request,
             options: options,
             onResponse: handleResponse
