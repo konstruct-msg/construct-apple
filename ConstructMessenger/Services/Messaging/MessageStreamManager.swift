@@ -868,14 +868,36 @@ final class MessageStreamManager {
                     conversationId: envelope.conversationID
                 ))
             }
-            // Unpack wire payload blob into crypto components
+            // Unpack wire payload blob into crypto components.
+            // STEALTH (sealed sender): SealedInner bytes can't be WirePayload-decoded here —
+            // MessageRouter resolves the sender and extracts the real payload.
+            let isSealed = envelope.hasSealedSender
+            let sealedInnerBytes = isSealed ? envelope.sealedSender.sealedInner : Data()
+            let senderUserId = isSealed ? "" : envelope.sender.userID
+
+            if isSealed {
+                return .message(ChatMessage(
+                    id: envelope.messageID,
+                    from: "",
+                    to: envelope.recipient.userID,
+                    messageType: "DIRECT_MESSAGE",
+                    ephemeralPublicKey: Data(),
+                    messageNumber: 0,
+                    content: "",
+                    suiteId: 1,
+                    timestamp: UInt64(envelope.timestamp),
+                    kemCiphertext: Data(),
+                    sealedInnerData: sealedInnerBytes
+                ))
+            }
+
             guard let decoded = try? WirePayloadCoder.decode(envelope.encryptedPayload) else {
                 Log.info("⚠️ Failed to decode encrypted_payload for message \(envelope.messageID)", category: "MessageStream")
                 return nil
             }
             let msg = ChatMessage(
                 id: envelope.messageID,
-                from: envelope.sender.userID,
+                from: senderUserId,
                 to: envelope.recipient.userID,
                 messageType: "DIRECT_MESSAGE",
                 ephemeralPublicKey: Data(decoded.ephemeralPublicKey),

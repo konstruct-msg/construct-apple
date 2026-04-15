@@ -695,6 +695,7 @@
 "stealth_scope_message_hint" = "one token per message — maximum unlinkability";
 "stealth_token_wallet" = "token wallet";
 "stealth_token_wallet_pending" = "[not yet active]";
+"stealth_token_count" = "%d tokens";
 "stealth_token_wallet_hint" = "tokens are minted in the background while charging. requires privacy pass support on the construct.";
 
 // Key Transparency

@@ -705,6 +705,7 @@
 "stealth_scope_message_hint" = "один токен на сообщение — максимальная анонимность";
 "stealth_token_wallet" = "кошелёк токенов";
 "stealth_token_wallet_pending" = "[ещё не активно]";
+"stealth_token_count" = "%d токенов";
 "stealth_token_wallet_hint" = "токены добываются в фоне на зарядке. требует поддержки privacy pass на сервере.";
 
 // Key Transparency

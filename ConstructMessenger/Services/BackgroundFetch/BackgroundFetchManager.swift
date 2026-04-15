@@ -559,14 +559,14 @@ class BackgroundFetchManager: NSObject {
         Log.info("Cleaning up fetch resources", category: "BackgroundFetch")
     }
     
-    /// Perform maintenance operations (cache cleanup, etc.)
+    /// Perform maintenance operations (cache cleanup, token minting, etc.)
     private func performMaintenance(completion: @escaping (Bool) -> Void) {
-        // TODO: Implement maintenance operations
-        // - Clean old messages from Core Data
-        // - Clear image cache
-        // - Optimize database
-        
-        DispatchQueue.global().asyncAfter(deadline: .now() + 1) {
+        DispatchQueue.global().async {
+            // Mint stealth tokens during maintenance window (device is charging)
+            Task { @MainActor in
+                // Mint up to 15 tokens per maintenance cycle (budget: ~1800-2700 per charging session)
+                TokenWalletService.shared.mintTokens(count: 15)
+            }
             completion(true)
         }
     }

@@ -62,6 +62,10 @@ struct ChatMessage: Codable, Identifiable {
     /// Empty for CONTROL_MESSAGE and SENDER_SYNC types.
     var rawPayload: Data = Data()
 
+    /// Sealed inner bytes for STEALTH (ConstructSEALED) messages.
+    /// When non-empty, `from` is empty — the real sender is recovered by decrypting this.
+    var sealedInnerData: Data = Data()
+
     /// Check if this is an END_SESSION control message
     var isEndSession: Bool {
         messageType == "CONTROL_MESSAGE" && content == "END_SESSION"

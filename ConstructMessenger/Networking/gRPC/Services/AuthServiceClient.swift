@@ -413,4 +413,12 @@ final class AuthServiceClient: Sendable {
             }
         }
     }
+
+    func getSenderCertificate() async throws -> Shared_Proto_Services_V1_GetSenderCertificateResponse {
+        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.getSenderCertificate) { grpcClient in
+            let authClient = Shared_Proto_Services_V1_AuthService.Client(wrapping: grpcClient)
+            let request = Shared_Proto_Services_V1_GetSenderCertificateRequest()
+            return try await authClient.getSenderCertificate(request: .init(message: request))
+        }
+    }
 }

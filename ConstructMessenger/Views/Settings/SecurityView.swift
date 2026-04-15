@@ -25,6 +25,7 @@ struct SecurityView: View {
 
     @AppStorage("stealth_mode_enabled") private var stealthEnabled = false
     @AppStorage("stealth_per_message") private var stealthPerMessage = false
+    private var tokenWallet = TokenWalletService.shared
 
     var body: some View {
         @Bindable var securityViewModel = securityViewModel
@@ -312,16 +313,16 @@ struct SecurityView: View {
                         .frame(height: 1)
                         .padding(.horizontal, 12)
 
-                    // Token wallet balance (placeholder until Privacy Pass is implemented)
+                    // Token wallet balance
                     HStack(spacing: 10) {
-                        CTRowIcon("[T]", color: Color.CT.textDim)
+                        CTRowIcon("[T]", color: tokenWallet.balance > 0 ? Color.CT.accent : Color.CT.textDim)
                         Text(LocalizedStringKey("stealth_token_wallet"))
                             .font(CTFont.regular(13))
                             .foregroundStyle(Color.CT.textDim)
                         Spacer()
-                        Text(NSLocalizedString("stealth_token_wallet_pending", comment: ""))
+                        Text(String(format: NSLocalizedString("stealth_token_count", comment: ""), tokenWallet.balance))
                             .font(CTFont.regular(12))
-                            .foregroundStyle(Color.CT.textDim.opacity(0.6))
+                            .foregroundStyle(tokenWallet.balance > 0 ? Color.CT.accent : Color.CT.textDim.opacity(0.6))
                     }
                     .padding(.horizontal, 12).padding(.vertical, 10)
 

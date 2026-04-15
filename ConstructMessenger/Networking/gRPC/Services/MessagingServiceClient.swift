@@ -30,7 +30,8 @@ final class MessagingServiceClient: Sendable {
         senderDeviceId: String? = nil,
         recipientDeviceId: String? = nil,
         contentType: Shared_Proto_Core_V1_ContentType = .e2EeSignal,
-        replyToMessageId: String? = nil
+        replyToMessageId: String? = nil,
+        sealedInnerBytes: Data? = nil
     ) async throws -> SendMessageResponse {
         // Acquire a UIBackgroundTask so iOS cannot tear down the network connection
         // while the RPC is in flight (send_message typically takes ~150ms).
@@ -51,12 +52,20 @@ final class MessagingServiceClient: Sendable {
 
             var envelope = Shared_Proto_Core_V1_Envelope()
             envelope.messageID = messageId
-            envelope.sender = sender
             envelope.recipient = recipient
             envelope.conversationID = conversationId
             envelope.contentType = contentType
             envelope.encryptedPayload = encryptedPayload
             envelope.timestamp = Int64(timestamp)
+
+            if let sealedInner = sealedInnerBytes, !sealedInner.isEmpty {
+                // STEALTH: do not populate sender — build SealedSenderEnvelope
+                var sealedEnvelope = Shared_Proto_Core_V1_SealedSenderEnvelope()
+                sealedEnvelope.sealedInner = sealedInner
+                envelope.sealedSender = sealedEnvelope
+            } else {
+                envelope.sender = sender
+            }
 
             if let replyId = replyToMessageId, !replyId.isEmpty {
                 envelope.replyToMessageID = replyId
@@ -84,7 +93,7 @@ final class MessagingServiceClient: Sendable {
                 📤 sendMessage RPC →
                    messageId      = \(messageId)
                    attemptId      = \(attemptId)
-                   senderId       = \(senderId)
+                   senderId       = \(sealedInnerBytes != nil ? "[STEALTH]" : senderId)
                    recipientId    = \(recipientId)
                    conversationId = \(conversationId)
                    payloadBytes   = \(encryptedPayload.count)
@@ -286,8 +295,28 @@ final class MessagingServiceClient: Sendable {
                     conversationId: ""
                 )
             }
-            // Unpack wire payload blob into crypto components
+            // Unpack wire payload blob into crypto components.
+            // For STEALTH messages, `sealedInnerData` is populated and `senderID` is empty.
+            let sealedInner = msg.sealedInnerData
+            let isSealed = !sealedInner.isEmpty
             guard let decoded = try? WirePayloadCoder.decode(msg.encryptedPayload) else {
+                if isSealed {
+                    // Sealed message payload is inside SealedInner — carry sealedInnerData
+                    // for MessageRouter to decrypt and route.
+                    return ChatMessage(
+                        id: msg.messageID,
+                        from: "",
+                        to: "",
+                        messageType: "DIRECT_MESSAGE",
+                        ephemeralPublicKey: Data(),
+                        messageNumber: 0,
+                        content: "",
+                        suiteId: 1,
+                        timestamp: UInt64(msg.timestamp),
+                        kemCiphertext: Data(),
+                        sealedInnerData: sealedInner
+                    )
+                }
                 Log.debug("⚠️ Failed to decode encrypted_payload for message \(msg.messageID) — queuing failed ACK", category: "MessagingServiceClient")
                 failed.append(FailedMessage(id: msg.messageID, senderId: msg.senderID))
                 return nil
@@ -308,7 +337,8 @@ final class MessagingServiceClient: Sendable {
                 kyberOtpkId: decoded.kyberOtpkId,
                 senderDeviceId: "",
                 conversationId: "",
-                rawPayload: msg.encryptedPayload
+                rawPayload: msg.encryptedPayload,
+                sealedInnerData: sealedInner
             )
         }
 
