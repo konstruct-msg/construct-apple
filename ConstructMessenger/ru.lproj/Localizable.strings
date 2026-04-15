@@ -755,3 +755,6 @@
 "social_recovery_restored_body" = "ваши ключи идентичности успешно восстановлены.";
 "social_recovery_row_active" = "■ социальное восстановление — активно";
 "social_recovery_row_inactive" = "○ социальное восстановление — не настроено";
+
+"social_recovery_identity_header" = "ИДЕНТИФИКАТОР";
+"social_recovery_username_label" = "Имя пользователя";

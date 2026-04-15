@@ -3,7 +3,6 @@
 //  ConstructMessenger
 //
 //  SLIP-39 social recovery — Variant A (vault key Shamir splitting).
-//  All UniFFI calls are stubbed until the xcframework is rebuilt with the new Rust functions.
 //
 
 import Foundation
@@ -48,6 +47,9 @@ final class SocialRecoveryService {
 
     var isConfigured: Bool = false
 
+    // Vault key held in memory only during the setup flow; cleared after upload.
+    private var vaultKey: [UInt8] = []
+
     // MARK: - Setup
 
     func configure(threshold: Int, shareCount: Int) {
@@ -57,15 +59,20 @@ final class SocialRecoveryService {
     }
 
     func generateShares() {
-        // TODO: wire to UniFFI after xcframework rebuild
-        // let vaultKey = sr_generate_vault_key()
-        // shares = sr_create_recovery_shares(vaultKey: vaultKey, threshold: UInt8(threshold), shareCount: UInt8(shareCount))
-        shares = (0..<shareCount).map { i in
-            placeholderMnemonic(shareIndex: i)
+        do {
+            vaultKey = try srGenerateVaultKey()
+            let mnemonics = try srCreateRecoveryShares(
+                vaultKey: vaultKey,
+                threshold: UInt8(threshold),
+                shareCount: UInt8(shareCount)
+            )
+            shares = mnemonics
+            shareLabels = Array(repeating: "", count: shareCount)
+            distributedFlags = Array(repeating: false, count: shareCount)
+            setupStep = .displayShare(index: 0)
+        } catch {
+            setupStep = .failed(error.localizedDescription)
         }
-        shareLabels = Array(repeating: "", count: shareCount)
-        distributedFlags = Array(repeating: false, count: shareCount)
-        setupStep = .displayShare(index: 0)
     }
 
     func setLabel(_ label: String, forShare index: Int) {
@@ -86,13 +93,34 @@ final class SocialRecoveryService {
     }
 
     func uploadBundle() async {
-        // TODO: wire to UniFFI after xcframework rebuild
-        // let bundle = SrRecoveryBundle(...)
-        // let sealed = sr_seal_recovery_bundle(vaultKey: vaultKey, bundle: bundle)
-        // upload sealed to server
-        try? await Task.sleep(nanoseconds: 1_500_000_000)
-        isConfigured = true
-        setupStep = .done
+        guard !vaultKey.isEmpty else {
+            setupStep = .failed("vault key missing")
+            return
+        }
+        do {
+            let km = KeychainManager.shared
+            guard
+                let signingKey  = km.loadDeviceSigningKey(),
+                let identityKey = km.loadDeviceIdentityKey(),
+                let deviceId    = km.loadDeviceID()
+            else {
+                setupStep = .failed("device keys not found in Keychain")
+                return
+            }
+            let bundle = SrRecoveryBundle(
+                deviceSigningKey:  signingKey,
+                deviceIdentityKey: identityKey,
+                deviceId:          deviceId,
+                createdAt:         Int64(Date().timeIntervalSince1970)
+            )
+            let ciphertext = try srSealRecoveryBundle(vaultKey: vaultKey, bundle: bundle)
+            try await AuthServiceClient.shared.storeRecoveryBundle(ciphertext: Data(ciphertext))
+            vaultKey = []  // clear from memory after successful upload
+            isConfigured = true
+            setupStep = .done
+        } catch {
+            setupStep = .failed(error.localizedDescription)
+        }
     }
 
     // MARK: - Recovery
@@ -108,15 +136,23 @@ final class SocialRecoveryService {
         enteredShares.remove(at: index)
     }
 
-    func reconstructAndRestore() async {
+    func reconstructAndRestore(username: String) async {
         recoveryStep = .reconstructing
-        // TODO: wire to UniFFI after xcframework rebuild
-        // let vaultKey = sr_reconstruct_vault_key(mnemonics: enteredShares)
-        // let ciphertext = download recovery bundle from server
-        // let bundle = sr_open_recovery_bundle(vaultKey: vaultKey, ciphertext: ciphertext)
-        // restore bundle.deviceSigningKey, bundle.deviceIdentityKey, bundle.deviceId
-        try? await Task.sleep(nanoseconds: 1_500_000_000)
-        recoveryStep = .done
+        do {
+            let reconstructedKey = try srReconstructVaultKey(mnemonics: enteredShares)
+            guard let ciphertext = try await AuthServiceClient.shared.getRecoveryBundle(username: username) else {
+                recoveryStep = .failed("no recovery bundle found for this identity")
+                return
+            }
+            let bundle = try srOpenRecoveryBundle(vaultKey: reconstructedKey, ciphertext: [UInt8](ciphertext))
+            let km = KeychainManager.shared
+            km.saveDeviceSigningKey(bundle.deviceSigningKey)
+            km.saveDeviceIdentityKey(bundle.deviceIdentityKey)
+            // deviceId is restored implicitly via key re-registration flow
+            recoveryStep = .done
+        } catch {
+            recoveryStep = .failed(error.localizedDescription)
+        }
     }
 
     // MARK: - Reset
@@ -130,18 +166,6 @@ final class SocialRecoveryService {
         enteredShares = []
         threshold = 2
         shareCount = 3
-    }
-
-    // MARK: - Private helpers
-
-    /// Returns 28-word placeholder mnemonic for stub usage.
-    private func placeholderMnemonic(shareIndex: Int) -> String {
-        let wordBank = [
-            "academic", "acid", "acrobat", "adapt", "again", "agency", "agree", "alarm",
-            "album", "alert", "algebra", "alive", "alpha", "already", "alto", "alumni",
-            "always", "amber", "amend", "amount", "angel", "angry", "animal", "answer",
-            "apart", "appear", "apple", "arena"
-        ]
-        return wordBank.shuffled().prefix(28).joined(separator: " ")
+        vaultKey = []
     }
 }

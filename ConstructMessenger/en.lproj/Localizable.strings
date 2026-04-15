@@ -745,3 +745,6 @@
 "social_recovery_restored_body" = "your identity keys have been restored successfully.";
 "social_recovery_row_active" = "■ social recovery — active";
 "social_recovery_row_inactive" = "○ social recovery — not configured";
+
+"social_recovery_identity_header" = "IDENTITY";
+"social_recovery_username_label" = "Username";

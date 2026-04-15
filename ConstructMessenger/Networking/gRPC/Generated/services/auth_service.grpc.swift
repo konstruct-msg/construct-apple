@@ -128,6 +128,30 @@ public enum Shared_Proto_Services_V1_AuthService: Sendable {
                 method: "RecoverAccount"
             )
         }
+        /// Namespace for "StoreRecoveryBundle" metadata.
+        public enum StoreRecoveryBundle: Sendable {
+            /// Request type for "StoreRecoveryBundle".
+            public typealias Input = Shared_Proto_Services_V1_StoreRecoveryBundleRequest
+            /// Response type for "StoreRecoveryBundle".
+            public typealias Output = Shared_Proto_Services_V1_StoreRecoveryBundleResponse
+            /// Descriptor for "StoreRecoveryBundle".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.AuthService"),
+                method: "StoreRecoveryBundle"
+            )
+        }
+        /// Namespace for "GetRecoveryBundle" metadata.
+        public enum GetRecoveryBundle: Sendable {
+            /// Request type for "GetRecoveryBundle".
+            public typealias Input = Shared_Proto_Services_V1_GetRecoveryBundleRequest
+            /// Response type for "GetRecoveryBundle".
+            public typealias Output = Shared_Proto_Services_V1_GetRecoveryBundleResponse
+            /// Descriptor for "GetRecoveryBundle".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.AuthService"),
+                method: "GetRecoveryBundle"
+            )
+        }
         /// Namespace for "GetSenderCertificate" metadata.
         public enum GetSenderCertificate: Sendable {
             /// Request type for "GetSenderCertificate".
@@ -175,6 +199,8 @@ public enum Shared_Proto_Services_V1_AuthService: Sendable {
             SetRecoveryKey.descriptor,
             GetRecoveryStatus.descriptor,
             RecoverAccount.descriptor,
+            StoreRecoveryBundle.descriptor,
+            GetRecoveryBundle.descriptor,
             GetSenderCertificate.descriptor,
             IssueTokens.descriptor,
             ApproveJoinRequest.descriptor
@@ -411,6 +437,54 @@ extension Shared_Proto_Services_V1_AuthService {
             deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_RecoverAccountResponse>,
             options: GRPCCore.CallOptions,
             onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_RecoverAccountResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "StoreRecoveryBundle" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > StoreRecoveryBundle - Upload encrypted social recovery bundle (authenticated)
+        /// > Bundle is ChaCha20-Poly1305 encrypted — server never sees plaintext
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_StoreRecoveryBundleRequest` message.
+        ///   - serializer: A serializer for `Shared_Proto_Services_V1_StoreRecoveryBundleRequest` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_StoreRecoveryBundleResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response, the result of which is
+        ///       returned to the caller. Returning from the closure will cancel the RPC if it
+        ///       hasn't already finished.
+        /// - Returns: The result of `handleResponse`.
+        func storeRecoveryBundle<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_StoreRecoveryBundleRequest>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_StoreRecoveryBundleRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_StoreRecoveryBundleResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_StoreRecoveryBundleResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "GetRecoveryBundle" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > GetRecoveryBundle - Fetch encrypted bundle by username (unauthenticated)
+        /// > Safe to be public because the bundle is strongly encrypted
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_GetRecoveryBundleRequest` message.
+        ///   - serializer: A serializer for `Shared_Proto_Services_V1_GetRecoveryBundleRequest` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_GetRecoveryBundleResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response, the result of which is
+        ///       returned to the caller. Returning from the closure will cancel the RPC if it
+        ///       hasn't already finished.
+        /// - Returns: The result of `handleResponse`.
+        func getRecoveryBundle<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_GetRecoveryBundleRequest>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_GetRecoveryBundleRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_GetRecoveryBundleResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_GetRecoveryBundleResponse>) async throws -> Result
         ) async throws -> Result where Result: Sendable
 
         /// Call the "GetSenderCertificate" method.
@@ -823,6 +897,76 @@ extension Shared_Proto_Services_V1_AuthService {
             )
         }
 
+        /// Call the "StoreRecoveryBundle" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > StoreRecoveryBundle - Upload encrypted social recovery bundle (authenticated)
+        /// > Bundle is ChaCha20-Poly1305 encrypted — server never sees plaintext
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_StoreRecoveryBundleRequest` message.
+        ///   - serializer: A serializer for `Shared_Proto_Services_V1_StoreRecoveryBundleRequest` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_StoreRecoveryBundleResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response, the result of which is
+        ///       returned to the caller. Returning from the closure will cancel the RPC if it
+        ///       hasn't already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func storeRecoveryBundle<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_StoreRecoveryBundleRequest>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_StoreRecoveryBundleRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_StoreRecoveryBundleResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_StoreRecoveryBundleResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Shared_Proto_Services_V1_AuthService.Method.StoreRecoveryBundle.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "GetRecoveryBundle" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > GetRecoveryBundle - Fetch encrypted bundle by username (unauthenticated)
+        /// > Safe to be public because the bundle is strongly encrypted
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_GetRecoveryBundleRequest` message.
+        ///   - serializer: A serializer for `Shared_Proto_Services_V1_GetRecoveryBundleRequest` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_GetRecoveryBundleResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response, the result of which is
+        ///       returned to the caller. Returning from the closure will cancel the RPC if it
+        ///       hasn't already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func getRecoveryBundle<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_GetRecoveryBundleRequest>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_GetRecoveryBundleRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_GetRecoveryBundleResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_GetRecoveryBundleResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Shared_Proto_Services_V1_AuthService.Method.GetRecoveryBundle.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
         /// Call the "GetSenderCertificate" method.
         ///
         /// > Source IDL Documentation:
@@ -1200,6 +1344,66 @@ extension Shared_Proto_Services_V1_AuthService.ClientProtocol {
             request: request,
             serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_RecoverAccountRequest>(),
             deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_RecoverAccountResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "StoreRecoveryBundle" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > StoreRecoveryBundle - Upload encrypted social recovery bundle (authenticated)
+    /// > Bundle is ChaCha20-Poly1305 encrypted — server never sees plaintext
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Shared_Proto_Services_V1_StoreRecoveryBundleRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response, the result of which is
+    ///       returned to the caller. Returning from the closure will cancel the RPC if it
+    ///       hasn't already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func storeRecoveryBundle<Result>(
+        request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_StoreRecoveryBundleRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_StoreRecoveryBundleResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.storeRecoveryBundle(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_StoreRecoveryBundleRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_StoreRecoveryBundleResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "GetRecoveryBundle" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > GetRecoveryBundle - Fetch encrypted bundle by username (unauthenticated)
+    /// > Safe to be public because the bundle is strongly encrypted
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Shared_Proto_Services_V1_GetRecoveryBundleRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response, the result of which is
+    ///       returned to the caller. Returning from the closure will cancel the RPC if it
+    ///       hasn't already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func getRecoveryBundle<Result>(
+        request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_GetRecoveryBundleRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_GetRecoveryBundleResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.getRecoveryBundle(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_GetRecoveryBundleRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_GetRecoveryBundleResponse>(),
             options: options,
             onResponse: handleResponse
         )
@@ -1601,6 +1805,74 @@ extension Shared_Proto_Services_V1_AuthService.ClientProtocol {
             metadata: metadata
         )
         return try await self.recoverAccount(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "StoreRecoveryBundle" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > StoreRecoveryBundle - Upload encrypted social recovery bundle (authenticated)
+    /// > Bundle is ChaCha20-Poly1305 encrypted — server never sees plaintext
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response, the result of which is
+    ///       returned to the caller. Returning from the closure will cancel the RPC if it
+    ///       hasn't already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func storeRecoveryBundle<Result>(
+        _ message: Shared_Proto_Services_V1_StoreRecoveryBundleRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_StoreRecoveryBundleResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Shared_Proto_Services_V1_StoreRecoveryBundleRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.storeRecoveryBundle(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "GetRecoveryBundle" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > GetRecoveryBundle - Fetch encrypted bundle by username (unauthenticated)
+    /// > Safe to be public because the bundle is strongly encrypted
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response, the result of which is
+    ///       returned to the caller. Returning from the closure will cancel the RPC if it
+    ///       hasn't already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func getRecoveryBundle<Result>(
+        _ message: Shared_Proto_Services_V1_GetRecoveryBundleRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_GetRecoveryBundleResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Shared_Proto_Services_V1_GetRecoveryBundleRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.getRecoveryBundle(
             request: request,
             options: options,
             onResponse: handleResponse

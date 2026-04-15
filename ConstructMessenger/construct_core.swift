@@ -3592,6 +3592,69 @@ public func FfiConverterTypeSessionInitResult_lower(_ value: SessionInitResult) 
 }
 
 
+/**
+ * Keys and metadata packed into the encrypted recovery bundle.
+ */
+public struct SrRecoveryBundle: Equatable, Hashable {
+    public var deviceSigningKey: Data
+    public var deviceIdentityKey: Data
+    public var deviceId: String
+    public var createdAt: Int64
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(deviceSigningKey: Data, deviceIdentityKey: Data, deviceId: String, createdAt: Int64) {
+        self.deviceSigningKey = deviceSigningKey
+        self.deviceIdentityKey = deviceIdentityKey
+        self.deviceId = deviceId
+        self.createdAt = createdAt
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension SrRecoveryBundle: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeSrRecoveryBundle: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SrRecoveryBundle {
+        return
+            try SrRecoveryBundle(
+                deviceSigningKey: FfiConverterData.read(from: &buf), 
+                deviceIdentityKey: FfiConverterData.read(from: &buf), 
+                deviceId: FfiConverterString.read(from: &buf), 
+                createdAt: FfiConverterInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: SrRecoveryBundle, into buf: inout [UInt8]) {
+        FfiConverterData.write(value.deviceSigningKey, into: &buf)
+        FfiConverterData.write(value.deviceIdentityKey, into: &buf)
+        FfiConverterString.write(value.deviceId, into: &buf)
+        FfiConverterInt64.write(value.createdAt, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSrRecoveryBundle_lift(_ buf: RustBuffer) throws -> SrRecoveryBundle {
+    return try FfiConverterTypeSrRecoveryBundle.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSrRecoveryBundle_lower(_ value: SrRecoveryBundle) -> RustBuffer {
+    return FfiConverterTypeSrRecoveryBundle.lower(value)
+}
+
+
 public struct TimingConfig: Equatable, Hashable {
     public var heartbeatIntervalSec: UInt64
     public var heartbeatJitterMs: UInt64
@@ -5276,6 +5339,61 @@ public func signRecoveryChallenge(privateKey: [UInt8], message: String)throws  -
 })
 }
 /**
+ * Split vault_key into share_count shares, requiring threshold to reconstruct.
+ * threshold must be <= share_count, both must be 2-10.
+ * Returns one 28-word mnemonic string per share.
+ */
+public func srCreateRecoveryShares(vaultKey: [UInt8], threshold: UInt8, shareCount: UInt8)throws  -> [String]  {
+    return try  FfiConverterSequenceString.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_func_sr_create_recovery_shares(
+        FfiConverterSequenceUInt8.lower(vaultKey),
+        FfiConverterUInt8.lower(threshold),
+        FfiConverterUInt8.lower(shareCount),$0
+    )
+})
+}
+/**
+ * Generate a 32-byte random vault key.
+ */
+public func srGenerateVaultKey()throws  -> [UInt8]  {
+    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_func_sr_generate_vault_key($0
+    )
+})
+}
+/**
+ * Decrypt bytes to RecoveryBundle using vault_key.
+ */
+public func srOpenRecoveryBundle(vaultKey: [UInt8], ciphertext: [UInt8])throws  -> SrRecoveryBundle  {
+    return try  FfiConverterTypeSrRecoveryBundle_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_func_sr_open_recovery_bundle(
+        FfiConverterSequenceUInt8.lower(vaultKey),
+        FfiConverterSequenceUInt8.lower(ciphertext),$0
+    )
+})
+}
+/**
+ * Reconstruct vault_key from at least threshold share mnemonics.
+ */
+public func srReconstructVaultKey(mnemonics: [String])throws  -> [UInt8]  {
+    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_func_sr_reconstruct_vault_key(
+        FfiConverterSequenceString.lower(mnemonics),$0
+    )
+})
+}
+/**
+ * Encrypt a RecoveryBundle to bytes using vault_key.
+ */
+public func srSealRecoveryBundle(vaultKey: [UInt8], bundle: SrRecoveryBundle)throws  -> [UInt8]  {
+    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_func_sr_seal_recovery_bundle(
+        FfiConverterSequenceUInt8.lower(vaultKey),
+        FfiConverterTypeSrRecoveryBundle_lower(bundle),$0
+    )
+})
+}
+/**
  * Verify that a PlatformBridge implementation correctly round-trips a
  * save → load through the platform secure store.
  * Returns true if the loaded bytes equal the saved bytes.
@@ -5424,6 +5542,21 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_sign_recovery_challenge() != 2630) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_sr_create_recovery_shares() != 33586) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_sr_generate_vault_key() != 65018) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_sr_open_recovery_bundle() != 30257) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_sr_reconstruct_vault_key() != 19594) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_sr_seal_recovery_bundle() != 62781) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_test_platform_bridge_roundtrip() != 58358) {

@@ -12,6 +12,7 @@ struct SocialRecoveryEntryView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var showingAddSheet = false
+    @State private var username: String = ""
 
     var body: some View {
         VStack(spacing: 0) {
@@ -56,6 +57,29 @@ struct SocialRecoveryEntryView: View {
                         .multilineTextAlignment(.leading)
                         .padding(.horizontal, 20)
                         .padding(.vertical, 14)
+
+                    Rectangle().fill(Color.CT.noise).frame(height: 1)
+
+                    CTSettingsSectionHeader(
+                        title: NSLocalizedString("social_recovery_identity_header", comment: "")
+                    )
+
+                    Rectangle().fill(Color.CT.noise).frame(height: 1)
+
+                    HStack {
+                        Text(NSLocalizedString("social_recovery_username_label", comment: ""))
+                            .font(CTFont.regular(12))
+                            .foregroundColor(Color.CT.textDim)
+                        Spacer()
+                        TextField("@handle", text: $username)
+                            .font(CTFont.regular(13))
+                            .foregroundColor(Color.CT.text)
+                            .multilineTextAlignment(.trailing)
+                            .autocorrectionDisabled()
+                            .textInputAutocapitalization(.never)
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 12)
 
                     Rectangle().fill(Color.CT.noise).frame(height: 1)
 
@@ -159,9 +183,9 @@ struct SocialRecoveryEntryView: View {
     }
 
     private var restoreButton: some View {
-        let enabled = service.enteredShares.count >= service.threshold
+        let enabled = service.enteredShares.count >= service.threshold && !username.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         return Button {
-            Task { await service.reconstructAndRestore() }
+            Task { await service.reconstructAndRestore(username: username.trimmingCharacters(in: .whitespacesAndNewlines)) }
         } label: {
             Text(NSLocalizedString("social_recovery_restore", comment: ""))
                 .font(CTFont.regular(13))
