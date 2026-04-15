@@ -562,10 +562,10 @@ class BackgroundFetchManager: NSObject {
     /// Perform maintenance operations (cache cleanup, token minting, etc.)
     private func performMaintenance(completion: @escaping (Bool) -> Void) {
         DispatchQueue.global().async {
-            // Mint stealth tokens during maintenance window (device is charging)
             Task { @MainActor in
-                // Mint up to 15 tokens per maintenance cycle (budget: ~1800-2700 per charging session)
-                TokenWalletService.shared.mintTokens(count: 15)
+                // Replenish blind tokens during maintenance window (up to 15 per cycle).
+                // BlindTokenService enforces 1-hour cooldown to respect server rate limit.
+                await BlindTokenService.shared.replenish(count: 15)
             }
             completion(true)
         }

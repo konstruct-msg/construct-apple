@@ -3,19 +3,28 @@
 //  Construct Messenger
 //
 //  Manages the STEALTH per-message token wallet.
-//  Tokens are UUIDs stored as JSON in the Keychain.
-//  Minted in the background during maintenance; consumed 1-per-message in per-message stealth mode.
+//  Tokens are BlindToken structs stored as JSON in the Keychain.
+//  Replenished via BlindTokenService (Privacy Pass OPRF); consumed 1-per-message.
 //
 
 import Foundation
 import Observation
+
+/// A finalized Privacy Pass blind token. The `token` bytes are the HKDF output
+/// from the OPRF evaluation; `nonce` is retained for future revocation proof.
+struct BlindToken: Codable, Sendable {
+    /// Original 32-byte random nonce used during blinding.
+    let nonce: Data
+    /// 32-byte finalized token: HKDF(k·T) derived in Rust core.
+    let token: Data
+}
 
 @Observable
 @MainActor
 final class TokenWalletService {
     static let shared = TokenWalletService()
 
-    private static let keychainKey = "stealth_token_wallet_v1"
+    private static let keychainKey = "stealth_token_wallet_v2"
     private static let maxBalance = 500
 
     private(set) var balance: Int = 0
@@ -26,44 +35,45 @@ final class TokenWalletService {
 
     // MARK: - Public API
 
-    /// Mint up to `count` new tokens (capped at maxBalance total).
-    func mintTokens(count: Int) {
-        var tokens = loadTokens()
-        let canAdd = min(count, Self.maxBalance - tokens.count)
+    /// Deposit server-issued blind tokens (from BlindTokenService).
+    func deposit(_ tokens: [BlindToken]) {
+        var existing = loadTokens()
+        let canAdd = min(tokens.count, Self.maxBalance - existing.count)
         guard canAdd > 0 else { return }
-        for _ in 0..<canAdd {
-            tokens.append(UUID().uuidString)
-        }
-        saveTokens(tokens)
-        balance = tokens.count
-        Log.info("🪙 TokenWallet: minted \(canAdd) tokens (balance=\(balance))", category: "TokenWallet")
+        existing.append(contentsOf: tokens.prefix(canAdd))
+        saveTokens(existing)
+        balance = existing.count
+        Log.info("🪙 TokenWallet: deposited \(canAdd) blind tokens (balance=\(balance))", category: "TokenWallet")
     }
 
-    /// Consume one token. Returns false if the wallet is empty.
+    /// Consume one token. Returns the token bytes if successful, nil if wallet is empty.
     @discardableResult
-    func consumeToken() -> Bool {
+    func consumeToken() -> BlindToken? {
         var tokens = loadTokens()
         guard !tokens.isEmpty else {
             Log.debug("🪙 TokenWallet: empty — cannot consume", category: "TokenWallet")
-            return false
+            return nil
         }
-        tokens.removeFirst()
+        let token = tokens.removeFirst()
         saveTokens(tokens)
         balance = tokens.count
-        return true
+        return token
     }
+
+    /// Returns true if at least one token is available.
+    var hasToken: Bool { balance > 0 }
 
     // MARK: - Storage
 
-    private func loadTokens() -> [String] {
+    private func loadTokens() -> [BlindToken] {
         guard
             let data = KeychainManager.shared.loadRawData(forKey: Self.keychainKey),
-            let tokens = try? JSONDecoder().decode([String].self, from: data)
+            let tokens = try? JSONDecoder().decode([BlindToken].self, from: data)
         else { return [] }
         return tokens
     }
 
-    private func saveTokens(_ tokens: [String]) {
+    private func saveTokens(_ tokens: [BlindToken]) {
         guard let data = try? JSONEncoder().encode(tokens) else { return }
         KeychainManager.shared.saveRawData(data, forKey: Self.keychainKey)
     }
