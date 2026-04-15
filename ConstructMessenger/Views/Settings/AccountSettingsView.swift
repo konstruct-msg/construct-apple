@@ -13,6 +13,7 @@ struct AccountSettingsView: View {
     @Environment(\.managedObjectContext) private var viewContext
     @Environment(AuthViewModel.self) private var authViewModel
     @Environment(AccountRecoveryViewModel.self) private var recoveryVM
+    @Environment(SocialRecoveryService.self) private var socialRecoveryService
     @Environment(SettingsViewModel.self) private var viewModel
     @Environment(\.dismiss) private var dismiss
 
@@ -33,6 +34,7 @@ struct AccountSettingsView: View {
     @State private var showingLogoutAllConfirm = false
     @State private var showingNoBackupWarning = false
     @State private var showingRecoverySetup = false
+    @State private var showingSocialRecoverySetup = false
     @State private var pendingLogoutAll = false  // which logout action was requested before backup check
 
     var body: some View {
@@ -152,6 +154,10 @@ struct AccountSettingsView: View {
                 .environment(recoveryVM)
                 .environment(authViewModel)
         }
+        .sheet(isPresented: $showingSocialRecoverySetup) {
+            SocialRecoverySetupView()
+                .environment(socialRecoveryService)
+        }
     }
 
     // MARK: - Avatar Header
@@ -266,6 +272,28 @@ struct AccountSettingsView: View {
                         .foregroundStyle(Color.CT.textDim)
                     Spacer()
                     Text("[\(NSLocalizedString("manage_action", comment: "")) [→]]")
+                        .font(CTFont.regular(13))
+                        .foregroundStyle(Color.CT.accent)
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 14)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            flatRowDivider()
+
+            // social recovery
+            Button {
+                showingSocialRecoverySetup = true
+            } label: {
+                HStack {
+                    Text(socialRecoveryService.isConfigured
+                         ? NSLocalizedString("social_recovery_row_active", comment: "")
+                         : NSLocalizedString("social_recovery_row_inactive", comment: ""))
+                        .font(CTFont.regular(14))
+                        .foregroundStyle(socialRecoveryService.isConfigured ? Color.CT.accent : Color.CT.textDim)
+                    Spacer()
+                    Text("[→]")
                         .font(CTFont.regular(13))
                         .foregroundStyle(Color.CT.accent)
                 }
@@ -670,6 +698,9 @@ struct AvatarViewerSheet: View {
         AccountSettingsView()
             .environment(\.managedObjectContext, context)
             .environment(authViewModel)
+            .environment(AccountRecoveryViewModel())
+            .environment(SocialRecoveryService())
+            .environment(SettingsViewModel())
     }
     .preferredColorScheme(.dark)
 }

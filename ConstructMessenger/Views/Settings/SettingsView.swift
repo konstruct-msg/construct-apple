@@ -9,6 +9,7 @@ struct SettingsView: View {
     @Environment(\.managedObjectContext) private var viewContext
     @Environment(AuthViewModel.self) private var authViewModel
     @Environment(AccountRecoveryViewModel.self) private var recoveryVM
+    @Environment(SocialRecoveryService.self) private var socialRecoveryService
     @Environment(ChatsViewModel.self) private var chatsViewModel
     @State private var viewModel = SettingsViewModel()
     private var connectionStatus = ConnectionStatusManager.shared
@@ -40,6 +41,7 @@ struct SettingsView: View {
                         NavigationLink(destination: AccountSettingsView()
                             .environment(authViewModel)
                             .environment(recoveryVM)
+                            .environment(socialRecoveryService)
                             .environment(viewModel)) {
                             profileRow
                         }
@@ -282,6 +284,7 @@ struct SettingsView: View {
         .environment(\.managedObjectContext, context)
         .environment(authViewModel)
         .environment(recoveryVM)
+        .environment(SocialRecoveryService())
         .environment(chatsVM)
         .environment(SecurityViewModel())
 }

@@ -17,6 +17,7 @@ struct Construct_MessengerApp: App {
     @State private var authViewModel = AuthViewModel(context: PersistenceController.shared.container.viewContext)
     @State private var securityViewModel = SecurityViewModel()
     @State private var recoveryViewModel = AccountRecoveryViewModel()
+    @State private var socialRecoveryService = SocialRecoveryService()
 
     init() {
         // Eagerly load the CoreData stack so NSManagedObjectModel is registered
@@ -39,6 +40,7 @@ struct Construct_MessengerApp: App {
             .environment(securityViewModel)
             .environment(authViewModel)   // PinLockView needs AuthViewModel for duress wipe
             .environment(recoveryViewModel)
+            .environment(socialRecoveryService)
             .task {
                 MediaManager.shared.evictOldFiles()
                 // Start ICE proxy if user has it enabled — async to allow .well-known cert fetch

@@ -121,6 +121,7 @@ struct ContentView: View {
         .environment(authViewModel)
         .environment(deepLinkHandler)
         .environment(AccountRecoveryViewModel())
+        .environment(SocialRecoveryService())
         .environment(SecurityViewModel())
 }
 #endif
@@ -153,6 +154,7 @@ struct ContentView: View {
         .environment(deepLinkHandler)
         .environment(chatsViewModel)
         .environment(AccountRecoveryViewModel())
+        .environment(SocialRecoveryService())
         .environment(SecurityViewModel())
 }
 #endif
