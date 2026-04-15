@@ -100,10 +100,10 @@ merge_ice() {
 
   [ -f "$core_lib" ] || fail "libconstruct_core.a не найден: $core_lib"
 
-  # Ищем libconstruct_ice*.a в deps/
+  # Ищем libconstruct_ice*.a в deps/ — берём самый новый (последний build)
   local ice_lib
   ice_lib=$(find "$CORE_PATH/target/$arch/$BUILD_DIR/deps" \
-            -name "libconstruct_ice*.a" 2>/dev/null | head -1)
+            -name "libconstruct_ice*.a" 2>/dev/null | xargs ls -t 2>/dev/null | head -1)
 
   if [ -n "$ice_lib" ] && [ -f "$ice_lib" ]; then
     libtool -static -o "$dest" "$core_lib" "$ice_lib"

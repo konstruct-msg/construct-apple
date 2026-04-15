@@ -44,6 +44,8 @@ enum TrafficPath: Equatable {
     case icePrimary(host: String)
     /// ICE relay: plain obfs4 → Moscow TCP relay → Amsterdam.
     case iceRelay(address: String)
+    /// ICE v2 WebTunnel: TLS → WebSocket → relay → server.
+    case iceWebTunnel(relay: String)
     /// ICE is enabled but proxy is temporarily bypassed (cooldown after failure).
     case iceCooldown
     /// ICE is enabled but the proxy has not started yet / is starting.
@@ -54,6 +56,7 @@ enum TrafficPath: Equatable {
         case .direct:           return "Direct gRPC"
         case .icePrimary:       return "ICE (Primary)"
         case .iceRelay:         return "ICE (Relay)"
+        case .iceWebTunnel:     return "ICE v2 (WebTunnel)"
         case .iceCooldown:      return "Direct gRPC (ICE recovering)"
         case .iceConnecting:    return "ICE (Connecting…)"
         }
@@ -64,6 +67,7 @@ enum TrafficPath: Equatable {
         case .direct:                  return "TLS 1.3 · ams.konstruct.cc:443"
         case .icePrimary(let host):    return "TLS + obfs4 · \(host)"
         case .iceRelay(let address):   return "obfs4 relay · \(address)"
+        case .iceWebTunnel(let relay): return "wss:// · \(relay)"
         case .iceCooldown:             return "Reconnecting via ICE…"
         case .iceConnecting:           return "Starting obfs4 proxy…"
         }
@@ -74,6 +78,7 @@ enum TrafficPath: Equatable {
         case .direct:        return "network"
         case .icePrimary:    return "lock.shield.fill"
         case .iceRelay:      return "arrow.triangle.2.circlepath.circle.fill"
+        case .iceWebTunnel:  return "lock.shield.fill"
         case .iceCooldown:   return "exclamationmark.arrow.circlepath"
         case .iceConnecting: return "clock.arrow.circlepath"
         }
@@ -84,6 +89,7 @@ enum TrafficPath: Equatable {
         case .direct:        return "blue"
         case .icePrimary:    return "green"
         case .iceRelay:      return "purple"
+        case .iceWebTunnel:  return "teal"
         case .iceCooldown:   return "orange"
         case .iceConnecting: return "orange"
         }
@@ -167,25 +173,38 @@ struct IceRelay: Codable, Identifiable {
     /// SHA-256 of DER SubjectPublicKeyInfo (hex). When set, cert is verified by pin
     /// instead of CA chain. Enables use of fake SNI without chain validation errors.
     let pinnedSpki: String?
+    /// WebTunnel (ICE v2) WebSocket resource path, e.g. `"/construct-ice"`.
+    /// When non-nil, this relay supports the WebTunnel wss:// transport.
+    let wtPath: String?
+    /// HTTP Host header for the WebTunnel WebSocket upgrade request.
+    /// May differ from `tlsServerName` for domain fronting.
+    /// Defaults to the relay's hostname when nil.
+    let wtHostHeader: String?
 
     /// Full bridge line string passed to Rust: "cert=<cert> iat-mode=<n>"
     var bridgeLine: String {
         "cert=\(bridgeCert) iat-mode=\(iatMode.rawValue)"
     }
 
+    /// Returns true when this relay supports WebTunnel transport (ICE v2).
+    var supportsWebTunnel: Bool { wtPath != nil }
+
     init(address: String, bridgeCert: String, iatMode: IceIATMode = .none,
-         tlsServerName: String? = nil, pinnedSpki: String? = nil) {
+         tlsServerName: String? = nil, pinnedSpki: String? = nil,
+         wtPath: String? = nil, wtHostHeader: String? = nil) {
         self.id            = UUID()
         self.address       = address
         self.bridgeCert    = bridgeCert
         self.iatMode       = iatMode
         self.tlsServerName = tlsServerName
         self.pinnedSpki    = pinnedSpki
+        self.wtPath        = wtPath
+        self.wtHostHeader  = wtHostHeader
     }
 
     // Codable conformance for IceIATMode (stored as rawValue Int)
     enum CodingKeys: String, CodingKey {
-        case id, address, bridgeCert, iatMode, tlsServerName, pinnedSpki
+        case id, address, bridgeCert, iatMode, tlsServerName, pinnedSpki, wtPath, wtHostHeader
     }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -196,6 +215,8 @@ struct IceRelay: Codable, Identifiable {
         iatMode       = IceIATMode(rawValue: raw) ?? .none
         tlsServerName = try? c.decode(String.self, forKey: .tlsServerName)
         pinnedSpki    = try? c.decode(String.self, forKey: .pinnedSpki)
+        wtPath        = try? c.decode(String.self, forKey: .wtPath)
+        wtHostHeader  = try? c.decode(String.self, forKey: .wtHostHeader)
     }
     func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
@@ -205,6 +226,8 @@ struct IceRelay: Codable, Identifiable {
         try c.encode(iatMode.rawValue, forKey: .iatMode)
         try? c.encode(tlsServerName, forKey: .tlsServerName)
         try? c.encode(pinnedSpki, forKey: .pinnedSpki)
+        try? c.encode(wtPath, forKey: .wtPath)
+        try? c.encode(wtHostHeader, forKey: .wtHostHeader)
     }
 }
 
@@ -277,6 +300,8 @@ final class IceProxyManager: ObservableObject {
     @Published private(set) var proxyPort: UInt16 = 0
     @Published private(set) var activeRelay: IceRelay?
     @Published private(set) var lastError: String?
+    /// True when the active transport is WebTunnel (ICE v2) rather than obfs4.
+    @Published private(set) var isWebTunnelActive: Bool = false
     /// True while ICE is in cooldown after a relay failure. Drives the UI directly —
     /// changes to this property cause the Network settings view to re-render.
     @Published private(set) var isOnCooldown: Bool = false
@@ -426,6 +451,7 @@ final class IceProxyManager: ObservableObject {
     var currentTrafficPath: TrafficPath {
         guard isRunning, let relay = activeRelay else { return .direct }
         if isOnCooldown { return .iceCooldown }
+        if isWebTunnelActive { return .iceWebTunnel(relay: relay.address) }
         if relay.tlsServerName != nil { return .icePrimary(host: relay.address) }
         return .iceRelay(address: relay.address)
     }
@@ -546,8 +572,39 @@ final class IceProxyManager: ObservableObject {
         lastError = nil
 
         var port: UInt16 = 0
-        let result: Int32
+        var result: Int32 = 0
         PerformanceMetrics.shared.start(.iceProxyStartBegin, label: relay.address)
+
+        // WebTunnel (ICE v2) — try first when available. Requires TLS config.
+        // Falls through to obfs4 when wt_path is absent or WebTunnel fails.
+        if let wtPath = relay.wtPath, relay.tlsServerName != nil {
+            let sni        = relay.tlsServerName ?? ""
+            let spki       = relay.pinnedSpki ?? ""
+            let hostHeader = relay.wtHostHeader ?? ""
+            Log.info("🧊 ICE WebTunnel → \(relay.address) (SNI: \(sni.isEmpty ? "<none>" : sni), path: \(wtPath))", category: "ICE")
+            result = relay.address.withCString { addrPtr in
+                sni.withCString { sniPtr in
+                    spki.withCString { spkiPtr in
+                        hostHeader.withCString { hostPtr in
+                            wtPath.withCString { pathPtr in
+                                ice_proxy_start_webtunnel(addrPtr, sniPtr, spkiPtr, hostPtr, pathPtr, &port)
+                            }
+                        }
+                    }
+                }
+            }
+            if result == 0 {
+                PerformanceMetrics.shared.end(.iceProxyStartBegin, endEvent: .iceProxyStartEnd, label: relay.address)
+                isRunning        = true
+                isWebTunnelActive = true
+                proxyPort        = port
+                activeRelay      = relay
+                return port
+            }
+            Log.error("🧊 ICE WebTunnel failed (\(result)), falling back to obfs4", category: "ICE")
+        }
+
+        isWebTunnelActive = false
 
         if let sni = relay.tlsServerName {
             if let spki = relay.pinnedSpki {
@@ -1161,6 +1218,7 @@ final class IceProxyManager: ObservableObject {
         isRunning           = false
         proxyPort           = 0
         activeRelay         = nil
+        isWebTunnelActive   = false
         isSecondaryRunning  = false
         secondaryProxyPort  = 0
         secondaryRelay      = nil

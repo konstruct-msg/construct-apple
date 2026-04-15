@@ -58,6 +58,9 @@ struct ConnectionStatusIndicator: View {
         case .iceRelay(let address):
             let hostname = address.components(separatedBy: ":").first ?? address
             return "RELAY: \(hostname) · OBFS4"
+        case .iceWebTunnel(let relay):
+            let hostname = relay.components(separatedBy: ":").first ?? relay
+            return "RELAY: \(hostname) · WEBTUNNEL"
         case .iceCooldown:
             return "DIRECT · RECOVERING"
         case .iceConnecting:
@@ -72,6 +75,7 @@ struct ConnectionStatusIndicator: View {
             case .direct:     return Color.CT.textDim
             case .icePrimary: return Color.CT.accent
             case .iceRelay:   return Color.CT.accentDim
+            case .iceWebTunnel: return Color.CT.accent
             case .iceCooldown, .iceConnecting: return Color.CT.textDim
             }
         case .connecting, .unknown:

@@ -268,21 +268,23 @@ struct NetworkSettingsView: View {
 
     private func pathASCII(_ path: TrafficPath) -> String {
         switch path {
-        case .direct:        return "[→]"
-        case .icePrimary:    return "[t]"
-        case .iceRelay:      return "[t]"
-        case .iceCooldown:   return "[!]"
-        case .iceConnecting: return "[~]"
+        case .direct:          return "[→]"
+        case .icePrimary:      return "[t]"
+        case .iceRelay:        return "[t]"
+        case .iceWebTunnel:    return "[ws]"
+        case .iceCooldown:     return "[!]"
+        case .iceConnecting:   return "[~]"
         }
     }
 
     private func pathColor(_ path: TrafficPath) -> Color {
         switch path {
-        case .direct:        return Color.CT.accentDim
-        case .icePrimary:    return Color.CT.accent
-        case .iceRelay:      return Color.CT.accentDim
-        case .iceCooldown:   return .orange
-        case .iceConnecting: return .orange
+        case .direct:          return Color.CT.accentDim
+        case .icePrimary:      return Color.CT.accent
+        case .iceRelay:        return Color.CT.accentDim
+        case .iceWebTunnel:    return Color.CT.accent
+        case .iceCooldown:     return .orange
+        case .iceConnecting:   return .orange
         }
     }
 }

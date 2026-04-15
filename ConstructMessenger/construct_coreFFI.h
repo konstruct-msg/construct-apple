@@ -870,6 +870,11 @@ RustBuffer uniffi_construct_core_fn_func_compute_pow(RustBuffer challenge, uint3
 RustBuffer uniffi_construct_core_fn_func_compute_pow_with_progress(RustBuffer challenge, uint32_t difficulty, RustBuffer progress_callback, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_COMPUTE_SAFETY_NUMBER
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_COMPUTE_SAFETY_NUMBER
+RustBuffer uniffi_construct_core_fn_func_compute_safety_number(RustBuffer my_device_id, RustBuffer their_device_id, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_CREATE_CRYPTO_CORE
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_CREATE_CRYPTO_CORE
 uint64_t uniffi_construct_core_fn_func_create_crypto_core(RustCallStatus *_Nonnull out_status
@@ -961,6 +966,21 @@ RustBuffer uniffi_construct_core_fn_func_mlkem768_keygen(RustCallStatus *_Nonnul
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_MNEMONIC_TO_SEED
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_MNEMONIC_TO_SEED
 RustBuffer uniffi_construct_core_fn_func_mnemonic_to_seed(RustBuffer mnemonic, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_PP_BLIND_TOKEN
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_PP_BLIND_TOKEN
+RustBuffer uniffi_construct_core_fn_func_pp_blind_token(RustBuffer nonce, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_PP_FINALIZE_TOKEN
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_PP_FINALIZE_TOKEN
+RustBuffer uniffi_construct_core_fn_func_pp_finalize_token(RustBuffer evaluated_bytes, RustBuffer blind_factor_bytes, RustBuffer nonce, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_PP_VERIFY_CLIENT
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_PP_VERIFY_CLIENT
+int8_t uniffi_construct_core_fn_func_pp_verify_client(RustBuffer evaluated_bytes, RustBuffer nonce, RustBuffer server_pubkey_bytes, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_RANDOM_SEND_DELAY_MS
@@ -1286,6 +1306,12 @@ uint16_t uniffi_construct_core_checksum_func_compute_pow_with_progress(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_COMPUTE_SAFETY_NUMBER
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_COMPUTE_SAFETY_NUMBER
+uint16_t uniffi_construct_core_checksum_func_compute_safety_number(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_CREATE_CRYPTO_CORE
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_CREATE_CRYPTO_CORE
 uint16_t uniffi_construct_core_checksum_func_create_crypto_core(void
@@ -1391,6 +1417,24 @@ uint16_t uniffi_construct_core_checksum_func_mlkem768_keygen(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_MNEMONIC_TO_SEED
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_MNEMONIC_TO_SEED
 uint16_t uniffi_construct_core_checksum_func_mnemonic_to_seed(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_PP_BLIND_TOKEN
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_PP_BLIND_TOKEN
+uint16_t uniffi_construct_core_checksum_func_pp_blind_token(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_PP_FINALIZE_TOKEN
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_PP_FINALIZE_TOKEN
+uint16_t uniffi_construct_core_checksum_func_pp_finalize_token(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_PP_VERIFY_CLIENT
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_PP_VERIFY_CLIENT
+uint16_t uniffi_construct_core_checksum_func_pp_verify_client(void
     
 );
 #endif

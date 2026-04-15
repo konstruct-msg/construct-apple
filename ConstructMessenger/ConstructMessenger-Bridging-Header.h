@@ -32,4 +32,21 @@ uint16_t ice_proxy_port_tls(void);
 /// Plain obfs4 proxy port specifically (dual-proxy happy-eyeballs mode).
 uint16_t ice_proxy_port_plain(void);
 
+/// WebTunnel (WebSocket-over-TLS) proxy for DPI evasion (construct-ice v2).
+///
+/// Traffic appears as standard wss:// connections to bypass DPI.
+///
+/// relay_addr:  IP:port of the relay ("158.160.140.67:443").
+/// tls_sni:     TLS SNI — set to CDN domain for fronting, or empty for IP-mode.
+/// spki_hex:    lowercase hex SHA-256 of relay DER SPKI — empty = no pinning.
+/// host_header: HTTP Host header for WebSocket upgrade (for domain fronting).
+/// path:        WebSocket resource path (e.g. "/construct-ice"). Empty → "/".
+/// port_out:    local TCP port the proxy listens on.
+int32_t ice_proxy_start_webtunnel(const char *relay_addr,
+                                   const char *tls_sni, const char *spki_hex,
+                                   const char *host_header, const char *path,
+                                   uint16_t *port_out);
+/// WebTunnel proxy port (0 = not running).
+uint16_t ice_proxy_port_webtunnel(void);
+
 #endif /* ConstructMessenger_Bridging_Header_h */
