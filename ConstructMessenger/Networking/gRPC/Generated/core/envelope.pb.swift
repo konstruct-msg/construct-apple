@@ -616,6 +616,14 @@ public struct Shared_Proto_Core_V1_SealedInner: Sendable {
   /// TTL in seconds (0 = no expiration)
   public var ttl: UInt32 = 0
 
+  /// Privacy Pass blind token — anonymous spend credential (optional).
+  /// When present, destination server verifies the token against the
+  /// Privacy Pass issuer public key before delivering the message.
+  /// Sender consumes one token per STEALTH message from their local wallet.
+  public var tokenNonce: Data = Data()
+
+  public var tokenBytes: Data = Data()
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -1173,7 +1181,7 @@ extension Shared_Proto_Core_V1_SealedSenderEnvelope: SwiftProtobuf.Message, Swif
 
 extension Shared_Proto_Core_V1_SealedInner: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SealedInner"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}recipient_user_id\0\u{3}delivery_tag\0\u{3}sender_cert_ciphertext\0\u{3}encrypted_payload\0\u{3}content_type\0\u{1}priority\0\u{1}ttl\0\u{c}\u{8}\u{8}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}recipient_user_id\0\u{3}delivery_tag\0\u{3}sender_cert_ciphertext\0\u{3}encrypted_payload\0\u{3}content_type\0\u{1}priority\0\u{1}ttl\0\u{4}\u{9}token_nonce\0\u{3}token_bytes\0\u{c}\u{8}\u{8}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1188,6 +1196,8 @@ extension Shared_Proto_Core_V1_SealedInner: SwiftProtobuf.Message, SwiftProtobuf
       case 5: try { try decoder.decodeSingularEnumField(value: &self.contentType) }()
       case 6: try { try decoder.decodeSingularEnumField(value: &self.priority) }()
       case 7: try { try decoder.decodeSingularUInt32Field(value: &self.ttl) }()
+      case 16: try { try decoder.decodeSingularBytesField(value: &self.tokenNonce) }()
+      case 17: try { try decoder.decodeSingularBytesField(value: &self.tokenBytes) }()
       default: break
       }
     }
@@ -1215,6 +1225,12 @@ extension Shared_Proto_Core_V1_SealedInner: SwiftProtobuf.Message, SwiftProtobuf
     if self.ttl != 0 {
       try visitor.visitSingularUInt32Field(value: self.ttl, fieldNumber: 7)
     }
+    if !self.tokenNonce.isEmpty {
+      try visitor.visitSingularBytesField(value: self.tokenNonce, fieldNumber: 16)
+    }
+    if !self.tokenBytes.isEmpty {
+      try visitor.visitSingularBytesField(value: self.tokenBytes, fieldNumber: 17)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1226,6 +1242,8 @@ extension Shared_Proto_Core_V1_SealedInner: SwiftProtobuf.Message, SwiftProtobuf
     if lhs.contentType != rhs.contentType {return false}
     if lhs.priority != rhs.priority {return false}
     if lhs.ttl != rhs.ttl {return false}
+    if lhs.tokenNonce != rhs.tokenNonce {return false}
+    if lhs.tokenBytes != rhs.tokenBytes {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

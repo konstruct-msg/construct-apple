@@ -56,13 +56,6 @@ final class ChunkedMessageSender {
                 }
             }
 
-            // Consume one token for per-message stealth (not consumed in per-stream mode)
-            if sealedInner != nil && UserDefaults.standard.bool(forKey: "stealth_per_message") {
-                await MainActor.run {
-                    TokenWalletService.shared.consumeToken()
-                }
-            }
-
             let response = try await MessagingServiceClient.shared.sendMessage(
                 messageId: chunkMessageId,
                 recipientId: recipientId,

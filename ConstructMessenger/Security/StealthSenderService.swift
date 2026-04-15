@@ -201,6 +201,15 @@ final class StealthSenderService {
         inner.senderCertCiphertext = sealedCert
         inner.encryptedPayload = encryptedPayload
         inner.deliveryTag = Data((0..<32).map { _ in UInt8.random(in: 0...255) })
+
+        // Attach a Privacy Pass blind token if the wallet has one.
+        // Token is optional: destination server accepts messages without tokens
+        // until Privacy Pass enforcement is enabled.
+        if let token = TokenWalletService.shared.consumeToken() {
+            inner.tokenNonce = token.nonce
+            inner.tokenBytes = token.token
+        }
+
         return try inner.serializedData()
     }
 
