@@ -10,9 +10,9 @@ import SwiftUI
 struct ImageHelper {
     // MARK: - Avatar Processing
 
-    static let maxAvatarSize: CGFloat = 1024
-    static let avatarCompressionQuality: CGFloat = 0.7
-    static let maxAvatarFileSize: Int = 40 * 1024
+    static let maxAvatarSize: CGFloat = 512
+    static let avatarCompressionQuality: CGFloat = 0.8
+    static let maxAvatarFileSize: Int = 200 * 1024
 
     static func prepareAvatarImage(_ image: UIImage) -> Data? {
         guard let resizedImage = resizeAndCropToSquare(image, size: maxAvatarSize) else { return nil }
@@ -73,9 +73,9 @@ struct ImageHelper {
 import AppKit
 
 struct ImageHelper {
-    static let maxAvatarSize: CGFloat = 1024
-    static let avatarCompressionQuality: CGFloat = 0.7
-    static let maxAvatarFileSize: Int = 40 * 1024
+    static let maxAvatarSize: CGFloat = 512
+    static let avatarCompressionQuality: CGFloat = 0.8
+    static let maxAvatarFileSize: Int = 200 * 1024
 
     static func prepareAvatarImage(_ image: NSImage) -> Data? {
         guard let tiff = image.tiffRepresentation,
