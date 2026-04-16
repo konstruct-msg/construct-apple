@@ -228,10 +228,12 @@ class BackgroundFetchManager: NSObject {
             return
         }
         
-        // Get Core Data context
+        // Get Core Data context — use a standalone background context (not a child of viewContext)
+        // to avoid triggering NSManagedObjectContextObjectsDidChange on the background thread,
+        // which would fire FRC/Observable updates off the main thread (purple Xcode warning).
         let context = PersistenceController.shared.container.viewContext
         let backgroundContext = NSManagedObjectContext(concurrencyType: .privateQueueConcurrencyType)
-        backgroundContext.parent = context
+        backgroundContext.persistentStoreCoordinator = context.persistentStoreCoordinator
         
         // ✅ Fetch pending messages via gRPC (unary, cursor-paginated)
         Task {
@@ -255,7 +257,7 @@ class BackgroundFetchManager: NSObject {
                 }
             } catch {
                 Log.error("❌ Failed to fetch offline messages: \(error.localizedDescription)", category: "BackgroundFetch")
-                completion(.failure(error))
+                DispatchQueue.main.async { completion(.failure(error)) }
             }
         }
     }
@@ -441,17 +443,30 @@ class BackgroundFetchManager: NSObject {
                 }
             }
             
-            // Save context
+            // Save context — standalone context writes directly to disk.
+            // Capture the NSManagedObjectContextDidSave notification so we can merge
+            // into viewContext on the main thread (keeps FRC/Observable updates on main thread).
             do {
+                var saveNotification: Notification?
+                let token = NotificationCenter.default.addObserver(
+                    forName: .NSManagedObjectContextDidSave,
+                    object: backgroundContext,
+                    queue: nil
+                ) { saveNotification = $0 }
+                defer { NotificationCenter.default.removeObserver(token) }
+
                 try backgroundContext.save()
-                context.performAndWait {
-                    context.saveAndLog()
-                }
-                
+
                 Log.info("✅ Saved \(newMessagesCount) new messages to Core Data", category: "BackgroundFetch")
-                
-                // Show notifications on main thread
+
+                let capturedNotification = saveNotification
                 DispatchQueue.main.async {
+                    // Merge changes into viewContext on main thread — FRC/Observable updates fire here safely.
+                    if let notification = capturedNotification {
+                        context.mergeChanges(fromContextDidSave: notification)
+                    }
+                    context.saveAndLog()
+
                     if newMessagesCount > 0 {
                         self.showNotificationsForMessages(
                             messagesByChat: messagesByChat,
@@ -459,7 +474,7 @@ class BackgroundFetchManager: NSObject {
                             totalCount: newMessagesCount
                         )
                     }
-                    
+
                     completion(.success(newMessagesCount))
                 }
             } catch {
