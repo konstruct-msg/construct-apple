@@ -10,22 +10,24 @@
 //
 
 import XCTest
-@testable import ConstructMessenger
+@testable import Construct_Messenger
 
 final class CryptoWireIntegrationTests: XCTestCase {
 
     // MARK: - Helpers
 
-    /// Minimal crypto peer — wraps a Rust core instance for testing
+    /// Minimal crypto peer — wraps a Rust OrchestratorCore instance for testing
     class CryptoPeer {
-        let core: ClassicCryptoCore
+        let core: OrchestratorCore
         let userId: String
-        private var sessionIds: [String: String] = [:]
 
         init(userId: String) throws {
             self.userId = userId
-            self.core = try createCryptoCore()
-            self.core.setLocalUserId(userId: userId)
+            // Bootstrap: generate fresh device keys via ClassicCryptoCore, then
+            // migrate to OrchestratorCore (matches the production init path).
+            let bootstrap = try createCryptoCore()
+            let keys = try bootstrap.exportPrivateKeys()
+            self.core = try createOrchestratorCoreFromKeys(keysData: keys, myUserId: userId)
         }
 
         /// Export key bundle for X3DH
@@ -34,11 +36,11 @@ final class CryptoWireIntegrationTests: XCTestCase {
             let json = try core.exportRegistrationBundleJson()
             guard let data = json.data(using: .utf8),
                   let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let ip = dict["identityPublic"] as? String,
-                  let sp = dict["signedPrekeyPublic"] as? String,
+                  let ip = dict["identity_public"] as? String,
+                  let sp = dict["signed_prekey_public"] as? String,
                   let sig = dict["signature"] as? String,
-                  let vk = dict["verifyingKey"] as? String,
-                  let sid = dict["suiteId"] as? String else {
+                  let vk = dict["verifying_key"] as? String,
+                  let sid = dict["suite_id"] as? String else {
                 throw NSError(domain: "TestError", code: 1)
             }
             return (ip, sp, sig, vk, sid)
@@ -68,26 +70,19 @@ final class CryptoWireIntegrationTests: XCTestCase {
                                 recipientBundle: (identityPublic: String, signedPrekeyPublic: String,
                                                   signature: String, verifyingKey: String, suiteId: String)) throws {
             let bytes = try bundleBytes(from: recipientBundle)
-            let sessionId = try core.initSession(contactId: contactId, recipientBundle: bytes)
-            sessionIds[contactId] = sessionId
+            _ = try core.initSession(contactId: contactId, recipientBundle: bytes)
         }
 
         /// Encrypt plaintext → EncryptedMessageComponents (wraps Rust core)
         func encryptRaw(_ plaintext: String, to contactId: String) throws -> MessageCryptoService.EncryptedMessageComponents {
-            guard let sessionId = sessionIds[contactId] else {
-                throw NSError(domain: "TestError", code: 3,
-                    userInfo: [NSLocalizedDescriptionKey: "No session for \(contactId)"])
-            }
-            let rustComponents = try core.encryptMessage(sessionId: sessionId, plaintext: plaintext)
-
-            // Apply padding (same as MessageCryptoService.encryptMessage does)
-            let paddedContent = MessagePadding.padCiphertextBase64(rustComponents.content)
-
+            let rustComponents = try core.encryptMessage(contactId: contactId, plaintext: Data(plaintext.utf8))
+            let rawContent = Data(rustComponents.content)
             return MessageCryptoService.EncryptedMessageComponents(
                 ephemeralPublicKey: Data(rustComponents.ephemeralPublicKey),
                 messageNumber: rustComponents.messageNumber,
-                content: paddedContent,
-                suiteId: 1
+                content: MessagePadding.padCiphertext(rawContent),
+                suiteId: 1,
+                oneTimePreKeyId: rustComponents.oneTimePrekeyId
             )
         }
 
@@ -99,20 +94,14 @@ final class CryptoWireIntegrationTests: XCTestCase {
         /// Decode wire payload (same as MessageStreamManager does) and decrypt
         func decodeAndDecrypt(_ payload: Data, from contactId: String) throws -> String {
             let decoded = try WirePayloadCoder.decode(payload)
-
-            // Unpad content before passing to Rust
-            let unpadded = MessagePadding.unpadCiphertextBase64(decoded.content)
-
-            guard let sessionId = sessionIds[contactId] else {
-                throw NSError(domain: "TestError", code: 4,
-                    userInfo: [NSLocalizedDescriptionKey: "No session for \(contactId)"])
-            }
-            return try core.decryptMessage(
-                sessionId: sessionId,
+            let unpadded = MessagePadding.unpadCiphertext(decoded.content)
+            let plaintextData = try core.decryptMessage(
+                contactId: contactId,
                 ephemeralPublicKey: decoded.ephemeralPublicKey,
                 messageNumber: decoded.messageNumber,
-                content: unpadded
+                content: [UInt8](unpadded)
             )
+            return String(data: plaintextData, encoding: .utf8) ?? ""
         }
 
         /// Initialize receiving session from first wire-encoded message
@@ -122,12 +111,12 @@ final class CryptoWireIntegrationTests: XCTestCase {
                                   wirePayload: Data) throws -> String {
             let bundleBytes = try bundleBytes(from: senderBundle)
             let decoded = try WirePayloadCoder.decode(wirePayload)
-            let unpadded = MessagePadding.unpadCiphertextBase64(decoded.content)
+            let unpadded = MessagePadding.unpadCiphertext(decoded.content)
 
             let msgDict: [String: Any] = [
                 "ephemeral_public_key": decoded.ephemeralPublicKey,
                 "message_number": decoded.messageNumber,
-                "content": unpadded
+                "content": [UInt8](unpadded)
             ]
             let msgBytes = [UInt8](try JSONSerialization.data(withJSONObject: msgDict))
 
@@ -136,7 +125,6 @@ final class CryptoWireIntegrationTests: XCTestCase {
                 recipientBundle: bundleBytes,
                 firstMessage: msgBytes
             )
-            sessionIds[contactId] = result.sessionId
             return result.decryptedMessage
         }
     }
@@ -184,14 +172,15 @@ final class CryptoWireIntegrationTests: XCTestCase {
 
         _ = try bob.initReceiverSession(from: alice.userId, senderBundle: aliceBundle, wirePayload: firstWire)
 
-        // Bob → Alice (Bob now replies — DH ratchet step)
-        try bob.initSenderSession(to: alice.userId, recipientBundle: aliceBundle)
+        // Bob → Alice: reply using the existing session (initReceiverSession already set it up)
+        // initSenderSession here would overwrite Bob's session with wrong key material
         let bobReply = try bob.encryptRaw("Reply from Bob", to: alice.userId)
         let bobWire = try bob.encodeWire(bobReply)
 
-        _ = try alice.initReceiverSession(from: bob.userId, senderBundle: bobBundle, wirePayload: bobWire)
+        // Alice decrypts Bob's reply — DH ratchet step, no initReceiverSession needed
+        _ = try alice.decodeAndDecrypt(bobWire, from: bob.userId)
 
-        // Continue: Alice sends another message
+        // Continue: Alice sends another message (post-DH-ratchet)
         let plaintext = "Second message from Alice"
         let components2 = try alice.encryptRaw(plaintext, to: bob.userId)
         let wire2 = try alice.encodeWire(components2)

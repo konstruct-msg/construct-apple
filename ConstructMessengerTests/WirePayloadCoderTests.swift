@@ -11,7 +11,7 @@
 //
 
 import XCTest
-@testable import ConstructMessenger
+@testable import Construct_Messenger
 
 final class WirePayloadCoderTests: XCTestCase {
 
@@ -33,8 +33,9 @@ final class WirePayloadCoderTests: XCTestCase {
         return MessageCryptoService.EncryptedMessageComponents(
             ephemeralPublicKey: dhPub,
             messageNumber: msgNum,
-            content: sealedBox.base64EncodedString(),
-            suiteId: 1
+            content: sealedBox,
+            suiteId: 1,
+            oneTimePreKeyId: 0
         )
     }
 
@@ -58,9 +59,7 @@ final class WirePayloadCoderTests: XCTestCase {
         let components = makeComponents()
         let payload = try WirePayloadCoder.encode(components)
         let decoded = try WirePayloadCoder.decode(payload)
-        // decoded.content is base64 of the sealed box bytes
-        let decodedBytes = Data(base64Encoded: decoded.content)
-        XCTAssertEqual(decodedBytes, Self.sealedBox)
+        XCTAssertEqual(decoded.content, Self.sealedBox)
     }
 
     func testRoundtripWithMessageNumberZero() throws {
@@ -81,8 +80,7 @@ final class WirePayloadCoderTests: XCTestCase {
         let components = makeComponents(sealedBox: Self.minSealedBox)
         let payload = try WirePayloadCoder.encode(components)
         let decoded = try WirePayloadCoder.decode(payload)
-        let decodedBytes = Data(base64Encoded: decoded.content)
-        XCTAssertEqual(decodedBytes, Self.minSealedBox)
+        XCTAssertEqual(decoded.content, Self.minSealedBox)
     }
 
     // MARK: - Payload Structure
@@ -122,10 +120,10 @@ final class WirePayloadCoderTests: XCTestCase {
         XCTAssertEqual(dhBytes, [UInt8](Self.dhPubKey))
     }
 
-    func testSealedBoxStartsAtOffset36() throws {
+    func testSealedBoxStartsAtHeaderSize() throws {
         let components = makeComponents()
         let payload = try WirePayloadCoder.encode(components)
-        let sealedBytes = Data(payload[36...])
+        let sealedBytes = Data(payload[WirePayloadCoder.headerSize...])
         XCTAssertEqual(sealedBytes, Self.sealedBox)
     }
 
@@ -135,8 +133,9 @@ final class WirePayloadCoderTests: XCTestCase {
         let components = MessageCryptoService.EncryptedMessageComponents(
             ephemeralPublicKey: Data(repeating: 0, count: 16),  // too short
             messageNumber: 0,
-            content: Self.sealedBox.base64EncodedString(),
-            suiteId: 1
+            content: Self.sealedBox,
+            suiteId: 1,
+            oneTimePreKeyId: 0
         )
         XCTAssertThrowsError(try WirePayloadCoder.encode(components)) { error in
             XCTAssertEqual(error as? WirePayloadError, .invalidDHPublicKey)
@@ -147,23 +146,12 @@ final class WirePayloadCoderTests: XCTestCase {
         let components = MessageCryptoService.EncryptedMessageComponents(
             ephemeralPublicKey: Data(repeating: 0, count: 64),  // too long
             messageNumber: 0,
-            content: Self.sealedBox.base64EncodedString(),
-            suiteId: 1
+            content: Self.sealedBox,
+            suiteId: 1,
+            oneTimePreKeyId: 0
         )
         XCTAssertThrowsError(try WirePayloadCoder.encode(components)) { error in
             XCTAssertEqual(error as? WirePayloadError, .invalidDHPublicKey)
-        }
-    }
-
-    func testEncodeRejectsInvalidBase64Content() {
-        let components = MessageCryptoService.EncryptedMessageComponents(
-            ephemeralPublicKey: Self.dhPubKey,
-            messageNumber: 0,
-            content: "not valid base64!!!",
-            suiteId: 1
-        )
-        XCTAssertThrowsError(try WirePayloadCoder.encode(components)) { error in
-            XCTAssertEqual(error as? WirePayloadError, .invalidBase64Content)
         }
     }
 

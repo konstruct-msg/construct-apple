@@ -12,7 +12,7 @@
 //
 
 import XCTest
-@testable import ConstructMessenger
+@testable import Construct_Messenger
 
 final class MessagePaddingTests: XCTestCase {
 
@@ -22,55 +22,53 @@ final class MessagePaddingTests: XCTestCase {
 
     // MARK: - Helpers
 
-    /// Generate random base64 string of `rawByteCount` bytes
-    private func makeBase64(bytes count: Int) -> String {
-        Data((0..<count).map { _ in UInt8.random(in: 0...255) }).base64EncodedString()
+    private func makeData(bytes count: Int) -> Data {
+        Data((0..<count).map { _ in UInt8.random(in: 0...255) })
     }
 
     // MARK: - Pad → Unpad Roundtrip
 
     func testRoundtripSmallMessage() {
-        let original = makeBase64(bytes: 100)
-        let padded = MessagePadding.padCiphertextBase64(original)
-        let unpadded = MessagePadding.unpadCiphertextBase64(padded)
+        let original = makeData(bytes: 100)
+        let padded = MessagePadding.padCiphertext(original)
+        let unpadded = MessagePadding.unpadCiphertext(padded)
         XCTAssertEqual(unpadded, original, "Roundtrip should recover original content")
     }
 
     func testRoundtripMediumMessage() {
-        let original = makeBase64(bytes: 2000)
-        let padded = MessagePadding.padCiphertextBase64(original)
-        let unpadded = MessagePadding.unpadCiphertextBase64(padded)
+        let original = makeData(bytes: 2000)
+        let padded = MessagePadding.padCiphertext(original)
+        let unpadded = MessagePadding.unpadCiphertext(padded)
         XCTAssertEqual(unpadded, original)
     }
 
     func testRoundtripLargeMessage() {
-        let original = makeBase64(bytes: 10000)
-        let padded = MessagePadding.padCiphertextBase64(original)
-        let unpadded = MessagePadding.unpadCiphertextBase64(padded)
+        let original = makeData(bytes: 10000)
+        let padded = MessagePadding.padCiphertext(original)
+        let unpadded = MessagePadding.unpadCiphertext(padded)
         XCTAssertEqual(unpadded, original)
     }
 
     func testRoundtripTinyMessage() {
-        let original = makeBase64(bytes: 1)
-        let padded = MessagePadding.padCiphertextBase64(original)
-        let unpadded = MessagePadding.unpadCiphertextBase64(padded)
+        let original = makeData(bytes: 1)
+        let padded = MessagePadding.padCiphertext(original)
+        let unpadded = MessagePadding.unpadCiphertext(padded)
         XCTAssertEqual(unpadded, original)
     }
 
     func testRoundtripMessageExactlyAtBucketBoundary() {
-        // A message that exactly fills bucket 0 after adding header
         let targetRawSize = buckets[0] - headerLength
-        let original = makeBase64(bytes: targetRawSize)
-        let padded = MessagePadding.padCiphertextBase64(original)
-        let unpadded = MessagePadding.unpadCiphertextBase64(padded)
+        let original = makeData(bytes: targetRawSize)
+        let padded = MessagePadding.padCiphertext(original)
+        let unpadded = MessagePadding.unpadCiphertext(padded)
         XCTAssertEqual(unpadded, original)
     }
 
     func testRoundtripMessageOneByteUnderBoundary() {
         let targetRawSize = buckets[0] - headerLength - 1
-        let original = makeBase64(bytes: targetRawSize)
-        let padded = MessagePadding.padCiphertextBase64(original)
-        let unpadded = MessagePadding.unpadCiphertextBase64(padded)
+        let original = makeData(bytes: targetRawSize)
+        let padded = MessagePadding.padCiphertext(original)
+        let unpadded = MessagePadding.unpadCiphertext(padded)
         XCTAssertEqual(unpadded, original)
     }
 
@@ -78,28 +76,22 @@ final class MessagePaddingTests: XCTestCase {
 
     func testPaddedOutputFitsFirstBucket() {
         guard MessagePaddingConfig.enabled else { return }
-        let original = makeBase64(bytes: 100)
-        let padded = MessagePadding.padCiphertextBase64(original)
-        let paddedBytes = Data(base64Encoded: padded)!
-        XCTAssertEqual(paddedBytes.count, buckets[0],
+        let padded = MessagePadding.padCiphertext(makeData(bytes: 100))
+        XCTAssertEqual(padded.count, buckets[0],
             "Small message should be padded to first bucket (\(buckets[0]) bytes)")
     }
 
     func testPaddedOutputFitsSecondBucket() {
         guard MessagePaddingConfig.enabled else { return }
-        let original = makeBase64(bytes: buckets[0] - headerLength + 1)  // just over first bucket
-        let padded = MessagePadding.padCiphertextBase64(original)
-        let paddedBytes = Data(base64Encoded: padded)!
-        XCTAssertEqual(paddedBytes.count, buckets[1],
+        let padded = MessagePadding.padCiphertext(makeData(bytes: buckets[0] - headerLength + 1))
+        XCTAssertEqual(padded.count, buckets[1],
             "Message exceeding first bucket should be padded to second bucket (\(buckets[1]) bytes)")
     }
 
     func testPaddedOutputFitsThirdBucket() {
         guard MessagePaddingConfig.enabled else { return }
-        let original = makeBase64(bytes: buckets[1] - headerLength + 1)  // just over second bucket
-        let padded = MessagePadding.padCiphertextBase64(original)
-        let paddedBytes = Data(base64Encoded: padded)!
-        XCTAssertEqual(paddedBytes.count, buckets[2],
+        let padded = MessagePadding.padCiphertext(makeData(bytes: buckets[1] - headerLength + 1))
+        XCTAssertEqual(padded.count, buckets[2],
             "Message exceeding second bucket should be padded to third bucket (\(buckets[2]) bytes)")
     }
 
@@ -107,14 +99,11 @@ final class MessagePaddingTests: XCTestCase {
         guard MessagePaddingConfig.enabled else { return }
         let testSizes = [1, 50, 100, 500, 1000, 1016, 1017, 2000, 4080, 4089, 8000]
         for size in testSizes {
-            let original = makeBase64(bytes: size)
-            let padded = MessagePadding.padCiphertextBase64(original)
-            if let paddedBytes = Data(base64Encoded: padded) {
-                XCTAssertTrue(
-                    buckets.contains(paddedBytes.count),
-                    "Padded size \(paddedBytes.count) for input \(size) bytes not in buckets \(buckets)"
-                )
-            }
+            let padded = MessagePadding.padCiphertext(makeData(bytes: size))
+            XCTAssertTrue(
+                buckets.contains(padded.count),
+                "Padded size \(padded.count) for input \(size) bytes not in buckets \(buckets)"
+            )
         }
     }
 
@@ -123,18 +112,14 @@ final class MessagePaddingTests: XCTestCase {
     func testPaddedOutputHasMagicHeader() {
         guard MessagePaddingConfig.enabled else { return }
         let magic: [UInt8] = [0x4B, 0x50, 0x41, 0x44]  // "KPAD"
-        let original = makeBase64(bytes: 100)
-        let padded = MessagePadding.padCiphertextBase64(original)
-        let paddedBytes = [UInt8](Data(base64Encoded: padded)!)
-        XCTAssertEqual(Array(paddedBytes.prefix(4)), magic, "Padded blob must start with KPAD magic")
+        let padded = [UInt8](MessagePadding.padCiphertext(makeData(bytes: 100)))
+        XCTAssertEqual(Array(padded.prefix(4)), magic, "Padded blob must start with KPAD magic")
     }
 
     func testPaddedOutputHasCorrectLengthField() {
         guard MessagePaddingConfig.enabled else { return }
         let rawBytes = Data((0..<100).map { UInt8($0) })
-        let original = rawBytes.base64EncodedString()
-        let padded = MessagePadding.padCiphertextBase64(original)
-        let paddedBytes = [UInt8](Data(base64Encoded: padded)!)
+        let paddedBytes = [UInt8](MessagePadding.padCiphertext(rawBytes))
 
         // Bytes 4–7 are big-endian u32 of original length
         let storedLength = (UInt32(paddedBytes[4]) << 24)
@@ -148,50 +133,37 @@ final class MessagePaddingTests: XCTestCase {
 
     func testUnpadPassesThroughDataWithoutMagic() {
         // Data without KPAD magic should be returned unchanged
-        let noPadding = makeBase64(bytes: 50)
-        let result = MessagePadding.unpadCiphertextBase64(noPadding)
+        let noPadding = makeData(bytes: 50)
+        let result = MessagePadding.unpadCiphertext(noPadding)
         XCTAssertEqual(result, noPadding, "Without magic, input should be returned unchanged")
     }
 
     func testUnpadPassesThroughTooShortData() {
-        // Less than 8 bytes — no room for header
-        let tiny = Data(repeating: 0x4B, count: 4).base64EncodedString()
-        let result = MessagePadding.unpadCiphertextBase64(tiny)
+        let tiny = Data(repeating: 0x4B, count: 4)
+        let result = MessagePadding.unpadCiphertext(tiny)
         XCTAssertEqual(result, tiny)
-    }
-
-    func testUnpadPassesThroughInvalidBase64() {
-        let result = MessagePadding.unpadCiphertextBase64("not!valid!base64!!!")
-        XCTAssertEqual(result, "not!valid!base64!!!")
     }
 
     // MARK: - Determinism: Same Input → Same Output Size
 
     func testSameInputProducesSamePaddedSize() {
         guard MessagePaddingConfig.enabled else { return }
-        let original = makeBase64(bytes: 200)
-        let padded1 = MessagePadding.padCiphertextBase64(original)
-        let padded2 = MessagePadding.padCiphertextBase64(original)
-        // Size must be identical (random padding may differ in content but not size)
-        let size1 = Data(base64Encoded: padded1)!.count
-        let size2 = Data(base64Encoded: padded2)!.count
+        let original = makeData(bytes: 200)
+        let size1 = MessagePadding.padCiphertext(original).count
+        let size2 = MessagePadding.padCiphertext(original).count
         XCTAssertEqual(size1, size2)
     }
 
     // MARK: - Pad passthrough when disabled
 
     func testPadPassesThroughWhenDisabled() {
-        // MessagePaddingConfig.enabled is a static let, so we test the actual value.
-        // This test documents the expected behavior: if disabled, input is unchanged.
         if !MessagePaddingConfig.enabled {
-            let original = makeBase64(bytes: 100)
-            let padded = MessagePadding.padCiphertextBase64(original)
-            XCTAssertEqual(padded, original)
+            let original = makeData(bytes: 100)
+            XCTAssertEqual(MessagePadding.padCiphertext(original), original)
         } else {
-            // Padding is enabled — verify it actually changes the input
-            let original = makeBase64(bytes: 100)
-            let padded = MessagePadding.padCiphertextBase64(original)
-            XCTAssertNotEqual(padded, original, "Padding should modify the input when enabled")
+            let original = makeData(bytes: 100)
+            XCTAssertNotEqual(MessagePadding.padCiphertext(original), original,
+                "Padding should modify the input when enabled")
         }
     }
 
@@ -199,11 +171,10 @@ final class MessagePaddingTests: XCTestCase {
 
     func testRoundtripAcrossAllBuckets() {
         for bucket in buckets {
-            // Test just below each bucket boundary
             let size = max(1, bucket - headerLength - 1)
-            let original = makeBase64(bytes: size)
-            let padded = MessagePadding.padCiphertextBase64(original)
-            let unpadded = MessagePadding.unpadCiphertextBase64(padded)
+            let original = makeData(bytes: size)
+            let padded = MessagePadding.padCiphertext(original)
+            let unpadded = MessagePadding.unpadCiphertext(padded)
             XCTAssertEqual(unpadded, original, "Roundtrip failed for size \(size) (bucket \(bucket))")
         }
     }

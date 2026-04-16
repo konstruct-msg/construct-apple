@@ -7,7 +7,7 @@
 //
 
 import XCTest
-@testable import ConstructMessenger
+@testable import Construct_Messenger
 
 final class CryptoIntegrationTests: XCTestCase {
 
@@ -30,11 +30,11 @@ final class CryptoIntegrationTests: XCTestCase {
 
             guard let jsonData = jsonString.data(using: .utf8),
                   let bundle = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
-                  let identityPublic = bundle["identityPublic"] as? String,
-                  let signedPrekeyPublic = bundle["signedPrekeyPublic"] as? String,
+                  let identityPublic = bundle["identity_public"] as? String,
+                  let signedPrekeyPublic = bundle["signed_prekey_public"] as? String,
                   let signature = bundle["signature"] as? String,
-                  let verifyingKey = bundle["verifyingKey"] as? String,
-                  let suiteId = bundle["suiteId"] as? String else {
+                  let verifyingKey = bundle["verifying_key"] as? String,
+                  let suiteId = bundle["suite_id"] as? String else {
                 throw NSError(domain: "TestError", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to parse bundle"])
             }
 
@@ -65,7 +65,7 @@ final class CryptoIntegrationTests: XCTestCase {
             sessions[contactId] = sessionId
         }
 
-        func encryptMessage(contactId: String, plaintext: String) throws -> (ephemeralPublicKey: Data, messageNumber: UInt32, content: String) {
+        func encryptMessage(contactId: String, plaintext: String) throws -> (ephemeralPublicKey: Data, messageNumber: UInt32, content: [UInt8]) {
             guard let sessionId = sessions[contactId] else {
                 throw NSError(domain: "TestError", code: 3, userInfo: [NSLocalizedDescriptionKey: "No session for \(contactId)"])
             }
@@ -74,7 +74,7 @@ final class CryptoIntegrationTests: XCTestCase {
             return (Data(components.ephemeralPublicKey), components.messageNumber, components.content)
         }
 
-        func initReceivingSession(contactId: String, senderBundle: (identityPublic: String, signedPrekeyPublic: String, signature: String, verifyingKey: String, suiteId: String), firstMessage: (ephemeralPublicKey: Data, messageNumber: UInt32, content: String)) throws -> String {
+        func initReceivingSession(contactId: String, senderBundle: (identityPublic: String, signedPrekeyPublic: String, signature: String, verifyingKey: String, suiteId: String), firstMessage: (ephemeralPublicKey: Data, messageNumber: UInt32, content: [UInt8])) throws -> String {
             guard let identityPublicData = Data(base64Encoded: senderBundle.identityPublic),
                   let signedPrekeyPublicData = Data(base64Encoded: senderBundle.signedPrekeyPublic),
                   let signatureData = Data(base64Encoded: senderBundle.signature),
@@ -114,7 +114,7 @@ final class CryptoIntegrationTests: XCTestCase {
             return result.decryptedMessage
         }
 
-        func decryptMessage(contactId: String, message: (ephemeralPublicKey: Data, messageNumber: UInt32, content: String)) throws -> String {
+        func decryptMessage(contactId: String, message: (ephemeralPublicKey: Data, messageNumber: UInt32, content: [UInt8])) throws -> String {
             guard let sessionId = sessions[contactId] else {
                 throw NSError(domain: "TestError", code: 5, userInfo: [NSLocalizedDescriptionKey: "No session for \(contactId)"])
             }
@@ -418,9 +418,10 @@ final class CryptoIntegrationTests: XCTestCase {
 
         _ = try bob.initReceivingSession(contactId: "alice", senderBundle: aliceBundle, firstMessage: encrypted)
 
-        // Encrypt several messages to test
-        var messages: [(ephemeralPublicKey: Data, messageNumber: UInt32, content: String)] = []
-        for i in 0..<10 {
+        // XCTest.measure runs the block 10 times; generate 20 unique DR messages
+        // so we never re-decrypt an already-consumed slot (DR is one-way / one-use)
+        var messages: [(ephemeralPublicKey: Data, messageNumber: UInt32, content: [UInt8])] = []
+        for i in 0..<20 {
             let msg = try alice.encryptMessage(contactId: "bob", plaintext: "Test \(i)")
             messages.append(msg)
         }

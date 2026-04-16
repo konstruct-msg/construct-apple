@@ -181,6 +181,52 @@ Regenerate with: `./generate_grpc_swift.sh`
 
 ---
 
+## Binary Data Pipeline (CRITICAL — no redundant encodings)
+
+Construct uses a fully binary data pipeline. Violating this rule introduces unnecessary
+CPU cost, allocation pressure, and potential encoding bugs at every message.
+
+### Rules
+
+1. **No base64 in application logic.** Base64 is allowed ONLY at true text-transport
+   boundaries: QR codes, deep links/URLs, `mailto:` params. It is NEVER acceptable
+   inside message processing, session management, or storage.
+
+2. **No JSON for binary payloads.** Keys, ciphertexts, sealed boxes, and wire payloads
+   are `Data` / `[UInt8]` end-to-end. `JSONSerialization` / `Codable` must not see raw
+   crypto bytes — use protobuf fields or CFE binary for that.
+
+3. **UniFFI boundary uses `Data` / `[UInt8]`.** All Swift ↔ Rust FFI calls pass binary
+   data as `Data` (Swift) or `[UInt8]` (UniFFI-generated). Never stringify before
+   crossing the boundary.
+
+4. **CFE binary format for session state.** Session JSON-in-CFE (`CfeSessionJsonWrapperV1`)
+   is a known technical debt item. New session fields go into the binary CFE layer.
+   Do not add new JSON fields to the session serialization path.
+
+5. **`Codable` `Data` fields are fine.** Swift's `JSONEncoder`/`JSONDecoder` transparently
+   base64-encodes `Data` values in JSON — this is acceptable for UserDefaults persistence
+   (e.g. `OutgoingWirePayloadStore`) because no explicit encode/decode step appears in
+   application code. Never add manual `.base64EncodedString()` / `Data(base64Encoded:)`
+   around values that are already typed as `Data`.
+
+6. **`encryptedContent` in Core Data is `Binary Data`.** The attribute uses
+   `allowsExternalBinaryDataStorage = YES`. Do not change it to String or add base64
+   when reading/writing from `MessagePersistenceService`.
+
+7. **`ChatMessage.content` is `Data`.** The in-memory protocol model carries raw sealed-box
+   bytes. Control messages (END_SESSION, ping) use `Data()` (empty), never a string literal.
+
+### Before adding any new crypto/messaging field, ask:
+- Is it `Data` from source to destination?
+- Does it cross the FFI boundary as `[UInt8]`?
+- Does the proto field hold `bytes`, not `string`?
+- Is there zero `base64EncodedString()` or `Data(base64Encoded:)` in the path?
+
+If any answer is "no", fix the design before merging.
+
+---
+
 ## Commits
 
 Follow [Conventional Commits](https://www.conventionalcommits.org/):

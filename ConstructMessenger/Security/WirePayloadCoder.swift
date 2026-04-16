@@ -170,7 +170,7 @@ enum WirePayloadCoder {
 
 // MARK: - Errors
 
-enum WirePayloadError: Error, LocalizedError {
+enum WirePayloadError: Error, LocalizedError, Equatable {
     case invalidDHPublicKey
     case payloadTooShort(Int)
     case kemTooLarge(Int)
