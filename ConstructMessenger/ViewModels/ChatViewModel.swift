@@ -491,6 +491,19 @@ class ChatViewModel: NSObject {
         // Normalise: strip leading/trailing whitespace before any further processing.
         let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
 
+        // Auto-split oversized plain-text pastes into sequential messages.
+        // Only the first chunk carries the replyTo context; subsequent ones are independent.
+        if images.isEmpty && fileURLs.isEmpty && text.count > MessageSizeLimits.maxTextCharacters {
+            let chunks = MessageValidator.splitIntoChunks(text)
+            Log.info("📋 Long paste split into \(chunks.count) messages", category: "ChatViewModel")
+            for (index, chunk) in chunks.enumerated() {
+                sendMessage(text: chunk,
+                            replyTo: index == 0 ? replyTo : nil,
+                            replyToContentOverride: index == 0 ? replyToContentOverride : nil)
+            }
+            return
+        }
+
         guard let recipientId = chat.otherUser?.id else {
             Log.error("❌ No recipient ID", category: "ChatViewModel")
             return

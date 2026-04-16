@@ -74,13 +74,23 @@ struct MessageInputTextBar: View {
 
     @ViewBuilder
     private var charCounter: some View {
-        if text.count > MessageSizeLimits.maxTextCharacters - 200 {
-            let remaining = MessageSizeLimits.maxTextCharacters - text.count
-            Text(remaining >= 0 ? "\(remaining)" : "+\(-remaining)")
-                .font(CTFont.regular(10))
-                .foregroundColor(remaining < 0 ? Color.CT.danger : Color.CT.textDim)
-                .padding(.trailing, 4)
-                .transition(.opacity)
+        let remaining = MessageSizeLimits.maxTextCharacters - text.count
+        if remaining < 200 {
+            if remaining < 0 {
+                // Oversized: will auto-split — show chunk count
+                let chunks = MessageValidator.splitIntoChunks(text)
+                Text("→ \(chunks.count) msgs")
+                    .font(CTFont.regular(10))
+                    .foregroundColor(Color.CT.accent)
+                    .padding(.trailing, 4)
+                    .transition(.opacity)
+            } else {
+                Text("\(remaining)")
+                    .font(CTFont.regular(10))
+                    .foregroundColor(Color.CT.textDim)
+                    .padding(.trailing, 4)
+                    .transition(.opacity)
+            }
         }
     }
 

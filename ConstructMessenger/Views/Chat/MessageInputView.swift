@@ -220,8 +220,7 @@ struct MessageInputView: View {
     // MARK: - Computed helpers
 
     private var canSend: Bool {
-        (!text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            && text.count <= MessageSizeLimits.maxTextCharacters)
+        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         || !selectedImages.isEmpty
         || !selectedFileURLs.isEmpty
     }

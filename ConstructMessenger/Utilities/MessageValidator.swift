@@ -64,6 +64,50 @@ struct MessageValidator {
         }
     }
 
+    // MARK: - Split Validation
+
+    /// Splits `text` into chunks of at most `maxChars` characters, splitting
+    /// preferentially at newline → sentence → word boundaries.
+    static func splitIntoChunks(_ text: String, maxChars: Int = MessageSizeLimits.maxTextCharacters) -> [String] {
+        guard text.count > maxChars else { return [text] }
+
+        var chunks: [String] = []
+        var remaining = Substring(text)
+
+        while !remaining.isEmpty {
+            if remaining.count <= maxChars {
+                chunks.append(String(remaining))
+                break
+            }
+
+            let endIndex = remaining.index(remaining.startIndex, offsetBy: maxChars)
+            let searchRange = remaining.startIndex..<endIndex
+            var splitIndex: String.Index = endIndex
+
+            // Prefer split at newline
+            if let r = remaining.range(of: "\n", options: .backwards, range: searchRange) {
+                splitIndex = r.upperBound
+            // Then sentence boundary
+            } else if let r = remaining.range(of: ". ", options: .backwards, range: searchRange) {
+                splitIndex = r.upperBound
+            } else if let r = remaining.range(of: "! ", options: .backwards, range: searchRange) {
+                splitIndex = r.upperBound
+            } else if let r = remaining.range(of: "? ", options: .backwards, range: searchRange) {
+                splitIndex = r.upperBound
+            // Then word boundary
+            } else if let r = remaining.range(of: " ", options: .backwards, range: searchRange) {
+                splitIndex = r.upperBound
+            }
+            // Hard cut as last resort
+
+            let chunk = remaining[..<splitIndex].trimmingCharacters(in: .whitespacesAndNewlines)
+            if !chunk.isEmpty { chunks.append(chunk) }
+            remaining = remaining[splitIndex...].drop(while: { $0 == " " || $0 == "\n" })
+        }
+
+        return chunks
+    }
+
     // MARK: - Caption Validation
 
     /// Validates an optional media/file caption (may be empty, but must not exceed maxCaptionCharacters).
