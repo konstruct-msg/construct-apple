@@ -933,7 +933,7 @@ class ChatViewModel: NSObject {
                         Task { [weak self] in
                             _ = self
                             await MultiDeviceSendCoordinator.shared.sendSenderSync(
-                                plaintext: text,
+                                plaintext: Data(text.utf8),
                                 messageId: messageId,
                                 originalRecipientUserId: recipientId,
                                 senderUserId: currentUserId,

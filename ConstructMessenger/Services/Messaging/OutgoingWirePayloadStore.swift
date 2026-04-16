@@ -19,7 +19,7 @@ final class OutgoingWirePayloadStore {
             let chunkKey = normalize(chunkMessageId)
 
             var entry = loadEntry(baseKey) ?? Entry(createdAt: Date().timeIntervalSince1970, chunks: [:])
-            entry.chunks[chunkKey] = wirePayload.base64EncodedString()
+            entry.chunks[chunkKey] = wirePayload
             saveEntry(entry, baseKey: baseKey)
         }
     }
@@ -33,7 +33,7 @@ final class OutgoingWirePayloadStore {
 
             let sortedKeys = entry.chunks.keys.sorted(by: chunkSort)
             let decoded: [(String, Data)] = sortedKeys.compactMap { chunkId in
-                guard let b64 = entry.chunks[chunkId], let data = Data(base64Encoded: b64) else { return nil }
+                guard let data = entry.chunks[chunkId] else { return nil }
                 return (chunkId, data)
             }
             return decoded.isEmpty ? nil : decoded
@@ -59,7 +59,7 @@ final class OutgoingWirePayloadStore {
 
     private struct Entry: Codable {
         var createdAt: TimeInterval
-        var chunks: [String: String] // chunkMessageId -> base64(wirePayload)
+        var chunks: [String: Data] // chunkMessageId -> wirePayload
     }
 
     private func loadEntry(_ baseKey: String) -> Entry? {

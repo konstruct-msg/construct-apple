@@ -61,7 +61,7 @@ final class MultiDeviceSendCoordinator {
     ///
     /// Errors per-device are logged and skipped; the function never throws.
     func fanOutToRecipientDevices(
-        plaintext: String,
+        plaintext: Data,
         messageId: String,
         recipientUserId: String,
         senderUserId: String,
@@ -106,7 +106,7 @@ final class MultiDeviceSendCoordinator {
     ///
     /// Errors are logged and swallowed — SenderSync is best-effort.
     func sendSenderSync(
-        plaintext: String,
+        plaintext: Data,
         messageId: String,
         originalRecipientUserId: String,
         senderUserId: String,
@@ -169,7 +169,7 @@ final class MultiDeviceSendCoordinator {
 
     /// Core per-device send: ensures session exists, encrypts, sends. Swallows errors.
     private func sendToDevice(
-        plaintext: String,
+        plaintext: Data,
         messageId: String,
         networkRecipientUserId: String,
         contactId: String,
@@ -192,7 +192,7 @@ final class MultiDeviceSendCoordinator {
             }
 
             let encPayload = try MessageRouter.shared.encryptOutgoing(
-                plaintext: Data(plaintext.utf8),
+                plaintext: plaintext,
                 messageId: messageId,
                 recipientId: contactId
             )

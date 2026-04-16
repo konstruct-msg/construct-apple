@@ -1048,7 +1048,7 @@ class CryptoManager {
         Log.debug("🔓 Decrypting message \(message.id.prefix(8))... contactId=\(logContactId.prefix(16))...", category: "CryptoManager")
         Log.debug("   messageNumber: \(message.messageNumber)", category: "CryptoManager")
         Log.debug("   ephemeralPublicKey: \(message.ephemeralPublicKey.count) bytes", category: "CryptoManager")
-        Log.debug("   content length: \(message.content.count) bytes (base64)", category: "CryptoManager")
+        Log.debug("   content length: \(message.content.count) bytes", category: "CryptoManager")
 
         // coreLock serializes decrypt alongside encrypt — concurrent decrypts on the same
         // session advance the DR receive chain non-deterministically.
@@ -1096,7 +1096,7 @@ class CryptoManager {
         contactId: String,
         ephemeralPublicKey: Data,
         messageNumber: UInt32,
-        content: String
+        content: Data
     ) throws -> String {
         coreLock.lock()
         defer { coreLock.unlock() }
@@ -1115,8 +1115,7 @@ class CryptoManager {
             throw CryptoManagerError.sessionNotFound
         }
 
-        let rawContent = Data(base64Encoded: content) ?? Data()
-        let contentForDecrypt = MessagePadding.unpadCiphertext(rawContent)
+        let contentForDecrypt = MessagePadding.unpadCiphertext(content)
         let plaintextData = try core.decryptMessage(
             contactId: contactId,
             ephemeralPublicKey: [UInt8](ephemeralPublicKey),
