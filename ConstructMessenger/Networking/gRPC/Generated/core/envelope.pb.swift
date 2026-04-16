@@ -335,16 +335,6 @@ public struct Shared_Proto_Core_V1_Envelope: @unchecked Sendable {
   /// Clears the value of `ephemeralSeconds`. Subsequent reads from it will return its default value.
   public mutating func clearEphemeralSeconds() {_uniqueStorage()._ephemeralSeconds = nil}
 
-  /// Reply to message ID (for threading)
-  public var replyToMessageID: String {
-    get {_storage._replyToMessageID ?? String()}
-    set {_uniqueStorage()._replyToMessageID = newValue}
-  }
-  /// Returns true if `replyToMessageID` has been explicitly set.
-  public var hasReplyToMessageID: Bool {_storage._replyToMessageID != nil}
-  /// Clears the value of `replyToMessageID`. Subsequent reads from it will return its default value.
-  public mutating func clearReplyToMessageID() {_uniqueStorage()._replyToMessageID = nil}
-
   /// Edit of message ID (for message editing)
   public var editsMessageID: String {
     get {_storage._editsMessageID ?? String()}
@@ -687,7 +677,7 @@ extension Shared_Proto_Core_V1_MessagePriority: SwiftProtobuf._ProtoNameProvidin
 
 extension Shared_Proto_Core_V1_Envelope: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Envelope"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}sender\0\u{3}sender_device\0\u{1}recipient\0\u{3}recipient_device\0\u{3}content_type\0\u{3}message_id\0\u{1}timestamp\0\u{1}ttl\0\u{1}priority\0\u{3}encrypted_payload\0\u{3}conversation_id\0\u{3}server_metadata\0\u{3}client_metadata\0\u{3}forwarding_path\0\u{4}\u{2}ephemeral_seconds\0\u{3}reply_to_message_id\0\u{3}edits_message_id\0\u{1}reactions\0\u{1}mentions\0\u{3}group_message_id\0\u{4}(sealed_sender\0\u{c}\u{f}\u{1}\u{c}\u{16}\u{1d}\u{c}3\u{a}\u{c}>\u{9}\u{c}G\u{1}\u{a}\u{c}Q\u{1}\u{14}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}sender\0\u{3}sender_device\0\u{1}recipient\0\u{3}recipient_device\0\u{3}content_type\0\u{3}message_id\0\u{1}timestamp\0\u{1}ttl\0\u{1}priority\0\u{3}encrypted_payload\0\u{3}conversation_id\0\u{3}server_metadata\0\u{3}client_metadata\0\u{3}forwarding_path\0\u{4}\u{2}ephemeral_seconds\0\u{4}\u{2}edits_message_id\0\u{1}reactions\0\u{1}mentions\0\u{3}group_message_id\0\u{4}(sealed_sender\0\u{c}\u{f}\u{1}\u{c}\u{11}\u{1}\u{c}\u{16}\u{1d}\u{c}3\u{a}\u{c}>\u{9}\u{c}G\u{1}\u{a}\u{c}Q\u{1}\u{14}")
 
   fileprivate class _StorageClass {
     var _sender: Shared_Proto_Core_V1_UserId? = nil
@@ -705,7 +695,6 @@ extension Shared_Proto_Core_V1_Envelope: SwiftProtobuf.Message, SwiftProtobuf._M
     var _clientMetadata: Shared_Proto_Core_V1_ClientMetadata? = nil
     var _forwardingPath: [String] = []
     var _ephemeralSeconds: UInt32? = nil
-    var _replyToMessageID: String? = nil
     var _editsMessageID: String? = nil
     var _reactions: [Shared_Proto_Core_V1_Reaction] = []
     var _mentions: [String] = []
@@ -735,7 +724,6 @@ extension Shared_Proto_Core_V1_Envelope: SwiftProtobuf.Message, SwiftProtobuf._M
       _clientMetadata = source._clientMetadata
       _forwardingPath = source._forwardingPath
       _ephemeralSeconds = source._ephemeralSeconds
-      _replyToMessageID = source._replyToMessageID
       _editsMessageID = source._editsMessageID
       _reactions = source._reactions
       _mentions = source._mentions
@@ -780,7 +768,6 @@ extension Shared_Proto_Core_V1_Envelope: SwiftProtobuf.Message, SwiftProtobuf._M
         case 13: try { try decoder.decodeSingularMessageField(value: &_storage._clientMetadata) }()
         case 14: try { try decoder.decodeRepeatedStringField(value: &_storage._forwardingPath) }()
         case 16: try { try decoder.decodeSingularUInt32Field(value: &_storage._ephemeralSeconds) }()
-        case 17: try { try decoder.decodeSingularStringField(value: &_storage._replyToMessageID) }()
         case 18: try { try decoder.decodeSingularStringField(value: &_storage._editsMessageID) }()
         case 19: try { try decoder.decodeRepeatedMessageField(value: &_storage._reactions) }()
         case 20: try { try decoder.decodeRepeatedStringField(value: &_storage._mentions) }()
@@ -855,9 +842,6 @@ extension Shared_Proto_Core_V1_Envelope: SwiftProtobuf.Message, SwiftProtobuf._M
       try { if let v = _storage._ephemeralSeconds {
         try visitor.visitSingularUInt32Field(value: v, fieldNumber: 16)
       } }()
-      try { if let v = _storage._replyToMessageID {
-        try visitor.visitSingularStringField(value: v, fieldNumber: 17)
-      } }()
       try { if let v = _storage._editsMessageID {
         try visitor.visitSingularStringField(value: v, fieldNumber: 18)
       } }()
@@ -897,7 +881,6 @@ extension Shared_Proto_Core_V1_Envelope: SwiftProtobuf.Message, SwiftProtobuf._M
         if _storage._clientMetadata != rhs_storage._clientMetadata {return false}
         if _storage._forwardingPath != rhs_storage._forwardingPath {return false}
         if _storage._ephemeralSeconds != rhs_storage._ephemeralSeconds {return false}
-        if _storage._replyToMessageID != rhs_storage._replyToMessageID {return false}
         if _storage._editsMessageID != rhs_storage._editsMessageID {return false}
         if _storage._reactions != rhs_storage._reactions {return false}
         if _storage._mentions != rhs_storage._mentions {return false}

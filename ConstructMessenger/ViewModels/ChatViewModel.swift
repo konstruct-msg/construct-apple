@@ -919,7 +919,6 @@ class ChatViewModel: NSObject {
                         recipientId: recipientId,
                         conversationId: ConversationId.direct(myUserId: currentUserId, theirUserId: recipientId),
                         timestamp: message.timestamp,
-                        replyToMessageId: nil,
                         recipientIdentityKey: UserDefaults.standard.bool(forKey: "stealth_mode_enabled")
                             ? self.recipientBundle?.identityPublic
                             : nil

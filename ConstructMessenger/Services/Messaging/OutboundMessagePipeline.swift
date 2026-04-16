@@ -15,7 +15,6 @@ final class OutboundMessagePipeline {
         recipientId: String,
         conversationId: String,
         timestamp: UInt64,
-        replyToMessageId: String?,
         recipientIdentityKey: Data? = nil
     ) async throws -> SendMessageResponse {
         let responses = try await ChunkedMessageSender.shared.sendChunks(
@@ -24,7 +23,6 @@ final class OutboundMessagePipeline {
             recipientId: recipientId,
             conversationId: conversationId,
             timestamp: timestamp,
-            replyToMessageId: replyToMessageId,
             recipientIdentityKey: recipientIdentityKey,
             onWirePayloadEncoded: { chunkId, wire in
                 OutgoingWirePayloadStore.shared.saveChunk(

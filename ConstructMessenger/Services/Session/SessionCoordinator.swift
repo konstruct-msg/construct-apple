@@ -630,8 +630,7 @@ final class SessionCoordinator {
                         recipientId: userId
                     ),
                     timestamp: UInt64(Date().timeIntervalSince1970),
-                    contentType: .sessionResetInit,
-                    replyToMessageId: nil
+                    contentType: .sessionResetInit
                 )
                 Log.info("🔄 SESSION_STATE[sri_sent]: SESSION_RESET_INIT to \(userId.prefix(8))… (attempt \(attempt))", category: "SessionInit")
                 return
@@ -671,8 +670,7 @@ final class SessionCoordinator {
                         messageId: pingMessageId,
                         recipientId: userId
                     ),
-                    timestamp: UInt64(Date().timeIntervalSince1970),
-                    replyToMessageId: nil
+                    timestamp: UInt64(Date().timeIntervalSince1970)
                 )
                 Log.info("🏓 SESSION_STATE[tie_break_ping]: sent to \(userId.prefix(8))… (attempt \(attempt)) — loser can now init as RESPONDER", category: "SessionInit")
                 return
@@ -713,8 +711,7 @@ final class SessionCoordinator {
                     messageId: readyMessageId,
                     recipientId: userId
                 ),
-                timestamp: UInt64(Date().timeIntervalSince1970),
-                replyToMessageId: nil
+                timestamp: UInt64(Date().timeIntervalSince1970)
             )
             Log.info("🤝 SESSION_STATE[session_ready_sent]: RESPONDER notified INITIATOR \(userId.prefix(8))…", category: "SessionInit")
         } catch {
@@ -953,8 +950,7 @@ final class SessionCoordinator {
                         senderId: myId,
                         recipientId: userId,
                         conversationId: ConversationId.direct(myUserId: myId, theirUserId: userId),
-                        timestamp: UInt64(msg.timestamp.timeIntervalSince1970),
-                        replyToMessageId: msg.replyToMessageId.map { $0.isEmpty ? nil : $0 } ?? nil
+                        timestamp: UInt64(msg.timestamp.timeIntervalSince1970)
                     )
 
                     let response = responses.first ?? SendMessageResponse(messageId: msg.id, status: "sent")

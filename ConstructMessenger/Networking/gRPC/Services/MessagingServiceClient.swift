@@ -30,7 +30,6 @@ final class MessagingServiceClient: Sendable {
         senderDeviceId: String? = nil,
         recipientDeviceId: String? = nil,
         contentType: Shared_Proto_Core_V1_ContentType = .e2EeSignal,
-        replyToMessageId: String? = nil,
         sealedInnerBytes: Data? = nil
     ) async throws -> SendMessageResponse {
         // Acquire a UIBackgroundTask so iOS cannot tear down the network connection
@@ -65,10 +64,6 @@ final class MessagingServiceClient: Sendable {
                 envelope.sealedSender = sealedEnvelope
             } else {
                 envelope.sender = sender
-            }
-
-            if let replyId = replyToMessageId, !replyId.isEmpty {
-                envelope.replyToMessageID = replyId
             }
 
             if let senderDeviceId, !senderDeviceId.isEmpty {

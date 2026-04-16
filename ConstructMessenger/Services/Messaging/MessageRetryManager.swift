@@ -49,7 +49,6 @@ class MessageRetryManager {
 
         let capturedMessageId = message.id
         let capturedSenderId = message.fromUserId
-        let capturedReplyToId = message.replyToMessageId
         let capturedTimestamp = UInt64(message.safeTimestamp.timeIntervalSince1970)
 
         // Prefer re-sending the exact same encrypted payload bytes.
@@ -66,8 +65,7 @@ class MessageRetryManager {
                             senderId: capturedSenderId,
                             conversationId: ConversationId.direct(myUserId: capturedSenderId, theirUserId: recipientId),
                             encryptedPayload: wirePayload,
-                            timestamp: capturedTimestamp,
-                            replyToMessageId: chunkId == capturedMessageId ? capturedReplyToId : nil
+                            timestamp: capturedTimestamp
                         )
                         if finalErrorCode.isEmpty, !response.errorCode.isEmpty {
                             finalErrorCode = response.errorCode
@@ -201,15 +199,7 @@ class MessageRetryManager {
                                 senderId: currentUserId,
                                 conversationId: ConversationId.direct(myUserId: currentUserId, theirUserId: recipientId),
                                 encryptedPayload: wirePayload,
-                                timestamp: UInt64(Date().timeIntervalSince1970),
-                                replyToMessageId: chunkId == messageId
-                                    ? await MainActor.run {
-                                        let fr = Message.fetchRequest()
-                                        fr.predicate = NSPredicate(format: "id == %@", messageId)
-                                        fr.fetchLimit = 1
-                                        return (try? context.fetch(fr).first)?.replyToMessageId
-                                    }
-                                    : nil
+                                timestamp: UInt64(Date().timeIntervalSince1970)
                             )
                             switch response.status.lowercased() {
                             case "failed":

@@ -22,7 +22,6 @@ final class ChunkedMessageSender {
         recipientId: String,
         conversationId: String,
         timestamp: UInt64,
-        replyToMessageId: String? = nil,
         recipientIdentityKey: Data? = nil,
         onWirePayloadEncoded: ((String, Data) -> Void)? = nil
     ) async throws -> [SendMessageResponse] {
@@ -62,7 +61,6 @@ final class ChunkedMessageSender {
                 conversationId: conversationId,
                 encryptedPayload: encryptedPayload,
                 timestamp: timestamp,
-                replyToMessageId: index == 0 ? replyToMessageId : nil,
                 sealedInnerBytes: sealedInner
             )
             responses.append(response)

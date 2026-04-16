@@ -891,7 +891,6 @@ final class MessageStreamManager {
                     contentType: UInt8(envelope.contentType.rawValue),
                     senderDeviceId: envelope.senderDevice.deviceID,
                     conversationId: envelope.conversationID,
-                    replyToMessageId: envelope.replyToMessageID,
                     sealedInnerData: sealedInnerBytes
                 ))
             }
@@ -917,7 +916,6 @@ final class MessageStreamManager {
                 kyberOtpkId: decoded.kyberOtpkId,
                 senderDeviceId: envelope.senderDevice.deviceID,
                 conversationId: envelope.conversationID,
-                replyToMessageId: envelope.replyToMessageID,
                 rawPayload: envelope.encryptedPayload
             )
             PerformanceMetrics.shared.messageEnvelopeArrived(messageId: envelope.messageID)
