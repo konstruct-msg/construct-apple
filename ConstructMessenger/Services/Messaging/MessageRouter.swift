@@ -300,6 +300,21 @@ class MessageRouter {
             return
         }
 
+        // Guard: after a tie-break WIN we sent SESSION_RESET_INIT and are waiting for the
+        // RESPONDER (peer) to acknowledge. Any msgNum=0 arriving in this window is from
+        // the peer's OLD init attempt (different ephemeral keys) and will always fail AEAD.
+        // ACK and discard it rather than letting the Rust core produce sendEndSession → loop.
+        if message.messageNumber == 0
+            && !message.isEndSession
+            && !message.isSessionResetInit
+            && SessionConfirmationTracker.shared.isPending(otherUserId) {
+            Log.info("🔇 SESSION_STATE[stale_init_drop]: discarding stale msgNum=0 from \(otherUserId.prefix(8))… (tie-break WIN, pending RESPONDER confirm)", category: "MessageRouter")
+            PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
+            onReceiptNeeded?([message.id], otherUserId, .delivered)
+            if isNewChat { context.delete(chat) }
+            return
+        }
+
         // Rust orchestrator is the SINGLE decrypt path — no Swift fallback.
         // Изъян 4: If orchestratorCore is nil (e.g. Keychain locked after reboot),
         // attempt a one-shot reload before giving up and triggering END_SESSION.

@@ -479,15 +479,14 @@ class ChatsViewModel {
         let chat = chatManagementService.startChat(with: user)
         // New contact added — resubscribe stream so server pushes messages from this contact.
         forceReconnectStream()
-        // Clear both active and archived sessions so we always prewarm with fresh OTPKs.
-        // If the contact was previously in CoreData with a stale prewarm session (e.g. their
-        // device was reset), the old session would cause AEAD failure on their side. Archiving
-        // and then clearing guarantees the subsequent prewarm fetches their current key bundle.
-        CryptoManager.shared.archiveSession(for: user.id, reason: .manualReset)
-        CryptoManager.shared.clearArchivedSessions(for: user.id)
-        // Prewarm session immediately: if we're the natural INITIATOR (higher deviceId),
-        // kick off X3DH init now so the first message is instant.
-        sessionCoordinator.prewarmSessions(for: [user.id])
+        // Only clear + re-prewarm if there is no active session. If the user already has an
+        // active session with this contact (e.g. they scanned a QR code to share a profile
+        // for an existing chat), wiping the session would cause an unnecessary END_SESSION
+        // storm. Only clear stale/missing sessions so we fetch fresh OTPKs.
+        if !CryptoManager.shared.hasSession(for: user.id) {
+            CryptoManager.shared.clearArchivedSessions(for: user.id)
+            sessionCoordinator.prewarmSessions(for: [user.id])
+        }
         return chat
     }
 

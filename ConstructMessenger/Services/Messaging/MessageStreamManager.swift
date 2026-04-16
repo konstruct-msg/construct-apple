@@ -886,7 +886,12 @@ final class MessageStreamManager {
                     content: "",
                     suiteId: 1,
                     timestamp: UInt64(envelope.timestamp),
+                    editsMessageId: envelope.editsMessageID,
                     kemCiphertext: Data(),
+                    contentType: UInt8(envelope.contentType.rawValue),
+                    senderDeviceId: envelope.senderDevice.deviceID,
+                    conversationId: envelope.conversationID,
+                    replyToMessageId: envelope.replyToMessageID,
                     sealedInnerData: sealedInnerBytes
                 ))
             }
