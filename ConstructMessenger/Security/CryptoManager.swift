@@ -819,13 +819,12 @@ class CryptoManager {
     /// with key `"archive_<contactId>"`.  Rust has already removed the session from
     /// memory, so we must NOT call `exportSessionJson` here — we store the bytes
     /// Rust handed us directly into `SessionArchiveManager`.
-    func acceptRustSessionArchive(contactId: String, sessionJsonBytes: [UInt8]) {
-        guard !sessionJsonBytes.isEmpty else {
+    func acceptRustSessionArchive(contactId: String, archiveBytes: [UInt8]) {
+        guard !archiveBytes.isEmpty else {
             Log.error("❌ acceptRustSessionArchive: empty bytes for \(contactId.prefix(8))…", category: "CryptoManager")
             return
         }
-        // Rust currently sends JSON bytes; store as Data — import_session has a LegacyJson fallback.
-        let archive = SessionArchive(sessionData: Data(sessionJsonBytes), archivedAt: Date(), reason: .endSessionReceived)
+        let archive = SessionArchive(sessionData: Data(archiveBytes), archivedAt: Date(), reason: .endSessionReceived)
         archiveManager.storeArchive(archive, for: contactId)
         let count = archiveManager.loadArchives(for: contactId)?.count ?? 0
         Log.info("📦 acceptRustSessionArchive: archived session for \(contactId.prefix(8))… (\(count) total)", category: "CryptoManager")

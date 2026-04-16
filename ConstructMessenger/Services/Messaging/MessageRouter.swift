@@ -653,12 +653,13 @@ class MessageRouter {
                 Log.debug("🗑️ Deleted hot session for \(contactId.prefix(8))… (Rust archive_session)", category: "MessageRouter")
                 CryptoManager.shared.saveOrchestratorStateCFE()
             } else {
-                CryptoManager.shared.saveSessionToKeychainPublic(for: contactId)
+                // Rust already exported the session as CFE binary — use bytes directly.
+                _ = KeychainManager.shared.saveSessionData(Data(rawBytes), for: contactId)
                 CryptoManager.shared.saveOrchestratorStateCFE()
             }
         } else if key.hasPrefix("archive_") {
             let contactId = String(key.dropFirst("archive_".count))
-            CryptoManager.shared.acceptRustSessionArchive(contactId: contactId, sessionJsonBytes: rawBytes)
+            CryptoManager.shared.acceptRustSessionArchive(contactId: contactId, archiveBytes: rawBytes)
             CryptoManager.shared.saveOrchestratorStateCFE()
         } else if key.hasPrefix("pq_deferred_") {
             let storageKey = "construct.pq_deferred.\(String(key.dropFirst("pq_deferred_".count)))"
