@@ -488,6 +488,9 @@ class ChatViewModel: NSObject {
     func sendMessage(text: String, images: [PlatformImage] = [], fileURLs: [URL] = [], replyTo: Message? = nil, replyToContentOverride: String? = nil) {
         Log.info("📤 sendMessage called with \(images.count) images, \(fileURLs.count) files", category: "ChatViewModel")
 
+        // Normalise: strip leading/trailing whitespace before any further processing.
+        let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+
         guard let recipientId = chat.otherUser?.id else {
             Log.error("❌ No recipient ID", category: "ChatViewModel")
             return
@@ -559,6 +562,16 @@ class ChatViewModel: NSObject {
 
         // Handle images if provided
         if !images.isEmpty {
+            do {
+                try MessageValidator.validateCaption(text)
+            } catch let error as MessageValidationError {
+                ErrorRouter.shared.report(error)
+                Log.error("❌ Caption validation failed: \(error.localizedDescription)", category: "ChatViewModel")
+                return
+            } catch {
+                ErrorRouter.shared.report(.unknown(error.userFacingMessage))
+                return
+            }
             sendMediaMessage(images: images, caption: text, replyTo: replyTo, replyToContentOverride: replyToContentOverride)
             return
         }

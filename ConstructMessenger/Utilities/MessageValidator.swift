@@ -64,6 +64,18 @@ struct MessageValidator {
         }
     }
 
+    // MARK: - Caption Validation
+
+    /// Validates an optional media/file caption (may be empty, but must not exceed maxCaptionCharacters).
+    static func validateCaption(_ caption: String) throws {
+        guard caption.count <= MessageSizeLimits.maxCaptionCharacters else {
+            throw MessageValidationError.textTooLarge(
+                currentSize: caption.count,
+                maxSize: MessageSizeLimits.maxCaptionCharacters
+            )
+        }
+    }
+
     // MARK: - File Validation
 
     /// Validates a single file attachment

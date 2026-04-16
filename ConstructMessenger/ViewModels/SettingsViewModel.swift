@@ -143,6 +143,12 @@ class SettingsViewModel {
         let trimmed = newUsername.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !trimmed.isEmpty, trimmed != authViewModel.currentUsername else { return }
 
+        guard trimmed.count >= MessageSizeLimits.minUsernameCharacters,
+              trimmed.count <= MessageSizeLimits.maxUsernameCharacters else {
+            usernameSaveError = "username_length_error"
+            return
+        }
+
         isSavingUsername = true
         usernameSaveError = nil
         usernameSaved = false
@@ -189,6 +195,7 @@ class SettingsViewModel {
         }
 
         let trimmed = name.trimmingCharacters(in: .whitespaces)
+        guard trimmed.count <= MessageSizeLimits.maxDisplayNameCharacters else { return }
 
         let fetchRequest = User.fetchRequest()
         fetchRequest.predicate = NSPredicate(format: "id == %@", userId)

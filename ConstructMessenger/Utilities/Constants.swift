@@ -170,6 +170,14 @@ struct MessageSizeLimits {
     static let maxTextMessageBytes: Int = 64 * 1024    // 64 KB encrypted wire limit
     static let maxPlaintextMessageBytes: Int = 16 * 1024  // 16 KB plaintext (4096 chars × ~4 bytes)
 
+    // Caption Limits (attached to media/file messages)
+    static let maxCaptionCharacters: Int = 1_024       // 1 K chars is plenty for a media caption
+
+    // Profile field limits (must match server-side validation)
+    static let minUsernameCharacters: Int = 3
+    static let maxUsernameCharacters: Int = 20         // server: username.len() <= 20
+    static let maxDisplayNameCharacters: Int = 50      // reasonable client-side cap
+
     // File Attachment Limits
     static let maxFileAttachmentBytes: Int64 = 500 * 1024 * 1024  // 500 MB
 

@@ -203,6 +203,7 @@ struct AccountSettingsView: View {
                 isEditing: $isEditingUsername,
                 value: $viewModel.username,
                 hint: NSLocalizedString("username_hint", comment: ""),
+                maxLength: MessageSizeLimits.maxUsernameCharacters,
                 isSaving: viewModel.isSavingUsername,
                 errorMessage: viewModel.usernameSaveError,
                 onCommit: {
@@ -227,6 +228,7 @@ struct AccountSettingsView: View {
                 isEditing: $isEditingDisplayName,
                 value: $viewModel.displayName,
                 hint: NSLocalizedString("display_name_hint", comment: ""),
+                maxLength: MessageSizeLimits.maxDisplayNameCharacters,
                 onCommit: { viewModel.saveDisplayName(viewModel.displayName, authViewModel: authViewModel) }
             )
             flatRowDivider()
@@ -433,6 +435,7 @@ struct AccountSettingsView: View {
         isEditing: Binding<Bool>,
         value: Binding<String>,
         hint: String? = nil,
+        maxLength: Int? = nil,
         isSaving: Bool = false,
         errorMessage: String? = nil,
         onCommit: @escaping () -> Void
@@ -457,6 +460,11 @@ struct AccountSettingsView: View {
                             .onSubmit {
                                 onCommit()
                                 isEditing.wrappedValue = false
+                            }
+                            .onChange(of: value.wrappedValue) { _, newValue in
+                                if let max = maxLength, newValue.count > max {
+                                    value.wrappedValue = String(newValue.prefix(max))
+                                }
                             }
                             .frame(maxWidth: 180)
                         Button {
