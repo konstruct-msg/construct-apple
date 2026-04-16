@@ -1074,9 +1074,9 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
     
     func applyPqContribution(contactId: String, kemSharedSecret: [UInt8]) throws 
     
-    func decryptMessage(contactId: String, ephemeralPublicKey: [UInt8], messageNumber: UInt32, content: [UInt8]) throws  -> String
+    func decryptMessage(contactId: String, ephemeralPublicKey: [UInt8], messageNumber: UInt32, content: [UInt8]) throws  -> Data
     
-    func encryptMessage(contactId: String, plaintext: String) throws  -> EncryptedMessageComponents
+    func encryptMessage(contactId: String, plaintext: Data) throws  -> EncryptedMessageComponents
     
     /**
      * Export the PQContributionManager state as a CFE binary blob.
@@ -1302,8 +1302,8 @@ open func applyPqContribution(contactId: String, kemSharedSecret: [UInt8])throws
 }
 }
     
-open func decryptMessage(contactId: String, ephemeralPublicKey: [UInt8], messageNumber: UInt32, content: [UInt8])throws  -> String  {
-    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+open func decryptMessage(contactId: String, ephemeralPublicKey: [UInt8], messageNumber: UInt32, content: [UInt8])throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_method_orchestratorcore_decrypt_message(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(contactId),
@@ -1314,12 +1314,12 @@ open func decryptMessage(contactId: String, ephemeralPublicKey: [UInt8], message
 })
 }
     
-open func encryptMessage(contactId: String, plaintext: String)throws  -> EncryptedMessageComponents  {
+open func encryptMessage(contactId: String, plaintext: Data)throws  -> EncryptedMessageComponents  {
     return try  FfiConverterTypeEncryptedMessageComponents_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_method_orchestratorcore_encrypt_message(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(contactId),
-        FfiConverterString.lower(plaintext),$0
+        FfiConverterData.lower(plaintext),$0
     )
 })
 }
@@ -3821,7 +3821,7 @@ public enum CfeAction: Equatable, Hashable {
     )
     case archiveSession(contactId: String
     )
-    case messageDecrypted(contactId: String, messageId: String, plaintextUtf8: String
+    case messageDecrypted(contactId: String, messageId: String, plaintext: Data
     )
     case sessionHealNeeded(contactId: String, role: String
     )
@@ -3912,7 +3912,7 @@ public struct FfiConverterTypeCfeAction: FfiConverterRustBuffer {
         case 5: return .archiveSession(contactId: try FfiConverterString.read(from: &buf)
         )
         
-        case 6: return .messageDecrypted(contactId: try FfiConverterString.read(from: &buf), messageId: try FfiConverterString.read(from: &buf), plaintextUtf8: try FfiConverterString.read(from: &buf)
+        case 6: return .messageDecrypted(contactId: try FfiConverterString.read(from: &buf), messageId: try FfiConverterString.read(from: &buf), plaintext: try FfiConverterData.read(from: &buf)
         )
         
         case 7: return .sessionHealNeeded(contactId: try FfiConverterString.read(from: &buf), role: try FfiConverterString.read(from: &buf)
@@ -4015,11 +4015,11 @@ public struct FfiConverterTypeCfeAction: FfiConverterRustBuffer {
             FfiConverterString.write(contactId, into: &buf)
             
         
-        case let .messageDecrypted(contactId,messageId,plaintextUtf8):
+        case let .messageDecrypted(contactId,messageId,plaintext):
             writeInt(&buf, Int32(6))
             FfiConverterString.write(contactId, into: &buf)
             FfiConverterString.write(messageId, into: &buf)
-            FfiConverterString.write(plaintextUtf8, into: &buf)
+            FfiConverterData.write(plaintext, into: &buf)
             
         
         case let .sessionHealNeeded(contactId,role):
@@ -4170,7 +4170,7 @@ public enum CfeIncomingEvent: Equatable, Hashable {
     
     case messageReceived(messageId: String, from: String, data: Data, msgNum: UInt32, kemCt: Data, otpkId: UInt32, isControl: Bool, contentType: UInt8
     )
-    case outgoingMessage(contactId: String, messageId: String, plaintextUtf8: String, contentType: UInt8
+    case outgoingMessage(contactId: String, messageId: String, plaintext: Data, contentType: UInt8
     )
     case outgoingCallSignal(contactId: String, messageId: String, protoBytes: Data
     )
@@ -4223,7 +4223,7 @@ public struct FfiConverterTypeCfeIncomingEvent: FfiConverterRustBuffer {
         case 1: return .messageReceived(messageId: try FfiConverterString.read(from: &buf), from: try FfiConverterString.read(from: &buf), data: try FfiConverterData.read(from: &buf), msgNum: try FfiConverterUInt32.read(from: &buf), kemCt: try FfiConverterData.read(from: &buf), otpkId: try FfiConverterUInt32.read(from: &buf), isControl: try FfiConverterBool.read(from: &buf), contentType: try FfiConverterUInt8.read(from: &buf)
         )
         
-        case 2: return .outgoingMessage(contactId: try FfiConverterString.read(from: &buf), messageId: try FfiConverterString.read(from: &buf), plaintextUtf8: try FfiConverterString.read(from: &buf), contentType: try FfiConverterUInt8.read(from: &buf)
+        case 2: return .outgoingMessage(contactId: try FfiConverterString.read(from: &buf), messageId: try FfiConverterString.read(from: &buf), plaintext: try FfiConverterData.read(from: &buf), contentType: try FfiConverterUInt8.read(from: &buf)
         )
         
         case 3: return .outgoingCallSignal(contactId: try FfiConverterString.read(from: &buf), messageId: try FfiConverterString.read(from: &buf), protoBytes: try FfiConverterData.read(from: &buf)
@@ -4277,11 +4277,11 @@ public struct FfiConverterTypeCfeIncomingEvent: FfiConverterRustBuffer {
             FfiConverterUInt8.write(contentType, into: &buf)
             
         
-        case let .outgoingMessage(contactId,messageId,plaintextUtf8,contentType):
+        case let .outgoingMessage(contactId,messageId,plaintext,contentType):
             writeInt(&buf, Int32(2))
             FfiConverterString.write(contactId, into: &buf)
             FfiConverterString.write(messageId, into: &buf)
-            FfiConverterString.write(plaintextUtf8, into: &buf)
+            FfiConverterData.write(plaintext, into: &buf)
             FfiConverterUInt8.write(contentType, into: &buf)
             
         
@@ -5667,10 +5667,10 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_orchestratorcore_apply_pq_contribution() != 43446) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_decrypt_message() != 55129) {
+    if (uniffi_construct_core_checksum_method_orchestratorcore_decrypt_message() != 9161) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_encrypt_message() != 40183) {
+    if (uniffi_construct_core_checksum_method_orchestratorcore_encrypt_message() != 55888) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_export_kyber_session_state() != 39459) {

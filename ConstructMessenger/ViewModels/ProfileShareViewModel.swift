@@ -125,7 +125,7 @@ class ProfileShareViewModel {
             do {
                 Log.debug("🔐 Sending profile message for user \(userId), JSON size: \(jsonSize) bytes", category: "ProfileShare")
                 let messageId = UUID().uuidString
-                let plan = ChunkedMessageSender.shared.buildPlan(plaintext: jsonString, messageId: UUID(uuidString: messageId) ?? UUID())
+                let plan = ChunkedMessageSender.shared.buildPlan(plaintext: Data(jsonString.utf8), messageId: UUID(uuidString: messageId) ?? UUID())
 
                 // ✅ Send via gRPC
                 do {

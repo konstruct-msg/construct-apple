@@ -347,12 +347,9 @@ class BackgroundFetchManager: NSObject {
                     // Use DispatchQueue.main.sync to serialize with foreground session state.
                     // This is safe because backgroundContext.perform runs on a private queue,
                     // not the main queue, so there is no deadlock risk.
-                    var decryptedContent: String?
+                    var decryptedContent: Data?
 
                     // Targeted session restore before the hasSession check.
-                    // Background fetch may run before restoreRecentSessions() has completed
-                    // (e.g., silent push during app launch race). restoreSession(for:) is a
-                    // synchronous Keychain lookup — no-op if session already in memory.
                     _ = DispatchQueue.main.sync { CryptoManager.shared.restoreSession(for: otherUserId) }
 
                     if CryptoManager.shared.hasSession(for: otherUserId) {
@@ -360,12 +357,6 @@ class BackgroundFetchManager: NSObject {
                             do {
                                 decryptedContent = try CryptoManager.shared.decryptMessage(messageData)
                                 Log.debug("✅ Decrypted message \(messageData.id)", category: "BackgroundFetch")
-                                // Immediately mark in-memory on the main thread to close the race window
-                                // with the live gRPC stream.  The stream's isProcessed check hits the
-                                // Rust in-memory cache first — if it finds the ID there it skips the
-                                // message entirely, preventing a double-decrypt AEAD failure that would
-                                // trigger heal_impossible → END_SESSION → silent session destruction.
-                                // Core Data persistence follows below on the background thread.
                                 PersistentACKStore.shared.preemptACK(messageData.id)
                             } catch {
                                 Log.error("❌ Failed to decrypt message \(messageData.id): \(error)", category: "BackgroundFetch")
@@ -373,24 +364,18 @@ class BackgroundFetchManager: NSObject {
                         }
                     } else {
                         Log.info("⚠️ No session for user \(otherUserId), message will be decrypted later", category: "BackgroundFetch")
-                        // Message will be decrypted when user opens chat and session is initialized
                     }
 
-                    // Chunk messages: if the decrypted plaintext starts with "KNST1:" it is a
-                    // chunked-message fragment.  The Double Ratchet advanced above, and the
-                    // in-memory ACK (preemptACK) was already written inside the main.sync block,
-                    // so the stream cannot re-decrypt this chunk.  We still need:
-                    //   1. Core Data ACK persist (markProcessed below) — survives app restart
-                    //   2. Reassembly — feed to shared ChunkedMessageReassembler
-                    // • .complete  → replace decryptedContent with assembled text, fall through to save
-                    // • .incomplete → Core Data ACK + skip save; remaining chunks complete assembly
-                    //                 via subsequent background fetches or the live stream
-                    // • .invalid / .legacy → Core Data ACK + skip save
-                    if let dc = decryptedContent, dc.hasPrefix("KNST1:") {
+                    // Chunk messages: if the decrypted bytes start with binary KNST magic or legacy
+                    // "KNST1:" prefix, feed to ChunkedMessageReassembler.
+                    let legacyPrefixBytes = Data(ChunkedMessageCodec.legacyPrefix.utf8)
+                    let binaryMagic = Data([0x4B, 0x4E, 0x53, 0x54]) // "KNST"
+                    if let dc = decryptedContent,
+                       dc.starts(with: binaryMagic) || dc.starts(with: legacyPrefixBytes) {
                         var assembled: String? = nil
                         DispatchQueue.main.sync {
-                            switch ChunkedMessageReassembler.shared.process(decryptedText: dc) {
-                            case .complete(let text):
+                            switch ChunkedMessageReassembler.shared.process(data: dc) {
+                            case .assembled(let text, _):
                                 assembled = text
                             case .legacy(let text):
                                 assembled = text
@@ -398,11 +383,10 @@ class BackgroundFetchManager: NSObject {
                                 break
                             }
                         }
-                        // Always ACK — ratchet is past this chunk, stream must not retry.
                         PersistentACKStore.shared.markProcessed(messageData.id, senderId: messageData.from, in: backgroundContext)
                         if let text = assembled {
                             Log.debug("✅ Chunk assembled in background fetch \(messageData.id.prefix(8))", category: "BackgroundFetch")
-                            decryptedContent = text
+                            decryptedContent = Data(text.utf8)
                         } else {
                             Log.debug("⏭️ Chunk fragment \(messageData.id.prefix(8)) ACK'd; waiting for remaining chunks", category: "BackgroundFetch")
                             continue
@@ -425,7 +409,8 @@ class BackgroundFetchManager: NSObject {
                     message.fromUserId = messageData.from
                     message.toUserId = messageData.to
                     message.encryptedContent = messageData.content
-                    message.decryptedContent = decryptedContent
+                    let decryptedString = decryptedContent.flatMap { String(data: $0, encoding: .utf8) }
+                    message.decryptedContent = decryptedString
                     message.timestamp = Date(timeIntervalSince1970: TimeInterval(messageData.timestamp))
                     message.isSentByMe = false
                     message.deliveryStatus = .delivered
@@ -437,7 +422,7 @@ class BackgroundFetchManager: NSObject {
 
                     // Update chat's last message
                     if let lastMessage = chatMessages.last {
-                        chat.lastMessageText = Chat.formatPreviewText(decryptedContent ?? NSLocalizedString("message_unavailable", comment: ""))
+                        chat.lastMessageText = Chat.formatPreviewText(decryptedString ?? NSLocalizedString("message_unavailable", comment: ""))
                         chat.lastMessageTime = Date(timeIntervalSince1970: TimeInterval(lastMessage.timestamp))
                     }
                 }

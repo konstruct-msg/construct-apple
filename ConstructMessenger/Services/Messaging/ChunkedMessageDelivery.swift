@@ -2,7 +2,7 @@ import Foundation
 
 struct ChunkedMessagePlan {
     let messageId: UUID
-    let payloads: [String]
+    let payloads: [Data]
     let originalLength: Int
 }
 
@@ -11,10 +11,9 @@ final class ChunkedMessageSender {
 
     private init() {}
 
-    func buildPlan(plaintext: String, messageId: UUID) -> ChunkedMessagePlan {
-        let data = Data(plaintext.utf8)
-        let payloads = ChunkedMessageCodec.encodeChunks(plaintext: data, messageId: messageId)
-        return ChunkedMessagePlan(messageId: messageId, payloads: payloads, originalLength: data.count)
+    func buildPlan(plaintext: Data, messageId: UUID) -> ChunkedMessagePlan {
+        let payloads = ChunkedMessageCodec.encodeChunks(plaintext: plaintext, messageId: messageId)
+        return ChunkedMessagePlan(messageId: messageId, payloads: payloads, originalLength: plaintext.count)
     }
 
     func sendChunks(
@@ -99,6 +98,103 @@ final class ChunkedMessageReassembler {
 
     private var pending: [UUID: PendingMessage] = [:]
 
+    /// Process binary decrypted data — supports both binary KNST frames and legacy formats.
+    /// Extracts `QuotedMessage` from `MessageContent` proto when present.
+    func process(data: Data) -> ChunkedMessageResult {
+        // ── Binary KNST frame ────────────────────────────────────────────────
+        let magic = ChunkedDeliveryConfig.magic
+        if data.count >= magic.count + 1,
+           data.prefix(magic.count).elementsEqual(magic),
+           data[magic.count] == ChunkedDeliveryConfig.version
+        {
+            guard let parsed = ChunkedMessageCodec.parseChunk(data: data) else {
+                Log.info("⚠️ Binary KNST magic found but header invalid, falling through", category: "ChunkedDelivery")
+                return decodeRaw(data)
+            }
+            return processKnstChunk(parsed)
+        }
+
+        // ── Legacy KNST1:<base64> text framing ──────────────────────────────
+        let prefix = Data(ChunkedMessageCodec.legacyPrefix.utf8)
+        if data.starts(with: prefix), let text = String(data: data, encoding: .utf8) {
+            return process(decryptedText: text)
+        }
+
+        return decodeRaw(data)
+    }
+
+    private func processKnstChunk(_ parsed: ChunkedMessageCodec.ParsedChunk) -> ChunkedMessageResult {
+        cleanupExpired()
+        if parsed.totalChunks == 1 {
+            let trimmed = parsed.payload.prefix(parsed.plaintextLength)
+            return decodeAssembled(Data(trimmed))
+        }
+        if parsed.totalChunks > ChunkedDeliveryConfig.maxChunks {
+            return .invalid("total_chunks exceeds max")
+        }
+        var entry = pending[parsed.messageId] ?? PendingMessage(
+            messageId: parsed.messageId,
+            totalChunks: parsed.totalChunks,
+            plaintextLength: parsed.plaintextLength,
+            receivedChunks: [:],
+            startTime: Date()
+        )
+        entry.receivedChunks[parsed.chunkIndex] = parsed.payload
+        pending[parsed.messageId] = entry
+        guard entry.isComplete else { return .incomplete }
+        var assembled = Data()
+        for index in 0..<entry.totalChunks {
+            guard let chunk = entry.receivedChunks[index] else { return .incomplete }
+            assembled.append(chunk)
+        }
+        pending.removeValue(forKey: parsed.messageId)
+        guard entry.plaintextLength <= assembled.count else {
+            return .invalid("Plaintext length exceeds assembled size")
+        }
+        return decodeAssembled(Data(assembled.prefix(entry.plaintextLength)))
+    }
+
+    private func decodeAssembled(_ data: Data) -> ChunkedMessageResult {
+        if let content = try? Shared_Proto_Messaging_V1_MessageContent(serializedBytes: data),
+           content.content != nil
+        {
+            let (text, quoted) = extract(content)
+            return .assembled(text: text, quoted: quoted)
+        }
+        if let text = String(data: data, encoding: .utf8) {
+            return text.isEmpty ? .invalid("empty plaintext") : .assembled(text: text, quoted: nil)
+        }
+        return .invalid("non-decodable binary (\(data.count) bytes)")
+    }
+
+    private func decodeRaw(_ data: Data) -> ChunkedMessageResult {
+        // Try proto first (single-message delivery without KNST framing)
+        if let content = try? Shared_Proto_Messaging_V1_MessageContent(serializedBytes: data),
+           content.content != nil
+        {
+            let (text, quoted) = extract(content)
+            return .assembled(text: text, quoted: quoted)
+        }
+        // Session control strings, legacy plain-text messages
+        if let text = String(data: data, encoding: .utf8) {
+            return text.isEmpty ? .invalid("empty plaintext") : .legacy(text)
+        }
+        return .invalid("non-decodable binary (\(data.count) bytes)")
+    }
+
+    private func extract(_ content: Shared_Proto_Messaging_V1_MessageContent)
+        -> (String, Shared_Proto_Messaging_V1_QuotedMessage?)
+    {
+        switch content.content {
+        case .text(let msg):
+            return (msg.text, msg.hasQuoted ? msg.quoted : nil)
+        default:
+            return ("", nil)
+        }
+    }
+
+    /// Legacy path: process a string decrypted with the old base64-KNST format.
+    /// Kept for BackgroundFetchManager compatibility with pre-migration messages.
     func process(decryptedText: String) -> ChunkedMessageResult {
         guard let encoded = ChunkedMessageCodec.extractPayloadString(from: decryptedText) else {
             return .legacy(decryptedText)
@@ -125,7 +221,7 @@ final class ChunkedMessageReassembler {
             guard let text = String(data: trimmed, encoding: .utf8) else {
                 return .invalid("Failed to decode plaintext")
             }
-            return .complete(text)
+            return .assembled(text: text, quoted: nil)
         }
 
         if parsed.totalChunks > ChunkedDeliveryConfig.maxChunks {
@@ -164,7 +260,7 @@ final class ChunkedMessageReassembler {
         guard let text = String(data: trimmed, encoding: .utf8) else {
             return .invalid("Failed to decode assembled plaintext")
         }
-        return .complete(text)
+        return .assembled(text: text, quoted: nil)
     }
 
     private func cleanupExpired() {
@@ -174,14 +270,18 @@ final class ChunkedMessageReassembler {
 }
 
 enum ChunkedMessageResult {
+    /// Successfully decoded message (KNST chunked or direct proto).
+    /// `quoted` is non-nil when the sender embedded a reply reference in the proto plaintext.
+    case assembled(text: String, quoted: Shared_Proto_Messaging_V1_QuotedMessage?)
+    /// Non-KNST data decoded as plain UTF-8 (session control strings, legacy messages).
     case legacy(String)
-    case complete(String)
     case incomplete
     case invalid(String)
 }
 
 enum ChunkedMessageCodec {
-    private static let prefix = "KNST1:"
+    static let legacyPrefix = "KNST1:"
+    private static let prefix = legacyPrefix
 
     struct ParsedChunk {
         let messageId: UUID
@@ -191,7 +291,7 @@ enum ChunkedMessageCodec {
         let payload: Data
     }
 
-    static func encodeChunks(plaintext: Data, messageId: UUID) -> [String] {
+    static func encodeChunks(plaintext: Data, messageId: UUID) -> [Data] {
         let payloadSize = ChunkedDeliveryConfig.chunkPayloadSize
         let totalChunks = UInt16((plaintext.count + payloadSize - 1) / payloadSize)
         if totalChunks > ChunkedDeliveryConfig.maxChunks {
@@ -200,7 +300,7 @@ enum ChunkedMessageCodec {
         }
         let clampedTotal = max(totalChunks, 1)
 
-        var payloads: [String] = []
+        var payloads: [Data] = []
         payloads.reserveCapacity(Int(clampedTotal))
 
         for index in 0..<Int(clampedTotal) {
@@ -213,27 +313,13 @@ enum ChunkedMessageCodec {
                 totalChunks: clampedTotal,
                 plaintextLength: plaintext.count
             )
-            var data = Data(capacity: header.count + chunkData.count)
-            data.append(header)
-            data.append(chunkData)
-            let encoded = data.base64EncodedString()
-            payloads.append(prefix + encoded)
+            var frame = Data(capacity: header.count + chunkData.count)
+            frame.append(header)
+            frame.append(chunkData)
+            payloads.append(frame)
         }
 
         return payloads
-    }
-
-    private static func singleChunkBase64(plaintext: Data, messageId: UUID) -> String {
-        let header = buildHeader(
-            messageId: messageId,
-            chunkIndex: 0,
-            totalChunks: 1,
-            plaintextLength: plaintext.count
-        )
-        var data = Data(capacity: header.count + plaintext.count)
-        data.append(header)
-        data.append(plaintext)
-        return data.base64EncodedString()
     }
 
     static func extractPayloadString(from decryptedText: String) -> String? {

@@ -68,7 +68,7 @@ final class MessageCryptoService {
         #endif
 
         do {
-            let rustComponents = try core.encryptMessage(contactId: userId, plaintext: message)
+            let rustComponents = try core.encryptMessage(contactId: userId, plaintext: Data(message.utf8))
 
             #if DEBUG
             Log.debug("🔐 ENCRYPT: Rust core returned components", category: "CryptoManager")
@@ -108,8 +108,8 @@ final class MessageCryptoService {
         restoreSession: (String) -> Bool,
         saveSession: (String) -> Void,
         archiveSession: (String, ArchiveReason) -> Void,
-        tryDecryptWithArchived: (ChatMessage) throws -> String
-    ) throws -> String {
+        tryDecryptWithArchived: (ChatMessage) throws -> Data
+    ) throws -> Data {
         guard let core = core else {
             throw CryptoManagerError.coreNotInitialized
         }

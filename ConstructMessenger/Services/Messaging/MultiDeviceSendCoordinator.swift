@@ -192,7 +192,7 @@ final class MultiDeviceSendCoordinator {
             }
 
             let encPayload = try MessageRouter.shared.encryptOutgoing(
-                plaintext: plaintext,
+                plaintext: Data(plaintext.utf8),
                 messageId: messageId,
                 recipientId: contactId
             )

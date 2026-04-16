@@ -801,7 +801,7 @@ final class SessionCoordinator {
         // Unwrap KNST1 chunk envelope to get actual plaintext
         let plaintext: String
         switch initMessageReassembler.process(decryptedText: decryptedContent) {
-        case .legacy(let text), .complete(let text):
+        case .legacy(let text), .assembled(let text, _):
             plaintext = text
         case .incomplete:
             Log.debug("⏳ Session-init message is a partial chunk — will be reassembled later", category: "SessionCoordinator")
@@ -940,7 +940,7 @@ final class SessionCoordinator {
 
                 do {
                     let messageUUID = UUID(uuidString: msg.id) ?? UUID()
-                    let plan = ChunkedMessageSender.shared.buildPlan(plaintext: plaintext, messageId: messageUUID)
+                    let plan = ChunkedMessageSender.shared.buildPlan(plaintext: Data(plaintext.utf8), messageId: messageUUID)
                     guard !plan.payloads.isEmpty else {
                         Log.error("❌ Auto-resend: message too large to build chunk plan: \(msg.id.prefix(8))…", category: "SessionInit")
                         msg.deliveryStatus = .failed

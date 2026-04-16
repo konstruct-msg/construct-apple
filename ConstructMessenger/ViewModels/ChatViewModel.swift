@@ -861,7 +861,25 @@ class ChatViewModel: NSObject {
 
         do {
             let messageId = UUID().uuidString.lowercased()
-            let plan = ChunkedMessageSender.shared.buildPlan(plaintext: text, messageId: UUID(uuidString: messageId) ?? UUID())
+
+            // Build MessageContent proto — embeds reply reference inside ciphertext (private, not in envelope).
+            var textMsg = Shared_Proto_Messaging_V1_TextMessage()
+            textMsg.text = text
+            if let reply = replyTo {
+                var quoted = Shared_Proto_Messaging_V1_QuotedMessage()
+                quoted.messageID = reply.id
+                quoted.textPreview = replyToContentOverride ?? reply.decryptedContent ?? ""
+                textMsg.quoted = quoted
+            }
+            var content = Shared_Proto_Messaging_V1_MessageContent()
+            content.text = textMsg
+            guard let plaintextData = try? content.serializedData(), !plaintextData.isEmpty else {
+                Log.error("❌ Failed to serialize MessageContent proto", category: "ChatViewModel")
+                isSending = false
+                return
+            }
+
+            let plan = ChunkedMessageSender.shared.buildPlan(plaintext: plaintextData, messageId: UUID(uuidString: messageId) ?? UUID())
             guard !plan.payloads.isEmpty else {
                 Log.error("❌ Message too large to send", category: "ChatViewModel")
                 isSending = false
@@ -901,7 +919,7 @@ class ChatViewModel: NSObject {
                         recipientId: recipientId,
                         conversationId: ConversationId.direct(myUserId: currentUserId, theirUserId: recipientId),
                         timestamp: message.timestamp,
-                        replyToMessageId: replyTo?.id,
+                        replyToMessageId: nil,
                         recipientIdentityKey: UserDefaults.standard.bool(forKey: "stealth_mode_enabled")
                             ? self.recipientBundle?.identityPublic
                             : nil
@@ -1060,7 +1078,7 @@ class ChatViewModel: NSObject {
         Task {
             do {
                 let wirePayload = try MessageRouter.shared.encryptOutgoing(
-                    plaintext: newText,
+                    plaintext: Data(newText.utf8),
                     messageId: message.id,
                     recipientId: recipientId
                 )

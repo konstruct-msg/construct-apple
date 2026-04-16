@@ -459,9 +459,11 @@ class MessageRouter {
             case .messageDecrypted(let contactId, _, let plaintext):
                 _ = contactId
                 checkUsernameUpdate(for: otherUserId, chat: chat, in: context)
-                switch chunkReassembler.process(decryptedText: plaintext) {
-                case .legacy(let text), .complete(let text):
-                    handleResolvedMessage(text, for: message, from: otherUserId, chat: chat, in: context)
+                switch chunkReassembler.process(data: plaintext) {
+                case .assembled(let text, let quoted):
+                    handleResolvedMessage(text, quotedMessage: quoted, for: message, from: otherUserId, chat: chat, in: context)
+                case .legacy(let text):
+                    handleResolvedMessage(text, quotedMessage: nil, for: message, from: otherUserId, chat: chat, in: context)
                 case .incomplete:
                     Log.debug("🧩 Chunked message incomplete, waiting for more chunks", category: "MessageRouter")
                 case .invalid(let reason):
@@ -545,12 +547,12 @@ class MessageRouter {
     /// Persists updated DR session state as a side-effect.
     ///
     /// - Parameters:
-    ///   - plaintext: Raw UTF-8 message text.
+    ///   - plaintext: Serialised plaintext bytes (protobuf MessageContent, binary KNST frame, or UTF-8).
     ///   - messageId: Unique message UUID (used for ACK tracking).
     ///   - recipientId: Contact user ID.
     ///   - contentType: Proto ContentType (0 = regular message, default).
     func encryptOutgoing(
-        plaintext: String,
+        plaintext: Data,
         messageId: String,
         recipientId: String,
         contentType: UInt8 = 0
@@ -558,7 +560,7 @@ class MessageRouter {
         let event = CfeIncomingEvent.outgoingMessage(
             contactId: recipientId,
             messageId: messageId,
-            plaintextUtf8: plaintext,
+            plaintext: plaintext,
             contentType: contentType
         )
         let actions = try CryptoManager.shared.handleOrchestratorEvent(event, tag: "outgoing_message")
@@ -584,7 +586,7 @@ class MessageRouter {
         recipientId: String
     ) throws -> Data {
         try encryptOutgoing(
-            plaintext: plaintext,
+            plaintext: Data(plaintext.utf8),
             messageId: messageId,
             recipientId: recipientId,
             contentType: 0
@@ -605,7 +607,7 @@ class MessageRouter {
         let heartbeatId = UUID().uuidString.lowercased()
         do {
             let payload = try encryptOutgoing(
-                plaintext: "__heartbeat__",
+                plaintext: Data("__heartbeat__".utf8),
                 messageId: heartbeatId,
                 recipientId: contactId,
                 contentType: 13
@@ -683,6 +685,7 @@ class MessageRouter {
 
     private func handleResolvedMessage(
         _ decryptedContent: String,
+        quotedMessage: Shared_Proto_Messaging_V1_QuotedMessage?,
         for message: ChatMessage,
         from otherUserId: String,
         chat: Chat,
@@ -749,7 +752,7 @@ class MessageRouter {
         }
 
         // 5. Save regular message
-        saveMessage(for: chat, with: message, decryptedContent: decryptedContent, in: context)
+        saveMessage(for: chat, with: message, decryptedContent: decryptedContent, quotedMessage: quotedMessage, in: context)
 
         // 6. Acknowledge delivery to sender via stream
         onReceiptNeeded?([message.id], otherUserId, .delivered)
@@ -1217,6 +1220,7 @@ class MessageRouter {
         for chat: Chat,
         with messageData: ChatMessage,
         decryptedContent: String,
+        quotedMessage: Shared_Proto_Messaging_V1_QuotedMessage?,
         in context: NSManagedObjectContext
     ) {
         let fetchRequest = Message.fetchRequest()
@@ -1254,7 +1258,12 @@ class MessageRouter {
         message.chat = chat
 
         // Restore reply-to context so the receiver sees the same reply bubble as the sender.
-        if !messageData.replyToMessageId.isEmpty {
+        // Priority: QuotedMessage from proto plaintext (privacy-safe, no server visibility).
+        // Fallback: legacy replyToMessageId from envelope (old clients without proto payload).
+        if let qm = quotedMessage, !qm.messageID.isEmpty {
+            message.replyToMessageId = qm.messageID.lowercased()
+            message.replyToContent = qm.textPreview.isEmpty ? nil : qm.textPreview
+        } else if !messageData.replyToMessageId.isEmpty {
             message.replyToMessageId = messageData.replyToMessageId.lowercased()
             // Look up the replied-to message locally to populate the preview snippet.
             let replyFetch = Message.fetchRequest()
@@ -1342,10 +1351,11 @@ class MessageRouter {
         let hasSession = CryptoManager.shared.hasSession(for: contactId)
 
         if hasSession {
-            guard let decrypted = try? CryptoManager.shared.decryptMessage(message, contactIdOverride: contactId) else {
+            guard let decryptedData = try? CryptoManager.shared.decryptMessage(message, contactIdOverride: contactId) else {
                 Log.error("❌ SENDER_SYNC: decryption failed for contactId=\(contactId.prefix(20))…", category: "MessageRouter")
                 return
             }
+            let decrypted = String(data: decryptedData, encoding: .utf8) ?? ""
             saveSenderSyncMessage(decrypted, original: message, partnerUserId: partnerUserId, in: context)
         } else if message.messageNumber == 0 {
             // New device: init receiving session async, then save

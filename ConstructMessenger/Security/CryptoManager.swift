@@ -1039,11 +1039,11 @@ class CryptoManager {
     /// Decrypt a ChatMessage directly using clean API
     /// Uses clean API - Rust handles all MessagePack internally
     /// Now with Session Archive fallback support
-    func decryptMessage(_ message: ChatMessage) throws -> String {
+    func decryptMessage(_ message: ChatMessage) throws -> Data {
         try decryptMessage(message, contactIdOverride: nil)
     }
 
-    func decryptMessage(_ message: ChatMessage, contactIdOverride: String?) throws -> String {
+    func decryptMessage(_ message: ChatMessage, contactIdOverride: String?) throws -> Data {
         let logContactId = contactIdOverride ?? message.from
         Log.debug("🔓 Decrypting message \(message.id.prefix(8))... contactId=\(logContactId.prefix(16))...", category: "CryptoManager")
         Log.debug("   messageNumber: \(message.messageNumber)", category: "CryptoManager")
@@ -1054,7 +1054,7 @@ class CryptoManager {
         // session advance the DR receive chain non-deterministically.
         coreLock.lock()
         defer { coreLock.unlock() }
-        let plaintext: String
+        let plaintext: Data
         do {
             plaintext = try messageCrypto.decryptMessage(
                 message,
@@ -1085,11 +1085,12 @@ class CryptoManager {
             throw error
         }
 
-        Log.info("✅ Message decrypted successfully (messageNumber: \(message.messageNumber), plaintext: \(plaintext.count) chars)", category: "CryptoManager")
+        Log.info("✅ Message decrypted successfully (messageNumber: \(message.messageNumber), plaintext: \(plaintext.count) bytes)", category: "CryptoManager")
         return plaintext
     }
     
-    /// Decrypt raw Double Ratchet components — used for signaling fields, not ChatMessage.
+    /// Decrypt raw Double Ratchet components — used for call signaling fields, not ChatMessage.
+    /// Returns UTF-8 string (call signals are always valid UTF-8).
     /// Handles session restore from Keychain if needed. Does not try archived sessions.
     func decryptRawComponents(
         contactId: String,
@@ -1116,19 +1117,19 @@ class CryptoManager {
 
         let rawContent = Data(base64Encoded: content) ?? Data()
         let contentForDecrypt = MessagePadding.unpadCiphertext(rawContent)
-        let plaintext = try core.decryptMessage(
+        let plaintextData = try core.decryptMessage(
             contactId: contactId,
             ephemeralPublicKey: [UInt8](ephemeralPublicKey),
             messageNumber: messageNumber,
             content: [UInt8](contentForDecrypt)
         )
         saveSessionToKeychain(for: contactId)
-        return plaintext
+        return String(data: plaintextData, encoding: .utf8) ?? ""
     }
 
     /// Try to decrypt message with archived sessions
-    /// Returns plaintext if successful, throws if all archives fail
-    private func tryDecryptWithArchivedSessions(message: ChatMessage) throws -> String {
+    /// Returns raw plaintext bytes if successful, throws if all archives fail
+    private func tryDecryptWithArchivedSessions(message: ChatMessage) throws -> Data {
         guard let core = orchestratorCore else {
             throw CryptoManagerError.coreNotInitialized
         }
@@ -1144,17 +1145,12 @@ class CryptoManager {
         Log.info("📦 Trying \(archives.count) archived sessions for \(message.from)", category: "CryptoManager")
 
         // Snapshot the active session so we can restore it if all archives fail.
-        // Without this, each failed import permanently overwrites the Rust core state.
         let activeSessionSnapshot = try? Data(core.exportSession(contactId: message.from))
 
-        // Try each archived session (newest first - already ordered)
         for (index, archive) in archives.enumerated().reversed() {
             do {
-                // Temporarily restore archived session to Rust core.
-                // importSession handles CFE binary (new) and legacy JSON (old) archives.
                 _ = try core.importSession(contactId: message.from, data: [UInt8](archive.sessionData))
                 
-                // Try to decrypt
                 let rawContent = Data(base64Encoded: message.content) ?? Data()
                 let contentBytes = [UInt8](MessagePadding.unpadCiphertext(rawContent))
                 let plaintext = try core.decryptMessage(
@@ -1165,15 +1161,9 @@ class CryptoManager {
                 )
                 
                 Log.info("✅ Decrypted with archived session #\(index) (archived at: \(archive.archivedAt))", category: "CryptoManager")
-                
-                // Success! Save the now-active session
                 saveSessionToKeychain(for: message.from)
-                
-                // Remove from archives (it's valid again)
                 archiveManager.restoreArchiveToCurrent(for: message.from, index: index)
-                
                 Log.info("♻️ Restored archived session as current", category: "CryptoManager")
-                
                 return plaintext
                 
             } catch {
@@ -1182,7 +1172,6 @@ class CryptoManager {
             }
         }
 
-        // All archives failed — restore the original active session into Rust core.
         if let snap = activeSessionSnapshot {
             _ = try? core.importSession(contactId: message.from, data: [UInt8](snap))
         }
