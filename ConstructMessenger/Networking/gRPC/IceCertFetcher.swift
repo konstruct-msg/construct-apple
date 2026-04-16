@@ -26,12 +26,20 @@ struct RelayInfo: Codable {
     let domain: String
     let sni: String
     let spkiSha256: String
+    /// WebSocket resource path for WebTunnel (ICE v2), e.g. "/construct-ice".
+    /// nil / empty → relay does not advertise WebTunnel support.
+    let wtPath: String?
+    /// Optional HTTP Host header override for the WebSocket upgrade request.
+    /// nil → falls back to `sni`.
+    let wtHostHeader: String?
 
     var addressWithPort: String { "\(addr):\(port)" }
 
     enum CodingKeys: String, CodingKey {
         case id, addr, port, domain, sni
-        case spkiSha256 = "spki_sha256"
+        case spkiSha256  = "spki_sha256"
+        case wtPath      = "wt_path"
+        case wtHostHeader = "wt_host_header"
     }
 }
 
@@ -176,6 +184,27 @@ actor IceCertFetcher {
         }
         if address == ICEConfig.mskRelayAddress {
             return ICEConfig.mskRelayPinnedSPKI.isEmpty ? nil : ICEConfig.mskRelayPinnedSPKI
+        }
+        return nil
+    }
+
+    /// Synchronous WebTunnel path lookup for non-async contexts.
+    /// Returns the WebSocket resource path (e.g. "/construct-ice") if the relay supports
+    /// WebTunnel, or nil if it only supports obfs4.
+    static func wtPathSync(for address: String) -> String? {
+        if let relay = cachedRelayInfosSync()?.first(where: { $0.addressWithPort == address }),
+           let path = relay.wtPath, !path.isEmpty {
+            return path
+        }
+        return ICEConfig.hardcodedRelayWTPaths[address]
+    }
+
+    /// Synchronous WebTunnel Host header lookup for non-async contexts.
+    /// Returns nil when the server config has no override — caller should fall back to SNI.
+    static func wtHostHeaderSync(for address: String) -> String? {
+        if let relay = cachedRelayInfosSync()?.first(where: { $0.addressWithPort == address }),
+           let host = relay.wtHostHeader, !host.isEmpty {
+            return host
         }
         return nil
     }

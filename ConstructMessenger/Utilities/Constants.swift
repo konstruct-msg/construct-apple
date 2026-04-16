@@ -458,6 +458,13 @@ struct ICEConfig {
     /// Value is JSON-encoded array of `ICERelayRegion` (see IceCertFetcher).
     static let cachedRelayRegionsKey = "construct.ice_relay_regions"
 
+    /// WebTunnel (ICE v2) WebSocket resource paths, keyed by relay address.
+    /// When present, makeRelay() activates WebTunnel-first transport for that relay.
+    /// Override via `.well-known/construct-server` `ice.relays[].wt_path` without a new build.
+    static let hardcodedRelayWTPaths: [String: String] = [
+        mskRelayAddress: "/construct-ice",
+    ]
+
     /// Fallback relay-region rules used when the server config has not been fetched yet.
     /// Each rule maps a UTC offset range (hours, inclusive) to a preferred relay ordering.
     /// The first matching rule wins; unmatched → default ordering.

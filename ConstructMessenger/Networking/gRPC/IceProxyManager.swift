@@ -244,6 +244,8 @@ private func makeRelay(address: String, bridgeCert: String) -> IceRelay {
     let resolvedCert = ICEConfig.hardcodedRelayCerts[address] ?? bridgeCert
     let sni: String?
     let pin: String?
+    let wtPath: String?
+    let wtHostHeader: String?
     if address.hasSuffix(":443") {
         if let s = IceCertFetcher.sniSync(for: address), !s.isEmpty {
             sni = s
@@ -257,12 +259,19 @@ private func makeRelay(address: String, bridgeCert: String) -> IceRelay {
             sni = address.components(separatedBy: ":").first.flatMap { $0.isEmpty ? nil : $0 }
             pin = nil
         }
+        // WebTunnel (ICE v2) — available when the relay advertises a wt_path.
+        // Preferred over obfs4 when set; IceProxyManager.start() enforces the priority.
+        wtPath      = IceCertFetcher.wtPathSync(for: address)
+        wtHostHeader = IceCertFetcher.wtHostHeaderSync(for: address)
     } else {
         sni = nil
         pin = nil
+        wtPath = nil
+        wtHostHeader = nil
     }
     return IceRelay(address: address, bridgeCert: resolvedCert, iatMode: .none,
-                    tlsServerName: sni, pinnedSpki: pin)
+                    tlsServerName: sni, pinnedSpki: pin,
+                    wtPath: wtPath, wtHostHeader: wtHostHeader)
 }
 
 /// Manages the construct-ice local TCP proxy for gRPC obfuscation.
