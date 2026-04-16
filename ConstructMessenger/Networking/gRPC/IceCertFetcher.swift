@@ -279,7 +279,7 @@ actor IceCertFetcher {
 
     // MARK: - Ed25519 signature verification
 
-    private func verifySignature(_ data: Data) throws -> Bool {
+    nonisolated private func verifySignature(_ data: Data) throws -> Bool {
         // 1. Parse as JSON object
         guard var jsonObject = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let sigField = jsonObject["signature"] as? String,
