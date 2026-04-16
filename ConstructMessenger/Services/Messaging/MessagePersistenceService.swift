@@ -156,7 +156,7 @@ class MessagePersistenceService {
         newMessage.id = id.lowercased()
         newMessage.fromUserId = fromUserId
         newMessage.toUserId = toUserId
-        newMessage.encryptedContent = ""
+        newMessage.encryptedContent = Data()
         newMessage.decryptedContent = placeholderJson
         newMessage.timestamp = now
         newMessage.isSentByMe = true
@@ -204,7 +204,7 @@ class MessagePersistenceService {
         newMessage.id = id
         newMessage.fromUserId = fromUserId
         newMessage.toUserId = toUserId
-        newMessage.encryptedContent = ""
+        newMessage.encryptedContent = Data()
         newMessage.decryptedContent = placeholderJson
         newMessage.timestamp = now
         newMessage.isSentByMe = true

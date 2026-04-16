@@ -127,7 +127,7 @@ final class MessageCryptoService {
         }
 
         do {
-            let rawContent = Data(base64Encoded: message.content) ?? Data()
+            let rawContent = message.content
             let contentForDecrypt = MessagePadding.unpadCiphertext(rawContent)
             let plaintext = try core.decryptMessage(
                 contactId: contactId,

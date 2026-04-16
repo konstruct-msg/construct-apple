@@ -473,7 +473,7 @@ class ChatViewModel: NSObject {
             msg.id = UUID().uuidString
             msg.fromUserId = currentUserId
             msg.toUserId = recipientId
-            msg.encryptedContent = ""
+            msg.encryptedContent = Data()
             msg.decryptedContent = queued.text
             msg.timestamp = queued.timestamp
             msg.deliveryStatus = .failed
@@ -544,7 +544,7 @@ class ChatViewModel: NSObject {
                 messageType: nil,
                 ephemeralPublicKey: Data(),
                 messageNumber: 0,
-                content: "",
+                content: Data(),
                 suiteId: 0,
                 timestamp: UInt64(Date().timeIntervalSince1970)
             )
@@ -893,7 +893,7 @@ class ChatViewModel: NSObject {
                 messageType: nil,
                 ephemeralPublicKey: Data(),
                 messageNumber: 0,
-                content: "",
+                content: Data(),
                 suiteId: 0,
                 timestamp: UInt64(Date().timeIntervalSince1970),
                 oneTimePreKeyId: 0

@@ -152,29 +152,23 @@ final class CryptoSessionInitializationService {
             "suite_id": suiteID,
         ]
 
-        // Rust expects content as a Base64 string (not raw bytes).
-        // Unpad only — do NOT base64-decode; the string is passed directly to serde.
-        let unpaddedContent = MessagePadding.unpadCiphertextBase64(firstMessage.content)
+        let sealedBox = MessagePadding.unpadCiphertext(firstMessage.content)
 
-        // Validate the base64 (guard against malformed payloads)
-        guard Data(base64Encoded: unpaddedContent) != nil else {
-            Log.error("❌ Invalid base64: firstMessage.content", category: "CryptoManager")
-            Log.error("   Original content length: \(firstMessage.content.count)", category: "CryptoManager")
-            Log.error("   Unpadded content length: \(unpaddedContent.count)", category: "CryptoManager")
-            Log.error("   Content preview: \(unpaddedContent.prefix(100))...", category: "CryptoManager")
+        guard sealedBox.count >= 12 else {
+            Log.error("❌ First message sealed box too short (\(sealedBox.count) bytes)", category: "CryptoManager")
             throw CryptoManagerError.invalidKeyData
         }
 
         Log.debug("🔐 First message details:", category: "CryptoManager")
         Log.debug("   ephemeralPublicKey: \(firstMessage.ephemeralPublicKey.count) bytes", category: "CryptoManager")
         Log.debug("   messageNumber: \(firstMessage.messageNumber)", category: "CryptoManager")
-        Log.debug("   content: \(unpaddedContent.count) chars (base64, unpadded)", category: "CryptoManager")
+        Log.debug("   sealedBox: \(sealedBox.count) bytes (unpadded)", category: "CryptoManager")
         Log.debug("   suiteId: \(suiteID)", category: "CryptoManager")
 
         let messageDict: [String: Any] = [
             "ephemeral_public_key": [UInt8](firstMessage.ephemeralPublicKey),
             "message_number": firstMessage.messageNumber,
-            "content": unpaddedContent,   // Base64 string — Rust serde deserializes as String
+            "content": [UInt8](sealedBox),   // raw bytes — Rust deserializes as Vec<u8>
             "one_time_prekey_id": firstMessage.oneTimePreKeyId
         ]
 

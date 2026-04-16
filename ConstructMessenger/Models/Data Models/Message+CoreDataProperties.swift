@@ -55,7 +55,7 @@ extension Message {
     @NSManaged public var id: String
     @NSManaged public var fromUserId: String
     @NSManaged public var toUserId: String
-    @NSManaged public var encryptedContent: String
+    @NSManaged public var encryptedContent: Data
     @NSManaged public var decryptedContent: String?
     @NSManaged public var suiteId: UInt16
     @NSManaged public var timestamp: Date

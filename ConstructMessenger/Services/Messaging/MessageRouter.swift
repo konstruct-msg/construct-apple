@@ -180,8 +180,9 @@ class MessageRouter {
         Log.debug("   ephemeralPublicKey: \(message.ephemeralPublicKey.count) bytes", category: "MessageRouter")
         let ephemeralPreview = message.ephemeralPublicKey.prefix(16).map { String(format: "%02x", $0) }.joined()
         Log.debug("   ephemeralPublicKey preview: \(ephemeralPreview)...", category: "MessageRouter")
-        Log.debug("   content (padded): \(message.content.count) chars", category: "MessageRouter")
-        Log.debug("   content preview: \(message.content.prefix(32))...", category: "MessageRouter")
+        Log.debug("   content (padded): \(message.content.count) bytes", category: "MessageRouter")
+        let contentPreview = message.content.prefix(16).map { String(format: "%02x", $0) }.joined()
+        Log.debug("   content preview: \(contentPreview)…", category: "MessageRouter")
         Log.debug("   isEndSession: \(message.isEndSession)", category: "MessageRouter")
         if !message.editsMessageId.isEmpty {
             Log.debug("   editsMessageId: \(message.editsMessageId)", category: "MessageRouter")
@@ -414,9 +415,9 @@ class MessageRouter {
 
     /// Legacy JSON path — only used when rawPayload is unavailable (e.g. old healing records).
     private func buildIncomingEventLegacy(message: ChatMessage, otherUserId: String) -> CfeIncomingEvent? {
-        let unpaddedContent = MessagePadding.unpadCiphertextBase64(message.content)
-        guard let sealedBox = Data(base64Encoded: unpaddedContent), sealedBox.count >= 12 else {
-            Log.error("❌ buildIncomingEventLegacy: cannot decode content for \(message.id.prefix(8))…", category: "MessageRouter")
+        let sealedBox = MessagePadding.unpadCiphertext(message.content)
+        guard sealedBox.count >= 12 else {
+            Log.error("❌ buildIncomingEventLegacy: sealed box too short (\(sealedBox.count)b) for \(message.id.prefix(8))…", category: "MessageRouter")
             return nil
         }
 
@@ -1194,7 +1195,7 @@ class MessageRouter {
         message.chat = chat
         message.fromUserId = "SYSTEM"
         message.toUserId = currentUserId
-        message.encryptedContent = ""
+        message.encryptedContent = Data()
         message.decryptedContent = text
         message.suiteId = 0
         message.timestamp = Date()

@@ -21,7 +21,7 @@ struct ChatMessage: Codable, Identifiable {
     // Optional for CONTROL_MESSAGE type
     let ephemeralPublicKey: Data  // Binary 32 bytes (dh_public_key from EncryptedRatchetMessage)
     let messageNumber: UInt32  // message_number from EncryptedRatchetMessage
-    let content: String  // Base64 encrypted content (ciphertext from EncryptedRatchetMessage)
+    let content: Data    // Raw sealed box bytes (nonce || ciphertext || tag); empty for control messages
     let suiteId: UInt16
 
     let timestamp: UInt64
@@ -68,7 +68,7 @@ struct ChatMessage: Codable, Identifiable {
 
     /// Check if this is an END_SESSION control message
     var isEndSession: Bool {
-        messageType == "CONTROL_MESSAGE" && content == "END_SESSION"
+        messageType == "CONTROL_MESSAGE"
     }
 
     /// Check if this is a SENDER_SYNC message (copy of own outgoing message for other devices).
@@ -103,7 +103,7 @@ extension ChatMessage {
         messageType = try c.decodeIfPresent(String.self, forKey: .messageType)
         ephemeralPublicKey = (try? c.decodeIfPresent(Data.self, forKey: .ephemeralPublicKey)) ?? Data()
         messageNumber = (try? c.decodeIfPresent(UInt32.self, forKey: .messageNumber)) ?? 0
-        content = try c.decode(String.self, forKey: .content)
+        content = (try? c.decodeIfPresent(Data.self, forKey: .content)) ?? Data()
         suiteId = (try? c.decodeIfPresent(UInt16.self, forKey: .suiteId)) ?? 0
         timestamp = (try? c.decodeIfPresent(UInt64.self, forKey: .timestamp)) ?? 0
         oneTimePreKeyId = (try? c.decodeIfPresent(UInt32.self, forKey: .oneTimePreKeyId)) ?? 0

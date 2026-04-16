@@ -98,7 +98,7 @@ enum WirePayloadCoder {
         let previousChainLength: UInt32   // DR PN field
         let suiteId: UInt16               // crypto-suite identifier
         let kemCiphertext: Data?          // nil if no PQC
-        let content: String               // Base64(nonce || ciphertext || auth_tag)
+        let content: Data               // Base64(nonce || ciphertext || auth_tag)
     }
 
     /// Unpack a received encrypted_payload blob into components for decryption.
@@ -153,7 +153,7 @@ enum WirePayloadCoder {
         let kemCiphertext: Data? = kemLen > 0 ? data[headerSize ..< sealedBoxStart] : nil
 
         let sealedBoxData = data[sealedBoxStart...]
-        let content = sealedBoxData.base64EncodedString()
+        let content = Data(sealedBoxData)
 
         return DecodedPayload(
             messageNumber: messageNumber,
