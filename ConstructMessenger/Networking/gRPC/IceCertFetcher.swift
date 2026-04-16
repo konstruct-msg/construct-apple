@@ -26,6 +26,10 @@ struct RelayInfo: Codable {
     let domain: String
     let sni: String
     let spkiSha256: String
+    /// obfs4 bridge cert for this relay's own keypair.
+    /// When present, overrides the AMS cert so new relays are fully OTA-updatable
+    /// without a binary release. nil → falls back to the AMS cert (legacy behaviour).
+    let bridgeCert: String?
     /// WebSocket resource path for WebTunnel (ICE v2), e.g. "/construct-ice".
     /// nil / empty → relay does not advertise WebTunnel support.
     let wtPath: String?
@@ -38,6 +42,7 @@ struct RelayInfo: Codable {
     enum CodingKeys: String, CodingKey {
         case id, addr, port, domain, sni
         case spkiSha256  = "spki_sha256"
+        case bridgeCert  = "bridge_cert"
         case wtPath      = "wt_path"
         case wtHostHeader = "wt_host_header"
     }
@@ -117,54 +122,77 @@ actor IceCertFetcher {
     // MARK: - Relay config (signed)
 
     /// Fetch, verify, and cache the relay config from `.well-known/construct-server`.
-    /// The config is signed with Ed25519; invalid signatures are rejected.
-    /// On success, caches `[RelayInfo]` in UserDefaults.
-    /// Returns cached relays on network failure, nil if no cache exists.
+    ///
+    /// Tries multiple mirror URLs in parallel. The first response that
+    /// - returns HTTP 200, AND
+    /// - passes Ed25519 signature verification
+    /// wins and is persisted to UserDefaults. All URLs carry the same signed payload so
+    /// no additional trust assumption is introduced by the GitHub mirror.
+    ///
+    /// Mirror list order: primary (konstruct.cc) → GitHub raw (construct-relay repo).
     @discardableResult
     func fetchAndCacheRelayConfig() async -> [RelayInfo]? {
-        let urlString = "https://\(ServerConfig.inviteHost)/.well-known/construct-server"
-        guard let url = URL(string: urlString) else { return Self.cachedRelayInfosSync() }
+        let mirrorURLs: [String] = [
+            "https://\(ServerConfig.inviteHost)/.well-known/construct-server",
+            "https://raw.githubusercontent.com/maximeliseyev/construct-relay/main/.well-known/construct-server",
+        ]
 
-        var request = URLRequest(url: url, timeoutInterval: timeout)
-        request.cachePolicy = .reloadIgnoringLocalCacheData
-
-        do {
-            let (data, response) = try await URLSession.shared.data(for: request)
-            guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-                Log.debug("🧊 construct-server returned non-200", category: "ICE")
-                return Self.cachedRelayInfosSync()
-            }
-
-            guard try verifySignature(data) else {
-                Log.error("🧊 construct-server signature invalid — ignoring response", category: "ICE")
-                return Self.cachedRelayInfosSync()
-            }
-
-            let parsed = try JSONDecoder().decode(ConstructServerWellKnown.self, from: data)
-            guard let relays = parsed.ice?.relays, !relays.isEmpty else {
-                return Self.cachedRelayInfosSync()
-            }
-
-            // Persist to UserDefaults
-            if let encoded = try? JSONEncoder().encode(relays) {
-                UserDefaults.standard.set(encoded, forKey: Self.cachedRelayInfosKey)
-            }
-
-            // Cache bundle signing key for KT verification
-            if let keyB64 = parsed.bundleSigningKey,
-               let keyData = Data(base64Encoded: keyB64) {
-                UserDefaults.standard.set(keyData, forKey: Self.cachedBundleSigningKeyKey)
-            }
-
-            // Keep old relay-list key in sync for code that hasn't migrated yet
-            let addressList = relays.map(\.addressWithPort)
-            UserDefaults.standard.set(addressList, forKey: ICEConfig.cachedRelayListKey)
-
-            Log.info("🧊 Relay config updated: \(relays.count) relay(s)", category: "ICE")
+        if let relays = await fetchVerifiedRelayConfig(from: mirrorURLs) {
             return relays
-        } catch {
-            Log.debug("🧊 construct-server fetch error: \(error)", category: "ICE")
-            return Self.cachedRelayInfosSync()
+        }
+        Log.debug("🧊 All construct-server mirrors failed — using cache", category: "ICE")
+        return Self.cachedRelayInfosSync()
+    }
+
+    /// Races all provided URLs; returns the first verified result, nil if all fail.
+    private func fetchVerifiedRelayConfig(from urls: [String]) async -> [RelayInfo]? {
+        return await withTaskGroup(of: [RelayInfo]?.self) { group in
+            for urlString in urls {
+                guard let url = URL(string: urlString) else { continue }
+                group.addTask { [self] in
+                    do {
+                        var request = URLRequest(url: url, timeoutInterval: self.timeout)
+                        request.cachePolicy = .reloadIgnoringLocalCacheData
+                        let (data, response) = try await URLSession.shared.data(for: request)
+                        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+                            Log.debug("🧊 \(url.host ?? "") returned non-200", category: "ICE")
+                            return nil
+                        }
+                        guard try self.verifySignature(data) else {
+                            Log.error("🧊 \(url.host ?? "") signature invalid — ignoring", category: "ICE")
+                            return nil
+                        }
+                        let parsed = try JSONDecoder().decode(ConstructServerWellKnown.self, from: data)
+                        guard let relays = parsed.ice?.relays, !relays.isEmpty else { return nil }
+
+                        // Persist to UserDefaults — safe from any task since UserDefaults is thread-safe
+                        if let encoded = try? JSONEncoder().encode(relays) {
+                            UserDefaults.standard.set(encoded, forKey: Self.cachedRelayInfosKey)
+                        }
+                        if let keyB64 = parsed.bundleSigningKey,
+                           let keyData = Data(base64Encoded: keyB64) {
+                            UserDefaults.standard.set(keyData, forKey: Self.cachedBundleSigningKeyKey)
+                        }
+                        let addressList = relays.map(\.addressWithPort)
+                        UserDefaults.standard.set(addressList, forKey: ICEConfig.cachedRelayListKey)
+
+                        Log.info("🧊 Relay config via \(url.host ?? "?"): \(relays.count) relay(s)", category: "ICE")
+                        return relays
+                    } catch {
+                        Log.debug("🧊 \(url.host ?? "") fetch error: \(error)", category: "ICE")
+                        return nil
+                    }
+                }
+            }
+
+            // Return first non-nil result; cancel remaining tasks
+            for await result in group {
+                if let relays = result {
+                    group.cancelAll()
+                    return relays
+                }
+            }
+            return nil
         }
     }
 
@@ -186,6 +214,17 @@ actor IceCertFetcher {
             return ICEConfig.mskRelayPinnedSPKI.isEmpty ? nil : ICEConfig.mskRelayPinnedSPKI
         }
         return nil
+    }
+
+    /// Synchronous bridge-cert lookup for non-async contexts.
+    /// Returns the obfs4 bridge cert specific to this relay (from server config), or nil to
+    /// fall back to the AMS cert. Enables new relays added via OTA without a binary update.
+    static func bridgeCertSync(for address: String) -> String? {
+        if let relay = cachedRelayInfosSync()?.first(where: { $0.addressWithPort == address }),
+           let cert = relay.bridgeCert, !cert.isEmpty {
+            return cert
+        }
+        return ICEConfig.hardcodedRelayCerts[address]
     }
 
     /// Synchronous WebTunnel path lookup for non-async contexts.
