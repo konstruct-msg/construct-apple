@@ -42,6 +42,10 @@ final class CallManager {
     }
 
     private(set) var state: CallState = .idle
+    private(set) var lastError: String? = nil
+
+    func clearLastError() { lastError = nil }
+
     private var active: ActiveCall?
 
     private final class ActiveCall {
@@ -151,6 +155,9 @@ final class CallManager {
             try await sendOffer(toUserId: userId)
         } catch {
             Log.error("📞 Outgoing call setup failed: \(error)", category: "Calls")
+            if let rpcError = error as? RPCError, rpcError.code == .permissionDenied {
+                lastError = NSLocalizedString("call_error_not_contacts", comment: "")
+            }
             endActiveCall(reason: .local("Call setup failed"))
         }
     }

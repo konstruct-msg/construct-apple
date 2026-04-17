@@ -354,6 +354,14 @@ struct ChatView: View {
             )
         }
         #endif
+        .alert(callManager.lastError ?? "", isPresented: Binding(
+            get: { callManager.lastError != nil },
+            set: { if !$0 { callManager.clearLastError() } }
+        )) {
+            Button(NSLocalizedString("ok", comment: ""), role: .cancel) {
+                callManager.clearLastError()
+            }
+        }
     }
     
     // MARK: - View Components

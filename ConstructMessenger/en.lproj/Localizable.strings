@@ -805,3 +805,4 @@
 "transfer_error_connection" = "Connection lost. Try again.";
 "transfer_error_corrupt" = "Transfer data is corrupted. Try again.";
 "transfer_error_cancelled" = "Transfer was cancelled.";
+"call_error_not_contacts" = "Cannot call this node. Make sure you are mutual contacts.";
