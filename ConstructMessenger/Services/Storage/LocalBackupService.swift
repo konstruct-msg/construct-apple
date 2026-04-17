@@ -2,20 +2,23 @@
 //  LocalBackupService.swift
 //  Construct Messenger
 //
-//  Encrypted local backup (.ctbackup) using BIP39 mnemonic + ChaCha20-Poly1305.
+//  Two use cases share the same binary payload format:
 //
-//  File format:
-//    [4 bytes]  Magic "CTB1"
-//    [1 byte]   Version = 0x01
-//    [N bytes]  ChaChaPoly.SealedBox.combined (nonce12 + ciphertext + tag16)
+//  1. .ctbackup file export/import (BIP39 mnemonic + ChaChaPoly outer encryption)
+//       exportBackup()  = buildTransferPayload → ChaChaPoly.seal → write file
+//       importBackup()  = read file → ChaChaPoly.open → stageTransferPayload
 //
-//  Plaintext inside sealed box — length-prefixed blobs (8-byte LE each):
+//  2. Direct P2P transfer via NearbyTransferService (channel handles encryption)
+//       sender:   buildTransferPayload → NearbyTransferService.startSending()
+//       receiver: NearbyTransferService.receivedPayload → stageTransferPayload()
+//
+//  Payload binary format (unencrypted — 8-byte LE length-prefixed blobs):
 //    manifest JSON (UTF-8)
 //    Core Data SQLite
 //    Core Data SQLite WAL  (length = 0 if absent)
 //    MessageKeyStore SQLite
 //
-//  Key derivation:
+//  Key derivation for .ctbackup:
 //    seed      = mnemonicToSeed(mnemonic)            // 64-byte BIP39 PBKDF2
 //    backupKey = HKDF<SHA256>(seed, salt: "construct_backup_v1")  // 32 bytes
 //
@@ -43,17 +46,17 @@ final class LocalBackupService {
         try generateMnemonic(wordCount: 12)
     }
 
-    // MARK: - Export
+    // MARK: - Payload Building (shared by export and direct transfer)
 
-    func exportBackup(mnemonic: String, context: NSManagedObjectContext) async throws -> URL {
+    /// Builds the unencrypted binary payload containing all local data.
+    /// Used by exportBackup() (which then encrypts it) and by the P2P transfer sender.
+    func buildTransferPayload(context: NSManagedObjectContext) async throws -> Data {
         try await context.perform {
             if context.hasChanges { try context.save() }
         }
 
-        let key = try deriveKey(from: mnemonic)
-
-        let coreSQLURL = PersistenceController.defaultStoreURL
-        let coreWALURL = URL(fileURLWithPath: coreSQLURL.path + "-wal")
+        let coreSQLURL  = PersistenceController.defaultStoreURL
+        let coreWALURL  = URL(fileURLWithPath: coreSQLURL.path + "-wal")
         let keyStoreURL = MessageKeyStore.storageURL
 
         guard FileManager.default.fileExists(atPath: coreSQLURL.path) else {
@@ -77,54 +80,23 @@ final class LocalBackupService {
         )
         let manifestData = try JSONEncoder().encode(manifest)
 
-        var plaintext = Data()
-        plaintext.append(uint64LE(manifestData.count));   plaintext.append(manifestData)
-        plaintext.append(uint64LE(coreSQLData.count));    plaintext.append(coreSQLData)
-        plaintext.append(uint64LE(coreWALData.count));    plaintext.append(coreWALData)
-        plaintext.append(uint64LE(keyStoreData.count));   plaintext.append(keyStoreData)
-
-        let sealedBox = try ChaChaPoly.seal(plaintext, using: key)
-
-        var fileData = Self.magic
-        fileData.append(Self.fileVersion)
-        fileData.append(sealedBox.combined)
-
-        let timestamp = DateFormatter.backupTimestamp.string(from: Date())
-        let filename  = "construct_backup_\(timestamp).ctbackup"
-        let tempURL   = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
-        try fileData.write(to: tempURL)
-        return tempURL
+        var payload = Data()
+        payload.append(uint64LE(manifestData.count));  payload.append(manifestData)
+        payload.append(uint64LE(coreSQLData.count));   payload.append(coreSQLData)
+        payload.append(uint64LE(coreWALData.count));   payload.append(coreWALData)
+        payload.append(uint64LE(keyStoreData.count));  payload.append(keyStoreData)
+        return payload
     }
 
-    // MARK: - Import
-
-    func importBackup(from fileURL: URL, mnemonic: String) async throws {
-        let trimmed = mnemonic.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard validateMnemonic(mnemonic: trimmed) else {
-            throw BackupError.invalidMnemonic
-        }
-
-        let fileData = try Data(contentsOf: fileURL)
-
-        guard fileData.count > 5, fileData.prefix(4) == Self.magic else {
-            throw BackupError.invalidFile
-        }
-
-        let key = try deriveKey(from: trimmed)
-
-        let sealedBox: ChaChaPoly.SealedBox
-        do { sealedBox = try ChaChaPoly.SealedBox(combined: fileData.dropFirst(5)) }
-        catch { throw BackupError.invalidFile }
-
-        let plaintext: Data
-        do { plaintext = try ChaChaPoly.open(sealedBox, using: key) }
-        catch { throw BackupError.decryptionFailed }
-
+    /// Parses an unencrypted payload and writes files to the staging directory.
+    /// Used by importBackup() (after decryption) and by the P2P transfer receiver.
+    /// Sets the pending restore flag — apply takes effect on next app launch.
+    func stageTransferPayload(_ data: Data) throws {
         var offset = 0
-        let (manifestData, o1) = try readLengthPrefixed(from: plaintext, at: offset); offset = o1
-        let (coreSQLData,  o2) = try readLengthPrefixed(from: plaintext, at: offset); offset = o2
-        let (coreWALData,  o3) = try readLengthPrefixed(from: plaintext, at: offset); offset = o3
-        let (keyStoreData, _)  = try readLengthPrefixed(from: plaintext, at: offset)
+        let (manifestData, o1) = try readLengthPrefixed(from: data, at: offset); offset = o1
+        let (coreSQLData,  o2) = try readLengthPrefixed(from: data, at: offset); offset = o2
+        let (coreWALData,  o3) = try readLengthPrefixed(from: data, at: offset); offset = o3
+        let (keyStoreData, _)  = try readLengthPrefixed(from: data, at: offset)
 
         guard (try? JSONDecoder().decode(BackupManifest.self, from: manifestData)) != nil else {
             throw BackupError.invalidFile
@@ -144,6 +116,50 @@ final class LocalBackupService {
         try keyStoreData.write(to: stagingDir.appendingPathComponent("message_keys.sqlite"))
 
         UserDefaults.standard.set(true, forKey: Self.pendingRestoreKey)
+    }
+
+    // MARK: - .ctbackup File Export
+
+    func exportBackup(mnemonic: String, context: NSManagedObjectContext) async throws -> URL {
+        let plaintext = try await buildTransferPayload(context: context)
+        let key = try deriveKey(from: mnemonic)
+        let sealedBox = try ChaChaPoly.seal(plaintext, using: key)
+
+        var fileData = Self.magic
+        fileData.append(Self.fileVersion)
+        fileData.append(sealedBox.combined)
+
+        let timestamp = DateFormatter.backupTimestamp.string(from: Date())
+        let filename  = "construct_backup_\(timestamp).ctbackup"
+        let tempURL   = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
+        try fileData.write(to: tempURL)
+        return tempURL
+    }
+
+    // MARK: - .ctbackup File Import
+
+    func importBackup(from fileURL: URL, mnemonic: String) async throws {
+        let trimmed = mnemonic.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard validateMnemonic(mnemonic: trimmed) else {
+            throw BackupError.invalidMnemonic
+        }
+
+        let fileData = try Data(contentsOf: fileURL)
+        guard fileData.count > 5, fileData.prefix(4) == Self.magic else {
+            throw BackupError.invalidFile
+        }
+
+        let key = try deriveKey(from: trimmed)
+
+        let sealedBox: ChaChaPoly.SealedBox
+        do { sealedBox = try ChaChaPoly.SealedBox(combined: fileData.dropFirst(5)) }
+        catch { throw BackupError.invalidFile }
+
+        let plaintext: Data
+        do { plaintext = try ChaChaPoly.open(sealedBox, using: key) }
+        catch { throw BackupError.decryptionFailed }
+
+        try stageTransferPayload(plaintext)
     }
 
     // MARK: - Pending Restore (called from PersistenceController before store opens)

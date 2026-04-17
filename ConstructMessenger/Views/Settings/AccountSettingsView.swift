@@ -23,6 +23,8 @@ struct AccountSettingsView: View {
     @State private var showingDeleteConfirmation = false
     @State private var showingExportBackup = false
     @State private var showingImportBackup = false
+    @State private var showingSendNearby = false
+    @State private var showingReceiveNearby = false
     @State private var imageToCrop: UIImage?
     @State private var showingCropView = false
     @State private var isEditingDisplayName = false
@@ -88,6 +90,13 @@ struct AccountSettingsView: View {
         }
         .sheet(isPresented: $showingImportBackup) {
             ImportBackupView()
+        }
+        .sheet(isPresented: $showingSendNearby) {
+            SendBackupNearbyView()
+                .environment(\.managedObjectContext, viewContext)
+        }
+        .sheet(isPresented: $showingReceiveNearby) {
+            ReceiveBackupNearbyView()
         }
         .sheet(isPresented: $showingDeleteConfirmation) {
             DeleteAccountConfirmationView(onDelete: { authViewModel.deleteAccount() },
@@ -359,6 +368,40 @@ struct AccountSettingsView: View {
             Button { showingImportBackup = true } label: {
                 HStack {
                     Text(NSLocalizedString("import_backup", comment: "").lowercased())
+                        .font(CTFont.regular(14))
+                        .foregroundStyle(Color.CT.text)
+                    Spacer()
+                    Text("[→]")
+                        .font(CTFont.regular(13))
+                        .foregroundStyle(Color.CT.accent)
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 14)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            flatRowDivider()
+
+            Button { showingSendNearby = true } label: {
+                HStack {
+                    Text(NSLocalizedString("transfer_send_nearby", comment: "").lowercased())
+                        .font(CTFont.regular(14))
+                        .foregroundStyle(Color.CT.text)
+                    Spacer()
+                    Text("[→]")
+                        .font(CTFont.regular(13))
+                        .foregroundStyle(Color.CT.accent)
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 14)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            flatRowDivider()
+
+            Button { showingReceiveNearby = true } label: {
+                HStack {
+                    Text(NSLocalizedString("transfer_receive_nearby", comment: "").lowercased())
                         .font(CTFont.regular(14))
                         .foregroundStyle(Color.CT.text)
                     Spacer()

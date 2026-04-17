@@ -794,3 +794,24 @@
 
 "backup_error_invalid_mnemonic" = "Неверная фраза восстановления. Проверьте все 12 слов и попробуйте снова.";
 "backup_error_invalid_file" = "Это не корректная резервная копия Construct, или фраза восстановления неверна.";
+
+// Transfer (P2P nearby)
+"transfer_send_nearby" = "отправить на соседнее устройство";
+"transfer_receive_nearby" = "получить с соседнего устройства";
+"transfer_send_title" = "Отправить резервную копию";
+"transfer_receive_title" = "Получить резервную копию";
+"transfer_preparing" = "Подготовка резервной копии...";
+"transfer_waiting" = "Ожидание соседнего устройства.\nОткройте «Получить» на другом устройстве и введите PIN ниже.";
+"transfer_searching" = "Поиск соседнего устройства...";
+"transfer_connecting" = "Подключение...";
+"transfer_staging" = "Применение резервной копии...";
+"transfer_your_pin" = "Ваш PIN";
+"transfer_enter_pin_hint" = "Введите 6-значный PIN, отображённый на устройстве отправителя.";
+"transfer_connect" = "Подключиться";
+"transfer_progress" = "Передача данных";
+"transfer_complete" = "Передача завершена.";
+"transfer_error_title" = "Ошибка передачи";
+"transfer_error_auth" = "Ошибка аутентификации. Убедитесь, что на обоих устройствах отображается одинаковый PIN.";
+"transfer_error_connection" = "Соединение прервано. Попробуйте снова.";
+"transfer_error_corrupt" = "Данные передачи повреждены. Попробуйте снова.";
+"transfer_error_cancelled" = "Передача была отменена.";

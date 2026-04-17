@@ -784,3 +784,24 @@
 
 "backup_error_invalid_mnemonic" = "Invalid recovery phrase. Check all 12 words and try again.";
 "backup_error_invalid_file" = "This is not a valid Construct backup, or the recovery phrase is incorrect.";
+
+// Transfer (P2P nearby)
+"transfer_send_nearby" = "send to nearby device";
+"transfer_receive_nearby" = "receive from nearby device";
+"transfer_send_title" = "Send Backup";
+"transfer_receive_title" = "Receive Backup";
+"transfer_preparing" = "Preparing backup...";
+"transfer_waiting" = "Waiting for nearby device.\nOpen Receive on the other device and enter the PIN below.";
+"transfer_searching" = "Searching for nearby device...";
+"transfer_connecting" = "Connecting...";
+"transfer_staging" = "Applying backup...";
+"transfer_your_pin" = "Your PIN";
+"transfer_enter_pin_hint" = "Enter the 6-digit PIN shown on the sender device.";
+"transfer_connect" = "Connect";
+"transfer_progress" = "Transferring";
+"transfer_complete" = "Transfer complete.";
+"transfer_error_title" = "Transfer Error";
+"transfer_error_auth" = "Authentication failed. Check that both devices show the same PIN.";
+"transfer_error_connection" = "Connection lost. Try again.";
+"transfer_error_corrupt" = "Transfer data is corrupted. Try again.";
+"transfer_error_cancelled" = "Transfer was cancelled.";

@@ -42,5 +42,11 @@
 		<string>remote-notification</string>
 		<string>voip</string>
 	</array>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Used to transfer your backup directly to a nearby device over WiFi.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_construct-transfer._tcp</string>
+	</array>
 </dict>
 </plist>
