@@ -88,8 +88,8 @@ final class CallManager {
 
     private init() {
         #if os(iOS)
-        VoIPPushManager.shared.onIncomingPush = { [weak self] payload in
-            Task { @MainActor in self?.handleIncomingPush(payload) }
+        VoIPPushManager.shared.onIncomingPush = { [weak self] payload, reportedUUID in
+            Task { @MainActor in self?.handleIncomingPush(payload, reportedUUID: reportedUUID) }
         }
         CallKitProvider.shared.onAnswer = { [weak self] uuid in
             Task { @MainActor in self?.answer(callUUID: uuid) }
@@ -177,13 +177,13 @@ final class CallManager {
 
     // MARK: - Incoming (from PushKit)
 
-    private func handleIncomingPush(_ payload: [AnyHashable: Any]) {
+    private func handleIncomingPush(_ payload: [AnyHashable: Any], reportedUUID: UUID) {
         guard CallsFeature.isEnabled else {
             Log.info("📞 Calls disabled — ignoring incoming VoIP push", category: "Calls")
             return
         }
 
-        let callId = (payload["call_id"] as? String) ?? UUID().uuidString
+        let callId  = (payload["call_id"]  as? String) ?? reportedUUID.uuidString
         let callerId = (payload["caller_id"] as? String) ?? "Unknown"
         // Privacy: do NOT use caller_name from push payload (exposed to APNs infrastructure).
         // Look up display name from local CoreData; fall back to generic app name.
@@ -198,14 +198,11 @@ final class CallManager {
             return NSLocalizedString("construct_app_name", comment: "")
         }()
 
-        let uuid: UUID = {
-            if let parsed = UUID(uuidString: callId) { return parsed }
-            return UUID()
-        }()
-
+        // reportedUUID was already passed to CallKit synchronously inside PushKit's delegate
+        // callback (iOS 13+ requirement). Do not call reportIncomingCall again.
         let session = CallSession(
             id: callId,
-            uuid: uuid,
+            uuid: reportedUUID,
             peerUserId: callerId,
             peerName: callerName,
             direction: .incoming
@@ -213,24 +210,16 @@ final class CallManager {
         begin(session: session, initialState: .incoming(session))
 
         #if os(iOS)
-        let reportedUUID = CallKitProvider.shared.reportIncomingCall(
-            callId: callId,
-            callerId: callerId,
-            callerName: callerName,
-            hasVideo: false
-        )
-        // Ensure we track the exact UUID CallKit uses even if call_id isn't a UUID string.
-        active?.close()
-        let adjusted = CallSession(
-            id: callId,
-            uuid: reportedUUID,
-            peerUserId: callerId,
-            peerName: callerName,
-            direction: .incoming
-        )
-        active = ActiveCall(session: adjusted)
+        // Update CallKit with the resolved caller name from local CoreData
+        // (we reported with app name initially to meet the sync deadline).
+        if callerName != NSLocalizedString("construct_app_name", comment: "") {
+            Task { @MainActor in
+                CallKitProvider.shared.updateCallInfo(uuid: reportedUUID, callerName: callerName)
+            }
+        }
+        active = ActiveCall(session: session)
         active?.callKitRegistered = true
-        state = .incoming(adjusted)
+        state = .incoming(session)
         #endif
     }
 
@@ -470,16 +459,24 @@ final class CallManager {
             Log.error("📞 Signaling error: code=\(error.code) msg=\(error.message)", category: "Calls")
             endActiveCall(reason: .error(error.code))
         case .incomingCall(let call):
-            // Fallback path if server delivers incoming-call notification while app is foreground.
+            // Fallback path: server delivers incoming-call notification while app is foreground
+            // (device is online, no PushKit wake needed). Report to CallKit directly.
             guard CallsFeature.isEnabled else { return }
             if case .idle = state {
                 Log.info("📞 IncomingCallNotification received (call_id=\(call.callID.prefix(8))…)", category: "Calls")
+                #if os(iOS)
+                let reportedUUID = CallKitProvider.shared.reportIncomingCall(
+                    callId: call.callID,
+                    callerId: call.callerID,
+                    callerName: call.callerName,
+                    hasVideo: false
+                )
                 let payload: [AnyHashable: Any] = [
                     "call_id": call.callID,
-                    "caller_id": call.callerID,
-                    "caller_name": call.callerName
+                    "caller_id": call.callerID
                 ]
-                handleIncomingPush(payload)
+                handleIncomingPush(payload, reportedUUID: reportedUUID)
+                #endif
             }
         case .signal(let s):
             switch s.signal {

@@ -23,8 +23,8 @@ final class VoIPPushManager: NSObject {
     /// If the device re-registers and gets a new device_id, the token must be re-registered.
     private var registeredDeviceId: String?
 
-    /// Raw VoIP push payload callback (e.g. for CallKit reporting).
-    var onIncomingPush: (@Sendable ([AnyHashable: Any]) -> Void)?
+    /// Raw VoIP push payload callback. UUID is the one already reported to CallKit synchronously.
+    var onIncomingPush: (@Sendable ([AnyHashable: Any], UUID) -> Void)?
 
     private var registry: PKPushRegistry?
     private var sessionObserverTask: Task<Void, Never>?
@@ -165,11 +165,28 @@ extension VoIPPushManager: PKPushRegistryDelegate {
         for type: PKPushType,
         completion: @escaping () -> Void
     ) {
+        guard type == .voIP else { completion(); return }
+
+        let dict = payload.dictionaryPayload
+        let callId  = (dict["call_id"]  as? String) ?? UUID().uuidString
+        let callerId = (dict["caller_id"] as? String) ?? ""
+
+        // CRITICAL: iOS 13+ terminates the app if reportNewIncomingCall is not called
+        // synchronously within this delegate method. Task { @MainActor } is an async
+        // dispatch and violates this contract, causing silent app termination.
+        // CXProvider.reportNewIncomingCall is thread-safe and must be called here.
+        let reportedUUID = CallKitProvider.shared.reportIncomingCallSync(
+            callId: callId,
+            callerId: callerId,
+            callerName: NSLocalizedString("construct_app_name", comment: ""),
+            hasVideo: false
+        )
+
+        Log.info("📞 Incoming VoIP push — CallKit notified sync (uuid=\(reportedUUID.uuidString.prefix(8))…)", category: "Calls")
+
+        // Dispatch remaining setup to MainActor after CallKit obligation is fulfilled.
         Task { @MainActor in
-            guard type == .voIP else { completion(); return }
-            let dict = payload.dictionaryPayload
-            Log.info("📞 Incoming VoIP push received (keys=\(dict.keys.count))", category: "Calls")
-            onIncomingPush?(dict)
+            onIncomingPush?(dict, reportedUUID)
             completion()
         }
     }

@@ -31,6 +31,27 @@ final class CallKitProvider: NSObject, CXProviderDelegate {
         provider.setDelegate(self, queue: nil)
     }
 
+    /// Thread-safe synchronous variant for use directly inside PushKit's
+    /// `pushRegistry(_:didReceiveIncomingPushWith:)` delegate callback.
+    /// iOS 13+ terminates the app if `reportNewIncomingCall` is not called
+    /// before returning from (or dispatching away from) that callback.
+    /// `CXProvider.reportNewIncomingCall` is documented as thread-safe.
+    nonisolated func reportIncomingCallSync(callId: String, callerId: String, callerName: String, hasVideo: Bool) -> UUID {
+        let uuid = UUID(uuidString: callId) ?? UUID()
+        let update = CXCallUpdate()
+        update.remoteHandle = CXHandle(type: .generic, value: callerId)
+        update.localizedCallerName = callerName
+        update.hasVideo = hasVideo
+        provider.reportNewIncomingCall(with: uuid, update: update) { error in
+            if let error {
+                Log.error("📞 CallKit reportNewIncomingCall failed: \(error)", category: "Calls")
+            } else {
+                Log.info("📞 CallKit incoming call reported sync (uuid=\(uuid.uuidString.prefix(8))…)", category: "Calls")
+            }
+        }
+        return uuid
+    }
+
     @MainActor
     func reportIncomingCall(callId: String, callerId: String, callerName: String, hasVideo: Bool) -> UUID {
         let uuid = UUID(uuidString: callId) ?? UUID()
@@ -47,6 +68,13 @@ final class CallKitProvider: NSObject, CXProviderDelegate {
             }
         }
         return uuid
+    }
+
+    @MainActor
+    func updateCallInfo(uuid: UUID, callerName: String) {
+        let update = CXCallUpdate()
+        update.localizedCallerName = callerName
+        provider.reportCall(with: uuid, updated: update)
     }
 
     @MainActor
