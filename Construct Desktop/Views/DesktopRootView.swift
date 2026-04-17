@@ -89,7 +89,7 @@ struct DesktopRootView: View {
 
     private var mainContent: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
-            // Sidebar: mode toggle + either chats list or synaps grid
+            // Sidebar: mode toggle + chats list (synaps takes detail pane instead)
             VStack(spacing: 0) {
                 sidebarModeBar
                 Rectangle().fill(Color.CT.noise).frame(height: 1)
@@ -98,16 +98,20 @@ struct DesktopRootView: View {
                     ChatsListView()
                         .environment(chatsViewModel)
                 } else {
-                    DesktopSynapsView()
-                        .environment(chatsViewModel)
-                        .environment(\.managedObjectContext, viewContext)
+                    // Synaps cloud is in the detail pane — sidebar shows nothing
+                    Color.CT.bg.frame(maxHeight: .infinity)
                 }
             }
             .background(Color.CT.bg)
             .navigationSplitViewColumnWidth(min: 230, ideal: 280, max: 360)
         } detail: {
-            // Detail: active chat or placeholder
-            if let chatId = chatsViewModel.chatToOpen,
+            if sidebarMode == .synaps {
+                DesktopSynapsView(onSwitchToChats: {
+                    withAnimation(.easeInOut(duration: 0.15)) { sidebarMode = .chats }
+                })
+                .environment(chatsViewModel)
+                .environment(\.managedObjectContext, viewContext)
+            } else if let chatId = chatsViewModel.chatToOpen,
                let chat = fetchChat(id: chatId) {
                 ChatView(chat: chat, context: viewContext)
                     .onDrop(of: [.image, .fileURL], isTargeted: nil) { providers in
@@ -119,6 +123,11 @@ struct DesktopRootView: View {
             }
         }
         .frame(minWidth: 700, minHeight: 480)
+        .onChange(of: sidebarMode) { _, mode in
+            withAnimation(.easeInOut(duration: 0.2)) {
+                columnVisibility = mode == .synaps ? .detailOnly : .all
+            }
+        }
         // Add Contact sheet (⌘⌥N)
         .sheet(isPresented: $showAddContact) {
             DesktopAddContactView()
@@ -134,18 +143,8 @@ struct DesktopRootView: View {
                 .environment(\.managedObjectContext, viewContext)
                 .frame(minWidth: 400, minHeight: 300)
         }
-        // Toolbar — CT ASCII style
+        // Toolbar — CT ASCII style (no mode switcher — it lives in the sidebar only)
         .toolbar {
-            ToolbarItem(placement: .navigation) {
-                HStack(spacing: 2) {
-                    modeButton("CHATS", mode: .chats)
-                    Text("·")
-                        .font(CTFont.regular(11))
-                        .foregroundStyle(Color.CT.noise)
-                    modeButton("SYNAPS", mode: .synaps)
-                }
-            }
-
             ToolbarItem(placement: .primaryAction) {
                 Button {
                     showAddContact = true
@@ -209,17 +208,6 @@ struct DesktopRootView: View {
         }
         .buttonStyle(.plain)
         .frame(maxWidth: .infinity)
-    }
-
-    private func modeButton(_ label: String, mode: SidebarMode) -> some View {
-        Button {
-            withAnimation(.easeInOut(duration: 0.15)) { sidebarMode = mode }
-        } label: {
-            Text("[\(label)]")
-                .font(CTFont.regular(11))
-                .foregroundStyle(sidebarMode == mode ? Color.CT.accent : Color.CT.textDim)
-        }
-        .buttonStyle(.plain)
     }
 
     // MARK: - Drag & Drop into chat

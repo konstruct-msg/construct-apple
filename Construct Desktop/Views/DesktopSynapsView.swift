@@ -17,6 +17,8 @@ import AppKit
 
 struct DesktopSynapsView: View {
 
+    var onSwitchToChats: (() -> Void)? = nil
+
     @Environment(\.managedObjectContext) private var context
     @Environment(ChatsViewModel.self)    private var chatsViewModel
 
@@ -108,11 +110,25 @@ struct DesktopSynapsView: View {
 
     private var synapsToolbar: some View {
         HStack(spacing: 0) {
+            // Back to Chats (visible when Synaps occupies full canvas)
+            if let switchBack = onSwitchToChats {
+                Button(action: switchBack) {
+                    Text("[← CHATS]")
+                        .font(CTFont.regular(11))
+                        .foregroundStyle(Color.CT.textDim)
+                }
+                .buttonStyle(.plain)
+                .padding(.leading, 14)
+
+                Rectangle().fill(Color.CT.noise).frame(width: 1, height: 16)
+                    .padding(.horizontal, 8)
+            }
+
             Text(NSLocalizedString("synaps", comment: "").uppercased())
                 .font(CTFont.bold(11))
                 .tracking(4)
                 .foregroundStyle(Color.CT.text)
-                .padding(.leading, 14)
+                .padding(.leading, onSwitchToChats == nil ? 14 : 0)
 
             Spacer()
 
