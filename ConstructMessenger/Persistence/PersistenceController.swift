@@ -44,6 +44,12 @@ struct PersistenceController {
             // Automatic lightweight migration for model changes
             description.shouldInferMappingModelAutomatically = true
             description.shouldMigrateStoreAutomatically = true
+            // Restrict DB file access to foreground (device unlocked) only.
+            // Without this the SQLite file is accessible after first unlock which
+            // makes forensic extraction trivial. NSFileProtectionComplete means the
+            // OS re-encrypts the file the moment the screen locks.
+            description.setOption(FileProtectionType.complete as NSObject,
+                                  forKey: NSPersistentStoreFileProtectionKey)
         }
 
         c.loadPersistentStores { description, error in
