@@ -56,9 +56,19 @@ class ChatViewModel: NSObject {
     /// Shared predicate that excludes all session-handshake control signals.
     /// Applied by the FRC, older-message pagination, and hasMoreMessages check
     /// so control messages never appear anywhere in the conversation view.
-    static let controlMessageFilterPredicate = NSPredicate(
-        format: "NOT (decryptedContent BEGINSWITH '__session_ready') AND NOT (decryptedContent BEGINSWITH 'session_ready_') AND NOT (decryptedContent BEGINSWITH '__session_ping') AND NOT (decryptedContent BEGINSWITH '__END_SESSION')"
-    )
+    ///
+    /// Primary filter: `contentTypeRaw == 0` (MessageContentType.regular) for all
+    /// messages written by v2+ of the schema.
+    /// Fallback string-prefix guards cover legacy DB rows that predate contentTypeRaw
+    /// (their contentTypeRaw is nil/0, but decryptedContent may contain control sentinels
+    /// that leaked before the system-message gate was enforced).
+    static let controlMessageFilterPredicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+        NSPredicate(format: "contentTypeRaw == 0"),
+        NSPredicate(format: "NOT (decryptedContent BEGINSWITH '__session_ready')"),
+        NSPredicate(format: "NOT (decryptedContent BEGINSWITH 'session_ready_')"),
+        NSPredicate(format: "NOT (decryptedContent BEGINSWITH '__session_ping')"),
+        NSPredicate(format: "NOT (decryptedContent BEGINSWITH '__END_SESSION')")
+    ])
 
     let chat: Chat
     private var recipientBundle: (identityPublic: Data, signedPrekeyPublic: Data, signature: Data, verifyingKey: Data)?
@@ -475,6 +485,7 @@ class ChatViewModel: NSObject {
             msg.toUserId = recipientId
             msg.encryptedContent = Data()
             msg.decryptedContent = queued.text
+            msg.contentType = .regular
             msg.timestamp = queued.timestamp
             msg.deliveryStatus = .failed
             msg.isSentByMe = true

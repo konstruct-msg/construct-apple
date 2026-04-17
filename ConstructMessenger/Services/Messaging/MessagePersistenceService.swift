@@ -62,6 +62,7 @@ class MessagePersistenceService {
             newMessage.toUserId = message.to
             newMessage.encryptedContent = message.content
             newMessage.decryptedContent = decryptedContent
+            newMessage.contentType = .regular
             newMessage.timestamp = messageTimestamp
             newMessage.isSentByMe = isSentByMe
             newMessage.deliveryStatus = status
@@ -158,6 +159,7 @@ class MessagePersistenceService {
         newMessage.toUserId = toUserId
         newMessage.encryptedContent = Data()
         newMessage.decryptedContent = placeholderJson
+        newMessage.contentType = .media
         newMessage.timestamp = now
         newMessage.isSentByMe = true
         newMessage.deliveryStatus = .sending
@@ -206,6 +208,7 @@ class MessagePersistenceService {
         newMessage.toUserId = toUserId
         newMessage.encryptedContent = Data()
         newMessage.decryptedContent = placeholderJson
+        newMessage.contentType = .media
         newMessage.timestamp = now
         newMessage.isSentByMe = true
         newMessage.deliveryStatus = .sending

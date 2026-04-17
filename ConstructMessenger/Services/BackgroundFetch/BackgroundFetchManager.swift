@@ -415,6 +415,7 @@ class BackgroundFetchManager: NSObject {
                     message.encryptedContent = messageData.content
                     let decryptedString = decryptedContent.flatMap { String(data: $0, encoding: .utf8) }
                     message.decryptedContent = decryptedString
+                    message.contentType = .regular
                     message.timestamp = Date(timeIntervalSince1970: TimeInterval(messageData.timestamp))
                     message.isSentByMe = false
                     message.deliveryStatus = .delivered

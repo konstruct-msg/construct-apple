@@ -8,6 +8,46 @@
 import Foundation
 import CoreData
 
+// MARK: - Message Content Type Enum
+
+/// Identifies the semantic type of a persisted message.
+/// Stored as `contentTypeRaw` (Int16) in Core Data.
+///
+/// System messages (sessionPing, sessionReady, sessionReset) are ephemeral —
+/// they are never saved to Core Data. This enum is used for regular messages
+/// and serves as the foundation for the decrypt-on-display migration (Phase 3).
+enum MessageContentType: Int16 {
+    /// Standard E2EE text or media message.
+    case regular      = 0
+    /// Profile-sharing JSON payload (ephemeral, not persisted).
+    case profileShare = 1
+    /// Media attachment message.
+    case media        = 2
+    /// Session ping control signal (ephemeral, not persisted).
+    case sessionPing  = 10
+    /// Session-ready handshake confirmation (ephemeral, not persisted).
+    case sessionReady = 11
+    /// END_SESSION / session reset signal (ephemeral, not persisted).
+    case sessionReset = 12
+
+    /// Returns `true` for control signals that must never be saved to Core Data.
+    var isEphemeral: Bool {
+        switch self {
+        case .sessionPing, .sessionReady, .sessionReset, .profileShare: return true
+        case .regular, .media: return false
+        }
+    }
+
+    /// Infer the content type from a decrypted plaintext string.
+    /// Used as a fallback for messages in the DB that predate `contentTypeRaw`.
+    static func infer(from plaintext: String) -> MessageContentType {
+        if plaintext.hasPrefix("__session_ping") { return .sessionPing }
+        if plaintext.hasPrefix("__session_ready") || plaintext.hasPrefix("session_ready_") { return .sessionReady }
+        if plaintext.hasPrefix("__END_SESSION") { return .sessionReset }
+        return .regular
+    }
+}
+
 // MARK: - Delivery Status Enum
 enum DeliveryStatus: Int16 {
     case sending = 0           // Отправляется (локально)
@@ -57,6 +97,7 @@ extension Message {
     @NSManaged public var toUserId: String
     @NSManaged public var encryptedContent: Data
     @NSManaged public var decryptedContent: String?
+    @NSManaged public var contentTypeRaw: Int16
     @NSManaged public var suiteId: UInt16
     @NSManaged public var timestamp: Date
     @NSManaged public var isSentByMe: Bool
@@ -78,6 +119,11 @@ extension Message {
     var deliveryStatus: DeliveryStatus {
         get { DeliveryStatus(rawValue: deliveryStatusRaw) ?? .sending }
         set { deliveryStatusRaw = newValue.rawValue }
+    }
+
+    var contentType: MessageContentType {
+        get { MessageContentType(rawValue: contentTypeRaw) ?? .regular }
+        set { contentTypeRaw = newValue.rawValue }
     }
 
     // Helper для проверки возможности retry

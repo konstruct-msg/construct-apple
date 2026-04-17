@@ -1260,6 +1260,7 @@ class MessageRouter {
         message.toUserId = messageData.to
         message.encryptedContent = messageData.content
         message.decryptedContent = decryptedContent
+        message.contentType = .regular
         message.timestamp = Date(timeIntervalSince1970: TimeInterval(messageData.timestamp))
         message.isSentByMe = false
         message.deliveryStatus = .delivered
