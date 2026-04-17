@@ -457,9 +457,16 @@ class MessageRouter {
     ) {
         for action in actions {
             switch action {
-            case .messageDecrypted(let contactId, _, let plaintext):
-                _ = contactId
+            case .messageDecrypted(let contactId, let decryptedMsgId, let plaintext):
+                let resolvedContactId = contactId.isEmpty ? otherUserId : contactId
                 checkUsernameUpdate(for: otherUserId, chat: chat, in: context)
+                // Generate and persist a per-message storage key (decrypt-on-display foundation).
+                let storageKey = Data((0..<32).map { _ in UInt8.random(in: 0...255) })
+                MessageKeyStore.shared.store(
+                    messageId: decryptedMsgId.isEmpty ? message.id : decryptedMsgId,
+                    key: storageKey,
+                    contactId: resolvedContactId
+                )
                 switch chunkReassembler.process(data: plaintext) {
                 case .assembled(let text, let quoted):
                     handleResolvedMessage(text, quotedMessage: quoted, for: message, from: otherUserId, chat: chat, in: context)
@@ -1358,6 +1365,9 @@ class MessageRouter {
                 return
             }
             let decrypted = String(data: decryptResult.plaintext, encoding: .utf8) ?? ""
+            if !decryptResult.storageKey.isEmpty {
+                MessageKeyStore.shared.store(messageId: message.id, key: decryptResult.storageKey, contactId: partnerUserId)
+            }
             saveSenderSyncMessage(decrypted, original: message, partnerUserId: partnerUserId, in: context)
         } else if message.messageNumber == 0 {
             // New device: init receiving session async, then save

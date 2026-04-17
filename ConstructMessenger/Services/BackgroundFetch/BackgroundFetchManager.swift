@@ -357,6 +357,9 @@ class BackgroundFetchManager: NSObject {
                             do {
                                 let result = try CryptoManager.shared.decryptMessage(messageData)
                                 decryptedContent = result.plaintext
+                                if !result.storageKey.isEmpty {
+                                    MessageKeyStore.shared.store(messageId: messageData.id, key: result.storageKey, contactId: otherUserId)
+                                }
                                 Log.debug("✅ Decrypted message \(messageData.id)", category: "BackgroundFetch")
                                 PersistentACKStore.shared.preemptACK(messageData.id)
                             } catch {
