@@ -180,7 +180,7 @@ class ProfileShareViewModel {
            let avatarMediaKey = profileData.avatarMediaKey {
             // New format: download and decrypt media from Media Upload API
             Task { [weak self] in
-                guard let self else { return }
+                guard self != nil else { return }
                 do {
                     Log.info("📥 Downloading avatar from Media Upload API: \(avatarMediaId)", category: "ProfileShare")
                     
@@ -264,7 +264,7 @@ class ProfileShareViewModel {
             Task { [weak self] in
                 guard let self else { return }
                 await withCheckedContinuation { continuation in
-                    shareProfile(with: contactId) { success, error in
+                    self.shareProfile(with: contactId) { success, error in
                         if success {
                             Log.info("✅ Profile rebroadcast to \(contactId.prefix(8))", category: "ProfileShare")
                         } else {

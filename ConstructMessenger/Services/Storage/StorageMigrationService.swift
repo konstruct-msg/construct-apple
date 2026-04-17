@@ -17,7 +17,7 @@ final class StorageMigrationService {
 
     static let shared = StorageMigrationService()
 
-    private let batchSize = 100
+    nonisolated private let batchSize = 100
     private var isMigrating = false
 
     private init() {}
@@ -42,7 +42,7 @@ final class StorageMigrationService {
         }
     }
 
-    private func migrateBatch(in context: NSManagedObjectContext) {
+    nonisolated private func migrateBatch(in context: NSManagedObjectContext) {
         let fetchRequest = Message.fetchRequest()
         // Only rows that have plaintext and haven't been migrated yet.
         fetchRequest.predicate = NSPredicate(format: "decryptedContent != nil AND contentKeyRef == nil")

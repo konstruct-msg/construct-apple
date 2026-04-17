@@ -181,27 +181,27 @@ final class NearbyTransferService {
         // stateUpdateHandler handles .ready (→ .advertising) and errors.
         // newConnectionHandler resolves the continuation on the first connection.
         let conn = try await withCheckedThrowingContinuation { (cont: CheckedContinuation<NWConnection, Error>) in
-            var resumed = false
+            let flag = ResumeOnce()
 
             listener.stateUpdateHandler = { [weak self] state in
                 switch state {
                 case .ready:
                     Task { @MainActor in self?.transferState = .advertising }
                 case .failed(let error):
-                    guard !resumed else { return }
-                    resumed = true
+                    guard !flag.done else { return }
+                    flag.done = true
                     cont.resume(throwing: error)
                 case .cancelled:
-                    guard !resumed else { return }
-                    resumed = true
+                    guard !flag.done else { return }
+                    flag.done = true
                     cont.resume(throwing: CancellationError())
                 default: break
                 }
             }
 
             listener.newConnectionHandler = { connection in
-                guard !resumed else { connection.cancel(); return }
-                resumed = true
+                guard !flag.done else { connection.cancel(); return }
+                flag.done = true
                 cont.resume(returning: connection)
             }
 
@@ -231,23 +231,23 @@ final class NearbyTransferService {
 
         // Browse for the sender's Bonjour service.
         let endpoint = try await withCheckedThrowingContinuation { (cont: CheckedContinuation<NWEndpoint, Error>) in
-            var resumed = false
+            let flag = ResumeOnce()
             let browser = NWBrowser(for: .bonjour(type: serviceType, domain: nil), using: params)
             self.browser = browser
 
             browser.browseResultsChangedHandler = { results, _ in
-                guard !resumed else { return }
+                guard !flag.done else { return }
                 if let match = results.first(where: {
                     if case .service(let name, _, _, _) = $0.endpoint { return name == instanceName }
                     return false
                 }) {
-                    resumed = true
+                    flag.done = true
                     cont.resume(returning: match.endpoint)
                 }
             }
             browser.stateUpdateHandler = { state in
-                if case .failed(let error) = state, !resumed {
-                    resumed = true
+                if case .failed(let error) = state, !flag.done {
+                    flag.done = true
                     cont.resume(throwing: error)
                 }
             }
@@ -393,18 +393,18 @@ final class NearbyTransferService {
 
     private func waitForReady(_ conn: NWConnection) async throws {
         try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
-            var resumed = false
+            let flag = ResumeOnce()
             let existing = conn.stateUpdateHandler
             conn.stateUpdateHandler = { state in
                 existing?(state)
-                guard !resumed else { return }
+                guard !flag.done else { return }
                 switch state {
                 case .ready:
-                    resumed = true; cont.resume()
+                    flag.done = true; cont.resume()
                 case .failed(let error):
-                    resumed = true; cont.resume(throwing: error)
+                    flag.done = true; cont.resume(throwing: error)
                 case .cancelled:
-                    resumed = true; cont.resume(throwing: CancellationError())
+                    flag.done = true; cont.resume(throwing: CancellationError())
                 default: break
                 }
             }
@@ -504,4 +504,11 @@ final class NearbyTransferService {
         var le = value.littleEndian
         return Data(bytes: &le, count: 4)
     }
+}
+
+/// Thread-safe one-shot flag for guarding continuation resumes.
+/// All NW callbacks are serialized on the same DispatchQueue, so this
+/// @unchecked Sendable wrapper is safe.
+private final class ResumeOnce: @unchecked Sendable {
+    var done = false
 }

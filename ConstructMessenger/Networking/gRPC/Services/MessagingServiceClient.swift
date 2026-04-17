@@ -37,8 +37,8 @@ final class MessagingServiceClient: Sendable {
         // Without this, backgrounding immediately after Send kills the connection
         // before the server response arrives → client never sees success=true → retry storm.
         #if canImport(UIKit)
-        let bgTaskId = UIApplication.shared.beginBackgroundTask(withName: "send-msg-rpc") { }
-        defer { UIApplication.shared.endBackgroundTask(bgTaskId) }
+        let bgTaskId = await MainActor.run { UIApplication.shared.beginBackgroundTask(withName: "send-msg-rpc") { } }
+        defer { Task { @MainActor in UIApplication.shared.endBackgroundTask(bgTaskId) } }
         #endif
         return try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.sendMessage, fastICEFallback: true) { grpcClient in
             let msgClient = Shared_Proto_Services_V1_MessagingService.Client(wrapping: grpcClient)

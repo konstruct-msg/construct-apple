@@ -23,7 +23,7 @@ final class BlindTokenService {
     static let shared = BlindTokenService()
 
     /// Maximum tokens to request in one IssueTokens call (server limit: 20/hr).
-    static let batchSize = 20
+    nonisolated static let batchSize = 20
     /// Don't replenish again within this window (mirrors server hourly bucket).
     private static let cooldown: TimeInterval = 3600
 

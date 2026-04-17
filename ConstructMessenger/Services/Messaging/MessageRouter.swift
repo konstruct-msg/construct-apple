@@ -457,8 +457,8 @@ class MessageRouter {
     ) {
         for action in actions {
             switch action {
-            case .messageDecrypted(let contactId, let decryptedMsgId, let plaintext):
-                let resolvedContactId = contactId.isEmpty ? otherUserId : contactId
+            case .messageDecrypted(let contactId, _, let plaintext):
+                _ = contactId.isEmpty ? otherUserId : contactId
                 checkUsernameUpdate(for: otherUserId, chat: chat, in: context)
                 switch chunkReassembler.process(data: plaintext) {
                 case .assembled(let text, let quoted):

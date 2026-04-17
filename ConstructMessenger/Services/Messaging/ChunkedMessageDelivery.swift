@@ -1,4 +1,5 @@
 import Foundation
+import SwiftProtobuf
 
 struct ChunkedMessagePlan {
     let messageId: UUID

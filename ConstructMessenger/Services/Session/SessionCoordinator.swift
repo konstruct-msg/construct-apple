@@ -407,7 +407,7 @@ final class SessionCoordinator {
                         contactId: userId,
                         sessionData: Data(sessionBytes)
                     )
-                    try? CryptoManager.shared.handleOrchestratorEvent(event, tag: "session_init_completed_responder")
+                    _ = try? CryptoManager.shared.handleOrchestratorEvent(event, tag: "session_init_completed_responder")
                 }
 
                 // Replenish OTPKs — Bob consumed one OTPK for this X3DH session init.

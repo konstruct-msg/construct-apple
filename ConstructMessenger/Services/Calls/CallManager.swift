@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import CoreData
 import GRPCCore
 import SwiftProtobuf
 
@@ -172,7 +173,7 @@ final class CallManager {
             req.predicate = NSPredicate(format: "id == %@", callerId)
             req.fetchLimit = 1
             if let user = (try? ctx.fetch(req))?.first {
-                return user.displayName ?? NSLocalizedString("construct_app_name", comment: "")
+                return user.displayName
             }
             return NSLocalizedString("construct_app_name", comment: "")
         }()

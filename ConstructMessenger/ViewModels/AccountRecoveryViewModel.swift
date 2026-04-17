@@ -222,9 +222,8 @@ final class AccountRecoveryViewModel {
             )
             IceProxyManager.shared.configureFromServer(cert: response.iceBridgeCert ?? "")
 
-            Task { [weak self] in
-                _ = self
-                try? await OtpkReplenishmentService.generateAndUpload(
+            Task {
+                _ = try? await OtpkReplenishmentService.generateAndUpload(
                     count: 100,
                     deviceId: deviceId,
                     replaceExisting: true

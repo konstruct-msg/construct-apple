@@ -37,8 +37,8 @@ final class LocalBackupService {
     private static let fileVersion: UInt8 = 0x01
     private static let hkdfSalt = Data("construct_backup_v1".utf8)
 
-    static let pendingRestoreKey = "ct.pending_restore"
-    private static let stagingDirName = "ct_restore"
+    nonisolated static let pendingRestoreKey = "ct.pending_restore"
+    nonisolated private static let stagingDirName = "ct_restore"
 
     // MARK: - Mnemonic
 
