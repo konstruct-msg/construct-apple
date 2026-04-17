@@ -6,6 +6,7 @@
 #if os(iOS)
 import Foundation
 import CallKit
+import AVFoundation
 
 final class CallKitProvider: NSObject, CXProviderDelegate {
     static let shared = CallKitProvider()
@@ -14,6 +15,10 @@ final class CallKitProvider: NSObject, CXProviderDelegate {
     private let callController = CXCallController()
     var onAnswer: (@Sendable (UUID) -> Void)?
     var onEnd: (@Sendable (UUID) -> Void)?
+    /// Called when CallKit activates the audio session (safe to start audio output).
+    var onAudioActivated: (@Sendable () -> Void)?
+    /// Called when CallKit deactivates the audio session.
+    var onAudioDeactivated: (@Sendable () -> Void)?
 
     private override init() {
         let config = CXProviderConfiguration()
@@ -84,9 +89,19 @@ final class CallKitProvider: NSObject, CXProviderDelegate {
         provider.reportCall(with: uuid, endedAt: Date(), reason: .remoteEnded)
     }
 
-    // MARK: - CXProviderDelegate (minimal)
+    // MARK: - CXProviderDelegate
 
     nonisolated func providerDidReset(_ provider: CXProvider) {}
+
+    nonisolated func provider(_ provider: CXProvider, didActivate audioSession: AVAudioSession) {
+        Log.info("📞 CallKit audio session activated", category: "Calls")
+        onAudioActivated?()
+    }
+
+    nonisolated func provider(_ provider: CXProvider, didDeactivate audioSession: AVAudioSession) {
+        Log.info("📞 CallKit audio session deactivated", category: "Calls")
+        onAudioDeactivated?()
+    }
 
     nonisolated func provider(_ provider: CXProvider, perform action: CXStartCallAction) {
         Log.info("📞 CallKit start (uuid=\(action.callUUID.uuidString.prefix(8))…)", category: "Calls")

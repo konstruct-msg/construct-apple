@@ -97,6 +97,19 @@ final class CallManager {
         CallKitProvider.shared.onEnd = { [weak self] uuid in
             Task { @MainActor in self?.end(callUUID: uuid) }
         }
+        CallKitProvider.shared.onAudioActivated = { [weak self] in
+            Task { @MainActor in
+                guard let self else { return }
+                // Play dial tone only on outgoing calls (dialing or ringing state).
+                switch self.state {
+                case .dialing, .ringing: DialTonePlayer.shared.start()
+                default: break
+                }
+            }
+        }
+        CallKitProvider.shared.onAudioDeactivated = {
+            Task { @MainActor in DialTonePlayer.shared.stop() }
+        }
         #endif
     }
 
@@ -230,6 +243,9 @@ final class CallManager {
         }
         guard case .incoming = active.session.direction else { return }
 
+        #if os(iOS)
+        DialTonePlayer.shared.stop()
+        #endif
         state = .connecting(active.session)
 
         Task { [weak self] in
@@ -531,6 +547,9 @@ final class CallManager {
 
         active.close()
         self.active = nil
+        #if os(iOS)
+        DialTonePlayer.shared.stop()
+        #endif
         state = .ended(session, reason)
 
         Task { @MainActor in
