@@ -427,11 +427,17 @@ final class SessionCoordinator {
             } else {
                 // initReceivingSession failed — prekey exhausted or invalid.
                 Log.info("🔄 initReceivingSession failed — clearing queue, sending END_SESSION to \(userId.prefix(8))...", category: "SessionInit")
-                // Do NOT ACK as delivered: we failed to decrypt. Mark as failed so the sender
-                // is forced to reset and re-send under a fresh session.
-                streamManager?.sendReceipt([message.id], to: userId, status: .failed)
-                // Mark as permanently processed so re-deliveries on reconnect are silently ignored
-                // instead of triggering a cascade of new failed session inits.
+                // ACK as delivered so the server advances the delivery cursor past this message.
+                // Sending .failed causes some server implementations to re-enqueue for retry,
+                // creating a cascade: on every reconnect the same undecryptable message comes
+                // back, triggers another failed init, sends another END_SESSION, etc.
+                // .delivered = "message reached device" — the END_SESSION we send separately
+                // tells the sender that decryption failed and a fresh session is needed.
+                streamManager?.sendReceipt([message.id], to: userId, status: .delivered)
+                // Track as permanently failed so the orphaned-init exception in MessageRouter
+                // does not re-process this message ID on subsequent reconnects.
+                FailedInitMessageStore.shared.add(message.id)
+                // Mark as permanently processed in ACK store (belt-and-suspenders).
                 if let context = viewContext {
                     PersistentACKStore.shared.markProcessed(message.id, senderId: userId, in: context)
                 }
@@ -493,9 +499,11 @@ final class SessionCoordinator {
                 Log.error("❌ SESSION_STATE[heal_failed]: initReceivingSession still failing for \(userId.prefix(8))…", category: "SessionInit")
                 if !canContinue {
                     Log.info("⛔ Heal exhausted — sending END_SESSION to \(userId.prefix(8))…", category: "SessionInit")
-                    // Heal is impossible, so do NOT report delivered. Report failed to force a reset.
-                    streamManager?.sendReceipt([failedMessage.id], to: userId, status: .failed)
-                    // Mark permanently so re-deliveries on reconnect don't restart the cascade.
+                    // ACK as delivered (same reasoning as initReceivingSession failure path):
+                    // .failed receipt causes the server to re-enqueue, looping indefinitely.
+                    streamManager?.sendReceipt([failedMessage.id], to: userId, status: .delivered)
+                    // Permanently block re-processing of this message ID.
+                    FailedInitMessageStore.shared.add(failedMessage.id)
                     PersistentACKStore.shared.markProcessed(failedMessage.id, senderId: userId, in: context)
                     pendingFirstMessages.removeValue(forKey: userId)
                     SessionHealingService.shared.clearQueue(for: userId, in: context)

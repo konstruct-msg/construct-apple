@@ -196,10 +196,16 @@ class MessageRouter {
         //    for the sender, re-process it. This handles the crash-recovery scenario where
         //    the init was ACKed before the session was persisted (e.g., app crashed mid-init).
         if PersistentACKStore.shared.isProcessed(message.id, in: context) {
+            // Orphaned-init exception: re-process msgNum=0 when the session was lost
+            // after ACK (e.g. app crashed between ACK and session persist). But exclude
+            // messages that have already been through initReceivingSession and failed
+            // (OTPK consumed, key mismatch, etc.) — those can never succeed and would
+            // loop on every reconnect if we keep re-processing them.
             let isOrphanedInit = message.messageNumber == 0
                 && !message.isEndSession
                 && !message.isSenderSync
                 && !CryptoManager.shared.hasSession(for: otherUserId)
+                && !FailedInitMessageStore.shared.contains(message.id)
             if !isOrphanedInit {
                 Log.debug("⏭️ Skipping already-processed message \(message.id.prefix(8))… (ACK store)", category: "MessageRouter")
                 onReceiptNeeded?([message.id], otherUserId, .delivered)

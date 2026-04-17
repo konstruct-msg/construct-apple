@@ -12,6 +12,8 @@
 //  4. initReceivingSession is idempotent (double-init does not corrupt state)
 //  5. Session survives END_SESSION → removeSession → fresh initSession → messaging resumes
 //  6. Bidirectional exchange works after ping-first init
+//  7. Stale OTPK loop: after initReceivingSession fails, FailedInitMessageStore prevents
+//     the orphaned-init exception from re-processing the same message forever
 //
 
 import XCTest
@@ -409,5 +411,43 @@ final class SessionInitFlowTests: XCTestCase {
         }
         // Either behaviour (throw or idempotent) is acceptable — the important thing is
         // no silent state corruption.
+    }
+
+    // MARK: - Stale OTPK / failed-init store
+
+    /// Test 9: After initReceivingSession fails, the message ID is registered in
+    /// FailedInitMessageStore. A subsequent check returns true, preventing the
+    /// orphaned-init exception in MessageRouter from re-processing the same
+    /// undecryptable message on every reconnect (stale OTPK loop fix).
+    func testFailedInitMessageStore_PreventsReprocessing() {
+        let staleMessageId = UUID().uuidString
+
+        // Start clean
+        XCTAssertFalse(FailedInitMessageStore.shared.contains(staleMessageId),
+                       "Message should not be in the store before being added")
+
+        // Simulate what SessionCoordinator does after initReceivingSession fails
+        FailedInitMessageStore.shared.add(staleMessageId)
+
+        XCTAssertTrue(FailedInitMessageStore.shared.contains(staleMessageId),
+                      "Message must be tracked after failed init")
+
+        // Clean up so other test runs start fresh
+        // (directly remove by adding a fresh store write — in production the store is
+        //  intentionally persistent, but here we just verify the add/contains contract)
+    }
+
+    /// Test 10: FailedInitMessageStore does not block DIFFERENT messages — only the
+    /// specific ID that failed. A new init message with a fresh ID must be re-processable.
+    func testFailedInitMessageStore_DoesNotBlockNewMessages() {
+        let staleId = UUID().uuidString
+        let freshId  = UUID().uuidString
+
+        FailedInitMessageStore.shared.add(staleId)
+
+        XCTAssertTrue(FailedInitMessageStore.shared.contains(staleId),
+                      "Stale message must be blocked")
+        XCTAssertFalse(FailedInitMessageStore.shared.contains(freshId),
+                       "A different (fresh) message must not be blocked")
     }
 }
