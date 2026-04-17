@@ -851,8 +851,8 @@ final class SessionCoordinator {
         fetchRequest.predicate = NSPredicate(format: "id == %@", messageData.id)
 
         if let existing = try? context.fetch(fetchRequest).first {
-            if existing.decryptedContent == nil {
-                existing.decryptedContent = plaintext
+            if !existing.hasDecryptedContent {
+                existing.applyStoredEncryption(plaintext: plaintext, contactId: messageData.from)
                 context.saveAndLog()
             }
             return
@@ -862,13 +862,13 @@ final class SessionCoordinator {
         message.id = messageData.id
         message.fromUserId = messageData.from
         message.toUserId = messageData.to
-        message.encryptedContent = messageData.content
-        message.decryptedContent = plaintext
         message.timestamp = Date(timeIntervalSince1970: TimeInterval(messageData.timestamp))
         message.isSentByMe = false
         message.deliveryStatus = .delivered
         message.retryCount = 0
         message.chat = chat
+
+        message.applyStoredEncryption(plaintext: plaintext, contactId: messageData.from)
 
         chat.lastMessageText = Chat.formatPreviewText(plaintext)
         chat.lastMessageTime = message.timestamp
@@ -929,7 +929,8 @@ final class SessionCoordinator {
             }
 
             for msg in candidates {
-                guard let plaintext = msg.decryptedContent else { continue }
+                let plaintext = msg.displayText
+                guard !plaintext.isEmpty else { continue }
 
                 msg.deliveryStatus = .sending
                 msg.retryCount += 1

@@ -71,7 +71,7 @@ struct MediaGalleryViewer: View {
     /// Expand each message into per-item entries, skipping non-image media (video etc.)
     private var entries: [GalleryEntry] {
         messages.flatMap { msg -> [GalleryEntry] in
-            guard let mc = parseMediaContent(from: msg.decryptedContent), !mc.mediaItems.isEmpty else {
+            guard let mc = parseMediaContent(from: msg.displayText), !mc.mediaItems.isEmpty else {
                 return [GalleryEntry(id: "\(msg.id)_0", message: msg, itemIndex: 0, mediaItem: [:])]
             }
             return mc.mediaItems.enumerated().compactMap { idx, item in
@@ -80,7 +80,7 @@ struct MediaGalleryViewer: View {
                    !mimeType.hasPrefix("image/") { return nil }
                 return GalleryEntry(id: "\(msg.id)_\(idx)", message: msg, itemIndex: idx, mediaItem: item)
             }
-        }.filter { !$0.mediaItem.isEmpty || parseMediaContent(from: $0.message.decryptedContent) == nil }
+        }.filter { !$0.mediaItem.isEmpty || parseMediaContent(from: $0.message.displayText) == nil }
     }
 
     init(messages: [Message], initialMessageId: String, isPresented: Binding<Bool>) {
@@ -369,8 +369,8 @@ struct MediaGalleryPage: View {
 
         // Received — download using mediaItem dict (already extracted from JSON by caller)
         let item = mediaItem.isEmpty
-            ? (parseMediaContent(from: message.decryptedContent)?.mediaItems.indices.contains(itemIndex) == true
-               ? parseMediaContent(from: message.decryptedContent)!.mediaItems[itemIndex]
+            ? (parseMediaContent(from: message.displayText)?.mediaItems.indices.contains(itemIndex) == true
+               ? parseMediaContent(from: message.displayText)!.mediaItems[itemIndex]
                : [:])
             : mediaItem
 

@@ -32,7 +32,7 @@ class MessageRetryManager {
         }
 
         // Ensure decrypted content exists before proceeding
-        guard message.decryptedContent != nil else {
+        guard message.hasDecryptedContent else {
             Log.error("Cannot retry - no decrypted content", category: "MessageRetryManager")
             return
         }
@@ -177,7 +177,7 @@ class MessageRetryManager {
         let pendingIds: [String] = queuedMessages.map { $0.id }
 
         // Mark all as sending synchronously before the async work starts
-        for message in queuedMessages where message.decryptedContent != nil {
+        for message in queuedMessages where message.hasDecryptedContent {
             message.deliveryStatus = .sending
             message.retryCount += 1
             messageQueueManager.markMessageAsSending(message.id)

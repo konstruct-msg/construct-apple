@@ -412,22 +412,22 @@ class BackgroundFetchManager: NSObject {
                     message.id = messageData.id
                     message.fromUserId = messageData.from
                     message.toUserId = messageData.to
-                    message.encryptedContent = messageData.content
-                    let decryptedString = decryptedContent.flatMap { String(data: $0, encoding: .utf8) }
-                    message.decryptedContent = decryptedString
+                    let decryptedString = decryptedContent.flatMap { String(data: $0, encoding: .utf8) } ?? ""
                     message.contentType = .regular
                     message.timestamp = Date(timeIntervalSince1970: TimeInterval(messageData.timestamp))
                     message.isSentByMe = false
                     message.deliveryStatus = .delivered
                     message.retryCount = 0
                     message.chat = chat
+
+                    message.applyStoredEncryption(plaintext: decryptedString, contactId: messageData.from)
                     
                     newMessagesCount += 1
                     chat.unreadCount += 1
 
                     // Update chat's last message
                     if let lastMessage = chatMessages.last {
-                        chat.lastMessageText = Chat.formatPreviewText(decryptedString ?? NSLocalizedString("message_unavailable", comment: ""))
+                        chat.lastMessageText = Chat.formatPreviewText(decryptedString.isEmpty ? NSLocalizedString("message_unavailable", comment: "") : decryptedString)
                         chat.lastMessageTime = Date(timeIntervalSince1970: TimeInterval(lastMessage.timestamp))
                     }
                 }
@@ -534,12 +534,11 @@ class BackgroundFetchManager: NSObject {
             let context = PersistenceController.shared.container.viewContext
             
             _ = messages.first.flatMap { msg -> String? in
-                // Try to get decrypted content if available
                 let messageFetch = Message.fetchRequest()
                 messageFetch.predicate = NSPredicate(format: "id == %@", msg.id)
-                if let savedMessage = try? context.fetch(messageFetch).first,
-                   let decrypted = savedMessage.decryptedContent {
-                    return decrypted
+                if let savedMessage = try? context.fetch(messageFetch).first {
+                    let text = savedMessage.displayText
+                    return text.isEmpty ? nil : text
                 }
                 return nil
             }

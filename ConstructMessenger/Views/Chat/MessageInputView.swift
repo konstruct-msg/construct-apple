@@ -46,7 +46,7 @@ struct MessageInputView: View {
             // Reply preview bar
             if let msg = replyingTo {
                 MessageReplyBar(
-                    content: quoteOverride ?? msg.decryptedContent,
+                    content: quoteOverride ?? (msg.displayText.isEmpty ? nil : msg.displayText),
                     messageId: msg.id,
                     onCancel: onCancelReply
                 )
@@ -54,7 +54,7 @@ struct MessageInputView: View {
 
             // Edit-mode banner
             if let msg = editingMessage {
-                MessageEditBar(content: msg.decryptedContent ?? "", onCancel: onCancelEdit)
+                MessageEditBar(content: msg.displayText, onCancel: onCancelEdit)
             }
 
             // Photo / file attachment previews

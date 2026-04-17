@@ -47,8 +47,9 @@ class MessagePersistenceService {
             // Recover a previously undecryptable message: if the sender re-sent the same
             // message (same UUID) after a session heal, update the content so the "unavailable"
             // bubble is replaced with the actual text.
-            if existing.decryptedContent == nil, !decryptedContent.isEmpty {
-                existing.decryptedContent = decryptedContent
+            if !existing.hasDecryptedContent, !decryptedContent.isEmpty {
+                let contactId = isSentByMe ? message.to : message.from
+                existing.applyStoredEncryption(plaintext: decryptedContent, contactId: contactId)
                 Log.info("✅ Recovered undecryptable message \(message.id.prefix(8))… — content now available", category: "MessagePersistence")
                 // Update chat preview if this was the last message showing "unavailable"
                 try? updateChatMetadata(chat: chat, lastMessageText: decryptedContent, lastMessageTime: existing.timestamp, in: context)
@@ -60,8 +61,6 @@ class MessagePersistenceService {
             newMessage.id = message.id.lowercased()
             newMessage.fromUserId = message.from
             newMessage.toUserId = message.to
-            newMessage.encryptedContent = message.content
-            newMessage.decryptedContent = decryptedContent
             newMessage.contentType = .regular
             newMessage.timestamp = messageTimestamp
             newMessage.isSentByMe = isSentByMe
@@ -69,18 +68,22 @@ class MessagePersistenceService {
             newMessage.retryCount = 0
             newMessage.chat = chat
             newMessage.suiteId = suiteId
-            
+
+            let contactId = isSentByMe ? message.to : message.from
+            newMessage.applyStoredEncryption(plaintext: decryptedContent, contactId: contactId)
+
             // Set reply information
             if let replyMessage = replyTo {
                 newMessage.replyToMessageId = replyMessage.id.lowercased()
-                newMessage.replyToContent = replyToContentOverride ?? replyMessage.decryptedContent
+                let replyText = replyToContentOverride ?? replyMessage.displayText
+                newMessage.replyToContent = replyText.isEmpty ? nil : replyText
             }
-            
+
             // Store all thumbnails indexed for multi-image messages
             for (index, thumb) in localThumbnails.enumerated() {
                 MediaManager.shared.storeThumbnail(thumb, for: message.id, at: index)
             }
-            
+
             isNewMessage = true
         }
         
@@ -122,7 +125,8 @@ class MessagePersistenceService {
             Log.error("❌ Cannot find message to update content: \(messageId)", category: "MessagePersistence")
             return
         }
-        message.decryptedContent = newContent
+        let contactId = message.isSentByMe ? message.toUserId : message.fromUserId
+        message.applyStoredEncryption(plaintext: newContent, contactId: contactId)
         message.isEdited = isEdited
         message.editedAt = editedAt
         context.saveAndLog()
@@ -157,8 +161,6 @@ class MessagePersistenceService {
         newMessage.id = id.lowercased()
         newMessage.fromUserId = fromUserId
         newMessage.toUserId = toUserId
-        newMessage.encryptedContent = Data()
-        newMessage.decryptedContent = placeholderJson
         newMessage.contentType = .media
         newMessage.timestamp = now
         newMessage.isSentByMe = true
@@ -166,9 +168,12 @@ class MessagePersistenceService {
         newMessage.retryCount = 0
         newMessage.chat = chat
 
+        newMessage.applyStoredEncryption(plaintext: placeholderJson, contactId: toUserId)
+
         if let replyMessage = replyTo {
             newMessage.replyToMessageId = replyMessage.id.lowercased()
-            newMessage.replyToContent = replyToContentOverride ?? replyMessage.decryptedContent
+            let replyText = replyToContentOverride ?? replyMessage.displayText
+            newMessage.replyToContent = replyText.isEmpty ? nil : replyText
         }
 
         if let thumb = thumbnail {
@@ -206,14 +211,14 @@ class MessagePersistenceService {
         newMessage.id = id
         newMessage.fromUserId = fromUserId
         newMessage.toUserId = toUserId
-        newMessage.encryptedContent = Data()
-        newMessage.decryptedContent = placeholderJson
         newMessage.contentType = .media
         newMessage.timestamp = now
         newMessage.isSentByMe = true
         newMessage.deliveryStatus = .sending
         newMessage.retryCount = 0
         newMessage.chat = chat
+
+        newMessage.applyStoredEncryption(plaintext: placeholderJson, contactId: toUserId)
 
         context.saveAndLog()
 
@@ -402,7 +407,7 @@ class MessagePersistenceService {
         fetchRequest.fetchLimit = 1
         
         if let lastMessage = try context.fetch(fetchRequest).first {
-            chat.lastMessageText = Chat.formatPreviewText(lastMessage.decryptedContent)
+            chat.lastMessageText = Chat.formatPreviewText(lastMessage.displayText)
             chat.lastMessageTime = lastMessage.timestamp
         } else {
             // No messages left, clear metadata

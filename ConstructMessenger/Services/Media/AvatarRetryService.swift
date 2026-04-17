@@ -111,6 +111,9 @@ final class AvatarRetryService {
         request.fetchLimit = 1
         request.returnsObjectsAsFaults = false
 
-        return (try? context.fetch(request))?.first?.decryptedContent
+        return (try? context.fetch(request))?.first.map { msg in
+            let text = msg.displayText
+            return text.isEmpty ? nil : text
+        } ?? nil
     }
 }

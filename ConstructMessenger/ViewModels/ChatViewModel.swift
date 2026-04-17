@@ -483,13 +483,12 @@ class ChatViewModel: NSObject {
             msg.id = UUID().uuidString
             msg.fromUserId = currentUserId
             msg.toUserId = recipientId
-            msg.encryptedContent = Data()
-            msg.decryptedContent = queued.text
             msg.contentType = .regular
             msg.timestamp = queued.timestamp
             msg.deliveryStatus = .failed
             msg.isSentByMe = true
             msg.chat = chat
+            msg.applyStoredEncryption(plaintext: queued.text, contactId: recipientId)
         }
         viewContext.saveAndLog()
         queuedMessages.removeAll()
@@ -658,10 +657,9 @@ class ChatViewModel: NSObject {
             context: viewContext,
             onError: { [weak self] error in
                 guard let self else { return }
-                if error == "payload_expired", let text = message.decryptedContent, !text.isEmpty {
-                    // The wire payload expired (>24h) or predates OutgoingWirePayloadStore.
-                    // Re-encrypting the same message ID would break Double Ratchet.
-                    // Send as a new message with a fresh ID and fresh encryption instead.
+                if error == "payload_expired" {
+                    let text = message.displayText
+                    guard !text.isEmpty else { return }
                     Log.info("🔁 Retry: payload expired — sending '\(text.prefix(20))…' as fresh message", category: "ChatViewModel")
                     self.sendTextMessage(text: text, replyTo: nil)
                 } else {
@@ -879,7 +877,7 @@ class ChatViewModel: NSObject {
             if let reply = replyTo {
                 var quoted = Shared_Proto_Messaging_V1_QuotedMessage()
                 quoted.messageID = reply.id
-                quoted.textPreview = replyToContentOverride ?? reply.decryptedContent ?? ""
+                quoted.textPreview = replyToContentOverride ?? reply.displayText
                 textMsg.quoted = quoted
             }
             var content = Shared_Proto_Messaging_V1_MessageContent()

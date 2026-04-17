@@ -223,10 +223,10 @@ struct ChatView: View {
                 .onChange(of: viewModel.editingMessage) { _, editMsg in
                     if let editMsg {
                         // For media messages pre-fill with caption, not the raw JSON payload
-                        if let mc = parseMediaContent(from: editMsg.decryptedContent) {
+                        if let mc = parseMediaContent(from: editMsg.displayText) {
                             messageText = mc.caption
                         } else {
-                            messageText = editMsg.decryptedContent ?? ""
+                            messageText = editMsg.displayText
                         }
                     }
                 }
@@ -667,7 +667,7 @@ struct ChatView: View {
             return valid
         }
         return valid.filter { message in
-            message.decryptedContent?.localizedCaseInsensitiveContains(searchText) ?? false
+            message.displayText.localizedCaseInsensitiveContains(searchText)
         }
     }
 
@@ -676,7 +676,7 @@ struct ChatView: View {
     private var mediaMessages: [Message] {
         viewModel.messages.filter {
             guard !$0.isDeleted, $0.managedObjectContext != nil else { return false }
-            if let mc = parseMediaContent(from: $0.decryptedContent) {
+            if let mc = parseMediaContent(from: $0.displayText) {
                 return (mc.media["_placeholder"] as? Bool) != true
             }
             return false

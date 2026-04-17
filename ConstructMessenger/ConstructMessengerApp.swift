@@ -43,6 +43,9 @@ struct Construct_MessengerApp: App {
             .environment(socialRecoveryService)
             .task {
                 MediaManager.shared.evictOldFiles()
+                StorageMigrationService.shared.migrateIfNeeded(
+                    context: PersistenceController.shared.container.viewContext
+                )
                 // Start ICE proxy if user has it enabled — async to allow .well-known cert fetch
                 await IceProxyManager.shared.startIfEnabled()
                 // One-time migration: upload Kyber SPK for users registered before PQC launch.

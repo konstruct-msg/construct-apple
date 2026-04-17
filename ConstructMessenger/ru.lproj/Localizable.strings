@@ -4,6 +4,7 @@
 "cancel" = "Отмена";
 "done" = "Готово";
 "unknown" = "Неизвестно";
+"constrcut_titlte" = "КОНСТРУКТ";
 
 // MARK: - Main Tabs
 "chats" = "Чаты";

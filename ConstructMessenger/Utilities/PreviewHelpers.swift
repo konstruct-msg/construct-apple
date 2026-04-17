@@ -97,11 +97,11 @@ struct PreviewHelpers {
         let message = Message(context: context)
         message.id = UUID().uuidString
         message.chat = chat
-        message.decryptedContent = text
         message.isSentByMe = isSentByMe
         message.timestamp = timestamp ?? Date()
         message.deliveryStatus = isSentByMe ? .delivered : .sent
         message.retryCount = 0
+        message.applyStoredEncryption(plaintext: text, contactId: "preview")
         return message
     }
 }

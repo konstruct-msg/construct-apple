@@ -17,10 +17,10 @@ extension MessageBubble {
             if message.isDeleted || message.managedObjectContext == nil {
                 EmptyView()
             } else if message.fromUserId == "SYSTEM" {
-                MessageBubbleSystemView(content: message.decryptedContent ?? "System message")
-            } else if let content = message.decryptedContent, content.hasPrefix("[SYSTEM]") {
+                MessageBubbleSystemView(content: message.displayText.isEmpty ? "System message" : message.displayText)
+            } else if message.displayText.hasPrefix("[SYSTEM]") {
                 MessageBubbleSystemView(
-                    content: content
+                    content: message.displayText
                         .replacingOccurrences(of: "[SYSTEM]", with: "")
                         .trimmingCharacters(in: .whitespaces)
                 )

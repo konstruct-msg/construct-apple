@@ -460,13 +460,6 @@ class MessageRouter {
             case .messageDecrypted(let contactId, let decryptedMsgId, let plaintext):
                 let resolvedContactId = contactId.isEmpty ? otherUserId : contactId
                 checkUsernameUpdate(for: otherUserId, chat: chat, in: context)
-                // Generate and persist a per-message storage key (decrypt-on-display foundation).
-                let storageKey = Data((0..<32).map { _ in UInt8.random(in: 0...255) })
-                MessageKeyStore.shared.store(
-                    messageId: decryptedMsgId.isEmpty ? message.id : decryptedMsgId,
-                    key: storageKey,
-                    contactId: resolvedContactId
-                )
                 switch chunkReassembler.process(data: plaintext) {
                 case .assembled(let text, let quoted):
                     handleResolvedMessage(text, quotedMessage: quoted, for: message, from: otherUserId, chat: chat, in: context)
@@ -748,7 +741,7 @@ class MessageRouter {
             fetchRequest.predicate = NSPredicate(format: "id == %@", message.editsMessageId)
             fetchRequest.fetchLimit = 1
             if let original = try? context.fetch(fetchRequest).first {
-                original.decryptedContent = decryptedContent
+                original.applyStoredEncryption(plaintext: decryptedContent, contactId: otherUserId)
                 original.isEdited = true
                 original.editedAt = Date(timeIntervalSince1970: TimeInterval(message.timestamp))
                 context.saveAndLog()
@@ -1203,13 +1196,13 @@ class MessageRouter {
         message.chat = chat
         message.fromUserId = "SYSTEM"
         message.toUserId = currentUserId
-        message.encryptedContent = Data()
-        message.decryptedContent = text
         message.suiteId = 0
         message.timestamp = Date()
         message.isSentByMe = false
         message.deliveryStatus = .delivered
         message.retryCount = 0
+
+        message.applyStoredEncryption(plaintext: text, contactId: userId)
         
         chat.lastMessageText = Chat.formatPreviewText(text)
         chat.lastMessageTime = Date()
@@ -1238,11 +1231,10 @@ class MessageRouter {
         
         // Check if message already exists (from background fetch)
         if let existingMessage = try? context.fetch(fetchRequest).first {
-            // Update decryptedContent if it's nil
-            if existingMessage.decryptedContent == nil {
+            // Update encrypted content if message wasn't previously decrypted
+            if !existingMessage.hasDecryptedContent {
                 Log.debug("🔄 Updating decrypted content for message \(messageData.id)", category: "MessageRouter")
-                existingMessage.decryptedContent = decryptedContent
-                
+                existingMessage.applyStoredEncryption(plaintext: decryptedContent, contactId: messageData.from)
                 do {
                     try context.save()
                     Log.debug("✅ Updated message decryption", category: "MessageRouter")
@@ -1252,20 +1244,20 @@ class MessageRouter {
             }
             return  // Message already exists
         }
-        
+
         // Create new message
         let message = Message(context: context)
         message.id = messageData.id.lowercased()
         message.fromUserId = messageData.from
         message.toUserId = messageData.to
-        message.encryptedContent = messageData.content
-        message.decryptedContent = decryptedContent
         message.contentType = .regular
         message.timestamp = Date(timeIntervalSince1970: TimeInterval(messageData.timestamp))
         message.isSentByMe = false
         message.deliveryStatus = .delivered
         message.retryCount = 0
         message.chat = chat
+
+        message.applyStoredEncryption(plaintext: decryptedContent, contactId: messageData.from)
 
         // Restore reply-to context so the receiver sees the same reply bubble as the sender.
         // Priority: QuotedMessage from proto plaintext (privacy-safe, no server visibility).
@@ -1275,12 +1267,12 @@ class MessageRouter {
             message.replyToContent = qm.textPreview.isEmpty ? nil : qm.textPreview
         } else if !messageData.replyToMessageId.isEmpty {
             message.replyToMessageId = messageData.replyToMessageId.lowercased()
-            // Look up the replied-to message locally to populate the preview snippet.
             let replyFetch = Message.fetchRequest()
             replyFetch.predicate = NSPredicate(format: "id ==[c] %@", messageData.replyToMessageId)
             replyFetch.fetchLimit = 1
             if let replyMsg = (try? context.fetch(replyFetch))?.first {
-                message.replyToContent = replyMsg.decryptedContent
+                let replyText = replyMsg.displayText
+                message.replyToContent = replyText.isEmpty ? nil : replyText
             }
         }
         
@@ -1366,9 +1358,6 @@ class MessageRouter {
                 return
             }
             let decrypted = String(data: decryptResult.plaintext, encoding: .utf8) ?? ""
-            if !decryptResult.storageKey.isEmpty {
-                MessageKeyStore.shared.store(messageId: message.id, key: decryptResult.storageKey, contactId: partnerUserId)
-            }
             saveSenderSyncMessage(decrypted, original: message, partnerUserId: partnerUserId, in: context)
         } else if message.messageNumber == 0 {
             // New device: init receiving session async, then save
@@ -1421,13 +1410,13 @@ class MessageRouter {
         msg.id = original.id
         msg.fromUserId = original.from
         msg.toUserId = partnerUserId
-        msg.encryptedContent = original.content
-        msg.decryptedContent = decrypted
         msg.timestamp = Date(timeIntervalSince1970: TimeInterval(original.timestamp))
         msg.isSentByMe = true
         msg.deliveryStatus = .sent
         msg.retryCount = 0
         msg.chat = chat
+
+        msg.applyStoredEncryption(plaintext: decrypted, contactId: partnerUserId)
 
         chat.lastMessageText = Chat.formatPreviewText(decrypted)
         chat.lastMessageTime = msg.timestamp

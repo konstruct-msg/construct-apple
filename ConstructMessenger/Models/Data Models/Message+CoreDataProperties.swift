@@ -97,6 +97,7 @@ extension Message {
     @NSManaged public var toUserId: String
     @NSManaged public var encryptedContent: Data
     @NSManaged public var decryptedContent: String?
+    @NSManaged public var contentKeyRef: String?
     @NSManaged public var contentTypeRaw: Int16
     @NSManaged public var suiteId: UInt16
     @NSManaged public var timestamp: Date

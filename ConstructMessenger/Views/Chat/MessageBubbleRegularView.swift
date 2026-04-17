@@ -51,15 +51,13 @@ struct MessageBubbleRegularView: View {
             }
 
             VStack(alignment: message.isSentByMe ? .trailing : .leading, spacing: 4) {
-                if let content = message.decryptedContent,
-                   let profileData = MessageBubbleContentParsing.parseProfileMessage(content)
-                {
+                if let profileData = MessageBubbleContentParsing.parseProfileMessage(message.displayText) {
                     ProfileShareBubbleView(profileData: profileData)
                         .overlay(
                             Rectangle()
                                 .stroke(isSelected ? Color.CT.accent : Color.clear, lineWidth: 2)
                         )
-                } else if let mediaContent = MessageBubbleContentParsing.parseMediaMessage(message.decryptedContent) {
+                } else if let mediaContent = MessageBubbleContentParsing.parseMediaMessage(message.displayText) {
                     VStack(alignment: .leading, spacing: 0) {
                         replyIndicatorView
                         MediaMessageView(
@@ -69,7 +67,7 @@ struct MessageBubbleRegularView: View {
                             onTapFullScreen: { onTapMedia?(message) }
                         )
                     }
-                } else if let fileContent = MessageBubbleContentParsing.parseFileMessage(message.decryptedContent) {
+                } else if let fileContent = MessageBubbleContentParsing.parseFileMessage(message.displayText) {
                     VStack(alignment: .leading, spacing: 0) {
                         replyIndicatorView
                         FileAttachmentBubbleView(fileContent: fileContent, isSentByMe: message.isSentByMe)
@@ -78,7 +76,7 @@ struct MessageBubbleRegularView: View {
                                     .stroke(isSelected ? Color.CT.accent : Color.clear, lineWidth: 2)
                             )
                     }
-                } else if let voiceContent = MessageBubbleContentParsing.parseVoiceMessage(message.decryptedContent) {
+                } else if let voiceContent = MessageBubbleContentParsing.parseVoiceMessage(message.displayText) {
                     VoiceMessageBubbleView(
                         voiceContent: voiceContent,
                         isSentByMe: message.isSentByMe,
@@ -94,14 +92,14 @@ struct MessageBubbleRegularView: View {
                         replyIndicatorView
 
                         VStack(alignment: .leading, spacing: 4) {
-                            if message.decryptedContent == nil {
+                            if !message.hasDecryptedContent {
                                 Text("[!] \(NSLocalizedString("message_unavailable", comment: ""))")
                                     .font(CTFont.regular(13))
                                     .foregroundColor(Color.CT.textDim)
                                     .italic()
                             } else {
                                 LinkDetectingText(
-                                    message.decryptedContent!,
+                                    message.displayText,
                                     color: message.isSentByMe ? .white : Color.CT.text
                                 )
                             }
@@ -164,19 +162,19 @@ struct MessageBubbleRegularView: View {
                     }
 
                     if let onReplyWithQuote,
-                       let content = message.decryptedContent,
-                       parseMediaContent(from: content) == nil,
-                       MessageBubbleContentParsing.parseFileMessage(content) == nil
+                       !message.displayText.isEmpty,
+                       parseMediaContent(from: message.displayText) == nil,
+                       MessageBubbleContentParsing.parseFileMessage(message.displayText) == nil
                     {
-                        Button { onReplyWithQuote(message, content) } label: {
+                        Button { onReplyWithQuote(message, message.displayText) } label: {
                             Label(NSLocalizedString("quote_reply", comment: ""), systemImage: "text.quote")
                         }
                     }
 
                     if message.isSentByMe,
-                       message.decryptedContent != nil,
-                       !message.decryptedContent!.hasPrefix("[MEDIA]"),
-                       !message.decryptedContent!.hasPrefix("[FILE]"),
+                       message.hasDecryptedContent,
+                       !message.displayText.hasPrefix("[MEDIA]"),
+                       !message.displayText.hasPrefix("[FILE]"),
                        let onEdit
                     {
                         Button { onEdit(message) } label: {
@@ -184,7 +182,7 @@ struct MessageBubbleRegularView: View {
                         }
                     }
 
-                    Button { PlatformClipboard.copy(message.decryptedContent ?? "") } label: {
+                    Button { PlatformClipboard.copy(message.displayText) } label: {
                         Label("copy", systemImage: "doc.on.doc")
                     }
 

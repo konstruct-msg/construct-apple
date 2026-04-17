@@ -20,7 +20,7 @@ struct QuoteSelectionSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var selectedText: String = ""
 
-    private var fullText: String { message.decryptedContent ?? "" }
+    private var fullText: String { message.displayText }
 
     var body: some View {
         VStack(spacing: 0) {

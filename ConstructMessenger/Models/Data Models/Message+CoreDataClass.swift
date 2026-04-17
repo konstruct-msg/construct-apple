@@ -7,8 +7,65 @@
 
 import Foundation
 import CoreData
+import Security
 
 @objc(Message)
 public class Message: NSManagedObject {
 
+    // MARK: - Display
+
+    /// Decrypted message text, suitable for UI display.
+    ///
+    /// Resolution order:
+    /// 1. In-memory `MessageDisplayCache` (O(1))
+    /// 2. Legacy `decryptedContent` field (unmigrated rows)
+    /// 3. On-demand decrypt via `MessageKeyStore` + `MessageStorageCrypto`
+    var displayText: String {
+        MessageDisplayCache.shared.plaintext(for: self)
+    }
+
+    /// True if this message has been decrypted — either via legacy `decryptedContent`
+    /// or via the encrypted-storage path (`contentKeyRef`).
+    var hasDecryptedContent: Bool {
+        contentKeyRef != nil || decryptedContent != nil
+    }
+
+    // MARK: - Storage Encryption
+
+    /// Encrypt `plaintext` with a fresh random key and persist it in place of the wire bytes.
+    ///
+    /// - Sets `encryptedContent` to the ChaChaPoly-encrypted blob.
+    /// - Sets `contentKeyRef = id` to mark the row as migrated.
+    /// - Clears `decryptedContent`.
+    /// - Stores the key in `MessageKeyStore` and warms `MessageDisplayCache`.
+    ///
+    /// Falls back to writing `decryptedContent` if encryption fails (should never happen
+    /// on a supported device, but keeps the message visible in any case).
+    func applyStoredEncryption(plaintext: String, contactId: String) {
+        guard !plaintext.isEmpty else {
+            decryptedContent = nil
+            return
+        }
+        let msgId = id
+
+        var keyBytes = Data(count: 32)
+        let status = keyBytes.withUnsafeMutableBytes {
+            SecRandomCopyBytes(kSecRandomDefault, 32, $0.baseAddress!)
+        }
+        guard status == errSecSuccess,
+              let plainData = plaintext.data(using: .utf8),
+              let encrypted = try? MessageStorageCrypto.encrypt(plaintext: plainData, key: keyBytes)
+        else {
+            Log.error("❌ applyStoredEncryption failed for \(msgId.prefix(8))… — falling back to plaintext", category: "Storage")
+            decryptedContent = plaintext
+            return
+        }
+
+        encryptedContent = encrypted
+        contentKeyRef = msgId
+        decryptedContent = nil
+
+        MessageKeyStore.shared.store(messageId: msgId, key: keyBytes, contactId: contactId)
+        MessageDisplayCache.shared.store(messageId: msgId, plaintext: plaintext)
+    }
 }
