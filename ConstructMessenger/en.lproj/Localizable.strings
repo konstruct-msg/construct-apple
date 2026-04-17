@@ -750,3 +750,37 @@
 
 "social_recovery_identity_header" = "IDENTITY";
 "social_recovery_username_label" = "Username";
+
+// MARK: - Local Backup
+"backup_section" = "backup";
+"export_backup" = "export backup";
+"import_backup" = "import backup";
+
+"backup_export_title" = "Export Backup";
+"backup_warning_header" = "BEFORE YOU PROCEED";
+"backup_export_warning" = "This creates an encrypted backup of all your messages and keys. The file is protected by a 12-word recovery phrase that you must write down and keep safe.\n\nStore the backup file and the recovery phrase separately.";
+"backup_mnemonic_warning" = "⚠ If you lose the recovery phrase, the backup cannot be decrypted. There is no recovery option.";
+"backup_generate_button" = "GENERATE RECOVERY PHRASE [→]";
+"backup_mnemonic_title" = "RECOVERY PHRASE";
+"backup_mnemonic_subtitle" = "Write down all 12 words in order. Do not take a screenshot.";
+"backup_copy_words" = "[ COPY ALL WORDS ]";
+"backup_confirm_saved" = "I have written down all 12 words";
+"backup_next_button" = "NEXT [→]";
+"backup_export_step_header" = "SAVE BACKUP FILE";
+"backup_export_step_subtitle" = "Save the .ctbackup file to a secure location outside this device (e.g. an encrypted USB drive). Do not store it in an unencrypted cloud service.";
+"backup_create_file" = "CREATE .ctbackup FILE [→]";
+"backup_share_file" = "SHARE .ctbackup FILE [→]";
+"backup_export_generating" = "generating backup…";
+
+"backup_import_title" = "Import Backup";
+"backup_import_words_header" = "RECOVERY PHRASE";
+"backup_import_words_subtitle" = "Enter the 12 words from your backup, separated by spaces.";
+"backup_import_file_header" = "BACKUP FILE";
+"backup_import_select_file" = "select .ctbackup file [→]";
+"backup_restore_warning" = "⚠ This will replace ALL your current messages and keys. This cannot be undone.";
+"backup_restore_button" = "RESTORE BACKUP [→]";
+"backup_restore_success_title" = "Backup Ready";
+"backup_restore_success_message" = "Your backup has been verified and staged. Close and reopen the app to complete the restore.";
+
+"backup_error_invalid_mnemonic" = "Invalid recovery phrase. Check all 12 words and try again.";
+"backup_error_invalid_file" = "This is not a valid Construct backup, or the recovery phrase is incorrect.";

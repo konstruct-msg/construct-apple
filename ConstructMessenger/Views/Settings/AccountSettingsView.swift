@@ -21,7 +21,8 @@ struct AccountSettingsView: View {
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var showingAvatarViewer = false
     @State private var showingDeleteConfirmation = false
-    @State private var showingExportAlert = false
+    @State private var showingExportBackup = false
+    @State private var showingImportBackup = false
     @State private var imageToCrop: UIImage?
     @State private var showingCropView = false
     @State private var isEditingDisplayName = false
@@ -55,6 +56,8 @@ struct AccountSettingsView: View {
                     flatDivider(thick: true)
                     accountSection
                     flatDivider(thick: true)
+                    backupSection
+                    flatDivider(thick: true)
                     dangerSection
                     flatDivider(thick: true)
 
@@ -79,10 +82,12 @@ struct AccountSettingsView: View {
         .onChange(of: viewModel.usernameSaved) { _, saved in
             if saved { originalUsername = viewModel.username }
         }
-        .alert(LocalizedStringKey("export_my_data"), isPresented: $showingExportAlert) {
-            Button(LocalizedStringKey("ok"), role: .cancel) { }
-        } message: {
-            Text(LocalizedStringKey("export_coming_soon_message"))
+        .sheet(isPresented: $showingExportBackup) {
+            ExportBackupView()
+                .environment(\.managedObjectContext, viewContext)
+        }
+        .sheet(isPresented: $showingImportBackup) {
+            ImportBackupView()
         }
         .sheet(isPresented: $showingDeleteConfirmation) {
             DeleteAccountConfirmationView(onDelete: { authViewModel.deleteAccount() },
@@ -312,6 +317,48 @@ struct AccountSettingsView: View {
             } label: {
                 HStack {
                     Text(NSLocalizedString("logout_row", comment: "").lowercased())
+                        .font(CTFont.regular(14))
+                        .foregroundStyle(Color.CT.text)
+                    Spacer()
+                    Text("[→]")
+                        .font(CTFont.regular(13))
+                        .foregroundStyle(Color.CT.accent)
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 14)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    // MARK: - Backup Section
+
+    private var backupSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            sectionHeader(NSLocalizedString("backup_section", comment: ""))
+            flatRowDivider()
+
+            Button { showingExportBackup = true } label: {
+                HStack {
+                    Text(NSLocalizedString("export_backup", comment: "").lowercased())
+                        .font(CTFont.regular(14))
+                        .foregroundStyle(Color.CT.text)
+                    Spacer()
+                    Text("[→]")
+                        .font(CTFont.regular(13))
+                        .foregroundStyle(Color.CT.accent)
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 14)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            flatRowDivider()
+
+            Button { showingImportBackup = true } label: {
+                HStack {
+                    Text(NSLocalizedString("import_backup", comment: "").lowercased())
                         .font(CTFont.regular(14))
                         .foregroundStyle(Color.CT.text)
                     Spacer()

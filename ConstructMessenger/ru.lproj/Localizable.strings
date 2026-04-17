@@ -760,3 +760,37 @@
 
 "social_recovery_identity_header" = "ИДЕНТИФИКАТОР";
 "social_recovery_username_label" = "Имя пользователя";
+
+// MARK: - Local Backup
+"backup_section" = "резервная копия";
+"export_backup" = "экспортировать";
+"import_backup" = "восстановить из копии";
+
+"backup_export_title" = "Резервная копия";
+"backup_warning_header" = "ПЕРЕД НАЧАЛОМ";
+"backup_export_warning" = "Создаётся зашифрованная резервная копия всех ваших сообщений и ключей. Файл защищён фразой из 12 слов, которую необходимо записать и хранить в безопасном месте.\n\nХраните файл резервной копии и фразу в разных местах.";
+"backup_mnemonic_warning" = "⚠ Если вы потеряете фразу восстановления, резервную копию невозможно будет расшифровать. Альтернативного способа восстановления нет.";
+"backup_generate_button" = "СОЗДАТЬ ФРАЗУ ВОССТАНОВЛЕНИЯ [→]";
+"backup_mnemonic_title" = "ФРАЗА ВОССТАНОВЛЕНИЯ";
+"backup_mnemonic_subtitle" = "Запишите все 12 слов по порядку. Не делайте скриншот.";
+"backup_copy_words" = "[ СКОПИРОВАТЬ ВСЕ СЛОВА ]";
+"backup_confirm_saved" = "Я записал(а) все 12 слов";
+"backup_next_button" = "ДАЛЕЕ [→]";
+"backup_export_step_header" = "СОХРАНИТЬ ФАЙЛ";
+"backup_export_step_subtitle" = "Сохраните файл .ctbackup в надёжном месте за пределами устройства (например, на зашифрованном USB-накопителе). Не храните его в незашифрованном облачном сервисе.";
+"backup_create_file" = "СОЗДАТЬ ФАЙЛ .ctbackup [→]";
+"backup_share_file" = "ПОДЕЛИТЬСЯ ФАЙЛОМ .ctbackup [→]";
+"backup_export_generating" = "создание резервной копии…";
+
+"backup_import_title" = "Восстановление";
+"backup_import_words_header" = "ФРАЗА ВОССТАНОВЛЕНИЯ";
+"backup_import_words_subtitle" = "Введите 12 слов из вашей резервной копии через пробел.";
+"backup_import_file_header" = "ФАЙЛ РЕЗЕРВНОЙ КОПИИ";
+"backup_import_select_file" = "выбрать файл .ctbackup [→]";
+"backup_restore_warning" = "⚠ Это заменит ВСЕ текущие сообщения и ключи. Действие необратимо.";
+"backup_restore_button" = "ВОССТАНОВИТЬ [→]";
+"backup_restore_success_title" = "Готово к восстановлению";
+"backup_restore_success_message" = "Резервная копия проверена и подготовлена. Закройте и откройте приложение снова, чтобы завершить восстановление.";
+
+"backup_error_invalid_mnemonic" = "Неверная фраза восстановления. Проверьте все 12 слов и попробуйте снова.";
+"backup_error_invalid_file" = "Это не корректная резервная копия Construct, или фраза восстановления неверна.";

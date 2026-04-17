@@ -194,6 +194,9 @@ final class MessageKeyStore {
         return String(cString: sqlite3_errmsg(db))
     }
 
+    /// Public accessor for the database file path (used by LocalBackupService for export/restore).
+    static var storageURL: URL { databaseURL() }
+
     private static func databaseURL() -> URL {
         let support = FileManager.default
             .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]

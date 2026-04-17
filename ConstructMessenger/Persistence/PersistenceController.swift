@@ -38,6 +38,10 @@ struct PersistenceController {
         }
         let c = NSPersistentContainer(name: "ConstructMessenger", managedObjectModel: model)
 
+        if !inMemory {
+            LocalBackupService.applyPendingRestoreIfNeeded()
+        }
+
         if inMemory {
             c.persistentStoreDescriptions.first?.url = URL(fileURLWithPath: "/dev/null")
         } else if let description = c.persistentStoreDescriptions.first {
@@ -129,5 +133,12 @@ struct PersistenceController {
     var safeViewContext: NSManagedObjectContext? {
         guard isReady else { return nil }
         return container.viewContext
+    }
+
+    /// Default SQLite store URL (Application Support directory, matches NSPersistentContainer default).
+    static var defaultStoreURL: URL {
+        FileManager.default
+            .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("ConstructMessenger.sqlite")
     }
 }
