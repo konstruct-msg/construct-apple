@@ -430,9 +430,13 @@ class ChatViewModel: NSObject {
                 self.isSessionReady = true
                 self.isInitializingSession = false
 
-                // Send queued messages
+                // Send ping as msgNum=0 first, then user messages as msgNum=1+.
+                // This ensures initReceivingSession on the peer side gets a UTF-8
+                // ping (which it can convert to String), not a binary protobuf payload.
                 Task { [weak self] in
-                    await self?.sendQueuedMessages(userId: userId)
+                    guard let self else { return }
+                    await self.sendSessionInitPing(to: userId)
+                    await self.sendQueuedMessages(userId: userId)
                 }
             },
             onFailure: { [weak self] error in
@@ -455,6 +459,43 @@ class ChatViewModel: NSObject {
         )
     }
     
+    /// Send a session-init ping as the first DR message (msgNum=0).
+    ///
+    /// The receiver's `init_receiving_session` expects the first message to be convertible
+    /// to a UTF-8 String. If we send a binary user message as msgNum=0 the Rust FFI does
+    /// `String::from_utf8(plaintext)` → DecryptionFailed, the session is torn down, and the
+    /// user's first message is permanently lost.  Sending an ASCII ping as msgNum=0 makes
+    /// `init_receiving_session` succeed; the receiver's `saveMessage` already silently drops
+    /// it (`"__session_ping_*__"` guard).  Real user messages then start at msgNum=1.
+    private func sendSessionInitPing(to userId: String) async {
+        guard CryptoManager.shared.hasSession(for: userId) else { return }
+        guard let myId = SessionManager.shared.currentUserId, !myId.isEmpty else { return }
+
+        let pingId = UUID().uuidString.lowercased()
+        let pingContent = "__session_ping_\(UUID().uuidString)__"
+
+        do {
+            let payload = try MessageRouter.shared.encryptSessionControl(
+                plaintext: pingContent,
+                messageId: pingId,
+                recipientId: userId
+            )
+            _ = try await MessagingServiceClient.shared.sendMessage(
+                messageId: pingId,
+                recipientId: userId,
+                senderId: myId,
+                conversationId: ConversationId.direct(myUserId: myId, theirUserId: userId),
+                encryptedPayload: payload,
+                timestamp: UInt64(Date().timeIntervalSince1970)
+            )
+            Log.info("🏓 SESSION_STATE[init_ping_sent]: msgNum=0 ping sent to \(userId.prefix(8))… — user messages follow as msgNum=1+", category: "SessionInit")
+        } catch {
+            Log.error("⚠️ SESSION_STATE[init_ping_failed]: \(error.localizedDescription) for \(userId.prefix(8))… — user messages will be sent anyway", category: "SessionInit")
+            // Non-fatal: send user messages even if the ping failed. The old bug (message loss)
+            // can only re-occur if the ping fails AND the peer's Rust version does utf-8 check.
+        }
+    }
+
     /// Send all queued messages after session is ready
     private func sendQueuedMessages(userId: String) async {
         await MainActor.run {
