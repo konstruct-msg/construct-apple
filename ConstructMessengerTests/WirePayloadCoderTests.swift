@@ -35,7 +35,8 @@ final class WirePayloadCoderTests: XCTestCase {
             messageNumber: msgNum,
             content: sealedBox,
             suiteId: 1,
-            oneTimePreKeyId: 0
+            oneTimePreKeyId: 0,
+            storageKey: Data()
         )
     }
 
@@ -135,7 +136,8 @@ final class WirePayloadCoderTests: XCTestCase {
             messageNumber: 0,
             content: Self.sealedBox,
             suiteId: 1,
-            oneTimePreKeyId: 0
+            oneTimePreKeyId: 0,
+            storageKey: Data()
         )
         XCTAssertThrowsError(try WirePayloadCoder.encode(components)) { error in
             XCTAssertEqual(error as? WirePayloadError, .invalidDHPublicKey)
@@ -148,7 +150,8 @@ final class WirePayloadCoderTests: XCTestCase {
             messageNumber: 0,
             content: Self.sealedBox,
             suiteId: 1,
-            oneTimePreKeyId: 0
+            oneTimePreKeyId: 0,
+            storageKey: Data()
         )
         XCTAssertThrowsError(try WirePayloadCoder.encode(components)) { error in
             XCTAssertEqual(error as? WirePayloadError, .invalidDHPublicKey)

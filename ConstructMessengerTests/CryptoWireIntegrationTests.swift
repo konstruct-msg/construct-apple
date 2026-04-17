@@ -82,7 +82,8 @@ final class CryptoWireIntegrationTests: XCTestCase {
                 messageNumber: rustComponents.messageNumber,
                 content: MessagePadding.padCiphertext(rawContent),
                 suiteId: 1,
-                oneTimePreKeyId: rustComponents.oneTimePrekeyId
+                oneTimePreKeyId: rustComponents.oneTimePrekeyId,
+                storageKey: Data(rustComponents.storageKey)
             )
         }
 
@@ -101,7 +102,7 @@ final class CryptoWireIntegrationTests: XCTestCase {
                 messageNumber: decoded.messageNumber,
                 content: [UInt8](unpadded)
             )
-            return String(data: plaintextData, encoding: .utf8) ?? ""
+            return String(data: Data(plaintextData.plaintext), encoding: .utf8) ?? ""
         }
 
         /// Initialize receiving session from first wire-encoded message

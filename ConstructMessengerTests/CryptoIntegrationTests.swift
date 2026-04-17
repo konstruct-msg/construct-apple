@@ -119,12 +119,13 @@ final class CryptoIntegrationTests: XCTestCase {
                 throw NSError(domain: "TestError", code: 5, userInfo: [NSLocalizedDescriptionKey: "No session for \(contactId)"])
             }
 
-            return try core.decryptMessage(
+            let result = try core.decryptMessage(
                 sessionId: sessionId,
                 ephemeralPublicKey: [UInt8](message.ephemeralPublicKey),
                 messageNumber: message.messageNumber,
                 content: message.content
             )
+            return String(bytes: result.plaintext, encoding: .utf8) ?? ""
         }
     }
 

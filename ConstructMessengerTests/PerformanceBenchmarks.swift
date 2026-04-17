@@ -73,7 +73,8 @@ final class PerformanceBenchmarks: XCTestCase {
             messageNumber: 0,
             content: sealedBox,
             suiteId: 1,
-            oneTimePreKeyId: 0
+            oneTimePreKeyId: 0,
+            storageKey: Data()
         )
         measure {
             for _ in 0..<1000 {
@@ -90,7 +91,8 @@ final class PerformanceBenchmarks: XCTestCase {
             messageNumber: 7,
             content: sealedBox,
             suiteId: 1,
-            oneTimePreKeyId: 0
+            oneTimePreKeyId: 0,
+            storageKey: Data()
         )
         let payload = try WirePayloadCoder.encode(components)
         measure {
@@ -134,7 +136,8 @@ final class PerformanceBenchmarks: XCTestCase {
                     messageNumber: rustComponents.messageNumber,
                     content: content,
                     suiteId: 1,
-                    oneTimePreKeyId: 0
+                    oneTimePreKeyId: 0,
+                    storageKey: Data()
                 )
                 _ = try? WirePayloadCoder.encode(components)
             }
@@ -181,7 +184,8 @@ final class PerformanceBenchmarks: XCTestCase {
                     messageNumber: rustComponents.messageNumber,
                     content: content,
                     suiteId: 1,
-                    oneTimePreKeyId: 0
+                    oneTimePreKeyId: 0,
+                    storageKey: Data()
                 )
                 guard let wire = try? WirePayloadCoder.encode(components) else { return }
                 guard let decoded = try? WirePayloadCoder.decode(wire) else { return }
