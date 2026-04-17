@@ -209,7 +209,7 @@ struct SocialRecoverySetupView: View {
                             )
                         )
                         .autocorrectionDisabled()
-                        .textInputAutocapitalization(.never)
+                        .autocapNever()
                         .font(CTFont.regular(13))
                         .foregroundColor(Color.CT.text)
                         .padding(10)

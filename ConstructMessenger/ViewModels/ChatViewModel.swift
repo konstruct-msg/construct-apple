@@ -5,6 +5,7 @@ import UIKit
 #endif
 import os.log
 import GRPCCore
+import SwiftProtobuf
 
 // MARK: - Message Queue Models
 

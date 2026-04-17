@@ -93,7 +93,7 @@ struct ReceiveBackupNearbyView: View {
                     .multilineTextAlignment(.center)
 
                 TextField("000000", text: $pinInput)
-                    .keyboardType(.numberPad)
+                    .numberPadKeyboard()
                     .font(CTFont.bold(32))
                     .tracking(8)
                     .foregroundColor(Color.CT.text)

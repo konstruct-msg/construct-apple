@@ -76,7 +76,7 @@ struct SocialRecoveryEntryView: View {
                             .foregroundColor(Color.CT.text)
                             .multilineTextAlignment(.trailing)
                             .autocorrectionDisabled()
-                            .textInputAutocapitalization(.never)
+                            .autocapNever()
                     }
                     .padding(.horizontal, 20)
                     .padding(.vertical, 12)
@@ -318,7 +318,7 @@ private struct AddShareSheet: View {
 
                 TextEditor(text: $wordsInput)
                     .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
+                    .autocapNever()
                     .font(CTFont.regular(13))
                     .foregroundColor(Color.CT.text)
                     .scrollContentBackground(.hidden)

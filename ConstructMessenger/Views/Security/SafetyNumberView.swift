@@ -87,7 +87,7 @@ struct SafetyNumberView: View {
 
     private var copyRow: some View {
         Button {
-            UIPasteboard.general.string = safetyNumber
+            PlatformClipboard.copy(safetyNumber)
             withAnimation { copied = true }
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
                 withAnimation { copied = false }

@@ -315,7 +315,9 @@ class ChatsViewModel {
                 await self.checkKeyHealthInBackground()
                 // Re-register push tokens in case they failed during the cooldown window.
                 await PushNotificationManager.shared.ensureTokenRegistered()
+                #if os(iOS)
                 await VoIPPushManager.shared.ensureTokenRegistered()
+                #endif
             }
         }
         observationTasks.append(iceRecoveryTask)

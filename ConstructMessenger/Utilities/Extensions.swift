@@ -124,3 +124,27 @@ func withRetry<T>(
     }
     throw lastError!
 }
+
+// MARK: - Platform-agnostic SwiftUI view modifiers
+
+import SwiftUI
+
+extension View {
+    /// `.textInputAutocapitalization(.never)` on iOS; no-op on macOS.
+    @ViewBuilder func autocapNever() -> some View {
+        #if os(iOS)
+        self.textInputAutocapitalization(.never)
+        #else
+        self
+        #endif
+    }
+
+    /// `.keyboardType(.numberPad)` on iOS; no-op on macOS.
+    @ViewBuilder func numberPadKeyboard() -> some View {
+        #if os(iOS)
+        self.keyboardType(.numberPad)
+        #else
+        self
+        #endif
+    }
+}

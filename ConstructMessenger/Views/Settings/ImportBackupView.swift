@@ -60,7 +60,7 @@ struct ImportBackupView: View {
                                 .padding(10)
                         )
                         .autocorrectionDisabled()
-                        .textInputAutocapitalization(.never)
+                        .autocapNever()
                         .padding(.horizontal, 20)
 
                     HStack {

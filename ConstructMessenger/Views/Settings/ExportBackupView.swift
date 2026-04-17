@@ -138,7 +138,7 @@ struct ExportBackupView: View {
                 .padding(.bottom, 16)
 
                 Button {
-                    UIPasteboard.general.string = mnemonic
+                    PlatformClipboard.copy(mnemonic)
                 } label: {
                     Text(NSLocalizedString("backup_copy_words", comment: ""))
                         .font(CTFont.regular(13))
