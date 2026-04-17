@@ -1353,11 +1353,11 @@ class MessageRouter {
         let hasSession = CryptoManager.shared.hasSession(for: contactId)
 
         if hasSession {
-            guard let decryptedData = try? CryptoManager.shared.decryptMessage(message, contactIdOverride: contactId) else {
+            guard let decryptResult = try? CryptoManager.shared.decryptMessage(message, contactIdOverride: contactId) else {
                 Log.error("❌ SENDER_SYNC: decryption failed for contactId=\(contactId.prefix(20))…", category: "MessageRouter")
                 return
             }
-            let decrypted = String(data: decryptedData, encoding: .utf8) ?? ""
+            let decrypted = String(data: decryptResult.plaintext, encoding: .utf8) ?? ""
             saveSenderSyncMessage(decrypted, original: message, partnerUserId: partnerUserId, in: context)
         } else if message.messageNumber == 0 {
             // New device: init receiving session async, then save

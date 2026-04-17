@@ -355,7 +355,8 @@ class BackgroundFetchManager: NSObject {
                     if CryptoManager.shared.hasSession(for: otherUserId) {
                         DispatchQueue.main.sync {
                             do {
-                                decryptedContent = try CryptoManager.shared.decryptMessage(messageData)
+                                let result = try CryptoManager.shared.decryptMessage(messageData)
+                                decryptedContent = result.plaintext
                                 Log.debug("✅ Decrypted message \(messageData.id)", category: "BackgroundFetch")
                                 PersistentACKStore.shared.preemptACK(messageData.id)
                             } catch {

@@ -1038,11 +1038,11 @@ class CryptoManager {
     /// Decrypt a ChatMessage directly using clean API
     /// Uses clean API - Rust handles all MessagePack internally
     /// Now with Session Archive fallback support
-    func decryptMessage(_ message: ChatMessage) throws -> Data {
+    func decryptMessage(_ message: ChatMessage) throws -> MessageDecryptResult {
         try decryptMessage(message, contactIdOverride: nil)
     }
 
-    func decryptMessage(_ message: ChatMessage, contactIdOverride: String?) throws -> Data {
+    func decryptMessage(_ message: ChatMessage, contactIdOverride: String?) throws -> MessageDecryptResult {
         let logContactId = contactIdOverride ?? message.from
         Log.debug("🔓 Decrypting message \(message.id.prefix(8))... contactId=\(logContactId.prefix(16))...", category: "CryptoManager")
         Log.debug("   messageNumber: \(message.messageNumber)", category: "CryptoManager")
@@ -1053,9 +1053,9 @@ class CryptoManager {
         // session advance the DR receive chain non-deterministically.
         coreLock.lock()
         defer { coreLock.unlock() }
-        let plaintext: Data
+        let decryptResult: MessageCryptoService.DecryptResult
         do {
-            plaintext = try messageCrypto.decryptMessage(
+            decryptResult = try messageCrypto.decryptMessage(
                 message,
                 contactIdOverride: contactIdOverride,
                 core: orchestratorCore,
@@ -1084,8 +1084,8 @@ class CryptoManager {
             throw error
         }
 
-        Log.info("✅ Message decrypted successfully (messageNumber: \(message.messageNumber), plaintext: \(plaintext.count) bytes)", category: "CryptoManager")
-        return plaintext
+        Log.info("✅ Message decrypted successfully (messageNumber: \(message.messageNumber), plaintext: \(decryptResult.plaintext.count) bytes)", category: "CryptoManager")
+        return MessageDecryptResult(plaintext: decryptResult.plaintext, storageKey: decryptResult.storageKey)
     }
     
     /// Decrypt raw Double Ratchet components — used for call signaling fields, not ChatMessage.
@@ -1115,14 +1115,14 @@ class CryptoManager {
         }
 
         let contentForDecrypt = MessagePadding.unpadCiphertext(content)
-        let plaintextData = try core.decryptMessage(
+        let result = try core.decryptMessage(
             contactId: contactId,
             ephemeralPublicKey: [UInt8](ephemeralPublicKey),
             messageNumber: messageNumber,
             content: [UInt8](contentForDecrypt)
         )
         saveSessionToKeychain(for: contactId)
-        return String(data: plaintextData, encoding: .utf8) ?? ""
+        return String(data: Data(result.plaintext), encoding: .utf8) ?? ""
     }
 
     /// Try to decrypt message with archived sessions
@@ -1151,7 +1151,7 @@ class CryptoManager {
                 
                 let rawContent = Data(base64Encoded: message.content) ?? Data()
                 let contentBytes = [UInt8](MessagePadding.unpadCiphertext(rawContent))
-                let plaintext = try core.decryptMessage(
+                let result = try core.decryptMessage(
                     contactId: message.from,
                     ephemeralPublicKey: [UInt8](message.ephemeralPublicKey),
                     messageNumber: message.messageNumber,
@@ -1162,7 +1162,7 @@ class CryptoManager {
                 saveSessionToKeychain(for: message.from)
                 archiveManager.restoreArchiveToCurrent(for: message.from, index: index)
                 Log.info("♻️ Restored archived session as current", category: "CryptoManager")
-                return plaintext
+                return Data(result.plaintext)
                 
             } catch {
                 Log.debug("❌ Archive #\(index) failed: \(error)", category: "CryptoManager")
@@ -1218,6 +1218,19 @@ enum CryptoManagerError: Error, LocalizedError {
             return "Invalid signature data from Rust core (expected base64)"
         }
     }
+}
+
+/// Result of decrypting a message at the CryptoManager level.
+/// `storageKey` is a 32-byte random key that the caller must store in `MessageKeyStore`
+/// keyed by the message's persistent ID. Once MessageKeyStore is implemented (Phase 2),
+/// callers use `storageKey` to re-encrypt `plaintext` at rest; until then it is discarded.
+struct MessageDecryptResult {
+    let plaintext: Data
+    let storageKey: Data
+
+    /// True only when decryption succeeded with an archived session — in that case
+    /// a fresh storage key was NOT generated (no DR message key consumed).
+    var isArchivedSessionDecrypt: Bool { storageKey.isEmpty }
 }
 
 // MARK: - Session Archive

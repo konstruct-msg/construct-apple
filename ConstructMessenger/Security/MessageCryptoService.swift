@@ -15,6 +15,12 @@ final class MessageCryptoService {
         let content: Data           // raw bytes: nonce || ciphertext_with_tag (optionally padded)
         let suiteId: UInt16
         let oneTimePreKeyId: UInt32  // OTPK key_id used in X3DH (0 = no OTPK)
+        let storageKey: Data         // 32-byte random key — store in MessageKeyStore keyed by message_id
+    }
+
+    struct DecryptResult {
+        let plaintext: Data
+        let storageKey: Data  // 32-byte random key — store in MessageKeyStore keyed by message_id
     }
 
     private static func suiteId(for userId: String) -> UInt16 {
@@ -86,7 +92,8 @@ final class MessageCryptoService {
                 messageNumber: rustComponents.messageNumber,
                 content: MessagePadding.padCiphertext(rawContent),
                 suiteId: suiteId,
-                oneTimePreKeyId: rustComponents.oneTimePrekeyId
+                oneTimePreKeyId: rustComponents.oneTimePrekeyId,
+                storageKey: Data(rustComponents.storageKey)
             )
 
             #if DEBUG
@@ -109,7 +116,7 @@ final class MessageCryptoService {
         saveSession: (String) -> Void,
         archiveSession: (String, ArchiveReason) -> Void,
         tryDecryptWithArchived: (ChatMessage) throws -> Data
-    ) throws -> Data {
+    ) throws -> DecryptResult {
         guard let core = core else {
             throw CryptoManagerError.coreNotInitialized
         }
@@ -129,17 +136,18 @@ final class MessageCryptoService {
         do {
             let rawContent = message.content
             let contentForDecrypt = MessagePadding.unpadCiphertext(rawContent)
-            let plaintext = try core.decryptMessage(
+            let result = try core.decryptMessage(
                 contactId: contactId,
                 ephemeralPublicKey: [UInt8](message.ephemeralPublicKey),
                 messageNumber: message.messageNumber,
                 content: [UInt8](contentForDecrypt)
             )
             saveSession(contactId)
-            return plaintext
+            return DecryptResult(plaintext: Data(result.plaintext), storageKey: Data(result.storageKey))
         } catch {
             if let plaintext = try? tryDecryptWithArchived(message) {
-                return plaintext
+                // Archived session decrypt — no storage key available; caller handles appropriately
+                return DecryptResult(plaintext: plaintext, storageKey: Data())
             }
             archiveSession(contactId, .decryptionFailed)
             throw CryptoManagerError.decryptionFailed

@@ -615,7 +615,7 @@ public protocol ClassicCryptoCoreProtocol: AnyObject, Sendable {
      */
     func applyPqContribution(contactId: String, kemSharedSecret: [UInt8]) throws 
     
-    func decryptMessage(sessionId: String, ephemeralPublicKey: [UInt8], messageNumber: UInt32, content: [UInt8]) throws  -> String
+    func decryptMessage(sessionId: String, ephemeralPublicKey: [UInt8], messageNumber: UInt32, content: [UInt8]) throws  -> DecryptedMessageResult
     
     func encryptMessage(sessionId: String, plaintext: String) throws  -> EncryptedMessageComponents
     
@@ -749,8 +749,8 @@ open func applyPqContribution(contactId: String, kemSharedSecret: [UInt8])throws
 }
 }
     
-open func decryptMessage(sessionId: String, ephemeralPublicKey: [UInt8], messageNumber: UInt32, content: [UInt8])throws  -> String  {
-    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+open func decryptMessage(sessionId: String, ephemeralPublicKey: [UInt8], messageNumber: UInt32, content: [UInt8])throws  -> DecryptedMessageResult  {
+    return try  FfiConverterTypeDecryptedMessageResult_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_method_classiccryptocore_decrypt_message(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(sessionId),
@@ -1074,7 +1074,7 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
     
     func applyPqContribution(contactId: String, kemSharedSecret: [UInt8]) throws 
     
-    func decryptMessage(contactId: String, ephemeralPublicKey: [UInt8], messageNumber: UInt32, content: [UInt8]) throws  -> Data
+    func decryptMessage(contactId: String, ephemeralPublicKey: [UInt8], messageNumber: UInt32, content: [UInt8]) throws  -> DecryptedMessageResult
     
     func encryptMessage(contactId: String, plaintext: Data) throws  -> EncryptedMessageComponents
     
@@ -1302,8 +1302,8 @@ open func applyPqContribution(contactId: String, kemSharedSecret: [UInt8])throws
 }
 }
     
-open func decryptMessage(contactId: String, ephemeralPublicKey: [UInt8], messageNumber: UInt32, content: [UInt8])throws  -> Data  {
-    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+open func decryptMessage(contactId: String, ephemeralPublicKey: [UInt8], messageNumber: UInt32, content: [UInt8])throws  -> DecryptedMessageResult  {
+    return try  FfiConverterTypeDecryptedMessageResult_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_method_orchestratorcore_decrypt_message(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(contactId),
@@ -2669,19 +2669,73 @@ public func FfiConverterTypeCoverTrafficConfig_lower(_ value: CoverTrafficConfig
 }
 
 
+public struct DecryptedMessageResult: Equatable, Hashable {
+    public var plaintext: [UInt8]
+    public var storageKey: [UInt8]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(plaintext: [UInt8], storageKey: [UInt8]) {
+        self.plaintext = plaintext
+        self.storageKey = storageKey
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension DecryptedMessageResult: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDecryptedMessageResult: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DecryptedMessageResult {
+        return
+            try DecryptedMessageResult(
+                plaintext: FfiConverterSequenceUInt8.read(from: &buf), 
+                storageKey: FfiConverterSequenceUInt8.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: DecryptedMessageResult, into buf: inout [UInt8]) {
+        FfiConverterSequenceUInt8.write(value.plaintext, into: &buf)
+        FfiConverterSequenceUInt8.write(value.storageKey, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDecryptedMessageResult_lift(_ buf: RustBuffer) throws -> DecryptedMessageResult {
+    return try FfiConverterTypeDecryptedMessageResult.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDecryptedMessageResult_lower(_ value: DecryptedMessageResult) -> RustBuffer {
+    return FfiConverterTypeDecryptedMessageResult.lower(value)
+}
+
+
 public struct EncryptedMessageComponents: Equatable, Hashable {
     public var ephemeralPublicKey: [UInt8]
     public var messageNumber: UInt32
     public var content: [UInt8]
     public var oneTimePrekeyId: UInt32
+    public var storageKey: [UInt8]
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(ephemeralPublicKey: [UInt8], messageNumber: UInt32, content: [UInt8], oneTimePrekeyId: UInt32) {
+    public init(ephemeralPublicKey: [UInt8], messageNumber: UInt32, content: [UInt8], oneTimePrekeyId: UInt32, storageKey: [UInt8]) {
         self.ephemeralPublicKey = ephemeralPublicKey
         self.messageNumber = messageNumber
         self.content = content
         self.oneTimePrekeyId = oneTimePrekeyId
+        self.storageKey = storageKey
     }
 
     
@@ -2701,7 +2755,8 @@ public struct FfiConverterTypeEncryptedMessageComponents: FfiConverterRustBuffer
                 ephemeralPublicKey: FfiConverterSequenceUInt8.read(from: &buf), 
                 messageNumber: FfiConverterUInt32.read(from: &buf), 
                 content: FfiConverterSequenceUInt8.read(from: &buf), 
-                oneTimePrekeyId: FfiConverterUInt32.read(from: &buf)
+                oneTimePrekeyId: FfiConverterUInt32.read(from: &buf), 
+                storageKey: FfiConverterSequenceUInt8.read(from: &buf)
         )
     }
 
@@ -2710,6 +2765,7 @@ public struct FfiConverterTypeEncryptedMessageComponents: FfiConverterRustBuffer
         FfiConverterUInt32.write(value.messageNumber, into: &buf)
         FfiConverterSequenceUInt8.write(value.content, into: &buf)
         FfiConverterUInt32.write(value.oneTimePrekeyId, into: &buf)
+        FfiConverterSequenceUInt8.write(value.storageKey, into: &buf)
     }
 }
 
@@ -3543,12 +3599,14 @@ public func FfiConverterTypeRotatedSpkBundle_lower(_ value: RotatedSpkBundle) ->
 public struct SessionInitResult: Equatable, Hashable {
     public var sessionId: String
     public var decryptedMessage: String
+    public var storageKey: [UInt8]
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(sessionId: String, decryptedMessage: String) {
+    public init(sessionId: String, decryptedMessage: String, storageKey: [UInt8]) {
         self.sessionId = sessionId
         self.decryptedMessage = decryptedMessage
+        self.storageKey = storageKey
     }
 
     
@@ -3566,13 +3624,15 @@ public struct FfiConverterTypeSessionInitResult: FfiConverterRustBuffer {
         return
             try SessionInitResult(
                 sessionId: FfiConverterString.read(from: &buf), 
-                decryptedMessage: FfiConverterString.read(from: &buf)
+                decryptedMessage: FfiConverterString.read(from: &buf), 
+                storageKey: FfiConverterSequenceUInt8.read(from: &buf)
         )
     }
 
     public static func write(_ value: SessionInitResult, into buf: inout [UInt8]) {
         FfiConverterString.write(value.sessionId, into: &buf)
         FfiConverterString.write(value.decryptedMessage, into: &buf)
+        FfiConverterSequenceUInt8.write(value.storageKey, into: &buf)
     }
 }
 
@@ -5577,7 +5637,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_classiccryptocore_apply_pq_contribution() != 13706) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_classiccryptocore_decrypt_message() != 28602) {
+    if (uniffi_construct_core_checksum_method_classiccryptocore_decrypt_message() != 16045) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_classiccryptocore_encrypt_message() != 45977) {
@@ -5667,7 +5727,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_orchestratorcore_apply_pq_contribution() != 43446) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_decrypt_message() != 9161) {
+    if (uniffi_construct_core_checksum_method_orchestratorcore_decrypt_message() != 56464) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_encrypt_message() != 55888) {
