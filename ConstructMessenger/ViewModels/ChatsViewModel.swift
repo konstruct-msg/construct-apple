@@ -398,10 +398,11 @@ class ChatsViewModel {
             }
         }
 
-        // Pre-warm sessions for contacts where we're the natural INITIATOR (higher deviceId)
-        // and already have message history. Contacts without history (e.g. just added via QR)
-        // are prewarmed in startChat instead, guaranteeing fresh OTPKs after QR scan.
-        sessionCoordinator.prewarmSessions(for: prewarmEligibleContactIds())
+        // Prewarm is intentionally omitted here: forceReconnectStream() always runs before
+        // startMessageStream() on first connect and calls prewarmSessions() there. On
+        // subsequent reconnects (stream dropped and restarted) sessions already exist, so
+        // prewarmSessions() would be a no-op that still triggers a CoreData fetch on every
+        // connectionStatus transition (connected → connecting → connected per reconnect cycle).
     }
 
     /// Cancel any in-progress backoff and reconnect immediately.

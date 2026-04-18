@@ -12,7 +12,6 @@ struct ContentView: View {
     @Environment(AuthViewModel.self) var authViewModel
     @Environment(DeepLinkHandler.self) var deepLinkHandler
     @Environment(\.managedObjectContext) private var viewContext
-    @Environment(\.scenePhase) private var scenePhase
     @AppStorage("appTheme") private var appTheme: AppTheme = .dark
 
     @State private var chatsViewModel = ChatsViewModel()
@@ -52,19 +51,12 @@ struct ContentView: View {
             chatsViewModel.setContext(viewContext)
             handleDeepLink(deepLinkHandler.deepLink)
         }
-        .onChange(of: scenePhase) { _, newPhase in
-            if newPhase == .active {
-                // Always restore connection when coming from background to foreground
-                print("📱 App became active, attempting to restore connection...")
-                // Avoid spamming Keychain/session restore while the session is already valid
-                // (e.g. permission prompts can trigger multiple active/inactive transitions).
-                if SessionManager.shared.sessionToken == nil || !SessionManager.shared.isSessionValid {
-                    authViewModel.restoreSession()
-                }
-            } else if newPhase == .background {
-                print("⏹️ App went to background.")
-                // gRPC architecture - stream disconnected gracefully
-                // Long polling will resume when app becomes active
+        .onReceive(NotificationCenter.default.publisher(for: .appWillEnterForeground)) { _ in
+            // Fires only when returning from true background — not for brief interruptions
+            // (Control Center, alerts, biometrics). scenePhase == .active would fire for all of those.
+            if SessionManager.shared.sessionToken == nil || !SessionManager.shared.isSessionValid {
+                Log.info("📱 App returning to foreground — restoring session", category: "Auth")
+                authViewModel.restoreSession()
             }
         }
         .onChange(of: deepLinkHandler.deepLink) { _, newDeepLink in
