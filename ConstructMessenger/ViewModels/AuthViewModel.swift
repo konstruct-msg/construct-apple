@@ -206,12 +206,15 @@ class AuthViewModel {
             // We have session token - verify it's still valid
             print("✅ Found session token for user: \(userId)")
             if !CryptoManager.shared.isInitialized {
-                // Auth state is set before guard so isAuthenticated is true during key recovery
                 self.currentUserId = userId
                 self.isAuthenticated = true
                 scheduleTokenRefresh()
                 CryptoManager.shared.setLocalUserId(userId)
-                handleLostDeviceKeys(userId: userId, reason: "keys missing after session token restore")
+                if CryptoManager.shared.isInitialized {
+                    finishAuth(userId: userId)
+                } else {
+                    handleLostDeviceKeys(userId: userId, reason: "keys missing after session token restore")
+                }
                 return
             }
             finishAuth(userId: userId)
@@ -248,7 +251,11 @@ class AuthViewModel {
                     self.isAuthenticated = true
                     scheduleTokenRefresh()
                     CryptoManager.shared.setLocalUserId(userId)
-                    handleLostDeviceKeys(userId: userId, reason: "keys missing after token refresh")
+                    if CryptoManager.shared.isInitialized {
+                        finishAuth(userId: userId)
+                    } else {
+                        handleLostDeviceKeys(userId: userId, reason: "keys missing after token refresh")
+                    }
                     return
                 }
                 finishAuth(userId: userId)
