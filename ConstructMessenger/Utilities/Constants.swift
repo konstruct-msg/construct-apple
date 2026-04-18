@@ -80,7 +80,7 @@ struct InviteConfig {
     static let signatureLengthBytes = 64
     static let qrWarningThresholdSeconds: TimeInterval = 60
     static let qrCodePrefixScheme = "konstruct://add"
-    static let qrCountdownTickSeconds: TimeInterval = 5
+    static let qrCountdownTickSeconds: TimeInterval = 1
 }
 
 
