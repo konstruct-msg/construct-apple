@@ -152,17 +152,11 @@ final class CallManager {
                 callerName: SessionManager.shared.currentDisplayName,
                 hasVideo: hasVideo
             )
+            // calleeOnline=false is normal: idle users never have a signal stream open.
+            // The server sends a VoIP push to wake the callee in this case.
+            // Continue the call regardless — it will ring until the callee answers or
+            // the server TTL expires (server sends an error signal when the call times out).
             Log.info("📞 InitiateCall: calleeOnline=\(initResp.calleeOnline) (call_id=\(callId.prefix(8))…)", category: "Calls")
-
-            // If callee has no active stream connection, end immediately.
-            // Sending ICE candidates to an offline peer floods the server with errors.
-            // The callee may receive the push notification and retry on their end.
-            if !initResp.calleeOnline {
-                Log.info("📞 Callee offline — ending call (call_id=\(callId.prefix(8))…)", category: "Calls")
-                lastError = NSLocalizedString("call_error_peer_offline", comment: "")
-                endActiveCall(reason: .local("Callee offline"))
-                return
-            }
 
             let turn = try? await SignalingServiceClient.shared.getTurnCredentials(callId: callId)
             if let turn {
