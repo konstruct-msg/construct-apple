@@ -24,9 +24,10 @@ enum QRCodeGenerator {
     /// Logo covers this fraction of the QR image's shorter dimension.
     private static let logoFraction: CGFloat = 0.22
 
-    /// Opaque padding (in logo-size-relative pts) added around the logo to
-    /// mask the underlying QR modules cleanly.
-    private static let logoPaddingFraction: CGFloat = 0.18
+    /// Opaque padding added on each side of the logo (as a fraction of logoEdge).
+    /// 0.05 = 5% per side = 10% total. The white patch is then snapped outward to
+    /// the nearest QR module boundary so no module is sliced in half.
+    private static let logoPaddingFraction: CGFloat = 0.05
 
     // MARK: - Public API
 
@@ -89,11 +90,24 @@ enum QRCodeGenerator {
 
         let logoEdge = size.width * logoFraction
         let padding  = logoEdge * logoPaddingFraction
-        let bgEdge   = logoEdge + padding * 2
+        let bgEdgeRaw = logoEdge + padding * 2
 
         let center = CGPoint(x: size.width / 2, y: size.height / 2)
-        let bgRect  = CGRect(x: center.x - bgEdge / 2,  y: center.y - bgEdge / 2,  width: bgEdge,  height: bgEdge)
-        let logoRect = CGRect(x: center.x - logoEdge / 2, y: center.y - logoEdge / 2, width: logoEdge, height: logoEdge)
+
+        // Snap the white background patch to the QR module grid.
+        // Each QR module is exactly `scale` pixels wide/tall after the CIFilter scale step.
+        // Expanding to the nearest outer module boundary ensures no module is half-covered.
+        let mod = scale
+        let rawBgX   = center.x - bgEdgeRaw / 2
+        let rawBgY   = center.y - bgEdgeRaw / 2
+        let snappedX    = floor(rawBgX    / mod) * mod
+        let snappedY    = floor(rawBgY    / mod) * mod
+        let snappedMaxX = ceil((rawBgX + bgEdgeRaw) / mod) * mod
+        let snappedMaxY = ceil((rawBgY + bgEdgeRaw) / mod) * mod
+        let bgRect  = CGRect(x: snappedX, y: snappedY,
+                             width: snappedMaxX - snappedX, height: snappedMaxY - snappedY)
+        let logoRect = CGRect(x: center.x - logoEdge / 2, y: center.y - logoEdge / 2,
+                              width: logoEdge, height: logoEdge)
 
         // White opaque background patch to mask the underlying QR modules
         ctx.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
