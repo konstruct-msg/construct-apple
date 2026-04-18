@@ -146,9 +146,33 @@ class AuthViewModel {
         
         // Step 1: Try to restore existing session token
         SessionManager.shared.loadSessionToken()
-        
+
+        // Helper: recover userId from JWT payload when Keychain entry is missing.
+        // The server embeds the user ID in the `sub` claim of every issued JWT.
+        func recoverUserIdFromToken() -> String? {
+            guard let token = SessionManager.shared.sessionToken,
+                  let uid = JWTUtils.extractUserId(from: token),
+                  !uid.isEmpty else { return nil }
+            // Persist so subsequent launches don't need this fallback.
+            KeychainManager.shared.saveUserID(uid)
+            SessionManager.shared.saveTokens(
+                accessToken: token,
+                refreshToken: SessionManager.shared.refreshToken ?? "",
+                expiresIn: Int(SessionManager.shared.sessionExpires?.timeIntervalSinceNow ?? 3600),
+                userId: uid
+            )
+            Log.info("⚠️ [Auth] userId recovered from JWT sub claim and re-saved to Keychain: \(uid.prefix(8))...", category: "Auth")
+            return uid
+        }
+
+        // Resolve userId — prefer Keychain, fall back to JWT extraction.
+        func resolvedUserId() -> String? {
+            if let uid = SessionManager.shared.currentUserId { return uid }
+            return recoverUserIdFromToken()
+        }
+
         if let _ = SessionManager.shared.sessionToken,
-           let userId = SessionManager.shared.currentUserId,
+           let userId = resolvedUserId(),
            SessionManager.shared.isSessionValid {
             // We have session token - verify it's still valid
             print("✅ Found session token for user: \(userId)")
@@ -167,7 +191,7 @@ class AuthViewModel {
         // Step 1.5: Token exists but is expired/near-expired — refresh using refresh token first.
         // This is faster and less error-prone than full device auth, and keeps the gRPC stream stable.
         if SessionManager.shared.sessionToken != nil,
-           let userId = SessionManager.shared.currentUserId,
+           let userId = resolvedUserId(),
            let refresh = SessionManager.shared.refreshToken {
             do {
                 Log.info("🔄 Session token expired — attempting refresh", category: "Auth")
@@ -180,10 +204,13 @@ class AuthViewModel {
                     expiresIn = response.expiresIn ?? 3600
                 }
 
+                // Preserve userId even if the refresh response doesn't include it.
+                let refreshedUserId = response.userId.isEmpty ? userId : response.userId
                 SessionManager.shared.saveTokens(
                     accessToken: response.accessToken,
                     refreshToken: response.refreshToken,
-                    expiresIn: expiresIn
+                    expiresIn: expiresIn,
+                    userId: refreshedUserId
                 )
 
                 self.currentUserId = userId
@@ -204,7 +231,7 @@ class AuthViewModel {
         
         // Step 2: No session token - try device-based auth
         guard let deviceId = KeychainManager.shared.loadDeviceID(),
-              let _ = KeychainManager.shared.loadDeviceSigningKey() else {
+              let rawSigningKey = KeychainManager.shared.loadDeviceSigningKey() else {
             print("❌ No device keys found - user needs to register")
             return
         }
@@ -219,7 +246,15 @@ class AuthViewModel {
                 throw NetworkError.encodingFailed
             }
 
-            let signingKeyBytes = try CryptoManager.shared.exportSigningSecretKey()
+            // Prefer CryptoCore signing; fall back to raw Keychain key when core is not yet
+            // initialized (e.g. CFE snapshot lost but device keys still in Keychain).
+            let signingKeyBytes: [UInt8]
+            do {
+                signingKeyBytes = try CryptoManager.shared.exportSigningSecretKey()
+            } catch {
+                Log.info("⚠️ [Auth] CryptoCore unavailable for signing — using raw Keychain key: \(error)", category: "Auth")
+                signingKeyBytes = [UInt8](rawSigningKey)
+            }
             let privateKey = try Curve25519.Signing.PrivateKey(rawRepresentation: Data(signingKeyBytes))
             let signatureData = try privateKey.signature(for: messageData)
             let signature = signatureData.base64EncodedString()
