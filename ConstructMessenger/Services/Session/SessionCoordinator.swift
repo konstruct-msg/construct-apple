@@ -837,6 +837,15 @@ final class SessionCoordinator {
             return
         }
 
+        // Silently discard binary-init sentinels. These are generated when the INITIATOR's
+        // msgNum=0 payload cannot be decoded as UTF-8 (legacy clients sending protobuf instead
+        // of the ping-first ASCII payload). The session IS established — the X3DH handshake
+        // completed — but there is no user-readable content to show.
+        if plaintext.hasPrefix("__binary_init_") {
+            Log.info("🔇 SESSION_STATE[binary_init_discarded]: non-UTF8 msgNum=0 payload from \(messageData.from.prefix(8))… — session established, sentinel discarded", category: "SessionCoordinator")
+            return
+        }
+
         // Phase 2 of two-phase handshake: RESPONDER sends __session_ready__ after its
         // initReceivingSession succeeds. We are the INITIATOR receiving confirmation.
         // Also handle legacy format without __ markers (older client versions).

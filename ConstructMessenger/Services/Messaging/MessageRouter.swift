@@ -708,6 +708,15 @@ class MessageRouter {
             return
         }
 
+        // Silently discard binary-init sentinels — these appear when a legacy msgNum=0 payload
+        // couldn't be decoded as UTF-8. The session was established; there's nothing to display.
+        if decryptedContent.hasPrefix("__binary_init_") {
+            Log.info("🔇 SESSION_STATE[binary_init_discarded_normal_path]: discarding binary init sentinel from \(otherUserId.prefix(8))…", category: "MessageRouter")
+            PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
+            onReceiptNeeded?([message.id], otherUserId, .delivered)
+            return
+        }
+
         // Silently discard two-phase handshake confirmation signals.
         // __session_ready_<UUID>__ is sent by the RESPONDER after initReceivingSession succeeds.
         // Also handle legacy format without __ markers (older client versions).
@@ -1404,6 +1413,12 @@ class MessageRouter {
         in context: NSManagedObjectContext
     ) {
         let (chat, _) = findOrCreateChat(for: partnerUserId, in: context)
+
+        // Discard binary-init sentinels (non-UTF8 msgNum=0 legacy payloads) — no user content.
+        if decrypted.hasPrefix("__binary_init_") {
+            Log.info("🔇 SENDER_SYNC: discarding binary_init sentinel for \(partnerUserId.prefix(8))…", category: "MessageRouter")
+            return
+        }
 
         let fetch = Message.fetchRequest()
         fetch.predicate = NSPredicate(format: "id == %@", original.id)

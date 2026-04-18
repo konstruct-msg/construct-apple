@@ -25,9 +25,9 @@ enum QRCodeGenerator {
     private static let logoFraction: CGFloat = 0.22
 
     /// Opaque padding added on each side of the logo (as a fraction of logoEdge).
-    /// 0.05 = 5% per side = 10% total. The white patch is then snapped outward to
+    /// 0.01 = 1% per side = 2% total. The white patch is then snapped outward to
     /// the nearest QR module boundary so no module is sliced in half.
-    private static let logoPaddingFraction: CGFloat = 0.05
+    private static let logoPaddingFraction: CGFloat = 0.01
 
     // MARK: - Public API
 

@@ -68,7 +68,8 @@ class ChatViewModel: NSObject {
         NSPredicate(format: "NOT (decryptedContent BEGINSWITH '__session_ready')"),
         NSPredicate(format: "NOT (decryptedContent BEGINSWITH 'session_ready_')"),
         NSPredicate(format: "NOT (decryptedContent BEGINSWITH '__session_ping')"),
-        NSPredicate(format: "NOT (decryptedContent BEGINSWITH '__END_SESSION')")
+        NSPredicate(format: "NOT (decryptedContent BEGINSWITH '__END_SESSION')"),
+        NSPredicate(format: "NOT (decryptedContent BEGINSWITH '__binary_init_')")
     ])
 
     let chat: Chat
