@@ -38,6 +38,16 @@ struct AuthInterceptor: ClientInterceptor {
             request.metadata.addString("Bearer \(token)", forKey: "authorization")
             if let userId {
                 request.metadata.addString(userId, forKey: "x-user-id")
+            } else {
+                // userId absent — attempt last-resort recovery from JWT before sending.
+                // If recovery fails, the RPC will be rejected by the server; fail early
+                // with a clear error rather than letting the server return UNAUTHENTICATED.
+                if let recovered = JWTUtils.extractUserId(from: token) {
+                    await MainActor.run { SessionManager.shared.updateUserId(recovered) }
+                    request.metadata.addString(recovered, forKey: "x-user-id")
+                } else {
+                    throw RPCError(code: .unauthenticated, message: "x-user-id unavailable — userId missing from session")
+                }
             }
             if let deviceId {
                 request.metadata.addString(deviceId, forKey: "x-device-id")

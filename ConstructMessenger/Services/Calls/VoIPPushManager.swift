@@ -72,6 +72,11 @@ final class VoIPPushManager: NSObject {
     private func retryServerRegistrationIfNeeded() async {
         guard CallsFeature.isEnabled else { return }
         guard SessionManager.shared.sessionToken != nil else { return }
+        // userId must be present — the server requires x-user-id on this RPC.
+        guard SessionManager.shared.currentUserId != nil else {
+            Log.debug("⏸️ VoIP token retry deferred — userId not yet available", category: "Calls")
+            return
+        }
 
         // If device re-registered with a new device_id, the VoIP token must be re-registered
         // so the server routes incoming call pushes to the correct device.

@@ -222,6 +222,13 @@ class PushNotificationManager: NSObject {
     /// Called whenever SessionManager.sessionToken changes to non-nil.
     private func retryServerRegistrationIfNeeded() async {
         guard SessionManager.shared.sessionToken != nil else { return }
+        // userId must be present — the server requires x-user-id on this RPC.
+        // If userId is still nil (e.g. race between token refresh and userId restore),
+        // we'll be called again on the next sessionToken change once userId is set.
+        guard SessionManager.shared.currentUserId != nil else {
+            Log.debug("⏸️ Device token retry deferred — userId not yet available", category: "Push")
+            return
+        }
         guard let token = deviceToken, !isRegisteredWithServer else { return }
         Log.info("🔄 Retrying device token registration (session now available)", category: "Push")
         await registerWithServer(token)
