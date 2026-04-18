@@ -131,7 +131,9 @@ final class GRPCChannelManager: Sendable {
     /// `iceProxyPort()` check after startOnDemandIfNeeded() / restartAfterCrash() sees 0 and
     /// falls back to a direct channel — defeating ICE entirely.
     ///
-    /// In practice the Rust goroutine initializes in <50 ms; the 2-second timeout is generous.
+    /// In practice the Rust goroutine initializes in <50 ms when ICE is already running (Rust flag
+    /// set after port bind). When ICE starts cold from scratch (full WebTunnel TCP+TLS handshake),
+    /// the tunnel may take 3–8 s to establish — hence the 10-second default.
     func waitForProxyReady(timeout: TimeInterval = NetworkTiming.ICE.proxyReadyWaitTimeout) async {
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {

@@ -126,7 +126,7 @@ enum NetworkTiming {
 
     enum ICE {
         static let relayCooldown: TimeInterval = 60.0
-        static let proxyReadyWaitTimeout: TimeInterval = 2.0
+        static let proxyReadyWaitTimeout: TimeInterval = 10.0
         static let onDemandStartJoinTimeout: TimeInterval = 5.0
         static let onDemandStartJoinPollInterval: TimeInterval = 0.1
         static let relayLatencyProbeTimeout: TimeInterval = 2.0
