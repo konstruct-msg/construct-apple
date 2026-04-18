@@ -149,26 +149,37 @@ class AuthViewModel {
 
         // Helper: recover userId from JWT payload when Keychain entry is missing.
         // The server embeds the user ID in the `sub` claim of every issued JWT.
+        // Only touches userId — does NOT re-save tokens or overwrite session expiry.
         func recoverUserIdFromToken() -> String? {
             guard let token = SessionManager.shared.sessionToken,
                   let uid = JWTUtils.extractUserId(from: token),
                   !uid.isEmpty else { return nil }
-            // Persist so subsequent launches don't need this fallback.
-            KeychainManager.shared.saveUserID(uid)
-            SessionManager.shared.saveTokens(
-                accessToken: token,
-                refreshToken: SessionManager.shared.refreshToken ?? "",
-                expiresIn: Int(SessionManager.shared.sessionExpires?.timeIntervalSinceNow ?? 3600),
-                userId: uid
-            )
+            SessionManager.shared.updateUserId(uid)
             Log.info("⚠️ [Auth] userId recovered from JWT sub claim and re-saved to Keychain: \(uid.prefix(8))...", category: "Auth")
             return uid
         }
 
-        // Resolve userId — prefer Keychain, fall back to JWT extraction.
+        // Resolve userId — prefer in-memory/Keychain, fall back to JWT extraction.
         func resolvedUserId() -> String? {
             if let uid = SessionManager.shared.currentUserId { return uid }
             return recoverUserIdFromToken()
+        }
+
+        // Common setup after any successful auth path: schedules token refresh,
+        // wires up CryptoCore, loads user profile, and starts SPK rotation check
+        // in the background so it completes before the user can share a QR code.
+        func finishAuth(userId: String) {
+            self.currentUserId = userId
+            self.isAuthenticated = true
+            scheduleTokenRefresh()
+            CryptoManager.shared.setLocalUserId(userId)
+            loadUserFromCoreData(userId: userId)
+            // Fire SPK rotation immediately in background — rotateIfNeeded() is a
+            // no-op if the key is fresh, so this is safe to call on every launch.
+            Task {
+                let deviceId = KeychainManager.shared.loadDeviceID() ?? ""
+                await PreKeyRotationService.shared.rotateIfNeeded(deviceId: deviceId)
+            }
         }
 
         if let _ = SessionManager.shared.sessionToken,
@@ -176,15 +187,16 @@ class AuthViewModel {
            SessionManager.shared.isSessionValid {
             // We have session token - verify it's still valid
             print("✅ Found session token for user: \(userId)")
-            self.currentUserId = userId
-            self.isAuthenticated = true
-            scheduleTokenRefresh()
-            CryptoManager.shared.setLocalUserId(userId)
             if !CryptoManager.shared.isInitialized {
+                // Auth state is set before guard so isAuthenticated is true during key recovery
+                self.currentUserId = userId
+                self.isAuthenticated = true
+                scheduleTokenRefresh()
+                CryptoManager.shared.setLocalUserId(userId)
                 handleLostDeviceKeys(userId: userId, reason: "keys missing after session token restore")
                 return
             }
-            loadUserFromCoreData(userId: userId)
+            finishAuth(userId: userId)
             return
         }
 
@@ -213,15 +225,15 @@ class AuthViewModel {
                     userId: refreshedUserId
                 )
 
-                self.currentUserId = userId
-                self.isAuthenticated = true
-                scheduleTokenRefresh()
-                CryptoManager.shared.setLocalUserId(userId)
                 if !CryptoManager.shared.isInitialized {
+                    self.currentUserId = userId
+                    self.isAuthenticated = true
+                    scheduleTokenRefresh()
+                    CryptoManager.shared.setLocalUserId(userId)
                     handleLostDeviceKeys(userId: userId, reason: "keys missing after token refresh")
                     return
                 }
-                loadUserFromCoreData(userId: userId)
+                finishAuth(userId: userId)
                 Log.info("✅ Session refreshed successfully", category: "Auth")
                 return
             } catch {
@@ -282,15 +294,9 @@ class AuthViewModel {
                 userId: response.userId
             )
             
-            self.currentUserId = response.userId
-            self.isAuthenticated = true
-            scheduleTokenRefresh()
-            CryptoManager.shared.setLocalUserId(response.userId)
             IceProxyManager.shared.configureFromServer(cert: response.iceBridgeCert ?? "")
             print("✅ Device-based authentication successful")
-            
-            // Load user from Core Data
-            loadUserFromCoreData(userId: response.userId)
+            finishAuth(userId: response.userId)
             
         } catch {
             print("❌ Device authentication failed: \(error)")

@@ -45,7 +45,7 @@ struct ContentView: View {
                     }
             }
         }
-//        .errorToast() // TODO: решить нужны ли эти уведомления вообще
+        .errorToast()
         .preferredColorScheme(appTheme.colorScheme)
         .onAppear {
             authViewModel.refreshDeviceKeyState()

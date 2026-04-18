@@ -29,6 +29,15 @@ class SessionManager {
         isSessionInvalidated = false
     }
 
+    /// Update the in-memory userId and persist it to Keychain without touching tokens or expiry.
+    /// Use this when the userId is recovered from a JWT claim or an auth response,
+    /// and the session token itself does not need to change.
+    func updateUserId(_ uid: String) {
+        guard !uid.isEmpty else { return }
+        KeychainManager.shared.saveUserID(uid)
+        self.userId = uid
+    }
+
     /// Clears stored tokens so restoreOrAuthenticateDevice() will fall through to device
     /// signing-key auth. Does NOT remove device keys, userId, or deviceId — identity is preserved.
     func invalidateTokensForReauth() {
