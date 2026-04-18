@@ -126,7 +126,7 @@ final class CryptoWireIntegrationTests: XCTestCase {
                 recipientBundle: bundleBytes,
                 firstMessage: msgBytes
             )
-            return result.decryptedMessage
+            return String(bytes: result.decryptedMessage, encoding: .utf8) ?? "__binary_init__"
         }
     }
 

@@ -230,7 +230,9 @@ final class CryptoSessionInitializationService {
                 firstMessage: messageBytes
             )
 
-            Log.info("✅ Session initialized successfully, decrypted: \(result.decryptedMessage.prefix(50))...", category: "CryptoManager")
+            let plaintext = result.decryptedMessage
+            let plaintextPreview = String(bytes: plaintext.prefix(50), encoding: .utf8) ?? "<binary \(plaintext.count)B>"
+            Log.info("✅ Session initialized successfully, decrypted: \(plaintextPreview)...", category: "CryptoManager")
 
             KeychainManager.shared.saveSessionSuiteId(userId: userId, suiteId: suiteID)
             // NOTE: saveSession is intentionally deferred until AFTER PQXDH strengthening below.
@@ -282,7 +284,13 @@ final class CryptoSessionInitializationService {
             // Single atomic Keychain write after the entire handshake (X3DH + PQXDH) is complete.
             saveSession(userId)
 
-            return result.decryptedMessage
+            // Convert raw bytes to String. For control messages (session pings, resets) the
+            // content is always ASCII — conversion is safe. For legacy binary msgNum=0 payloads
+            // (old clients sending protobuf before the ping-first fix), the UTF-8 conversion
+            // returns nil and we fall back to a sentinel that is silently filtered by saveMessage.
+            // Crucially, the session IS established regardless of content encoding — the X3DH
+            // handshake completed successfully.
+            return String(bytes: plaintext, encoding: .utf8) ?? "__binary_init_\(UUID().uuidString)__"
         } catch {
             Log.error("❌ Rust core initReceivingSession failed: \(error)", category: "CryptoManager")
             Log.error("   Error type: \(type(of: error))", category: "CryptoManager")

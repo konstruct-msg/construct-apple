@@ -111,7 +111,7 @@ final class CryptoIntegrationTests: XCTestCase {
             )
 
             sessions[contactId] = result.sessionId
-            return result.decryptedMessage
+            return String(bytes: result.decryptedMessage, encoding: .utf8) ?? "__binary_init__"
         }
 
         func decryptMessage(contactId: String, message: (ephemeralPublicKey: Data, messageNumber: UInt32, content: [UInt8])) throws -> String {

@@ -3598,12 +3598,12 @@ public func FfiConverterTypeRotatedSpkBundle_lower(_ value: RotatedSpkBundle) ->
 
 public struct SessionInitResult: Equatable, Hashable {
     public var sessionId: String
-    public var decryptedMessage: String
+    public var decryptedMessage: [UInt8]
     public var storageKey: [UInt8]
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(sessionId: String, decryptedMessage: String, storageKey: [UInt8]) {
+    public init(sessionId: String, decryptedMessage: [UInt8], storageKey: [UInt8]) {
         self.sessionId = sessionId
         self.decryptedMessage = decryptedMessage
         self.storageKey = storageKey
@@ -3624,14 +3624,14 @@ public struct FfiConverterTypeSessionInitResult: FfiConverterRustBuffer {
         return
             try SessionInitResult(
                 sessionId: FfiConverterString.read(from: &buf), 
-                decryptedMessage: FfiConverterString.read(from: &buf), 
+                decryptedMessage: FfiConverterSequenceUInt8.read(from: &buf), 
                 storageKey: FfiConverterSequenceUInt8.read(from: &buf)
         )
     }
 
     public static func write(_ value: SessionInitResult, into buf: inout [UInt8]) {
         FfiConverterString.write(value.sessionId, into: &buf)
-        FfiConverterString.write(value.decryptedMessage, into: &buf)
+        FfiConverterSequenceUInt8.write(value.decryptedMessage, into: &buf)
         FfiConverterSequenceUInt8.write(value.storageKey, into: &buf)
     }
 }

@@ -246,10 +246,23 @@ final class MessageStreamManager {
     }
 
     /// Send a delivery receipt for one or more messages via the live stream.
+    ///
+    /// **Receipt semantics contract** — use the wrong status and you will loop forever:
+    ///
+    /// - `.delivered`: the message reached this device. The server advances its Redis stream
+    ///   consumer-group cursor so the message is **never re-delivered**. Use this for ALL
+    ///   session-layer failures (OTPK exhausted, AEAD failure, UTF-8 decode, session not found,
+    ///   init_receiving_session failure, heal exhausted). The device handles recovery itself via
+    ///   END_SESSION; it does NOT need the server to retry.
+    ///
+    /// - `.failed`: the server should **retry delivery later** (message stays in queue).
+    ///   Reserve exclusively for genuine transport failures — e.g. the gRPC stream dropped
+    ///   before the message was processed at all. Never use for crypto/session errors.
+    ///
     /// - Parameters:
     ///   - messageIds: IDs of messages being acknowledged.
     ///   - recipientUserId: The original message sender — server uses this to route the receipt back without a DB lookup.
-    ///   - status: `.delivered` after successful decrypt, `.failed` on unrecoverable decrypt error.
+    ///   - status: `.delivered` to advance cursor; `.failed` for transport-only retry.
     func sendReceipt(_ messageIds: [String], to recipientUserId: String = "", status: Shared_Proto_Signaling_V1_ReceiptStatus) {
         guard !messageIds.isEmpty else { return }
 

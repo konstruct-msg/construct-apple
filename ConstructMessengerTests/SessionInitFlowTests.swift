@@ -97,11 +97,12 @@ private final class SessionPeer {
 
     func initReceivingSession(contactId: String, senderBundle: Bundle, firstMsg: EncryptedComponents) throws -> String {
         let msg = try firstMsg.toMessageBytes()
-        return try core.initReceivingSession(
+        let bytes = try core.initReceivingSession(
             contactId: contactId,
             recipientBundle: bundleBytes(from: senderBundle),
             firstMessage: msg
         ).decryptedMessage
+        return String(bytes: bytes, encoding: .utf8) ?? "__binary_init__"
     }
 
     // MARK: Decrypt (after session established)
@@ -182,9 +183,10 @@ final class SessionInitFlowTests: XCTestCase {
     /// REGRESSION: Without the ping-first fix, binary user messages sent as msgNum=0 cause
     /// Rust's String::from_utf8() to throw DecryptionFailed.
     /// This test must stay failing (i.e. throw) as long as the Rust FFI converts to String —
-    /// it documents the known limitation and guards against accidentally "fixing" it on the
-    /// Rust side without updating the protocol expectations on the Swift side.
-    func testInitReceivingSession_BinaryMsg0_ThrowsDecryptionFailed() throws {
+    /// Regression guard for the Measure А fix: binary content as msgNum=0 must NOT prevent
+    /// session establishment. X3DH succeeds; only the content encoding is non-UTF-8.
+    /// The returned plaintext falls back to the `"__binary_init_*__"` sentinel.
+    func testInitReceivingSession_BinaryMsg0_SessionEstablishedWithBinarySentinel() throws {
         let alice = try SessionPeer(userId: "alice-\(UUID().uuidString)")
         let bob   = try SessionPeer(userId: "bob-\(UUID().uuidString)")
 
@@ -201,20 +203,21 @@ final class SessionInitFlowTests: XCTestCase {
         let msg0 = try alice.encrypt(binaryPayload, to: bob.userId)
         XCTAssertEqual(msg0.messageNumber, 0)
 
-        XCTAssertThrowsError(
-            try bob.initReceivingSession(
-                contactId: alice.userId,
-                senderBundle: aliceBundle,
-                firstMsg: msg0
-            )
-        ) { error in
-            guard case CryptoError.DecryptionFailed(let message) = error else {
-                XCTFail("Expected CryptoError.DecryptionFailed, got: \(error)")
-                return
-            }
-            XCTAssertTrue(message.contains("UTF-8") || message.contains("utf"),
-                          "DecryptionFailed message must mention UTF-8 — this is the known root cause: \(message)")
-        }
+        // Session must be established — no throw
+        let decrypted = try bob.initReceivingSession(
+            contactId: alice.userId,
+            senderBundle: aliceBundle,
+            firstMsg: msg0
+        )
+        // Non-UTF-8 content falls back to sentinel; session is fully functional
+        XCTAssertTrue(decrypted.hasPrefix("__binary_init_"),
+                      "Binary msgNum=0 must yield sentinel, got: \(decrypted.prefix(60))")
+
+        // Subsequent messages must decrypt normally (session DR state is valid)
+        let msg1Plaintext = "hello after binary init"
+        let msg1 = try alice.encrypt(Data(msg1Plaintext.utf8), to: bob.userId)
+        let decrypted1 = try bob.decrypt(msg1, from: alice.userId)
+        XCTAssertEqual(String(data: decrypted1, encoding: .utf8), msg1Plaintext)
     }
 
     // MARK: 3. User message after ping arrives as msgNum=1 with content preserved
