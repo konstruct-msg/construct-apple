@@ -407,6 +407,12 @@ class ChatsViewModel {
     /// Cancel any in-progress backoff and reconnect immediately.
     /// Called when app returns to foreground to skip any pending retry delay.
     private func forceReconnectStream() {
+        // Don't reconnect when there is no session — this is a no-op at best and
+        // creates a flood of UNAUTHENTICATED gRPC channels during first-time registration.
+        guard SessionManager.shared.sessionToken != nil else {
+            Log.debug("📡 No session — skipping forceReconnect", category: "ChatsViewModel")
+            return
+        }
         // Debounce: if multiple triggers fire within 300 ms (e.g. networkPathChanged +
         // appDidBecomeActive + reachabilityChanged all at once), only the last one runs.
         // This prevents 80+ concurrent connectLoop tasks each creating a gRPC channel.

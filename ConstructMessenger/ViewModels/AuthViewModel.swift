@@ -22,6 +22,11 @@ class AuthViewModel {
     /// from Keychain. Drives a dedicated recovery screen instead of the main app.
     var deviceKeysUnavailable = false
 
+    /// True while RegistrationFlowView is active. Prevents restoreOrAuthenticateDevice()
+    /// from interfering with an ongoing registration (the stream's UNAUTHENTICATED errors
+    /// would otherwise trigger auth re-attempts every few seconds).
+    var isRegistrationInProgress = false
+
     func refreshDeviceKeyState() {
         // If already authenticated, don't re-read Keychain — it may be temporarily
         // inaccessible (WhenUnlockedThisDeviceOnly items while device is locked via
@@ -133,9 +138,16 @@ class AuthViewModel {
     
     /// Restore existing session OR authenticate with device keys
     func restoreOrAuthenticateDevice() async {
+        // Registration is in progress — don't interfere. The stream's UNAUTHENTICATED
+        // errors would otherwise fire repeated re-auth attempts every few seconds.
+        if isRegistrationInProgress { return }
         // Coalesce repeated calls (scenePhase, permission prompts, etc.)
         if restoreInFlight { return }
-        if let last = lastRestoreAttemptAt, Date().timeIntervalSince(last) < 2 {
+        // When no device keys exist the app is in first-run registration mode.
+        // Use a 30-second window to prevent the stream reconnect loop from
+        // hammering this path (it retries at 2 / 4 / 8 / 16 / 32 s intervals).
+        let debounceWindow: TimeInterval = KeychainManager.shared.isDeviceRegistered() ? 2 : 30
+        if let last = lastRestoreAttemptAt, Date().timeIntervalSince(last) < debounceWindow {
             return
         }
         lastRestoreAttemptAt = Date()
@@ -314,10 +326,20 @@ class AuthViewModel {
                 || description.contains("error 7")    // gRPC PERMISSION_DENIED
 
             if isDeviceRejected {
+                // If we have a pending registration bundle, the keys were saved before
+                // the registration RPC could complete. Show the registration screen so the
+                // user can retry (the bundle + keys are already in Keychain / UserDefaults).
+                let hasPendingBundle = PendingRegistrationStore.hasPendingBundle()
                 await MainActor.run {
-                    Log.error("🗑️ Server rejected device (401/403) — clearing keys to show onboarding", category: "Auth")
-                    KeychainManager.shared.deleteDeviceKeys()
-                    hasRegisteredDeviceKeys = false
+                    if hasPendingBundle {
+                        Log.info("♻️ Device not registered yet — routing back to registration (pending bundle found)", category: "Auth")
+                        // Keep keys; RegistrationFlowView will pick them up and retry.
+                        hasRegisteredDeviceKeys = false
+                    } else {
+                        Log.error("🗑️ Server rejected device (401/403) — clearing keys to show onboarding", category: "Auth")
+                        KeychainManager.shared.deleteDeviceKeys()
+                        hasRegisteredDeviceKeys = false
+                    }
                 }
             } else {
                 Log.error("⚠️ Device auth failed (transient error) — keeping keys: \(error)", category: "Auth")

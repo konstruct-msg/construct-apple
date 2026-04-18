@@ -231,6 +231,8 @@ struct RegistrationFlowView: View {
         .toolbar(.hidden, for: .navigationBar)
         .navigationBarBackButtonHidden(true)
         #endif
+        .onAppear { authViewModel.isRegistrationInProgress = true }
+        .onDisappear { authViewModel.isRegistrationInProgress = false }
         .task {
             guard !hasStarted else { return }
             // Guard against re-running if keys were already saved (e.g. view recreated during dismiss)
@@ -242,26 +244,53 @@ struct RegistrationFlowView: View {
 
     private func startRegistration() async {
         do {
-            // Step 1: Generate keys
+            // Step 1: Generate keys (or reuse from a previous failed attempt)
             currentStep = .generatingKeys
-            
-            // Generate real cryptographic keys using Rust core
-            let (generatedDeviceId, bundle, signingKeyData, identityKeyData) = try CryptoManager.shared.generateRegistrationBundle()
 
-            deviceId = generatedDeviceId
-            registrationBundle = bundle
-            signingKey = signingKeyData
-            identityKey = identityKeyData
+            let savedId = KeychainManager.shared.loadDeviceID()
+            let savedSigning = KeychainManager.shared.loadDeviceSigningKey()
+            let savedIdentity = KeychainManager.shared.loadDeviceIdentityKey()
+            let savedBundle = RegistrationFlowView.loadSavedBundle()
 
-            Log.info("✅ Generated keys: device_id=\(generatedDeviceId)", category: "Registration")
-            Log.info("🔐 Registration bundle verifying_key: \(bundle.verifyingKey)", category: "Registration")
+            if let sid = savedId, let ssign = savedSigning, let sidentity = savedIdentity,
+               let sbundle = savedBundle {
+                // Reuse keys from a previous attempt that failed mid-flight.
+                // Don't regenerate — the keys may already be registered on the server
+                // (the RPC could have timed out after the server persisted the data).
+                Log.info("♻️ Reusing previously generated keys: device_id=\(sid)", category: "Registration")
+                deviceId = sid
+                signingKey = ssign
+                identityKey = sidentity
+                registrationBundle = sbundle
+            } else {
+                // Generate real cryptographic keys using Rust core
+                let (generatedDeviceId, bundle, signingKeyData, identityKeyData) = try CryptoManager.shared.generateRegistrationBundle()
 
-            do {
-                let derivedVerifyingKey = try deriveVerifyingKeyFromSecret(identitySecretKey: [UInt8](signingKeyData))
-                let derivedBase64 = Data(derivedVerifyingKey).base64EncodedString()
-                Log.info("🔐 Derived verifying key from signing_secret: \(derivedBase64)", category: "Registration")
-            } catch {
-                Log.info("⚠️ Failed to derive verifying key from signing_secret: \(error.localizedDescription)", category: "Registration")
+                deviceId = generatedDeviceId
+                registrationBundle = bundle
+                signingKey = signingKeyData
+                identityKey = identityKeyData
+
+                Log.info("✅ Generated keys: device_id=\(generatedDeviceId)", category: "Registration")
+                Log.info("🔐 Registration bundle verifying_key: \(bundle.verifyingKey)", category: "Registration")
+
+                do {
+                    let derivedVerifyingKey = try deriveVerifyingKeyFromSecret(identitySecretKey: [UInt8](signingKeyData))
+                    let derivedBase64 = Data(derivedVerifyingKey).base64EncodedString()
+                    Log.info("🔐 Derived verifying key from signing_secret: \(derivedBase64)", category: "Registration")
+                } catch {
+                    Log.info("⚠️ Failed to derive verifying key from signing_secret: \(error.localizedDescription)", category: "Registration")
+                }
+
+                // Save device keys and bundle IMMEDIATELY — before any network call.
+                // If the registration RPC succeeds on the server but the response is
+                // lost (deadline exceeded), the next launch will find these keys and
+                // successfully authenticate instead of generating a new identity.
+                KeychainManager.shared.saveDeviceID(deviceId)
+                KeychainManager.shared.saveDeviceSigningKey(signingKey)
+                KeychainManager.shared.saveDeviceIdentityKey(identityKey)
+                RegistrationFlowView.saveBundle(bundle)
+                Log.info("💾 Device keys saved to Keychain before RPC", category: "Registration")
             }
             try await Task.sleep(for: .seconds(0.3)) // Brief pause for UI feedback
             
@@ -305,6 +334,9 @@ struct RegistrationFlowView: View {
                 powSolution: solution
             )
             Log.info("✅ Registration successful! userId=\(registerData.userId)", category: "Registration")
+
+            // Clear the pending bundle — it is no longer needed after successful registration.
+            RegistrationFlowView.clearSavedBundle()
             
             // Step 5: Complete
             #if canImport(UIKit)
@@ -318,8 +350,10 @@ struct RegistrationFlowView: View {
             
             Log.info("💾 Starting data persistence...", category: "Registration")
             
-            // 1. Save device credentials to Keychain
-            Log.info("1️⃣ Saving device credentials to Keychain...", category: "Registration")
+            // 1. Device credentials are already in Keychain (saved before RPC).
+            //    Re-save to be sure (idempotent; protects against the reuse path above
+            //    where keys were loaded from Keychain but not yet saved for this run).
+            Log.info("1️⃣ Confirming device credentials in Keychain...", category: "Registration")
             KeychainManager.shared.saveDeviceID(deviceId)
             KeychainManager.shared.saveDeviceSigningKey(signingKey)
             KeychainManager.shared.saveDeviceIdentityKey(identityKey)
@@ -438,6 +472,36 @@ struct RegistrationFlowView: View {
             Log.error("❌ Registration failed: \(error)", category: "Registration")
             currentStep = .error(error.userFacingMessage)
         }
+    }
+}
+
+// MARK: - Pending bundle persistence
+// Delegates to PendingRegistrationStore — public-key-only data stored in UserDefaults.
+
+private extension RegistrationFlowView {
+    static func saveBundle(_ bundle: RegistrationBundleJson) {
+        PendingRegistrationStore.save(
+            identityPublic: bundle.identityPublic,
+            signedPrekeyPublic: bundle.signedPrekeyPublic,
+            signature: bundle.signature,
+            verifyingKey: bundle.verifyingKey,
+            suiteId: bundle.suiteId
+        )
+    }
+
+    static func loadSavedBundle() -> RegistrationBundleJson? {
+        guard let t = PendingRegistrationStore.load() else { return nil }
+        return RegistrationBundleJson(
+            identityPublic: t.identityPublic,
+            signedPrekeyPublic: t.signedPrekeyPublic,
+            signature: t.signature,
+            verifyingKey: t.verifyingKey,
+            suiteId: t.suiteId
+        )
+    }
+
+    static func clearSavedBundle() {
+        PendingRegistrationStore.clear()
     }
 }
 

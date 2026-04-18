@@ -9,10 +9,27 @@ import Foundation
 /// Lifecycle: entries are cheap (UUID strings) and self-pruning at 200 entries.
 final class FailedInitMessageStore {
     static let shared = FailedInitMessageStore()
-    private init() {}
 
-    private let key = "com.construct.failed_init_message_ids"
+    private let key: String
     private let maxEntries = 200
+    private let defaults: UserDefaults
+
+    /// Production init — uses standard UserDefaults.
+    convenience init() {
+        self.init(suiteName: nil)
+    }
+
+    /// Isolated init for unit tests — pass a unique suiteName to avoid polluting
+    /// the app's shared UserDefaults. Tear down with `removePersistentDomain`.
+    init(suiteName: String?) {
+        if let name = suiteName {
+            self.defaults = UserDefaults(suiteName: name) ?? .standard
+            self.key = "com.construct.failed_init_message_ids"
+        } else {
+            self.defaults = .standard
+            self.key = "com.construct.failed_init_message_ids"
+        }
+    }
 
     // MARK: - Public API
 
@@ -33,10 +50,10 @@ final class FailedInitMessageStore {
     // MARK: - Private
 
     private func load() -> [String] {
-        UserDefaults.standard.stringArray(forKey: key) ?? []
+        defaults.stringArray(forKey: key) ?? []
     }
 
     private func save(_ ids: [String]) {
-        UserDefaults.standard.set(ids, forKey: key)
+        defaults.set(ids, forKey: key)
     }
 }

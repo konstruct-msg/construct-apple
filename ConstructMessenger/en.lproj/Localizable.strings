@@ -285,7 +285,7 @@
 "change_avatar" = "Change Photo";
 
 // Onboarding
-"onboarding_tagline" = "post-modern messenger";
+"onboarding_tagline" = "postmodern messenger";
 "onboarding_username_placeholder" = "choose a public alias (optional)";
 "onboarding_create_identity" = "Create device identity";
 "onboarding_restore" = "Restore from recovery key";

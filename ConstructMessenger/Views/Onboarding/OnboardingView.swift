@@ -49,17 +49,13 @@ struct OnboardingView: View {
                 Spacer()
 
                 // Branding
-                VStack(spacing: 30) {
+                VStack(spacing: 60) {
                     CTLogoView(size: 100, color: Color.CT.text)
 
                     Text("constrcut_titlte")
                         .font(CTFont.bold(26))
                         .foregroundColor(Color.CT.text)
                         .tracking(8)
-
-                    CTSep()
-                        .frame(maxWidth: 200)
-                        .padding(.vertical, 2)
 
                     Text(LocalizedStringKey("onboarding_tagline"))
                         .font(CTFont.regular(12))
@@ -103,10 +99,10 @@ struct OnboardingView: View {
                 }
                 .frame(maxWidth: 360)
                 .padding(.horizontal, 24)
-                .padding(.bottom, 20)
+                .padding(.bottom, 16)
 
                 // Actions
-                VStack(spacing: 14) {
+                VStack(spacing: 8) {
                     CTButton(
                         label: NSLocalizedString("onboarding_create_identity", comment: "").uppercased(),
                         isEnabled: canProceed
@@ -114,6 +110,7 @@ struct OnboardingView: View {
                         showingRegistration = true
                     }
                     .frame(maxWidth: 360)
+                    .padding(.bottom, 16)
 
                     HStack(spacing: 32) {
                         Button { showingRecovery = true } label: {
