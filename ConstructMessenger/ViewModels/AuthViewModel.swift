@@ -36,7 +36,13 @@ class AuthViewModel {
             hasRegisteredDeviceKeys = true
             return
         }
-        hasRegisteredDeviceKeys = KeychainManager.shared.isDeviceRegistered()
+        // Use only deviceId (kSecAttrAccessibleAfterFirstUnlock) as the routing signal.
+        // signingKey / identityKey use kSecAttrAccessibleWhenUnlockedThisDeviceOnly and
+        // are unavailable when the app is woken in the background (notifications, background
+        // fetch) while the device is locked — causing a spurious flash to OnboardingView.
+        // Crypto key health is verified by restoreOrAuthenticateDevice(); if keys are missing
+        // or corrupted it sets deviceKeysUnavailable = true and shows KeysRecoveryView.
+        hasRegisteredDeviceKeys = KeychainManager.shared.loadDeviceID() != nil
     }
     
     // ✅ REFACTOR Phase 1.2: Single source of truth - Core Data User entity
@@ -257,6 +263,10 @@ class AuthViewModel {
         guard let deviceId = KeychainManager.shared.loadDeviceID(),
               let rawSigningKey = KeychainManager.shared.loadDeviceSigningKey() else {
             print("❌ No device keys found - user needs to register")
+            // Definitively mark as unregistered so ContentView routes to OnboardingView.
+            // refreshDeviceKeyState() uses only deviceId (AfterFirstUnlock) which may have
+            // been nil at init time; this async confirmation is the source of truth.
+            hasRegisteredDeviceKeys = false
             return
         }
         
