@@ -45,28 +45,32 @@ struct PersistenceController {
         if inMemory {
             c.persistentStoreDescriptions.first?.url = URL(fileURLWithPath: "/dev/null")
         } else if let description = c.persistentStoreDescriptions.first {
-            // Automatic lightweight migration for model changes
             description.shouldInferMappingModelAutomatically = true
             description.shouldMigrateStoreAutomatically = true
-            // NSFileProtection is iOS-only. macOS uses the user's login keychain and
-            // APFS volume encryption — no per-file protection key is needed.
+            // .completeUntilFirstUserAuthentication (not .complete) allows the store to be
+            // created and opened on first launch and from background wakes. .complete would
+            // block file I/O until the device is unlocked AND can race with store creation
+            // on first install (observed crash on iOS 26 / iPad16).
             #if os(iOS)
-            description.setOption(FileProtectionType.complete as NSObject,
+            description.setOption(FileProtectionType.completeUntilFirstUserAuthentication as NSObject,
                                   forKey: NSPersistentStoreFileProtectionKey)
             #endif
         }
 
         c.loadPersistentStores { description, error in
             guard let error else { return }
-            // Store failed to load — most likely a schema migration failure on iOS 26.
-            // Attempt recovery: destroy the incompatible store and recreate it empty
-            // so the app can start. The user loses local history but the app won't crash.
+            // Store failed to load (e.g. schema migration or file protection error).
+            // Recovery: wipe the incompatible store files and recreate a blank store so
+            // the app can start. The user loses local cache but won't see a crash.
+            print("⚠️ Core Data: store load failed — attempting recovery: \(error)")
             guard let storeURL = description.url else {
-                fatalError("❌ Core Data: persistent store has no URL — cannot recover: \(error)")
+                // No URL at all — nothing we can do but log and continue with a
+                // broken container (app will show empty state instead of crashing).
+                print("❌ Core Data: persistent store has no URL — cannot recover")
+                return
             }
+            Self.nukeSQLiteFiles(at: storeURL)
             do {
-                let coordinator = NSPersistentStoreCoordinator(managedObjectModel: c.managedObjectModel)
-                try coordinator.destroyPersistentStore(at: storeURL, ofType: NSSQLiteStoreType, options: nil)
                 try c.persistentStoreCoordinator.addPersistentStore(
                     ofType: NSSQLiteStoreType,
                     configurationName: nil,
@@ -76,9 +80,11 @@ struct PersistenceController {
                         NSInferMappingModelAutomaticallyOption: true
                     ]
                 )
-                print("⚠️ Core Data: store was reset after migration failure — user data cleared")
+                print("⚠️ Core Data: store recreated after recovery — local data cleared")
             } catch {
-                fatalError("❌ Core Data: persistent store recovery failed: \(error)")
+                // Still failed after nuke — log and continue; the app will start with
+                // an in-memory-like empty context rather than crashing.
+                print("❌ Core Data: recovery failed after nuke: \(error)")
             }
         }
 
@@ -140,5 +146,15 @@ struct PersistenceController {
         FileManager.default
             .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("ConstructMessenger.sqlite")
+    }
+
+    /// Removes SQLite main file + WAL + SHM so a fresh empty store can be created.
+    private static func nukeSQLiteFiles(at storeURL: URL) {
+        let fm = FileManager.default
+        let walURL = storeURL.appendingPathExtension("wal")
+        let shmURL = storeURL.appendingPathExtension("shm")
+        for url in [storeURL, walURL, shmURL] {
+            try? fm.removeItem(at: url)
+        }
     }
 }
