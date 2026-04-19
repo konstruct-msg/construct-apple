@@ -34,7 +34,13 @@ struct PersistenceController {
         // Fix: explicitly load the model from Bundle.main so only one copy is registered.
         guard let modelURL = Bundle.main.url(forResource: "ConstructMessenger", withExtension: "momd"),
               let model = NSManagedObjectModel(contentsOf: modelURL) else {
-            fatalError("❌ Core Data: ConstructMessenger.momd not found in Bundle.main")
+            // Bundle is corrupted — fall back to letting CoreData find the model itself.
+            // Better to start with a potentially broken container than to crash outright.
+            print("❌ Core Data: ConstructMessenger.momd not found in Bundle.main — falling back to default init")
+            let fallback = NSPersistentContainer(name: "ConstructMessenger")
+            fallback.loadPersistentStores { _, _ in }
+            container = fallback
+            return
         }
         let c = NSPersistentContainer(name: "ConstructMessenger", managedObjectModel: model)
 

@@ -68,7 +68,9 @@ struct PreviewHelpers {
         _ = semaphore.wait(timeout: .now() + 5)
 
         if let error = loadError {
-            fatalError("Failed to load preview CoreData: \(error)")
+            // In-memory store failed — extremely unlikely. Return a broken container;
+            // preview will show empty state rather than crashing the Xcode canvas.
+            print("⚠️ Preview CoreData failed to load: \(error)")
         }
 
         return container
