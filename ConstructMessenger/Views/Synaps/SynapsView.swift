@@ -115,6 +115,11 @@ struct SynapsView: View {
                 let vm = ContactRequestsViewModel(viewContext: context)
                 contactRequestsVM = vm
                 await vm.load()
+                // User A side: detect any newly-accepted sent requests and create contacts.
+                let accepted = await vm.checkAcceptedRequests(context: context)
+                if let first = accepted.first {
+                    chatsViewModel.openOrCreateChat(with: first)
+                }
             }
             #if os(iOS)
             .toolbar(.hidden, for: .navigationBar)
@@ -137,7 +142,10 @@ struct SynapsView: View {
                 if let vm = contactRequestsVM {
                     ContactRequestSheet(
                         request: request,
-                        onAccept: { try await vm.accept(requestId: request.id) },
+                        onAccept: {
+                            let user = try await vm.accept(request: request, context: context)
+                            chatsViewModel.openOrCreateChat(with: user)
+                        },
                         onDeclineBlock: { try await vm.declineAndBlock(requestId: request.id) },
                         onSpamBlock: { try await vm.reportSpamAndBlock(requestId: request.id) }
                     )
@@ -342,8 +350,8 @@ struct SynapsView: View {
     private func sendContactRequest(to profile: Shared_Proto_Services_V1_UserProfile) async {
         guard let vm = contactRequestsVM else { return }
         do {
-            _ = try await vm.sendRequest(toUserId: profile.userID)
-            vm.markSentRequest(toUserId: profile.userID)
+            let requestId = try await vm.sendRequest(toUserId: profile.userID)
+            vm.markSentRequest(toUserId: profile.userID, requestId: requestId)
             // Refresh UI to show [pending] state.
             remoteState = .found(profile)
         } catch {
@@ -404,32 +412,19 @@ struct SynapsView: View {
     /// Upserts the remote user in Core Data (marking as contact) and opens a chat.
     @MainActor
     private func addRemoteUserAndChat(profile: Shared_Proto_Services_V1_UserProfile) async {
-        let userId = profile.userID
-        guard !userId.isEmpty else { return }
-
-        let fetchRequest = User.fetchRequest()
-        fetchRequest.predicate = NSPredicate(format: "id == %@", userId)
-        fetchRequest.fetchLimit = 1
-
-        let user: User
-        if let existing = try? context.fetch(fetchRequest).first {
-            user = existing
-        } else {
-            user = User(context: context)
-            user.id = userId
-            user.addedAt = Date()
-            user.isBlocked = false
-            user.isSharingWithMe = false
-            user.amISharingWith = false
+        do {
+            let user = try ContactLinkService.shared.createOrUpdateContact(
+                userId: profile.userID,
+                username: profile.hasUsername ? profile.username : nil,
+                displayName: profile.hasDisplayName ? profile.displayName : nil,
+                context: context
+            )
+            searchText = ""
+            remoteState = .idle
+            chatsViewModel.openOrCreateChat(with: user)
+        } catch {
+            Log.error("❌ addRemoteUserAndChat failed: \(error)", category: "SynapsView")
         }
-        user.isContact = true
-        user.username = profile.hasUsername ? profile.username : ""
-        user.displayName = profile.hasDisplayName ? profile.displayName : DisplayNameGenerator.generate(from: userId)
-        try? context.save()
-
-        searchText = ""
-        remoteState = .idle
-        chatsViewModel.openOrCreateChat(with: user)
     }
 }
 
