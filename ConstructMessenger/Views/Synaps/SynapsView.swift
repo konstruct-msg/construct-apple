@@ -121,6 +121,18 @@ struct SynapsView: View {
                     chatsViewModel.openOrCreateChat(with: first)
                 }
             }
+            .onReceive(NotificationCenter.default.publisher(for: .contactRequestAccepted)) { _ in
+                // Background push: User B accepted our contact request. Re-run polling
+                // so User A gets the contact immediately without opening the Synaps tab.
+                Task {
+                    let vm = contactRequestsVM ?? ContactRequestsViewModel(viewContext: context)
+                    if contactRequestsVM == nil { contactRequestsVM = vm }
+                    let accepted = await vm.checkAcceptedRequests(context: context)
+                    if let first = accepted.first {
+                        await MainActor.run { chatsViewModel.openOrCreateChat(with: first) }
+                    }
+                }
+            }
             #if os(iOS)
             .toolbar(.hidden, for: .navigationBar)
             #endif

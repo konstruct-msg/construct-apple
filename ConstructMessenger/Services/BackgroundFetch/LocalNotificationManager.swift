@@ -302,6 +302,9 @@ extension LocalNotificationManager: UNUserNotificationCenterDelegate {
 extension Notification.Name {
     static let openChat = Notification.Name("com.construct.openChat")
     static let openChatsList = Notification.Name("com.construct.openChatsList")
+    /// Fired when a silent push with `activity_type = contact_request_accepted` arrives.
+    /// `userInfo["requestId"]` carries the request_id string from the server.
+    static let contactRequestAccepted = Notification.Name("com.construct.contactRequestAccepted")
 }
 
 // MARK: - Localization Helpers

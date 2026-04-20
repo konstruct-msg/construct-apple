@@ -118,6 +118,18 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             return
         }
 
+        if activityType == "contact_request_accepted" {
+            let requestId = construct?["conversation_id"] as? String
+            Log.info("📱 contact_request_accepted push — requestId: \(requestId ?? "nil")", category: "Push")
+            NotificationCenter.default.post(
+                name: .contactRequestAccepted,
+                object: nil,
+                userInfo: requestId.map { ["requestId": $0] } ?? [:]
+            )
+            completionHandler(.newData)
+            return
+        }
+
         // Race the fetch against a 27-second safety timeout so we always call
         // the completion handler before iOS's 30-second hard deadline.
         // fetchPendingMessages → processOfflineMessages → showNewMessageNotification.
