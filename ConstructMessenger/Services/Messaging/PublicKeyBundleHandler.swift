@@ -125,7 +125,7 @@ class PublicKeyBundleHandler {
                 signedPrekeyPublic: data.signedPrekeyPublic,
                 signature: data.signature,
                 verifyingKey: data.verifyingKey,
-                suiteId: "1"
+                suiteId: String(data.suiteId)
             )
             
             // For incoming messages, we are the RECIPIENT

@@ -1149,7 +1149,7 @@ class CryptoManager {
             do {
                 _ = try core.importSession(contactId: message.from, data: [UInt8](archive.sessionData))
                 
-                let rawContent = Data(base64Encoded: message.content) ?? Data()
+                let rawContent = message.content
                 let contentBytes = [UInt8](MessagePadding.unpadCiphertext(rawContent))
                 let result = try core.decryptMessage(
                     contactId: message.from,
