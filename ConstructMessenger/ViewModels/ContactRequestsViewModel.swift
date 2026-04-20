@@ -158,6 +158,12 @@ extension ContactRequestsViewModel {
     /// For each newly-accepted request, creates the contact in CoreData and returns
     /// the list of newly-linked users so the caller can navigate to the new chat.
     ///
+    /// Username/displayName resolution: the server never stores plaintext usernames.
+    /// User A searched for User B before sending the request, so their data is already
+    /// in the local CoreData cache. ContactLinkService will find and preserve it.
+    /// If CoreData has no entry yet (e.g. after reinstall), a generated name is used
+    /// and updated later via session profile sharing.
+    ///
     /// Call this on `SynapsView.task` and whenever the app comes to the foreground.
     ///
     /// - Parameter context: CoreData context to write new contacts into.
@@ -174,16 +180,19 @@ extension ContactRequestsViewModel {
                 guard let toUserId = UserDefaults.standard.string(forKey: udKey),
                       !toUserId.isEmpty else { continue }
 
-                // Avoid re-processing: remove the key first to prevent duplicate runs.
+                // Remove the key first to prevent duplicate runs on concurrent calls.
                 UserDefaults.standard.removeObject(forKey: udKey)
                 UserDefaults.standard.removeObject(forKey: "cr_sent_\(toUserId)")
 
                 do {
-                    let profile = try await UserServiceClient.shared.getUserProfile(userId: toUserId)
+                    // No getUserProfile call — server never returns plaintext username.
+                    // ContactLinkService will reuse the existing CoreData entry for this
+                    // user (populated when User A searched for them) or create a new one
+                    // with a generated name that gets resolved via session profile sharing.
                     let user = try ContactLinkService.shared.createOrUpdateContact(
                         userId: toUserId,
-                        username: profile.hasUsername ? profile.username : nil,
-                        displayName: profile.hasDisplayName ? profile.displayName : nil,
+                        username: nil,
+                        displayName: nil,
                         context: context
                     )
                     newContacts.append(user)
