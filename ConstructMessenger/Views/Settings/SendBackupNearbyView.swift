@@ -2,14 +2,21 @@
 //  SendBackupNearbyView.swift
 //  Construct Messenger
 //
-//  Sends a backup payload to a nearby device over P2P WiFi.
-//  Uses NearbyTransferService (shared with future device history sync).
+//  Sends a backup or history sync payload to a nearby device over P2P WiFi.
+//  Uses NearbyTransferService (mode .backup for backup, .historySync for device transfer).
 //
 
 import SwiftUI
 import CoreData
 
 struct SendBackupNearbyView: View {
+    enum Mode {
+        case backup
+        case historySync
+    }
+
+    var mode: Mode = .backup
+
     @Environment(\.dismiss) private var dismiss
     @Environment(\.managedObjectContext) private var context
 
@@ -22,7 +29,7 @@ struct SendBackupNearbyView: View {
             Color.CT.bg.ignoresSafeArea()
             VStack(spacing: 0) {
                 CTNavBar(
-                    title: NSLocalizedString("transfer_send_title", comment: ""),
+                    title: NSLocalizedString(mode == .historySync ? "history_sync_send_title" : "transfer_send_title", comment: ""),
                     showBack: true,
                     backAction: { dismiss() }
                 )
@@ -191,8 +198,10 @@ struct SendBackupNearbyView: View {
 
     private func prepare() async {
         do {
-            let payload = try await LocalBackupService.shared.buildTransferPayload(context: context)
-            service.startSending(payload: payload, type: .backup)
+            let userId = mode == .historySync ? KeychainManager.shared.loadUserID() : nil
+            let payload = try await LocalBackupService.shared.buildTransferPayload(context: context, userId: userId)
+            let transferType: NearbyTransferService.TransferType = mode == .historySync ? .historySync : .backup
+            service.startSending(payload: payload, type: transferType)
         } catch {
             errorMessage = error.localizedDescription
             showError = true

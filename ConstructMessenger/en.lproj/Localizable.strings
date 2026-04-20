@@ -259,6 +259,8 @@
 "linked_devices_hint" = "Use your account on multiple devices simultaneously.";
 "linked_devices_coming_soon" = "Linking additional devices will be available in a future update.";
 "link_new_device" = "Link New Device";
+"transfer_history_row" = "Transfer History to Nearby Device";
+"transfer_history_hint" = "Send your message history to a device on the same WiFi network.";
 "this_device" = "This Device";
 "profile_currently_shared" = "Profile currently shared";
 "stop_sharing_profile" = "Stop Sharing Profile";
@@ -805,5 +807,14 @@
 "transfer_error_connection" = "Connection lost. Try again.";
 "transfer_error_corrupt" = "Transfer data is corrupted. Try again.";
 "transfer_error_cancelled" = "Transfer was cancelled.";
+
+// History Sync (device-to-device after linking)
+"history_sync_send_title" = "Transfer History";
+"history_sync_receive_title" = "Receive History";
+"history_sync_offer_title" = "Transfer Message History?";
+"history_sync_offer_message" = "Do you want to receive your message history from a nearby device? Make sure both devices are on the same WiFi network.";
+"history_sync_offer_yes" = "Receive History";
+"history_sync_offer_skip" = "Skip";
+"history_sync_user_mismatch" = "History transfer failed: this history belongs to a different account.";
 "call_error_not_contacts" = "Cannot call this node. Make sure you are mutual contacts.";
 "call_error_peer_offline" = "Node is offline. Try again later.";

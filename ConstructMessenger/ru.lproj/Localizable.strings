@@ -322,6 +322,8 @@
 "linked_devices_hint" = "Используйте аккаунт одновременно на нескольких устройствах.";
 "linked_devices_coming_soon" = "Привязка дополнительных устройств появится в одном из следующих обновлений.";
 "link_new_device" = "Привязать устройство";
+"transfer_history_row" = "Передать историю на соседнее устройство";
+"transfer_history_hint" = "Отправьте историю сообщений на устройство в той же сети WiFi.";
 "this_device" = "Это устройство";
 
 // App Settings / Appearance
@@ -815,5 +817,14 @@
 "transfer_error_connection" = "Соединение прервано. Попробуйте снова.";
 "transfer_error_corrupt" = "Данные передачи повреждены. Попробуйте снова.";
 "transfer_error_cancelled" = "Передача была отменена.";
+
+// History Sync (device-to-device after linking)
+"history_sync_send_title" = "Передать историю";
+"history_sync_receive_title" = "Получить историю";
+"history_sync_offer_title" = "Перенести историю сообщений?";
+"history_sync_offer_message" = "Хотите получить историю сообщений с другого устройства? Убедитесь, что оба устройства в одной сети WiFi.";
+"history_sync_offer_yes" = "Получить историю";
+"history_sync_offer_skip" = "Пропустить";
+"history_sync_user_mismatch" = "Ошибка переноса истории: история принадлежит другому аккаунту.";
 "call_error_not_contacts" = "Нельзя позвонить этому ноду. Убедитесь, что вы являетесь взаимными контактами.";
 "call_error_peer_offline" = "Нод не в сети. Попробуйте позже.";

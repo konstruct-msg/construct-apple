@@ -2,13 +2,20 @@
 //  ReceiveBackupNearbyView.swift
 //  Construct Messenger
 //
-//  Receives a backup payload from a nearby device over P2P WiFi.
+//  Receives a backup or history sync payload from a nearby device over P2P WiFi.
 //  User enters the 6-digit PIN displayed on the sender device.
 //
 
 import SwiftUI
 
 struct ReceiveBackupNearbyView: View {
+    enum Mode {
+        case backup
+        case historySync
+    }
+
+    var mode: Mode = .backup
+
     @Environment(\.dismiss) private var dismiss
 
     @State private var service = NearbyTransferService()
@@ -23,7 +30,7 @@ struct ReceiveBackupNearbyView: View {
             Color.CT.bg.ignoresSafeArea()
             VStack(spacing: 0) {
                 CTNavBar(
-                    title: NSLocalizedString("transfer_receive_title", comment: ""),
+                    title: NSLocalizedString(mode == .historySync ? "history_sync_receive_title" : "transfer_receive_title", comment: ""),
                     showBack: true,
                     backAction: { dismiss() }
                 )
@@ -210,7 +217,8 @@ struct ReceiveBackupNearbyView: View {
         isStaging = true
         Task {
             do {
-                try LocalBackupService.shared.stageTransferPayload(payload)
+                let expectedUserId = mode == .historySync ? KeychainManager.shared.loadUserID() : nil
+                try LocalBackupService.shared.stageTransferPayload(payload, expectedUserId: expectedUserId)
                 service.receivedPayload = nil
                 isStaging = false
                 showRestartAlert = true

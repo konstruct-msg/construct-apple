@@ -22,6 +22,8 @@ struct DeviceLinkScanView: View {
     @State private var vm = DeviceLinkViewModel()
     @State private var showError = false
     @State private var showApprovalSuccess = false
+    @State private var showHistorySyncOffer = false
+    @State private var showReceiveHistorySync = false
 
     var body: some View {
         NavigationStack {
@@ -90,7 +92,22 @@ struct DeviceLinkScanView: View {
             guard completed else { return }
             let userId = KeychainManager.shared.loadUserID() ?? ""
             authViewModel.finalizeDeviceRegistration(userId: userId, username: nil)
-            dismiss()
+            showHistorySyncOffer = true
+        }
+        // MARK: History sync offer
+        .alert(NSLocalizedString("history_sync_offer_title", comment: ""), isPresented: $showHistorySyncOffer) {
+            Button(NSLocalizedString("history_sync_offer_yes", comment: "")) {
+                showReceiveHistorySync = true
+            }
+            Button(NSLocalizedString("history_sync_offer_skip", comment: ""), role: .cancel) {
+                dismiss()
+            }
+        } message: {
+            Text(NSLocalizedString("history_sync_offer_message", comment: ""))
+        }
+        .fullScreenCover(isPresented: $showReceiveHistorySync) {
+            ReceiveBackupNearbyView(mode: .historySync)
+                .onDisappear { dismiss() }
         }
         // MARK: Phone approved a laptop's join request
         .onChange(of: vm.approvalGranted) { _, granted in

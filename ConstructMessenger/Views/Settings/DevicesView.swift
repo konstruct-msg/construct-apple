@@ -21,6 +21,7 @@ struct DevicesView: View {
     @State private var errorMessage: String? = nil
     @State private var showingQRSheet = false
     @State private var showingScanner = false
+    @State private var showSendHistorySync = false
     @State private var deviceToRevoke: AuthServiceClient.LinkedDevice? = nil
     @State private var showRevokeConfirm = false
     @State private var showSignOutConfirm = false
@@ -94,6 +95,19 @@ struct DevicesView: View {
                             .padding(.horizontal, 20)
                     }
 
+                    // MARK: - History Transfer
+                    VStack(alignment: .leading, spacing: 6) {
+                        ConstructSection {
+                            ConstructButtonRow(icon: "[→]", title: LocalizedStringKey("transfer_history_row")) {
+                                showSendHistorySync = true
+                            }
+                        }
+                        Text(LocalizedStringKey("transfer_history_hint"))
+                            .font(CTFont.regular(11))
+                            .foregroundStyle(Color.CT.textDim)
+                            .padding(.horizontal, 20)
+                    }
+
                     // MARK: - Session management
                     VStack(alignment: .leading, spacing: 6) {
                         ConstructSection(header: NSLocalizedString("session_management", comment: "")) {
@@ -130,6 +144,10 @@ struct DevicesView: View {
 
         // MARK: Sheets
         .sheet(isPresented: $showingQRSheet) { DeviceLinkQRSheet() }
+        .sheet(isPresented: $showSendHistorySync) {
+            SendBackupNearbyView(mode: .historySync)
+                .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
+        }
         #if os(iOS)
         .sheet(isPresented: $showingScanner) { DeviceLinkScanView() }
         #endif

@@ -50,7 +50,8 @@ final class LocalBackupService {
 
     /// Builds the unencrypted binary payload containing all local data.
     /// Used by exportBackup() (which then encrypts it) and by the P2P transfer sender.
-    func buildTransferPayload(context: NSManagedObjectContext) async throws -> Data {
+    /// Pass `userId` when building a historySync payload to embed it in the manifest.
+    func buildTransferPayload(context: NSManagedObjectContext, userId: String? = nil) async throws -> Data {
         try await context.perform {
             if context.hasChanges { try context.save() }
         }
@@ -76,7 +77,8 @@ final class LocalBackupService {
             version: 1,
             createdAt: Int(Date().timeIntervalSince1970),
             coreSQLiteSize: coreSQLData.count,
-            keyStoreSQLiteSize: keyStoreData.count
+            keyStoreSQLiteSize: keyStoreData.count,
+            userId: userId
         )
         let manifestData = try JSONEncoder().encode(manifest)
 
@@ -91,15 +93,20 @@ final class LocalBackupService {
     /// Parses an unencrypted payload and writes files to the staging directory.
     /// Used by importBackup() (after decryption) and by the P2P transfer receiver.
     /// Sets the pending restore flag — apply takes effect on next app launch.
-    func stageTransferPayload(_ data: Data) throws {
+    /// Pass `expectedUserId` for historySync transfers to reject cross-account payloads.
+    func stageTransferPayload(_ data: Data, expectedUserId: String? = nil) throws {
         var offset = 0
         let (manifestData, o1) = try readLengthPrefixed(from: data, at: offset); offset = o1
         let (coreSQLData,  o2) = try readLengthPrefixed(from: data, at: offset); offset = o2
         let (coreWALData,  o3) = try readLengthPrefixed(from: data, at: offset); offset = o3
         let (keyStoreData, _)  = try readLengthPrefixed(from: data, at: offset)
 
-        guard (try? JSONDecoder().decode(BackupManifest.self, from: manifestData)) != nil else {
+        guard let manifest = try? JSONDecoder().decode(BackupManifest.self, from: manifestData) else {
             throw BackupError.invalidFile
+        }
+
+        if let expected = expectedUserId, let embedded = manifest.userId, embedded != expected {
+            throw BackupError.userIdMismatch
         }
 
         let fm = FileManager.default
@@ -249,6 +256,16 @@ private struct BackupManifest: Codable {
     let createdAt: Int
     let coreSQLiteSize: Int
     let keyStoreSQLiteSize: Int
+    /// Set for historySync transfers; nil for .backup files (backward compatible).
+    let userId: String?
+
+    init(version: Int, createdAt: Int, coreSQLiteSize: Int, keyStoreSQLiteSize: Int, userId: String? = nil) {
+        self.version = version
+        self.createdAt = createdAt
+        self.coreSQLiteSize = coreSQLiteSize
+        self.keyStoreSQLiteSize = keyStoreSQLiteSize
+        self.userId = userId
+    }
 }
 
 // MARK: - BackupError
@@ -258,6 +275,7 @@ enum BackupError: LocalizedError {
     case fileNotFound(String)
     case invalidFile
     case decryptionFailed
+    case userIdMismatch
 
     var errorDescription: String? {
         switch self {
@@ -265,6 +283,7 @@ enum BackupError: LocalizedError {
         case .fileNotFound(let n): return "File not found: \(n)"
         case .invalidFile:         return NSLocalizedString("backup_error_invalid_file", comment: "")
         case .decryptionFailed:    return NSLocalizedString("backup_error_invalid_file", comment: "")
+        case .userIdMismatch:      return NSLocalizedString("history_sync_user_mismatch", comment: "")
         }
     }
 }
