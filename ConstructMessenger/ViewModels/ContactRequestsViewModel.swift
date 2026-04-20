@@ -107,7 +107,7 @@ final class ContactRequestsViewModel {
             action: Shared_Proto_Services_V1_ContactRequestAction.accept
         )
         incomingRequests.removeAll { $0.id == request.id }
-        return try await ContactLinkService.shared.createOrUpdateContact(
+        return try ContactLinkService.shared.createOrUpdateContact(
             userId: request.fromUserId,
             username: request.username,
             displayName: request.displayName,
