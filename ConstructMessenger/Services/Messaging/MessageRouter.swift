@@ -348,6 +348,10 @@ class MessageRouter {
             PerformanceMetrics.shared.messageDecryptEnd(messageId: message.id)
         } catch {
             Log.error("❌ handleEvent threw for \(message.id.prefix(8))…: \(error) — sending END_SESSION", category: "MessageRouter")
+            // Mark as processed so BackgroundFetch does not re-process this undecryptable message
+            // on every background cycle (which would recreate ghost contacts and cause Core Data
+            // validation errors). The failed receipt + END_SESSION handle recovery on the live stream.
+            PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
             onEndSessionNeeded?(otherUserId)
             if isNewChat { context.delete(chat) }
             return
@@ -378,6 +382,9 @@ class MessageRouter {
                 onReceiptNeeded?([message.id], contactId, .failed)
                 pendingMessages.removeValue(forKey: contactId)
                 SessionHealingService.shared.clearQueue(for: contactId, in: context)
+                // Mark as processed so BackgroundFetch does not re-process this undecryptable
+                // message on every background cycle.
+                PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
                 onEndSessionNeeded?(contactId)
                 if isNewChat { context.delete(chat) }
                 return

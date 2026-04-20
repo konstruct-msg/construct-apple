@@ -293,7 +293,16 @@ class BackgroundFetchManager: NSObject {
                     continue
                 }
                 let otherUserId = message.from == currentUserId ? message.to : message.from
-                
+
+                // Skip messages from contacts that have been pruned. This must be the first
+                // check after resolving otherUserId: pruneContact() already archives the
+                // session and deletes User + Chat from Core Data. BackgroundFetch must not
+                // recreate them, nor attempt decryption against a wiped session.
+                guard !DeletedContactsStore.shared.isDeleted(otherUserId) else {
+                    Log.debug("⏭️ Skipping message \(message.id.prefix(8))… from pruned contact \(otherUserId.prefix(8))…", category: "BackgroundFetch")
+                    continue
+                }
+
                 // Find or create chat
                 let chatId = self.findOrCreateChat(
                     for: otherUserId,
@@ -484,38 +493,28 @@ class BackgroundFetchManager: NSObject {
     ) -> String? {
         let chatFetch = Chat.fetchRequest()
         chatFetch.predicate = NSPredicate(format: "otherUser.id == %@", userId)
-        
+
         if let existingChat = try? context.fetch(chatFetch).first {
             return existingChat.id
         }
-        
-        // Create new chat
+
+        // Only create a new chat when the User already exists in Core Data.
+        // BackgroundFetch must not bootstrap contacts: if the sender is unknown
+        // (pruned or first-ever contact) return nil so the message is skipped.
+        // The foreground stream handles session init, user creation, and decryption.
+        // Creating ghost User+Chat objects here causes Core Data validation errors
+        // (encryptedContent required) and recreates pruned contacts on every cycle.
         let userFetch = User.fetchRequest()
         userFetch.predicate = NSPredicate(format: "id == %@", userId)
-        
-        let dbUser: User
-        if let existingUser = try? context.fetch(userFetch).first {
-            dbUser = existingUser
-            // ✅ FIX: If existing user has UUID as username, it will be updated when publicKeyBundle is requested
-            // This happens automatically in ChatsViewModel.handleIncomingMessage
-        } else {
-            let newUser = User(context: context)
-            newUser.id = userId
-            newUser.username = ""
-            newUser.displayName = DisplayNameGenerator.generate(from: userId)
-            newUser.isSharingWithMe = false
-            newUser.isBlocked = false
-            newUser.amISharingWith = false
-            newUser.isContact = true
-            newUser.addedAt = Date()
-            dbUser = newUser
-            Log.debug("Created new user in BackgroundFetch: id=\(userId), username will be updated from publicKeyBundle", category: "BackgroundFetch")
+        guard let existingUser = try? context.fetch(userFetch).first else {
+            Log.info("⏭️ BackgroundFetch: unknown sender \(userId.prefix(8))… — skipping (no contact record)", category: "BackgroundFetch")
+            return nil
         }
-        
+
         let newChat = Chat(context: context)
         newChat.id = UUID().uuidString
-        newChat.otherUser = dbUser
-        
+        newChat.otherUser = existingUser
+
         return newChat.id
     }
     
