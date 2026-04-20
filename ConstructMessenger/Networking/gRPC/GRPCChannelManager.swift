@@ -491,8 +491,20 @@ final class GRPCChannelManager: Sendable {
                 switch rpc.code {
                 // These are application-level errors — the relay delivered the response fine.
                 case .unauthenticated, .permissionDenied, .invalidArgument, .notFound,
-                     .alreadyExists, .resourceExhausted, .unimplemented, .cancelled,
+                     .alreadyExists, .resourceExhausted, .cancelled,
                      .internalError:
+                    return false
+                case .unimplemented:
+                    // "Unexpected non-200 HTTP Status Code" is NOT an app-level error when ICE
+                    // is active — it means the relay→upstream HTTP path is broken (the relay
+                    // accepted the obfs4 connection but returned a non-200 HTTP response instead
+                    // of proxying gRPC). This is a relay failure and must trigger relay rotation.
+                    // Other .unimplemented errors (real missing RPC methods) are app-level — skip.
+                    let msg = rpc.message.lowercased()
+                    if msg.contains("non-200") || msg.contains("http status code") ||
+                       msg.contains("unexpected") && msg.contains("http") {
+                        return true
+                    }
                     return false
                 case .unavailable, .deadlineExceeded, .unknown:
                     // Distinguish relay failures (TCP/TLS errors) from non-relay failures

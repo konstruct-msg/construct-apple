@@ -126,17 +126,21 @@ enum NetworkTiming {
 
     enum ICE {
         static let relayCooldown: TimeInterval = 60.0
-        static let proxyReadyWaitTimeout: TimeInterval = 10.0
+        /// Time to wait for the obfs4/WebTunnel proxy to bind its local port.
+        /// Increased from 10s to 15s: Russian mobile networks (ТСПУ) require
+        /// longer relay handshake + NAT traversal time. 10s caused frequent
+        /// "waitForProxyReady timed out" on the first connection attempt.
+        static let proxyReadyWaitTimeout: TimeInterval = 15.0
         static let onDemandStartJoinTimeout: TimeInterval = 5.0
         static let onDemandStartJoinPollInterval: TimeInterval = 0.1
         static let relayLatencyProbeTimeout: TimeInterval = 2.0
         static let certFetchTimeoutHTTPS: TimeInterval = 8.0
         /// Short RPC timeout for an unverified ICE relay. Catches DPI-blocked obfs4
         /// tunnels without making the user wait 15–30s for the full RPC deadline.
-        /// 8s gives enough headroom for obfs4 handshake + TLS + first RPC on a
+        /// 10s gives enough headroom for obfs4 handshake + TLS + first RPC on a
         /// high-latency path (Russia → AMS), while still rotating quickly if the
         /// relay is genuinely unreachable.
-        static let unverifiedRelayTimeout: TimeInterval = 8.0
+        static let unverifiedRelayTimeout: TimeInterval = 10.0
 
         // Happy Eyeballs — transparent failover
         /// After the first reachable relay probe result arrives, wait this long for
