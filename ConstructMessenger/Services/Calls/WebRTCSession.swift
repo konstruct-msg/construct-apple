@@ -26,6 +26,7 @@ enum WebRTCSessionError: Error {
 @MainActor
 protocol WebRTCSessionProtocol: AnyObject {
     var onLocalIceCandidate: (@Sendable (WebRTCIceCandidate) -> Void)? { get set }
+    var onConnectionFailed: (@Sendable () -> Void)? { get set }
 
     func createOffer() async throws -> String
     func createAnswer() async throws -> String
@@ -57,6 +58,7 @@ private final class WebRTCFactory {
 @MainActor
 final class WebRTCSession: NSObject, WebRTCSessionProtocol {
     var onLocalIceCandidate: (@Sendable (WebRTCIceCandidate) -> Void)?
+    var onConnectionFailed: (@Sendable () -> Void)?
 
     private let role: WebRTCSessionRole
     private let factory: RTCPeerConnectionFactory
@@ -193,27 +195,16 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
         }
     }
 
-    // Static TURN URL fallback used when GetTurnCredentials RPC is not yet implemented.
-    // Once the server implements the RPC, dynamic credentials from `turn` will take priority.
-    private static let staticTurnURLs: [String] = [
-        "turn:turn.ams.konstruct.cc:3478?transport=udp",
-        "turn:turn.ams.konstruct.cc:3478?transport=tcp",
-        "turns:turn.ams.konstruct.cc:5349?transport=tcp",
-        "turn:turn.msk.konstruct.cc:3478?transport=udp",
-        "turn:turn.msk.konstruct.cc:3478?transport=tcp",
-        "turns:turn.msk.konstruct.cc:5349?transport=tcp",
-    ]
-
     private static func buildIceServers(turn: Shared_Proto_Signaling_V1_TurnCredentials?) -> [RTCIceServer] {
         var servers: [RTCIceServer] = []
         servers.append(RTCIceServer(urlStrings: ["stun:stun.l.google.com:19302"]))
         if let turn, !turn.urls.isEmpty {
             // Dynamic credentials from server — use them exclusively.
             servers.append(RTCIceServer(urlStrings: turn.urls, username: turn.username, credential: turn.credential))
-        } else {
-            // Static fallback: known TURN hosts without credentials (requires open relay config on server).
-            servers.append(RTCIceServer(urlStrings: staticTurnURLs))
         }
+        // No credential-less TURN fallback: coturn requires HMAC-SHA1 auth (use-auth-secret).
+        // Without credentials TURN relay candidates are never generated, wasting ICE time.
+        // If getTurnCredentials failed, continue with STUN-only — ICE will use direct path.
         return servers
     }
 
@@ -244,10 +235,33 @@ extension WebRTCSession: RTCPeerConnectionDelegate {
     }
 
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didRemove candidates: [RTCIceCandidate]) {}
-    nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didChange stateChanged: RTCSignalingState) {}
-    nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didChange newState: RTCIceConnectionState) {}
-    nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didChange newState: RTCIceGatheringState) {}
-    nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didChange newState: RTCPeerConnectionState) {}
+
+    nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didChange stateChanged: RTCSignalingState) {
+        Log.debug("📞 WebRTC signalingState → \(stateChanged.rawValue)", category: "Calls")
+    }
+
+    nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didChange newState: RTCIceConnectionState) {
+        Log.info("📞 WebRTC iceConnectionState → \(newState.debugDescription)", category: "Calls")
+        if newState == .failed || newState == .disconnected {
+            Task { @MainActor in
+                self.onConnectionFailed?()
+            }
+        }
+    }
+
+    nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didChange newState: RTCIceGatheringState) {
+        Log.debug("📞 WebRTC iceGatheringState → \(newState.debugDescription)", category: "Calls")
+    }
+
+    nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didChange newState: RTCPeerConnectionState) {
+        Log.info("📞 WebRTC peerConnectionState → \(newState.debugDescription)", category: "Calls")
+        if newState == .failed {
+            Task { @MainActor in
+                self.onConnectionFailed?()
+            }
+        }
+    }
+
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didAdd stream: RTCMediaStream) {}
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didRemove stream: RTCMediaStream) {}
     nonisolated func peerConnectionShouldNegotiate(_ peerConnection: RTCPeerConnection) {}
@@ -256,10 +270,54 @@ extension WebRTCSession: RTCPeerConnectionDelegate {
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didOpen dataChannel: RTCDataChannel) {}
 }
 
+// MARK: - State Debug Descriptions
+
+private extension RTCIceConnectionState {
+    var debugDescription: String {
+        switch self {
+        case .new:          return "new"
+        case .checking:     return "checking"
+        case .connected:    return "connected"
+        case .completed:    return "completed"
+        case .failed:       return "failed"
+        case .disconnected: return "disconnected"
+        case .closed:       return "closed"
+        case .count:        return "count"
+        @unknown default:   return "unknown(\(rawValue))"
+        }
+    }
+}
+
+private extension RTCIceGatheringState {
+    var debugDescription: String {
+        switch self {
+        case .new:       return "new"
+        case .gathering: return "gathering"
+        case .complete:  return "complete"
+        @unknown default: return "unknown(\(rawValue))"
+        }
+    }
+}
+
+private extension RTCPeerConnectionState {
+    var debugDescription: String {
+        switch self {
+        case .new:          return "new"
+        case .connecting:   return "connecting"
+        case .connected:    return "connected"
+        case .disconnected: return "disconnected"
+        case .failed:       return "failed"
+        case .closed:       return "closed"
+        @unknown default:   return "unknown(\(rawValue))"
+        }
+    }
+}
+
 #else
 
 final class WebRTCSession: WebRTCSessionProtocol {
     var onLocalIceCandidate: (@Sendable (WebRTCIceCandidate) -> Void)?
+    var onConnectionFailed: (@Sendable () -> Void)?
 
     init(role: WebRTCSessionRole, turn: Shared_Proto_Signaling_V1_TurnCredentials?) throws {
         throw WebRTCSessionError.webRTCLibraryMissing

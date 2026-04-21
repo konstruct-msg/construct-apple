@@ -284,6 +284,9 @@ final class CallManager {
                     #if os(iOS)
                     CallKitProvider.shared.reportOutgoingCallConnected(uuid: active.session.uuid)
                     #endif
+                    // Open stream so callee ICE candidates reach the caller via the
+                    // signaling relay instead of the E2EE fallback path.
+                    try? self.openStreamIfNeeded()
                     return  // Skip stream-based ringing — answer already sent
                 }
 
@@ -610,6 +613,13 @@ final class CallManager {
                 self?.sendIceCandidate(c)
             }
         }
+        webrtc.onConnectionFailed = { [weak self] in
+            Task { @MainActor in
+                guard let self else { return }
+                Log.error("📞 WebRTC connection failed — ending call", category: "Calls")
+                self.endActiveCall(reason: .local("ICE connection failed"))
+            }
+        }
         active.webrtc = webrtc
         Log.info("📞 WebRTC session created (role=\(role), turn=\(active.turn != nil ? "yes" : "STUN-only"))", category: "Calls")
     }
@@ -769,7 +779,13 @@ final class CallManager {
             }
         case .iceCandidate(let ice):
             guard let active, active.session.id == signal.callID else { return }
-            let c = WebRTCIceCandidate(sdp: ice.candidate, sdpMid: ice.sdpMid, sdpMLineIndex: Int32(ice.sdpMLineIndex))
+            // ICE candidate SDP is always CallSignalCrypto-encrypted before sending.
+            // Decrypt it here (stream path decrypts in handleRemoteIceCandidate).
+            guard let candidateSdp = try? CallSignalCrypto.shared.decryptField(ice.candidate, from: senderUserId) else {
+                Log.error("📞 Failed to decrypt E2EE ICE candidate from \(senderUserId.prefix(8))… — dropping", category: "Calls")
+                return
+            }
+            let c = WebRTCIceCandidate(sdp: candidateSdp, sdpMid: ice.sdpMid, sdpMLineIndex: Int32(ice.sdpMLineIndex))
             // Buffer ICE candidates until the remote offer has been applied.
             // addRemoteIceCandidate silently fails when there's no remote description.
             if active.pendingRemoteOfferSdp != nil {
@@ -781,7 +797,11 @@ final class CallManager {
         case .iceCandidates(let batch):
             guard let active, active.session.id == signal.callID else { return }
             for ice in batch.candidates {
-                let c = WebRTCIceCandidate(sdp: ice.candidate, sdpMid: ice.sdpMid, sdpMLineIndex: Int32(ice.sdpMLineIndex))
+                guard let candidateSdp = try? CallSignalCrypto.shared.decryptField(ice.candidate, from: senderUserId) else {
+                    Log.error("📞 Failed to decrypt E2EE ICE candidate (batch) from \(senderUserId.prefix(8))… — dropping", category: "Calls")
+                    continue
+                }
+                let c = WebRTCIceCandidate(sdp: candidateSdp, sdpMid: ice.sdpMid, sdpMLineIndex: Int32(ice.sdpMLineIndex))
                 if active.pendingRemoteOfferSdp != nil {
                     active.pendingIceCandidates.append(c)
                 } else {
