@@ -252,9 +252,11 @@ private func makeRelay(address: String, bridgeCert: String) -> IceRelay {
             sni = s
             pin = IceCertFetcher.spkiPinSync(for: address)
         } else if let explicitSNI = ICEConfig.hardcodedRelaySNIs[address] {
-            // Hardcoded fallback: IP-based relay with fake SNI for REALITY-style DPI evasion.
+            // Hardcoded fallback: relay with explicit SNI + SPKI pin.
+            // IP-based relays use a fake SNI for REALITY-style DPI evasion;
+            // domain-based relays use their own hostname but still need pinning.
             sni = explicitSNI
-            pin = ICEConfig.mskRelayPinnedSPKI.isEmpty ? nil : ICEConfig.mskRelayPinnedSPKI
+            pin = ICEConfig.hardcodedRelaySPKIs[address]
         } else {
             // Server-pushed relay (domain-based): derive SNI from hostname, no pinning.
             sni = address.components(separatedBy: ":").first.flatMap { $0.isEmpty ? nil : $0 }
