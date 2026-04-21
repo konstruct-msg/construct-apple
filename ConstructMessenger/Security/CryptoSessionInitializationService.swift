@@ -95,6 +95,16 @@ final class CryptoSessionInitializationService {
             saveSession(userId)
 
             Log.info("✅ INITIATOR session created: \(sessionId.prefix(16))...", category: "CryptoManager")
+        } catch CryptoError.PeerSpkStale(let message) {
+            let ageSecs: UInt64
+            if let range = message.range(of: "age_secs=") {
+                ageSecs = UInt64(message[range.upperBound...].prefix(while: { $0.isNumber })) ?? 0
+            } else {
+                ageSecs = 0
+            }
+            let ageDays = Double(ageSecs) / 86400.0
+            Log.error("⚠️ Peer SPK stale for \(userId.prefix(8))… — age ≈ \(String(format: "%.1f", ageDays))d", category: "CryptoManager")
+            throw SessionError.peerSPKStale(ageDays: ageDays)
         } catch {
             Log.error("❌ Rust core initSession failed: \(error)", category: "CryptoManager")
             throw CryptoManagerError.sessionInitializationFailed

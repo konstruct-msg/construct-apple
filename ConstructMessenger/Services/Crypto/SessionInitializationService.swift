@@ -117,21 +117,9 @@ class SessionInitializationService {
             )
             PerformanceMetrics.shared.end(.sessionInitStart, endEvent: .sessionInitEnd, label: String(userId.prefix(8)))
             Log.info("✅ Session initialized as INITIATOR for \(userId)", category: "SessionInit")
+        } catch let sessionError as SessionError {
+            throw sessionError
         } catch {
-            let desc = "\(error)"
-            // Rust rejects SPK bundles older than 14 days. Parse the age from the error message
-            // and surface as peerSPKStale so callers can show a human-readable message.
-            if desc.contains("SPK bundle is stale") || desc.contains("spk bundle is stale") {
-                let ageDays: Double
-                if let match = desc.range(of: #"age=(\d+)s"#, options: .regularExpression) {
-                    let ageSecs = Double(desc[match].dropFirst(4).dropLast(1)) ?? 0
-                    ageDays = ageSecs / 86400
-                } else {
-                    ageDays = 14
-                }
-                Log.error("⚠️ Peer SPK stale for \(userId.prefix(8))… — age ≈ \(String(format: "%.1f", ageDays))d", category: "SessionInit")
-                throw SessionError.peerSPKStale(ageDays: ageDays)
-            }
             Log.error("❌ Session init failed for \(userId): \(error)", category: "SessionInit")
             Log.error("   bundle.suiteId=\(bundle.suiteId), identityPublic.len=\(bundle.identityPublic.count), signedPrekeyPublic.len=\(bundle.signedPrekeyPublic.count)", category: "SessionInit")
             throw error

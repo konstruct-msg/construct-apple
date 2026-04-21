@@ -4450,6 +4450,8 @@ public enum CryptoError: Swift.Error, Equatable, Hashable, Foundation.LocalizedE
     
     case MessagePackDeserializationFailed(message: String)
     
+    case PeerSpkStale(message: String)
+    
 
     
 
@@ -4513,6 +4515,10 @@ public struct FfiConverterTypeCryptoError: FfiConverterRustBuffer {
             message: try FfiConverterString.read(from: &buf)
         )
         
+        case 10: return .PeerSpkStale(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
 
         default: throw UniffiInternalError.unexpectedEnumCase
         }
@@ -4542,6 +4548,8 @@ public struct FfiConverterTypeCryptoError: FfiConverterRustBuffer {
             writeInt(&buf, Int32(8))
         case .MessagePackDeserializationFailed(_ /* message is ignored*/):
             writeInt(&buf, Int32(9))
+        case .PeerSpkStale(_ /* message is ignored*/):
+            writeInt(&buf, Int32(10))
 
         
         }

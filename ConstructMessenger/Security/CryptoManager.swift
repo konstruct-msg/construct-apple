@@ -678,6 +678,8 @@ class CryptoManager {
                 }
             )
             Log.info("✅ Session initialized for user: \(userId)", category: "CryptoManager")
+        } catch let sessionError as SessionError {
+            throw sessionError
         } catch CryptoManagerError.invalidKeyData {
             Log.error("Failed to decode base64-encoded keys from bundle", category: "CryptoManager")
             throw CryptoManagerError.invalidKeyData
