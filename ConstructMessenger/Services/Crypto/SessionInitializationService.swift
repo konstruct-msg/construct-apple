@@ -138,35 +138,51 @@ class SessionInitializationService {
         }
     }
     
-    /// Proactively initialize session for a user (fetch bundle + initialize)
+    /// Proactively initialize session for a user (fetch bundle + initialize).
+    ///
+    /// When the peer's SPK is stale (`peerSPKStale`), the peer may have just come
+    /// online and rotated their keys. The server may not yet reflect the new
+    /// `spk_uploaded_at` — in this case we wait `staleSPKRetryDelay` seconds and
+    /// retry up to `staleSPKMaxRetries` times before giving up.
     func initializeSessionProactively(
         userId: String,
         onSuccess: @escaping () -> Void,
         onFailure: @escaping (Error) -> Void
     ) async {
         Log.info("🔐 SESSION_STATE[proactive_init_start]: userId=\(userId.prefix(8))...", category: "SessionInit")
-        
-        do {
-            // Fetch bundle with retry
-            let bundle = try await fetchPublicKeyWithRetry(userId: userId)
-            
-            // Initialize sending session
-            try initializeSession(userId: userId, bundle: bundle, deleteExisting: true)
 
-            Log.info("✅ SESSION_STATE[proactive_init_success]: userId=\(userId.prefix(8))...", category: "SessionInit")
-            
-            // Notify success on main actor
-            await MainActor.run {
-                onSuccess()
+        let staleSPKMaxRetries = 2
+        let staleSPKRetryDelay: UInt64 = 60 // seconds
+
+        var lastError: Error?
+        for attempt in 0...staleSPKMaxRetries {
+            if attempt > 0 {
+                Log.info("🔁 SESSION_STATE[stale_spk_retry_\(attempt)]: waiting \(staleSPKRetryDelay)s for peer SPK rotation to propagate — userId=\(userId.prefix(8))…", category: "SessionInit")
+                try? await Task.sleep(nanoseconds: staleSPKRetryDelay * 1_000_000_000)
+                guard !Task.isCancelled else { break }
             }
-            
-        } catch {
-            Log.error("❌ SESSION_STATE[proactive_init_failed]: userId=\(userId.prefix(8))..., error=\(error.localizedDescription)", category: "SessionInit")
-            
-            // Notify failure on main actor
-            await MainActor.run {
-                onFailure(error)
+
+            do {
+                let bundle = try await fetchPublicKeyWithRetry(userId: userId)
+                try initializeSession(userId: userId, bundle: bundle, deleteExisting: true)
+
+                Log.info("✅ SESSION_STATE[proactive_init_success]: userId=\(userId.prefix(8))...", category: "SessionInit")
+                await MainActor.run { onSuccess() }
+                return
+            } catch SessionError.peerSPKStale(let days) where attempt < staleSPKMaxRetries {
+                // Peer just came online and rotated — server may not have updated yet.
+                // We'll retry after a delay.
+                Log.error("⚠️ Peer SPK stale for \(userId.prefix(8))… (\(String(format: "%.1f", days))d) — will retry in \(staleSPKRetryDelay)s (\(attempt + 1)/\(staleSPKMaxRetries))", category: "SessionInit")
+                lastError = SessionError.peerSPKStale(ageDays: days)
+                continue
+            } catch {
+                lastError = error
+                break
             }
         }
+
+        let finalError = lastError ?? NetworkError.connectionFailed
+        Log.error("❌ SESSION_STATE[proactive_init_failed]: userId=\(userId.prefix(8))..., error=\(finalError.localizedDescription)", category: "SessionInit")
+        await MainActor.run { onFailure(finalError) }
     }
 }
