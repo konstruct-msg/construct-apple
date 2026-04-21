@@ -833,6 +833,8 @@ final class GRPCChannelManager: Sendable {
                         if iceProxyPort() != nil {
                             continue
                         }
+                        // waitForProxyReady timed out — clear stuck state so next attempt restarts.
+                        await IceProxyManager.shared.resetIfStuck()
                     }
                 }
 
@@ -855,6 +857,8 @@ final class GRPCChannelManager: Sendable {
                         Log.info("🧊 ICE proxy active — retrying RPC through relay", category: "GRPCChannel")
                         continue
                     }
+                    // waitForProxyReady timed out — clear stuck state so next attempt restarts fresh.
+                    await IceProxyManager.shared.resetIfStuck()
                 }
 
                 throw error

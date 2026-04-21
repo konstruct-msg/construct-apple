@@ -1014,12 +1014,27 @@ final class IceProxyManager: ObservableObject {
         // retries the RPC through ICE.  This is the right behaviour: cooldown means "the ICE
         // relay was recently flaky", but DPI means "the direct path is always broken".
         if isRunning {
-            if isOnCooldown {
-                clearCooldown()
-                Log.info("🧊 ICE on cooldown but DPI detected — clearing cooldown, routing via ICE", category: "ICE")
+            // `ice_proxy_is_running()` returns 1 only after the Rust goroutine finishes
+            // establishing the relay tunnel. Swift's `isRunning` is set optimistically when
+            // the local SOCKS port binds (before the goroutine reports readiness). If Rust
+            // confirms the proxy, we're done. If not and no concurrent start is in progress,
+            // the tunnel setup failed silently — reset and restart.
+            if ice_proxy_is_running() != 0 {
+                if isOnCooldown {
+                    clearCooldown()
+                    Log.info("🧊 ICE on cooldown but DPI detected — clearing cooldown, routing via ICE", category: "ICE")
+                }
+                if confirmDPI { confirmDPIDetected() }
+                return
             }
-            if confirmDPI { confirmDPIDetected() }
-            return
+            if !isStartingOnDemand {
+                // Stuck: port bound, goroutine never confirmed. Reset and start fresh.
+                Log.error("🧊 ICE proxy stuck (isRunning=true, ice_proxy_is_running()=0) — restarting", category: "ICE")
+                ice_proxy_stop()
+                resetAllProxyState()
+                // fall through to fresh start below
+            }
+            // else: concurrent start in progress — fall through to isStartingOnDemand wait
         }
 
         // Another concurrent RPC already kicked off an ICE start — wait for it rather
@@ -1255,6 +1270,22 @@ final class IceProxyManager: ObservableObject {
         } else {
             Log.error("🧊 ICE force-start failed (VPN DNS failure)", category: "ICE")
         }
+    }
+
+    /// Resets Swift proxy state if the proxy is stuck: `isRunning` is true but Rust
+    /// `ice_proxy_is_running()` returns 0. This occurs when `ice_proxy_start_webtunnel()`
+    /// (or similar) binds the local SOCKS port synchronously and returns success before the
+    /// background goroutine establishes the relay tunnel. If the goroutine silently fails,
+    /// `isRunning` remains true and `startOnDemandInternal` returns early forever.
+    ///
+    /// After this call `isRunning=false`, so the next `startOnDemandIfNeeded()` starts a
+    /// fresh proxy. DPI detection is intentionally preserved so ICE retries immediately.
+    @MainActor
+    func resetIfStuck() {
+        guard isRunning, ice_proxy_is_running() == 0 else { return }
+        Log.error("🧊 ICE proxy stuck (resetIfStuck) — clearing state for fresh start", category: "ICE")
+        ice_proxy_stop()
+        resetAllProxyState()
     }
 
     /// Called on app foreground to verify the ICE proxy process is actually alive.
