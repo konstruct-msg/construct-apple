@@ -373,6 +373,13 @@ class MessageRouter {
             case .messageDecrypted:
                 executeRustActions(actions, for: message, chat: chat, otherUserId: otherUserId, in: context)
                 return
+            case .callSignalDecrypted:
+                // ct=12: Rust decrypted the call signal — dispatch to CallManager directly.
+                // There is no .messageDecrypted in the action list for call signals, so this
+                // case must be handled here before the loop falls through to "no routing decision".
+                executeRustActions(actions, for: message, chat: chat, otherUserId: otherUserId, in: context)
+                onReceiptNeeded?([message.id], otherUserId, .delivered)
+                return
             case .sessionHealNeeded(let contactId, let role):
                 handleRustHealDecision(role: role, contactId: contactId, message: message, in: context, pendingMessages: &pendingMessages)
                 if isNewChat { context.delete(chat) }

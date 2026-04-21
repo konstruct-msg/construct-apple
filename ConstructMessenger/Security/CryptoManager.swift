@@ -420,6 +420,7 @@ class CryptoManager {
     private func orchestratorActionSummary(_ actions: [CfeAction]) -> String {
         if actions.isEmpty { return "" }
         var hasDecrypt = false
+        var hasCallSignal = false
         var hasSend = false
         var hasSave = false
         var hasHeal = false
@@ -431,6 +432,8 @@ class CryptoManager {
             switch action {
             case .messageDecrypted:
                 hasDecrypt = true
+            case .callSignalDecrypted:
+                hasCallSignal = true
             case .sendEncryptedMessage:
                 hasSend = true
             case .saveSessionToSecureStore:
@@ -450,6 +453,7 @@ class CryptoManager {
 
         var parts: [String] = []
         if hasDecrypt { parts.append("decrypted") }
+        if hasCallSignal { parts.append("call_signal") }
         if hasSend { parts.append("send") }
         if hasSave { parts.append("save") }
         if hasHeal { parts.append("heal") }
