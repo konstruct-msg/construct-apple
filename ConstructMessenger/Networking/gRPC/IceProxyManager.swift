@@ -18,6 +18,7 @@ import Foundation
 import Combine
 import Network
 import os
+import CryptoKit
 
 /// Thread-safe one-shot flag used to prevent double-resuming a CheckedContinuation
 /// when multiple concurrent closures (NW state handler + timeout) race to complete.
@@ -274,9 +275,26 @@ private func makeRelay(address: String, bridgeCert: String) -> IceRelay {
                     wtPath: wtPath, wtHostHeader: wtHostHeader)
 }
 
+/// Compute a WebTunnel path auth token for a given time period.
+///
+/// Mirrors the relay-side computation (`webtunnel_token` in construct-relay):
+///   SHA-256( bridge_cert_base64_string || "webtunnel-v1" || period_u64_be )[:8]
+/// encoded as 16 lowercase hex characters. Period = unix_seconds / 300 (5 min windows).
+///
+/// Using the obfs4 bridge cert as seed means no additional shared secret is needed —
+/// the cert is already distributed to clients and is relay-specific.
+private func webtunnelAuthToken(bridgeCert: String, period: UInt64) -> String {
+    var data = Data(bridgeCert.utf8)
+    data.append(contentsOf: "webtunnel-v1".utf8)
+    withUnsafeBytes(of: period.bigEndian) { data.append(contentsOf: $0) }
+    return SHA256.hash(data: data).prefix(8)
+        .map { String(format: "%02x", $0) }.joined()
+}
+
 /// Manages the construct-ice local TCP proxy for gRPC obfuscation.
 @MainActor
 final class IceProxyManager: ObservableObject {
+
     static let shared = IceProxyManager()
     private init() {
         // Load persisted mode (or platform default if never set).
@@ -590,12 +608,19 @@ final class IceProxyManager: ObservableObject {
             let sni        = relay.tlsServerName ?? ""
             let spki       = relay.pinnedSpki ?? ""
             let hostHeader = relay.wtHostHeader ?? ""
+
+            // Append time-based auth token derived from the relay's obfs4 bridge cert.
+            // The relay verifies it with the same HMAC — stops bots and scanners.
+            let period = UInt64(Date().timeIntervalSince1970) / 300
+            let token = webtunnelAuthToken(bridgeCert: relay.bridgeCert, period: period)
+            let authPath = wtPath + "/" + token
+
             Log.info("🧊 ICE WebTunnel → \(relay.address) (SNI: \(sni.isEmpty ? "<none>" : sni), path: \(wtPath))", category: "ICE")
             result = relay.address.withCString { addrPtr in
                 sni.withCString { sniPtr in
                     spki.withCString { spkiPtr in
                         hostHeader.withCString { hostPtr in
-                            wtPath.withCString { pathPtr in
+                            authPath.withCString { pathPtr in
                                 ice_proxy_start_webtunnel(addrPtr, sniPtr, spkiPtr, hostPtr, pathPtr, &port)
                             }
                         }
