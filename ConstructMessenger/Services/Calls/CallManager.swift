@@ -69,6 +69,10 @@ final class CallManager {
         /// Number of signaling stream reconnect attempts (timeout-triggered). Capped at maxStreamRetries.
         var streamRetryCount: Int = 0
         static let maxStreamRetries = 3
+        /// ICE candidates waiting to be flushed as a batch to stay under 10/sec signal rate limit.
+        var pendingOutgoingIce: [Shared_Proto_Signaling_V1_IceCandidate] = []
+        /// Task that fires after a short debounce to flush pendingOutgoingIce.
+        var iceFlushTask: Task<Void, Never>? = nil
 
         init(session: CallSession) {
             self.session = session
@@ -79,6 +83,8 @@ final class CallManager {
             keepaliveTask?.cancel()
             receiveTask?.cancel()
             acceptTask?.cancel()
+            iceFlushTask?.cancel()
+            iceFlushTask = nil
             webrtc?.close()
             webrtc = nil
             stream?.close()
@@ -464,7 +470,14 @@ final class CallManager {
             break
         case .error(let error):
             Log.error("📞 Signaling error: code=\(error.code) msg=\(error.message)", category: "Calls")
-            endActiveCall(reason: .error(error.code))
+            switch error.code {
+            case .rateLimited:
+                // ICE candidate was dropped server-side; WebRTC will retransmit or use other candidates.
+                // Do NOT end the call — this is a transient error from ICE burst at call start.
+                break
+            default:
+                endActiveCall(reason: .error(error.code))
+            }
         case .incomingCall(let call):
             // Fallback path: server delivers incoming-call notification while app is foreground
             // (device is online, no PushKit wake needed). Report to CallKit directly.
@@ -887,7 +900,8 @@ final class CallManager {
         Log.info("📞 Offer (proto) sent via E2EE to \(toUserId.prefix(8))… call_id=\(active.session.id.prefix(8))…", category: "Calls")
     }
 
-    /// ICE candidates travel via Signal stream when available; fall back to E2EE when stream is absent (incoming E2EE call path).
+    /// ICE candidates are batched with a 200ms debounce before sending to stay under the
+    /// server's 10/sec signal rate limit. A burst of 10 candidates uses 1 signal slot, not 10.
     private func sendIceCandidate(_ c: WebRTCIceCandidate) {
         guard let active else { return }
         let peerUserId = active.session.peerUserId
@@ -900,8 +914,39 @@ final class CallManager {
         }
         ice.sdpMid = c.sdpMid
         ice.sdpMLineIndex = UInt32(max(0, c.sdpMLineIndex))
-        if let stream = active.stream {
-            stream.send(Self.makeRoutedSignal(callId: active.session.id, deviceId: Self.currentDeviceId(), signal: .iceCandidate(ice)))
+
+        if active.stream != nil {
+            // Queue and flush as a batch after 200ms debounce.
+            active.pendingOutgoingIce.append(ice)
+            active.iceFlushTask?.cancel()
+            active.iceFlushTask = Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .milliseconds(200))
+                guard !Task.isCancelled, let self, let active = self.active else { return }
+                let batch = active.pendingOutgoingIce
+                guard !batch.isEmpty else { return }
+                active.pendingOutgoingIce.removeAll()
+                active.iceFlushTask = nil
+                if let stream = active.stream {
+                    if batch.count == 1 {
+                        stream.send(Self.makeRoutedSignal(callId: active.session.id, deviceId: Self.currentDeviceId(), signal: .iceCandidate(batch[0])))
+                    } else {
+                        var candidates = Shared_Proto_Signaling_V1_IceCandidateBatch()
+                        candidates.candidates = batch
+                        stream.send(Self.makeRoutedSignal(callId: active.session.id, deviceId: Self.currentDeviceId(), signal: .iceCandidates(candidates)))
+                    }
+                    Log.debug("📞 Flushed \(batch.count) ICE candidate(s) via stream (call_id=\(active.session.id.prefix(8))…)", category: "Calls")
+                } else {
+                    // Stream closed before flush — send via E2EE.
+                    for candidate in batch {
+                        var sig = Shared_Proto_Signaling_V1_WebRTCSignal()
+                        sig.callID = active.session.id
+                        sig.senderDeviceID = Self.currentDeviceId()
+                        sig.timestamp = Self.nowMs()
+                        sig.signal = .iceCandidate(candidate)
+                        self.sendCallSignalProto(sig, to: peerUserId)
+                    }
+                }
+            }
         } else {
             // No stream (E2EE-only call path) — send ICE via DR-encrypted message.
             var sig = Shared_Proto_Signaling_V1_WebRTCSignal()
