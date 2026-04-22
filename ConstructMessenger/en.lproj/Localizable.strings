@@ -95,6 +95,12 @@
 "pin_code_length" = "PIN must be 6-12 digits";
 "pin_codes_dont_match" = "PIN codes don't match";
 "wrong_pin_code" = "Wrong PIN Code";
+"lock_delay" = "Lock After";
+"lock_delay_immediate" = "Immediately";
+"lock_delay_30s" = "30 Seconds";
+"lock_delay_1m" = "1 Minute";
+"lock_delay_5m" = "5 Minutes";
+"lock_delay_10m" = "10 Minutes";
 "face_id" = "Face ID";
 "touch_id" = "Touch ID";
 "biometric" = "Biometrics";

@@ -35,8 +35,9 @@ struct SecurityGateView<Content: View>: View {
         .onChange(of: scenePhase) { _, newPhase in
             switch newPhase {
             case .background, .inactive:
-                securityViewModel.lockIfNeeded()
+                securityViewModel.handleBackground()
             case .active:
+                securityViewModel.handleForeground()
                 securityViewModel.refreshBiometricAvailability()
             @unknown default:
                 break

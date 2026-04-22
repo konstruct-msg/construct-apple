@@ -21,6 +21,7 @@ struct SecurityView: View {
     @State private var showingDuressPinSetup = false
     @State private var showingDisableDuressAlert = false
     @State private var showingDiscoverableConfirm = false
+    @State private var showingLockDelayPicker = false
     @State private var lockdown = LockdownManager.shared
 
     @AppStorage("stealth_mode_enabled") private var stealthEnabled = false
@@ -73,6 +74,9 @@ struct SecurityView: View {
                     }
                     .padding(.horizontal, 12).padding(.vertical, 10)
                     .disabled(!securityViewModel.isBiometricAvailable)
+
+                    CTSep(style: .thin)
+                    lockDelayRow
 
                     CTSep(style: .thin)
                     Button { showingDisablePinSheet = true } label: {
@@ -436,6 +440,38 @@ struct SecurityView: View {
     }
 
     // MARK: - Helpers
+
+    private var lockDelayRow: some View {
+        @Bindable var securityViewModel = securityViewModel
+        return Button { showingLockDelayPicker = true } label: {
+            HStack(spacing: 10) {
+                CTRowIcon("[t]")
+                Text(LocalizedStringKey("lock_delay"))
+                    .font(CTFont.regular(13))
+                    .foregroundStyle(Color.CT.text)
+                Spacer()
+                Text(securityViewModel.lockDelay.localizedTitle)
+                    .font(CTFont.regular(12))
+                    .foregroundStyle(Color.CT.textDim)
+                Text("[→]").font(CTFont.regular(12)).foregroundStyle(Color.CT.textDim)
+            }
+            .padding(.horizontal, 12).padding(.vertical, 12)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .confirmationDialog(
+            NSLocalizedString("lock_delay", comment: ""),
+            isPresented: $showingLockDelayPicker,
+            titleVisibility: .visible
+        ) {
+            ForEach(LockDelay.allCases) { delay in
+                Button(delay.localizedTitle) {
+                    securityViewModel.lockDelay = delay
+                }
+            }
+            Button(NSLocalizedString("cancel", comment: ""), role: .cancel) {}
+        }
+    }
 
     /// Fetch IDs of all current chat partners from Core Data (snapshot for lockdown).
     private func fetchCurrentContactIds() -> Set<String> {

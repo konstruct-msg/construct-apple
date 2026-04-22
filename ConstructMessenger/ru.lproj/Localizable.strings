@@ -95,6 +95,12 @@
 "pin_code_length" = "ПИН-код должен содержать 6-12 цифр";
 "pin_codes_dont_match" = "ПИН-коды не совпадают";
 "wrong_pin_code" = "Неверный ПИН-код";
+"lock_delay" = "Блокировать через";
+"lock_delay_immediate" = "Немедленно";
+"lock_delay_30s" = "30 секунд";
+"lock_delay_1m" = "1 минуту";
+"lock_delay_5m" = "5 минут";
+"lock_delay_10m" = "10 минут";
 "face_id" = "Face ID";
 "touch_id" = "Touch ID";
 "biometric" = "Биометрия";

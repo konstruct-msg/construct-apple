@@ -12,6 +12,27 @@ import CommonCrypto
 import Security
 import Observation
 
+/// How long the app waits in the background before requiring PIN on return.
+enum LockDelay: Int, CaseIterable, Identifiable {
+    case immediate = 0
+    case thirtySeconds = 30
+    case oneMinute = 60
+    case fiveMinutes = 300
+    case tenMinutes = 600
+
+    var id: Int { rawValue }
+
+    var localizedTitle: String {
+        switch self {
+        case .immediate:     return NSLocalizedString("lock_delay_immediate", comment: "")
+        case .thirtySeconds: return NSLocalizedString("lock_delay_30s", comment: "")
+        case .oneMinute:     return NSLocalizedString("lock_delay_1m", comment: "")
+        case .fiveMinutes:   return NSLocalizedString("lock_delay_5m", comment: "")
+        case .tenMinutes:    return NSLocalizedString("lock_delay_10m", comment: "")
+        }
+    }
+}
+
 @Observable
 final class SecurityViewModel {
     private(set) var isPinEnabled: Bool
@@ -24,12 +45,21 @@ final class SecurityViewModel {
             UserDefaults.standard.set(isBiometricEnabled, forKey: Self.biometricEnabledKey)
         }
     }
+    var lockDelay: LockDelay {
+        didSet {
+            UserDefaults.standard.set(lockDelay.rawValue, forKey: Self.lockDelayKey)
+        }
+    }
+
+    /// Timestamp of the most recent background/inactive transition; nil when in foreground.
+    private var backgroundedAt: Date?
 
     private static let pinHashKey = "app_pin_hash"
     private static let pinSaltKey = "app_pin_salt"
     private static let pinLengthKey = "app_pin_length"
     private static let pinHashVersionKey = "app_pin_hash_version"
     private static let biometricEnabledKey = "security.useBiometrics"
+    private static let lockDelayKey = "security.lockDelay"
     private static let duressPinHashKey = "app_duress_pin_hash"
     private static let duressPinSaltKey = "app_duress_pin_salt"
     private static let duressPinHashVersionKey = "app_duress_pin_hash_version"
@@ -45,6 +75,8 @@ final class SecurityViewModel {
         self.isDuresspinEnabled = SecurityViewModel.hasSavedDuressPin()
         self.isUnlocked = !hasPin
         self.isBiometricEnabled = UserDefaults.standard.bool(forKey: Self.biometricEnabledKey)
+        let savedDelay = UserDefaults.standard.integer(forKey: Self.lockDelayKey)
+        self.lockDelay = LockDelay(rawValue: savedDelay) ?? .immediate
         refreshBiometricAvailability()
         if !hasPin {
             self.isBiometricEnabled = false
@@ -88,6 +120,31 @@ final class SecurityViewModel {
     func lockIfNeeded() {
         guard isPinEnabled else { return }
         isUnlocked = false
+    }
+
+    /// Called when the app moves to background or inactive.
+    /// Locks immediately if delay is .immediate; otherwise records the timestamp.
+    func handleBackground() {
+        guard isPinEnabled else { return }
+        backgroundedAt = Date()
+        if lockDelay == .immediate {
+            isUnlocked = false
+        }
+    }
+
+    /// Called when the app returns to the foreground.
+    /// Locks if the elapsed background time exceeded the configured delay.
+    func handleForeground() {
+        guard isPinEnabled, isUnlocked else {
+            backgroundedAt = nil
+            return
+        }
+        defer { backgroundedAt = nil }
+        guard let since = backgroundedAt, lockDelay != .immediate else { return }
+        let elapsed = Date().timeIntervalSince(since)
+        if elapsed >= TimeInterval(lockDelay.rawValue) {
+            isUnlocked = false
+        }
     }
 
     func setPin(_ pin: String) {
