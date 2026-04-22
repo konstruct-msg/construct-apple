@@ -218,7 +218,14 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
         try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetoothHFP])
         try? session.setPreferredSampleRate(NetworkTiming.Calls.audioPreferredSampleRateHz)
         try? session.setPreferredIOBufferDuration(NetworkTiming.Calls.audioPreferredIOBufferDuration)
-        try session.setActive(true)
+        // Do NOT call setActive(true) here — CallKit manages audio session lifecycle.
+        // Activation happens via CXProviderDelegate.provider(_:didActivate:).
+        // Calling setActive() outside that callback throws "Session activation failed"
+        // (NSOSStatusErrorDomain 561017449) when a previous call's session is still
+        // tearing down or when CallKit hasn't yet granted permission for the new call.
+        if (try? session.setActive(true)) == nil {
+            Log.debug("📞 AVAudioSession.setActive(true) deferred — CallKit will activate via didActivate", category: "Calls")
+        }
     }
 }
 

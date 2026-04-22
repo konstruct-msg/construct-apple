@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import AVFoundation
 import CoreData
 import GRPCCore
 import SwiftProtobuf
@@ -106,6 +107,13 @@ final class CallManager {
         CallKitProvider.shared.onAudioActivated = { [weak self] in
             Task { @MainActor in
                 guard let self else { return }
+                // CallKit has activated the audio session — configure it now.
+                // This is the correct place per Apple's CallKit documentation.
+                // WebRTCSession.configureAudioSession() sets category but defers
+                // setActive; CallKit calls this when it's safe to use audio.
+                let avSession = AVAudioSession.sharedInstance()
+                try? avSession.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetoothHFP])
+                try? avSession.setActive(true)
                 // Play dial tone only on outgoing calls (dialing or ringing state).
                 switch self.state {
                 case .dialing, .ringing: DialTonePlayer.shared.start()
