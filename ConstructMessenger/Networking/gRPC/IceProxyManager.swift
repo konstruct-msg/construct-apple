@@ -822,12 +822,7 @@ final class IceProxyManager: ObservableObject {
         Log.info("🧊 Relay probe order: \(ordered.joined(separator: " → "))", category: "ICE")
 
         for address in ordered {
-            let relay: IceRelay
-            if address == "\(iceHost):443" {
-                relay = IceRelay(address: address, bridgeCert: cert, iatMode: .none, tlsServerName: iceHost)
-            } else {
-                relay = makeRelay(address: address, bridgeCert: cert)
-            }
+            let relay = makeRelay(address: address, bridgeCert: cert)
             if start(relay: relay) != nil {
                 saveRelay(relay)
                 Log.info("🧊 ICE started via \(address)", category: "ICE")
@@ -874,15 +869,7 @@ final class IceProxyManager: ObservableObject {
         let primaryAddress   = ordered[0]
         let secondaryAddress = ordered.count > 1 ? ordered[1] : nil
 
-        // Build relays
-        func makeHERelay(_ address: String) -> IceRelay {
-            if address == "\(iceHost):443" {
-                return IceRelay(address: address, bridgeCert: cert, iatMode: .none, tlsServerName: iceHost)
-            }
-            return makeRelay(address: address, bridgeCert: cert)
-        }
-
-        let primaryRelay = makeHERelay(primaryAddress)
+        let primaryRelay = makeRelay(address: primaryAddress, bridgeCert: cert)
 
         // Start primary (this maps to PROXY_TLS when address has tlsServerName, else PROXY).
         let primaryPort = start(relay: primaryRelay)
@@ -898,7 +885,7 @@ final class IceProxyManager: ObservableObject {
 
         // Start secondary without calling stop() first (we own two separate Rust statics).
         if let secondaryAddress {
-            let secondaryRelay = makeHERelay(secondaryAddress)
+            let secondaryRelay = makeRelay(address: secondaryAddress, bridgeCert: cert)
             let secondaryPort = startSecondary(relay: secondaryRelay)
             if let sp = secondaryPort {
                 isSecondaryRunning = true

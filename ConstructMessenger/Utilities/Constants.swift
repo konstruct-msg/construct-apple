@@ -469,10 +469,12 @@ struct ICEConfig {
 
     /// Hardcoded relay list used as a last resort when discovery is unavailable.
     /// Order matters: relays are probed concurrently but this sets tie-break priority.
+    /// SPB relay (194.87.235.91) is omitted until deployed — the server RSTs port 443,
+    /// causing rapid blacklist/unblacklist cycles that interfere with relay rotation.
     static let hardcodedRelayAddresses: [String] = [
         mskRelayAddress,
         amsRelayAddress,
-        spbRelayAddress,   // not yet active — probed; TCP connect will simply time out until deployed
+        // spbRelayAddress,   // TODO: uncomment after Relay 3 deployment
     ]
 
     /// TLS SNI overrides keyed by relay address string.

@@ -281,7 +281,8 @@ final class GRPCChannelManager: Sendable {
     func makeClient() throws -> GRPCClient<HTTP2ClientTransport.TransportServices> {
         // ICE mode: connect to local proxy with plaintext, proxy handles obfs4 to relay
         if let icePort = iceProxyPort() {
-            Log.info("🧊 gRPC via ICE proxy → 127.0.0.1:\(icePort) (obfs4 → relay)", category: "gRPC")
+            let transportLabel = IceProxyManager.shared.isWebTunnelActive ? "wss → relay" : "obfs4 → relay"
+            Log.info("🧊 gRPC via ICE proxy → 127.0.0.1:\(icePort) (\(transportLabel))", category: "gRPC")
             let transport = try HTTP2ClientTransport.TransportServices(
                 target: .ipv4(address: "127.0.0.1", port: Int(icePort)),
                 transportSecurity: .plaintext,
