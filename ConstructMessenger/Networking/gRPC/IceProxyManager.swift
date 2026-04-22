@@ -617,7 +617,7 @@ final class IceProxyManager: ObservableObject {
             let token = webtunnelAuthToken(bridgeCert: relay.bridgeCert, period: period)
             let authPath = wtPath + "/" + token
 
-            Log.info("🧊 ICE WebTunnel → \(relay.address) (SNI: \(sni.isEmpty ? "<none>" : sni), path: \(wtPath))", category: "ICE")
+            Log.info("🧊 ICE WebTunnel → \(relay.address) (SNI: \(sni.isEmpty ? "<none>" : sni), path: \(authPath))", category: "ICE")
             result = relay.address.withCString { addrPtr in
                 sni.withCString { sniPtr in
                     spki.withCString { spkiPtr in
