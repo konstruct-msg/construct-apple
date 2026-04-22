@@ -275,6 +275,13 @@ class ChatsViewModel {
                 if self.streamManager.isConnected {
                     // Stream survived the switch — no work needed.
                     Log.info("📱 App became active — stream still alive, skipping reconnect", category: "ChatsViewModel")
+                } else if self.streamManager.isActivelyConnecting {
+                    // A fresh connection attempt is already in progress (retryCount=0).
+                    // This is most likely an ICE failover: the stream timed out in background,
+                    // ICE proxy is starting, and the connectLoop will retry via ICE automatically.
+                    // Interrupting it now would cancel the ICE startup and restart a direct-path
+                    // attempt that DPI will block again.
+                    Log.info("📱 App became active — ICE failover in progress, skipping forceReconnect", category: "ChatsViewModel")
                 } else {
                     // Stream went down (app was truly backgrounded, or the OS killed the socket).
                     Log.info("📱 App became active — stream is down, reconnecting", category: "ChatsViewModel")

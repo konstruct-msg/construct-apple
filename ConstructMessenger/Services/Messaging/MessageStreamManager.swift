@@ -62,6 +62,11 @@ final class MessageStreamManager {
     /// Set to the current time whenever a heartbeat ack is received from the server.
     private(set) var lastHeartbeatDate: Date?
 
+    /// True when a connection attempt is actively in progress (not sleeping in backoff).
+    /// When true, app-foreground force-reconnect should be skipped to avoid interrupting
+    /// an ongoing ICE failover path with a new competing direct-path attempt.
+    var isActivelyConnecting: Bool { streamTask != nil && !isConnected && retryCount == 0 }
+
     // MARK: - Callbacks
 
     private var onMessageReceived: ((ChatMessage) -> Void)?
@@ -740,6 +745,12 @@ final class MessageStreamManager {
                     IceProxyManager.shared.clearCooldown()
                 } else if !IceProxyManager.shared.isRunning {
                     await IceProxyManager.shared.startEphemeralOnDemandIfNeeded()
+                    // Wait for ice_proxy_is_running() = 1 before proceeding.
+                    // ice_proxy_start_tls() binds the port synchronously but the Rust goroutine
+                    // that sets the "is_running" flag runs asynchronously (3–8 s cold start).
+                    // Without this wait, routingKey() still returns "direct:…" on the next
+                    // acquirePersistentClient() call, creating a direct channel that DPI blocks.
+                    await GRPCChannelManager.shared.waitForProxyReady()
                 }
                 // Force routing key refresh for the next acquireChannel().
                 GRPCChannelManager.shared.invalidatePersistentClient()
