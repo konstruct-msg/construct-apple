@@ -429,6 +429,22 @@ final class IceProxyManager: ObservableObject {
         return Date().timeIntervalSince(failedAt) < Self.relayFailureTTL
     }
 
+    /// True when every known relay is in the recently-failed blacklist.
+    /// Used by GRPCChannelManager to detect the "all relays exhausted" state and apply
+    /// a cooldown before the next rotation attempt — without this guard, rapid cycling
+    /// fills the relay's per-IP connection limit (8), making all subsequent attempts fail.
+    var allRelaysRecentlyFailed: Bool {
+        let host = GRPCChannelManager.shared.currentHost
+        let iceHost = "ice.\(host)"
+        var seen = Set<String>()
+        var all: [String] = []
+        for addr in ["\(iceHost):443"] + ICEConfig.hardcodedRelayAddresses
+            + (UserDefaults.standard.stringArray(forKey: ICEConfig.cachedRelayListKey) ?? [])
+        where seen.insert(addr).inserted { all.append(addr) }
+        guard !all.isEmpty else { return false }
+        return all.allSatisfy { isRelayRecentlyFailed($0) }
+    }
+
     /// Clear all relay failure tracking (e.g. on network path change — new network may work fine).
     private func clearRelayFailures() {
         guard !recentlyFailedRelays.isEmpty || verifiedRelayAddress != nil || !webTunnelBlockedRelays.isEmpty else { return }

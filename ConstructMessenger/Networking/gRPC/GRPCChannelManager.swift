@@ -838,6 +838,14 @@ final class GRPCChannelManager: Sendable {
                     // Rotate INLINE so the retry loop can use the new relay immediately.
                     let rotated = await IceProxyManager.shared.rotateToNextRelay()
                     if rotated {
+                        // If every known relay was recently blacklisted, we've just restarted the
+                        // least-bad one. Cycling immediately fills the relay's per-IP connection
+                        // limit (8 concurrent), making every new attempt fail at the TCP layer.
+                        // A 30 s pause lets old connections drain before we create new ones.
+                        if await IceProxyManager.shared.allRelaysRecentlyFailed {
+                            Log.info("🧊 All relays blacklisted — waiting 30s to let connections drain", category: "gRPC")
+                            try? await Task.sleep(for: .seconds(30))
+                        }
                         invalidatePersistentClient()
                         await waitForProxyReady()
                         Log.info("🧊 Relay rotated inline — retrying via new relay", category: "gRPC")
