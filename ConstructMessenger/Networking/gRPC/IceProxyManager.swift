@@ -239,7 +239,7 @@ struct IceRelay: Codable, Identifiable {
 /// 1. `IceCertFetcher` cached relay config (fetched from signed construct-server) → preferred.
 /// 2. `ICEConfig.hardcodedRelaySNIs[address]` + `ICEConfig.mskRelayPinnedSPKI` → hardcoded fallback.
 /// 3. Hostname extracted from address → domain-based relay (no pinning).
-private func makeRelay(address: String, bridgeCert: String) -> IceRelay {
+private func makeRelay(address: String, bridgeCert: String, forceObfs4: Bool = false) -> IceRelay {
     // Priority: server-pushed per-relay cert → hardcoded cert → AMS cert passed by caller.
     // bridgeCertSync returns hardcodedRelayCerts[address] if no server-pushed cert exists.
     let resolvedCert = IceCertFetcher.bridgeCertSync(for: address) ?? bridgeCert
@@ -262,10 +262,10 @@ private func makeRelay(address: String, bridgeCert: String) -> IceRelay {
             sni = address.components(separatedBy: ":").first.flatMap { $0.isEmpty ? nil : $0 }
             pin = nil
         }
-        // WebTunnel (ICE v2) — available when the relay advertises a wt_path.
-        // Preferred over obfs4 when set; IceProxyManager.start() enforces the priority.
-        wtPath      = IceCertFetcher.wtPathSync(for: address)
-        wtHostHeader = IceCertFetcher.wtHostHeaderSync(for: address)
+        // WebTunnel (ICE v2) — preferred over obfs4 when available.
+        // Skip when forceObfs4 = true (carrier transparent proxy blocked WebSocket UPGRADE).
+        wtPath       = forceObfs4 ? nil : IceCertFetcher.wtPathSync(for: address)
+        wtHostHeader = forceObfs4 ? nil : IceCertFetcher.wtHostHeaderSync(for: address)
     } else {
         sni = nil
         pin = nil
@@ -380,6 +380,11 @@ final class IceProxyManager: ObservableObject {
     /// How long a failed relay stays deprioritized before becoming eligible again.
     private static let relayFailureTTL: TimeInterval = 300  // 5 minutes
 
+    /// Relay addresses where WebTunnel was blocked by a carrier transparent HTTP proxy this session.
+    /// When set, makeRelay() skips wtPath for these addresses, forcing obfs4 mode.
+    /// Cleared on network path change — the new network may allow WebTunnel.
+    private var webTunnelBlockedRelays: Set<String> = []
+
     /// Address of the relay that has successfully completed at least one gRPC RPC
     /// this session. In-memory only — resets on app restart.
     /// When the active relay matches, performRPC trusts its obfs4 tunnel and uses
@@ -426,9 +431,10 @@ final class IceProxyManager: ObservableObject {
 
     /// Clear all relay failure tracking (e.g. on network path change — new network may work fine).
     private func clearRelayFailures() {
-        guard !recentlyFailedRelays.isEmpty || verifiedRelayAddress != nil else { return }
+        guard !recentlyFailedRelays.isEmpty || verifiedRelayAddress != nil || !webTunnelBlockedRelays.isEmpty else { return }
         recentlyFailedRelays.removeAll()
         verifiedRelayAddress = nil
+        webTunnelBlockedRelays.removeAll()
         Log.info("🧊 Relay failure blacklist + verification cleared", category: "ICE")
     }
 
@@ -589,6 +595,31 @@ final class IceProxyManager: ObservableObject {
         resetAllProxyState()
         let cert = await getIceBridgeCert()
         return await startWithRelayFallback(cert: cert)
+    }
+
+    /// Called when WebTunnel returns a non-200 HTTP status code (carrier transparent proxy
+    /// intercepted the WebSocket UPGRADE). obfs4 is a binary protocol that such proxies
+    /// cannot inspect, so this restarts the same relay in obfs4 mode.
+    ///
+    /// Marks the relay address in `webTunnelBlockedRelays` so subsequent
+    /// `startWithRelayFallback()` calls also bypass WebTunnel on this network.
+    /// The set is cleared on network path change — new network may allow WebTunnel.
+    ///
+    /// - Returns: true if obfs4 started successfully, false if it also failed.
+    func retryCurrentRelayAsObfs4() async -> Bool {
+        guard isWebTunnelActive, let relay = activeRelay else { return false }
+        Log.info("🧊 WebTunnel blocked by carrier proxy — retrying \(relay.address) via obfs4", category: "ICE")
+        webTunnelBlockedRelays.insert(relay.address)
+        ice_proxy_stop()
+        resetAllProxyState()
+        let obfs4Relay = makeRelay(address: relay.address, bridgeCert: relay.bridgeCert, forceObfs4: true)
+        if start(relay: obfs4Relay) != nil {
+            saveRelay(obfs4Relay)
+            Log.info("🧊 ICE obfs4 active on \(relay.address) (WebTunnel blocked by carrier)", category: "ICE")
+            return true
+        }
+        Log.error("🧊 ICE obfs4 also failed on \(relay.address) — will rotate to next relay", category: "ICE")
+        return false
     }
 
     // MARK: - Start / Stop
@@ -822,7 +853,7 @@ final class IceProxyManager: ObservableObject {
         Log.info("🧊 Relay probe order: \(ordered.joined(separator: " → "))", category: "ICE")
 
         for address in ordered {
-            let relay = makeRelay(address: address, bridgeCert: cert)
+            let relay = makeRelay(address: address, bridgeCert: cert, forceObfs4: webTunnelBlockedRelays.contains(address))
             if start(relay: relay) != nil {
                 saveRelay(relay)
                 Log.info("🧊 ICE started via \(address)", category: "ICE")
@@ -869,7 +900,7 @@ final class IceProxyManager: ObservableObject {
         let primaryAddress   = ordered[0]
         let secondaryAddress = ordered.count > 1 ? ordered[1] : nil
 
-        let primaryRelay = makeRelay(address: primaryAddress, bridgeCert: cert)
+        let primaryRelay = makeRelay(address: primaryAddress, bridgeCert: cert, forceObfs4: webTunnelBlockedRelays.contains(primaryAddress))
 
         // Start primary (this maps to PROXY_TLS when address has tlsServerName, else PROXY).
         let primaryPort = start(relay: primaryRelay)
@@ -885,7 +916,7 @@ final class IceProxyManager: ObservableObject {
 
         // Start secondary without calling stop() first (we own two separate Rust statics).
         if let secondaryAddress {
-            let secondaryRelay = makeRelay(address: secondaryAddress, bridgeCert: cert)
+            let secondaryRelay = makeRelay(address: secondaryAddress, bridgeCert: cert, forceObfs4: webTunnelBlockedRelays.contains(secondaryAddress))
             let secondaryPort = startSecondary(relay: secondaryRelay)
             if let sp = secondaryPort {
                 isSecondaryRunning = true

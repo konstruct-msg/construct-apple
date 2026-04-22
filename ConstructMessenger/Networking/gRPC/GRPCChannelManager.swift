@@ -590,6 +590,16 @@ final class GRPCChannelManager: Sendable {
             return msg.contains("Failed to resolve") || msg.contains("nodename nor servname")
         }
 
+        /// True when the error is "WebTunnel blocked by a carrier transparent HTTP proxy":
+        /// the proxy intercepted the WebSocket UPGRADE and returned a non-101 response.
+        /// obfs4 is a binary protocol that transparent HTTP proxies cannot interpret.
+        func isWebTunnelBlocked(_ error: Error) -> Bool {
+            guard let rpc = error as? RPCError, rpc.code == .unimplemented else { return false }
+            let msg = rpc.message.lowercased()
+            return msg.contains("non-200") || msg.contains("http status code") ||
+                   (msg.contains("unexpected") && msg.contains("http"))
+        }
+
         var lastError: Error?
         var iceAutoStartedThisCall = false   // true once we DPI-auto-started ICE in this call
 
@@ -804,13 +814,28 @@ final class GRPCChannelManager: Sendable {
                         continue
                     }
                 } else if usingICE, !iceAutoStartedThisCall, shouldRecordIceFailure(error) {
-                    // Relay tunnel broken (DPI-blocked or unreachable). Rotate to the next
-                    // relay INLINE so the retry loop can use it immediately — unlike the old
-                    // async recordICEFailure() path which started recovery in a detached Task
-                    // that didn't finish before the retry loop exhausted all attempts.
-                    if let failedAddr = await IceProxyManager.shared.activeRelay?.address {
-                        await IceProxyManager.shared.recordRelayFailure(address: failedAddr)
+                    // Relay tunnel broken (DPI-blocked or unreachable). Before rotating,
+                    // check if this is a WebTunnel-specific failure (carrier transparent
+                    // proxy intercepted the WebSocket UPGRADE). obfs4 is a binary protocol
+                    // that such proxies cannot inspect — try the same relay in obfs4 mode.
+                    let failedAddr = await IceProxyManager.shared.activeRelay?.address
+                    let webTunnelActive = await IceProxyManager.shared.isWebTunnelActive
+                    if isWebTunnelBlocked(error), webTunnelActive {
+                        Log.info("🧊 WebTunnel blocked (non-200) — retrying relay via obfs4", category: "gRPC")
+                        let obfs4OK = await IceProxyManager.shared.retryCurrentRelayAsObfs4()
+                        if obfs4OK {
+                            invalidatePersistentClient()
+                            await waitForProxyReady()
+                            Log.info("🧊 ICE obfs4 fallback active — retrying via same relay", category: "gRPC")
+                            continue
+                        }
+                        // obfs4 also failed — blacklist the relay (activeRelay is nil now,
+                        // use the address captured above) and rotate to the next one.
+                        if let addr = failedAddr { await IceProxyManager.shared.recordRelayFailure(address: addr) }
+                    } else {
+                        if let addr = failedAddr { await IceProxyManager.shared.recordRelayFailure(address: addr) }
                     }
+                    // Rotate INLINE so the retry loop can use the new relay immediately.
                     let rotated = await IceProxyManager.shared.rotateToNextRelay()
                     if rotated {
                         invalidatePersistentClient()
