@@ -92,14 +92,15 @@ struct MessageBubbleRegularView: View {
                         replyIndicatorView
 
                         VStack(alignment: .leading, spacing: 4) {
-                            if !message.hasDecryptedContent {
+                            let text = message.displayText
+                            if text.isEmpty {
                                 Text("[!] \(NSLocalizedString("message_unavailable", comment: ""))")
                                     .font(CTFont.regular(13))
                                     .foregroundColor(Color.CT.textDim)
                                     .italic()
                             } else {
                                 LinkDetectingText(
-                                    message.displayText,
+                                    text,
                                     color: message.isSentByMe ? .white : Color.CT.text
                                 )
                             }

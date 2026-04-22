@@ -65,7 +65,7 @@ public class Message: NSManagedObject {
         contentKeyRef = msgId
         decryptedContent = nil
 
-        MessageKeyStore.shared.store(messageId: msgId, key: keyBytes, contactId: contactId)
+        MessageKeyStore.shared.storeSync(messageId: msgId, key: keyBytes, contactId: contactId)
         MessageDisplayCache.shared.store(messageId: msgId, plaintext: plaintext)
     }
 }
