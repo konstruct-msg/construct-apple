@@ -190,6 +190,19 @@ struct IceRelay: Codable, Identifiable {
     /// Returns true when this relay supports WebTunnel transport (ICE v2).
     var supportsWebTunnel: Bool { wtPath != nil }
 
+    /// True when this relay uses CDN domain fronting: the TLS SNI points to a CDN host
+    /// that is different from the relay's own hostname (e.g., MSK behind Yandex CDN).
+    ///
+    /// Raw obfs4 is **not viable** on CDN-fronted relays because the CDN terminates TLS
+    /// at the CDN edge — the inner obfs4 bytes never reach the relay process.
+    /// When WebTunnel is blocked on a CDN-fronted relay, the correct action is to rotate
+    /// to a direct relay instead of attempting obfs4.
+    var isCDNFronted: Bool {
+        guard let sni = tlsServerName, !sni.isEmpty else { return false }
+        let hostname = address.components(separatedBy: ":").first ?? address
+        return sni != hostname
+    }
+
     init(address: String, bridgeCert: String, iatMode: IceIATMode = .none,
          tlsServerName: String? = nil, pinnedSpki: String? = nil,
          wtPath: String? = nil, wtHostHeader: String? = nil) {
@@ -624,6 +637,18 @@ final class IceProxyManager: ObservableObject {
     /// - Returns: true if obfs4 started successfully, false if it also failed.
     func retryCurrentRelayAsObfs4() async -> Bool {
         guard isWebTunnelActive, let relay = activeRelay else { return false }
+
+        // CDN-fronted relays (e.g., MSK behind Yandex CDN) terminate TLS at the CDN edge —
+        // obfs4 bytes inside the TLS tunnel never reach the relay process. Attempting obfs4
+        // on a CDN-fronted relay always fails in <1 s. Mark WebTunnel as blocked so the next
+        // startWithRelayFallback() also bypasses WebTunnel for this relay, then rotate
+        // immediately to a non-CDN relay instead of wasting time on an impossible obfs4 attempt.
+        if relay.isCDNFronted {
+            Log.info("🧊 CDN-fronted relay \(relay.address) — obfs4 impossible (CDN terminates TLS), rotating", category: "ICE")
+            webTunnelBlockedRelays.insert(relay.address)
+            return false
+        }
+
         Log.info("🧊 WebTunnel blocked by carrier proxy — retrying \(relay.address) via obfs4", category: "ICE")
         webTunnelBlockedRelays.insert(relay.address)
         ice_proxy_stop()
