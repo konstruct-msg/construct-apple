@@ -454,13 +454,13 @@ private struct NetworkDetailPreview: View {
                         CTSep()
 
                         CTSettingsSectionHeader(title: "FALLBACK RELAY")
-                        CTSettingsRow(label: "host",          value: "msk.konstruct.cc")
+                        CTSettingsRow(label: "host",          value: "—")
                         CTSep()
-                        CTSettingsRow(label: "port",          value: "443")
+                        CTSettingsRow(label: "port",          value: "—")
                         CTSep()
-                        CTSettingsRow(label: "transport",     value: "TLS + OBFS4")
+                        CTSettingsRow(label: "transport",     value: "—")
                         CTSep()
-                        CTSettingsRow(label: "status",        value: "standby")
+                        CTSettingsRow(label: "status",        value: "no relay")
                         CTSep()
 
                         CTSettingsSectionHeader(title: "BEHAVIOUR")

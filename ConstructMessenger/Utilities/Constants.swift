@@ -404,43 +404,19 @@ struct ICEConfig {
     /// Primary ICE endpoint: TLS 1.3 → obfs4 → gRPC (Amsterdam, via Traefik).
     /// Uses `ice.<grpcHost>:443` derived at runtime from GRPCChannelManager.currentHost.
 
-    // ── Relay 1: Moscow (Yandex Cloud) ───────────────────────────────────────────
-    /// Relay 1 — Moscow, Yandex Cloud (158.160.140.67).
-    /// TLS 1.3 → obfs4 → TCP relay → Amsterdam.
-
-    /// IP address of the Moscow relay — used for TCP connect, no DNS resolution.
-    static let mskRelayIP = "158.160.140.67"
-
-    /// Fake TLS SNI sent in ClientHello for the Moscow relay (REALITY-style DPI evasion).
-    /// The IP is Yandex Cloud, so traffic to it with a Yandex domain SNI looks legitimate.
-    /// The actual cert is verified by SPKI pin below — domain match is intentionally skipped.
-    static let mskRelaySNI = "storage.yandexcloud.net"
-
-    /// Hardcoded fallback SPKI pin for the Moscow relay.
-    /// Update via sign-config.sh + git push; this value is the last-resort safety net.
-    static let mskRelayPinnedSPKI = "ce2bbfcac1fffab1f4f41ee540aee2dea92c523f7768264aeb87184bf8bfa723"
-
-    /// obfs4 bridge cert for Relay 1.
-    /// Update when the relay container is recreated (new keypair in /data/relay.obfs4).
-    static let mskRelayBridgeCert = "IZKOsDNS5gld2g1PH4Uo4Yna/ltepGKpzDQTbSJll9OqzMin6yZaNx4gFbiLTvuGbABpcA"
-
-    static let mskRelayAddress = "\(mskRelayIP):443"
-
-    /// Direct obfs4 port on the Moscow relay, bypassing the Yandex CDN layer.
-    ///
-    /// MSK relay port 443 is CDN-fronted — the CDN terminates TLS so raw obfs4 bytes
-    /// never reach the relay process. Port 9443 binds directly on the VM (no CDN),
-    /// allowing TLS+obfs4 to pass through. This is the fallback when WebTunnel on
-    /// port 443 is blocked by carrier DPI (e.g. on mobile LTE in Russia).
-    ///
-    /// Same obfs4 identity and TLS cert as port 443 — same SPKI pin and bridge cert.
-    static let mskRelayObfs4Address = "\(mskRelayIP):9443"
-
-    /// coturn TURN/STUN server on the Moscow relay VM.
-    /// Used as a secondary TURN server for WebRTC (geographic advantage for RU users)
-    /// and as the STUN fallback when no server-issued TURN credentials are available.
-    static let mskTURNAddress = "turn:\(mskRelayIP):3478"
-    static let mskSTUNAddress = "stun:\(mskRelayIP):3478"
+    // ── Relay 1: Moscow (Yandex Cloud) — REMOVED ────────────────────────────────
+    // IP 158.160.140.67 confirmed blocked by RU DPI: TCP RST on TLS ClientHello
+    // on both port 443 and 9443. Kept as comments for reference when a new RU
+    // relay is deployed with proper CDN fronting (Cloudflare or equivalent).
+    //
+    // static let mskRelayIP             = "158.160.140.67"
+    // static let mskRelaySNI            = "storage.yandexcloud.net"
+    // static let mskRelayPinnedSPKI     = "ce2bbfcac1fffab1f4f41ee540aee2dea92c523f7768264aeb87184bf8bfa723"
+    // static let mskRelayBridgeCert     = "IZKOsDNS5gld2g1PH4Uo4Yna/ltepGKpzDQTbSJll9OqzMin6yZaNx4gFbiLTvuGbABpcA"
+    // static let mskRelayAddress        = "\(mskRelayIP):443"
+    // static let mskRelayObfs4Address   = "\(mskRelayIP):9443"
+    // static let mskTURNAddress         = "turn:\(mskRelayIP):3478"
+    // static let mskSTUNAddress         = "stun:\(mskRelayIP):3478"
 
     // ── Relay 2: Amsterdam co-located (ice.ams.konstruct.cc) ─────────────────
     /// construct-relay running on the same VPS as the main server.

@@ -210,9 +210,6 @@ actor IceCertFetcher {
         if let relay = cachedRelayInfosSync()?.first(where: { $0.addressWithPort == address }) {
             return relay.spkiSha256.isEmpty ? nil : relay.spkiSha256
         }
-        if address == ICEConfig.mskRelayAddress {
-            return ICEConfig.mskRelayPinnedSPKI.isEmpty ? nil : ICEConfig.mskRelayPinnedSPKI
-        }
         return nil
     }
 
