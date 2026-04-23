@@ -131,6 +131,9 @@ enum NetworkTiming {
         /// longer relay handshake + NAT traversal time. 10s caused frequent
         /// "waitForProxyReady timed out" on the first connection attempt.
         static let proxyReadyWaitTimeout: TimeInterval = 15.0
+        /// Shorter timeout used on WiFi where the proxy starts in <1s typically.
+        /// Avoids blocking the retry loop for 15s when ICE simply fails on a fast network.
+        static let proxyReadyWaitTimeoutWiFi: TimeInterval = 5.0
         static let onDemandStartJoinTimeout: TimeInterval = 5.0
         static let onDemandStartJoinPollInterval: TimeInterval = 0.1
         static let relayLatencyProbeTimeout: TimeInterval = 2.0

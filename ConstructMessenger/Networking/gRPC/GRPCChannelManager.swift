@@ -140,12 +140,20 @@ final class GRPCChannelManager: Sendable {
     /// set after port bind). When ICE starts cold from scratch (full WebTunnel TCP+TLS handshake),
     /// the tunnel may take 3–8 s to establish — hence the 10-second default.
     func waitForProxyReady(timeout: TimeInterval = NetworkTiming.ICE.proxyReadyWaitTimeout) async {
-        let deadline = Date().addingTimeInterval(timeout)
+        // ICE OFF: proxy will never start — return immediately, no polling.
+        let rawMode = UserDefaults.standard.string(forKey: IceMode.defaultsKey) ?? IceMode.platformDefault.rawValue
+        guard (IceMode(rawValue: rawMode) ?? .auto) != .off else { return }
+        // On WiFi the proxy typically starts in <500 ms; the full 15 s cellular timeout
+        // wastes 10+ s in failure paths on fast networks.
+        let effectiveTimeout = NetworkReachabilityManager.shared.connectionType == .cellular
+            ? timeout
+            : min(timeout, NetworkTiming.ICE.proxyReadyWaitTimeoutWiFi)
+        let deadline = Date().addingTimeInterval(effectiveTimeout)
         while Date() < deadline {
             if ice_proxy_is_running() != 0, ice_proxy_port() > 0 { return }
             try? await Task.sleep(nanoseconds: 50_000_000) // 50 ms
         }
-        Log.debug("🧊 waitForProxyReady: timed out after \(Int(timeout * 1000)) ms", category: "gRPC")
+        Log.debug("🧊 waitForProxyReady: timed out after \(Int(effectiveTimeout * 1000)) ms", category: "gRPC")
     }
 
     private init() {
@@ -656,8 +664,12 @@ final class GRPCChannelManager: Sendable {
                     return min(timeout, NetworkTiming.ICE.unverifiedRelayTimeout)
                 }
                 // "Happy eyeballs" for routing: on the first direct attempt, prefer a short
-                // deadline so we can quickly try ICE instead of waiting 20–30 seconds.
+                // deadline so we can quickly try ICE instead of waiting 20-30 seconds.
+                // Skip this cap when ICE is OFF — no fallback exists, so the direct attempt
+                // must use the full caller timeout to avoid artificial connection failures.
                 guard fastICEFallback, !usingICE, attempt == 0 else { return timeout }
+                let rawModeForTimeout = UserDefaults.standard.string(forKey: IceMode.defaultsKey) ?? IceMode.platformDefault.rawValue
+                guard (IceMode(rawValue: rawModeForTimeout) ?? .auto) != .off else { return timeout }
                 // 4 seconds is enough for TCP+TLS on healthy networks, but short enough to
                 // avoid UI stalls on DPI-blocked paths.
                 return min(timeout, NetworkTiming.GRPC.fastFallbackDirectTimeout)
@@ -861,17 +873,22 @@ final class GRPCChannelManager: Sendable {
 
                 // VPN DNS failure: when direct TLS can't resolve the server name, try routing through
                 // ICE which bypasses DNS entirely (connects to 127.0.0.1 locally, relay resolves upstream).
+                // Skip entirely when ICE is OFF — the user has explicitly disabled it.
                 if !usingICE, isDNSResolutionFailure(error) {
-                    let hasCert = await IceProxyManager.shared.hasCert
-                    if hasCert {
-                        Log.info("🧊 DNS failure on direct path — forcing ICE routing (VPN?)", category: "gRPC")
-                        await IceProxyManager.shared.forceStartIgnoringCooldown()
-                        await waitForProxyReady()
-                        if iceProxyPort() != nil {
-                            continue
+                    let dnsIceRawMode = UserDefaults.standard.string(forKey: IceMode.defaultsKey) ?? IceMode.platformDefault.rawValue
+                    let dnsIceMode = IceMode(rawValue: dnsIceRawMode) ?? .auto
+                    if dnsIceMode != .off {
+                        let hasCert = await IceProxyManager.shared.hasCert
+                        if hasCert {
+                            Log.info("🧊 DNS failure on direct path — forcing ICE routing (VPN?)", category: "gRPC")
+                            await IceProxyManager.shared.forceStartIgnoringCooldown()
+                            await waitForProxyReady()
+                            if iceProxyPort() != nil {
+                                continue
+                            }
+                            // waitForProxyReady timed out — clear stuck state so next attempt restarts.
+                            await IceProxyManager.shared.resetIfStuck()
                         }
-                        // waitForProxyReady timed out — clear stuck state so next attempt restarts.
-                        await IceProxyManager.shared.resetIfStuck()
                     }
                 }
 
@@ -879,7 +896,11 @@ final class GRPCChannelManager: Sendable {
                 // first attempt, try starting ICE proxy and retrying through the obfs4 relay.
                 // Also fires when ICE is running but on cooldown — startOnDemandIfNeeded() clears
                 // the cooldown in that case, so iceProxyPort() becomes non-nil after the call.
-                if !usingICE, attempt == 0, shouldTryICEFallback(error) {
+                // Skip entirely when ICE is OFF — startOnDemandIfNeeded() would return immediately
+                // but waitForProxyReady() would still block for up to 5-15s.
+                let dpiRawMode = UserDefaults.standard.string(forKey: IceMode.defaultsKey) ?? IceMode.platformDefault.rawValue
+                let dpiIceMode = IceMode(rawValue: dpiRawMode) ?? .auto
+                if !usingICE, attempt == 0, dpiIceMode != .off, shouldTryICEFallback(error) {
                     if fastICEFallback {
                         PerformanceMetrics.shared.record(.rpcFastICEFallbackTriggered, label: routingKey())
                     }

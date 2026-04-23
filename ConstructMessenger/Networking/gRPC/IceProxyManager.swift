@@ -391,6 +391,9 @@ final class IceProxyManager: ObservableObject {
     private let relayKey   = "iceActiveRelay"
     /// Tracks whether `isEnabled` was set by DPI auto-detection (true) or user toggle (false).
     private static let autoDetectedKey = "ice_auto_detected_dpi"
+    /// Persists DPI detection across app launches so the proxy can be pre-warmed at startup.
+    /// Set when DPI is confirmed in AUTO mode; cleared when direct path is verified clean.
+    private static let dpiPersistentKey = "ice_dpi_detected_persistent"
     /// Bump this version to trigger another one-time reset of stale DPI state.
     private static let dpiResetVersion = 1
     /// Bump to trigger migration from old boolean ice_enabled → IceMode tri-state.
@@ -923,6 +926,21 @@ final class IceProxyManager: ObservableObject {
         let host    = GRPCChannelManager.shared.currentHost
         let iceHost = "ice.\(host)"
 
+        // Fast path: if there's a stored relay from the last successful start and it's
+        // not on the recent-failure list, try it immediately without probing all endpoints.
+        // This eliminates the 300-400ms sortByLatency pass on every repeat ICE start
+        // (network switch, crash recovery, relay rotation).
+        if let stored = loadStoredRelay(), !isRelayRecentlyFailed(stored.address) {
+            let relay = makeRelay(address: stored.address, bridgeCert: cert,
+                                  forceObfs4: webTunnelBlockedRelays.contains(stored.address))
+            if start(relay: relay) != nil {
+                saveRelay(relay)
+                Log.info("🧊 ICE fast-started via cached relay \(relay.address)", category: "ICE")
+                return true
+            }
+            Log.info("🧊 Cached relay \(stored.address) failed — probing all endpoints", category: "ICE")
+        }
+
         // Deduplicated candidate list: primary (AMS) + hardcoded + server-fetched relays.
         var seen = Set<String>()
         var candidates: [String] = []
@@ -1078,8 +1096,24 @@ final class IceProxyManager: ObservableObject {
     /// Start with the stored relay (called at app launch).
     /// In `.on` mode: starts ICE immediately.
     /// In `.auto`/`.off` mode: skips (ICE will start on-demand if DPI is detected).
+    /// Exception: in `.auto` mode with persistent DPI, pre-warms the proxy in the
+    /// background so `startOnDemandIfNeeded()` can confirm DPI and return immediately
+    /// on the first RPC failure instead of running `sortByLatency` (~300–400 ms).
     func startIfEnabled() async {
         migrateToModeIfNeeded()
+
+        // AUTO mode + persistent DPI: pre-warm the proxy before the first RPC.
+        // `startEphemeralOnDemandIfNeeded` starts without confirming DPI so EU users
+        // who had DPI last session still get a clean slate — the proxy warms in the
+        // background but `iceProxyPort()` returns nil until DPI is actually observed.
+        if mode == .auto, UserDefaults.standard.bool(forKey: Self.dpiPersistentKey) {
+            Task { [weak self] in
+                guard let self else { return }
+                await self.startEphemeralOnDemandIfNeeded()
+            }
+            Task { await IceCertFetcher.shared.fetchAndCacheRelayList() }
+        }
+
         guard mode == .on else { return }
 
         // Restore cooldown state from previous session (persisted in UserDefaults by GRPCChannelManager).
@@ -1177,6 +1211,10 @@ final class IceProxyManager: ObservableObject {
             while isStartingOnDemand, Date() < deadline {
                 try? await Task.sleep(nanoseconds: UInt64(NetworkTiming.ICE.onDemandStartJoinPollInterval * 1_000_000_000))
             }
+            // The concurrent start finished. If it was an ephemeral pre-warm (confirmDPI=false)
+            // and the caller IS a real DPI event (confirmDPI=true), the proxy may be running
+            // but ice_enabled is still false — confirm DPI now so iceProxyPort() routes correctly.
+            if confirmDPI, isRunning, ice_proxy_is_running() != 0 { confirmDPIDetected() }
             return
         }
 
@@ -1200,6 +1238,7 @@ final class IceProxyManager: ObservableObject {
         guard !dpiDetectedThisSession else { return }
         dpiDetectedThisSession = true
         UserDefaults.standard.set(true, forKey: enabledKey)
+        UserDefaults.standard.set(true, forKey: Self.dpiPersistentKey)
         Log.info("🧊 DPI confirmed for this session — ICE routing active, starting direct probe timer", category: "ICE")
         startDirectProbeTimer()
     }
@@ -1209,6 +1248,7 @@ final class IceProxyManager: ObservableObject {
         dpiDetectedThisSession = false
         if mode == .auto {
             UserDefaults.standard.set(false, forKey: enabledKey)
+            UserDefaults.standard.set(false, forKey: Self.dpiPersistentKey)
         }
         stopDirectProbeTimer()
     }
