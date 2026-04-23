@@ -822,7 +822,9 @@ final class GRPCChannelManager: Sendable {
                     let webTunnelActive = await IceProxyManager.shared.isWebTunnelActive
                     if isWebTunnelBlocked(error), webTunnelActive {
                         Log.info("🧊 WebTunnel blocked (non-200) — retrying relay via obfs4", category: "gRPC")
-                        let obfs4OK = await IceProxyManager.shared.retryCurrentRelayAsObfs4()
+                        // Pass failedAddr as hint: networkPathChanged may have reset activeRelay
+                        // between the read above and the actual retry call (race condition on MainActor).
+                        let obfs4OK = await IceProxyManager.shared.retryCurrentRelayAsObfs4(hintAddress: failedAddr)
                         if obfs4OK {
                             invalidatePersistentClient()
                             await waitForProxyReady()

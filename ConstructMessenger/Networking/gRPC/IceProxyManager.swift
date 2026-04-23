@@ -659,8 +659,20 @@ final class IceProxyManager: ObservableObject {
     /// The set is cleared on network path change — new network may allow WebTunnel.
     ///
     /// - Returns: true if obfs4 started successfully, false if it also failed.
-    func retryCurrentRelayAsObfs4() async -> Bool {
-        guard isWebTunnelActive, let relay = activeRelay else { return false }
+    func retryCurrentRelayAsObfs4(hintAddress: String? = nil) async -> Bool {
+        // Prefer current live state. If networkPathChanged raced and already called
+        // resetAllProxyState() between the caller's webTunnelActive read and this call,
+        // fall back to reconstructing the relay from the hint address captured by the caller.
+        let relay: IceRelay
+        if isWebTunnelActive, let active = activeRelay {
+            relay = active
+        } else if let addr = hintAddress, !addr.isEmpty,
+                  let cert = ICEConfig.hardcodedRelayCerts[addr] {
+            Log.info("🧊 WebTunnel retry: activeRelay was reset (network change race) — recovering from hint \(addr)", category: "ICE")
+            relay = makeRelay(address: addr, bridgeCert: cert)
+        } else {
+            return false
+        }
 
         webTunnelBlockedRelays.insert(relay.address)
 
