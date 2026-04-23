@@ -63,11 +63,16 @@ final class SignalingServiceClient: Sendable {
 
     // MARK: - Signal Stream
 
-    /// Opens the bidirectional `Signal` stream.
+    /// Opens the bidirectional `Signal` stream using the shared persistent gRPC channel
+    /// managed by `GRPCChannelManager`. The caller owns the returned handle and must
+    /// call `close()` when the stream is no longer needed.
     ///
-    /// The returned handle owns its own gRPC client + runConnections() task and must be closed.
+    /// Using the shared channel ensures the signaling stream:
+    /// - shares the same HTTP/2 connection as message RPCs (no extra TLS handshake)
+    /// - is automatically rerouted when the ICE relay changes (generation-based invalidation)
+    /// - participates in the same failure tracking / cooldown logic as all other RPCs
     func openSignalStream() throws -> SignalStream {
-        let grpcClient = try GRPCChannelManager.shared.makeClient()
+        let grpcClient = try GRPCChannelManager.shared.acquireChannel()
         let client = Shared_Proto_Signaling_V1_SignalingService.Client(wrapping: grpcClient)
 
         let (outbound, outboundContinuation) = AsyncStream<Shared_Proto_Signaling_V1_SignalRequest>.makeStream()
@@ -82,10 +87,6 @@ final class SignalingServiceClient: Sendable {
                 }
             }
         )
-
-        let connectTask = Task {
-            try await grpcClient.runConnections()
-        }
 
         let streamTask = Task {
             do {
@@ -127,8 +128,6 @@ final class SignalingServiceClient: Sendable {
         }
 
         return SignalStream(
-            grpcClient: grpcClient,
-            connectTask: connectTask,
             streamTask: streamTask,
             outboundContinuation: outboundContinuation,
             accepted: accepted,
@@ -157,28 +156,26 @@ private actor TurnCredentialsCache {
 
 // MARK: - Stream Handle
 
-/// An owned signaling stream connection.
+/// An owned signaling stream handle.
+///
+/// Uses the shared `GRPCChannelManager` persistent channel — the underlying HTTP/2
+/// connection is NOT owned by this handle and must not be shut down here.
+/// Closing the stream only finishes the outbound producer and cancels the stream RPC task.
 ///
 /// - NOTE: This is a minimal transport handle. Call lifecycle/WebRTC binding will be layered on top.
 final class SignalStream: @unchecked Sendable {
     let accepted: AsyncStream<Void>
     let incoming: AsyncStream<Shared_Proto_Signaling_V1_SignalResponse>
 
-    private let grpcClient: GRPCClient<HTTP2ClientTransport.TransportServices>
-    private let connectTask: Task<Void, Error>
     private let streamTask: Task<Void, Error>
     private let outboundContinuation: AsyncStream<Shared_Proto_Signaling_V1_SignalRequest>.Continuation
 
     init(
-        grpcClient: GRPCClient<HTTP2ClientTransport.TransportServices>,
-        connectTask: Task<Void, Error>,
         streamTask: Task<Void, Error>,
         outboundContinuation: AsyncStream<Shared_Proto_Signaling_V1_SignalRequest>.Continuation,
         accepted: AsyncStream<Void>,
         incoming: AsyncStream<Shared_Proto_Signaling_V1_SignalResponse>
     ) {
-        self.grpcClient = grpcClient
-        self.connectTask = connectTask
         self.streamTask = streamTask
         self.outboundContinuation = outboundContinuation
         self.accepted = accepted
@@ -190,9 +187,9 @@ final class SignalStream: @unchecked Sendable {
     }
 
     func close() {
+        // Finish outbound so the server receives a clean stream end.
         outboundContinuation.finish()
-        grpcClient.beginGracefulShutdown()
+        // Cancel the stream RPC task (not the shared gRPC connection).
         streamTask.cancel()
-        connectTask.cancel()
     }
 }

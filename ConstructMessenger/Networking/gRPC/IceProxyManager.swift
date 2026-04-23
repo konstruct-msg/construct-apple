@@ -532,8 +532,12 @@ final class IceProxyManager: ObservableObject {
     /// The current effective routing path for traffic.
     /// Updates automatically because it reads `@Published` properties.
     var currentTrafficPath: TrafficPath {
-        guard isRunning, let relay = activeRelay else { return .direct }
         if isOnCooldown { return .iceCooldown }
+        guard isRunning, let relay = activeRelay else {
+            // ICE is enabled (or starting on-demand) but the proxy isn't up yet.
+            if isEnabled || isStartingOnDemand { return .iceConnecting }
+            return .direct
+        }
         if isWebTunnelActive { return .iceWebTunnel(relay: relay.address) }
         if relay.tlsServerName != nil { return .icePrimary(host: relay.address) }
         return .iceRelay(address: relay.address)
@@ -1026,18 +1030,13 @@ final class IceProxyManager: ObservableObject {
     /// If a plain proxy is already running its port is returned immediately (idempotent).
     @MainActor
     private func startSecondary(relay: IceRelay) -> UInt16? {
-        // For a plain-obfs4 secondary we always use ice_proxy_start (not _tls).
-        // If the caller accidentally passes a TLS relay, strip tlsServerName.
-        var host = ""
-        guard let comps = relay.address.split(separator: ":").map(String.init) as [String]?,
-              comps.count == 2,
-              let _ = UInt16(comps[1]) else { return nil }
-        host = comps[0]
-
+        // ice_proxy_start(bridge_line, relay_addr, port_out)
+        // bridge_line = "cert=<base64> iat-mode=<N>" (relay.bridgeLine)
+        // relay_addr  = "host:port"                  (relay.address)
         var outPort: UInt16 = 0
-        let result = host.withCString { hostPtr in
-            relay.bridgeCert.withCString { certPtr in
-                ice_proxy_start(certPtr, hostPtr, &outPort)
+        let result = relay.bridgeLine.withCString { bridgeLinePtr in
+            relay.address.withCString { addrPtr in
+                ice_proxy_start(bridgeLinePtr, addrPtr, &outPort)
             }
         }
         guard result == 0, outPort > 0 else { return nil }

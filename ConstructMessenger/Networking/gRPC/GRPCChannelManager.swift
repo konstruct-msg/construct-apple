@@ -54,16 +54,21 @@ final class GRPCChannelManager: Sendable {
 
     /// Record that the ICE relay just failed. Subsequent calls will bypass ICE for `iceCooldown` seconds.
     /// Also triggers a background reconnect attempt: fresh cert fetch → primary → relay fallback.
-    func recordICEFailure() {
+    ///
+    /// - Parameter failedAddress: The relay address that failed, captured by the caller before any
+    ///   `await` suspension points. Avoids a race where `activeRelay` is cleared on MainActor by a
+    ///   concurrent `networkPathChanged` before this Task runs.
+    func recordICEFailure(failedAddress: String? = nil) {
         UserDefaults.standard.set(Date().timeIntervalSinceReferenceDate, forKey: Self.iceFailedAtKey)
         invalidatePersistentClient()  // routing will change (ICE → direct)
         Log.info("⚠️ ICE relay failure recorded — bypassing ICE for \(Int(Self.iceCooldown))s", category: "gRPC")
         Task { @MainActor [weak self] in
             guard self != nil else { return }
-            // Blacklist the relay that just failed so startWithRelayFallback() picks a
-            // different one instead of re-selecting the same broken relay by TCP latency.
-            if let failedAddress = IceProxyManager.shared.activeRelay?.address {
-                IceProxyManager.shared.recordRelayFailure(address: failedAddress)
+            // Use the pre-captured address when available; fall back to the current relay only if
+            // the caller didn't supply one (old call sites without a captured address).
+            let addr = failedAddress ?? IceProxyManager.shared.activeRelay?.address
+            if let addr {
+                IceProxyManager.shared.recordRelayFailure(address: addr)
             }
             // Notify IceProxyManager so the UI reflects cooldown state immediately.
             IceProxyManager.shared.enterCooldown(duration: Self.iceCooldown)
@@ -400,21 +405,20 @@ final class GRPCChannelManager: Sendable {
         Log.info("🏁 Happy-eyeballs race: \(raceLegs) leg(s) (direct + ICE-TLS:\(iceTLSPort) + ICE-plain:\(icePlainPort))", category: "gRPC")
         PerformanceMetrics.shared.start(.grpcConnectStart, label: "race:\(raceLegs)-legs")
 
-        // nonisolated(unsafe): written exactly once (first-write-wins), always before any read.
-        nonisolated(unsafe) var winnerLabel: String = "direct"
+        typealias LegResult = (label: String, value: Result)
 
-        let result: Result = try await withThrowingTaskGroup(of: Result.self) { group in
+        let raceResult: LegResult = try await withThrowingTaskGroup(of: LegResult.self) { group in
             // Leg 1: direct TLS
             let directClient = try makeDirectClient()
             group.addTask {
                 let connTask = Task { try await directClient.runConnections() }
                 defer {
                     directClient.beginGracefulShutdown()
-                    connTask.cancel()
+                    // Do NOT connTask.cancel() — let runConnections() drain gracefully.
+                    _ = connTask  // suppress unused warning; task released when client drains
                 }
                 let r = try await operation(directClient)
-                winnerLabel = "direct"
-                return r
+                return ("direct", r)
             }
 
             // Leg 2: ICE-TLS (staggered by happyEyeballsICEStaggerMs)
@@ -425,11 +429,10 @@ final class GRPCChannelManager: Sendable {
                     let connTask = Task { try await iceTLSClient.runConnections() }
                     defer {
                         iceTLSClient.beginGracefulShutdown()
-                        connTask.cancel()
+                        _ = connTask
                     }
                     let r = try await operation(iceTLSClient)
-                    winnerLabel = "ice-tls:\(iceTLSPort)"
-                    return r
+                    return ("ice-tls:\(iceTLSPort)", r)
                 }
             }
 
@@ -442,11 +445,10 @@ final class GRPCChannelManager: Sendable {
                     let connTask = Task { try await icePlainClient.runConnections() }
                     defer {
                         icePlainClient.beginGracefulShutdown()
-                        connTask.cancel()
+                        _ = connTask
                     }
                     let r = try await operation(icePlainClient)
-                    winnerLabel = "ice-plain:\(icePlainPort)"
-                    return r
+                    return ("ice-plain:\(icePlainPort)", r)
                 }
             }
 
@@ -458,7 +460,7 @@ final class GRPCChannelManager: Sendable {
         }
 
         PerformanceMetrics.shared.end(.grpcConnectStart, endEvent: .grpcConnectEnd, label: "race:\(raceLegs)-legs")
-        Log.info("🏁 Happy-eyeballs race winner: \(winnerLabel)", category: "gRPC")
+        Log.info("🏁 Happy-eyeballs race winner: \(raceResult.label)", category: "gRPC")
 
         // Commit the winning routing to the persistent connection:
         // - If ICE won: iceProxyPort() is already non-nil → acquirePersistentClient() will
@@ -467,13 +469,13 @@ final class GRPCChannelManager: Sendable {
         //   the persistent connection so the next acquirePersistentClient() re-evaluates routing.
         //   (iceProxyPort() routing is based on ICE mode + cooldown; direct win means DPI is
         //   not active so the ICE auto-start task can be discarded.)
-        if winnerLabel == "direct" {
+        if raceResult.label == "direct" {
             // Clear any ICE auto-warm that started in the background — direct is faster.
             await IceProxyManager.shared.stopEphemeral()
             invalidatePersistentClient()
         }
 
-        return result
+        return raceResult.value
     }
 
     /// Execute a gRPC operation with automatic client lifecycle management.
@@ -854,7 +856,7 @@ final class GRPCChannelManager: Sendable {
                         continue
                     }
                     // All relays exhausted — enter cooldown for direct fallback.
-                    recordICEFailure()
+                    recordICEFailure(failedAddress: failedAddr)
                 }
 
                 // VPN DNS failure: when direct TLS can't resolve the server name, try routing through
