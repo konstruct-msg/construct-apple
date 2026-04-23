@@ -478,39 +478,36 @@ struct ICEConfig {
     /// Per-relay obfs4 bridge certs, keyed by relay address (IP:port or host:port).
     /// Used by makeRelay() to override the AMS cert for relays with their own obfs4 keypair.
     static let hardcodedRelayCerts: [String: String] = [
-        mskRelayAddress:      mskRelayBridgeCert,
-        mskRelayObfs4Address: mskRelayBridgeCert,   // same identity as :443
-        amsRelayAddress:      amsRelayBridgeCert,
-        // spbRelayAddress: spbRelayBridgeCert,   // TODO: uncomment after Relay 3 deployment
+        amsRelayAddress: amsRelayBridgeCert,
+        // mskRelayAddress: mskRelayBridgeCert,    // MSK relay removed — IP blocked by RU DPI
+        // spbRelayAddress: spbRelayBridgeCert,    // TODO: uncomment after Relay 3 deployment
     ]
 
     /// Hardcoded relay list used as a last resort when discovery is unavailable.
     /// Order matters: relays are probed concurrently but this sets tie-break priority.
-    /// SPB relay (194.87.235.91) is omitted until deployed — the server RSTs port 443,
-    /// causing rapid blacklist/unblacklist cycles that interfere with relay rotation.
     static let hardcodedRelayAddresses: [String] = [
-        mskRelayAddress,
         amsRelayAddress,
-        // spbRelayAddress,   // TODO: uncomment after Relay 3 deployment
+        // mskRelayAddress,  // MSK relay removed — 158.160.140.67 blocked by RU DPI (TLS RST)
+        // spbRelayAddress,  // TODO: uncomment after Relay 3 deployment
     ]
 
     /// TLS SNI overrides keyed by relay address string.
     /// Required for IP-based relays (IPs cannot be used as TLS SNI).
     /// Also used for domain-based relays that need explicit SPKI pinning.
     static let hardcodedRelaySNIs: [String: String] = [
-        mskRelayAddress:      mskRelaySNI,
-        mskRelayObfs4Address: mskRelaySNI,   // same SNI as :443 (same TLS cert)
-        amsRelayAddress:      amsRelaySNI,
-        // spbRelayAddress: spbRelaySNI,   // TODO: uncomment after Relay 3 deployment
+        amsRelayAddress: amsRelaySNI,
+        // mskRelayAddress:      mskRelaySNI,       // MSK removed
+        // mskRelayObfs4Address: mskRelaySNI,       // MSK removed
+        // spbRelayAddress: spbRelaySNI,            // TODO: uncomment after Relay 3 deployment
     ]
 
     /// SPKI pins keyed by relay address. Looked up by makeRelay() for any relay
     /// that appears in hardcodedRelaySNIs.
     static let hardcodedRelaySPKIs: [String: String] = [
-        mskRelayAddress:      mskRelayPinnedSPKI,
-        mskRelayObfs4Address: mskRelayPinnedSPKI,   // same cert as :443
-        amsRelayAddress:      amsRelayPinnedSPKI,
-        // spbRelayAddress: spbRelayPinnedSPKI,   // TODO: uncomment after Relay 3 deployment
+        amsRelayAddress: amsRelayPinnedSPKI,
+        // mskRelayAddress:      mskRelayPinnedSPKI,  // MSK removed
+        // mskRelayObfs4Address: mskRelayPinnedSPKI,  // MSK removed
+        // spbRelayAddress: spbRelayPinnedSPKI,       // TODO: uncomment after Relay 3 deployment
     ]
 
     /// UserDefaults key where the relay list fetched from the server is cached.
@@ -523,36 +520,24 @@ struct ICEConfig {
     /// WebTunnel (ICE v2) WebSocket resource paths, keyed by relay address.
     /// When present, makeRelay() activates WebTunnel-first transport for that relay.
     /// Override via `.well-known/construct-server` `ice.relays[].wt_path` without a new build.
-    /// Note: mskRelayObfs4Address (:9443) is intentionally absent — the direct obfs4
-    /// port bypasses CDN and should never use WebTunnel (its purpose is raw TLS+obfs4).
     static let hardcodedRelayWTPaths: [String: String] = [
-        mskRelayAddress: "/construct-ice",
         amsRelayAddress: "/construct-ice",
+        // mskRelayAddress: "/construct-ice",   // MSK removed
         // spbRelayAddress: "/construct-ice",   // TODO: uncomment after Relay 3 deployment
     ]
 
     /// Companion obfs4-only ports for CDN-fronted relays.
-    ///
-    /// When a CDN-fronted relay (isCDNFronted = true) has its WebTunnel blocked by
-    /// carrier DPI, raw obfs4 cannot be attempted on the CDN port — the CDN terminates
-    /// TLS and discards the inner obfs4 bytes. Instead, the client switches to the
-    /// companion port, which connects directly to the relay VM (bypassing CDN).
-    ///
-    /// These ports run the same `construct-relay` process (ALT_LISTEN_ADDR env var),
-    /// sharing the same TLS cert and obfs4 identity — same SPKI pin and bridge cert.
-    static let hardcodedRelayObfs4Companions: [String: String] = [
-        mskRelayAddress: mskRelayObfs4Address,
-    ]
+    // MSK relay removed — 9443 also RST by DPI
+    static let hardcodedRelayObfs4Companions: [String: String] = [:]
 
     /// Fallback relay-region rules used when the server config has not been fetched yet.
     /// Each rule maps a UTC offset range (hours, inclusive) to a preferred relay ordering.
     /// The first matching rule wins; unmatched → default ordering.
     ///
-    /// UTC+3 → Moscow relay first; UTC+0..+2 → Amsterdam first.
+    /// MSK relay removed. RU users fall through to AMS until a new RU-region relay is deployed.
     /// Override via `.well-known/construct-server` `ice.relay_regions` without a new build.
     static let hardcodedRelayRegions: [ICERelayRegion] = [
-        ICERelayRegion(tzOffsetMin: 3, tzOffsetMax: 3, preferredRelays: [mskRelayAddress, amsRelayAddress]),
-        ICERelayRegion(tzOffsetMin: 0, tzOffsetMax: 2, preferredRelays: [amsRelayAddress, mskRelayAddress]),
+        ICERelayRegion(tzOffsetMin: 0, tzOffsetMax: 12, preferredRelays: [amsRelayAddress]),
     ]
 }
 

@@ -772,6 +772,7 @@ struct ChatView: View {
     _ = PreviewHelpers.createSampleMessage(context: context, chat: chat, isSentByMe: false, text: "Hi! How are you?")
     _ = PreviewHelpers.createSampleMessage(context: context, chat: chat, isSentByMe: true, text: "I'm good, thanks! So what about you?")
     _ = PreviewHelpers.createSampleMessage(context: context, chat: chat, isSentByMe: false, text: "Great to hear!")
+    _ = PreviewHelpers.createSampleMessage(context: context, chat: chat, isSentByMe: false, text: "I'm fine, just relaxing!")
 
     try? context.save()
 
