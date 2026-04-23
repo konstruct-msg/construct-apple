@@ -198,15 +198,21 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
     private static func buildIceServers(turn: Shared_Proto_Signaling_V1_TurnCredentials?) -> [RTCIceServer] {
         var servers: [RTCIceServer] = []
         if let turn, !turn.urls.isEmpty {
-            // Server-provided TURN credentials — use exclusively.
-            // TURN servers also handle STUN binding requests on the same port,
-            // so no separate STUN server is needed when TURN is available.
+            // Server-provided TURN credentials — primary server (AMS).
+            // TURN servers also handle STUN binding requests, so no separate STUN needed.
             servers.append(RTCIceServer(urlStrings: turn.urls, username: turn.username, credential: turn.credential))
+            // Secondary TURN: Moscow coturn for RU users (lower latency relay path).
+            // Uses the same credentials — coturn shared-secret is server-wide, not per-host.
+            servers.append(RTCIceServer(
+                urlStrings: [ICEConfig.mskTURNAddress],
+                username: turn.username,
+                credential: turn.credential
+            ))
         } else {
-            // TURN unavailable (credentials fetch failed). Fall back to own STUN server
-            // (coturn on ams.konstruct.cc) for NAT traversal without relay capability.
-            // Never use public STUN servers (privacy: ICE activity reveals call metadata).
-            servers.append(RTCIceServer(urlStrings: ["stun:ams.konstruct.cc:3478"]))
+            // TURN unavailable (credentials fetch failed). Fall back to own STUN servers
+            // for NAT traversal without relay capability. Never use public STUN servers
+            // (privacy: ICE activity would reveal call metadata to Google/Cloudflare).
+            servers.append(RTCIceServer(urlStrings: [ICEConfig.mskSTUNAddress, "stun:ams.konstruct.cc:3478"]))
         }
         return servers
     }

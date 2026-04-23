@@ -436,6 +436,12 @@ struct ICEConfig {
     /// Same obfs4 identity and TLS cert as port 443 — same SPKI pin and bridge cert.
     static let mskRelayObfs4Address = "\(mskRelayIP):9443"
 
+    /// coturn TURN/STUN server on the Moscow relay VM.
+    /// Used as a secondary TURN server for WebRTC (geographic advantage for RU users)
+    /// and as the STUN fallback when no server-issued TURN credentials are available.
+    static let mskTURNAddress = "turn:\(mskRelayIP):3478"
+    static let mskSTUNAddress = "stun:\(mskRelayIP):3478"
+
     // ── Relay 2: Amsterdam co-located (ice.ams.konstruct.cc) ─────────────────
     /// construct-relay running on the same VPS as the main server.
     /// Upstream: ams.konstruct.cc:443 via internal Docker network.
