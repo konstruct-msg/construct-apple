@@ -245,13 +245,20 @@ struct IceRelay: Codable, Identifiable {
     }
 }
 
-/// Builds an `IceRelay` from an address string, automatically detecting TLS mode:
-/// `:443` → TLS-wrapped obfs4, any other port → legacy plain-obfs4.
+/// Builds an `IceRelay` from an address string, automatically detecting TLS mode.
 ///
-/// SNI + pinning priority for `:443` addresses:
+/// TLS mode is used for:
+///   - Addresses ending in `:443` (standard HTTPS port)
+///   - Any address with an explicit SNI in `ICEConfig.hardcodedRelaySNIs` (e.g. `:9443`
+///     companion ports that share the relay's TLS cert but bypass CDN)
+///   - Any address with server-pushed SNI from `IceCertFetcher`
+///
+/// Addresses with no SNI config fall back to plain obfs4 (no TLS wrapper).
+///
+/// SNI + pinning priority for TLS addresses:
 /// 1. `IceCertFetcher` cached relay config (fetched from signed construct-server) → preferred.
-/// 2. `ICEConfig.hardcodedRelaySNIs[address]` + `ICEConfig.mskRelayPinnedSPKI` → hardcoded fallback.
-/// 3. Hostname extracted from address → domain-based relay (no pinning).
+/// 2. `ICEConfig.hardcodedRelaySNIs[address]` + `ICEConfig.hardcodedRelaySPKIs` → hardcoded fallback.
+/// 3. Hostname extracted from address → domain-based relay, no pinning (`:443` only).
 private func makeRelay(address: String, bridgeCert: String, forceObfs4: Bool = false) -> IceRelay {
     // Priority: server-pushed per-relay cert → hardcoded cert → AMS cert passed by caller.
     // bridgeCertSync returns hardcodedRelayCerts[address] if no server-pushed cert exists.
@@ -260,23 +267,35 @@ private func makeRelay(address: String, bridgeCert: String, forceObfs4: Bool = f
     let pin: String?
     let wtPath: String?
     let wtHostHeader: String?
-    if address.hasSuffix(":443") {
-        if let s = IceCertFetcher.sniSync(for: address), !s.isEmpty {
+
+    // Determine whether this address should use TLS mode:
+    //   - Standard :443 port (may be CDN-fronted or direct)
+    //   - Any port with a hardcoded SNI override (e.g., :9443 companion ports)
+    //   - Any port with a server-pushed SNI from IceCertFetcher
+    let serverPushedSNI = IceCertFetcher.sniSync(for: address)
+    let hardcodedSNI    = ICEConfig.hardcodedRelaySNIs[address]
+    let useTLS          = address.hasSuffix(":443")
+                       || serverPushedSNI != nil
+                       || hardcodedSNI != nil
+
+    if useTLS {
+        if let s = serverPushedSNI, !s.isEmpty {
             sni = s
             pin = IceCertFetcher.spkiPinSync(for: address)
-        } else if let explicitSNI = ICEConfig.hardcodedRelaySNIs[address] {
+        } else if let explicitSNI = hardcodedSNI {
             // Hardcoded fallback: relay with explicit SNI + SPKI pin.
             // IP-based relays use a fake SNI for REALITY-style DPI evasion;
             // domain-based relays use their own hostname but still need pinning.
             sni = explicitSNI
             pin = ICEConfig.hardcodedRelaySPKIs[address]
         } else {
-            // Server-pushed relay (domain-based): derive SNI from hostname, no pinning.
+            // Server-pushed relay (domain-based, :443 only): derive SNI from hostname, no pinning.
             sni = address.components(separatedBy: ":").first.flatMap { $0.isEmpty ? nil : $0 }
             pin = nil
         }
         // WebTunnel (ICE v2) — preferred over obfs4 when available.
         // Skip when forceObfs4 = true (carrier transparent proxy blocked WebSocket UPGRADE).
+        // Companion obfs4 ports (:9443) intentionally have no wtPath entry — pure TLS+obfs4.
         wtPath       = forceObfs4 ? nil : IceCertFetcher.wtPathSync(for: address)
         wtHostHeader = forceObfs4 ? nil : IceCertFetcher.wtHostHeaderSync(for: address)
     } else {
@@ -630,6 +649,11 @@ final class IceProxyManager: ObservableObject {
     /// intercepted the WebSocket UPGRADE). obfs4 is a binary protocol that such proxies
     /// cannot inspect, so this restarts the same relay in obfs4 mode.
     ///
+    /// For CDN-fronted relays (e.g. MSK behind Yandex CDN), the CDN terminates TLS so
+    /// raw obfs4 bytes never reach the relay process. Instead of attempting obfs4 on the
+    /// CDN port (which always fails in <1s), this switches to a companion obfs4 port that
+    /// connects directly to the relay VM, bypassing the CDN entirely.
+    ///
     /// Marks the relay address in `webTunnelBlockedRelays` so subsequent
     /// `startWithRelayFallback()` calls also bypass WebTunnel on this network.
     /// The set is cleared on network path change — new network may allow WebTunnel.
@@ -638,19 +662,30 @@ final class IceProxyManager: ObservableObject {
     func retryCurrentRelayAsObfs4() async -> Bool {
         guard isWebTunnelActive, let relay = activeRelay else { return false }
 
+        webTunnelBlockedRelays.insert(relay.address)
+
         // CDN-fronted relays (e.g., MSK behind Yandex CDN) terminate TLS at the CDN edge —
-        // obfs4 bytes inside the TLS tunnel never reach the relay process. Attempting obfs4
-        // on a CDN-fronted relay always fails in <1 s. Mark WebTunnel as blocked so the next
-        // startWithRelayFallback() also bypasses WebTunnel for this relay, then rotate
-        // immediately to a non-CDN relay instead of wasting time on an impossible obfs4 attempt.
+        // obfs4 bytes inside the TLS tunnel never reach the relay process. Switch to the
+        // companion obfs4 port (direct VM access, no CDN) if one is configured.
         if relay.isCDNFronted {
-            Log.info("🧊 CDN-fronted relay \(relay.address) — obfs4 impossible (CDN terminates TLS), rotating", category: "ICE")
-            webTunnelBlockedRelays.insert(relay.address)
+            if let companionAddr = ICEConfig.hardcodedRelayObfs4Companions[relay.address] {
+                Log.info("🧊 CDN-fronted relay \(relay.address) — switching to companion obfs4 port \(companionAddr)", category: "ICE")
+                ice_proxy_stop()
+                resetAllProxyState()
+                let obfs4Relay = makeRelay(address: companionAddr, bridgeCert: relay.bridgeCert)
+                if start(relay: obfs4Relay) != nil {
+                    saveRelay(obfs4Relay)
+                    Log.info("🧊 ICE obfs4 active via companion port \(companionAddr) (bypassing CDN)", category: "ICE")
+                    return true
+                }
+                Log.error("🧊 ICE companion obfs4 port \(companionAddr) also failed — will rotate", category: "ICE")
+                return false
+            }
+            Log.info("🧊 CDN-fronted relay \(relay.address) — no companion obfs4 port configured, rotating", category: "ICE")
             return false
         }
 
         Log.info("🧊 WebTunnel blocked by carrier proxy — retrying \(relay.address) via obfs4", category: "ICE")
-        webTunnelBlockedRelays.insert(relay.address)
         ice_proxy_stop()
         resetAllProxyState()
         let obfs4Relay = makeRelay(address: relay.address, bridgeCert: relay.bridgeCert, forceObfs4: true)
@@ -1425,7 +1460,11 @@ final class IceProxyManager: ObservableObject {
               let relay = try? JSONDecoder().decode(IceRelay.self, from: data) else { return nil }
         // Migrate stored relays that still use legacy port 9443 (plain obfs4, no TLS wrapper).
         // Upgrade to port 443 with TLS SNI — all relays now run TLS-over-obfs4 via Traefik.
-        if relay.address.hasSuffix(":9443") || relay.tlsServerName == nil {
+        // Exception: known companion obfs4 addresses (e.g. mskRelayObfs4Address = "IP:9443")
+        // are intentionally on non-443 ports with TLS config — do not migrate those.
+        let isLegacyPlainObfs4 = (relay.address.hasSuffix(":9443") || relay.tlsServerName == nil)
+                               && ICEConfig.hardcodedRelaySNIs[relay.address] == nil
+        if isLegacyPlainObfs4 {
             let upgraded = makeRelay(address: relay.address.replacingOccurrences(of: ":9443", with: ":443"),
                                      bridgeCert: relay.bridgeCert)
             saveRelay(upgraded)

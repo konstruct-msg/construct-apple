@@ -426,6 +426,16 @@ struct ICEConfig {
 
     static let mskRelayAddress = "\(mskRelayIP):443"
 
+    /// Direct obfs4 port on the Moscow relay, bypassing the Yandex CDN layer.
+    ///
+    /// MSK relay port 443 is CDN-fronted — the CDN terminates TLS so raw obfs4 bytes
+    /// never reach the relay process. Port 9443 binds directly on the VM (no CDN),
+    /// allowing TLS+obfs4 to pass through. This is the fallback when WebTunnel on
+    /// port 443 is blocked by carrier DPI (e.g. on mobile LTE in Russia).
+    ///
+    /// Same obfs4 identity and TLS cert as port 443 — same SPKI pin and bridge cert.
+    static let mskRelayObfs4Address = "\(mskRelayIP):9443"
+
     // ── Relay 2: Amsterdam co-located (ice.ams.konstruct.cc) ─────────────────
     /// construct-relay running on the same VPS as the main server.
     /// Upstream: ams.konstruct.cc:443 via internal Docker network.
@@ -462,8 +472,9 @@ struct ICEConfig {
     /// Per-relay obfs4 bridge certs, keyed by relay address (IP:port or host:port).
     /// Used by makeRelay() to override the AMS cert for relays with their own obfs4 keypair.
     static let hardcodedRelayCerts: [String: String] = [
-        mskRelayAddress: mskRelayBridgeCert,
-        amsRelayAddress: amsRelayBridgeCert,
+        mskRelayAddress:      mskRelayBridgeCert,
+        mskRelayObfs4Address: mskRelayBridgeCert,   // same identity as :443
+        amsRelayAddress:      amsRelayBridgeCert,
         // spbRelayAddress: spbRelayBridgeCert,   // TODO: uncomment after Relay 3 deployment
     ]
 
@@ -481,16 +492,18 @@ struct ICEConfig {
     /// Required for IP-based relays (IPs cannot be used as TLS SNI).
     /// Also used for domain-based relays that need explicit SPKI pinning.
     static let hardcodedRelaySNIs: [String: String] = [
-        mskRelayAddress: mskRelaySNI,
-        amsRelayAddress: amsRelaySNI,
+        mskRelayAddress:      mskRelaySNI,
+        mskRelayObfs4Address: mskRelaySNI,   // same SNI as :443 (same TLS cert)
+        amsRelayAddress:      amsRelaySNI,
         // spbRelayAddress: spbRelaySNI,   // TODO: uncomment after Relay 3 deployment
     ]
 
     /// SPKI pins keyed by relay address. Looked up by makeRelay() for any relay
     /// that appears in hardcodedRelaySNIs.
     static let hardcodedRelaySPKIs: [String: String] = [
-        mskRelayAddress: mskRelayPinnedSPKI,
-        amsRelayAddress: amsRelayPinnedSPKI,
+        mskRelayAddress:      mskRelayPinnedSPKI,
+        mskRelayObfs4Address: mskRelayPinnedSPKI,   // same cert as :443
+        amsRelayAddress:      amsRelayPinnedSPKI,
         // spbRelayAddress: spbRelayPinnedSPKI,   // TODO: uncomment after Relay 3 deployment
     ]
 
@@ -504,10 +517,25 @@ struct ICEConfig {
     /// WebTunnel (ICE v2) WebSocket resource paths, keyed by relay address.
     /// When present, makeRelay() activates WebTunnel-first transport for that relay.
     /// Override via `.well-known/construct-server` `ice.relays[].wt_path` without a new build.
+    /// Note: mskRelayObfs4Address (:9443) is intentionally absent — the direct obfs4
+    /// port bypasses CDN and should never use WebTunnel (its purpose is raw TLS+obfs4).
     static let hardcodedRelayWTPaths: [String: String] = [
         mskRelayAddress: "/construct-ice",
         amsRelayAddress: "/construct-ice",
         // spbRelayAddress: "/construct-ice",   // TODO: uncomment after Relay 3 deployment
+    ]
+
+    /// Companion obfs4-only ports for CDN-fronted relays.
+    ///
+    /// When a CDN-fronted relay (isCDNFronted = true) has its WebTunnel blocked by
+    /// carrier DPI, raw obfs4 cannot be attempted on the CDN port — the CDN terminates
+    /// TLS and discards the inner obfs4 bytes. Instead, the client switches to the
+    /// companion port, which connects directly to the relay VM (bypassing CDN).
+    ///
+    /// These ports run the same `construct-relay` process (ALT_LISTEN_ADDR env var),
+    /// sharing the same TLS cert and obfs4 identity — same SPKI pin and bridge cert.
+    static let hardcodedRelayObfs4Companions: [String: String] = [
+        mskRelayAddress: mskRelayObfs4Address,
     ]
 
     /// Fallback relay-region rules used when the server config has not been fetched yet.
