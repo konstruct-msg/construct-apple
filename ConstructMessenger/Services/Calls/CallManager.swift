@@ -201,6 +201,22 @@ final class CallManager {
             return
         }
 
+        // Busy guard: decline new incoming calls when already in a call.
+        // `begin()` would silently close the active call via active?.close() — don't let that happen.
+        if active != nil {
+            switch state {
+            case .active, .connecting, .dialing, .ringing:
+                Log.info("📞 Busy — declining second incoming push (uuid=\(reportedUUID.uuidString.prefix(8))…)", category: "Calls")
+                #if os(iOS)
+                // PushKit already reported this to CallKit synchronously; tell it the call ended.
+                CallKitProvider.shared.reportCallEnded(uuid: reportedUUID)
+                #endif
+                return
+            default:
+                break
+            }
+        }
+
         let callId  = (payload["call_id"]  as? String) ?? reportedUUID.uuidString
         let callerId = (payload["caller_id"] as? String) ?? "Unknown"
         // Privacy: do NOT use caller_name from push payload (exposed to APNs infrastructure).
@@ -459,10 +475,13 @@ final class CallManager {
                     self.handleSignalResponse(msg, for: active.session)
                 }
             }
-            // Stream closed — end call if still active with this session.
+            // Stream closed — end call only if this stream is still the active one.
+            // If openStreamIfNeeded() replaced the stream during a retry, `active.stream`
+            // will point to the new stream, and this old receiveTask must NOT tear down
+            // the call that the new stream is serving.
             await MainActor.run { [weak self, weak active] in
                 guard let self, let active else { return }
-                if self.active === active {
+                if self.active === active, active.stream === stream {
                     Log.error("📞 Signaling stream closed unexpectedly", category: "Calls")
                     self.endActiveCall(reason: .local("Signal stream closed"))
                 }

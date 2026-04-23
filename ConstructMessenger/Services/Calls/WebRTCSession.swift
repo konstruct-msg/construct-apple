@@ -197,14 +197,17 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
 
     private static func buildIceServers(turn: Shared_Proto_Signaling_V1_TurnCredentials?) -> [RTCIceServer] {
         var servers: [RTCIceServer] = []
-        servers.append(RTCIceServer(urlStrings: ["stun:stun.l.google.com:19302"]))
         if let turn, !turn.urls.isEmpty {
-            // Dynamic credentials from server — use them exclusively.
+            // Server-provided TURN credentials — use exclusively.
+            // TURN servers also handle STUN binding requests on the same port,
+            // so no separate STUN server is needed when TURN is available.
             servers.append(RTCIceServer(urlStrings: turn.urls, username: turn.username, credential: turn.credential))
+        } else {
+            // TURN unavailable (credentials fetch failed). Fall back to own STUN server
+            // (coturn on ams.konstruct.cc) for NAT traversal without relay capability.
+            // Never use public STUN servers (privacy: ICE activity reveals call metadata).
+            servers.append(RTCIceServer(urlStrings: ["stun:ams.konstruct.cc:3478"]))
         }
-        // No credential-less TURN fallback: coturn requires HMAC-SHA1 auth (use-auth-secret).
-        // Without credentials TURN relay candidates are never generated, wasting ICE time.
-        // If getTurnCredentials failed, continue with STUN-only — ICE will use direct path.
         return servers
     }
 
@@ -218,14 +221,10 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
         try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetoothHFP])
         try? session.setPreferredSampleRate(NetworkTiming.Calls.audioPreferredSampleRateHz)
         try? session.setPreferredIOBufferDuration(NetworkTiming.Calls.audioPreferredIOBufferDuration)
-        // Do NOT call setActive(true) here — CallKit manages audio session lifecycle.
-        // Activation happens via CXProviderDelegate.provider(_:didActivate:).
-        // Calling setActive() outside that callback throws "Session activation failed"
-        // (NSOSStatusErrorDomain 561017449) when a previous call's session is still
-        // tearing down or when CallKit hasn't yet granted permission for the new call.
-        if (try? session.setActive(true)) == nil {
-            Log.debug("📞 AVAudioSession.setActive(true) deferred — CallKit will activate via didActivate", category: "Calls")
-        }
+        // Do NOT call setActive(true) here — CallKit manages the audio session lifecycle.
+        // Activation happens via CXProviderDelegate.provider(_:didActivate:audioSession:).
+        // Calling setActive() here races with CallKit's own activation and throws
+        // NSOSStatusErrorDomain 561017449 when a previous call's session is still tearing down.
     }
 }
 
@@ -249,7 +248,10 @@ extension WebRTCSession: RTCPeerConnectionDelegate {
 
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didChange newState: RTCIceConnectionState) {
         Log.info("📞 WebRTC iceConnectionState → \(newState.debugDescription)", category: "Calls")
-        if newState == .failed || newState == .disconnected {
+        // `.disconnected` is transient on mobile (brief network hiccup, device lock, switch
+        // between WiFi/cellular). Triggering teardown immediately cuts live calls unnecessarily.
+        // Only `.failed` means ICE has exhausted all candidates and the call cannot continue.
+        if newState == .failed {
             Task { @MainActor in
                 self.onConnectionFailed?()
             }

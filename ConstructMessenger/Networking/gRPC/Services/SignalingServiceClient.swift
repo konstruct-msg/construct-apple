@@ -24,7 +24,10 @@ final class SignalingServiceClient: Sendable {
     // MARK: - TURN
 
     func getTurnCredentials(callId: String? = nil) async throws -> Shared_Proto_Signaling_V1_TurnCredentials {
-        if let cached = await turnCache.getIfValid() {
+        // TURN credentials may be call-scoped on the server (HMAC bound to callId).
+        // Never serve cached creds for a specific call — they may be invalid for this callId.
+        // Cache is only used for anonymous/non-call-scoped requests.
+        if callId == nil, let cached = await turnCache.getIfValid() {
             return cached
         }
 
@@ -36,7 +39,8 @@ final class SignalingServiceClient: Sendable {
             return resp.credentials
         }
 
-        await turnCache.store(creds)
+        // Only cache non-call-scoped credentials.
+        if callId == nil { await turnCache.store(creds) }
         return creds
     }
 
