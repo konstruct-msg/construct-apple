@@ -33,6 +33,13 @@ class CryptoManager {
     private var _bootstrapCore: ClassicCryptoCore?
     private var _cachedKeysJson: String?
     private var _cachedUserId: String?
+
+    /// Returns the local user identity for Double Ratchet AEAD associated data.
+    /// Uses the device ID (hash of identity public key) — deterministic and independent
+    /// of server-assigned UUIDs, so session AD never breaks on re-auth or UUID changes.
+    private var cryptoLocalUserId: String {
+        KeychainManager.shared.loadDeviceID() ?? (_cachedUserId ?? "")
+    }
     private let coreProvider = CryptoCoreProvider()
     
     // Serializes all access to orchestratorCore and _bootstrapCore so that
@@ -255,7 +262,7 @@ class CryptoManager {
     /// made by `rotateSignedPrekey()`, ensuring the core stays in sync with the
     /// Keychain (and thus with what the server has).
     func reloadCoreFromKeychain() {
-        guard let userId = _cachedUserId else {
+        guard _cachedUserId != nil else {
             Log.error("❌ reloadCoreFromKeychain: no cached userId — cannot recreate OrchestratorCore", category: "CryptoManager")
             return
         }
@@ -263,8 +270,9 @@ class CryptoManager {
             Log.error("❌ reloadCoreFromKeychain: failed to reload — Keychain state unavailable", category: "CryptoManager")
             return
         }
+        let cryptoId = cryptoLocalUserId
         do {
-            let newCore = try createOrchestratorCoreFromKeys(keysData: [UInt8](keysData), myUserId: userId)
+            let newCore = try createOrchestratorCoreFromKeys(keysData: [UInt8](keysData), myUserId: cryptoId)
             if let otpksData = KeychainManager.shared.loadOtpksData() {
                 do {
                     try newCore.importOneTimePrekeys(data: [UInt8](otpksData))
@@ -697,13 +705,15 @@ class CryptoManager {
     }
 
     /// Set the local user ID in the crypto core so AAD correctly binds sender identity.
-    /// Must be called after login/registration with the server-assigned userId.
+    /// `userId` is the server-assigned account UUID stored for routing/UI purposes.
+    /// The crypto layer always uses `deviceId` (hash of identity public key) — see `cryptoLocalUserId`.
     func setLocalUserId(_ userId: String) {
         _cachedUserId = userId
+        let cryptoId = cryptoLocalUserId
 
         if let existing = orchestratorCore {
-            existing.setLocalUserId(userId: userId)
-            Log.debug("🔑 CryptoManager: updated local user ID to \(userId)", category: "CryptoManager")
+            existing.setLocalUserId(userId: cryptoId)
+            Log.debug("🔑 CryptoManager: updated local user ID to \(cryptoId) (crypto)", category: "CryptoManager")
             return
         }
 
@@ -723,7 +733,7 @@ class CryptoManager {
         guard let keys = keysData else { return }
 
         do {
-            let newCore = try createOrchestratorCoreFromKeys(keysData: keys, myUserId: userId)
+            let newCore = try createOrchestratorCoreFromKeys(keysData: keys, myUserId: cryptoId)
             // Import OTPKs if available
             if let otpksData = KeychainManager.shared.loadOtpksData() {
                 do {
@@ -742,7 +752,7 @@ class CryptoManager {
             orchestratorCore = newCore
             _bootstrapCore = nil
             _cachedKeysJson = nil
-            Log.debug("🔑 CryptoManager: OrchestratorCore created for user \(userId)", category: "CryptoManager")
+            Log.debug("🔑 CryptoManager: OrchestratorCore created (cryptoId=\(cryptoId))", category: "CryptoManager")
         } catch {
             Log.error("❌ setLocalUserId: OrchestratorCore init failed: \(error)", category: "CryptoManager")
         }
