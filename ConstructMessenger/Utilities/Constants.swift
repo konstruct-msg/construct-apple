@@ -502,11 +502,13 @@ struct ICEConfig {
     /// Each rule maps a UTC offset range (hours, inclusive) to a preferred relay ordering.
     /// The first matching rule wins; unmatched → default ordering.
     ///
-    /// MSK removed. SPb relay handles UTC+3 (RU). AMS handles all other zones.
+    /// AMS first for everyone — it's always reachable globally.
+    /// SPb is secondary: useful for RU users blocked by TSPU, harmless for others (just a fallback).
+    /// RU-specific routing (SPb primary) is handled by the server OTA config via IP geolocation,
+    /// not by timezone heuristics — timezone is a poor proxy for DPI presence.
     /// Override via `.well-known/construct-server` `ice.relay_regions` without a new build.
     static let hardcodedRelayRegions: [ICERelayRegion] = [
-        ICERelayRegion(tzOffsetMin: 2, tzOffsetMax: 12, preferredRelays: [spbRelayAddress, amsRelayAddress]),
-        ICERelayRegion(tzOffsetMin: -12, tzOffsetMax: 1, preferredRelays: [amsRelayAddress, spbRelayAddress]),
+        ICERelayRegion(tzOffsetMin: -12, tzOffsetMax: 12, preferredRelays: [amsRelayAddress, spbRelayAddress]),
     ]
 }
 
