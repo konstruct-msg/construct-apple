@@ -460,11 +460,20 @@ final class GRPCChannelManager: Sendable {
                 }
             }
 
-            guard let first = try await group.next() else {
-                throw RPCError(code: .unavailable, message: "All transport legs failed")
+            // Wait for the first SUCCESS — ignore individual leg failures so a broken relay
+            // doesn't cancel a still-running direct leg (and vice versa).
+            // Only fail the whole race when every leg has reported failure.
+            var lastError: Error = RPCError(code: .unavailable, message: "All transport legs failed")
+            while let result = await group.nextResult() {
+                switch result {
+                case .success(let legResult):
+                    group.cancelAll()
+                    return legResult
+                case .failure(let error):
+                    if !(error is CancellationError) { lastError = error }
+                }
             }
-            group.cancelAll()
-            return first
+            throw lastError
         }
 
         PerformanceMetrics.shared.end(.grpcConnectStart, endEvent: .grpcConnectEnd, label: "race:\(raceLegs)-legs")
@@ -670,6 +679,11 @@ final class GRPCChannelManager: Sendable {
                 guard fastICEFallback, !usingICE, attempt == 0 else { return timeout }
                 let rawModeForTimeout = UserDefaults.standard.string(forKey: IceMode.defaultsKey) ?? IceMode.platformDefault.rawValue
                 guard (IceMode(rawValue: rawModeForTimeout) ?? .auto) != .off else { return timeout }
+                // Only shorten the timeout when ICE is actually ready to take over.
+                // If the relay hasn't connected yet (port == 0, e.g. all relays blacklisted),
+                // the direct path has no fallback — use the full timeout to avoid a false
+                // deadlineExceeded → false DPI-confirmed cascade.
+                guard ice_proxy_port_tls() > 0 else { return timeout }
                 // 4 seconds is enough for TCP+TLS on healthy networks, but short enough to
                 // avoid UI stalls on DPI-blocked paths.
                 return min(timeout, NetworkTiming.GRPC.fastFallbackDirectTimeout)
