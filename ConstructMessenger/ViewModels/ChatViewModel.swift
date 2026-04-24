@@ -1044,6 +1044,7 @@ class ChatViewModel: NSObject {
                             OutgoingWirePayloadStore.shared.remove(baseMessageId: messageId)
                         }
                         Log.info("✅ Message sent via gRPC: \(messageId) status=\(aggregated.status)\(ecStr)\(traceTag)", category: "ChatViewModel")
+                        SessionActivityTracker.shared.recordActivity(for: recipientId)
                         self.isSending = false
                     }
                 } catch {

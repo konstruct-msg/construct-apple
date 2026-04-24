@@ -647,6 +647,8 @@ public protocol ClassicCryptoCoreProtocol: AnyObject, Sendable {
      */
     func getRegistrationBundleFields() throws  -> RegistrationBundleJson
     
+    func getSessionHealth(contactId: String)  -> SessionHealthReport?
+    
     /**
      * Raw Ed25519 signing secret key bytes (64 bytes).
      */
@@ -864,6 +866,15 @@ open func getRegistrationBundleFields()throws  -> RegistrationBundleJson  {
     return try  FfiConverterTypeRegistrationBundleJson_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_method_classiccryptocore_get_registration_bundle_fields(
             self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+open func getSessionHealth(contactId: String) -> SessionHealthReport?  {
+    return try!  FfiConverterOptionTypeSessionHealthReport.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_classiccryptocore_get_session_health(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(contactId),$0
     )
 })
 }
@@ -1123,6 +1134,8 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
      * Typed registration bundle — replaces `export_registration_bundle_json()` parsing.
      */
     func getRegistrationBundleFields() throws  -> RegistrationBundleJson
+    
+    func getSessionHealth(contactId: String)  -> SessionHealthReport?
     
     /**
      * Suite ID for the active session with `contact_id`.
@@ -1453,6 +1466,15 @@ open func getRegistrationBundleFields()throws  -> RegistrationBundleJson  {
     return try  FfiConverterTypeRegistrationBundleJson_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_method_orchestratorcore_get_registration_bundle_fields(
             self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+open func getSessionHealth(contactId: String) -> SessionHealthReport?  {
+    return try!  FfiConverterOptionTypeSessionHealthReport.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_orchestratorcore_get_session_health(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(contactId),$0
     )
 })
 }
@@ -3596,6 +3618,78 @@ public func FfiConverterTypeRotatedSpkBundle_lower(_ value: RotatedSpkBundle) ->
 }
 
 
+/**
+ * Read-only health snapshot of a Double Ratchet session.
+ * Returned by get_session_health(). Does not mutate session state.
+ */
+public struct SessionHealthReport: Equatable, Hashable {
+    public var messagesSent: UInt32
+    public var messagesReceived: UInt32
+    public var skippedKeysCount: UInt32
+    public var isPqStrengthened: Bool
+    public var lastRatchetAt: UInt64
+    public var sessionId: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(messagesSent: UInt32, messagesReceived: UInt32, skippedKeysCount: UInt32, isPqStrengthened: Bool, lastRatchetAt: UInt64, sessionId: String) {
+        self.messagesSent = messagesSent
+        self.messagesReceived = messagesReceived
+        self.skippedKeysCount = skippedKeysCount
+        self.isPqStrengthened = isPqStrengthened
+        self.lastRatchetAt = lastRatchetAt
+        self.sessionId = sessionId
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension SessionHealthReport: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeSessionHealthReport: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SessionHealthReport {
+        return
+            try SessionHealthReport(
+                messagesSent: FfiConverterUInt32.read(from: &buf), 
+                messagesReceived: FfiConverterUInt32.read(from: &buf), 
+                skippedKeysCount: FfiConverterUInt32.read(from: &buf), 
+                isPqStrengthened: FfiConverterBool.read(from: &buf), 
+                lastRatchetAt: FfiConverterUInt64.read(from: &buf), 
+                sessionId: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: SessionHealthReport, into buf: inout [UInt8]) {
+        FfiConverterUInt32.write(value.messagesSent, into: &buf)
+        FfiConverterUInt32.write(value.messagesReceived, into: &buf)
+        FfiConverterUInt32.write(value.skippedKeysCount, into: &buf)
+        FfiConverterBool.write(value.isPqStrengthened, into: &buf)
+        FfiConverterUInt64.write(value.lastRatchetAt, into: &buf)
+        FfiConverterString.write(value.sessionId, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSessionHealthReport_lift(_ buf: RustBuffer) throws -> SessionHealthReport {
+    return try FfiConverterTypeSessionHealthReport.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSessionHealthReport_lower(_ value: SessionHealthReport) -> RustBuffer {
+    return FfiConverterTypeSessionHealthReport.lower(value)
+}
+
+
 public struct SessionInitResult: Equatable, Hashable {
     public var sessionId: String
     public var decryptedMessage: [UInt8]
@@ -5012,6 +5106,30 @@ fileprivate struct FfiConverterOptionData: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypeSessionHealthReport: FfiConverterRustBuffer {
+    typealias SwiftType = SessionHealthReport?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeSessionHealthReport.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeSessionHealthReport.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionCallbackInterfacePowProgressCallback: FfiConverterRustBuffer {
     typealias SwiftType = PowProgressCallback?
 
@@ -5684,6 +5802,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_classiccryptocore_get_registration_bundle_fields() != 57911) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_method_classiccryptocore_get_session_health() != 64984) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_method_classiccryptocore_get_signing_key_bytes() != 55710) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -5781,6 +5902,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_get_registration_bundle_fields() != 23586) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_get_session_health() != 34835) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_get_session_suite_id() != 15328) {

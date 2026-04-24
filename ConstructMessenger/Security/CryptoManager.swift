@@ -203,18 +203,31 @@ class CryptoManager {
 
     // MARK: - Session Persistence
 
-    /// Save session to Keychain after state change
+    /// Save session to Keychain after state change.
+    /// Includes verify-after-write: reads back the blob to confirm integrity.
     private func saveSessionToKeychain(for userId: String) {
         coreLock.lock()
         defer { coreLock.unlock() }
         guard let core = orchestratorCore else { return }
         do {
             let sessionData = Data(try core.exportSession(contactId: userId))
-            let saved = KeychainManager.shared.saveSessionData(sessionData, for: userId)
-            if saved {
-                Log.debug("💾 Session (CFE) saved to Keychain: \(userId)", category: "CryptoManager")
-            } else {
-                Log.error("❌ Failed to save session to Keychain: \(userId)", category: "CryptoManager")
+            var saved = false
+            for attempt in 1...3 {
+                saved = KeychainManager.shared.saveSessionData(sessionData, for: userId)
+                guard saved else {
+                    Log.error("❌ Keychain write failed (attempt \(attempt)/3): \(userId)", category: "CryptoManager")
+                    continue
+                }
+                // Verify round-trip: read back and compare byte count.
+                if let readBack = KeychainManager.shared.loadSessionData(for: userId),
+                   readBack.count == sessionData.count {
+                    Log.debug("💾 Session saved+verified (\(sessionData.count)B): \(userId)", category: "CryptoManager")
+                    return
+                }
+                Log.error("❌ Session verify-after-write mismatch (attempt \(attempt)/3): \(userId)", category: "CryptoManager")
+            }
+            if !saved {
+                Log.error("❌ Failed to save session to Keychain after 3 attempts: \(userId)", category: "CryptoManager")
             }
         } catch {
             Log.error("❌ Session export failed: \(error)", category: "CryptoManager")
@@ -764,7 +777,13 @@ class CryptoManager {
         Log.debug("🔑 Session check for \(userId): \(exists ? "EXISTS" : "MISSING")", category: "CryptoManager")
         return exists
     }
-    
+
+    /// Return a read-only health snapshot for the session with `userId`.
+    /// Returns `nil` if no session exists or the core is not initialized.
+    func getSessionHealth(for userId: String) -> SessionHealthReport? {
+        return orchestratorCore?.getSessionHealth(contactId: userId)
+    }
+
     /// Get all user IDs with active sessions
     /// Used for sending END_SESSION to all contacts on logout
     func getAllSessionUserIds() -> [String] {

@@ -793,6 +793,7 @@ class MessageRouter {
         chat.lastMessageTime = Date(timeIntervalSince1970: TimeInterval(message.timestamp))
         context.saveAndLog()
 
+        SessionActivityTracker.shared.recordActivity(for: message.from)
         Log.info("📬 Message received and saved: \(message.id)", category: "MessageRouter")
     }
     

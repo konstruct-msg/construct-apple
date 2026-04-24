@@ -216,12 +216,15 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         LocalNotificationManager.shared.removeAllNotifications()
 
         // Re-request APNs token on every foreground transition (Apple-recommended).
-        // If the token is unchanged APNs returns immediately. If it rotated (e.g.
-        // reinstall, OS upgrade) the new token flows through registerDeviceToken()
-        // and is immediately synced with the server — preventing BadDeviceToken errors.
         application.registerForRemoteNotifications()
         Task { await PushNotificationManager.shared.ensureTokenRegistered() }
         Task { await VoIPPushManager.shared.ensureTokenRegistered() }
+
+        // Proactively exercise sessions that have been silent for 12+ hours.
+        Task {
+            await SessionActivityTracker.shared.sendStaleSessionHeartbeats()
+            SessionActivityTracker.shared.logSessionHealthSummary()
+        }
     }
 
     func applicationDidEnterBackground(_ application: UIApplication) {
