@@ -77,6 +77,28 @@ private struct ConstructServerWellKnown: Decodable {
         case signedAt = "signed_at"
         case bundleSigningKey = "bundle_signing_key"
     }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        // version and signed_at may be Int (sign_relay_manifest.py) or String — accept both
+        if let s = try? c.decodeIfPresent(String.self, forKey: .version) {
+            version = s
+        } else if let i = try? c.decodeIfPresent(Int.self, forKey: .version) {
+            version = String(i)
+        } else {
+            version = nil
+        }
+        if let s = try? c.decodeIfPresent(String.self, forKey: .signedAt) {
+            signedAt = s
+        } else if let i = try? c.decodeIfPresent(Int.self, forKey: .signedAt) {
+            signedAt = String(i)
+        } else {
+            signedAt = nil
+        }
+        ice              = try c.decodeIfPresent(ICESection.self, forKey: .ice)
+        signature        = try c.decodeIfPresent(String.self,     forKey: .signature)
+        bundleSigningKey = try c.decodeIfPresent(String.self,     forKey: .bundleSigningKey)
+    }
 }
 
 // MARK: - IceCertFetcher
