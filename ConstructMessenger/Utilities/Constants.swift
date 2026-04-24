@@ -427,24 +427,16 @@ struct ICEConfig {
     /// Update when the relay container is recreated (new keypair in /data/relay.obfs4).
     static let amsRelayBridgeCert = "voFt3ilLSKx2xYuZsjxOnXtHTktUE4EaExIYRG+Bh89frHzI5QVrBNvT41zdS7Maiu6gPA"
 
-    // ── Relay 3: Saint Petersburg (194.87.235.91) — PLANNED, not yet deployed ─
-    // After deploying construct-relay on this VPS, fill in the three values below
-    // from the relay startup logs:
-    //
-    //   spki_sha256  → "TLS SPKI fingerprint" line in relay logs
-    //   bridgeCert   → "obfs4 bridge cert" line in relay logs
-    //   sni          → choose a CDN/cloud domain that looks legitimate for this IP
-    //                  (check which provider owns 194.87.235.91 and pick their domain)
-    //
-    // Then uncomment the three spb* entries in the dictionaries below and ship.
+    // ── Relay 2: Saint Petersburg, MT Finance (45.135.233.5) ─────────────────
+    /// obfs4 relay, port 9894. No WebTunnel (bare IP — CDN fronting not set up yet).
+    /// SNI: s3.vkcs.cloud (VK Cloud S3, plausible for SPb-area IPs).
+    static let spbRelayIP          = "45.135.233.5"
+    static let spbRelayAddress     = "\(spbRelayIP):9894"
+    static let spbRelaySNI         = "s3.vkcs.cloud"
+    static let spbRelayPinnedSPKI  = "bd2da0c781a0fc98d85640bd87d2d4709c709a50b6bee06f90282ca6237f3410"
+    static let spbRelayBridgeCert  = "vkHsS7HOg1e8D9UPfLCQ4G8oLFfy6t/6oBXdAU4oUvPTMWTWZo0kiw6dq28cssjE24OUOw"
 
-    static let spbRelayIP      = "194.87.235.91"
-    static let spbRelayAddress = "\(spbRelayIP):443"
-    // static let spbRelaySNI         = ""   // TODO: fill after deployment
-    // static let spbRelayPinnedSPKI  = ""   // TODO: fill after deployment
-    // static let spbRelayBridgeCert  = ""   // TODO: fill after deployment
-
-    // ── Shared ────────────────────────────────────────────────────────────────────
+    // ── Relay 3: Amsterdam co-located (ice.ams.konstruct.cc) ─────────────────
 
     /// Ed25519 public key used to verify `.well-known/construct-server` signature.
     /// This is the ONLY value hardcoded permanently — everything else is OTA-updatable.
@@ -455,16 +447,16 @@ struct ICEConfig {
     /// Used by makeRelay() to override the AMS cert for relays with their own obfs4 keypair.
     static let hardcodedRelayCerts: [String: String] = [
         amsRelayAddress: amsRelayBridgeCert,
+        spbRelayAddress: spbRelayBridgeCert,
         // mskRelayAddress: mskRelayBridgeCert,    // MSK relay removed — IP blocked by RU DPI
-        // spbRelayAddress: spbRelayBridgeCert,    // TODO: uncomment after Relay 3 deployment
     ]
 
     /// Hardcoded relay list used as a last resort when discovery is unavailable.
     /// Order matters: relays are probed concurrently but this sets tie-break priority.
     static let hardcodedRelayAddresses: [String] = [
         amsRelayAddress,
+        spbRelayAddress,
         // mskRelayAddress,  // MSK relay removed — 158.160.140.67 blocked by RU DPI (TLS RST)
-        // spbRelayAddress,  // TODO: uncomment after Relay 3 deployment
     ]
 
     /// TLS SNI overrides keyed by relay address string.
@@ -472,18 +464,18 @@ struct ICEConfig {
     /// Also used for domain-based relays that need explicit SPKI pinning.
     static let hardcodedRelaySNIs: [String: String] = [
         amsRelayAddress: amsRelaySNI,
+        spbRelayAddress: spbRelaySNI,
         // mskRelayAddress:      mskRelaySNI,       // MSK removed
         // mskRelayObfs4Address: mskRelaySNI,       // MSK removed
-        // spbRelayAddress: spbRelaySNI,            // TODO: uncomment after Relay 3 deployment
     ]
 
     /// SPKI pins keyed by relay address. Looked up by makeRelay() for any relay
     /// that appears in hardcodedRelaySNIs.
     static let hardcodedRelaySPKIs: [String: String] = [
         amsRelayAddress: amsRelayPinnedSPKI,
+        spbRelayAddress: spbRelayPinnedSPKI,
         // mskRelayAddress:      mskRelayPinnedSPKI,  // MSK removed
         // mskRelayObfs4Address: mskRelayPinnedSPKI,  // MSK removed
-        // spbRelayAddress: spbRelayPinnedSPKI,       // TODO: uncomment after Relay 3 deployment
     ]
 
     /// UserDefaults key where the relay list fetched from the server is cached.
@@ -498,8 +490,8 @@ struct ICEConfig {
     /// Override via `.well-known/construct-server` `ice.relays[].wt_path` without a new build.
     static let hardcodedRelayWTPaths: [String: String] = [
         amsRelayAddress: "/construct-ice",
+        // spbRelayAddress: no WebTunnel — bare IP, no CDN fronting
         // mskRelayAddress: "/construct-ice",   // MSK removed
-        // spbRelayAddress: "/construct-ice",   // TODO: uncomment after Relay 3 deployment
     ]
 
     /// Companion obfs4-only ports for CDN-fronted relays.
@@ -510,10 +502,11 @@ struct ICEConfig {
     /// Each rule maps a UTC offset range (hours, inclusive) to a preferred relay ordering.
     /// The first matching rule wins; unmatched → default ordering.
     ///
-    /// MSK relay removed. RU users fall through to AMS until a new RU-region relay is deployed.
+    /// MSK removed. SPb relay handles UTC+3 (RU). AMS handles all other zones.
     /// Override via `.well-known/construct-server` `ice.relay_regions` without a new build.
     static let hardcodedRelayRegions: [ICERelayRegion] = [
-        ICERelayRegion(tzOffsetMin: 0, tzOffsetMax: 12, preferredRelays: [amsRelayAddress]),
+        ICERelayRegion(tzOffsetMin: 2, tzOffsetMax: 12, preferredRelays: [spbRelayAddress, amsRelayAddress]),
+        ICERelayRegion(tzOffsetMin: -12, tzOffsetMax: 1, preferredRelays: [amsRelayAddress, spbRelayAddress]),
     ]
 }
 
