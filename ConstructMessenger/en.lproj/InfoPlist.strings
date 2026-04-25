@@ -1,0 +1,7 @@
+/* English InfoPlist localization */
+
+CFBundleDisplayName = "Construct";
+
+NSMicrophoneUsageDescription = "Construct uses the microphone to record voice messages and make encrypted calls.";
+NSUserNotificationsUsageDescription = "Construct sends you notifications for new messages.";
+NSLocalNetworkUsageDescription = "Used to transfer your backup directly to a nearby device over WiFi.";

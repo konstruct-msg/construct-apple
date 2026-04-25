@@ -1,0 +1,7 @@
+/* Japanese InfoPlist localization */
+
+CFBundleDisplayName = "共創";
+
+NSMicrophoneUsageDescription = "共創は、ボイスメッセージの録音と暗号化通話のためにマイクを使用します。";
+NSUserNotificationsUsageDescription = "共創は新着メッセージの通知をお送りします。";
+NSLocalNetworkUsageDescription = "WiFiを通じて近くのデバイスにバックアップを直接転送するために使用します。";
