@@ -1,826 +1,838 @@
 // MARK: - General
-"error" = "Error";
+"error" = "エラー";
 "ok" = "OK";
-"cancel" = "Cancel";
-"done" = "Done";
-"unknown" = "Unknown";
+"cancel" = "キャンセル";
+"done" = "完了";
+"unknown" = "不明";
 "constrcut_titlte" = "KONSTRUCT";
-
+     8
 // MARK: - Main Tabs
-"chats" = "Chats";
-"settings" = "Settings";
-
+"chats" = "チャット";
+"settings" = "設定";
+    12
 // MARK: - Auth
-"register" = "Register";
-"username" = "Username";
-"password" = "Password";
-"login" = "Login";
-"logout" = "Logout";
-"logout_confirmation" = "Are you sure you want to logout?";
-"password_strength_very_weak" = "Very Weak";
-"password_strength_weak" = "Weak";
-"password_strength_medium" = "Medium";
-"password_strength_strong" = "Strong";
-"password_strength_very_strong" = "Very Strong";
-
+"register" = "初期化";
+"username" = "ユーザー名";
+"password" = "パスワード";
+"login" = "ログイン";
+"logout" = "ログアウト";
+"logout_confirmation" = "ログアウトしてもよろしいですか？";
+"password_strength_very_weak" = "非常に弱い";
+"password_strength_weak" = "弱い";
+"password_strength_medium" = "普通";
+"password_strength_strong" = "強い";
+"password_strength_very_strong" = "非常に強い";
+    25
 // MARK: - Chats List
-"scan_qr_code_or_share_link" = "Scan a QR code or share your contact link to add verified contacts";
-"scan_qr_code" = "Scan QR Code";
-"new_contact" = "New Contact";
-
+"scan_qr_code_or_share_link" = "QRコードをスキャンするか、連絡先リンクを共有して認証済み連絡先を追加します";
+"scan_qr_code" = "QRコードをスキャン";
+"new_contact" = "新規ノード";
+    30
 // MARK: - Chat
-"sending" = "Sending...";
-"status_connecting" = "Connecting...";
-"status_no_connection" = "No connection";
-"status_encrypting" = "Encrypting...";
-"chat" = "Chat";
-"encrypted" = "Encrypted";
-"message_unavailable" = "Message not available";
-"reply" = "Reply";
-"copy" = "Copy";
-"info" = "Info";
-"delete" = "Delete";
-"retry" = "Retry";
-"message" = "Message";
-"reply_to_colon" = "Reply to:";
-"message_placeholder" = "Message...";
-
+"sending" = "送信中...";
+"status_connecting" = "接続中...";
+"status_no_connection" = "接続なし";
+"status_encrypting" = "暗号化中...";
+"chat" = "チャット";
+"encrypted" = "暗号化済み";
+"message_unavailable" = "メッセージを利用できません";
+"reply" = "返信";
+"copy" = "コピー";
+"info" = "詳細";
+"delete" = "削除";
+"retry" = "再試行";
+"message" = "メッセージ";
+"reply_to_colon" = "返信先:";
+"message_placeholder" = "メッセージ...";
+    47
 // MARK: - Message Info
-"status" = "Status";
-"sent" = "Sent";
-"direction" = "Direction";
-"outgoing" = "Outgoing";
-"incoming" = "Incoming";
-"delivery_information" = "Delivery Information";
-"message_id" = "Message ID";
-"from" = "From";
-"to" = "To";
-"reply_to" = "Reply To";
-"encryption" = "Encryption";
-"end_to_end" = "End-to-End";
-"protocol" = "Protocol";
-"security" = "Security";
-"message_info" = "Message Info";
-
+"status" = "ステータス";
+"sent" = "送信済み";
+"direction" = "方向";
+"outgoing" = "送信";
+"incoming" = "受信";
+"delivery_information" = "配信情報";
+"message_id" = "メッセージID";
+"from" = "送信元";
+"to" = "送信先";
+"reply_to" = "返信先";
+"encryption" = "暗号化";
+"end_to_end" = "エンドツーエンド";
+"protocol" = "プロトコル";
+"security" = "セキュリティ";
+"message_info" = "メッセージ情報";
+    64
 // MARK: - QR Code Scanner
-"position_qr_code_within_frame" = "Position the QR code within the frame";
-"camera_access_required" = "Camera Access Required";
-"open_settings" = "Open Settings";
-"allow_camera_access_for_qr" = "Please allow camera access in Settings to scan QR codes";
-"invalid_qr_code_construct" = "Invalid QR code. Please scan a Konstruct contact code.";
-
+"position_qr_code_within_frame" = "枠内にQRコードを合わせてください";
+"camera_access_required" = "カメラへのアクセスが必要です";
+"open_settings" = "設定を開く";
+"allow_camera_access_for_qr" = "QRコードをスキャンするために、設定からカメラへのアクセスを許可してください";
+"invalid_qr_code_construct" = "無効なQRコードです。共創のノードコードをスキャンしてください。";
+    71
 // MARK: - Settings Main
-"user" = "User";
-"preferences" = "Preferences";
-"version" = "Version";
-"about" = "About";
-"account" = "Identity";
-"appearance" = "Appearance";
-"network" = "Network";
-"notifications" = "Notifications";
-
+"user" = "ユーザー";
+"preferences" = "基本設定";
+"version" = "バージョン";
+"about" = "このアプリについて";
+"account" = "アイデンティティ";
+"appearance" = "外観";
+"network" = "ネットワーク";
+"notifications" = "通知";
+    81
 // MARK: - Settings -> Account
-"display_name" = "Display Name";
-"show_my_qr_code" = "Show My QR Code";
-"share_contact" = "Share Contact";
-"share_contact_footer" = "Share your QR code or link to let others add you as a contact";
-
-"pin_code" = "PIN Code";
-"enable_pin_code" = "Enable PIN Code";
-"disable_pin_code" = "Disable PIN Code";
-"change_pin_code" = "Change PIN Code";
-"enter_pin_code" = "Enter PIN Code";
-"create_pin_code" = "Create PIN Code";
-"confirm_pin_code" = "Confirm PIN Code";
-"pin_code_length" = "PIN must be 6-12 digits";
-"pin_codes_dont_match" = "PIN codes don't match";
-"wrong_pin_code" = "Wrong PIN Code";
-"lock_delay" = "Lock After";
-"lock_delay_immediate" = "Immediately";
-"lock_delay_30s" = "30 Seconds";
-"lock_delay_1m" = "1 Minute";
-"lock_delay_5m" = "5 Minutes";
-"lock_delay_10m" = "10 Minutes";
+"display_name" = "表示名";
+"show_my_qr_code" = "自分のQRコードを表示";
+"share_contact" = "ノードを共有";
+"share_contact_footer" = "QRコードやリンクを共有して、他のノードがあなたを追加できるようにします";
+    87
+"pin_code" = "PINコード";
+"enable_pin_code" = "PINコードを有効にする";
+"disable_pin_code" = "PINコードを無効にする";
+"change_pin_code" = "PINコードを変更";
+"enter_pin_code" = "PINコードを入力";
+"create_pin_code" = "PINコードを作成";
+"confirm_pin_code" = "PINコードを確認";
+"pin_code_length" = "PINは6〜12桁である必要があります";
+"pin_codes_dont_match" = "PINコードが一致しません";
+"wrong_pin_code" = "PINコードが正しくありません";
+"lock_delay" = "自動ロック";
+"lock_delay_immediate" = "即時";
+"lock_delay_30s" = "30秒";
+"lock_delay_1m" = "1分";
+"lock_delay_5m" = "5分";
+"lock_delay_10m" = "10分";
 "face_id" = "Face ID";
 "touch_id" = "Touch ID";
-"biometric" = "Biometrics";
-"use_biometric" = "Use %@ to unlock";
-"use_pin_code" = "Use PIN Code";
-"unlock" = "Unlock";
-"save" = "Save";
-"continue" = "Continue";
-"enable_biometric" = "Enable %@?";
-"biometric_unavailable" = "Biometrics are not available on this device.";
-"disable" = "Disable";
-
+"biometric" = "生体認証";
+"use_biometric" = "%@を使用してロック解除";
+"use_pin_code" = "PINコードを使用";
+"unlock" = "ロック解除";
+"save" = "保存";
+"continue" = "続行";
+"enable_biometric" = "%@を有効にしますか？";
+"biometric_unavailable" = "このデバイスでは生体認証を利用できません。";
+"disable" = "無効にする";
+   115
 // MARK: - Settings -> My QR Code
-"failed_to_generate_qr_code" = "Failed to generate QR code";
-"show_this_code_to_someone_nearby" = "Show this code to someone nearby";
-"scan_with_camera_or_screenshot" = "They can scan this with their camera or take a screenshot";
-
+"failed_to_generate_qr_code" = "QRコードの生成に失敗しました";
+"show_this_code_to_someone_nearby" = "このコードを近くの人に見せてください";
+"scan_with_camera_or_screenshot" = "カメラでスキャンするか、スクリーンショットを撮ってもらってください";
+   120
 // MARK: - Settings -> Appearance
-"theme" = "Theme";
-"theme_footer" = "Choose how Construct Messenger looks. Automatic adjusts based on your system settings.";
-"automatic" = "Automatic";
-"light" = "Light";
-"dark" = "Dark";
-
+"theme" = "テーマ";
+"theme_footer" = "共創の外観を選択します。「自動」はシステムの設定に合わせて調整されます。";
+"automatic" = "自動";
+"light" = "ライト";
+"dark" = "ダーク";
+   127
 // MARK: - Settings -> Network
-"connected" = "Connected";
-"disconnected" = "Disconnected";
-"connection" = "Connection";
-"subscriptions" = "Subscriptions";
-"last_heartbeat" = "Last Heartbeat";
-"custom_server_debug" = "Custom Server (Debug)";
-"apply_changes" = "Apply Changes";
-"environment" = "Environment";
-"debug" = "Debug";
-"release" = "Release";
-"server_settings_footer" = "These settings are automatically configured based on your build configuration.";
-"network_settings" = "Network Settings";
-"default_server" = "Default Server";
-"reset_to_default" = "Reset to Default";
-"custom_server" = "Custom Server";
-
+"connected" = "接続済み";
+"disconnected" = "切断";
+"connection" = "接続";
+"subscriptions" = "サブスクリプション";
+"last_heartbeat" = "最終ハートビート";
+"custom_server_debug" = "カスタムサーバー (デバッグ)";
+"apply_changes" = "変更を適用";
+"environment" = "環境";
+"debug" = "デバッグ";
+"release" = "リリース";
+"server_settings_footer" = "これらの設定はビルド構成に基づいて自動的に設定されます。";
+"network_settings" = "ネットワーク設定";
+"default_server" = "デフォルトサーバー";
+"reset_to_default" = "デフォルトにリセット";
+"custom_server" = "カスタムサーバー";
+   144
 // MARK: - Notifications Settings
-"enable_notifications" = "Enable Notifications";
-"notifications_footer" = "Control how and when you receive notifications";
-"message_notifications" = "Message Notifications";
-"show_message_notifications" = "Show Message Notifications";
-"preview_name_and_message" = "Name and Message";
-"preview_name_only" = "Name Only";
-"preview_none" = "No Preview";
-"sound_and_haptics" = "Sound & Haptics";
-"notification_sound" = "Notification Sound";
-"vibration" = "Vibration";
-"sound_haptics_footer" = "Customize notification sound and vibration";
-"push_notifications" = "Push Notifications";
-"enable_push_notifications" = "Enable Push Notifications";
-"push_notifications_footer" = "Receive notifications when the app is in the background. Your messages remain end-to-end encrypted.";
-"push_privacy_notice" = "Privacy Notice";
-"push_privacy_notice_text" = "Push notifications are delivered using encrypted, anonymous tokens. The server cannot read your messages or identify who you're talking to.";
-"system_notification_settings" = "System Notification Settings";
-"open_system_settings" = "Open System Settings";
-"system_settings_footer" = "Manage notification permissions in iOS Settings";
-"notification_permissions_required" = "Notification permissions are required to receive alerts";
-"grant_permission" = "Grant Permission";
-"not_determined" = "Not Set";
-"authorized" = "Authorized";
-"denied" = "Denied";
-
+"enable_notifications" = "通知を有効にする";
+"notifications_footer" = "通知の受信方法とタイミングを制御します";
+"message_notifications" = "メッセージ通知";
+"show_message_notifications" = "メッセージ通知を表示";
+"preview_name_and_message" = "名前とメッセージ";
+"preview_name_only" = "名前のみ";
+"preview_none" = "プレビューなし";
+"sound_and_haptics" = "サウンドと触覚";
+"notification_sound" = "通知音";
+"vibration" = "バイブレーション";
+"sound_haptics_footer" = "通知音とバイブレーションをカスタマイズします";
+"push_notifications" = "プッシュ通知";
+"enable_push_notifications" = "プッシュ通知を有効にする";
+"push_notifications_footer" = "アプリがバックグラウンドにあるときに通知を受け取ります。メッセージはエンドツーエンドで暗号化されたままです。";
+"push_privacy_notice" = "プライバシーに関する注意";
+"push_privacy_notice_text" = "プッシュ通知は暗号化された匿名トークンを使用して配信されます。サーバーはメッセージを読んだり、誰と話しているかを特定したりすることはできません。";
+"system_notification_settings" = "システムの通知設定";
+"open_system_settings" = "システム設定を開く";
+"system_settings_footer" = "iOSの設定で通知の許可を管理します";
+"notification_permissions_required" = "アラートを受信するには通知の許可が必要です";
+"grant_permission" = "許可を与える";
+"not_determined" = "未設定";
+"authorized" = "許可済み";
+"denied" = "拒否";
+   170
 // MARK: - Background Fetch & Local Notifications
-"construct_app_name" = "Construct";
-"construct_new_message" = "New Message";
-"construct_new_messages" = "New Messages";
-"construct_new_messages_count" = "You have %d new messages";
-"construct_new_messages_from_contacts" = "You have %d new messages from %d contacts";
-"construct_sync_completed" = "Messages Synced";
-"construct_sync_completed_count" = "Synced %d new messages";
-"background_fetch" = "Background Refresh";
-"background_fetch_footer" = "Periodically fetches missed messages via an encrypted gRPC connection when the live stream is not active (e.g. app is backgrounded or network was interrupted). Keeps your inbox up to date without relying on push notifications alone.";
-"enable_background_fetch" = "Enable Background Refresh";
-"background_fetch_status" = "Background Refresh Status";
-"background_fetch_disabled" = "Disabled";
-"background_fetch_enabled" = "Enabled";
-"background_fetch_last_check" = "Last check: %@";
-"background_fetch_interval" = "Check Interval";
-"background_fetch_interval_settings" = "Check Interval";
-"background_fetch_interval_footer" = "How often to fetch missed messages when the live stream is inactive. iOS may adjust this based on your usage patterns.";
-"background_fetch_interval_minutes" = "%d min";
-"background_fetch_interval_hours" = "%d hour";
-"background_fetch_low_power_mode_warning" = "Disabled in Low Power Mode";
-"background_fetch_low_power_mode_title" = "Low Power Mode Active";
-"background_fetch_low_power_mode_description" = "Background refresh is automatically disabled when Low Power Mode is enabled to save battery.";
-"background_fetch_low_power_mode_alert_title" = "Low Power Mode Detected";
-"background_fetch_low_power_mode_alert_message" = "Background refresh has been disabled because Low Power Mode is enabled. It will be re-enabled automatically when Low Power Mode is turned off.";
-"background_fetch_disabled_low_power" = "Disabled (Low Power Mode)";
-"background_fetch_energy_saving" = "Energy Saving";
-
+"construct_app_name" = "共創";
+"construct_new_message" = "新着メッセージ";
+"construct_new_messages" = "新着メッセージ";
+"construct_new_messages_count" = "%d件の新着メッセージがあります";
+"construct_new_messages_from_contacts" = "%2$d件の連絡先から%1$d件の新着メッセージがあります";
+"construct_sync_completed" = "メッセージの同期完了";
+"construct_sync_completed_count" = "%d件の新着メッセージを同期しました";
+"background_fetch" = "バックグラウンド更新";
+"background_fetch_footer" =
+       "ライブストリームがアクティブでないとき（アプリがバックグラウンドにある場合やネットワークが中断された場合など）、暗号化されたgRPC接続を介して定期的に未読メッセージを取得します。プッシュ通知だけに頼らずに、受
+       信トレイを最新の状態に保ちます。";
+"enable_background_fetch" = "バックグラウンド更新を有効にする";
+"background_fetch_status" = "バックグラウンド更新のステータス";
+"background_fetch_disabled" = "無効";
+"background_fetch_enabled" = "有効";
+"background_fetch_last_check" = "最終確認: %@";
+"background_fetch_interval" = "確認間隔";
+"background_fetch_interval_settings" = "確認間隔";
+"background_fetch_interval_footer" = "ライブストリームが非アクティブなときに未読メッセージを取得する頻度。iOSは使用パターンに基づいてこれを調整する場合があります。";
+"background_fetch_interval_minutes" = "%d分";
+"background_fetch_interval_hours" = "%d時間";
+"background_fetch_low_power_mode_warning" = "低電力モード中は無効";
+"background_fetch_low_power_mode_title" = "低電力モードが有効";
+"background_fetch_low_power_mode_description" = "バッテリーを節約するため、低電力モードが有効な場合はバックグラウンド更新が自動的に無効になります。";
+"background_fetch_low_power_mode_alert_title" = "低電力モードを検出";
+"background_fetch_low_power_mode_alert_message" = "低電力モードが有効なため、バックグラウンド更新が無効になりました。低電力モードをオフにすると、自動的に再有効化されます。";
+"background_fetch_disabled_low_power" = "無効 (低電力モード)";
+"background_fetch_energy_saving" = "省エネルギー";
+   198
 // MARK: - Profile Sharing
-"profile" = "Profile";
-"profile_sharing_status" = "Profile Sharing Status";
-"sharing_with_you" = "Sharing with you";
-"not_sharing_with_you" = "Not sharing with you";
-"profile_sharing_info" = "Profile Sharing Info";
-"profile_sharing_info_footer" = "This user can choose to share their profile data (display name and avatar) with you via encrypted messages. Profile data is not stored on the server.";
-"share_my_data" = "Share My Data";
-"block_user" = "Block User";
-"unblock_user" = "Unblock User";
-"actions" = "Actions";
-"user_is_blocked_footer" = "This user is blocked. They cannot send you messages.";
-"block_user_confirmation" = "Block User";
-"block_user_confirmation_message" = "Are you sure you want to block this user? They will not be able to send you messages.";
-"unblock_user_confirmation_message" = "Are you sure you want to unblock this user? They will be able to send you messages again.";
-"share_my_data_alert" = "Share My Data";
-"profile_shared_successfully" = "Profile shared successfully";
-"failed_to_share_profile" = "Failed to share profile";
-"profile_sharing_stopped" = "Profile sharing stopped";
-"not_authenticated" = "Not authenticated";
-"user_not_found" = "User not found";
-"failed_to_encode_profile" = "Failed to encode profile";
-"search_messages" = "Search messages";
-"select" = "Select";
-"select_messages" = "Select Messages";
-"delete_selected" = "Delete Selected";
-"message_selected" = "message selected";
-"messages_selected" = "messages selected";
-"load_older_messages" = "Load older messages";
-"reachable" = "Reachable";
-"unreachable" = "Unreachable";
-"delete_my_account" = "Delete identity";
-"delete_account_warning" = "Permanently deletes your identity from the server. After successful deletion, all local encryption keys and app data will be automatically cleared from this device.";
-"delete_account_warning_title" = "Delete Identity?";
-"delete_account_warning_message" = "This will permanently delete your identity from the server. After server confirms deletion, all local keys and data will be automatically cleared from this device. You cannot undo this action.";
-"delete_account_confirmation_message" = "Final confirmation: Your identity will be deleted from the server, and all local encryption keys will be cleared after server confirmation. This action is irreversible.";
-"delete_account_irreversible_warning" = "This action is irreversible. All your data will be permanently deleted from the server and cannot be recovered.";
-"delete_account" = "Delete Identity";
-"delete_account_countdown" = "Delete in %ds";
-"delete_account_local_only" = "Delete local data only";
-"delete_account_local_only_title" = "Delete local data only?";
-"delete_account_local_only_warning" = "Your account may still exist on the server. All local encryption keys and app data will be permanently deleted from this device. You will no longer be able to use this account from here.";
-"delete_account_local_only_confirm" = "Delete locally";
-"warning" = "Warning";"DANGER_ZONE" = "Danger Zone";
-"account_recovery" = "Account Recovery";
-"discovery" = "Discovery";
-"account_recovery_seed" = "Identity Recovery (Seed Phrase)";
-"account_recovery_seed_hint" = "Restore access using your recovery seed phrase.";
-"account_recovery_seed_coming_soon" = "Seed phrase recovery will be available in a future update.";
-
+"profile" = "プロフィール";
+"profile_sharing_status" = "プロフィール共有のステータス";
+"sharing_with_you" = "あなたと共有中";
+"not_sharing_with_you" = "あなたと共有していません";
+"profile_sharing_info" = "プロフィール共有情報";
+"profile_sharing_info_footer" = "このユーザーは、暗号化されたメッセージを介してプロフィールデータ（表示名とアバター）をあなたと共有することを選択できます。プロフィールデータはサーバーに保存されません。";
+"share_my_data" = "自分のデータを共有";
+"block_user" = "ユーザーをブロック";
+"unblock_user" = "ユーザーのブロックを解除";
+"actions" = "アクション";
+"user_is_blocked_footer" = "このユーザーはブロックされています。メッセージを送信することはできません。";
+"block_user_confirmation" = "ユーザーをブロック";
+"block_user_confirmation_message" = "このユーザーをブロックしてもよろしいですか？メッセージを送信できなくなります。";
+"unblock_user_confirmation_message" = "このユーザーのブロックを解除してもよろしいですか？再びメッセージを送信できるようになります。";
+"share_my_data_alert" = "自分のデータを共有";
+"profile_shared_successfully" = "プロフィールを正常に共有しました";
+"failed_to_share_profile" = "プロフィールの共有に失敗しました";
+"profile_sharing_stopped" = "プロフィールの共有を停止しました";
+"not_authenticated" = "認証されていません";
+"user_not_found" = "ユーザーが見つかりません";
+"failed_to_encode_profile" = "プロフィールのエンコードに失敗しました";
+"search_messages" = "メッセージを検索";
+"select" = "選択";
+"select_messages" = "メッセージを選択";
+"delete_selected" = "選択した項目を削除";
+"message_selected" = "件のメッセージを選択中";
+"messages_selected" = "件のメッセージを選択中";
+"load_older_messages" = "以前のメッセージを読み込む";
+"reachable" = "接続可能";
+"unreachable" = "接続不可";
+"delete_my_account" = "アイデンティティを削除";
+"delete_account_warning" = "サーバーからあなたのアイデンティティを永久に削除します。削除が成功すると、このデバイスからすべてのローカル暗号化キーとアプリデータが自動的に消去されます。";
+"delete_account_warning_title" = "アイデンティティを削除しますか？";
+"delete_account_warning_message" =
+       "これにより、サーバーからあなたのアイデンティティが永久に削除されます。サーバーが削除を確認すると、このデバイス上のすべてのローカルキーとデータが自動的に消去されます。この操作は取り消せません。";
+"delete_account_confirmation_message" = "最終確認：あなたのアイデンティティはサーバーから削除され、サーバーの確認後にすべてのローカル暗号化キーが消去されます。この操作は元に戻せません。";
+"delete_account_irreversible_warning" = "この操作は元に戻せません。すべてのデータがサーバーから永久に削除され、復元することはできません。";
+"delete_account" = "アイデンティティを削除";
+"delete_account_countdown" = "%d秒後に削除";
+"delete_account_local_only" = "ローカルデータのみ削除";
+"delete_account_local_only_title" = "ローカルデータのみ削除しますか？";
+"delete_account_local_only_warning" =
+       "アカウントはサーバー上に残っている可能性があります。このデバイス上のすべてのローカル暗号化キーとアプリデータが永久に削除されます。ここからこのアカウントを使用することはできなくなります。";
+"delete_account_local_only_confirm" = "ローカルで削除";
+"warning" = "警告";"DANGER_ZONE" = "危険地帯";
+"account_recovery" = "アカウント復旧";
+"discovery" = "発見";
+"account_recovery_seed" = "アイデンティティ復旧 (シードフレーズ)";
+"account_recovery_seed_hint" = "復旧シードフレーズを使用してアクセスを復元します。";
+"account_recovery_seed_coming_soon" = "シードフレーズによる復旧は、今後のアップデートで利用可能になる予定です。";
+   248
 // Duress PIN
-"duress_pin" = "Destruction PIN";
-"duress_pin_hint" = "A separate PIN that silently wipes all data when entered on the lock screen.";
-"duress_pin_coming_soon" = "Destruction PIN will be available in a future update.";
-"enable_duress_pin" = "Enable Destruction PIN";
-"disable_duress_pin" = "Disable Destruction PIN";
-"duress_pin_change" = "Change Destruction PIN";
-"create_duress_pin" = "Create Destruction PIN";
-"confirm_duress_pin" = "Confirm Destruction PIN";
-"duress_pin_setup_warning" = "When entered on the lock screen, this PIN silently wipes all local data and attempts to delete your account from the server. This action is irreversible.";
-"duress_pin_matches_main" = "Destruction PIN cannot match your main PIN. Choose a different code.";
-"duress_pin_disable_warning" = "Your Destruction PIN will be removed. The lock screen will no longer trigger a silent wipe.";
-"duress_pin_requires_main_pin" = "Enable a main PIN first to use the Destruction PIN.";
-
+"duress_pin" = "破壊PIN";
+"duress_pin_hint" = "ロック画面で入力すると、すべてのデータを密かに消去する別のPINコード。";
+"duress_pin_coming_soon" = "破壊PINは今後のアップデートで利用可能になる予定です。";
+"enable_duress_pin" = "破壊PINを有効にする";
+"disable_duress_pin" = "破壊PINを無効にする";
+"duress_pin_change" = "破壊PINを変更";
+"create_duress_pin" = "破壊PINを作成";
+"confirm_duress_pin" = "破壊PINを確認";
+"duress_pin_setup_warning" = "ロック画面でこのPINを入力すると、すべてのローカルデータが密かに消去され、サーバーからのアカウント削除が試行されます。この操作は取り消せません。";
+"duress_pin_matches_main" = "破壊PINをメインのPINと同じにすることはできません。別のコードを選択してください。";
+"duress_pin_disable_warning" = "破壊PINが削除されます。ロック画面でのサイレント消去は実行されなくなります。";
+"duress_pin_requires_main_pin" = "破壊PINを使用するには、まずメインのPINを有効にしてください。";
+   262
 // Linked Devices
-"linked_devices" = "Linked Devices";
-"linked_devices_hint" = "Use your account on multiple devices simultaneously.";
-"linked_devices_coming_soon" = "Linking additional devices will be available in a future update.";
-"link_new_device" = "Link New Device";
-"transfer_history_row" = "Transfer History to Nearby Device";
-"transfer_history_hint" = "Send your message history to a device on the same WiFi network.";
-"this_device" = "This Device";
-"profile_currently_shared" = "Profile currently shared";
-"stop_sharing_profile" = "Stop Sharing Profile";
-"share_my_profile" = "Share My Profile";
-"share_profile_explanation" = "Share your name and photo with this contact";
-"username_invalid_chars" = "Username can only contain letters, numbers, and underscores.";
-"username_too_short" = "Username must be at least 3 characters.";
-"username_checking" = "Checking availability...";
-"username_available" = "Username is available.";
-"username_unavailable" = "Username is already taken.";
-"username_check_failed" = "Could not verify username right now. Try again.";
-"username_hint" = "your unique public identifier. tap to change.";
-"username_length_error" = "username must be 3–20 characters";
-"display_name_hint" = "shown to your contacts. username stays permanent.";
-"new_messages" = "New Messages";
-"scroll_to_bottom" = "Back to Latest";
-
+"linked_devices" = "連携済みレプリカ";
+"linked_devices_hint" = "複数のレプリカで同時にアカウントを使用します。";
+"linked_devices_coming_soon" = "追加レプリカの連携は、今後のアップデートで利用可能になる予定です。";
+"link_new_device" = "新しいレプリカを連携";
+"transfer_history_row" = "近くのデバイスに履歴を転送";
+"transfer_history_hint" = "同じWiFiネットワーク上のデバイスにメッセージ履歴を送信します。";
+"this_device" = "このレプリカ";
+"profile_currently_shared" = "プロフィールを共有中";
+"stop_sharing_profile" = "プロフィールの共有を停止";
+"share_my_profile" = "プロフィールを共有";
+"share_profile_explanation" = "この連絡先と名前と写真を共有します";
+"username_invalid_chars" = "ユーザー名には英数字とアンダースコアのみ使用できます。";
+"username_too_short" = "ユーザー名は3文字以上である必要があります。";
+"username_checking" = "空き状況を確認中...";
+"username_available" = "ユーザー名は使用可能です。";
+"username_unavailable" = "このユーザー名は既に使用されています。";
+"username_check_failed" = "現在ユーザー名を検証できません。もう一度お試しください。";
+"username_hint" = "あなた固有の公開識別子。タップして変更。";
+"username_length_error" = "ユーザー名は3〜20文字である必要があります";
+"display_name_hint" = "連絡先に表示されます。ユーザー名は不変です。";
+"new_messages" = "新着メッセージ";
+"scroll_to_bottom" = "最新へ戻る";
+   286
 // Network Settings
-"server" = "Server";
-"port" = "Port";
-"server_applied_title" = "Server Updated";
-"server_applied_message" = "The new gRPC server will be used for all future connections.";
-"close" = "Close";
-"change_avatar" = "Change Photo";
-
+"server" = "サーバー";
+"port" = "ポート";
+"server_applied_title" = "サーバーを更新しました";
+"server_applied_message" = "今後のすべての接続に新しいgRPCサーバーが使用されます。";
+"close" = "閉じる";
+"change_avatar" = "写真を変更";
+   294
 // Onboarding
-"onboarding_tagline" = "postmodern messenger";
-"onboarding_username_placeholder" = "choose a public alias (optional)";
-"onboarding_create_identity" = "Create device identity";
-"onboarding_restore" = "Restore from recovery key";
-"onboarding_recovery_coming_soon" = "Recovery coming soon";
-"onboarding_network_settings" = "Network settings";
-
+"onboarding_tagline" = "ポストモダン・メッセンジャー";
+"onboarding_username_placeholder" = "公開エイリアスを選択 (任意)";
+"onboarding_create_identity" = "デバイスアイデンティティを作成";
+"onboarding_restore" = "復旧キーから復元";
+"onboarding_recovery_coming_soon" = "復旧機能は近日公開";
+"onboarding_network_settings" = "ネットワーク設定";
+   302
 // Registration flow
-"reg_establishing_trust" = "Establishing trust";
-"reg_joining_network" = "Your device is joining the network";
-"reg_welcome" = "Welcome";
-"reg_label_username" = "Username";
-"reg_label_mode" = "Mode";
-"reg_label_device_id" = "Device ID";
-"reg_mode_anonymous" = "Anonymous";
-"reg_error_title" = "Something went wrong";
-"reg_continue" = "Continue";
-"reg_try_again" = "Try Again";
-"reg_cancel" = "Cancel";
-"reg_phase_entropy" = "entropy collected";
-"reg_phase_nonce" = "nonce search";
-"reg_phase_solution" = "solution found";
-
+"reg_establishing_trust" = "信頼関係を構築中";
+"reg_joining_network" = "デバイスがネットワークに参加しています";
+"reg_welcome" = "ようこそ";
+"reg_label_username" = "ユーザー名";
+"reg_label_mode" = "モード";
+"reg_label_device_id" = "デバイスID";
+"reg_mode_anonymous" = "匿名";
+"reg_error_title" = "エラーが発生しました";
+"reg_continue" = "続行";
+"reg_try_again" = "再試行";
+"reg_cancel" = "キャンセル";
+"reg_phase_entropy" = "エントロピー収集済み";
+"reg_phase_nonce" = "ナンス検索中";
+"reg_phase_solution" = "解法が見つかりました";
+   318
 // Delete Account
-"delete_account_footer" = "Permanently deletes your identity and all associated data.";
-"delete_account_not_available" = "Identity deletion is not yet available. Please try again later.";
-"delete_account_failed" = "Deletion failed: %@";
-
+"delete_account_footer" = "アイデンティティと関連するすべてのデータを永久に削除します。";
+"delete_account_not_available" = "アイデンティティの削除はまだ利用できません。後でもう一度お試しください。";
+"delete_account_failed" = "削除に失敗しました: %@";
+   323
 // Account Settings — new sections
-"privacy" = "Privacy";
-"privacy_who_can_find_me" = "Who can find me by username";
-"privacy_read_receipts" = "Read receipts";
-"privacy_coming_soon_footer" = "Privacy controls are coming soon.";
-"data_and_privacy" = "Data & Privacy";
-"export_my_data" = "Export My Data";
-"export_my_data_footer" = "Download a copy of your messages, contacts and account data. Required under GDPR and applicable privacy laws.";
-"export_coming_soon_message" = "Data export is not yet available. This feature is required by law and will be added before public launch.";
-"danger_zone" = "Danger Zone";
-
+"privacy" = "プライバシー";
+"privacy_who_can_find_me" = "ユーザー名で自分を検索できる人";
+"privacy_read_receipts" = "既読確認";
+"privacy_coming_soon_footer" = "プライバシーコントロールは近日公開予定です。";
+"data_and_privacy" = "データとプライバシー";
+"export_my_data" = "データをエクスポート";
+"export_my_data_footer" = "メッセージ、連絡先、アカウントデータのコピーをダウンロードします。GDPRおよび適用されるプライバシー法の下で義務付けられています。";
+"export_coming_soon_message" = "データのエクスポートはまだ利用できません。この機能は法律で義務付けられており、正式リリース前に追加される予定です。";
+"danger_zone" = "危険地帯";
+   334
 // QR Scanner
-"paste_invite_link" = "Paste invite link";
-"clipboard_no_valid_invite" = "No valid invite link found in clipboard.";
-
+"paste_invite_link" = "招待リンクを貼り付け";
+"clipboard_no_valid_invite" = "クリップボードに有効な招待リンクが見つかりませんでした。";
+   338
 // iPad Split View
-"select_chat" = "Select a Chat";
-"select_chat_description" = "Choose a conversation from the sidebar to start messaging.";
-
+"select_chat" = "チャットを選択";
+"select_chat_description" = "サイドバーから会話を選択してメッセージを開始してください。";
+   342
 // QR Code
-
+   344
 // Account Settings
-
+   346
 // Reset Session
-"reset_session" = "Reset Session";
-"reset_session_title" = "Reset Session?";
-"reset_session_message" = "This will re-establish a new encrypted session. Messages in transit may be lost.";
-
+"reset_session" = "セッションをリセット";
+"reset_session_title" = "セッションをリセットしますか？";
+"reset_session_message" = "新しい暗号化セッションを再構築します。転送中のメッセージが失われる可能性があります。";
+   351
 // Account Recovery
-"try_again" = "Try Again";
-"recovery_not_configured" = "Not set up";
-"recovery_intro_title" = "Set Up Account Recovery";
-"recovery_intro_body" = "Generate a 12-word recovery phrase. If you lose this device, use the phrase to recover your account.";
-"recovery_generate" = "Generate Recovery Phrase";
-"recovery_write_down" = "Write down these 12 words in order. Store them somewhere safe — never share them.";
-"recovery_never_share" = "Never share your recovery phrase with anyone.";
-"recovery_wrote_it_down" = "I've Written It Down";
-"recovery_quiz_title" = "Verify Your Recovery Phrase";
-"recovery_quiz_word_n" = "Word #%d";
-"recovery_quiz_placeholder" = "Enter word";
-"recovery_confirm" = "Confirm & Activate";
-"recovery_quiz_failed" = "Some words are incorrect. Please check your recovery phrase.";
-"recovery_uploading" = "Activating recovery key…";
-"recovery_done_title" = "Recovery Phrase Activated";
-"recovery_done_body" = "Your account is now protected. Keep your recovery phrase safe.";
-"recovery_fingerprint" = "Key Fingerprint";
-"recovery_error_title" = "Something went wrong";
-"recovery_error_not_found" = "Account not found or recovery not enabled.";
-"recovery_error_not_configured" = "Recovery phrase was never set up for this account.";
-"recovery_error_wrong_phrase" = "Incorrect recovery phrase.";
-"recovery_error_cooldown" = "Recovery was recently used. Please try again later.";
-"recovery_error_already_set" = "Recovery key is already set (immutable).";
-"recovery_entry_instructions" = "Enter your 12-word recovery phrase to restore your account on this device.";
-"recovery_identifier_label" = "Account ID or Username";
-"recovery_identifier_placeholder" = "username or UUID";
-"recovery_enter_phrase" = "Recovery phrase (12 words)";
-"recovery_invalid_phrase" = "Invalid recovery phrase. Check the words and try again.";
-"recovery_restore_account" = "Restore Account";
-"recovery_in_progress" = "Recovering account…";
-"recovery_restored_title" = "Account Restored";
-"recovery_restored_body" = "Your account has been recovered on this device. Previous sessions have been revoked.";
-"recovery_banner_title" = "Protect Your Account";
-"recovery_banner_subtitle" = "Set up your recovery phrase to avoid losing access.";
-
+"try_again" = "再試行";
+"recovery_not_configured" = "未設定";
+"recovery_intro_title" = "アカウント復旧の設定";
+"recovery_intro_body" = "12語の復旧フレーズを生成します。このデバイスを紛失した場合、このフレーズを使用してアカウントを復旧できます。";
+"recovery_generate" = "復旧フレーズを生成";
+"recovery_write_down" = "これらの12語を順番に書き留めてください。安全な場所に保管し、決して共有しないでください。";
+"recovery_never_share" = "復旧フレーズを決して誰にも教えないでください。";
+"recovery_wrote_it_down" = "書き留めました";
+"recovery_quiz_title" = "復旧フレーズの確認";
+"recovery_quiz_word_n" = "%d番目の単語";
+"recovery_quiz_placeholder" = "単語を入力";
+"recovery_confirm" = "確認して有効化";
+"recovery_quiz_failed" = "いくつかの単語が正しくありません。復旧フレーズを確認してください。";
+"recovery_uploading" = "復旧キーを有効化中...";
+"recovery_done_title" = "復旧フレーズを有効化しました";
+"recovery_done_body" = "アカウントが保護されました。復旧フレーズを安全に保管してください。";
+"recovery_fingerprint" = "キーフィンガープリント";
+"recovery_error_title" = "エラーが発生しました";
+"recovery_error_not_found" = "アカウントが見つからないか、復旧が有効になっていません。";
+"recovery_error_not_configured" = "このアカウントに復旧フレーズは設定されていません。";
+"recovery_error_wrong_phrase" = "復旧フレーズが正しくありません。";
+"recovery_error_cooldown" = "復旧機能が最近使用されました。後でもう一度お試しください。";
+"recovery_error_already_set" = "復旧キーは既に設定されています (変更不可)。";
+"recovery_entry_instructions" = "12語の復旧フレーズを入力して、このデバイスでアカウントを復元します。";
+"recovery_identifier_label" = "アカウントIDまたはユーザー名";
+"recovery_identifier_placeholder" = "ユーザー名またはUUID";
+"recovery_enter_phrase" = "復旧フレーズ (12語)";
+"recovery_invalid_phrase" = "無効な復旧フレーズです。単語を確認して、もう一度お試しください。";
+"recovery_restore_account" = "アカウントを復元";
+"recovery_in_progress" = "アカウントを復旧中...";
+"recovery_restored_title" = "アカウントを復元しました";
+"recovery_restored_body" = "このデバイスでアカウントが復元されました。以前のセッションは無効化されました。";
+"recovery_banner_title" = "アカウントを保護";
+"recovery_banner_subtitle" = "アクセスできなくなるのを防ぐため、復旧フレーズを設定してください。";
+   387
 // macOS Catalyst — push notifications
-"push_not_available_mac" = "Push Notifications Unavailable on Desktop";
-"push_not_available_mac_hint" = "The desktop app uses a persistent connection for real-time delivery. Push notifications are available on the iOS app.";
-
+"push_not_available_mac" = "デスクトップではプッシュ通知を利用できません";
+"push_not_available_mac_hint" = "デスクトップアプリはリアルタイム配信のために常時接続を使用します。プッシュ通知はiOSアプリで利用可能です。";
+   391
 // Profile sharing
-"failed_to_establish_session" = "Failed to establish a secure connection. Please try again.";
-"saved" = "Saved";
-
+"failed_to_establish_session" = "安全な接続の確立に失敗しました。もう一度お試しください。";
+"saved" = "保存済み";
+   395
 // Swipe actions
-"pin" = "Pin";
-"unpin" = "Unpin";
-"mark_unread" = "Mark Unread";
-"mark_read" = "Mark Read";
-
+"pin" = "固定";
+"unpin" = "固定を解除";
+"mark_unread" = "未読にする";
+"mark_read" = "既読にする";
+   401
 // ICE — traffic obfuscation
 "ice_title" = "ICE";
-"ice_footer" = "ICE masks your traffic to make it indistinguishable from regular HTTPS. The configuration is provided automatically by the server.";
-"ice_unavailable" = "Not available on this server";
-"ice_retry" = "Retry ICE connection";
-"traffic_protection" = "Traffic Protection";
-"ice_footer_short" = "ICE masks traffic as standard HTTPS. Configuration is provided automatically.";
-
+"ice_footer" = "ICEは、トラフィックを通常のHTTPSと区別がつかないように偽装します。設定はサーバーから自動的に提供されます。";
+"ice_unavailable" = "このサーバーでは利用できません";
+"ice_retry" = "ICE接続を再試行";
+"traffic_protection" = "トラフィック保護";
+"ice_footer_short" = "ICEはトラフィックを標準のHTTPSとして偽装します。設定は自動的に行われます。";
+   409
 // ICE mode (tri-state)
-"ice_mode_off" = "off";
-"ice_mode_auto" = "auto";
-"ice_mode_on" = "on";
-"ice_footer_off" = "Traffic protection disabled. Direct connection only.";
-"ice_footer_auto" = "ICE activates automatically when network blocking is detected.";
-"ice_footer_on" = "All traffic routed through ICE relay.";
-"ice_auto_active" = "Auto-activated · direct blocked";
-"ice_direct_probe_ok" = "Direct: OK (%@)";
-"ice_direct_probe_blocked" = "Direct: blocked";
-
+"ice_mode_off" = "オフ";
+"ice_mode_auto" = "自動";
+"ice_mode_on" = "オン";
+"ice_footer_off" = "トラフィック保護が無効です。直接接続のみ。";
+"ice_footer_auto" = "ネットワークの遮断が検出されると、ICEが自動的に有効になります。";
+"ice_footer_on" = "すべてのトラフィックがICEリレーを経由します。";
+"ice_auto_active" = "自動有効化中 ・ 直接接続遮断";
+"ice_direct_probe_ok" = "直接接続: OK (%@)";
+"ice_direct_probe_blocked" = "直接接続: 遮断";
+   420
 // Data & Storage
-"data_and_storage" = "Data & Storage";
-"storage_media_cache" = "Media Cache";
-"storage_media_cache_footer" = "Cached media files let you view photos and files instantly without re-downloading. Stored in the system Caches folder — iOS may clear this automatically when storage is low.";
-"media_cache" = "Media Cache";
-"storage_of_quota" = "%@ of %@";
-"storage_clearing" = "Clearing…";
-"storage_clear_media_cache" = "Clear Media Cache";
-"storage_clear_confirm_title" = "Clear Media Cache?";
-"storage_clear_confirm_message" = "All cached photos, videos and files will be removed. They will be re-downloaded when needed.";
-"storage_limit" = "Storage Limit";
-"storage_limit_footer" = "Oldest files are automatically removed when the cache exceeds this limit.";
-"storage_no_limit" = "No Limit";
-"storage_no_limit_footer" = "Media files will be kept until you clear them manually or iOS reclaims the space.";
-"storage_auto_clear" = "Keep Media For";
-"storage_auto_clear_footer" = "Media older than the selected period is removed each time the app launches.";
-"storage_keep_forever" = "Forever";
-"storage_keep_7_days" = "7 Days";
-"storage_keep_30_days" = "30 Days";
-"storage_keep_90_days" = "90 Days";
-
+"data_and_storage" = "データとストレージ";
+"storage_media_cache" = "メディアキャッシュ";
+"storage_media_cache_footer" =
+       "キャッシュされたメディアファイルにより、再ダウンロードせずに写真やファイルをすぐに表示できます。システムのキャッシュフォルダに保存され、ストレージが少なくなるとiOSによって自動的に消去される場合があります。"
+       ;
+"media_cache" = "メディアキャッシュ";
+"storage_of_quota" = "%2$@中%1$@使用";
+"storage_clearing" = "消去中...";
+"storage_clear_media_cache" = "メディアキャッシュを消去";
+"storage_clear_confirm_title" = "メディアキャッシュを消去しますか？";
+"storage_clear_confirm_message" = "キャッシュされたすべての写真、動画、ファイルが削除されます。必要に応じて再ダウンロードされます。";
+"storage_limit" = "ストレージ制限";
+"storage_limit_footer" = "キャッシュがこの制限を超えると、最も古いファイルから自動的に削除されます。";
+"storage_no_limit" = "無制限";
+"storage_no_limit_footer" = "メディアファイルは、手動で消去するかiOSが領域を回収するまで保持されます。";
+"storage_auto_clear" = "メディアの保持期間";
+"storage_auto_clear_footer" = "選択した期間より古いメディアは、アプリの起動時に毎回削除されます。";
+"storage_keep_forever" = "永久";
+"storage_keep_7_days" = "7日間";
+"storage_keep_30_days" = "30日間";
+"storage_keep_90_days" = "90日間";
+   441
 // Message editing
-"edit_message" = "Edit";
-"edited" = "edited";
-"editing_message" = "Editing message";
-"edit_message_failed" = "Failed to edit message: %@";
-"edit_message_limit_reached" = "Edit limit reached (20 edits max)";
-
+"edit_message" = "編集";
+"edited" = "編集済み";
+"editing_message" = "メッセージを編集";
+"edit_message_failed" = "メッセージの編集に失敗しました: %@";
+"edit_message_limit_reached" = "編集制限に達しました (最大20回)";
+   448
 // MARK: - Network Settings — Connection Route
-"endpoint" = "Endpoint";
-"mode" = "Mode";
-
+"endpoint" = "エンドポイント";
+"mode" = "モード";
+   452
 // MARK: - Quote & Reply
-"quote_reply" = "Quote & Reply";
-"select_quote" = "Select Quote";
-"quote_selection_hint" = "Select the text you want to quote, then tap Reply.";
-"reply_with_selection" = "Reply to Selection";
-"photo" = "Photo";
-"video" = "Video";
-"file_attachment" = "File";
-
+"quote_reply" = "引用と返信";
+"select_quote" = "引用を選択";
+"quote_selection_hint" = "引用するテキストを選択して、「返信」をタップしてください。";
+"reply_with_selection" = "選択範囲に返信";
+"photo" = "写真";
+"video" = "動画";
+"file_attachment" = "ファイル";
+   461
 // MARK: - Attachments
-"attach" = "Attach";
-"camera" = "Camera";
-"files" = "Files";
-"photos" = "Photos";
-"drop_to_attach" = "Drop to attach";
-
+"attach" = "添付";
+"camera" = "カメラ";
+"files" = "ファイル";
+"photos" = "写真";
+"drop_to_attach" = "ドロップして添付";
+   468
 // MARK: - Message States
-"uploading" = "Uploading…";
-"loading" = "Loading...";
-"failed_to_load" = "Failed to load";
-"shared_profile" = "Shared profile";
-
+"uploading" = "アップロード中...";
+"loading" = "読み込み中...";
+"failed_to_load" = "読み込みに失敗しました";
+"shared_profile" = "共有プロフィール";
+   474
 // MARK: - Drafts
-"save_draft" = "Save Draft";
-"drafts" = "Drafts";
-"drafts_stored_locally" = "Drafts are stored locally on this device.";
-
+"save_draft" = "下書きを保存";
+"drafts" = "下書き";
+"drafts_stored_locally" = "下書きはこのデバイスにローカルに保存されます。";
+   479
 // MARK: - QR Code
-"code_expired" = "Code expired";
-"generate_new_code" = "Generate New Code";
-"expires_in" = "Expires in %@";
-
+"code_expired" = "コードの期限が切れました";
+"generate_new_code" = "新しいコードを生成";
+"expires_in" = "有効期限: %@";
+   484
 // MARK: - Settings & Diagnostics
-"diagnostics" = "Diagnostics";
-"diagnostics_logs" = "Diagnostics & Logs";
+"diagnostics" = "診断";
+"diagnostics_logs" = "診断とログ";
 "tls" = "TLS";
-"interval" = "Interval";
-"preview" = "Preview";
-
+"interval" = "間隔";
+"preview" = "プレビュー";
+   491
 // MARK: - Device Linking
-"onboarding_link_device" = "Link Existing Account";
-"device_link_scan_title" = "Scan to Link";
-"device_link_scan_instructions" = "Open your existing device → Settings → Linked Devices → Link New Device, then scan the QR code.";
-"device_link_linking" = "Linking device…";
-"device_link_success" = "Device linked successfully";
-"device_link_qr_title" = "Link New Device";
-"device_link_qr_instructions" = "On your new device, choose 'Link Existing Account' during onboarding and scan this code.";
-"device_link_expires_in" = "Expires in %@";
-"device_link_expired" = "Code expired — tap to refresh";
-"device_link_refresh" = "Generate New Code";
-"device_link_confirm" = "Link Device";
-"device_link_token_placeholder" = "Paste link token…";
-"device_link_macos_instructions" = "On your existing device, open Settings → Linked Devices → Link New Device, then paste the token shown on screen.";
-"device_link_confirm_title" = "Link this device?";
-"device_revoke" = "Remove Device";
-"device_revoke_confirm_title" = "Remove Device";
-"device_revoke_confirm" = "This device will be removed from your account.";
-"device_added_%@" = "Added %@";
-
+"onboarding_link_device" = "既存のアカウントを連携";
+"device_link_scan_title" = "スキャンして連携";
+"device_link_scan_instructions" = "既存のレプリカを開く → 設定 → 連携済みレプリカ → 新しいレプリカを連携 を選択し、QRコードをスキャンしてください。";
+"device_link_linking" = "レプリカを連携中...";
+"device_link_success" = "レプリカを正常に連携しました";
+"device_link_qr_title" = "新しいレプリカを連携";
+"device_link_qr_instructions" = "新しいレプリカで、オンボーディング中に「既存のアカウントを連携」を選択し、このコードをスキャンしてください。";
+"device_link_expires_in" = "有効期限: %@";
+"device_link_expired" = "期限切れ — タップして更新";
+"device_link_refresh" = "新しいコードを生成";
+"device_link_confirm" = "レプリカを連携";
+"device_link_token_placeholder" = "リンク・トークンを貼り付け...";
+"device_link_macos_instructions" = "既存のレプリカで、設定 → 連携済みレプリカ → 新しいレプリカを連携 を開き、画面に表示されているトークンを貼り付けてください。";
+"device_link_confirm_title" = "このレプリカを連携しますか？";
+"device_revoke" = "レプリカを解除";
+"device_revoke_confirm_title" = "レプリカを解除";
+"device_revoke_confirm" = "このレプリカはアカウントから削除されます。";
+"device_added_%@" = "%@に追加されました";
+   511
 // MARK: - Device Join Request (Desktop onboarding)
-"device_link_request_title" = "Link to Existing Account";
-"device_link_request_instruction" = "Scan with your iPhone";
-"device_link_request_steps" = "Open Construct on your iPhone → Settings → Linked Devices → tap 'Link New Device' — or just scan this code if you have Construct open.";
-"device_link_waiting_approval" = "Waiting for approval on your iPhone…";
-"device_link_scan_on_phone" = "Scan this code with Construct on your iPhone";
-"device_link_request_timeout" = "Link request timed out — please try again";
-"device_link_feature_unavailable" = "This feature requires a server update. Please try again later.";
-"device_link_invalid_qr" = "Invalid QR code — make sure you are scanning a Construct link code.";
-"device_link_approve_title" = "Link \"%@\" to your account?";
-"device_link_approve_title_fallback" = "Link new device to your account?";
-"device_link_approve" = "Link Device";
-"device_link_approve_message" = "This device will have full access to your Construct account.";
-"device_link_approved_title" = "Device Linked";
-"device_link_approved_message" = "The device has been linked to your account successfully.";
-
+"device_link_request_title" = "既存のアカウントに連携";
+"device_link_request_instruction" = "iPhoneでスキャンしてください";
+"device_link_request_steps" = "iPhoneで共創を開く → 設定 → 連携済みレプリカ → 「新しいレプリカを連携」をタップするか、共創を開いた状態でこのコードをスキャンしてください。";
+"device_link_waiting_approval" = "iPhoneでの承認を待機中...";
+"device_link_scan_on_phone" = "iPhoneの共創でこのコードをスキャンしてください";
+"device_link_request_timeout" = "連携リクエストがタイムアウトしました。もう一度お試しください。";
+"device_link_feature_unavailable" = "この機能にはサーバーのアップデートが必要です。後でもう一度お試しください。";
+"device_link_invalid_qr" = "無効なQRコードです。共創のリンク用コードをスキャンしていることを確認してください。";
+"device_link_approve_title" = "\"%@\" をアカウントに連携しますか？";
+"device_link_approve_title_fallback" = "新しいレプリカをアカウントに連携しますか？";
+"device_link_approve" = "レプリカを連携";
+"device_link_approve_message" = "このレプリカは、あなたの共創アカウントへのフルアクセス権を持つことになります。";
+"device_link_approved_title" = "レプリカを連携しました";
+"device_link_approved_message" = "レプリカが正常にアカウントに連携されました。";
+   527
 // MARK: - Session Management
-"session_management" = "Session Management";
-"sign_out_this_device" = "Sign Out This Device";
-"sign_out_this_device_message" = "You will be signed out on this device only. Other linked devices remain active.";
-"sign_out_other_devices" = "Sign Out Other Devices";
-"sign_out_other_devices_message" = "All other linked devices will be signed out. This device stays active.";
-"sign_out_all_devices" = "Sign Out All Devices";
-"sign_out_all_devices_message" = "You will be signed out on ALL devices simultaneously. Use this if a device was lost or compromised.";
-"sign_out_all_hint" = "Signing out of all devices invalidates all sessions immediately. You will need to re-authenticate on every device.";
-"sign_out" = "Sign Out";
-"device_scan_to_approve" = "Scan to Approve New Device";
-"device_revoke_confirm_message" = "Sign out \"%@\" remotely? This device will be disconnected from your account.";
-"other_devices" = "Other Devices";
-"other_devices_hint" = "Tap − to remove a device from your account.";
-"device_active_now" = "Active now";
-
+"session_management" = "セッション管理";
+"sign_out_this_device" = "このレプリカからサインアウト";
+"sign_out_this_device_message" = "このレプリカのみサインアウトします。他の連携済みレプリカはアクティブなままです。";
+"sign_out_other_devices" = "他のレプリカからサインアウト";
+"sign_out_other_devices_message" = "他のすべての連携済みレプリカからサインアウトします。このレプリカはアクティブなままです。";
+"sign_out_all_devices" = "すべてのレプリカからサインアウト";
+"sign_out_all_devices_message" = "すべてのレプリカから同時にサインアウトします。レプリカを紛失したり盗まれたりした場合は、これを使用してください。";
+"sign_out_all_hint" = "すべてのレプリカからサインアウトすると、すべてのセッションが即座に無効化されます。すべてのレプリカで再認証が必要になります。";
+"sign_out" = "サインアウト";
+"device_scan_to_approve" = "スキャンして新しいレプリカを承認";
+"device_revoke_confirm_message" = "\"%@\" をリモートでサインアウトしますか？このレプリカはアカウントから切断されます。";
+"other_devices" = "他のレプリカ";
+"other_devices_hint" = "－ をタップして、アカウントからレプリカを削除します。";
+"device_active_now" = "現在アクティブ";
+   543
 // MARK: - Flood guard & Lockdown
-"flood_alert_body" = "Sent %d messages in a short time. Notifications suppressed.";
-"flood_banner_title" = "Too many messages";
-"flood_banner_subtitle" = "Notifications from this contact are paused. Review and decide.";
-"lockdown_mode" = "Lockdown Mode";
-"lockdown_active_since" = "Active since %@";
-"lockdown_mode_hint" = "Only contacts added before activation receive notifications. New senders are silently saved — you can review them anytime.";
-"allow" = "Allow";
-
+"flood_alert_body" = "短時間に %d 件のメッセージが送信されました。通知が抑制されています。";
+"flood_banner_title" = "メッセージが多すぎます";
+"flood_banner_subtitle" = "この連絡先からの通知が一時停止されています。確認して判断してください。";
+"lockdown_mode" = "ロックダウン・モード";
+"lockdown_active_since" = "%@ から有効";
+"lockdown_mode_hint" = "有効化前に追加された連絡先のみ通知を受信します。新しい送信者は密かに保存され、いつでも確認できます。";
+"allow" = "許可";
+   552
 // MARK: - Image Crop
-"crop_use_photo" = "Use Photo";
-
+"crop_use_photo" = "写真を使用";
+   555
 // MARK: - Synaps
-"synaps" = "Synapses";
-"synaps_search_prompt" = "Search";
-"synaps_empty_title" = "No connections yet";
-"synaps_empty_subtitle" = "People you connect with will appear here, even after you clear a conversation.";
-"synaps_open_chat" = "Open Chat";
-"synaps_prune_title" = "Cut this synapse?";
-"synaps_prune_action" = "Cut";
-"synaps_prune_message" = "This will permanently remove %@ from your Synaps and delete the conversation.";
-
+"synaps" = "シナプス";
+"synaps_search_prompt" = "検索";
+"synaps_empty_title" = "接続はまだありません";
+"synaps_empty_subtitle" = "会話を消去した後でも、接続した人はここに表示されます。";
+"synaps_open_chat" = "チャットを開く";
+"synaps_prune_title" = "このシナプスを切断しますか？";
+"synaps_prune_action" = "切断";
+"synaps_prune_message" = "これにより %@ がシナプスから永久に削除され、会話も削除されます。";
+   565
 // MARK: - Connection Status Indicator
-
+   567
 // MARK: - Contact card crypto section
-"session_crypto_suite" = "Encryption";
-"session_crypto_no_session" = "No active session";
-
-"voice_message" = "Voice message";
-"ice_auto_activated_footer" = "ICE was activated automatically — your network blocks direct connections. You can disable it in settings.";
-
+"session_crypto_suite" = "暗号化";
+"session_crypto_no_session" = "アクティブなセッションなし";
+   571
+"voice_message" = "ボイスメッセージ";
+"ice_auto_activated_footer" = "ICEが自動的に有効になりました。ネットワークが直接接続を遮断しています。設定で無効にすることができます。";
+   574
 // MARK: - Calls
-"call_mute" = "Mute";
-"call_unmute" = "Unmute";
-"call_speaker" = "Speaker";
-"call_end" = "End Call";
-"call_connecting" = "Connecting…";
-"call_incoming_audio" = "Incoming audio call";
-"call_answer" = "Answer";
-"call_decline" = "Decline";
-
+"call_mute" = "ミュート";
+"call_unmute" = "ミュート解除";
+"call_speaker" = "スピーカー";
+"call_end" = "通話を終了";
+"call_connecting" = "接続中...";
+"call_incoming_audio" = "音声着信";
+"call_answer" = "応答";
+"call_decline" = "拒否";
+   584
 // MARK: - Call History
-"calls_recents" = "Recents";
-"calls_clear" = "Clear";
-"calls_clear_confirm" = "Clear all recent calls?";
-"calls_empty" = "No recent calls";
-"call_outgoing" = "Outgoing";
-"call_incoming" = "Incoming";
-"call_missed" = "Missed";
-"call_declined" = "Declined";
-"call_failed" = "Failed";
-"call_ended" = "Call Ended";
-"call_busy" = "Busy";
-"call_no_relay" = "No connection (relay unavailable)";
-"call_dismiss" = "Dismiss";
-"call_call_back" = "Call Back";
-"share" = "Share";
-"show_qr_code" = "Show QR Code";
-"copy_contact_link" = "Copy Contact Link";
-"link_copied" = "Link Copied";
-"recovery_not_configured_title" = "Recovery Not Configured";
-"developer" = "Developer";
-"change_photo" = "change photo";
-"identity_section" = "identity";
-"account_section" = "account";
-"bio" = "bio";
-"user_id" = "user id";
-"joined" = "joined";
-"changes_encrypted_footer" = "> changes are end-to-end encrypted";
-"delete_account_row" = "delete account";
-"delete_action" = "delete";
-"manage_action" = "manage";
-"add_action" = "add";
-"call_voice" = "voice call";
-"end_to_end_encrypted" = "changes are end-to-end encrypted";
-"invite" = "invite";
-"qr_caption_trust" = "trust is computed, not assumed.";
-"qr_scan_hint" = "show to someone nearby or take a screenshot";
-
+"calls_recents" = "履歴";
+"calls_clear" = "消去";
+"calls_clear_confirm" = "すべての着信履歴を消去しますか？";
+"calls_empty" = "通話履歴はありません";
+"call_outgoing" = "発信";
+"call_incoming" = "着信";
+"call_missed" = "不在着信";
+"call_declined" = "拒否";
+"call_failed" = "失敗";
+"call_ended" = "通話終了";
+"call_busy" = "お話し中";
+"call_no_relay" = "接続なし (リレー利用不可)";
+"call_dismiss" = "閉じる";
+"call_call_back" = "折り返し";
+"share" = "共有";
+"show_qr_code" = "QRコードを表示";
+"copy_contact_link" = "ノードリンクをコピー";
+"link_copied" = "リンクをコピーしました";
+"recovery_not_configured_title" = "復旧未設定";
+"developer" = "開発者";
+"change_photo" = "写真を変更";
+"identity_section" = "アイデンティティ";
+"account_section" = "アカウント";
+"bio" = "自己紹介";
+"user_id" = "ユーザーID";
+"joined" = "参加日";
+"changes_encrypted_footer" = "> 変更はエンドツーエンドで暗号化されます";
+"delete_account_row" = "アカウントを削除";
+"delete_action" = "削除";
+"manage_action" = "管理";
+"add_action" = "追加";
+"call_voice" = "音声通話";
+"end_to_end_encrypted" = "変更はエンドツーエンドで暗号化されます";
+"invite" = "招待";
+"qr_caption_trust" = "信頼は仮定されるものではなく、計算されるものです。";
+"qr_scan_hint" = "近くの人に見せるか、スクリーンショットを撮ってください";
+   622
 // MARK: - Device Link QR
-"device_link_section" = "link replica";
-"generating" = "generating...";
-"device_link_scan_hint" = "scan with another replica to link";
-
+"device_link_section" = "レプリカを連携";
+"generating" = "生成中...";
+"device_link_scan_hint" = "別のレプリカでスキャンして連携";
+   627
 // MARK: - Keys Recovery
-"keys_recovery_title" = "device keys unavailable";
-"keys_recovery_warning_title" = "⚠ CRYPTO KEYS NOT FOUND";
-"keys_recovery_warning_body" = "Your device crypto keys could not be loaded from Keychain. This may be a temporary system issue, or the keys may be permanently lost.\n\nYour messages and sessions cannot be accessed until this is resolved.";
-"keys_recovery_section_retry" = "retry";
-"keys_recovery_retry_hint" = "Keys may be temporarily unavailable due to a system issue. Try reloading.";
-"keys_recovery_retry_action" = "retry keychain read [→]";
-"keys_recovery_retry_failed" = "still unavailable";
-"keys_recovery_section_seed" = "restore from seed phrase";
-"keys_recovery_seed_hint" = "If you saved your 12-word recovery phrase, use it to restore access to your existing identity.";
-"keys_recovery_seed_action" = "enter recovery phrase [→]";
-"keys_recovery_section_new" = "create new account";
-"keys_recovery_new_hint" = "Create a completely new identity. Your existing account and messages will be permanently lost.";
-"keys_recovery_new_action" = "create new account [→]";
-"keys_recovery_wipe_confirm_title" = "create new account?";
-"keys_recovery_wipe_confirm_body" = "This will permanently delete your current identity and all local data. This cannot be undone.";
-"keys_recovery_wipe_confirm_action" = "delete and continue";
-
+"keys_recovery_title" = "デバイスキーを利用できません";
+"keys_recovery_warning_title" = "⚠ 暗号化キーが見つかりません";
+"keys_recovery_warning_body" =
+       "キーチェーンからデバイスの暗号化キーを読み込めませんでした。これはシステムの一時的な問題であるか、キーが永久に失われた可能性があります。\n\nこれが解決されるまで、メッセージやセッションにアクセスできません。
+       ";
+"keys_recovery_section_retry" = "再試行";
+"keys_recovery_retry_hint" = "システムの問題により、キーが一時的に利用できない場合があります。再読み込みをお試しください。";
+"keys_recovery_retry_action" = "キーチェーンの読み込みを再試行 [→]";
+"keys_recovery_retry_failed" = "依然として利用不可";
+"keys_recovery_section_seed" = "シードフレーズから復元";
+"keys_recovery_seed_hint" = "12語の復旧フレーズを保存している場合は、それを使用して既存のアイデンティティへのアクセスを復元してください。";
+"keys_recovery_seed_action" = "復旧フレーズを入力 [→]";
+"keys_recovery_section_new" = "新規アカウント作成";
+"keys_recovery_new_hint" = "完全に新しいアイデンティティを作成します。既存のアカウントとメッセージは永久に失われます。";
+"keys_recovery_new_action" = "新規アカウントを作成 [→]";
+"keys_recovery_wipe_confirm_title" = "新規アカウントを作成しますか？";
+"keys_recovery_wipe_confirm_body" = "これにより、現在のアイデンティティとすべてのローカルデータが永久に削除されます。この操作は取り消せません。";
+"keys_recovery_wipe_confirm_action" = "削除して続行";
+   645
 // MARK: - Logout
-"logout_row" = "sign out";
-"logout_all_row" = "sign out all devices";
-"logout_confirm_title" = "Sign Out?";
-"logout_confirm_message" = "You will be signed out on this device. You can sign back in with your seed phrase.";
-"logout_confirm_action" = "Sign Out";
-"logout_all_confirm_title" = "Sign Out All Devices?";
-"logout_all_confirm_message" = "All sessions on all your devices will be invalidated immediately. You will need to re-authenticate on every device using your seed phrase.";
-"logout_all_confirm_action" = "Sign Out All";
-"logout_no_backup_title" = "No Recovery Phrase Saved";
-"logout_no_backup_message" = "You haven't saved your recovery phrase yet. If you sign out without it, you will permanently lose access to your account and messages.";
-"logout_no_backup_setup_action" = "Set Up Recovery First";
-"logout_no_backup_proceed_action" = "Sign Out Anyway";
-
+"logout_row" = "サインアウト";
+"logout_all_row" = "すべてのレプリカからサインアウト";
+"logout_confirm_title" = "サインアウトしますか？";
+"logout_confirm_message" = "このデバイスからサインアウトします。シードフレーズで再度サインインできます。";
+"logout_confirm_action" = "サインアウト";
+"logout_all_confirm_title" = "すべてのレプリカからサインアウトしますか？";
+"logout_all_confirm_message" = "すべてのレプリカ上のすべてのセッションが即座に無効化されます。シードフレーズを使用して、すべてのレプリカで再認証が必要になります。";
+"logout_all_confirm_action" = "すべてサインアウト";
+"logout_no_backup_title" = "復旧フレーズが保存されていません";
+"logout_no_backup_message" = "復旧フレーズがまだ保存されていません。これなしでサインアウトすると、アカウントとメッセージへのアクセス権を永久に失います。";
+"logout_no_backup_setup_action" = "まず復旧を設定する";
+"logout_no_backup_proceed_action" = "そのままサインアウトする";
+   659
 // MARK: - Discoverable / User Search
-"searchable_toggle_title" = "searchable by username";
-"searchable_toggle_footer" = "When enabled, anyone who knows your exact username can find you. This cannot be used to guess or enumerate usernames — only 100% exact matches work. Off by default.";
-"searchable_confirm_title" = "enable search?";
-"searchable_confirm_message" = "Your username will be findable by anyone who types it exactly. Disable at any time in Security settings.";
-"searchable_confirm_action" = "enable";
-"searchable_no_username_hint" = "set a username first to enable search";
-"username_not_set" = "no username";
-"searchable_indicator" = "[⊙] searchable";
-"searchable_indicator_off" = "[ ] searchable";
-"synaps_remote_result_header" = "found on construct";
-"synaps_searching" = "searching...";
-"synaps_not_found" = "not found";
-
+"searchable_toggle_title" = "ユーザー名で検索可能";
+"searchable_toggle_footer" =
+       "有効にすると、あなたの正確なユーザー名を知っている人は誰でもあなたを見つけることができます。ユーザー名を推測したり列挙したりすることはできません。100%完全に一致する場合のみ機能します。デフォルトはオフです。
+       ";
+"searchable_confirm_title" = "検索を有効にしますか？";
+"searchable_confirm_message" = "あなたのユーザー名を正確に入力した人は、誰でもあなたを見つけることができるようになります。セキュリティ設定でいつでも無効にできます。";
+"searchable_confirm_action" = "有効にする";
+"searchable_no_username_hint" = "検索を有効にするには、まずユーザー名を設定してください";
+"username_not_set" = "ユーザー名未設定";
+"searchable_indicator" = "[⊙] 検索可能";
+"searchable_indicator_off" = "[ ] 検索可能";
+"synaps_remote_result_header" = "共創で見つかりました";
+"synaps_searching" = "検索中...";
+"synaps_not_found" = "見つかりませんでした";
+   673
 // Contact Requests
-"contact_requests_section" = "requests";
-"contact_request_from" = "from";
-"contact_request_confirm" = "[✓] confirm";
-"contact_request_decline_block" = "[✗] decline + block";
-"contact_request_spam_block" = "[⚠] report spam + block";
-"contact_request_sent" = "request sent";
-"contact_request_pending" = "[pending]";
-"contact_request_send_action" = "[→ send request]";
-"contact_request_sheet_title" = "contact request";
-"contact_request_from_title" = "wants to connect";
-"contact_request_empty_inbox" = "no pending requests";
-
+"contact_requests_section" = "リクエスト";
+"contact_request_from" = "送信元";
+"contact_request_confirm" = "[✓] 承認";
+"contact_request_decline_block" = "[✗] 拒否 + ブロック";
+"contact_request_spam_block" = "[⚠] スパム報告 + ブロック";
+"contact_request_sent" = "リクエストを送信しました";
+"contact_request_pending" = "[保留中]";
+"contact_request_send_action" = "[→ リクエストを送信]";
+"contact_request_sheet_title" = "ノードリクエスト";
+"contact_request_from_title" = "が接続を希望しています";
+"contact_request_empty_inbox" = "保留中のリクエストはありません";
+   686
 // Safety Numbers
-"safety_numbers" = "safety numbers";
-"safety_numbers_verify_title" = "verify identity";
-"safety_numbers_instruction" = "Compare these numbers with %@ verbally or in person. If the numbers match, your connection is secure and has not been intercepted.";
-"safety_numbers_copy" = "copy to clipboard";
-"safety_numbers_copied" = "copied";
-"safety_numbers_mismatch_header" = "if numbers don't match";
-"safety_numbers_mismatch_body" = "Stop communicating and verify your connection. A mismatch may indicate that someone is intercepting your messages.";
-"safety_numbers_unavailable" = "unavailable — identity not initialized";
-
+"safety_numbers" = "セーフティナンバー";
+"safety_numbers_verify_title" = "アイデンティティを確認";
+"safety_numbers_instruction" = "これらの番号を %@ と口頭または対面で比較してください。番号が一致すれば、接続は安全であり、傍受されていません。";
+"safety_numbers_copy" = "クリップボードにコピー";
+"safety_numbers_copied" = "コピーしました";
+"safety_numbers_mismatch_header" = "番号が一致しない場合";
+"safety_numbers_mismatch_body" = "通信を停止し、接続を確認してください。不一致は、誰かがメッセージを傍受している可能性を示唆しています。";
+"safety_numbers_unavailable" = "利用不可 — アイデンティティが初期化されていません";
+   696
 // Stealth mode
-"stealth_section" = "stealth";
-"stealth_toggle_title" = "stealth mode";
-"stealth_toggle_active_hint" = "active — sender identity concealed from the construct";
-"stealth_hint" = "sender identity is not disclosed to the construct. messages are routed through anonymous tokens — the server cannot link outgoing traffic to your identity.";
-"stealth_scope_stream" = "per stream (recommended)";
-"stealth_scope_stream_hint" = "one token per active stream per day";
-"stealth_scope_message" = "per message";
-"stealth_scope_message_hint" = "one token per message — maximum unlinkability";
-"stealth_token_wallet" = "token wallet";
-"stealth_token_wallet_pending" = "[not yet active]";
-"stealth_token_count" = "%d tokens";
-"stealth_token_wallet_hint" = "tokens are minted in the background while charging. requires privacy pass support on the construct.";
-
+"stealth_section" = "ステルス";
+"stealth_toggle_title" = "ステルスモード";
+"stealth_toggle_active_hint" = "有効 — 送信者のアイデンティティは共創から隠されています";
+"stealth_hint" = "送信者のアイデンティティは共創に開示されません。メッセージは匿名トークンを介してルーティングされ、サーバーは送信トラフィックをあなたのアイデンティティに関連付けることはできません。";
+"stealth_scope_stream" = "ストリームごと (推奨)";
+"stealth_scope_stream_hint" = "アクティブなストリームごとに1日1つのトークン";
+"stealth_scope_message" = "メッセージごと";
+"stealth_scope_message_hint" = "メッセージごとに1つのトークン — 最大限の非連結性";
+"stealth_token_wallet" = "トークンウォレット";
+"stealth_token_wallet_pending" = "[まだアクティブではありません]";
+"stealth_token_count" = "%d個のトークン";
+"stealth_token_wallet_hint" = "トークンは充電中にバックグラウンドで作成されます。共創でのPrivacy Passサポートが必要です。";
+   710
 // Key Transparency
-"kt_section" = "key transparency";
-"kt_status" = "merkle log";
-"kt_verified" = "[✓] verified";
-"kt_warning" = "[!] warning";
-"kt_no_data" = "[–] no data";
-"kt_hint" = "every identity key is permanently recorded in an append-only merkle log. tampering is cryptographically detectable.";
-"kt_failure_hint" = "key transparency verification failed — possible tampering detected.";
-
+"kt_section" = "キーの透明性";
+"kt_status" = "メルクル・ログ";
+"kt_verified" = "[✓] 検証済み";
+"kt_warning" = "[!] 警告";
+"kt_no_data" = "[–] データなし";
+"kt_hint" = "すべてのアイデンティティキーは、追記専用のメルクル・ログに永久に記録されます。改ざんは暗号技術により検出可能です。";
+"kt_failure_hint" = "キーの透明性の検証に失敗しました — 改ざんが検出された可能性があります。";
+   719
 // Social Recovery (SLIP-39)
-"social_recovery_title" = "SOCIAL RECOVERY";
-"social_recovery_intro_title" = "social recovery";
-"social_recovery_intro_body" = "your identity keys will be split across trusted contacts using Shamir secret sharing. any M of N contacts can restore your account if you lose access.";
-"social_recovery_begin" = "BEGIN SETUP [→]";
-"social_recovery_scheme_title" = "RECOVERY SCHEME";
-"social_recovery_2of3" = "2 of 3";
-"social_recovery_3of5" = "3 of 5";
-"social_recovery_2of3_hint" = "2 contacts needed to restore";
-"social_recovery_3of5_hint" = "3 contacts needed to restore";
-"social_recovery_generate" = "GENERATE SHARES [→]";
-"social_recovery_share_title" = "SHARE %d OF %d";
-"social_recovery_share_warning" = "send these words to a trusted contact. do NOT share multiple shares with the same person.";
-"social_recovery_share_label_caption" = "label";
-"social_recovery_share_label_placeholder" = "label (e.g. sent to Anna)";
-"social_recovery_share_next" = "NEXT SHARE [→]";
-"social_recovery_share_done" = "FINISH SETUP [→]";
-"social_recovery_share_unlabeled" = "share %d";
-"social_recovery_uploading" = "encrypting bundle...";
-"social_recovery_done_title" = "RECOVERY CONFIGURED";
-"social_recovery_done_body" = "your identity is now protected.";
-"social_recovery_enter_title" = "SOCIAL RECOVERY";
-"social_recovery_enter_subtitle" = "contact each trustee and ask for their share words.";
-"social_recovery_entered_header" = "ENTERED SHARES (%d/%d needed)";
-"social_recovery_no_shares_yet" = "no shares entered yet";
-"social_recovery_add_share" = "+ ADD SHARE";
-"social_recovery_shares_needed" = "need %d more share(s) to restore";
-"social_recovery_restore" = "RESTORE IDENTITY [→]";
-"social_recovery_enter_words_title" = "ENTER SHARE WORDS";
-"social_recovery_enter_words_hint" = "paste or type the 28 words separated by spaces";
-"social_recovery_add_share_confirm" = "ADD SHARE [→]";
-"social_recovery_share_n" = "share %d";
-"social_recovery_word_count" = "%d words";
-"social_recovery_reconstructing" = "reconstructing vault key...";
-"social_recovery_restored_title" = "IDENTITY RESTORED";
-"social_recovery_restored_body" = "your identity keys have been restored successfully.";
-"social_recovery_row_active" = "■ social recovery — active";
-"social_recovery_row_inactive" = "○ social recovery — not configured";
-
-"social_recovery_identity_header" = "IDENTITY";
-"social_recovery_username_label" = "Username";
-
+"social_recovery_title" = "ソーシャル復旧";
+"social_recovery_intro_title" = "ソーシャル復旧";
+"social_recovery_intro_body" = "あなたのアイデンティティキーは、シャミアの秘密分散法を使用して、信頼できる連絡先に分割されます。アクセスを失った場合、N人のうちM人の連絡先がいればアカウントを復元できます。";
+"social_recovery_begin" = "設定を開始 [→]";
+"social_recovery_scheme_title" = "復旧スキーム";
+"social_recovery_2of3" = "3人のうち2人";
+"social_recovery_3of5" = "5人のうち3人";
+"social_recovery_2of3_hint" = "復元には2人の連絡先が必要";
+"social_recovery_3of5_hint" = "復元には3人の連絡先が必要";
+"social_recovery_generate" = "シェアを生成 [→]";
+"social_recovery_share_title" = "シェア %d / %d";
+"social_recovery_share_warning" = "これらの単語を信頼できる連絡先に送信してください。同じ人に複数のシェアを共有しないでください。";
+"social_recovery_share_label_caption" = "ラベル";
+"social_recovery_share_label_placeholder" = "ラベル (例: アンナに送信)";
+"social_recovery_share_next" = "次のシェア [→]";
+"social_recovery_share_done" = "設定を完了 [→]";
+"social_recovery_share_unlabeled" = "シェア %d";
+"social_recovery_uploading" = "バンドルを暗号化中...";
+"social_recovery_done_title" = "復旧を設定しました";
+"social_recovery_done_body" = "あなたのアイデンティティが保護されました。";
+"social_recovery_enter_title" = "ソーシャル復旧";
+"social_recovery_enter_subtitle" = "各管理者に連絡し、シェアの単語を聞いてください。";
+"social_recovery_entered_header" = "入力済みシェア (必要数 %d / %d)";
+"social_recovery_no_shares_yet" = "まだシェアは入力されていません";
+"social_recovery_add_share" = "+ シェアを追加";
+"social_recovery_shares_needed" = "復元にはあと %d 個のシェアが必要です";
+"social_recovery_restore" = "アイデンティティを復元 [→]";
+"social_recovery_enter_words_title" = "シェアの単語を入力";
+"social_recovery_enter_words_hint" = "スペースで区切られた28語を貼り付けるか入力してください";
+"social_recovery_add_share_confirm" = "シェアを追加 [→]";
+"social_recovery_share_n" = "シェア %d";
+"social_recovery_word_count" = "%d 語";
+"social_recovery_reconstructing" = "ヴォルトキーを再構築中...";
+"social_recovery_restored_title" = "アイデンティティを復元しました";
+"social_recovery_restored_body" = "アイデンティティキーが正常に復元されました。";
+"social_recovery_row_active" = "■ ソーシャル復旧 — 有効";
+"social_recovery_row_inactive" = "○ ソーシャル復旧 — 未設定";
+   758
+"social_recovery_identity_header" = "アイデンティティ";
+"social_recovery_username_label" = "ユーザー名";
+   761
 // MARK: - Local Backup
-"backup_section" = "backup";
-"export_backup" = "export backup";
-"import_backup" = "import backup";
-
-"backup_export_title" = "Export Backup";
-"backup_warning_header" = "BEFORE YOU PROCEED";
-"backup_export_warning" = "This creates an encrypted backup of all your messages and keys. The file is protected by a 12-word recovery phrase that you must write down and keep safe.\n\nStore the backup file and the recovery phrase separately.";
-"backup_mnemonic_warning" = "⚠ If you lose the recovery phrase, the backup cannot be decrypted. There is no recovery option.";
-"backup_generate_button" = "GENERATE RECOVERY PHRASE [→]";
-"backup_mnemonic_title" = "RECOVERY PHRASE";
-"backup_mnemonic_subtitle" = "Write down all 12 words in order. Do not take a screenshot.";
-"backup_copy_words" = "[ COPY ALL WORDS ]";
-"backup_confirm_saved" = "I have written down all 12 words";
-"backup_next_button" = "NEXT [→]";
-"backup_export_step_header" = "SAVE BACKUP FILE";
-"backup_export_step_subtitle" = "Save the .ctbackup file to a secure location outside this device (e.g. an encrypted USB drive). Do not store it in an unencrypted cloud service.";
-"backup_create_file" = "CREATE .ctbackup FILE [→]";
-"backup_share_file" = "SHARE .ctbackup FILE [→]";
-"backup_export_generating" = "generating backup…";
-
-"backup_import_title" = "Import Backup";
-"backup_import_words_header" = "RECOVERY PHRASE";
-"backup_import_words_subtitle" = "Enter the 12 words from your backup, separated by spaces.";
-"backup_import_file_header" = "BACKUP FILE";
-"backup_import_select_file" = "select .ctbackup file [→]";
-"backup_restore_warning" = "⚠ This will replace ALL your current messages and keys. This cannot be undone.";
-"backup_restore_button" = "RESTORE BACKUP [→]";
-"backup_restore_success_title" = "Backup Ready";
-"backup_restore_success_message" = "Your backup has been verified and staged. Close and reopen the app to complete the restore.";
-
-"backup_error_invalid_mnemonic" = "Invalid recovery phrase. Check all 12 words and try again.";
-"backup_error_invalid_file" = "This is not a valid Construct backup, or the recovery phrase is incorrect.";
-
+"backup_section" = "バックアップ";
+"export_backup" = "バックアップをエクスポート";
+"import_backup" = "バックアップをインポート";
+   766
+"backup_export_title" = "バックアップをエクスポート";
+"backup_warning_header" = "続行する前に";
+"backup_export_warning" =
+       "これにより、すべてのメッセージとキーの暗号化されたバックアップが作成されます。ファイルは12語の復旧フレーズで保護されており、このフレーズを書き留めて安全に保管する必要があります。\n\nバックアップファイルと復
+       旧フレーズは別々に保管してください。";
+"backup_mnemonic_warning" = "⚠ 復旧フレーズを紛失すると、バックアップを復号できません。救済策はありません。";
+"backup_generate_button" = "復旧フレーズを生成 [→]";
+"backup_mnemonic_title" = "復旧フレーズ";
+"backup_mnemonic_subtitle" = "12語すべてを順番に書き留めてください。スクリーンショットを撮らないでください。";
+"backup_copy_words" = "[ すべての単語をコピー ]";
+"backup_confirm_saved" = "12語すべてを書き留めました";
+"backup_next_button" = "次へ [→]";
+"backup_export_step_header" = "バックアップファイルを保存";
+"backup_export_step_subtitle" = ".ctbackup ファイルを、このデバイス以外の安全な場所（暗号化されたUSBドライブなど）に保存してください。暗号化されていないクラウドサービスには保存しないでください。";
+"backup_create_file" = ".ctbackup ファイルを作成 [→]";
+"backup_share_file" = ".ctbackup ファイルを共有 [→]";
+"backup_export_generating" = "バックアップを生成中...";
+   782
+"backup_import_title" = "バックアップをインポート";
+"backup_import_words_header" = "復旧フレーズ";
+"backup_import_words_subtitle" = "バックアップの12語をスペースで区切って入力してください。";
+"backup_import_file_header" = "バックアップファイル";
+"backup_import_select_file" = ".ctbackup ファイルを選択 [→]";
+"backup_restore_warning" = "⚠ これにより、現在のすべてのメッセージとキーが上書きされます。この操作は取り消せません。";
+"backup_restore_button" = "バックアップを復元 [→]";
+"backup_restore_success_title" = "バックアップの準備完了";
+"backup_restore_success_message" = "バックアップが検証され、準備が整いました。アプリを閉じて再度開くと、復元が完了します。";
+   792
+"backup_error_invalid_mnemonic" = "復旧フレーズが無効です。12語すべてを確認して、もう一度お試しください。";
+"backup_error_invalid_file" = "これは有効な共創バックアップではないか、復旧フレーズが正しくありません。";
+   795
 // Transfer (P2P nearby)
-"transfer_send_nearby" = "send to nearby device";
-"transfer_receive_nearby" = "receive from nearby device";
-"transfer_send_title" = "Send Backup";
-"transfer_receive_title" = "Receive Backup";
-"transfer_preparing" = "Preparing backup...";
-"transfer_waiting" = "Waiting for nearby device.\nOpen Receive on the other device and enter the PIN below.";
-"transfer_searching" = "Searching for nearby device...";
-"transfer_connecting" = "Connecting...";
-"transfer_staging" = "Applying backup...";
-"transfer_your_pin" = "Your PIN";
-"transfer_enter_pin_hint" = "Enter the 6-digit PIN shown on the sender device.";
-"transfer_connect" = "Connect";
-"transfer_progress" = "Transferring";
-"transfer_complete" = "Transfer complete.";
-"transfer_error_title" = "Transfer Error";
-"transfer_error_auth" = "Authentication failed. Check that both devices show the same PIN.";
-"transfer_error_connection" = "Connection lost. Try again.";
-"transfer_error_corrupt" = "Transfer data is corrupted. Try again.";
-"transfer_error_cancelled" = "Transfer was cancelled.";
-
+"transfer_send_nearby" = "近くのデバイスに送信";
+"transfer_receive_nearby" = "近くのデバイスから受信";
+"transfer_send_title" = "バックアップを送信";
+"transfer_receive_title" = "バックアップを受信";
+"transfer_preparing" = "バックアップを準備中...";
+"transfer_waiting" = "近くのデバイスを待機中。\nもう一方のデバイスで「受信」を開き、以下のPINを入力してください。";
+"transfer_searching" = "近くのデバイスを検索中...";
+"transfer_connecting" = "接続中...";
+"transfer_staging" = "バックアップを適用中...";
+"transfer_your_pin" = "あなたのPIN";
+"transfer_enter_pin_hint" = "送信側デバイスに表示されている6桁のPINを入力してください。";
+"transfer_connect" = "接続";
+"transfer_progress" = "転送中";
+"transfer_complete" = "転送完了。";
+"transfer_error_title" = "転送エラー";
+"transfer_error_auth" = "認証に失敗しました。両方のデバイスに同じPINが表示されていることを確認してください。";
+"transfer_error_connection" = "接続が失われました。もう一度お試しください。";
+"transfer_error_corrupt" = "転送データが破損しています。もう一度お試しください。";
+"transfer_error_cancelled" = "転送がキャンセルされました。";
+   816
 // History Sync (device-to-device after linking)
-"history_sync_send_title" = "Transfer History";
-"history_sync_receive_title" = "Receive History";
-"history_sync_offer_title" = "Transfer Message History?";
-"history_sync_offer_message" = "Do you want to receive your message history from a nearby device? Make sure both devices are on the same WiFi network.";
-"history_sync_offer_yes" = "Receive History";
-"history_sync_offer_skip" = "Skip";
-"history_sync_user_mismatch" = "History transfer failed: this history belongs to a different account.";
-"call_error_not_contacts" = "Cannot call this node. Make sure you are mutual contacts.";
-"call_error_peer_offline" = "Node is offline. Try again later.";
+"history_sync_send_title" = "履歴を転送";
+"history_sync_receive_title" = "履歴を受信";
+"history_sync_offer_title" = "メッセージ履歴を転送しますか？";
+"history_sync_offer_message" = "近くのデバイスからメッセージ履歴を受信しますか？両方のデバイスが同じWiFiネットワーク上にあることを確認してください。";
+"history_sync_offer_yes" = "履歴を受信";
+"history_sync_offer_skip" = "スキップ";
+"history_sync_user_mismatch" = "履歴の転送に失敗しました：この履歴は別のアカウントのものです。";
+"call_error_not_contacts" = "このノードに発信できません。相互に連絡先に追加していることを確認してください。";
+"call_error_peer_offline" = "ノードがオフラインです。後でもう一度お試しください。";
