@@ -48,5 +48,9 @@
 	<array>
 		<string>_construct-transfer._tcp</string>
 	</array>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<true/>
+	<key>ITSEncryptionExportComplianceCode</key>
+	<string>$(ITS_ENCRYPTION_EXPORT_COMPLIANCE_CODE)</string>
 </dict>
 </plist>
