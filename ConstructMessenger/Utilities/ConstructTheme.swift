@@ -478,11 +478,13 @@ struct CTTabBar: View {
         self.items = items
     }
 
-    static let defaultItems: [CTTabItem] = [
-        CTTabItem(symbol: CTSymbol.tabChats,    label: "MSG"),
-        CTTabItem(symbol: CTSymbol.tabSynaps,   label: "SYN"),
-        CTTabItem(symbol: CTSymbol.tabSettings, label: "CFG"),
-    ]
+    static var defaultItems: [CTTabItem] {
+        [
+            CTTabItem(symbol: CTSymbol.tabChats,    label: NSLocalizedString("tab_chats",    comment: "")),
+            CTTabItem(symbol: CTSymbol.tabSynaps,   label: NSLocalizedString("tab_synaps",   comment: "")),
+            CTTabItem(symbol: CTSymbol.tabSettings, label: NSLocalizedString("tab_settings", comment: "")),
+        ]
+    }
 
     var body: some View {
         HStack {

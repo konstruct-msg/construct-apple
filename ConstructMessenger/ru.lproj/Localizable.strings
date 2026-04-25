@@ -834,3 +834,8 @@
 "history_sync_user_mismatch" = "Ошибка переноса истории: история принадлежит другому аккаунту.";
 "call_error_not_contacts" = "Нельзя позвонить этому ноду. Убедитесь, что вы являетесь взаимными контактами.";
 "call_error_peer_offline" = "Нод не в сети. Попробуйте позже.";
+
+/* Tab bar labels */
+"tab_chats" = "СОБ";
+"tab_synaps" = "УЗЛ";
+"tab_settings" = "НСТ";

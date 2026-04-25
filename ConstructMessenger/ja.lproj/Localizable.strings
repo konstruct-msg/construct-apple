@@ -836,3 +836,7 @@
 "history_sync_user_mismatch" = "履歴の転送に失敗しました：この履歴は別のアカウントのものです。";
 "call_error_not_contacts" = "このノードに発信できません。相互に連絡先に追加していることを確認してください。";
 "call_error_peer_offline" = "ノードがオフラインです。後でもう一度お試しください。";
+/* タブバーラベル */
+"tab_chats" = "通信";
+"tab_synaps" = "繋";
+"tab_settings" = "設定";
