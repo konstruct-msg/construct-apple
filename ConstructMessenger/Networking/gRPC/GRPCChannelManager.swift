@@ -168,6 +168,7 @@ final class GRPCChannelManager: Sendable {
         ) { [weak self] _ in
             guard let self else { return }
             Log.info("🔌 Network path changed — invalidating persistent gRPC connection", category: "gRPC")
+            self.networkInterfaceChangedAt = Date()
             self.invalidatePersistentClient()
         }
     }
@@ -189,6 +190,10 @@ final class GRPCChannelManager: Sendable {
         let task:   Task<Void, Never>
         let key:    String   // routing identity — "ice:<port>" or "direct:<host>:<port>"
     }
+
+    // Timestamp of the last network interface change. Used by shouldTryICEFallback() to
+    // suppress false DPI detection during the reconnect window that follows a path switch.
+    nonisolated(unsafe) var networkInterfaceChangedAt: Date = .distantPast
 
     // nonisolated(unsafe) is correct here: all mutations are serialised through _connLock.
     private nonisolated(unsafe) var _conn: PersistentConn?
@@ -561,6 +566,14 @@ final class GRPCChannelManager: Sendable {
             if IceMode(rawValue: rawMode) == .off { return false }
 
             if error is CancellationError { return false }
+
+            // After a network interface change (WiFi↔cellular), the first RPC timeout is caused
+            // by the old connection dying — not DPI. Suppress DPI detection for 20 s.
+            let timeSincePathChange = Date().timeIntervalSince(GRPCChannelManager.shared.networkInterfaceChangedAt)
+            if timeSincePathChange < 20 {
+                Log.debug("🧊 Suppressing DPI detection — network changed \(Int(timeSincePathChange))s ago", category: "GRPCChannel")
+                return false
+            }
             if let rpc = error as? RPCError {
                 switch rpc.code {
                 case .unavailable:
