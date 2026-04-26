@@ -65,6 +65,11 @@ class MessageRouter {
     /// Provides message IDs, the original sender's user ID (for server routing), and receipt status.
     var onReceiptNeeded: (([String], String, Shared_Proto_Signaling_V1_ReceiptStatus) -> Void)?
 
+    /// Called when an E2E-encrypted delivery receipt (content_type=14) arrives for message(s)
+    /// we originally sent. Provides the confirmed message IDs.
+    /// Wired by ChatsViewModel to call handleDeliveryReceipts.
+    var onE2EDeliveryReceiptDecrypted: (([String]) -> Void)?
+
     private let chunkReassembler = ChunkedMessageReassembler.shared
 
     // MARK: - Rust Timer Support (R-C2)
@@ -639,7 +644,8 @@ class MessageRouter {
                 senderId: myId,
                 conversationId: ConversationId.direct(myUserId: myId, theirUserId: contactId),
                 encryptedPayload: payload,
-                timestamp: UInt64(Date().timeIntervalSince1970)
+                timestamp: UInt64(Date().timeIntervalSince1970),
+                contentType: .heartbeat
             )
             Log.debug("💓 Heartbeat sent to \(contactId.prefix(8))…", category: "MessageRouter")
         } catch {
@@ -713,6 +719,21 @@ class MessageRouter {
         chat: Chat,
         in context: NSManagedObjectContext
     ) {
+        // HEARTBEAT (content_type=13): silent liveness probe — discard, send cursor ACK.
+        if message.contentType == 13 {
+            Log.debug("💓 Heartbeat received from \(otherUserId.prefix(8))… — session healthy", category: "MessageRouter")
+            PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
+            onReceiptNeeded?([message.id], otherUserId, .delivered)
+            return
+        }
+
+        // DELIVERY_RECEIPT (content_type=14): E2E-encrypted delivery confirmation.
+        // Parse payload, notify observers, send cursor ACK. Do NOT save to Core Data.
+        if message.contentType == 14 {
+            handleIncomingE2EDeliveryReceipt(decryptedContent, messageId: message.id, from: otherUserId, in: context)
+            return
+        }
+
         // Silently discard session establishment pings received on the normal message path.
         // These are sent after a tie-break win to trigger RESPONDER init on the peer.
         if decryptedContent.hasPrefix("__session_ping") && decryptedContent.hasSuffix("__") {
@@ -785,8 +806,27 @@ class MessageRouter {
         // 5. Save regular message
         saveMessage(for: chat, with: message, decryptedContent: decryptedContent, quotedMessage: quotedMessage, in: context)
 
-        // 6. Acknowledge delivery to sender via stream
+        // 6. Acknowledge delivery to sender via stream (cursor ACK)
         onReceiptNeeded?([message.id], otherUserId, .delivered)
+
+        // 6b. Send E2E-encrypted delivery receipt back to sender.
+        // This receipt is DR-encrypted so the server cannot correlate receipt→sender
+        // even when stealth mode is active. Fires fire-and-forget; non-fatal if it fails.
+        let msgIdForReceipt = message.id
+        let identityKeyForReceipt: Data? = {
+            guard UserDefaults.standard.bool(forKey: "stealth_mode_enabled") else { return nil }
+            let req = User.fetchRequest()
+            req.predicate = NSPredicate(format: "id == %@", otherUserId)
+            req.fetchLimit = 1
+            return (try? context.fetch(req))?.first?.knownIdentityKey
+        }()
+        Task {
+            await sendEncryptedDeliveryReceipt(
+                messageIds: [msgIdForReceipt],
+                to: otherUserId,
+                recipientIdentityKey: identityKeyForReceipt
+            )
+        }
 
         // 7. Update chat metadata
         chat.lastMessageText = Chat.formatPreviewText(decryptedContent)
@@ -999,7 +1039,91 @@ class MessageRouter {
     }
     
     // MARK: - Special Message Types
-    
+
+    // MARK: - E2E Delivery Receipts
+
+    /// Parse and dispatch an incoming E2E delivery receipt (content_type=14).
+    ///
+    /// Payload format: `{"type":"delivery_receipt","message_ids":["<uuid>",...]}`
+    /// Backward compat: JSON `type` field is checked so old clients that fall through to
+    /// `handleSpecialMessage` also silently discard the payload instead of saving it.
+    private func handleIncomingE2EDeliveryReceipt(
+        _ payload: String,
+        messageId: String,
+        from otherUserId: String,
+        in context: NSManagedObjectContext
+    ) {
+        defer {
+            PersistentACKStore.shared.markProcessed(messageId, senderId: otherUserId, in: context)
+            onReceiptNeeded?([messageId], otherUserId, .delivered)
+        }
+        guard let data = payload.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let type_ = json["type"] as? String, type_ == "delivery_receipt",
+              let ids = json["message_ids"] as? [String], !ids.isEmpty else {
+            Log.error("❌ E2E receipt: failed to parse payload from \(otherUserId.prefix(8))…", category: "MessageRouter")
+            return
+        }
+        Log.info("📬 E2E receipt: \(ids.count) message(s) confirmed by \(otherUserId.prefix(8))…", category: "MessageRouter")
+        onE2EDeliveryReceiptDecrypted?(ids)
+    }
+
+    /// Send an E2E-encrypted delivery receipt (content_type=14) to `contactId`.
+    ///
+    /// The receipt is encrypted via Double Ratchet — server sees only an opaque sealed
+    /// envelope addressed to `contactId`. If stealth mode is enabled and `recipientIdentityKey`
+    /// is available, sealed-sender is applied so the server cannot learn who sent the receipt.
+    ///
+    /// Non-fatal: errors are logged but not propagated. The legacy stream relay receipt
+    /// remains the fallback delivery confirmation mechanism.
+    func sendEncryptedDeliveryReceipt(
+        messageIds: [String],
+        to contactId: String,
+        recipientIdentityKey: Data? = nil
+    ) async {
+        guard let myId = SessionManager.shared.currentUserId, !myId.isEmpty else { return }
+        guard CryptoManager.shared.hasSession(for: contactId) else {
+            Log.debug("📨 E2E receipt skip — no session for \(contactId.prefix(8))…", category: "MessageRouter")
+            return
+        }
+        let receiptId = UUID().uuidString.lowercased()
+        let payloadJSON: [String: Any] = ["type": "delivery_receipt", "message_ids": messageIds]
+        guard let payloadData = try? JSONSerialization.data(withJSONObject: payloadJSON) else { return }
+        do {
+            let wirePayload = try encryptOutgoing(
+                plaintext: payloadData,
+                messageId: receiptId,
+                recipientId: contactId,
+                contentType: 14
+            )
+            var sealedInner: Data? = nil
+            if let identityKey = recipientIdentityKey {
+                do {
+                    sealedInner = try await StealthSenderService.buildSealedInner(
+                        recipientUserId: contactId,
+                        recipientIdentityKey: identityKey,
+                        encryptedPayload: wirePayload
+                    )
+                } catch {
+                    Log.error("⚠️ E2E receipt: seal failed, sending without stealth: \(error)", category: "MessageRouter")
+                }
+            }
+            _ = try await MessagingServiceClient.shared.sendMessage(
+                messageId: receiptId,
+                recipientId: contactId,
+                senderId: myId,
+                conversationId: ConversationId.direct(myUserId: myId, theirUserId: contactId),
+                encryptedPayload: wirePayload,
+                timestamp: UInt64(Date().timeIntervalSince1970),
+                contentType: .deliveryReceipt,
+                sealedInnerBytes: sealedInner
+            )
+            Log.info("📨 E2E receipt sent: \(messageIds.count) msg(s) → \(contactId.prefix(8))…", category: "MessageRouter")
+        } catch {
+            Log.error("❌ E2E receipt failed to \(contactId.prefix(8))…: \(error.localizedDescription)", category: "MessageRouter")
+        }
+    }
+
     /// Handle special message types (profile, etc.)
     /// - Returns: true if special message was handled
     private func handleSpecialMessage(
@@ -1011,22 +1135,33 @@ class MessageRouter {
         if decryptedContent.trimmingCharacters(in: .whitespaces).hasPrefix("{"),
            let jsonData = decryptedContent.data(using: .utf8),
            let jsonDict = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
-           let type = jsonDict["type"] as? String,
-           type == "profile" {
-            
-            if let profileData = ProfileSharingManager.shared.parseProfileMessage(decryptedContent) {
-                Log.info("📥 Received profile message from \(userId)", category: "MessageRouter")
-                ProfileSharingManager.shared.handleProfileMessage(profileData, from: userId, in: context)
+           let type = jsonDict["type"] as? String {
+
+            if type == "delivery_receipt" {
+                // Backward-compat guard: content_type=14 is handled in handleResolvedMessage.
+                // This branch catches any fallthrough from older code paths / future regressions.
+                if let ids = jsonDict["message_ids"] as? [String], !ids.isEmpty {
+                    Log.info("📬 E2E receipt (special-msg path): \(ids.count) msg(s)", category: "MessageRouter")
+                    onE2EDeliveryReceiptDecrypted?(ids)
+                }
                 return true
-            } else {
-                Log.info("⚠️ Failed to parse profile message from \(userId), skipping", category: "MessageRouter")
-                return true  // Still skip saving as regular message
+            }
+
+            if type == "profile" {
+                if let profileData = ProfileSharingManager.shared.parseProfileMessage(decryptedContent) {
+                    Log.info("📥 Received profile message from \(userId)", category: "MessageRouter")
+                    ProfileSharingManager.shared.handleProfileMessage(profileData, from: userId, in: context)
+                    return true
+                } else {
+                    Log.info("⚠️ Failed to parse profile message from \(userId), skipping", category: "MessageRouter")
+                    return true
+                }
             }
         }
-        
-        return false  // Not a special message
+
+        return false
     }
-    
+
     // MARK: - END_SESSION Handling
 
     /// Handle SESSION_RESET_INIT — atomic archive of old session + RESPONDER init in a single pass.
@@ -1181,7 +1316,22 @@ class MessageRouter {
         var requeuedCount = 0
         var droppedCount = 0
 
+        var serverAcceptedCount = 0
         for msg in messages {
+            let msgId = msg.id
+            guard !msgId.isEmpty else { continue }
+
+            // Wire payload is removed immediately after the server accepts the message
+            // (status="sent"/"delivered"). If the payload is gone, the server already has
+            // the ciphertext — re-queuing would cause retryMessage to fail instantly with
+            // "payload_expired", permanently marking the message failed even though it was
+            // accepted. Leave it as .sent; a delivery receipt may still arrive later.
+            if OutgoingWirePayloadStore.shared.loadChunks(baseMessageId: msgId) == nil {
+                serverAcceptedCount += 1
+                Log.info("⏭️ END_SESSION: skipping re-queue for \(msgId.prefix(8))… — server already accepted (no wire payload)", category: "MessageRouter")
+                continue
+            }
+
             if msg.retryCount < maxRetries {
                 msg.deliveryStatus = .queued
                 requeuedCount += 1
@@ -1192,6 +1342,9 @@ class MessageRouter {
                 droppedCount += 1
                 Log.error("⛔ END_SESSION: dropping re-queue for \(msg.id.prefix(8))… after \(msg.retryCount) attempts — marking failed", category: "MessageRouter")
             }
+        }
+        if serverAcceptedCount > 0 {
+            Log.info("⏭️ END_SESSION: skipped \(serverAcceptedCount) message(s) for \(userId.prefix(8))… — already accepted by server", category: "MessageRouter")
         }
         context.saveAndLog()
 

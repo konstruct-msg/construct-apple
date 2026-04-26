@@ -47,6 +47,22 @@ public enum Shared_Proto_Core_V1_ContentType: SwiftProtobuf.Enum, Swift.CaseIter
   /// any other E2EE message.
   case callSignal // = 12
 
+  /// HEARTBEAT — silent liveness probe sent via Double Ratchet with content_type=13.
+  /// Recipient attempts to decrypt; a decrypt failure triggers proactive session heal
+  /// before the user's next real message. No UI shown, no notification fired.
+  /// Server treats identically to E2EE_SIGNAL (opaque bytes).
+  case heartbeat // = 13
+
+  /// DELIVERY_RECEIPT — end-to-end encrypted delivery confirmation (Variant 2).
+  /// Sent from recipient to original sender as a regular DR message with content_type=14.
+  /// Payload is JSON: {"type":"delivery_receipt","message_ids":["<uuid>",...]}
+  /// Hides communication metadata from the server (unlike the legacy relay-receipt path).
+  /// If stealth mode is active, sealed sender is applied — server cannot correlate
+  /// the receipt sender with the original sealed message recipient.
+  /// Backward compat: both this and the legacy stream receipt are sent; receiving side
+  /// deduplicates (guard message.deliveryStatus != .delivered).
+  case deliveryReceipt // = 14
+
   /// Key exchange initiation (X3DH handshake)
   case keyExchange // = 20
 
@@ -86,6 +102,8 @@ public enum Shared_Proto_Core_V1_ContentType: SwiftProtobuf.Enum, Swift.CaseIter
     case 10: self = .webrtcSignal
     case 11: self = .presence
     case 12: self = .callSignal
+    case 13: self = .heartbeat
+    case 14: self = .deliveryReceipt
     case 20: self = .keyExchange
     case 21: self = .sessionReset
     case 22: self = .keySync
@@ -103,6 +121,8 @@ public enum Shared_Proto_Core_V1_ContentType: SwiftProtobuf.Enum, Swift.CaseIter
     case .webrtcSignal: return 10
     case .presence: return 11
     case .callSignal: return 12
+    case .heartbeat: return 13
+    case .deliveryReceipt: return 14
     case .keyExchange: return 20
     case .sessionReset: return 21
     case .keySync: return 22
@@ -120,6 +140,8 @@ public enum Shared_Proto_Core_V1_ContentType: SwiftProtobuf.Enum, Swift.CaseIter
     .webrtcSignal,
     .presence,
     .callSignal,
+    .heartbeat,
+    .deliveryReceipt,
     .keyExchange,
     .sessionReset,
     .keySync,
@@ -668,7 +690,7 @@ public struct Shared_Proto_Core_V1_SenderCertificate: Sendable {
 fileprivate let _protobuf_package = "shared.proto.core.v1"
 
 extension Shared_Proto_Core_V1_ContentType: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0CONTENT_TYPE_UNSPECIFIED\0\u{1}CONTENT_TYPE_E2EE_SIGNAL\0\u{1}CONTENT_TYPE_E2EE_MLS\0\u{2}\u{8}CONTENT_TYPE_WEBRTC_SIGNAL\0\u{1}CONTENT_TYPE_PRESENCE\0\u{1}CONTENT_TYPE_CALL_SIGNAL\0\u{2}\u{8}CONTENT_TYPE_KEY_EXCHANGE\0\u{1}CONTENT_TYPE_SESSION_RESET\0\u{1}CONTENT_TYPE_KEY_SYNC\0\u{1}CONTENT_TYPE_SENDER_SYNC\0\u{1}CONTENT_TYPE_SESSION_RESET_INIT\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0CONTENT_TYPE_UNSPECIFIED\0\u{1}CONTENT_TYPE_E2EE_SIGNAL\0\u{1}CONTENT_TYPE_E2EE_MLS\0\u{2}\u{8}CONTENT_TYPE_WEBRTC_SIGNAL\0\u{1}CONTENT_TYPE_PRESENCE\0\u{1}CONTENT_TYPE_CALL_SIGNAL\0\u{1}CONTENT_TYPE_HEARTBEAT\0\u{1}CONTENT_TYPE_DELIVERY_RECEIPT\0\u{2}\u{6}CONTENT_TYPE_KEY_EXCHANGE\0\u{1}CONTENT_TYPE_SESSION_RESET\0\u{1}CONTENT_TYPE_KEY_SYNC\0\u{1}CONTENT_TYPE_SENDER_SYNC\0\u{1}CONTENT_TYPE_SESSION_RESET_INIT\0")
 }
 
 extension Shared_Proto_Core_V1_MessagePriority: SwiftProtobuf._ProtoNameProviding {

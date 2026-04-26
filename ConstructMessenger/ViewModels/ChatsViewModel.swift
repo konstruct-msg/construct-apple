@@ -382,6 +382,9 @@ class ChatsViewModel {
         streamManager.onKeySyncReceived = { [weak self] userId in
             self?.sessionCoordinator.handleKeySyncRequest(for: userId)
         }
+        MessageRouter.shared.onE2EDeliveryReceiptDecrypted = { [weak self] messageIds in
+            self?.handleDeliveryReceipts(messageIds)
+        }
         streamManager.connect(contactUserIds: currentConversationIds()) { [weak self] message in
             self?.handleIncomingMessage(message)
         }
@@ -448,6 +451,9 @@ class ChatsViewModel {
             }
             self.streamManager.onKeySyncReceived = { [weak self] userId in
                 self?.sessionCoordinator.handleKeySyncRequest(for: userId)
+            }
+            MessageRouter.shared.onE2EDeliveryReceiptDecrypted = { [weak self] messageIds in
+                self?.handleDeliveryReceipts(messageIds)
             }
             self.streamManager.forceReconnect(contactUserIds: self.currentConversationIds()) { [weak self] message in
                 self?.handleIncomingMessage(message)
@@ -614,7 +620,13 @@ class ChatsViewModel {
 
                 let prev = message.deliveryStatus
                 message.deliveryStatus = .delivered
-                Log.info("📬 Receipt: message \(messageId) marked delivered (was \(prev))", category: "MessageStream")
+                if prev == .failed {
+                    // Receipt arrived after false-failure (e.g. END_SESSION re-queue race).
+                    // The server had the message all along — correcting status to .delivered.
+                    Log.error("📬 Receipt: corrected false-failed message \(messageId) → .delivered", category: "MessageStream")
+                } else {
+                    Log.info("📬 Receipt: message \(messageId) marked delivered (was \(prev))", category: "MessageStream")
+                }
             }
             context.saveAndLog()
         }
