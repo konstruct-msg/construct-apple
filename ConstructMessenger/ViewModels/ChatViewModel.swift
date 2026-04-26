@@ -609,6 +609,35 @@ class ChatViewModel: NSObject {
 
         Log.info("📤 Sending to: \(recipientId), from: \(currentUserId)", category: "ChatViewModel")
 
+        // Pre-flight: if this contact has been silent for >6h, check session health before
+        // spending an encryption attempt. Returns true immediately when activity is recent.
+        // If session is unhealthy (e.g. skipped-key count too high), preflight triggers reinit
+        // and we queue the message for delivery after the new session is ready.
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            let ok = await SessionActivityTracker.shared.preflight(for: recipientId)
+            guard ok else {
+                let queued = QueuedMessage(text: text, images: images, replyTo: replyTo)
+                self.queuedMessages.append(queued)
+                self.isInitializingSession = true
+                Log.info("⏳ Pre-flight failed — message queued, triggering proactive reinit for \(recipientId.prefix(8))…", category: "ChatViewModel")
+                await self.initializeSessionProactively(userId: recipientId)
+                return
+            }
+            self.dispatchSend(text: text, images: images, fileURLs: fileURLs,
+                              replyTo: replyTo, replyToContentOverride: replyToContentOverride)
+        }
+    }
+
+    /// Validate and dispatch a message to the appropriate send path (file / media / text).
+    /// Called after preflight confirms the session is healthy.
+    private func dispatchSend(
+        text: String,
+        images: [PlatformImage],
+        fileURLs: [URL],
+        replyTo: Message?,
+        replyToContentOverride: String?
+    ) {
         // Handle files if provided (document attachments)
         if !fileURLs.isEmpty {
             do {

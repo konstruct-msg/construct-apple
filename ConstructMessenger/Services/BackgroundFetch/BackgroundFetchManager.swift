@@ -569,6 +569,12 @@ class BackgroundFetchManager: NSObject {
                 // Replenish blind tokens during maintenance window (up to 15 per cycle).
                 // BlindTokenService enforces 1-hour cooldown to respect server rate limit.
                 await BlindTokenService.shared.replenish(count: 15)
+
+                // Session health audit: send heartbeats to contacts silent for 12+ hours,
+                // then log a health summary for diagnostics. Mirrors the foreground path in
+                // applicationWillEnterForeground — keeps sessions alive between launches.
+                await SessionActivityTracker.shared.sendStaleSessionHeartbeats()
+                SessionActivityTracker.shared.logSessionHealthSummary()
             }
             completion(true)
         }
