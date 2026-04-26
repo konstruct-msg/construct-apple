@@ -36,6 +36,9 @@ struct ChatView: View {
 
     // Flood guard observer — updates when IncomingFloodGuard suppresses this chat's sender
     @State private var floodGuard = IncomingFloodGuard.shared
+
+    // Key Transparency status for the contact in this chat
+    @State private var contactKTStatus: KTStatus = .unverified
     
     // ✅ Swipe-to-dismiss gesture state (not scroll-related)
     @GestureState private var dragState: CGFloat = 0
@@ -314,6 +317,7 @@ struct ChatView: View {
         .onAppear {
             markChatAsRead()
             viewModel.onViewAppear()
+            loadContactKTStatus()
             // Изъян 7: notify Rust orchestrator that this chat is now active (enables heartbeat scheduling).
             if let contactId = viewModel.chat.otherUser?.id, !contactId.isEmpty {
                 _ = try? CryptoManager.shared.handleOrchestratorEvent(
@@ -321,6 +325,11 @@ struct ChatView: View {
                     tag: "chat_active_true"
                 )
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .contactKeyChanged)) { note in
+            guard let changedId = note.userInfo?["userId"] as? String,
+                  changedId == viewModel.chat.otherUser?.id else { return }
+            loadContactKTStatus()
         }
         .onDisappear {
             // Изъян 7: cancel heartbeat scheduling when chat is closed.
@@ -551,6 +560,8 @@ struct ChatView: View {
             }
             .buttonStyle(.plain)
 
+            ktBadge
+
             Spacer()
 
             if isEditMode {
@@ -591,7 +602,35 @@ struct ChatView: View {
     }
 
 
-    /// Returns a subtle subtitle for the navigation bar when connection or session state requires attention.
+    /// KT badge shown in the nav bar.  `[✓]` when verified, `[!]` on key-change/failure, hidden otherwise.
+    @ViewBuilder private var ktBadge: some View {
+        switch contactKTStatus {
+        case .verified:
+            Text("[✓]")
+                .font(CTFont.regular(11))
+                .foregroundColor(Color.CT.accent)
+        case .keyChanged, .failed:
+            Text("[!]")
+                .font(CTFont.bold(11))
+                .foregroundColor(Color.CT.danger)
+        case .unverified:
+            EmptyView()
+        }
+    }
+
+    /// Load KT status for the contact from Core Data.
+    private func loadContactKTStatus() {
+        guard let userId = viewModel.chat.otherUser?.id, !userId.isEmpty else { return }
+        let ctx = viewContext
+        let req = User.fetchRequest()
+        req.predicate = NSPredicate(format: "id == %@", userId)
+        req.fetchLimit = 1
+        if let user = (try? ctx.fetch(req))?.first {
+            contactKTStatus = user.ktStatus
+        }
+    }
+
+
     /// Returns nil when everything is healthy (no subtitle shown).
     private var navigationStatusSubtitle: String? {
         // Only show "Encrypting..." while actively establishing a session (user tapped Send).
