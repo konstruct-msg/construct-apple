@@ -780,7 +780,16 @@ final class MessageStreamManager {
             }
         }
 
-        // Stream accepted — wait until it ends (disconnect, server close, etc.).
+        // Stream accepted on the direct path — stop any ephemeral ICE pre-warm.
+        // The pre-warm fires in the background during fetchMissedMessages and establishes
+        // the ICE tunnel in 3–8 s. Once the tunnel is up, iceProxyPort() returns the ICE
+        // port even though DPI was never confirmed, causing acquirePersistentClient() to
+        // switch routing and tear down the warm direct client — a visible reconnect for
+        // EU/non-DPI users. Stopping it here prevents that disruption.
+        // No-op when: ICE not running, DPI confirmed this session, or mode == .on.
+        IceProxyManager.shared.stopEphemeral()
+
+        // Wait until the stream ends (disconnect, server close, etc.).
         try await streamTask.value
     }
 

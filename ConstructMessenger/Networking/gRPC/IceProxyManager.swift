@@ -1165,10 +1165,12 @@ final class IceProxyManager: ObservableObject {
     /// and the background ICE warm-up is no longer needed.
     ///
     /// Safe to call unconditionally: if DPI was already confirmed before the race, this is a
-    /// no-op — confirmed DPI sessions must not be interrupted.
+    /// no-op — confirmed DPI sessions must not be interrupted. Also a no-op in `.on` mode —
+    /// the user explicitly chose ICE and the proxy must never be stopped by the direct path.
     func stopEphemeral() {
+        guard mode == .auto else { return }
         guard isRunning, !dpiDetectedThisSession else { return }
-        Log.info("🧊 Direct won happy-eyeballs race — stopping ephemeral ICE pre-warm", category: "ICE")
+        Log.info("🧊 Direct won — stopping ephemeral ICE pre-warm", category: "ICE")
         ice_proxy_stop()
         resetAllProxyState()
         // Deliberately do NOT call clearDPIDetection() — dpiDetectedThisSession is already false here.
