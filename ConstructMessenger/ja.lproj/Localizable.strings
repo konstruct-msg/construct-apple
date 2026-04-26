@@ -4,12 +4,12 @@
 "cancel" = "キャンセル";
 "done" = "完了";
 "unknown" = "不明";
-"constrcut_titlte" = "KONSTRUCT";
-     8
+"constrcut_titlte" = "共創";
+     
 // MARK: - Main Tabs
 "chats" = "チャット";
 "settings" = "設定";
-    12
+
 // MARK: - Auth
 "register" = "初期化";
 "username" = "ユーザー名";
@@ -22,12 +22,12 @@
 "password_strength_medium" = "普通";
 "password_strength_strong" = "強い";
 "password_strength_very_strong" = "非常に強い";
-    25
+    
 // MARK: - Chats List
 "scan_qr_code_or_share_link" = "QRコードをスキャンするか、連絡先リンクを共有して認証済み連絡先を追加します";
 "scan_qr_code" = "QRコードをスキャン";
 "new_contact" = "新規ノード";
-    30
+    
 // MARK: - Chat
 "sending" = "送信中...";
 "status_connecting" = "接続中...";
@@ -44,7 +44,7 @@
 "message" = "メッセージ";
 "reply_to_colon" = "返信先:";
 "message_placeholder" = "メッセージ...";
-    47
+    
 // MARK: - Message Info
 "status" = "ステータス";
 "sent" = "送信済み";
@@ -61,14 +61,14 @@
 "protocol" = "プロトコル";
 "security" = "セキュリティ";
 "message_info" = "メッセージ情報";
-    64
+    
 // MARK: - QR Code Scanner
 "position_qr_code_within_frame" = "枠内にQRコードを合わせてください";
 "camera_access_required" = "カメラへのアクセスが必要です";
 "open_settings" = "設定を開く";
 "allow_camera_access_for_qr" = "QRコードをスキャンするために、設定からカメラへのアクセスを許可してください";
 "invalid_qr_code_construct" = "無効なQRコードです。共創のノードコードをスキャンしてください。";
-    71
+
 // MARK: - Settings Main
 "user" = "ユーザー";
 "preferences" = "基本設定";
@@ -78,13 +78,13 @@
 "appearance" = "外観";
 "network" = "ネットワーク";
 "notifications" = "通知";
-    81
+
 // MARK: - Settings -> Account
 "display_name" = "表示名";
 "show_my_qr_code" = "自分のQRコードを表示";
 "share_contact" = "ノードを共有";
 "share_contact_footer" = "QRコードやリンクを共有して、他のノードがあなたを追加できるようにします";
-    87
+
 "pin_code" = "PINコード";
 "enable_pin_code" = "PINコードを有効にする";
 "disable_pin_code" = "PINコードを無効にする";
@@ -112,19 +112,19 @@
 "enable_biometric" = "%@を有効にしますか？";
 "biometric_unavailable" = "このデバイスでは生体認証を利用できません。";
 "disable" = "無効にする";
-   115
+
 // MARK: - Settings -> My QR Code
 "failed_to_generate_qr_code" = "QRコードの生成に失敗しました";
 "show_this_code_to_someone_nearby" = "このコードを近くの人に見せてください";
 "scan_with_camera_or_screenshot" = "カメラでスキャンするか、スクリーンショットを撮ってもらってください";
-   120
+
 // MARK: - Settings -> Appearance
 "theme" = "テーマ";
 "theme_footer" = "共創の外観を選択します。「自動」はシステムの設定に合わせて調整されます。";
 "automatic" = "自動";
 "light" = "ライト";
 "dark" = "ダーク";
-   127
+
 // MARK: - Settings -> Network
 "connected" = "接続済み";
 "disconnected" = "切断";
@@ -141,7 +141,7 @@
 "default_server" = "デフォルトサーバー";
 "reset_to_default" = "デフォルトにリセット";
 "custom_server" = "カスタムサーバー";
-   144
+
 // MARK: - Notifications Settings
 "enable_notifications" = "通知を有効にする";
 "notifications_footer" = "通知の受信方法とタイミングを制御します";
@@ -167,7 +167,7 @@
 "not_determined" = "未設定";
 "authorized" = "許可済み";
 "denied" = "拒否";
-   170
+
 // MARK: - Background Fetch & Local Notifications
 "construct_app_name" = "共創";
 "construct_new_message" = "新着メッセージ";
@@ -197,7 +197,7 @@
 "background_fetch_low_power_mode_alert_message" = "低電力モードが有効なため、バックグラウンド更新が無効になりました。低電力モードをオフにすると、自動的に再有効化されます。";
 "background_fetch_disabled_low_power" = "無効 (低電力モード)";
 "background_fetch_energy_saving" = "省エネルギー";
-   198
+
 // MARK: - Profile Sharing
 "profile" = "プロフィール";
 "profile_sharing_status" = "プロフィール共有のステータス";
@@ -249,7 +249,7 @@
 "account_recovery_seed" = "アイデンティティ復旧 (シードフレーズ)";
 "account_recovery_seed_hint" = "復旧シードフレーズを使用してアクセスを復元します。";
 "account_recovery_seed_coming_soon" = "シードフレーズによる復旧は、今後のアップデートで利用可能になる予定です。";
-   248
+
 // Duress PIN
 "duress_pin" = "破壊PIN";
 "duress_pin_hint" = "ロック画面で入力すると、すべてのデータを密かに消去する別のPINコード。";
@@ -263,7 +263,7 @@
 "duress_pin_matches_main" = "破壊PINをメインのPINと同じにすることはできません。別のコードを選択してください。";
 "duress_pin_disable_warning" = "破壊PINが削除されます。ロック画面でのサイレント消去は実行されなくなります。";
 "duress_pin_requires_main_pin" = "破壊PINを使用するには、まずメインのPINを有効にしてください。";
-   262
+
 // Linked Devices
 "linked_devices" = "連携済みレプリカ";
 "linked_devices_hint" = "複数のレプリカで同時にアカウントを使用します。";
@@ -287,7 +287,7 @@
 "display_name_hint" = "連絡先に表示されます。ユーザー名は不変です。";
 "new_messages" = "新着メッセージ";
 "scroll_to_bottom" = "最新へ戻る";
-   286
+
 // Network Settings
 "server" = "サーバー";
 "port" = "ポート";
@@ -295,7 +295,7 @@
 "server_applied_message" = "今後のすべての接続に新しいgRPCサーバーが使用されます。";
 "close" = "閉じる";
 "change_avatar" = "写真を変更";
-   294
+
 // Onboarding
 "onboarding_tagline" = "ポストモダン・メッセンジャー";
 "onboarding_username_placeholder" = "公開エイリアスを選択 (任意)";
@@ -303,7 +303,7 @@
 "onboarding_restore" = "復旧キーから復元";
 "onboarding_recovery_coming_soon" = "復旧機能は近日公開";
 "onboarding_network_settings" = "ネットワーク設定";
-   302
+
 // Registration flow
 "reg_establishing_trust" = "信頼関係を構築中";
 "reg_joining_network" = "デバイスがネットワークに参加しています";
@@ -319,12 +319,12 @@
 "reg_phase_entropy" = "エントロピー収集済み";
 "reg_phase_nonce" = "ナンス検索中";
 "reg_phase_solution" = "解法が見つかりました";
-   318
+
 // Delete Account
 "delete_account_footer" = "アイデンティティと関連するすべてのデータを永久に削除します。";
 "delete_account_not_available" = "アイデンティティの削除はまだ利用できません。後でもう一度お試しください。";
 "delete_account_failed" = "削除に失敗しました: %@";
-   323
+
 // Account Settings — new sections
 "privacy" = "プライバシー";
 "privacy_who_can_find_me" = "ユーザー名で自分を検索できる人";
@@ -335,24 +335,24 @@
 "export_my_data_footer" = "メッセージ、連絡先、アカウントデータのコピーをダウンロードします。GDPRおよび適用されるプライバシー法の下で義務付けられています。";
 "export_coming_soon_message" = "データのエクスポートはまだ利用できません。この機能は法律で義務付けられており、正式リリース前に追加される予定です。";
 "danger_zone" = "危険地帯";
-   334
+
 // QR Scanner
 "paste_invite_link" = "招待リンクを貼り付け";
 "clipboard_no_valid_invite" = "クリップボードに有効な招待リンクが見つかりませんでした。";
-   338
+
 // iPad Split View
 "select_chat" = "チャットを選択";
 "select_chat_description" = "サイドバーから会話を選択してメッセージを開始してください。";
-   342
+
 // QR Code
-   344
+
 // Account Settings
-   346
+
 // Reset Session
 "reset_session" = "セッションをリセット";
 "reset_session_title" = "セッションをリセットしますか？";
 "reset_session_message" = "新しい暗号化セッションを再構築します。転送中のメッセージが失われる可能性があります。";
-   351
+
 // Account Recovery
 "try_again" = "再試行";
 "recovery_not_configured" = "未設定";
@@ -388,21 +388,21 @@
 "recovery_restored_body" = "このデバイスでアカウントが復元されました。以前のセッションは無効化されました。";
 "recovery_banner_title" = "アカウントを保護";
 "recovery_banner_subtitle" = "アクセスできなくなるのを防ぐため、復旧フレーズを設定してください。";
-   387
+
 // macOS Catalyst — push notifications
 "push_not_available_mac" = "デスクトップではプッシュ通知を利用できません";
 "push_not_available_mac_hint" = "デスクトップアプリはリアルタイム配信のために常時接続を使用します。プッシュ通知はiOSアプリで利用可能です。";
-   391
+
 // Profile sharing
 "failed_to_establish_session" = "安全な接続の確立に失敗しました。もう一度お試しください。";
 "saved" = "保存済み";
-   395
+
 // Swipe actions
 "pin" = "固定";
 "unpin" = "固定を解除";
 "mark_unread" = "未読にする";
 "mark_read" = "既読にする";
-   401
+
 // ICE — traffic obfuscation
 "ice_title" = "ICE";
 "ice_footer" = "ICEは、トラフィックを通常のHTTPSと区別がつかないように偽装します。設定はサーバーから自動的に提供されます。";
@@ -410,7 +410,7 @@
 "ice_retry" = "ICE接続を再試行";
 "traffic_protection" = "トラフィック保護";
 "ice_footer_short" = "ICEはトラフィックを標準のHTTPSとして偽装します。設定は自動的に行われます。";
-   409
+
 // ICE mode (tri-state)
 "ice_mode_off" = "オフ";
 "ice_mode_auto" = "自動";
@@ -421,7 +421,7 @@
 "ice_auto_active" = "自動有効化中 ・ 直接接続遮断";
 "ice_direct_probe_ok" = "直接接続: OK (%@)";
 "ice_direct_probe_blocked" = "直接接続: 遮断";
-   420
+   
 // Data & Storage
 "data_and_storage" = "データとストレージ";
 "storage_media_cache" = "メディアキャッシュ";
@@ -444,18 +444,18 @@
 "storage_keep_7_days" = "7日間";
 "storage_keep_30_days" = "30日間";
 "storage_keep_90_days" = "90日間";
-   441
+
 // Message editing
 "edit_message" = "編集";
 "edited" = "編集済み";
 "editing_message" = "メッセージを編集";
 "edit_message_failed" = "メッセージの編集に失敗しました: %@";
 "edit_message_limit_reached" = "編集制限に達しました (最大20回)";
-   448
+
 // MARK: - Network Settings — Connection Route
 "endpoint" = "エンドポイント";
 "mode" = "モード";
-   452
+
 // MARK: - Quote & Reply
 "quote_reply" = "引用と返信";
 "select_quote" = "引用を選択";
@@ -464,37 +464,37 @@
 "photo" = "写真";
 "video" = "動画";
 "file_attachment" = "ファイル";
-   461
+
 // MARK: - Attachments
 "attach" = "添付";
 "camera" = "カメラ";
 "files" = "ファイル";
 "photos" = "写真";
 "drop_to_attach" = "ドロップして添付";
-   468
+
 // MARK: - Message States
 "uploading" = "アップロード中...";
 "loading" = "読み込み中...";
 "failed_to_load" = "読み込みに失敗しました";
 "shared_profile" = "共有プロフィール";
-   474
+
 // MARK: - Drafts
 "save_draft" = "下書きを保存";
 "drafts" = "下書き";
 "drafts_stored_locally" = "下書きはこのデバイスにローカルに保存されます。";
-   479
+
 // MARK: - QR Code
 "code_expired" = "コードの期限が切れました";
 "generate_new_code" = "新しいコードを生成";
 "expires_in" = "有効期限: %@";
-   484
+
 // MARK: - Settings & Diagnostics
 "diagnostics" = "診断";
 "diagnostics_logs" = "診断とログ";
 "tls" = "TLS";
 "interval" = "間隔";
 "preview" = "プレビュー";
-   491
+
 // MARK: - Device Linking
 "onboarding_link_device" = "既存のアカウントを連携";
 "device_link_scan_title" = "スキャンして連携";
@@ -514,7 +514,7 @@
 "device_revoke_confirm_title" = "レプリカを解除";
 "device_revoke_confirm" = "このレプリカはアカウントから削除されます。";
 "device_added_%@" = "%@に追加されました";
-   511
+
 // MARK: - Device Join Request (Desktop onboarding)
 "device_link_request_title" = "既存のアカウントに連携";
 "device_link_request_instruction" = "iPhoneでスキャンしてください";
@@ -530,7 +530,7 @@
 "device_link_approve_message" = "このレプリカは、あなたの共創アカウントへのフルアクセス権を持つことになります。";
 "device_link_approved_title" = "レプリカを連携しました";
 "device_link_approved_message" = "レプリカが正常にアカウントに連携されました。";
-   527
+
 // MARK: - Session Management
 "session_management" = "セッション管理";
 "sign_out_this_device" = "このレプリカからサインアウト";
@@ -546,7 +546,7 @@
 "other_devices" = "他のレプリカ";
 "other_devices_hint" = "－ をタップして、アカウントからレプリカを削除します。";
 "device_active_now" = "現在アクティブ";
-   543
+
 // MARK: - Flood guard & Lockdown
 "flood_alert_body" = "短時間に %d 件のメッセージが送信されました。通知が抑制されています。";
 "flood_banner_title" = "メッセージが多すぎます";
@@ -555,10 +555,10 @@
 "lockdown_active_since" = "%@ から有効";
 "lockdown_mode_hint" = "有効化前に追加された連絡先のみ通知を受信します。新しい送信者は密かに保存され、いつでも確認できます。";
 "allow" = "許可";
-   552
+
 // MARK: - Image Crop
 "crop_use_photo" = "写真を使用";
-   555
+
 // MARK: - Synaps
 "synaps" = "シナプス";
 "synaps_search_prompt" = "検索";
@@ -568,16 +568,16 @@
 "synaps_prune_title" = "このシナプスを切断しますか？";
 "synaps_prune_action" = "切断";
 "synaps_prune_message" = "これにより %@ がシナプスから永久に削除され、会話も削除されます。";
-   565
+
 // MARK: - Connection Status Indicator
-   567
+
 // MARK: - Contact card crypto section
 "session_crypto_suite" = "暗号化";
 "session_crypto_no_session" = "アクティブなセッションなし";
-   571
+ 
 "voice_message" = "ボイスメッセージ";
 "ice_auto_activated_footer" = "ICEが自動的に有効になりました。ネットワークが直接接続を遮断しています。設定で無効にすることができます。";
-   574
+
 // MARK: - Calls
 "call_mute" = "ミュート";
 "call_unmute" = "ミュート解除";
@@ -587,7 +587,7 @@
 "call_incoming_audio" = "音声着信";
 "call_answer" = "応答";
 "call_decline" = "拒否";
-   584
+
 // MARK: - Call History
 "calls_recents" = "履歴";
 "calls_clear" = "消去";
@@ -625,12 +625,12 @@
 "invite" = "招待";
 "qr_caption_trust" = "信頼は仮定されるものではなく、計算されるものです。";
 "qr_scan_hint" = "近くの人に見せるか、スクリーンショットを撮ってください";
-   622
+
 // MARK: - Device Link QR
 "device_link_section" = "レプリカを連携";
 "generating" = "生成中...";
 "device_link_scan_hint" = "別のレプリカでスキャンして連携";
-   627
+
 // MARK: - Keys Recovery
 "keys_recovery_title" = "デバイスキーを利用できません";
 "keys_recovery_warning_title" = "⚠ 暗号化キーが見つかりません";
@@ -650,7 +650,7 @@
 "keys_recovery_wipe_confirm_title" = "新規アカウントを作成しますか？";
 "keys_recovery_wipe_confirm_body" = "これにより、現在のアイデンティティとすべてのローカルデータが永久に削除されます。この操作は取り消せません。";
 "keys_recovery_wipe_confirm_action" = "削除して続行";
-   645
+
 // MARK: - Logout
 "logout_row" = "サインアウト";
 "logout_all_row" = "すべてのレプリカからサインアウト";
@@ -664,7 +664,7 @@
 "logout_no_backup_message" = "復旧フレーズがまだ保存されていません。これなしでサインアウトすると、アカウントとメッセージへのアクセス権を永久に失います。";
 "logout_no_backup_setup_action" = "まず復旧を設定する";
 "logout_no_backup_proceed_action" = "そのままサインアウトする";
-   659
+
 // MARK: - Discoverable / User Search
 "searchable_toggle_title" = "ユーザー名で検索可能";
 "searchable_toggle_footer" =
@@ -680,7 +680,7 @@
 "synaps_remote_result_header" = "共創で見つかりました";
 "synaps_searching" = "検索中...";
 "synaps_not_found" = "見つかりませんでした";
-   673
+
 // Contact Requests
 "contact_requests_section" = "リクエスト";
 "contact_request_from" = "送信元";
@@ -693,7 +693,7 @@
 "contact_request_sheet_title" = "ノードリクエスト";
 "contact_request_from_title" = "が接続を希望しています";
 "contact_request_empty_inbox" = "保留中のリクエストはありません";
-   686
+
 // Safety Numbers
 "safety_numbers" = "セーフティナンバー";
 "safety_numbers_verify_title" = "アイデンティティを確認";
@@ -703,7 +703,7 @@
 "safety_numbers_mismatch_header" = "番号が一致しない場合";
 "safety_numbers_mismatch_body" = "通信を停止し、接続を確認してください。不一致は、誰かがメッセージを傍受している可能性を示唆しています。";
 "safety_numbers_unavailable" = "利用不可 — アイデンティティが初期化されていません";
-   696
+
 // Stealth mode
 "stealth_section" = "ステルス";
 "stealth_toggle_title" = "ステルスモード";
@@ -717,7 +717,7 @@
 "stealth_token_wallet_pending" = "[まだアクティブではありません]";
 "stealth_token_count" = "%d個のトークン";
 "stealth_token_wallet_hint" = "トークンは充電中にバックグラウンドで作成されます。共創でのPrivacy Passサポートが必要です。";
-   710
+
 // Key Transparency
 "kt_section" = "キーの透明性";
 "kt_status" = "メルクル・ログ";
@@ -726,7 +726,7 @@
 "kt_no_data" = "[–] データなし";
 "kt_hint" = "すべてのアイデンティティキーは、追記専用のメルクル・ログに永久に記録されます。改ざんは暗号技術により検出可能です。";
 "kt_failure_hint" = "キーの透明性の検証に失敗しました — 改ざんが検出された可能性があります。";
-   719
+
 // Social Recovery (SLIP-39)
 "social_recovery_title" = "ソーシャル復旧";
 "social_recovery_intro_title" = "ソーシャル復旧";
@@ -765,15 +765,15 @@
 "social_recovery_restored_body" = "アイデンティティキーが正常に復元されました。";
 "social_recovery_row_active" = "■ ソーシャル復旧 — 有効";
 "social_recovery_row_inactive" = "○ ソーシャル復旧 — 未設定";
-   758
+
 "social_recovery_identity_header" = "アイデンティティ";
 "social_recovery_username_label" = "ユーザー名";
-   761
+
 // MARK: - Local Backup
 "backup_section" = "バックアップ";
 "export_backup" = "バックアップをエクスポート";
 "import_backup" = "バックアップをインポート";
-   766
+
 "backup_export_title" = "バックアップをエクスポート";
 "backup_warning_header" = "続行する前に";
 "backup_export_warning" =
@@ -791,7 +791,7 @@
 "backup_create_file" = ".ctbackup ファイルを作成 [→]";
 "backup_share_file" = ".ctbackup ファイルを共有 [→]";
 "backup_export_generating" = "バックアップを生成中...";
-   782
+
 "backup_import_title" = "バックアップをインポート";
 "backup_import_words_header" = "復旧フレーズ";
 "backup_import_words_subtitle" = "バックアップの12語をスペースで区切って入力してください。";
@@ -801,10 +801,10 @@
 "backup_restore_button" = "バックアップを復元 [→]";
 "backup_restore_success_title" = "バックアップの準備完了";
 "backup_restore_success_message" = "バックアップが検証され、準備が整いました。アプリを閉じて再度開くと、復元が完了します。";
-   792
+
 "backup_error_invalid_mnemonic" = "復旧フレーズが無効です。12語すべてを確認して、もう一度お試しください。";
 "backup_error_invalid_file" = "これは有効な共創バックアップではないか、復旧フレーズが正しくありません。";
-   795
+
 // Transfer (P2P nearby)
 "transfer_send_nearby" = "近くのデバイスに送信";
 "transfer_receive_nearby" = "近くのデバイスから受信";
@@ -825,7 +825,7 @@
 "transfer_error_connection" = "接続が失われました。もう一度お試しください。";
 "transfer_error_corrupt" = "転送データが破損しています。もう一度お試しください。";
 "transfer_error_cancelled" = "転送がキャンセルされました。";
-   816
+
 // History Sync (device-to-device after linking)
 "history_sync_send_title" = "履歴を転送";
 "history_sync_receive_title" = "履歴を受信";

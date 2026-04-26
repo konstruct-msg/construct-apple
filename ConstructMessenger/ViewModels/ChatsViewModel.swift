@@ -270,7 +270,9 @@ class ChatsViewModel {
                 self.backgroundDisconnectTask = nil
 
                 // Verify ICE proxy is still alive — it may have been killed during suspension.
+                // Also pre-warms it when DPI was previously detected (network may have changed).
                 await IceProxyManager.shared.verifyAliveOrRestart()
+                await IceProxyManager.shared.startIfEnabled()
 
                 if self.streamManager.isConnected {
                     // Stream survived the switch — no work needed.
@@ -298,6 +300,19 @@ class ChatsViewModel {
         // Old TCP connections bound to the previous interface are dead; cancel them and reopen.
         let pathTask = Task { [weak self] in
             for await _ in NotificationCenter.default.notifications(named: .networkPathChanged) {
+                guard let self else { continue }
+                // If the app is in the background grace period, don't trigger a reconnect now:
+                // - iOS fires spurious path-changed notifications when an app is backgrounded.
+                // - Reconnecting in background is wasteful — iOS may suspend us before it completes.
+                // Instead, just tear down the dead connection and let the foreground handler reconnect.
+                if let bgTask = self.backgroundDisconnectTask, !bgTask.isCancelled {
+                    Log.info("🌐 Network changed during background grace — deferring reconnect to foreground", category: "ChatsViewModel")
+                    bgTask.cancel()
+                    self.backgroundDisconnectTask = nil
+                    self.streamManager.pause()
+                    GRPCChannelManager.shared.invalidatePersistentClient()
+                    continue
+                }
                 Log.info("🌐 Network interface changed — restarting stream and ICE proxy", category: "ChatsViewModel")
                 // Restart ICE proxy: its relay connection was bound to the old interface.
                 Task { @MainActor in
@@ -305,7 +320,7 @@ class ChatsViewModel {
                     await IceProxyManager.shared.verifyAliveOrRestart()
                     await IceProxyManager.shared.startIfEnabled()
                 }
-                self?.forceReconnectStream()
+                self.forceReconnectStream()
             }
         }
         observationTasks.append(pathTask)
