@@ -726,6 +726,7 @@
 "kt_no_data" = "[–] データなし";
 "kt_hint" = "すべてのアイデンティティキーは、追記専用のメルクル・ログに永久に記録されます。改ざんは暗号技術により検出可能です。";
 "kt_failure_hint" = "キーの透明性の検証に失敗しました — 改ざんが検出された可能性があります。";
+"kt_last_failure_at" = "最後の失敗: %@";
 
 // Social Recovery (SLIP-39)
 "social_recovery_title" = "ソーシャル復旧";

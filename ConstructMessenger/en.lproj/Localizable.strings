@@ -716,6 +716,7 @@
 "kt_no_data" = "[–] no data";
 "kt_hint" = "every identity key is permanently recorded in an append-only merkle log. tampering is cryptographically detectable.";
 "kt_failure_hint" = "key transparency verification failed — possible tampering detected.";
+"kt_last_failure_at" = "last failure: %@";
 
 // Social Recovery (SLIP-39)
 "social_recovery_title" = "SOCIAL RECOVERY";

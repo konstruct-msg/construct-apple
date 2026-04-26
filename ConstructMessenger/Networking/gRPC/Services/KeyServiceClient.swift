@@ -6,34 +6,63 @@
 //
 
 import Foundation
+import CoreData
 import GRPCCore
 import GRPCNIOTransportHTTP2
 
 // MARK: - Key Transparency result store
 
-/// Persists the most recent Key Transparency verification outcome so SecurityView
-/// can show an aggregate status without re-verifying every time.
+/// Persists the Key Transparency verification state so SecurityView can show
+/// an aggregate status without re-verifying every time.
+///
+/// Reset logic: after `successesNeededToReset` consecutive successful verifications
+/// the `failureCount` is cleared — this prevents permanent red state after a
+/// transient outage or misconfiguration that has since been resolved.
 final class KTStore {
     static let shared = KTStore()
     private init() {}
 
-    private let lastVerifiedAtKey = "construct.kt_last_verified_at"
-    private let failureCountKey   = "construct.kt_failure_count"
-    private let verifiedCountKey  = "construct.kt_verified_count"
+    // MARK: UserDefaults keys
+    private let lastVerifiedAtKey        = "construct.kt_last_verified_at"
+    private let lastFailedAtKey          = "construct.kt_last_failed_at"
+    private let failureCountKey          = "construct.kt_failure_count"
+    private let verifiedCountKey         = "construct.kt_verified_count"
+    private let consecutiveSuccessKey    = "construct.kt_consecutive_success"
+
+    /// Number of consecutive successful verifications needed to clear `failureCount`.
+    private let successesNeededToReset = 3
+
+    // MARK: Record outcomes
 
     func recordVerified() {
-        UserDefaults.standard.set(Date(), forKey: lastVerifiedAtKey)
-        let count = UserDefaults.standard.integer(forKey: verifiedCountKey)
-        UserDefaults.standard.set(count + 1, forKey: verifiedCountKey)
+        let ud = UserDefaults.standard
+        ud.set(Date(), forKey: lastVerifiedAtKey)
+        ud.set(ud.integer(forKey: verifiedCountKey) + 1, forKey: verifiedCountKey)
+
+        let consecutive = ud.integer(forKey: consecutiveSuccessKey) + 1
+        ud.set(consecutive, forKey: consecutiveSuccessKey)
+
+        if consecutive >= successesNeededToReset && ud.integer(forKey: failureCountKey) > 0 {
+            ud.set(0, forKey: failureCountKey)
+            ud.set(0, forKey: consecutiveSuccessKey)
+        }
     }
 
     func recordFailure() {
-        let count = UserDefaults.standard.integer(forKey: failureCountKey)
-        UserDefaults.standard.set(count + 1, forKey: failureCountKey)
+        let ud = UserDefaults.standard
+        ud.set(Date(), forKey: lastFailedAtKey)
+        ud.set(ud.integer(forKey: failureCountKey) + 1, forKey: failureCountKey)
+        ud.set(0, forKey: consecutiveSuccessKey)
     }
+
+    // MARK: Read state
 
     var lastVerifiedAt: Date? {
         UserDefaults.standard.object(forKey: lastVerifiedAtKey) as? Date
+    }
+
+    var lastFailedAt: Date? {
+        UserDefaults.standard.object(forKey: lastFailedAtKey) as? Date
     }
 
     var verifiedCount: Int {
@@ -159,9 +188,19 @@ final class KeyServiceClient: Sendable {
                 case .verified:
                     KTStore.shared.recordVerified()
                     Log.info("🔐 KT: inclusion proof verified for device \(response.deviceID)", category: "KT")
+                    Self.updateContactKTStatus(
+                        userId: userId,
+                        identityKey: bundle.identityKey,
+                        newStatus: .verified
+                    )
                 case .failed(let e):
                     KTStore.shared.recordFailure()
                     Log.error("🔐 KT: proof FAILED for device \(response.deviceID) — \(e)", category: "KT")
+                    Self.updateContactKTStatus(
+                        userId: userId,
+                        identityKey: bundle.identityKey,
+                        newStatus: .failed
+                    )
                 case .unavailable:
                     break
                 }
@@ -351,6 +390,50 @@ final class KeyServiceClient: Sendable {
                 request: .init(message: request)
             )
             return response.identityKey
+        }
+    }
+
+    // MARK: - KT per-contact state update
+
+    /// Update the `knownIdentityKey` and `ktStatus` on the User Core Data record
+    /// for `userId` after a KT verification result.
+    ///
+    /// - On first verification (`knownIdentityKey == nil`): stores the key and marks `.verified`.
+    /// - On matching key: updates status to the new value (`.verified` or `.failed`).
+    /// - On key change (was set, now different): marks `.keyChanged` and posts
+    ///   `.contactKeyChanged` — regardless of whether the proof itself was valid,
+    ///   because any unexpected key change must surface to the user.
+    private static func updateContactKTStatus(
+        userId: String,
+        identityKey: Data,
+        newStatus: KTStatus
+    ) {
+        let context = PersistenceController.shared.container.newBackgroundContext()
+        context.perform {
+            let fetch = User.fetchRequest()
+            fetch.predicate = NSPredicate(format: "id == %@", userId)
+            fetch.fetchLimit = 1
+            guard let user = try? context.fetch(fetch).first else { return }
+
+            if let known = user.knownIdentityKey, known != identityKey {
+                // Identity key has changed since the last verified session.
+                user.ktStatus = .keyChanged
+                user.knownIdentityKey = identityKey
+                Log.error("🔐 KT: identity key changed for user \(userId)", category: "KT")
+                DispatchQueue.main.async {
+                    NotificationCenter.default.post(
+                        name: .contactKeyChanged,
+                        object: nil,
+                        userInfo: ["userId": userId]
+                    )
+                }
+            } else {
+                user.ktStatus = newStatus
+                if newStatus == .verified {
+                    user.knownIdentityKey = identityKey
+                }
+            }
+            try? context.save()
         }
     }
 }

@@ -488,6 +488,7 @@ struct SecurityView: View {
 private struct KTStatusSection: View {
     @State private var verifiedCount = 0
     @State private var failureCount = 0
+    @State private var lastFailedAt: Date? = nil
 
     private var statusText: String {
         if failureCount > 0 { return NSLocalizedString("kt_warning", comment: "") }
@@ -519,6 +520,16 @@ private struct KTStatusSection: View {
         .onAppear {
             verifiedCount = KTStore.shared.verifiedCount
             failureCount  = KTStore.shared.failureCount
+            lastFailedAt  = KTStore.shared.lastFailedAt
+        }
+
+        if failureCount > 0, let failedAt = lastFailedAt {
+            Text(String(format: NSLocalizedString("kt_last_failure_at", comment: ""),
+                        RelativeDateTimeFormatter().localizedString(for: failedAt, relativeTo: Date())))
+                .font(CTFont.regular(10))
+                .foregroundStyle(Color.CT.danger.opacity(0.8))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 12).padding(.top, 2)
         }
 
         Text(failureCount > 0

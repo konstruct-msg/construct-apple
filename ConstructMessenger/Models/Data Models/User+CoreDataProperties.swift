@@ -2,11 +2,25 @@
 //  User+CoreDataProperties.swift
 //  Construct Messenger
 //
-//  Created by Maxim Eliseyev on 13.12.2025.
-//
 
 import Foundation
 import CoreData
+
+// MARK: - Key Transparency status per contact
+
+/// Reflects the result of the last Key Transparency verification for this contact.
+enum KTStatus: Int16 {
+    /// No bundle has been fetched yet (new contact, or no session established).
+    case unverified = 0
+    /// Last verification succeeded and identity key matches the Merkle log.
+    case verified = 1
+    /// Identity key changed since the last verified bundle — requires user acknowledgement.
+    case keyChanged = 2
+    /// Last verification failed (proof invalid, signature mismatch, etc.).
+    case failed = 3
+}
+
+// MARK: - User Core Data properties
 
 extension User {
     @nonobjc public class func fetchRequest() -> NSFetchRequest<User> {
@@ -27,6 +41,22 @@ extension User {
     @NSManaged public var isContact: Bool
     /// When the contact was first added (link, code, or incoming message).
     @NSManaged public var addedAt: Date?
+
+    // MARK: Key Transparency
+
+    /// The raw identity key bytes from the last successfully KT-verified bundle.
+    /// `nil` until the first successful verification.
+    @NSManaged public var knownIdentityKey: Data?
+
+    /// Raw `KTStatus` value stored in Core Data. Use `ktStatus` accessor.
+    @NSManaged public var ktStatusRaw: Int16
+
+    /// Typed Key Transparency status for this contact.
+    var ktStatus: KTStatus {
+        get { KTStatus(rawValue: ktStatusRaw) ?? .unverified }
+        set { ktStatusRaw = newValue.rawValue }
+    }
+
     @NSManaged public var chats: NSSet?
 }
 

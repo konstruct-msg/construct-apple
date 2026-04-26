@@ -560,6 +560,9 @@ extension APIConstants {
 
 // MARK: - Notifications
 extension Notification.Name {
-    static let serverURLChanged = Notification.Name("serverURLChanged")
-    static let deleteChat = Notification.Name("constructDeleteChat")
+    static let serverURLChanged   = Notification.Name("serverURLChanged")
+    static let deleteChat         = Notification.Name("constructDeleteChat")
+    /// Posted when a contact's identity key changes since the last verified bundle.
+    /// userInfo: ["userId": String]
+    static let contactKeyChanged  = Notification.Name("constructContactKeyChanged")
 }

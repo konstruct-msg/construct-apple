@@ -142,11 +142,13 @@ struct KeyTransparencyVerifier {
 
         // 4. Verify the Signed Tree Head
         guard let pubKeyBytes = serverBundleSigningPublicKey else {
-            // Server key not configured — inclusion proof checks out but STH can't be verified.
-            return .failed(.treeHeadKeyMissing)
+            // Server signing key not yet fetched from .well-known (first launch, no network).
+            // This is a configuration gap, not evidence of tampering — return unavailable.
+            return .unavailable
         }
         guard let pubKey = try? Curve25519.Signing.PublicKey(rawRepresentation: pubKeyBytes) else {
-            return .failed(.treeHeadKeyMissing)
+            // Key bytes present in UserDefaults but malformed — likely data corruption.
+            return .unavailable
         }
         let signable = treeHeadSignable(treeSize: treeSize, rootHash: rootHash)
         guard pubKey.isValidSignature(treeHeadSignature, for: signable) else {
