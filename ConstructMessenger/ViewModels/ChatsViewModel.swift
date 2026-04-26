@@ -62,6 +62,12 @@ class ChatsViewModel {
 
     // ✅ Session lifecycle coordinator (session init, END_SESSION, healing, KEY_SYNC)
     let sessionCoordinator = SessionCoordinator()
+
+    /// Contacts from whom we've received END_SESSION but for whom no Core Data User record
+    /// exists yet (fresh invite, first ever contact). We subscribe to their stream conversation
+    /// so the INITIATOR's X3DH message arrives via live stream rather than waiting for
+    /// fetchMissedMessages. Entries are cleared once a Chat is created for that userId.
+    private var ephemeralSubscriptionUserIds: Set<String> = []
     
     // ✅ Chat management service
     private let chatManagementService = ChatManagementService()
@@ -96,6 +102,16 @@ class ChatsViewModel {
         
         // ✅ Configure SessionCoordinator with the shared stream manager
         sessionCoordinator.configure(streamManager: streamManager)
+
+        // ✅ Ephemeral stream subscription: when END_SESSION arrives from a brand-new contact
+        // (no User record yet), subscribe to their conversation stream immediately so the
+        // INITIATOR's X3DH message arrives via live stream and not only via fetchMissedMessages.
+        sessionCoordinator.onEphemeralSubscriptionNeeded = { [weak self] userId in
+            guard let self else { return }
+            guard self.ephemeralSubscriptionUserIds.insert(userId).inserted else { return }
+            Log.info("📡 Ephemeral stream subscription added for \(userId.prefix(8))… (pending END_SESSION INITIATOR)", category: "ChatsViewModel")
+            self.forceReconnectStream()
+        }
         
         setupSubscribers()
         setupAppLifecycleObservers()
@@ -480,11 +496,15 @@ class ChatsViewModel {
     }
 
     private func currentContactIds() -> [String] {
-        guard let context = viewContext else { return [] }
+        guard let context = viewContext else { return Array(ephemeralSubscriptionUserIds) }
         let fetchRequest = User.fetchRequest()
         fetchRequest.predicate = NSPredicate(format: "id != %@", SessionManager.shared.currentUserId ?? "")
         let users = (try? context.fetch(fetchRequest)) ?? []
-        return users.compactMap { $0.id }
+        let coreDataIds = Set(users.compactMap { $0.id })
+        // Merge ephemeral subscriptions — contacts from whom we received END_SESSION but
+        // for whom no User record exists yet. Once their X3DH message arrives and the Chat
+        // is created, the User record covers them and the ephemeral entry is cleared.
+        return Array(coreDataIds.union(ephemeralSubscriptionUserIds))
     }
 
     /// Contact IDs eligible for proactive prewarm on stream connect.
@@ -600,6 +620,13 @@ class ChatsViewModel {
 
     private func handleIncomingMessage(_ message: ChatMessage) {
         guard let context = viewContext else { return }
+        // Clear ephemeral subscription once an actual message arrives from this contact —
+        // their User record will be created by MessageRouter (findOrCreateChat), so the
+        // regular Core Data path takes over for future stream subscriptions.
+        let senderId = message.from
+        if !senderId.isEmpty, ephemeralSubscriptionUserIds.remove(senderId) != nil {
+            Log.info("📡 Ephemeral subscription cleared for \(senderId.prefix(8))… (first message arrived)", category: "ChatsViewModel")
+        }
         sessionCoordinator.routeIncomingMessage(message, in: context)
     }
 

@@ -63,7 +63,14 @@ final class SessionCoordinator {
     /// the timeout, we override the natural ordering and proactively initialize ourselves.
     /// This prevents a permanent session deadlock when the INITIATOR is itself broken/offline.
     private var responderFallbackTasks: [String: Task<Void, Never>] = [:]
-    private let responderFallbackTimeout: TimeInterval = 20.0
+    /// 60 s gives ICE/network time to stabilise + fetchMissedMessages time to deliver the
+    /// INITIATOR's X3DH message before we override ordering and create a competing session.
+    private let responderFallbackTimeout: TimeInterval = 60.0
+
+    /// Called when END_SESSION arrives from a userId that has no Core Data record yet
+    /// (brand-new contact). ChatsViewModel subscribes to this callback and adds an ephemeral
+    /// stream subscription so the INITIATOR's X3DH message can arrive via live stream.
+    var onEphemeralSubscriptionNeeded: ((String) -> Void)?
 
     /// Timer that periodically evicts expired entries from cooldown dicts so they don't grow unboundedly.
     private var cooldownPurgeTimer: Timer?
@@ -317,6 +324,10 @@ final class SessionCoordinator {
             guard DeviceIdOrdering.isNaturalInitiator(myId: myId, peerId: userId) else {
                 Log.info("🔇 END_SESSION from natural INITIATOR \(userId.prefix(8))… — waiting as RESPONDER (no resend, no prewarm)", category: "SessionInit")
                 startResponderFallback(for: userId)
+                // Notify ChatsViewModel to add an ephemeral stream subscription for this
+                // userId. Without this the INITIATOR's X3DH message can only arrive via
+                // fetchMissedMessages, which often times out while ICE is establishing.
+                onEphemeralSubscriptionNeeded?(userId)
                 return
             }
 
