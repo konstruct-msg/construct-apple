@@ -401,12 +401,15 @@ final class MessageStreamManager {
 
             guard !Task.isCancelled else { break }
 
-            // Exponential backoff with jitter
+            // Exponential backoff with ±30% jitter.
+            // Wider spread than 25% reduces the thundering-herd effect: when many clients
+            // disconnect simultaneously (server restart, network outage), their retries
+            // are spread over a 60% window instead of bunching within 25% of the same delay.
             retryCount += 1
             let base: TimeInterval = NetworkTiming.Stream.backoffBaseDelay
             let delay = min(base * pow(2, Double(min(retryCount - 1, 5))), maxRetryDelay)
-            let jitter = Double.random(in: 0...(delay * 0.25))
-            let totalDelay = delay + jitter
+            let jitter = Double.random(in: -(delay * 0.3)...(delay * 0.3))
+            let totalDelay = max(0.1, delay + jitter)
 
             Log.info("⏳ MessageStream reconnecting in \(String(format: "%.1f", totalDelay))s (attempt #\(retryCount)) → \(host):\(port)", category: "MessageStream")
             do {
@@ -767,6 +770,9 @@ final class MessageStreamManager {
                     GRPCChannelManager.shared.invalidatePersistentClient()
                     Log.info("🧊 Routing changed \(routingKeyBefore) → \(routingKeyAfter) — persistent client invalidated", category: "MessageStream")
                 } else {
+                    // Direct routing is still active — the ephemeral ICE pre-warm (if started)
+                    // is not needed. Stop it to conserve battery and avoid unnecessary relay traffic.
+                    await IceProxyManager.shared.stopEphemeral()
                     Log.info("🧊 Routing unchanged (\(routingKeyAfter)) — keeping persistent client, retrying on same connection", category: "MessageStream")
                 }
                 // Immediate retry: propagate an error to exit openStream() and let connectLoop retry.

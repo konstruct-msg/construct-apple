@@ -161,10 +161,13 @@ final class GRPCChannelManager: Sendable {
         // (cellular ↔ WiFi switch, VPN on/off, etc.).  The old TCP connection is dead
         // after a path change; proactively evicting it prevents the first post-switch
         // RPC from failing before a retry can create a fresh connection.
+        // queue: .main ensures the callback runs on the MainActor queue, preventing a data race
+        // on `networkInterfaceChangedAt` (nonisolated(unsafe) var) between the background
+        // NWPathMonitor posting queue (writer) and shouldTryICEFallback() (reader on MainActor).
         NotificationCenter.default.addObserver(
             forName: .networkPathChanged,
             object: nil,
-            queue: nil
+            queue: .main
         ) { [weak self] _ in
             guard let self else { return }
             Log.info("🔌 Network path changed — invalidating persistent gRPC connection", category: "gRPC")
