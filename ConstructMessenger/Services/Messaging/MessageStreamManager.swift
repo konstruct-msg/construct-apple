@@ -740,6 +740,9 @@ final class MessageStreamManager {
                 PerformanceMetrics.shared.cancelStart(.streamOpenStart, label: metricsLabel)
                 streamTask.cancel()
                 incomingContinuation.finish()
+                // Capture routing key before any ICE state change.
+                let routingKeyBefore = GRPCChannelManager.shared.currentRoutingKey
+
                 // If ICE is running but on cooldown, clear cooldown: direct path is likely blocked.
                 if IceProxyManager.shared.isRunning, IceProxyManager.shared.isOnCooldown {
                     IceProxyManager.shared.clearCooldown()
@@ -752,8 +755,20 @@ final class MessageStreamManager {
                     // acquirePersistentClient() call, creating a direct channel that DPI blocks.
                     await GRPCChannelManager.shared.waitForProxyReady()
                 }
-                // Force routing key refresh for the next acquireChannel().
-                GRPCChannelManager.shared.invalidatePersistentClient()
+
+                // Only invalidate the persistent client when the routing path actually changed
+                // (e.g. direct → ICE). Unconditional invalidation kills the in-progress TLS/ICE
+                // connection and restarts a cold one on every 2.5 s timeout, causing a ~60 s retry
+                // loop: 3 s (fetch cap) + 2.5 s (timeout) = 5.5 s/cycle × ~11 cycles ≈ 60 s.
+                // If routing is unchanged the existing warm connection will succeed on the next
+                // retry once the ICE tunnel or TLS handshake finishes (typically within one cycle).
+                let routingKeyAfter = GRPCChannelManager.shared.currentRoutingKey
+                if routingKeyAfter != routingKeyBefore {
+                    GRPCChannelManager.shared.invalidatePersistentClient()
+                    Log.info("🧊 Routing changed \(routingKeyBefore) → \(routingKeyAfter) — persistent client invalidated", category: "MessageStream")
+                } else {
+                    Log.info("🧊 Routing unchanged (\(routingKeyAfter)) — keeping persistent client, retrying on same connection", category: "MessageStream")
+                }
                 // Immediate retry: propagate an error to exit openStream() and let connectLoop retry.
                 throw RPCError(code: .unavailable, message: "Stream open timed out — retrying with ICE")
             }
