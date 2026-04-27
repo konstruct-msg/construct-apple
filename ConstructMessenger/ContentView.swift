@@ -54,8 +54,14 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: .appWillEnterForeground)) { _ in
             // Fires only when returning from true background — not for brief interruptions
             // (Control Center, alerts, biometrics). scenePhase == .active would fire for all of those.
-            if SessionManager.shared.sessionToken == nil || !SessionManager.shared.isSessionValid {
-                Log.info("📱 App returning to foreground — restoring session", category: "Auth")
+            //
+            // Also retry if the crypto core was never initialized — happens when the app was
+            // woken in background while the device was locked (WhenUnlockedThisDeviceOnly keys
+            // temporarily unavailable). Now that the user is bringing the app to foreground,
+            // the device is unlocked and Keychain items are accessible.
+            if SessionManager.shared.sessionToken == nil || !SessionManager.shared.isSessionValid
+                || !CryptoManager.shared.isInitialized {
+                Log.info("📱 App returning to foreground — restoring session (token missing, expired, or crypto uninitialised)", category: "Auth")
                 authViewModel.restoreSession()
             }
         }

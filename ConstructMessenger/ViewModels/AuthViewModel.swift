@@ -8,6 +8,7 @@
 import Foundation
 import CoreData
 import CryptoKit
+import UIKit
 
 @MainActor
 @Observable
@@ -76,13 +77,18 @@ class AuthViewModel {
     init(context: NSManagedObjectContext) {
         self.viewContext = context
         setupSubscribers()
-        startTokenRefreshMonitoring()  // ✅ Monitor token expiration
-        setupSessionExpiredListener()  // Subscribe to session invalidation
-        refreshDeviceKeyState()        // Sync Keychain state into @Published
-        
-        // ✅ Device-based auth: Try to restore session OR authenticate with device keys
+        startTokenRefreshMonitoring()
+        setupSessionExpiredListener()
+        // hasRegisteredDeviceKeys intentionally left nil so SplashView renders while
+        // the async auth task runs. It is set by restoreOrAuthenticateDevice() in all
+        // exit paths; refreshDeviceKeyState() is the fallback for unexpected returns.
         Task { [weak self] in
             await self?.restoreOrAuthenticateDevice()
+            // Safety net: if the async task returned without resolving the routing state,
+            // fall back to a synchronous Keychain read so the app never stays on SplashView.
+            if self?.hasRegisteredDeviceKeys == nil {
+                self?.refreshDeviceKeyState()
+            }
         }
     }
     
@@ -456,6 +462,15 @@ class AuthViewModel {
     ///   3. Create new account — explicit user choice, then we wipe and re-register
     private func handleLostDeviceKeys(userId: String, reason: String) {
         Log.error("⚠️ [Auth] Device keys unavailable — showing recovery screen. Reason: \(reason). userId: \(userId.prefix(8))", category: "Auth")
+        // kSecAttrAccessibleWhenUnlockedThisDeviceOnly items are inaccessible when the
+        // device is locked and the app is woken by a push notification. This is a transient
+        // condition — the keys haven't been wiped; they just can't be read right now.
+        // Skip the recovery screen in this case; restoreOrAuthenticateDevice() will be
+        // retried when the user brings the app to the foreground.
+        guard UIApplication.shared.applicationState != .background else {
+            Log.info("⚠️ [Auth] Keys inaccessible in background (device locked) — deferring recovery to foreground", category: "Auth")
+            return
+        }
         deviceKeysUnavailable = true
     }
 
