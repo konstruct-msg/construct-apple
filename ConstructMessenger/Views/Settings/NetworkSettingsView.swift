@@ -160,25 +160,6 @@ struct NetworkSettingsView: View {
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
 
-                        // Direct probe status in AUTO mode
-                        if iceManager.mode == .auto, iceManager.dpiDetectedThisSession {
-                            CTSep(style: .thin)
-                            HStack {
-                                if let lastSuccess = iceManager.lastDirectProbeSuccess {
-                                    Text(String(format: NSLocalizedString("ice_direct_probe_ok", comment: ""),
-                                                lastSuccess.formatted(.relative(presentation: .named))))
-                                        .font(CTFont.regular(11))
-                                        .foregroundStyle(Color.CT.accent)
-                                } else {
-                                    Text(LocalizedStringKey("ice_direct_probe_blocked"))
-                                        .font(CTFont.regular(11))
-                                        .foregroundStyle(Color.CT.danger)
-                                }
-                                Spacer()
-                            }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                        }
                     } else if iceManager.mode != .off && !iceManager.isRunning {
                         CTSep(style: .thin)
                         Text(iceManager.lastError ?? NSLocalizedString("ice_unavailable", comment: ""))
@@ -195,13 +176,6 @@ struct NetworkSettingsView: View {
                     Text(LocalizedStringKey("ice_unavailable"))
                         .font(CTFont.regular(11))
                         .foregroundStyle(Color.CT.textDim)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 12)
-                        .padding(.bottom, 8)
-                } else if iceManager.mode == .auto && iceManager.dpiDetectedThisSession {
-                    Text(LocalizedStringKey("ice_auto_active"))
-                        .font(CTFont.regular(11))
-                        .foregroundStyle(.orange)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 12)
                         .padding(.bottom, 8)

@@ -48,7 +48,7 @@ final class AuthServiceClient: Sendable {
         challenge: String,
         powSolution: PowSolution
     ) async throws -> RegisterSuccessData {
-        return try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.registerDevice, allowAuthRetry: false, fastICEFallback: true) { grpcClient in
+        return try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.registerDevice, allowAuthRetry: false) { grpcClient in
             let authClient = Shared_Proto_Services_V1_AuthService.Client(wrapping: grpcClient)
 
             var publicKeys = Shared_Proto_Services_V1_DevicePublicKeys()

@@ -114,9 +114,7 @@ final class GRPCChannelManager: Sendable {
         case .off:
             return nil
         case .auto:
-            // Only route through ICE when DPI was confirmed this session.
-            // Read the legacy key which is kept in sync by isEnabled setter.
-            guard UserDefaults.standard.bool(forKey: "ice_enabled") else { return nil }
+            return nil
         case .on:
             break // Always route through ICE
         }
@@ -133,7 +131,7 @@ final class GRPCChannelManager: Sendable {
     ///
     /// `ice_proxy_start_tls()` binds the TCP port synchronously and returns, but the Rust goroutine
     /// that sets the "is_running" flag runs asynchronously. Without this wait, the immediate
-    /// `iceProxyPort()` check after startOnDemandIfNeeded() / restartAfterCrash() sees 0 and
+    /// `iceProxyPort()` check after `restartAfterCrash()` sees 0 and
     /// falls back to a direct channel — defeating ICE entirely.
     ///
     /// In practice the Rust goroutine initializes in <50 ms when ICE is already running (Rust flag
@@ -161,9 +159,6 @@ final class GRPCChannelManager: Sendable {
         // (cellular ↔ WiFi switch, VPN on/off, etc.).  The old TCP connection is dead
         // after a path change; proactively evicting it prevents the first post-switch
         // RPC from failing before a retry can create a fresh connection.
-        // queue: .main ensures the callback runs on the MainActor queue, preventing a data race
-        // on `networkInterfaceChangedAt` (nonisolated(unsafe) var) between the background
-        // NWPathMonitor posting queue (writer) and shouldTryICEFallback() (reader on MainActor).
         NotificationCenter.default.addObserver(
             forName: .networkPathChanged,
             object: nil,
@@ -171,7 +166,6 @@ final class GRPCChannelManager: Sendable {
         ) { [weak self] _ in
             guard let self else { return }
             Log.info("🔌 Network path changed — invalidating persistent gRPC connection", category: "gRPC")
-            self.networkInterfaceChangedAt = Date()
             self.invalidatePersistentClient()
         }
     }
@@ -194,10 +188,6 @@ final class GRPCChannelManager: Sendable {
         let key:    String   // routing identity — "ice:<port>" or "direct:<host>:<port>"
     }
 
-    // Timestamp of the last network interface change. Used by shouldTryICEFallback() to
-    // suppress false DPI detection during the reconnect window that follows a path switch.
-    nonisolated(unsafe) var networkInterfaceChangedAt: Date = .distantPast
-
     // nonisolated(unsafe) is correct here: all mutations are serialised through _connLock.
     private nonisolated(unsafe) var _conn: PersistentConn?
     // Monotonically increasing generation counter.  Bumped on every invalidation (both
@@ -215,15 +205,6 @@ final class GRPCChannelManager: Sendable {
 
     /// Exposes the current routing key for debug metrics and logging.
     var currentRoutingKey: String { routingKey() }
-
-    /// True when a valid persistent connection exists for the current routing key.
-    /// Used by performRPC to decide whether to use the hot path or a cold race.
-    private var hasPersistentConnection: Bool {
-        _connLock.withLock {
-            guard let conn = _conn else { return false }
-            return conn.key == routingKey() && !conn.task.isCancelled
-        }
-    }
 
     /// Returns a reusable persistent client, creating/replacing it when routing changes.
     private func acquirePersistentClient() throws -> GRPCClient<HTTP2ClientTransport.TransportServices> {
@@ -349,37 +330,6 @@ final class GRPCChannelManager: Sendable {
         )
     }
 
-    // MARK: - Happy Eyeballs helpers
-
-    /// Returns the secondary (plain-obfs4) proxy port when running in dual-proxy mode, or nil.
-    func secondaryICEProxyPort() -> UInt16? {
-        guard !isICEOnCooldownInternal() else { return nil }
-        let port = ice_proxy_port_plain()
-        return port > 0 ? port : nil
-    }
-
-    /// Creates a one-shot gRPC client targeting the Construct server directly over TLS.
-    /// Used for the "direct" leg of a happy-eyeballs 3-way race.
-    func makeDirectClient() throws -> GRPCClient<HTTP2ClientTransport.TransportServices> {
-        let host = currentHost
-        let port = currentPort
-        let transport = try HTTP2ClientTransport.TransportServices(
-            target: .dns(host: host, port: port),
-            transportSecurity: .tls,
-            config: .defaults {
-                $0.connection = .init(
-                    maxIdleTime: .seconds(NetworkTiming.GRPC.maxIdleTimeSeconds),
-                    keepalive: .init(
-                        time: .seconds(NetworkTiming.GRPC.keepaliveTimeDirectSeconds),
-                        timeout: .seconds(NetworkTiming.GRPC.keepaliveTimeoutSeconds),
-                        allowWithoutCalls: true
-                    )
-                )
-            }
-        )
-        return GRPCClient(transport: transport, interceptors: [AuthInterceptor()])
-    }
-
     /// Creates a one-shot gRPC client targeting a local ICE proxy port over plaintext.
     /// Used for the ICE legs of a happy-eyeballs 3-way race.
     func makeICEClient(port: UInt16) throws -> GRPCClient<HTTP2ClientTransport.TransportServices> {
@@ -400,116 +350,12 @@ final class GRPCChannelManager: Sendable {
         return GRPCClient(transport: transport, interceptors: [AuthInterceptor()])
     }
 
-    /// Executes `operation` via a 3-way happy-eyeballs race:
-    ///   1. Direct gRPC (TLS to Construct server)
-    ///   2. ICE-TLS proxy (primary relay, AMS)                  [250 ms staggered start]
-    ///   3. ICE-plain proxy (secondary relay, e.g. MSK)         [450 ms staggered start]
-    ///
-    /// The first leg to succeed wins; the others are cancelled.  After the race, the
-    /// persistent connection is committed to the winning path so subsequent RPCs reuse it
-    /// without repeating the race.
-    ///
-    /// Requires both proxy ports to already be running (or starting).
-    /// Use `IceProxyManager.startBothRelaysForHappyEyeballs()` first.
-    func happyEyeballsRace<Result: Sendable>(
-        _ operation: @Sendable @escaping (GRPCClient<HTTP2ClientTransport.TransportServices>) async throws -> Result
-    ) async throws -> Result {
-        let iceTLSPort  = ice_proxy_port_tls()
-        let icePlainPort = ice_proxy_port_plain()
-        let raceLegs = 1 + (iceTLSPort  > 0 ? 1 : 0)
-                         + (icePlainPort > 0 ? 1 : 0)
-        Log.info("🏁 Happy-eyeballs race: \(raceLegs) leg(s) (direct + ICE-TLS:\(iceTLSPort) + ICE-plain:\(icePlainPort))", category: "gRPC")
-        PerformanceMetrics.shared.start(.grpcConnectStart, label: "race:\(raceLegs)-legs")
-
-        typealias LegResult = (label: String, value: Result)
-
-        let raceResult: LegResult = try await withThrowingTaskGroup(of: LegResult.self) { group in
-            // Leg 1: direct TLS
-            let directClient = try makeDirectClient()
-            group.addTask {
-                let connTask = Task { try await directClient.runConnections() }
-                defer {
-                    directClient.beginGracefulShutdown()
-                    // Do NOT connTask.cancel() — let runConnections() drain gracefully.
-                    _ = connTask  // suppress unused warning; task released when client drains
-                }
-                let r = try await operation(directClient)
-                return ("direct", r)
-            }
-
-            // Leg 2: ICE-TLS (staggered by happyEyeballsICEStaggerMs)
-            if iceTLSPort > 0 {
-                let iceTLSClient = try makeICEClient(port: iceTLSPort)
-                group.addTask {
-                    try await Task.sleep(nanoseconds: NetworkTiming.ICE.happyEyeballsICEStaggerMs * 1_000_000)
-                    let connTask = Task { try await iceTLSClient.runConnections() }
-                    defer {
-                        iceTLSClient.beginGracefulShutdown()
-                        _ = connTask
-                    }
-                    let r = try await operation(iceTLSClient)
-                    return ("ice-tls:\(iceTLSPort)", r)
-                }
-            }
-
-            // Leg 3: ICE-plain (staggered further)
-            if icePlainPort > 0 {
-                let icePlainClient = try makeICEClient(port: icePlainPort)
-                group.addTask {
-                    let stagger = NetworkTiming.ICE.happyEyeballsICEStaggerMs + NetworkTiming.ICE.happyEyeballsRelayStaggerMs
-                    try await Task.sleep(nanoseconds: stagger * 1_000_000)
-                    let connTask = Task { try await icePlainClient.runConnections() }
-                    defer {
-                        icePlainClient.beginGracefulShutdown()
-                        _ = connTask
-                    }
-                    let r = try await operation(icePlainClient)
-                    return ("ice-plain:\(icePlainPort)", r)
-                }
-            }
-
-            // Wait for the first SUCCESS — ignore individual leg failures so a broken relay
-            // doesn't cancel a still-running direct leg (and vice versa).
-            // Only fail the whole race when every leg has reported failure.
-            var lastError: Error = RPCError(code: .unavailable, message: "All transport legs failed")
-            while let result = await group.nextResult() {
-                switch result {
-                case .success(let legResult):
-                    group.cancelAll()
-                    return legResult
-                case .failure(let error):
-                    if !(error is CancellationError) { lastError = error }
-                }
-            }
-            throw lastError
-        }
-
-        PerformanceMetrics.shared.end(.grpcConnectStart, endEvent: .grpcConnectEnd, label: "race:\(raceLegs)-legs")
-        Log.info("🏁 Happy-eyeballs race winner: \(raceResult.label)", category: "gRPC")
-
-        // Commit the winning routing to the persistent connection:
-        // - If ICE won: iceProxyPort() is already non-nil → acquirePersistentClient() will
-        //   route through ICE on the next call. No action needed.
-        // - If direct won: ICE proxy may still be running (auto-mode warm-up). Invalidate
-        //   the persistent connection so the next acquirePersistentClient() re-evaluates routing.
-        //   (iceProxyPort() routing is based on ICE mode + cooldown; direct win means DPI is
-        //   not active so the ICE auto-start task can be discarded.)
-        if raceResult.label == "direct" {
-            // Clear any ICE auto-warm that started in the background — direct is faster.
-            await IceProxyManager.shared.stopEphemeral()
-            invalidatePersistentClient()
-        }
-
-        return raceResult.value
-    }
-
     /// Execute a gRPC operation with automatic client lifecycle management.
     /// Creates a client, runs connections in background, executes the operation, then shuts down.
     /// If the operation fails while ICE is active, records the failure so future calls bypass ICE.
     func performRPC<Result: Sendable>(
         timeout: TimeInterval? = nil,
         allowAuthRetry: Bool = true,
-        fastICEFallback: Bool = false,
         _ operation: @Sendable @escaping (GRPCClient<HTTP2ClientTransport.TransportServices>) async throws -> Result
     ) async throws -> Result {
         func shouldRecordIceFailure(_ error: Error) -> Bool {
@@ -559,70 +405,12 @@ final class GRPCChannelManager: Sendable {
             return true
         }
 
-        /// Network-level errors that suggest DPI interference — worth retrying through ICE.
-        /// Only true for errors that look like network-level blocking (timeouts, TLS resets).
-        /// False for server-side issues, auth errors, and client-side channel state problems.
-        /// Always returns false in `.off` mode (user explicitly disabled ICE).
-        func shouldTryICEFallback(_ error: Error) -> Bool {
-            // Respect user's explicit choice: OFF means no fallback.
-            let rawMode = UserDefaults.standard.string(forKey: IceMode.defaultsKey) ?? IceMode.platformDefault.rawValue
-            if IceMode(rawValue: rawMode) == .off { return false }
-
-            if error is CancellationError { return false }
-
-            // After a network interface change (WiFi↔cellular), the first RPC timeout is caused
-            // by the old connection dying — not DPI. Suppress DPI detection for 20 s.
-            let timeSincePathChange = Date().timeIntervalSince(GRPCChannelManager.shared.networkInterfaceChangedAt)
-            if timeSincePathChange < 20 {
-                Log.debug("🧊 Suppressing DPI detection — network changed \(Int(timeSincePathChange))s ago", category: "GRPCChannel")
-                return false
-            }
-            if let rpc = error as? RPCError {
-                switch rpc.code {
-                case .unavailable:
-                    let msg = rpc.message.lowercased()
-                    // "connection preface" on the DIRECT path means DPI: the middlebox accepted
-                    // TCP but reset before HTTP/2 handshake — exactly when ICE is needed.
-                    // (isRelayFailure() also checks this string, but there it means the relay
-                    //  itself worked fine and the remote server reset — different context.)
-                    // Client-side channel lifecycle — not a network error.
-                    if msg.contains("channel is closed") { return false }
-                    // Server port not listening — server down, not DPI.
-                    if msg.contains("connection refused") { return false }
-                    // DNS failure — resolver issue, not DPI.
-                    if msg.contains("name resolution") || msg.contains("dns") { return false }
-                    // Local ICE proxy died — handled by isStaleLocalProxy().
-                    if msg.contains("127.0.0.1") { return false }
-                    return true
-                case .deadlineExceeded:
-                    return true
-                default:
-                    return false
-                }
-            }
-            // Raw NIO transport error — only treat as DPI if it's a genuine connection failure,
-            // not a client-side state issue (closed channel, cancelled, etc.)
-            let desc = String(describing: error).lowercased()
-            if desc.contains("cancelled") || desc.contains("channel") || desc.contains("closed")
-                || desc.contains("refused") { return false }
-            return true
-        }
-
         /// True when the error is ECONNREFUSED on the local ICE proxy port (127.0.0.1).
         /// This means the Rust proxy process died but Swift state was not updated.
         /// Distinct from a relay failure — no cooldown should be entered, just restart the process.
         func isStaleLocalProxy(_ error: Error) -> Bool {
             guard let rpc = error as? RPCError, rpc.code == .unavailable else { return false }
             return rpc.message.contains("127.0.0.1")
-        }
-
-        /// True when the error is a DNS resolution failure on the direct TLS path.
-        /// Typically occurs when VPN routes all traffic through a DNS server that
-        /// doesn't know about the Construct server hostname.
-        func isDNSResolutionFailure(_ error: Error) -> Bool {
-            guard let rpc = error as? RPCError, rpc.code == .unavailable else { return false }
-            let msg = rpc.message
-            return msg.contains("Failed to resolve") || msg.contains("nodename nor servname")
         }
 
         /// True when the error is "WebTunnel blocked by a carrier transparent HTTP proxy":
@@ -636,47 +424,6 @@ final class GRPCChannelManager: Sendable {
         }
 
         var lastError: Error?
-        var iceAutoStartedThisCall = false   // true once we DPI-auto-started ICE in this call
-
-        // Happy Eyeballs pre-warm: only in AUTO mode. In OFF mode, no ICE at all.
-        // In ON mode, ICE is already running from app launch.
-        // Fire ICE startup concurrently at t=0 while the direct attempt is in flight.
-        if fastICEFallback, iceProxyPort() == nil {
-            let currentMode = IceMode(rawValue: UserDefaults.standard.string(forKey: IceMode.defaultsKey) ?? "") ?? .auto
-            if currentMode == .auto {
-                Task {
-                    let hasCert = await IceProxyManager.shared.hasCert
-                    if hasCert {
-                        await IceProxyManager.shared.startEphemeralOnDemandIfNeeded()
-                    }
-                }
-            }
-        }
-
-        // True happy-eyeballs race: fire all available paths simultaneously on cold start.
-        // Conditions:
-        //   1. fastICEFallback is enabled (caller requests ICE fallback support)
-        //   2. No persistent connection exists yet (cold start or after reconnect)
-        //   3. ICE proxy is already warm (port > 0) — at least one leg has started
-        //   4. Auto mode — in .on mode ICE is always preferred; no need to race direct
-        // The first path to return a result wins; all others are cancelled.
-        // On direct win: the ephemeral ICE pre-warm is stopped (no confirmed DPI).
-        // On ICE win: persistent routing switches to ICE automatically via iceProxyPort().
-        if fastICEFallback, !hasPersistentConnection {
-            let iceTLSPort  = ice_proxy_port_tls()
-            let icePlainPort = ice_proxy_port_plain()
-            let rawMode = UserDefaults.standard.string(forKey: IceMode.defaultsKey) ?? IceMode.platformDefault.rawValue
-            let iceMode = IceMode(rawValue: rawMode) ?? .auto
-            if iceMode == .auto, iceTLSPort > 0 || icePlainPort > 0 {
-                do {
-                    Log.info("🏁 Cold start — entering happy-eyeballs race (ICE-TLS:\(iceTLSPort) ICE-plain:\(icePlainPort))", category: "gRPC")
-                    return try await happyEyeballsRace(operation)
-                } catch {
-                    Log.info("🏁 Happy-eyeballs race failed — falling through to sequential retry: \(error)", category: "gRPC")
-                    lastError = error
-                }
-            }
-        }
 
         for attempt in 0..<3 {
             let usingICE = iceProxyPort() != nil
@@ -688,30 +435,8 @@ final class GRPCChannelManager: Sendable {
                 if usingICE, !iceRelayVerified {
                     return min(timeout, NetworkTiming.ICE.unverifiedRelayTimeout)
                 }
-                // "Happy eyeballs" for routing: on the first direct attempt, prefer a short
-                // deadline so we can quickly try ICE instead of waiting 20-30 seconds.
-                // Skip this cap when ICE is OFF — no fallback exists, so the direct attempt
-                // must use the full caller timeout to avoid artificial connection failures.
-                guard fastICEFallback, !usingICE, attempt == 0 else { return timeout }
-                let rawModeForTimeout = UserDefaults.standard.string(forKey: IceMode.defaultsKey) ?? IceMode.platformDefault.rawValue
-                guard (IceMode(rawValue: rawModeForTimeout) ?? .auto) != .off else { return timeout }
-                // Only shorten the timeout when ICE is actually ready to take over.
-                // If the relay hasn't connected yet (port == 0, e.g. all relays blacklisted),
-                // the direct path has no fallback — use the full timeout to avoid a false
-                // deadlineExceeded → false DPI-confirmed cascade.
-                guard ice_proxy_port_tls() > 0 else { return timeout }
-                // 4 seconds is enough for TCP+TLS on healthy networks, but short enough to
-                // avoid UI stalls on DPI-blocked paths.
-                return min(timeout, NetworkTiming.GRPC.fastFallbackDirectTimeout)
+                return timeout
             }()
-
-            if fastICEFallback, !usingICE, attempt == 0, let effectiveTimeout {
-                PerformanceMetrics.shared.record(
-                    .rpcFastICEFallbackArmed,
-                    label: routingKey(),
-                    value: effectiveTimeout * 1000
-                )
-            }
 
             // ------------------------------------------------------------------
             // Prefer the persistent connection (no TLS handshake on hot path).
@@ -850,8 +575,6 @@ final class GRPCChannelManager: Sendable {
 
                 // If the call failed while routing through ICE, record relay failure only for
                 // network-ish failures. Don't disable ICE due to auth/validation errors.
-                // Also skip cooldown when ICE was just auto-started this call — a warm-up
-                // failure doesn't mean the relay itself is broken.
                 if usingICE, isStaleLocalProxy(error) {
                     // ECONNREFUSED on 127.0.0.1 — local proxy died in background.
                     // Restart immediately; do NOT enter cooldown (this is a process crash, not relay failure).
@@ -861,7 +584,7 @@ final class GRPCChannelManager: Sendable {
                     if iceProxyPort() != nil {
                         continue
                     }
-                } else if usingICE, !iceAutoStartedThisCall, shouldRecordIceFailure(error) {
+                } else if usingICE, shouldRecordIceFailure(error) {
                     // Relay tunnel broken (DPI-blocked or unreachable). Before rotating,
                     // check if this is a WebTunnel-specific failure (carrier transparent
                     // proxy intercepted the WebSocket UPGRADE). obfs4 is a binary protocol
@@ -903,54 +626,6 @@ final class GRPCChannelManager: Sendable {
                     }
                     // All relays exhausted — enter cooldown for direct fallback.
                     recordICEFailure(failedAddress: failedAddr)
-                }
-
-                // VPN DNS failure: when direct TLS can't resolve the server name, try routing through
-                // ICE which bypasses DNS entirely (connects to 127.0.0.1 locally, relay resolves upstream).
-                // Skip entirely when ICE is OFF — the user has explicitly disabled it.
-                if !usingICE, isDNSResolutionFailure(error) {
-                    let dnsIceRawMode = UserDefaults.standard.string(forKey: IceMode.defaultsKey) ?? IceMode.platformDefault.rawValue
-                    let dnsIceMode = IceMode(rawValue: dnsIceRawMode) ?? .auto
-                    if dnsIceMode != .off {
-                        let hasCert = await IceProxyManager.shared.hasCert
-                        if hasCert {
-                            Log.info("🧊 DNS failure on direct path — forcing ICE routing (VPN?)", category: "gRPC")
-                            await IceProxyManager.shared.forceStartIgnoringCooldown()
-                            await waitForProxyReady()
-                            if iceProxyPort() != nil {
-                                continue
-                            }
-                            // waitForProxyReady timed out — clear stuck state so next attempt restarts.
-                            await IceProxyManager.shared.resetIfStuck()
-                        }
-                    }
-                }
-
-                // DPI auto-fallback: when direct connection fails with a network error on the
-                // first attempt, try starting ICE proxy and retrying through the obfs4 relay.
-                // Also fires when ICE is running but on cooldown — startOnDemandIfNeeded() clears
-                // the cooldown in that case, so iceProxyPort() becomes non-nil after the call.
-                // Skip entirely when ICE is OFF — startOnDemandIfNeeded() would return immediately
-                // but waitForProxyReady() would still block for up to 5-15s.
-                let dpiRawMode = UserDefaults.standard.string(forKey: IceMode.defaultsKey) ?? IceMode.platformDefault.rawValue
-                let dpiIceMode = IceMode(rawValue: dpiRawMode) ?? .auto
-                if !usingICE, attempt == 0, dpiIceMode != .off, shouldTryICEFallback(error) {
-                    if fastICEFallback {
-                        PerformanceMetrics.shared.record(.rpcFastICEFallbackTriggered, label: routingKey())
-                    }
-                    Log.info("🧊 Direct connection failed — auto-starting ICE (DPI detected) error=\(error)", category: "GRPCChannel")
-                    await IceProxyManager.shared.startOnDemandIfNeeded()
-                    await waitForProxyReady()
-                    if iceProxyPort() != nil {
-                        // The failed connection was already invalidated at the top of this catch block.
-                        // No extra invalidation needed — just retry; acquirePersistentClient() will
-                        // open a fresh channel routed through the ICE proxy port.
-                        iceAutoStartedThisCall = true
-                        Log.info("🧊 ICE proxy active — retrying RPC through relay", category: "GRPCChannel")
-                        continue
-                    }
-                    // waitForProxyReady timed out — clear stuck state so next attempt restarts fresh.
-                    await IceProxyManager.shared.resetIfStuck()
                 }
 
                 throw error

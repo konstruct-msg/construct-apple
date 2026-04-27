@@ -40,7 +40,7 @@ final class MessagingServiceClient: Sendable {
         let bgTaskId = await MainActor.run { UIApplication.shared.beginBackgroundTask(withName: "send-msg-rpc") { } }
         defer { Task { @MainActor in UIApplication.shared.endBackgroundTask(bgTaskId) } }
         #endif
-        return try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.sendMessage, fastICEFallback: true) { grpcClient in
+        return try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.sendMessage) { grpcClient in
             let msgClient = Shared_Proto_Services_V1_MessagingService.Client(wrapping: grpcClient)
 
             var sender = Shared_Proto_Core_V1_UserId()
@@ -146,7 +146,7 @@ final class MessagingServiceClient: Sendable {
     // MARK: - Send End Session (replaces MessagingAPI.sendEndSession)
 
     func sendEndSession(to recipientId: String, reason: String? = nil) async throws -> EndSessionResponse {
-        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.endSession, fastICEFallback: true) { grpcClient in
+        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.endSession) { grpcClient in
             let msgClient = Shared_Proto_Services_V1_MessagingService.Client(wrapping: grpcClient)
 
             let messageId = UUID().uuidString
@@ -346,7 +346,7 @@ final class MessagingServiceClient: Sendable {
     }
 
     func getPendingMessages(sinceCursor: String? = nil, limit: Int32 = 50) async throws -> PendingMessagesResult {
-        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.getPendingMessages, fastICEFallback: true) { grpcClient in
+        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.getPendingMessages) { grpcClient in
             try await Self.getPendingMessagesPage(grpcClient: grpcClient, sinceCursor: sinceCursor, limit: limit)
         }
     }
@@ -359,7 +359,7 @@ final class MessagingServiceClient: Sendable {
         newEncryptedContent: Data,
         recipientUserId: String
     ) async throws -> Shared_Proto_Services_V1_EditMessageResponse {
-        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.editMessage, fastICEFallback: true) { grpcClient in
+        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.editMessage) { grpcClient in
             let msgClient = Shared_Proto_Services_V1_MessagingService.Client(wrapping: grpcClient)
 
             var request = Shared_Proto_Services_V1_EditMessageRequest()

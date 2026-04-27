@@ -85,7 +85,7 @@ final class KeyServiceClient: Sendable {
     /// Fetch pre-key bundles for ALL active devices of a user (or specific device IDs).
     /// Returns one bundle per device — caller must encrypt separately for each.
     func getPreKeyBundles(userId: String, deviceIds: [String] = []) async throws -> [DeviceBundleData] {
-        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.getPreKeyBundles, fastICEFallback: true) { grpcClient in
+        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.getPreKeyBundles) { grpcClient in
             let keyClient = Shared_Proto_Services_V1_KeyService.Client(wrapping: grpcClient)
 
             var request = Shared_Proto_Services_V1_GetPreKeyBundlesRequest()
@@ -139,7 +139,7 @@ final class KeyServiceClient: Sendable {
 
     /// Fetch a user's pre-key bundle for establishing an E2EE session.
     func getPreKeyBundle(userId: String, deviceId: String? = nil) async throws -> PublicKeyBundleData {
-        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.getPreKeyBundle, fastICEFallback: true) { grpcClient in
+        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.getPreKeyBundle) { grpcClient in
             let keyClient = Shared_Proto_Services_V1_KeyService.Client(wrapping: grpcClient)
 
             var request = Shared_Proto_Services_V1_GetPreKeyBundleRequest()
@@ -253,7 +253,7 @@ final class KeyServiceClient: Sendable {
         kyberSignedPreKey: (keyId: UInt32, publicKey: Data, signature: Data)? = nil,
         kyberOneTimePreKeys: [(keyId: UInt32, publicKey: Data, signature: Data)]? = nil
     ) async throws -> (classicCount: UInt32, kyberCount: UInt32) {
-        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.uploadPreKeys, fastICEFallback: true) { grpcClient in
+        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.uploadPreKeys) { grpcClient in
             let keyClient = Shared_Proto_Services_V1_KeyService.Client(wrapping: grpcClient)
 
             var request = Shared_Proto_Services_V1_UploadPreKeysRequest()
@@ -302,7 +302,7 @@ final class KeyServiceClient: Sendable {
 
     /// Check how many one-time pre-keys remain on the server.
     func getPreKeyCount(deviceId: String) async throws -> UInt32 {
-        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.getPreKeyCount, fastICEFallback: true) { grpcClient in
+        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.getPreKeyCount) { grpcClient in
             let keyClient = Shared_Proto_Services_V1_KeyService.Client(wrapping: grpcClient)
 
             var request = Shared_Proto_Services_V1_GetPreKeyCountRequest()
@@ -317,7 +317,7 @@ final class KeyServiceClient: Sendable {
 
     /// Returns both the current count and the server-recommended minimum.
     func getPreKeyCountFull(deviceId: String) async throws -> (count: UInt32, recommendedMinimum: UInt32) {
-        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.getPreKeyCount, fastICEFallback: true) { grpcClient in
+        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.getPreKeyCount) { grpcClient in
             let keyClient = Shared_Proto_Services_V1_KeyService.Client(wrapping: grpcClient)
 
             var request = Shared_Proto_Services_V1_GetPreKeyCountRequest()
@@ -349,7 +349,7 @@ final class KeyServiceClient: Sendable {
         newKyberKey: (keyId: UInt32, publicKey: Data, signature: Data)? = nil,
         reason: Shared_Proto_Services_V1_SignedPreKeyRotationReason = .scheduled
     ) async throws -> Shared_Proto_Services_V1_RotateSignedPreKeyResponse {
-        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.rotateSignedPreKey, fastICEFallback: true) { grpcClient in
+        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.rotateSignedPreKey) { grpcClient in
             let keyClient = Shared_Proto_Services_V1_KeyService.Client(wrapping: grpcClient)
 
             var signed = Shared_Proto_Services_V1_SignedPreKeyUpload()
@@ -380,7 +380,7 @@ final class KeyServiceClient: Sendable {
 
     /// Fetch a user's identity key (for safety number verification).
     func getIdentityKey(userId: String) async throws -> Data {
-        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.getIdentityKey, fastICEFallback: true) { grpcClient in
+        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.getIdentityKey) { grpcClient in
             let keyClient = Shared_Proto_Services_V1_KeyService.Client(wrapping: grpcClient)
 
             var request = Shared_Proto_Services_V1_GetIdentityKeyRequest()

@@ -322,13 +322,6 @@ struct RegistrationFlowView: View {
             
             Log.info("✅ PoW complete! nonce=\(solution.nonce)", category: "Registration")
 
-            // Pre-warm ICE while transitioning to the submit step.
-            // getPowChallenge may have won a happy-eyeballs race on the direct path, which
-            // stops the ephemeral ICE proxy. Re-starting it now gives the WebTunnel up to
-            // the full registerDevice timeout (20 s) to establish its tunnel — rather than
-            // racing against the 10-second waitForProxyReady after DPI is detected mid-RPC.
-            Task { await IceProxyManager.shared.startEphemeralOnDemandIfNeeded() }
-
             // Step 4: Submit registration
             currentStep = .submittingRegistration
             let registerData = try await AuthServiceClient.shared.registerDevice(

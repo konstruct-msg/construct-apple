@@ -430,8 +430,6 @@ final class CallManager {
                 // If ICE is running but on cooldown, clear cooldown: direct path is likely blocked.
                 if IceProxyManager.shared.isRunning, IceProxyManager.shared.isOnCooldown {
                     IceProxyManager.shared.clearCooldown()
-                } else if !IceProxyManager.shared.isRunning {
-                    await IceProxyManager.shared.startEphemeralOnDemandIfNeeded()
                 }
 
                 // Only restart if this stream is still the active one.

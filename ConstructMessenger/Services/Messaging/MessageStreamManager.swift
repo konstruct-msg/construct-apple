@@ -436,7 +436,7 @@ final class MessageStreamManager {
             }
 
             let startCursor = lastPendingCursor
-            let fetchResult: FetchResult = try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.getPendingMessages, fastICEFallback: true) { grpcClient in
+            let fetchResult: FetchResult = try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.getPendingMessages) { grpcClient in
                 func withTimeout<T: Sendable>(
                     seconds: TimeInterval,
                     _ operation: @Sendable @escaping () async throws -> T
@@ -751,14 +751,6 @@ final class MessageStreamManager {
                 // If ICE is running but on cooldown, clear cooldown: direct path is likely blocked.
                 if IceProxyManager.shared.isRunning, IceProxyManager.shared.isOnCooldown {
                     IceProxyManager.shared.clearCooldown()
-                } else if !IceProxyManager.shared.isRunning {
-                    await IceProxyManager.shared.startEphemeralOnDemandIfNeeded()
-                    // Wait for ice_proxy_is_running() = 1 before proceeding.
-                    // ice_proxy_start_tls() binds the port synchronously but the Rust goroutine
-                    // that sets the "is_running" flag runs asynchronously (3–8 s cold start).
-                    // Without this wait, routingKey() still returns "direct:…" on the next
-                    // acquirePersistentClient() call, creating a direct channel that DPI blocks.
-                    await GRPCChannelManager.shared.waitForProxyReady()
                 }
 
                 // Only invalidate the persistent client when the routing path actually changed
@@ -772,24 +764,12 @@ final class MessageStreamManager {
                     GRPCChannelManager.shared.invalidatePersistentClient()
                     Log.info("🧊 Routing changed \(routingKeyBefore) → \(routingKeyAfter) — persistent client invalidated", category: "MessageStream")
                 } else {
-                    // Direct routing is still active — the ephemeral ICE pre-warm (if started)
-                    // is not needed. Stop it to conserve battery and avoid unnecessary relay traffic.
-                    await IceProxyManager.shared.stopEphemeral()
                     Log.info("🧊 Routing unchanged (\(routingKeyAfter)) — keeping persistent client, retrying on same connection", category: "MessageStream")
                 }
                 // Immediate retry: propagate an error to exit openStream() and let connectLoop retry.
                 throw RPCError(code: .unavailable, message: "Stream open timed out — retrying with ICE")
             }
         }
-
-        // Stream accepted on the direct path — stop any ephemeral ICE pre-warm.
-        // The pre-warm fires in the background during fetchMissedMessages and establishes
-        // the ICE tunnel in 3–8 s. Once the tunnel is up, iceProxyPort() returns the ICE
-        // port even though DPI was never confirmed, causing acquirePersistentClient() to
-        // switch routing and tear down the warm direct client — a visible reconnect for
-        // EU/non-DPI users. Stopping it here prevents that disruption.
-        // No-op when: ICE not running, DPI confirmed this session, or mode == .on.
-        IceProxyManager.shared.stopEphemeral()
 
         // Wait until the stream ends (disconnect, server close, etc.).
         try await streamTask.value

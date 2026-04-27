@@ -389,19 +389,8 @@ final class IceProxyManager: ObservableObject {
 
     private let enabledKey = "ice_enabled"
     private let relayKey   = "iceActiveRelay"
-    /// Tracks whether `isEnabled` was set by DPI auto-detection (true) or user toggle (false).
-    private static let autoDetectedKey = "ice_auto_detected_dpi"
-    /// Persists DPI detection across app launches so the proxy can be pre-warmed at startup.
-    /// Set when DPI is confirmed in AUTO mode; cleared when direct path is verified clean.
-    private static let dpiPersistentKey = "ice_dpi_detected_persistent"
-    /// Bump this version to trigger another one-time reset of stale DPI state.
-    private static let dpiResetVersion = 1
     /// Bump to trigger migration from old boolean ice_enabled → IceMode tri-state.
     private static let modesMigrationVersion = 1
-
-    /// Prevents duplicate concurrent on-demand start attempts (e.g. when several
-    /// RPC calls all fail at the same moment and each tries to start ICE).
-    private var isStartingOnDemand = false
 
     // MARK: - Failed relay tracking
     //
@@ -503,33 +492,12 @@ final class IceProxyManager: ObservableObject {
         }
     }
 
-    /// True when DPI blocking was detected during this app session (not persisted).
-    /// In `.auto` mode, this is the gate for `iceProxyPort()` — proxy port is only
-    /// returned when DPI is confirmed, preventing EU users from routing through ICE.
-    @Published private(set) var dpiDetectedThisSession = false
-
     /// Timestamp of last successful direct probe (TLS handshake). nil if never probed or failed.
     @Published private(set) var lastDirectProbeSuccess: Date?
-    /// Timer for periodic direct probing in AUTO mode when ICE is active.
-    private var directProbeTask: Task<Void, Never>?
 
-    /// Legacy compatibility: whether ICE should be treated as "enabled" for routing.
-    /// - `.off` → false
-    /// - `.auto` → true only if DPI detected this session
-    /// - `.on` → true always
     var isEnabled: Bool {
-        get {
-            switch mode {
-            case .off:  return false
-            case .auto: return dpiDetectedThisSession
-            case .on:   return true
-            }
-        }
-        set {
-            // Legacy setter for UI compatibility during transition.
-            // Maps: true → .on, false → .off (explicit user action).
-            mode = newValue ? .on : .off
-        }
+        get { mode == .on }
+        set { mode = newValue ? .on : .off }
     }
 
     /// The current effective routing path for traffic.
@@ -537,8 +505,7 @@ final class IceProxyManager: ObservableObject {
     var currentTrafficPath: TrafficPath {
         if isOnCooldown { return .iceCooldown }
         guard isRunning, let relay = activeRelay else {
-            // ICE is enabled (or starting on-demand) but the proxy isn't up yet.
-            if isEnabled || isStartingOnDemand { return .iceConnecting }
+            if isEnabled { return .iceConnecting }
             return .direct
         }
         if isWebTunnelActive { return .iceWebTunnel(relay: relay.address) }
@@ -643,9 +610,7 @@ final class IceProxyManager: ObservableObject {
     /// Returns true if a different relay was started successfully.
     @discardableResult
     func rotateToNextRelay() async -> Bool {
-        // Don't call stop() — it clears DPI detection, which would break .auto mode
-        // routing (iceProxyPort() would return nil). We're rotating precisely because
-        // DPI IS present on the current relay.
+        // Don't call stop() — we want to bypass the `isRunning` guard and reset directly.
         ice_proxy_stop()
         resetAllProxyState()
         let cert = await getIceBridgeCert()
@@ -819,7 +784,6 @@ final class IceProxyManager: ObservableObject {
         guard isRunning else { return }
         ice_proxy_stop()
         resetAllProxyState()
-        clearDPIDetection()
     }
 
     // MARK: - Relay list
@@ -1067,24 +1031,9 @@ final class IceProxyManager: ObservableObject {
     /// to the new `IceMode` tri-state. Also clears stale DPI auto-detection from the
     /// "connection preface" false-positive era.
     private func migrateToModeIfNeeded() {
-        // Phase 1: legacy boolean DPI reset (existing migration v1)
-        let dpiKey = "ice_dpi_reset_v\(Self.dpiResetVersion)"
-        if !UserDefaults.standard.bool(forKey: dpiKey) {
-            UserDefaults.standard.set(true, forKey: dpiKey)
-            #if os(iOS)
-            if UserDefaults.standard.bool(forKey: enabledKey) {
-                UserDefaults.standard.set(false, forKey: enabledKey)
-                UserDefaults.standard.set(false, forKey: Self.autoDetectedKey)
-                Log.info("🧊 Cleared stale ICE auto-detection (DPI reset v\(Self.dpiResetVersion))", category: "ICE")
-            }
-            #endif
-        }
-
-        // Phase 2: migrate to IceMode tri-state
         let modeKey = "ice_mode_migration_v\(Self.modesMigrationVersion)"
         if !UserDefaults.standard.bool(forKey: modeKey) {
             UserDefaults.standard.set(true, forKey: modeKey)
-            // Only migrate if mode was never explicitly set
             if UserDefaults.standard.string(forKey: IceMode.defaultsKey) == nil {
                 let migrated = IceMode.migrateFromLegacy()
                 mode = migrated
@@ -1095,24 +1044,9 @@ final class IceProxyManager: ObservableObject {
 
     /// Start with the stored relay (called at app launch).
     /// In `.on` mode: starts ICE immediately.
-    /// In `.auto`/`.off` mode: skips (ICE will start on-demand if DPI is detected).
-    /// Exception: in `.auto` mode with persistent DPI, pre-warms the proxy in the
-    /// background so `startOnDemandIfNeeded()` can confirm DPI and return immediately
-    /// on the first RPC failure instead of running `sortByLatency` (~300–400 ms).
+    /// In `.auto`/`.off` mode: skips (ICE will start on-demand if needed).
     func startIfEnabled() async {
         migrateToModeIfNeeded()
-
-        // AUTO mode + persistent DPI: pre-warm the proxy before the first RPC.
-        // `startEphemeralOnDemandIfNeeded` starts without confirming DPI so EU users
-        // who had DPI last session still get a clean slate — the proxy warms in the
-        // background but `iceProxyPort()` returns nil until DPI is actually observed.
-        if mode == .auto, UserDefaults.standard.bool(forKey: Self.dpiPersistentKey) {
-            Task { [weak self] in
-                guard let self else { return }
-                await self.startEphemeralOnDemandIfNeeded()
-            }
-            Task { await IceCertFetcher.shared.fetchAndCacheRelayList() }
-        }
 
         guard mode == .on else { return }
 
@@ -1142,189 +1076,6 @@ final class IceProxyManager: ObservableObject {
         await startWithRelayFallback(cert: freshCert)
     }
 
-    /// Auto-start ICE when DPI blocking is detected on a direct connection.
-    /// Called by `GRPCChannelManager.performRPC` after a network failure on the direct path.
-    /// Only works in `.auto` mode. Sets `dpiDetectedThisSession` (session-scoped, not persisted).
-    /// In `.off` mode: does nothing (user explicitly disabled ICE).
-    /// In `.on` mode: should never be called (ICE already running).
-    func startOnDemandIfNeeded() async {
-        guard mode == .auto else { return }
-        await startOnDemandInternal()
-    }
-
-    /// Starts ICE as a fast-fallback probe (e.g. for stream open) without confirming DPI.
-    /// Use when the direct path looks blocked/slow but we don't yet have a definitive signal.
-    /// Only works in `.auto` mode.
-    func startEphemeralOnDemandIfNeeded() async {
-        guard mode == .auto else { return }
-        await startOnDemandInternal(confirmDPI: false)
-    }
-
-    /// Stops an ephemeral ICE proxy that was started as a pre-warm probe (confirmDPI=false).
-    /// Called by the happy-eyeballs race when the direct path wins, meaning DPI is not active
-    /// and the background ICE warm-up is no longer needed.
-    ///
-    /// Safe to call unconditionally: if DPI was already confirmed before the race, this is a
-    /// no-op — confirmed DPI sessions must not be interrupted. Also a no-op in `.on` mode —
-    /// the user explicitly chose ICE and the proxy must never be stopped by the direct path.
-    func stopEphemeral() {
-        guard mode == .auto else { return }
-        guard isRunning, !dpiDetectedThisSession else { return }
-        Log.info("🧊 Direct won — stopping ephemeral ICE pre-warm", category: "ICE")
-        ice_proxy_stop()
-        resetAllProxyState()
-        // Deliberately do NOT call clearDPIDetection() — dpiDetectedThisSession is already false here.
-    }
-
-    private func startOnDemandInternal(confirmDPI: Bool = true) async {
-        // If ICE proxy is running but on cooldown, DPI blocking has been confirmed on the direct
-        // path — clear the cooldown so `iceProxyPort()` returns a valid port and the caller
-        // retries the RPC through ICE.  This is the right behaviour: cooldown means "the ICE
-        // relay was recently flaky", but DPI means "the direct path is always broken".
-        if isRunning {
-            // `ice_proxy_is_running()` returns 1 only after the Rust goroutine finishes
-            // establishing the relay tunnel. Swift's `isRunning` is set optimistically when
-            // the local SOCKS port binds (before the goroutine reports readiness). If Rust
-            // confirms the proxy, we're done. If not and no concurrent start is in progress,
-            // the tunnel setup failed silently — reset and restart.
-            if ice_proxy_is_running() != 0 {
-                if isOnCooldown {
-                    clearCooldown()
-                    Log.info("🧊 ICE on cooldown but DPI detected — clearing cooldown, routing via ICE", category: "ICE")
-                }
-                if confirmDPI { confirmDPIDetected() }
-                return
-            }
-            if !isStartingOnDemand {
-                // Stuck: port bound, goroutine never confirmed. Reset and start fresh.
-                Log.error("🧊 ICE proxy stuck (isRunning=true, ice_proxy_is_running()=0) — restarting", category: "ICE")
-                ice_proxy_stop()
-                resetAllProxyState()
-                // fall through to fresh start below
-            }
-            // else: concurrent start in progress — fall through to isStartingOnDemand wait
-        }
-
-        // Another concurrent RPC already kicked off an ICE start — wait for it rather
-        // than returning immediately with no proxy port.  We poll on the MainActor so
-        // Task.sleep yields to let the active start make progress.
-        if isStartingOnDemand {
-            let deadline = Date().addingTimeInterval(NetworkTiming.ICE.onDemandStartJoinTimeout)
-            while isStartingOnDemand, Date() < deadline {
-                try? await Task.sleep(nanoseconds: UInt64(NetworkTiming.ICE.onDemandStartJoinPollInterval * 1_000_000_000))
-            }
-            // The concurrent start finished. If it was an ephemeral pre-warm (confirmDPI=false)
-            // and the caller IS a real DPI event (confirmDPI=true), the proxy may be running
-            // but ice_enabled is still false — confirm DPI now so iceProxyPort() routes correctly.
-            if confirmDPI, isRunning, ice_proxy_is_running() != 0 { confirmDPIDetected() }
-            return
-        }
-
-        isStartingOnDemand = true
-        defer { isStartingOnDemand = false }
-        Log.info("🧊 Auto-starting ICE proxy (DPI auto-detection, confirmDPI=\(confirmDPI))", category: "ICE")
-        let cert = await getIceBridgeCert()
-        if await startWithRelayFallback(cert: cert) {
-            if confirmDPI { confirmDPIDetected() }
-            Task { await IceCertFetcher.shared.fetchAndCacheRelayList() }
-            Log.info("🧊 ICE auto-started via DPI detection", category: "ICE")
-        } else {
-            Log.error("🧊 ICE auto-start failed on all endpoints", category: "ICE")
-        }
-    }
-
-    /// Mark DPI as detected for this session and start periodic direct probing.
-    /// Session-scoped: resets on app restart, so EU users get a clean slate.
-    /// Syncs the legacy `ice_enabled` key so `iceProxyPort()` fast-path sees it.
-    private func confirmDPIDetected() {
-        guard !dpiDetectedThisSession else { return }
-        dpiDetectedThisSession = true
-        UserDefaults.standard.set(true, forKey: enabledKey)
-        UserDefaults.standard.set(true, forKey: Self.dpiPersistentKey)
-        Log.info("🧊 DPI confirmed for this session — ICE routing active, starting direct probe timer", category: "ICE")
-        startDirectProbeTimer()
-    }
-
-    /// Clear DPI detection for this session (direct probe succeeded or mode changed).
-    private func clearDPIDetection() {
-        dpiDetectedThisSession = false
-        if mode == .auto {
-            UserDefaults.standard.set(false, forKey: enabledKey)
-            UserDefaults.standard.set(false, forKey: Self.dpiPersistentKey)
-        }
-        stopDirectProbeTimer()
-    }
-
-    // MARK: - Direct probe (AUTO mode)
-
-    /// Periodically probes the direct TLS connection to check if DPI blocking has lifted.
-    /// When the probe succeeds, deactivates ICE and switches back to direct routing.
-    /// Only runs in `.auto` mode while `dpiDetectedThisSession` is true.
-    private func startDirectProbeTimer() {
-        directProbeTask?.cancel()
-        directProbeTask = Task { @MainActor [weak self] in
-            // Wait 5 minutes before first probe — give ICE time to stabilize.
-            try? await Task.sleep(for: .seconds(300))
-            while !Task.isCancelled {
-                guard let self, self.mode == .auto, self.dpiDetectedThisSession else { return }
-                let success = await Self.probeDirectTLS(
-                    host: GRPCChannelManager.shared.currentHost,
-                    port: UInt16(GRPCChannelManager.shared.currentPort)
-                )
-                if success {
-                    self.lastDirectProbeSuccess = Date()
-                    Log.info("🧊 Direct probe succeeded — deactivating ICE, switching to direct", category: "ICE")
-                    self.clearDPIDetection()
-                    GRPCChannelManager.shared.invalidatePersistentClient()
-                    return
-                } else {
-                    Log.debug("🧊 Direct probe failed — staying on ICE", category: "ICE")
-                }
-                // Retry every 5 minutes
-                try? await Task.sleep(for: .seconds(300))
-            }
-        }
-    }
-
-    /// Lightweight direct connection probe: TCP+TLS handshake only (no gRPC).
-    /// DPI blocks at TLS level (SNI-based RST), so a successful TLS handshake = no DPI.
-    private static func probeDirectTLS(host: String, port: UInt16, timeout: TimeInterval = 5) async -> Bool {
-        await withCheckedContinuation { continuation in
-            let params = NWParameters.tls
-            let conn = NWConnection(host: .init(host), port: .init(integerLiteral: port), using: params)
-            let flag = OnceResumeFlag()
-
-            conn.stateUpdateHandler = { state in
-                switch state {
-                case .ready:
-                    guard flag.trigger() else { return }
-                    conn.cancel()
-                    continuation.resume(returning: true)
-                case .failed, .cancelled:
-                    guard flag.trigger() else { return }
-                    conn.cancel()
-                    continuation.resume(returning: false)
-                default:
-                    break
-                }
-            }
-
-            conn.start(queue: .global(qos: .utility))
-
-            DispatchQueue.global().asyncAfter(deadline: .now() + timeout) {
-                guard flag.trigger() else { return }
-                conn.cancel()
-                continuation.resume(returning: false)
-            }
-        }
-    }
-
-    /// Stop the direct probe timer (called when mode changes or ICE is stopped).
-    private func stopDirectProbeTimer() {
-        directProbeTask?.cancel()
-        directProbeTask = nil
-    }
-
     /// Called when `performRPC` gets ECONNREFUSED on 127.0.0.1 — the Rust proxy process died
     /// while the Swift side still thinks it's running. Force-resets all state and restarts.
     /// Does NOT enter cooldown (cooldown is for relay/cert failures, not local process death).
@@ -1335,7 +1086,6 @@ final class IceProxyManager: ObservableObject {
         resetAllProxyState()
         // Clear any cooldown that was set due to this crash; we want to retry immediately.
         clearCooldown()
-        isStartingOnDemand = false
         let cert = await getIceBridgeCert()
         if await startWithRelayFallback(cert: cert) {
             Task { await IceCertFetcher.shared.fetchAndCacheRelayList() }
@@ -1352,53 +1102,11 @@ final class IceProxyManager: ObservableObject {
     @MainActor
     func handleNetworkPathChange() async {
         Log.info("🧊 Network path changed — restarting ICE proxy for new interface", category: "ICE")
-        // Stop both proxies; their underlying TCP sockets are dead.
         ice_proxy_stop()
         resetAllProxyState()
         clearCooldown()
-        clearRelayFailures()  // new network = clean slate for relay selection
-        isStartingOnDemand = false
+        clearRelayFailures()
 
-        // In AUTO mode: if DPI was active on the previous interface, quickly probe
-        // the new interface instead of blindly resetting to direct mode.
-        // A 2s TCP+TLS probe is enough to distinguish DPI (RST in <100ms) from a
-        // working path.  This eliminates the 4s "dead window" (direct-fail → ICE
-        // start) that caused intermittent OTPK/fetchMissedMessages timeouts after
-        // every network handover.
-        if mode == .auto {
-            if dpiDetectedThisSession {
-                Log.info("🧊 DPI was active — probing direct path on new interface (2s)", category: "ICE")
-                let directWorks = await Self.probeDirectTLS(
-                    host: GRPCChannelManager.shared.currentHost,
-                    port: UInt16(GRPCChannelManager.shared.currentPort),
-                    timeout: 2.0
-                )
-                if directWorks {
-                    // New network has no DPI — switch back to direct routing.
-                    clearDPIDetection()
-                    Log.info("🧊 Direct path works on new interface — deactivating ICE", category: "ICE")
-                } else {
-                    // DPI still present — restart ICE immediately without waiting for
-                    // the normal 4s fast-fallback re-detection round-trip.
-                    Log.info("🧊 Direct path blocked on new interface — restarting ICE immediately", category: "ICE")
-                    let cert = await getIceBridgeCert()
-                    if await startWithRelayFallback(cert: cert) {
-                        Task { await IceCertFetcher.shared.fetchAndCacheRelayList() }
-                        Log.info("🧊 ICE restarted for new interface", category: "ICE")
-                    } else {
-                        // All relays unreachable on new interface — fall back to standard
-                        // re-detection so the next performRPC can try direct again.
-                        clearDPIDetection()
-                        Log.error("🧊 ICE restart failed on new interface — falling back to direct re-detection", category: "ICE")
-                    }
-                }
-            } else {
-                clearDPIDetection()
-            }
-            return
-        }
-
-        // In ON mode, restart immediately on the new interface.
         guard mode == .on else { return }
         let cert = await getIceBridgeCert()
         if await startWithRelayFallback(cert: cert) {
@@ -1420,46 +1128,6 @@ final class IceProxyManager: ObservableObject {
         isSecondaryRunning  = false
         secondaryProxyPort  = 0
         secondaryRelay      = nil
-    }
-
-    /// Called when DNS resolution fails on the direct TLS path (VPN intercepting DNS).
-    /// Clears any cooldown and force-restarts the proxy so gRPC can bypass DNS via ICE.
-    /// If the proxy is already running (just on cooldown), skips the restart.
-    func forceStartIgnoringCooldown() async {
-        guard mode != .off else { return }
-        clearCooldown()
-        if isRunning {
-            // Proxy is alive — clearing cooldown is enough; next makeClient() will use ICE.
-            Log.info("🧊 ICE cooldown force-cleared (VPN DNS failure)", category: "ICE")
-            return
-        }
-        // Proxy not running — start it now.
-        guard !isStartingOnDemand else { return }
-        isStartingOnDemand = true
-        defer { isStartingOnDemand = false }
-        Log.info("🧊 Force-starting ICE proxy (VPN DNS failure)", category: "ICE")
-        let cert = await getIceBridgeCert()
-        if await startWithRelayFallback(cert: cert) {
-            Task { await IceCertFetcher.shared.fetchAndCacheRelayList() }
-        } else {
-            Log.error("🧊 ICE force-start failed (VPN DNS failure)", category: "ICE")
-        }
-    }
-
-    /// Resets Swift proxy state if the proxy is stuck: `isRunning` is true but Rust
-    /// `ice_proxy_is_running()` returns 0. This occurs when `ice_proxy_start_webtunnel()`
-    /// (or similar) binds the local SOCKS port synchronously and returns success before the
-    /// background goroutine establishes the relay tunnel. If the goroutine silently fails,
-    /// `isRunning` remains true and `startOnDemandInternal` returns early forever.
-    ///
-    /// After this call `isRunning=false`, so the next `startOnDemandIfNeeded()` starts a
-    /// fresh proxy. DPI detection is intentionally preserved so ICE retries immediately.
-    @MainActor
-    func resetIfStuck() {
-        guard isRunning, ice_proxy_is_running() == 0 else { return }
-        Log.error("🧊 ICE proxy stuck (resetIfStuck) — clearing state for fresh start", category: "ICE")
-        ice_proxy_stop()
-        resetAllProxyState()
     }
 
     /// Called on app foreground to verify the ICE proxy process is actually alive.

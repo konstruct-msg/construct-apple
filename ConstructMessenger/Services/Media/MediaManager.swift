@@ -235,13 +235,10 @@ class MediaManager {
     private static func ensureICEForMedia() async {
         let rawMode = UserDefaults.standard.string(forKey: IceMode.defaultsKey) ?? IceMode.platformDefault.rawValue
         let mode = IceMode(rawValue: rawMode) ?? .auto
-        guard mode != .off else { return }
-        // In .auto mode only act if DPI was already confirmed; in .on mode always ensure ICE is up.
-        if mode == .auto, !UserDefaults.standard.bool(forKey: "ice_enabled") { return }
+        guard mode == .on else { return }
         guard !GRPCChannelManager.shared.isICEOnCooldown else { return }
         if ice_proxy_is_running() == 0 {
-            Log.info("🧊 Pre-flight: starting ICE before media download", category: "MediaManager")
-            await IceProxyManager.shared.startOnDemandIfNeeded()
+            Log.info("🧊 ICE proxy not running (mode=on) — waiting for proxy ready", category: "MediaManager")
             await GRPCChannelManager.shared.waitForProxyReady()
         }
     }

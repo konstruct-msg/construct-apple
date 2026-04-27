@@ -31,7 +31,7 @@ final class SignalingServiceClient: Sendable {
             return cached
         }
 
-        let creds = try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.getTurnCredentials, fastICEFallback: true) { grpcClient in
+        let creds = try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.getTurnCredentials) { grpcClient in
             let client = Shared_Proto_Signaling_V1_SignalingService.Client(wrapping: grpcClient)
             var req = Shared_Proto_Signaling_V1_GetTurnCredentialsRequest()
             if let callId { req.callID = callId }
@@ -53,7 +53,7 @@ final class SignalingServiceClient: Sendable {
     /// - Returns: `calleeOnline` flag (true = callee has active Signal stream).
     @discardableResult
     func initiateCall(callId: String, calleeUserId: String, callerName: String, hasVideo: Bool) async throws -> Shared_Proto_Signaling_V1_InitiateCallResponse {
-        return try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.initiateCall, fastICEFallback: true) { grpcClient in
+        return try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.initiateCall) { grpcClient in
             let client = Shared_Proto_Signaling_V1_SignalingService.Client(wrapping: grpcClient)
             var req = Shared_Proto_Signaling_V1_InitiateCallRequest()
             req.callID = callId
