@@ -7,7 +7,7 @@ Construct MSK Relay Diagnostic
 
 Что проверяется:
   1. Server config  — актуальный wt_path из .well-known/construct-server
-  2. TCP            — доступность портов 443 и 9443
+  2. TCP            — доступность портов 443 и 52143
   3. TLS            — handshake с fake SNI + SPKI pin
   4. WebTunnel      — правильность токена (ожидаем HTTP 101)
   5. gRPC ping      — отправка минимального gRPC-запроса через каждый рабочий путь
@@ -20,7 +20,6 @@ import os
 import socket
 import ssl
 import struct
-import sys
 import time
 import urllib.request
 from datetime import datetime
@@ -28,9 +27,9 @@ from datetime import datetime
 # ──────────────────────────────────────────────────────────────────────────────
 # Конфиг релея (зеркало ICEConfig.swift)
 # ──────────────────────────────────────────────────────────────────────────────
-RELAY_IP      = "158.160.140.67"
-RELAY_SNI     = "storage.yandexcloud.net"
-EXPECTED_SPKI = "ce2bbfcac1fffab1f4f41ee540aee2dea92c523f7768264aeb87184bf8bfa723"
+RELAY_IP = "45.135.233.5"
+RELAY_SNI = "s3.vkcs.cloud"
+EXPECTED_SPKI = "bd2da0c781a0fc98d85640bd87d2d4709c709a50b6bee06f90282ca6237f3410"
 
 # Токен из последнего docker logs (обновляй после каждого рестарта контейнера)
 WT_TOKEN_LAST_KNOWN = "88f6344fe0beea2f"
@@ -38,9 +37,9 @@ WT_TOKEN_LAST_KNOWN = "88f6344fe0beea2f"
 # Дополнительные токены из iOS-логов (stale — для диагностики)
 WT_EXTRA_TOKENS = ["f86323d55b22ee49", "2f3f73a6d9bece5d", "d6cd51dfbf97278c"]
 
-GRPC_HOST  = "ams.konstruct.cc"
-PORTS      = [443, 9443]
-TIMEOUT    = 6.0
+GRPC_HOST = "ams.konstruct.cc"
+PORTS = [443, 52143]
+TIMEOUT = 6.0
 
 CONFIG_URLS = [
     "https://konstruct.cc/.well-known/construct-server",
@@ -51,20 +50,35 @@ CONFIG_URLS = [
 # Helpers
 # ──────────────────────────────────────────────────────────────────────────────
 RESET = "\033[0m"
-BOLD  = "\033[1m"
-RED   = "\033[91m"
-GRN   = "\033[92m"
-YLW   = "\033[93m"
-CYN   = "\033[96m"
+BOLD = "\033[1m"
+RED = "\033[91m"
+GRN = "\033[92m"
+YLW = "\033[93m"
+CYN = "\033[96m"
+
 
 def ts():
     return datetime.now().strftime("%H:%M:%S.%f")[:-3]
 
-def ok(msg):  print(f"[{ts()}] {GRN}✅ {msg}{RESET}")
-def err(msg): print(f"[{ts()}] {RED}❌ {msg}{RESET}")
-def warn(msg):print(f"[{ts()}] {YLW}⚠️  {msg}{RESET}")
-def info(msg):print(f"[{ts()}] {CYN}ℹ️  {msg}{RESET}")
-def hdr(msg): print(f"\n{BOLD}{'─'*50}\n  {msg}\n{'─'*50}{RESET}")
+
+def ok(msg):
+    print(f"[{ts()}] {GRN}✅ {msg}{RESET}")
+
+
+def err(msg):
+    print(f"[{ts()}] {RED}❌ {msg}{RESET}")
+
+
+def warn(msg):
+    print(f"[{ts()}] {YLW}⚠️  {msg}{RESET}")
+
+
+def info(msg):
+    print(f"[{ts()}] {CYN}ℹ️  {msg}{RESET}")
+
+
+def hdr(msg):
+    print(f"\n{BOLD}{'─'*50}\n  {msg}\n{'─'*50}{RESET}")
 
 
 def tls_context():
@@ -83,6 +97,7 @@ def spki_sha256(cert_der: bytes) -> str | None:
     try:
         from cryptography import x509
         from cryptography.hazmat.primitives import serialization
+
         cert = x509.load_der_x509_certificate(cert_der)
         spki = cert.public_key().public_bytes(
             serialization.Encoding.DER,
@@ -94,8 +109,8 @@ def spki_sha256(cert_der: bytes) -> str | None:
 
     # Fallback: ищем SubjectPublicKeyInfo по известным OID-байтам
     for oid in [
-        bytes.fromhex("2a8648ce3d0201"),    # EC P-256 / P-384
-        bytes.fromhex("2a864886f70d010101"), # RSA
+        bytes.fromhex("2a8648ce3d0201"),  # EC P-256 / P-384
+        bytes.fromhex("2a864886f70d010101"),  # RSA
     ]:
         idx = cert_der.find(oid)
         if idx < 0:
@@ -111,7 +126,10 @@ def spki_sha256(cert_der: bytes) -> str | None:
                 elif l0 == 0x81:
                     hlen, length = 3, cert_der[start + 2]
                 elif l0 == 0x82:
-                    hlen, length = 4, struct.unpack(">H", cert_der[start+2:start+4])[0]
+                    hlen, length = (
+                        4,
+                        struct.unpack(">H", cert_der[start + 2 : start + 4])[0],
+                    )
                 else:
                     continue
                 end = start + hlen + length
@@ -132,7 +150,9 @@ def test_server_config() -> dict:
     for url in CONFIG_URLS:
         info(f"Fetching: {url}")
         try:
-            req = urllib.request.Request(url, headers={"User-Agent": "construct-diag/1.0"})
+            req = urllib.request.Request(
+                url, headers={"User-Agent": "construct-diag/1.0"}
+            )
             with urllib.request.urlopen(req, timeout=5) as r:
                 raw = r.read().decode()
             try:
@@ -142,7 +162,7 @@ def test_server_config() -> dict:
                     warn("  Поле ice.relays пустое или отсутствует")
                 for relay in relays:
                     addr = relay.get("address", "?")
-                    wtp  = relay.get("wt_path", "—")
+                    wtp = relay.get("wt_path", "—")
                     cert = relay.get("bridge_cert", "—")[:20] + "…"
                     print(f"     {addr:30s}  wt_path={wtp}  cert={cert}")
                     result[addr] = wtp
@@ -188,7 +208,7 @@ def test_tls(ip: str, port: int) -> tuple[bool, float | None]:
         tls = tls_context().wrap_socket(raw, server_hostname=RELAY_SNI)
         rtt = (time.time() - t0) * 1000
         cert_der = tls.getpeercert(binary_form=True)
-        cipher  = tls.cipher()
+        cipher = tls.cipher()
         version = tls.version()
         tls.close()
 
@@ -273,10 +293,19 @@ def test_all_webtunnel_paths(ip: str, port: int, server_wt: str | None):
 
     found_working = None
     for path in paths:
-        label = "(server-config)" if path == server_wt else \
-                "(last-known)"   if WT_TOKEN_LAST_KNOWN in path else \
-                "(stale/ios-log)" if any(t in path for t in WT_EXTRA_TOKENS) else \
-                "(base-path)"
+        label = (
+            "(server-config)"
+            if path == server_wt
+            else (
+                "(last-known)"
+                if WT_TOKEN_LAST_KNOWN in path
+                else (
+                    "(stale/ios-log)"
+                    if any(t in path for t in WT_EXTRA_TOKENS)
+                    else "(base-path)"
+                )
+            )
+        )
         ok_, status = test_webtunnel(ip, port, path)
         if ok_:
             ok(f"  WebTunnel ✓ {path} {label}")
@@ -287,8 +316,12 @@ def test_all_webtunnel_paths(ip: str, port: int, server_wt: str | None):
             err(f"  WebTunnel ✗ {path} {label} → {status}")
 
     if not found_working:
-        err("  Ни один WebTunnel путь не работает — токен не совпадает или CDN блокирует")
-        info("  Запусти на сервере: docker logs construct-relay-relay-1 2>&1 | grep wt_path")
+        err(
+            "  Ни один WebTunnel путь не работает — токен не совпадает или CDN блокирует"
+        )
+        info(
+            "  Запусти на сервере: docker logs construct-relay-relay-1 2>&1 | grep wt_path"
+        )
     return found_working
 
 
@@ -355,12 +388,16 @@ def print_summary(results: dict):
     hdr("ИТОГ")
     status = {
         "server_config": "✅" if results.get("config_ok") else "❌",
-        "tcp_443":  "✅" if results.get("tcp_443")  else "❌",
-        "tcp_9443": "✅" if results.get("tcp_9443") else "❌",
-        "tls_443":  "✅" if results.get("tls_443")  else "❌",
-        "tls_9443": "✅" if results.get("tls_9443") else "❌",
-        "wt_443":   "✅" if results.get("wt_working_path") else "❌",
-        "obfs4_9443": "✅ *(обычно не тестируется из Python)*" if results.get("tcp_9443") else "❌ (TCP заблокирован)",
+        "tcp_443": "✅" if results.get("tcp_443") else "❌",
+        "tcp_52143": "✅" if results.get("tcp_52143") else "❌",
+        "tls_443": "✅" if results.get("tls_443") else "❌",
+        "tls_52143": "✅" if results.get("tls_52143") else "❌",
+        "wt_443": "✅" if results.get("wt_working_path") else "❌",
+        "obfs4_52143": (
+            "✅ *(обычно не тестируется из Python)*"
+            if results.get("tcp_52143")
+            else "❌ (TCP заблокирован)"
+        ),
     }
     for k, v in status.items():
         print(f"  {k:20s} {v}")
@@ -373,16 +410,20 @@ def print_summary(results: dict):
     else:
         print()
         err("WebTunnel не работает. Возможные причины:")
-        print("  1. wt_path в .well-known/construct-server устарел — перезапусти знак конфига")
+        print(
+            "  1. wt_path в .well-known/construct-server устарел — перезапусти знак конфига"
+        )
         print("     docker logs construct-relay-relay-1 2>&1 | grep wt_path")
         print("  2. CDN блокирует нестандартный WebSocket upgrade")
         print("  3. Relay контейнер не запущен")
 
-    if not results.get("tcp_9443"):
+    if not results.get("tcp_52143"):
         print()
-        warn("Порт 9443 недоступен:")
+        warn("Порт 52143 недоступен:")
         print("  Вероятно, оператор/DPI блокирует нестандартные TLS-порты на этом IP.")
-        print("  Fallback-путь obfs4 через 9443 НЕ работает с этого устройства/оператора.")
+        print(
+            "  Fallback-путь obfs4 через 52143 НЕ работает с этого устройства/оператора."
+        )
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -426,10 +467,12 @@ def main():
             working = test_all_webtunnel_paths(RELAY_IP, port, msk_wt_from_server)
             results["wt_working_path"] = working
 
-        if port == 9443:
-            info("Порт 9443 — obfs4 протокол (не тестируется из Python)")
+        if port == 52143:
+            info("Порт 52143 — obfs4 протокол (не тестируется из Python)")
             info("TLS handshake выше подтверждает доступность сети.")
-            info("Если TLS прошёл но ICE всё равно не работает — проблема в obfs4 framing")
+            info(
+                "Если TLS прошёл но ICE всё равно не работает — проблема в obfs4 framing"
+            )
 
     # Итог
     print_summary(results)
