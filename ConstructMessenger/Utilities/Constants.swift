@@ -428,10 +428,10 @@ struct ICEConfig {
     static let amsRelayBridgeCert = "voFt3ilLSKx2xYuZsjxOnXtHTktUE4EaExIYRG+Bh89frHzI5QVrBNvT41zdS7Maiu6gPA"
 
     // ── Relay 2: Saint Petersburg, MT Finance (45.135.233.5) ─────────────────
-    /// obfs4 relay, port 9894. No WebTunnel (bare IP — CDN fronting not set up yet).
+    /// obfs4 relay, port 52143. No WebTunnel (bare IP — CDN fronting not set up yet).
     /// SNI: s3.vkcs.cloud (VK Cloud S3, plausible for SPb-area IPs).
     static let spbRelayIP          = "45.135.233.5"
-    static let spbRelayAddress     = "\(spbRelayIP):9894"
+    static let spbRelayAddress     = "\(spbRelayIP):52143"
     static let spbRelaySNI         = "s3.vkcs.cloud"
     static let spbRelayPinnedSPKI  = "bd2da0c781a0fc98d85640bd87d2d4709c709a50b6bee06f90282ca6237f3410"
     static let spbRelayBridgeCert  = "vkHsS7HOg1e8D9UPfLCQ4G8oLFfy6t/6oBXdAU4oUvPTMWTWZo0kiw6dq28cssjE24OUOw"
