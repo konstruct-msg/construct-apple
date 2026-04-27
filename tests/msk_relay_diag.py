@@ -392,7 +392,11 @@ def print_summary(results: dict):
         "tcp_52143": "✅" if results.get("tcp_52143") else "❌",
         "tls_443": "✅" if results.get("tls_443") else "❌",
         "tls_52143": "✅" if results.get("tls_52143") else "❌",
-        "wt_443": "✅" if results.get("wt_working_path") else "❌",
+        "wt_443": (
+            "N/A (не настроен)" if results.get("wt_not_configured")
+            else "✅" if results.get("wt_working_path")
+            else "❌"
+        ),
         "obfs4_52143": (
             "✅ *(обычно не тестируется из Python)*"
             if results.get("tcp_52143")
@@ -403,7 +407,9 @@ def print_summary(results: dict):
         print(f"  {k:20s} {v}")
 
     working_path = results.get("wt_working_path")
-    if working_path:
+    if results.get("wt_not_configured"):
+        pass  # WebTunnel intentionally disabled for this relay
+    elif working_path:
         print(f"\n  ✅ Рабочий WebTunnel путь: {working_path}")
         if WT_TOKEN_LAST_KNOWN not in working_path:
             warn("  Токен в hardcoded WT_TOKEN_LAST_KNOWN устарел — обнови скрипт!")
@@ -464,8 +470,13 @@ def main():
             continue
 
         if port == 443:
-            working = test_all_webtunnel_paths(RELAY_IP, port, msk_wt_from_server)
-            results["wt_working_path"] = working
+            if msk_wt_from_server is None:
+                info("Порт 443 — WebTunnel отключён для этого релея (wt_path: null)")
+                results["wt_working_path"] = None
+                results["wt_not_configured"] = True
+            else:
+                working = test_all_webtunnel_paths(RELAY_IP, port, msk_wt_from_server)
+                results["wt_working_path"] = working
 
         if port == 52143:
             info("Порт 52143 — obfs4 протокол (не тестируется из Python)")
