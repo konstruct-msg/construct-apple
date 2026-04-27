@@ -150,10 +150,10 @@ class ChatsViewModel {
 
                 // Read current state and register for change notification in a single call,
                 // eliminating the missed-observation window between two separate tracking blocks.
-                var nextState: PollingState!
+                var capturedState: PollingState?
                 await withCheckedContinuation { continuation in
                     withObservationTracking {
-                        nextState = PollingState(
+                        capturedState = PollingState(
                             hasToken: SessionManager.shared.sessionToken != nil,
                             status: self.connectionStatusManager.connectionStatus,
                             pushEnabled: {
@@ -168,6 +168,7 @@ class ChatsViewModel {
                         continuation.resume()
                     }
                 }
+                guard let nextState = capturedState else { continue }
 
                 if nextState != lastState {
                     lastState = nextState

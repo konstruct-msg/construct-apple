@@ -101,9 +101,9 @@ class KeychainManager {
         
         if hasKeys {
             Log.debug("✅ Device keys found in Keychain", category: "Keychain")
-            Log.debug("   deviceId: \(deviceId!.prefix(16))...", category: "Keychain")
-            Log.debug("   signingKey: \(signingKey!.count) bytes", category: "Keychain")
-            Log.debug("   identityKey: \(identityKey!.count) bytes", category: "Keychain")
+            Log.debug("   deviceId: \(deviceId?.prefix(16) ?? "<nil>")...", category: "Keychain")
+            Log.debug("   signingKey: \(signingKey?.count ?? 0) bytes", category: "Keychain")
+            Log.debug("   identityKey: \(identityKey?.count ?? 0) bytes", category: "Keychain")
         } else {
             Log.debug("❌ No device keys in Keychain", category: "Keychain")
             Log.debug("   deviceId: \(deviceId != nil ? "✓" : "✗")", category: "Keychain")

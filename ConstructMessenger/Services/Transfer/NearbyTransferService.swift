@@ -471,7 +471,11 @@ final class NearbyTransferService {
             bytes[0] = src[0]; bytes[1] = src[1]
             bytes[2] = src[2]; bytes[3] = src[3]
         }
-        return try! ChaChaPoly.Nonce(data: Data(bytes))
+        do {
+            return try ChaChaPoly.Nonce(data: Data(bytes))
+        } catch {
+            preconditionFailure("makeNonce: ChaChaPoly.Nonce failed for 12-byte input — should never happen: \(error)")
+        }
     }
 
     // MARK: - Utilities

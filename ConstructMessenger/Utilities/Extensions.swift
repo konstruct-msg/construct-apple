@@ -122,7 +122,8 @@ func withRetry<T>(
             }
         }
     }
-    throw lastError!
+    // lastError is always non-nil: every loop iteration that doesn't return sets it in the catch block.
+    throw lastError ?? CancellationError()
 }
 
 // MARK: - Platform-agnostic SwiftUI view modifiers

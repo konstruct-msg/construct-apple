@@ -89,7 +89,7 @@ struct KeyTransparencyVerifier {
     // MARK: STH signable bytes
 
     private static func treeHeadSignable(treeSize: UInt64, rootHash: Data) -> Data {
-        var buf = "ConstructKT-v1".data(using: .utf8)!
+        var buf = Data("ConstructKT-v1".utf8)
         var be = treeSize.bigEndian
         buf.append(Data(bytes: &be, count: 8))
         buf.append(rootHash)

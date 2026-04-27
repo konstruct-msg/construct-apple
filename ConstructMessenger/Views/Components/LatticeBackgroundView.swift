@@ -61,7 +61,7 @@ struct CTMatrixBackground: View {
         for _ in 0..<count {
             let ri = Int.random(in: 0..<r)
             let ci = Int.random(in: 0..<c)
-            grid[ri][ci] = Self.chars.randomElement()!
+            grid[ri][ci] = Self.chars.randomElement() ?? " "
         }
     }
 }

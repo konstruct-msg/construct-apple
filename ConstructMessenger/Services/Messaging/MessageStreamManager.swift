@@ -447,7 +447,9 @@ final class MessageStreamManager {
                             try await Task.sleep(for: .seconds(seconds))
                             throw RPCError(code: .deadlineExceeded, message: "Request timed out")
                         }
-                        let first = try await group.next()!
+                        guard let first = try await group.next() else {
+                            throw RPCError(code: .internalError, message: "withTimeout: task group returned nil unexpectedly")
+                        }
                         group.cancelAll()
                         return first
                     }

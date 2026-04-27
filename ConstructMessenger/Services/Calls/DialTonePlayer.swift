@@ -21,7 +21,9 @@ final class DialTonePlayer {
     private let sampleRate: Double = 44100
 
     private init() {
-        let format = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 1)!
+        guard let format = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 1) else {
+            preconditionFailure("DialTonePlayer: AVAudioFormat init failed for 44100Hz/1ch — should never happen")
+        }
         engine.attach(playerNode)
         engine.connect(playerNode, to: engine.mainMixerNode, format: format)
         cycleBuffer = makeCycleBuffer(format: format)

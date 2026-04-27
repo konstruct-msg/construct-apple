@@ -195,7 +195,7 @@ class MediaManager {
                 Log.info("🔄 Upload dropped (code=\(error.code)) — will retry", category: "MediaManager")
             }
         }
-        throw lastError!
+        throw lastError ?? RPCError(code: .unknown, message: "Upload failed: no error captured")
     }
 
     /// Downloads encrypted media data with up to 3 automatic retries on transient ICE/stream failures.
@@ -227,7 +227,7 @@ class MediaManager {
                 _ = index  // suppress unused-variable warning
             }
         }
-        throw lastError!
+        throw lastError ?? RPCError(code: .unknown, message: "Download failed: no error captured")
     }
 
     /// Ensures the ICE proxy is running and ready when DPI has been confirmed this session.

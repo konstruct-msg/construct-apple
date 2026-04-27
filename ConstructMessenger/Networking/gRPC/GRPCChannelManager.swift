@@ -740,7 +740,9 @@ final class GRPCChannelManager: Sendable {
                                 try await Task.sleep(for: .seconds(effectiveTimeout))
                                 throw RPCError(code: .deadlineExceeded, message: "Request timed out")
                             }
-                            let first = try await inner.next()!
+                            guard let first = try await inner.next() else {
+                                throw RPCError(code: .internalError, message: "performRPC: task group returned nil unexpectedly")
+                            }
                             inner.cancelAll()
                             return first
                         }
@@ -772,7 +774,9 @@ final class GRPCChannelManager: Sendable {
                                         try await Task.sleep(for: .seconds(effectiveTimeout))
                                         throw RPCError(code: .deadlineExceeded, message: "Request timed out")
                                     }
-                                    let first = try await inner.next()!
+                                    guard let first = try await inner.next() else {
+                                        throw RPCError(code: .internalError, message: "performRPC: task group returned nil unexpectedly")
+                                    }
                                     inner.cancelAll()
                                     return first
                                 }
