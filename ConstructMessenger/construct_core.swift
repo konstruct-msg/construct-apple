@@ -664,9 +664,9 @@ public protocol ClassicCryptoCoreProtocol: AnyObject, Sendable {
     
     func importSessionJson(contactId: String, sessionJson: String) throws  -> String
     
-    func initReceivingSession(contactId: String, recipientBundle: [UInt8], firstMessage: [UInt8]) throws  -> SessionInitResult
+    func initReceivingSession(contactId: String, recipientBundle: BinaryKeyBundle, firstMessage: BinaryFirstMessage) throws  -> SessionInitResult
     
-    func initSession(contactId: String, recipientBundle: [UInt8]) throws  -> String
+    func initSession(contactId: String, recipientBundle: BinaryKeyBundle) throws  -> String
     
     func oneTimePrekeyCount()  -> UInt32
     
@@ -934,23 +934,23 @@ open func importSessionJson(contactId: String, sessionJson: String)throws  -> St
 })
 }
     
-open func initReceivingSession(contactId: String, recipientBundle: [UInt8], firstMessage: [UInt8])throws  -> SessionInitResult  {
+open func initReceivingSession(contactId: String, recipientBundle: BinaryKeyBundle, firstMessage: BinaryFirstMessage)throws  -> SessionInitResult  {
     return try  FfiConverterTypeSessionInitResult_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_method_classiccryptocore_init_receiving_session(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(contactId),
-        FfiConverterSequenceUInt8.lower(recipientBundle),
-        FfiConverterSequenceUInt8.lower(firstMessage),$0
+        FfiConverterTypeBinaryKeyBundle_lower(recipientBundle),
+        FfiConverterTypeBinaryFirstMessage_lower(firstMessage),$0
     )
 })
 }
     
-open func initSession(contactId: String, recipientBundle: [UInt8])throws  -> String  {
+open func initSession(contactId: String, recipientBundle: BinaryKeyBundle)throws  -> String  {
     return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_method_classiccryptocore_init_session(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(contactId),
-        FfiConverterSequenceUInt8.lower(recipientBundle),$0
+        FfiConverterTypeBinaryKeyBundle_lower(recipientBundle),$0
     )
 })
 }
@@ -1188,9 +1188,9 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
     
     func importSessionJson(contactId: String, sessionJson: String) throws  -> String
     
-    func initReceivingSession(contactId: String, recipientBundle: [UInt8], firstMessage: [UInt8]) throws  -> SessionInitResult
+    func initReceivingSession(contactId: String, recipientBundle: BinaryKeyBundle, firstMessage: BinaryFirstMessage) throws  -> SessionInitResult
     
-    func initSession(contactId: String, recipientBundle: [UInt8]) throws  -> String
+    func initSession(contactId: String, recipientBundle: BinaryKeyBundle) throws  -> String
     
     func oneTimePrekeyCount()  -> UInt32
     
@@ -1611,23 +1611,23 @@ open func importSessionJson(contactId: String, sessionJson: String)throws  -> St
 })
 }
     
-open func initReceivingSession(contactId: String, recipientBundle: [UInt8], firstMessage: [UInt8])throws  -> SessionInitResult  {
+open func initReceivingSession(contactId: String, recipientBundle: BinaryKeyBundle, firstMessage: BinaryFirstMessage)throws  -> SessionInitResult  {
     return try  FfiConverterTypeSessionInitResult_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_method_orchestratorcore_init_receiving_session(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(contactId),
-        FfiConverterSequenceUInt8.lower(recipientBundle),
-        FfiConverterSequenceUInt8.lower(firstMessage),$0
+        FfiConverterTypeBinaryKeyBundle_lower(recipientBundle),
+        FfiConverterTypeBinaryFirstMessage_lower(firstMessage),$0
     )
 })
 }
     
-open func initSession(contactId: String, recipientBundle: [UInt8])throws  -> String  {
+open func initSession(contactId: String, recipientBundle: BinaryKeyBundle)throws  -> String  {
     return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_method_orchestratorcore_init_session(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(contactId),
-        FfiConverterSequenceUInt8.lower(recipientBundle),$0
+        FfiConverterTypeBinaryKeyBundle_lower(recipientBundle),$0
     )
 })
 }
@@ -2616,6 +2616,173 @@ public func FfiConverterTypeAuthTokens_lift(_ buf: RustBuffer) throws -> AuthTok
 #endif
 public func FfiConverterTypeAuthTokens_lower(_ value: AuthTokens) -> RustBuffer {
     return FfiConverterTypeAuthTokens.lower(value)
+}
+
+
+/**
+ * Binary first-message bundle for init_receiving_session — no JSON encoding.
+ */
+public struct BinaryFirstMessage: Equatable, Hashable {
+    public var ephemeralPublicKey: [UInt8]
+    public var messageNumber: UInt32
+    public var content: [UInt8]
+    public var oneTimePrekeyId: UInt32
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(ephemeralPublicKey: [UInt8], messageNumber: UInt32, content: [UInt8], oneTimePrekeyId: UInt32) {
+        self.ephemeralPublicKey = ephemeralPublicKey
+        self.messageNumber = messageNumber
+        self.content = content
+        self.oneTimePrekeyId = oneTimePrekeyId
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension BinaryFirstMessage: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeBinaryFirstMessage: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> BinaryFirstMessage {
+        return
+            try BinaryFirstMessage(
+                ephemeralPublicKey: FfiConverterSequenceUInt8.read(from: &buf), 
+                messageNumber: FfiConverterUInt32.read(from: &buf), 
+                content: FfiConverterSequenceUInt8.read(from: &buf), 
+                oneTimePrekeyId: FfiConverterUInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: BinaryFirstMessage, into buf: inout [UInt8]) {
+        FfiConverterSequenceUInt8.write(value.ephemeralPublicKey, into: &buf)
+        FfiConverterUInt32.write(value.messageNumber, into: &buf)
+        FfiConverterSequenceUInt8.write(value.content, into: &buf)
+        FfiConverterUInt32.write(value.oneTimePrekeyId, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeBinaryFirstMessage_lift(_ buf: RustBuffer) throws -> BinaryFirstMessage {
+    return try FfiConverterTypeBinaryFirstMessage.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeBinaryFirstMessage_lower(_ value: BinaryFirstMessage) -> RustBuffer {
+    return FfiConverterTypeBinaryFirstMessage.lower(value)
+}
+
+
+/**
+ * Binary key bundle passed across the FFI boundary — no JSON encoding.
+ * Replaces the former sequence<u8> JSON payload for init_session / init_receiving_session.
+ */
+public struct BinaryKeyBundle: Equatable, Hashable {
+    public var identityPublic: [UInt8]
+    public var signedPrekeyPublic: [UInt8]
+    public var signature: [UInt8]
+    public var verifyingKey: [UInt8]
+    public var suiteId: UInt16
+    public var oneTimePrekeyPublic: [UInt8]?
+    public var oneTimePrekeyId: UInt32?
+    public var spkUploadedAt: UInt64
+    public var spkRotationEpoch: UInt32
+    public var kyberSpkUploadedAt: UInt64
+    public var kyberSpkRotationEpoch: UInt32
+    public var kyberPreKeyPublic: [UInt8]?
+    public var kyberOneTimePrekeyPublic: [UInt8]?
+    public var kyberOneTimePrekeyId: UInt32?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(identityPublic: [UInt8], signedPrekeyPublic: [UInt8], signature: [UInt8], verifyingKey: [UInt8], suiteId: UInt16, oneTimePrekeyPublic: [UInt8]?, oneTimePrekeyId: UInt32?, spkUploadedAt: UInt64, spkRotationEpoch: UInt32, kyberSpkUploadedAt: UInt64, kyberSpkRotationEpoch: UInt32, kyberPreKeyPublic: [UInt8]?, kyberOneTimePrekeyPublic: [UInt8]?, kyberOneTimePrekeyId: UInt32?) {
+        self.identityPublic = identityPublic
+        self.signedPrekeyPublic = signedPrekeyPublic
+        self.signature = signature
+        self.verifyingKey = verifyingKey
+        self.suiteId = suiteId
+        self.oneTimePrekeyPublic = oneTimePrekeyPublic
+        self.oneTimePrekeyId = oneTimePrekeyId
+        self.spkUploadedAt = spkUploadedAt
+        self.spkRotationEpoch = spkRotationEpoch
+        self.kyberSpkUploadedAt = kyberSpkUploadedAt
+        self.kyberSpkRotationEpoch = kyberSpkRotationEpoch
+        self.kyberPreKeyPublic = kyberPreKeyPublic
+        self.kyberOneTimePrekeyPublic = kyberOneTimePrekeyPublic
+        self.kyberOneTimePrekeyId = kyberOneTimePrekeyId
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension BinaryKeyBundle: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeBinaryKeyBundle: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> BinaryKeyBundle {
+        return
+            try BinaryKeyBundle(
+                identityPublic: FfiConverterSequenceUInt8.read(from: &buf), 
+                signedPrekeyPublic: FfiConverterSequenceUInt8.read(from: &buf), 
+                signature: FfiConverterSequenceUInt8.read(from: &buf), 
+                verifyingKey: FfiConverterSequenceUInt8.read(from: &buf), 
+                suiteId: FfiConverterUInt16.read(from: &buf), 
+                oneTimePrekeyPublic: FfiConverterOptionSequenceUInt8.read(from: &buf), 
+                oneTimePrekeyId: FfiConverterOptionUInt32.read(from: &buf), 
+                spkUploadedAt: FfiConverterUInt64.read(from: &buf), 
+                spkRotationEpoch: FfiConverterUInt32.read(from: &buf), 
+                kyberSpkUploadedAt: FfiConverterUInt64.read(from: &buf), 
+                kyberSpkRotationEpoch: FfiConverterUInt32.read(from: &buf), 
+                kyberPreKeyPublic: FfiConverterOptionSequenceUInt8.read(from: &buf), 
+                kyberOneTimePrekeyPublic: FfiConverterOptionSequenceUInt8.read(from: &buf), 
+                kyberOneTimePrekeyId: FfiConverterOptionUInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: BinaryKeyBundle, into buf: inout [UInt8]) {
+        FfiConverterSequenceUInt8.write(value.identityPublic, into: &buf)
+        FfiConverterSequenceUInt8.write(value.signedPrekeyPublic, into: &buf)
+        FfiConverterSequenceUInt8.write(value.signature, into: &buf)
+        FfiConverterSequenceUInt8.write(value.verifyingKey, into: &buf)
+        FfiConverterUInt16.write(value.suiteId, into: &buf)
+        FfiConverterOptionSequenceUInt8.write(value.oneTimePrekeyPublic, into: &buf)
+        FfiConverterOptionUInt32.write(value.oneTimePrekeyId, into: &buf)
+        FfiConverterUInt64.write(value.spkUploadedAt, into: &buf)
+        FfiConverterUInt32.write(value.spkRotationEpoch, into: &buf)
+        FfiConverterUInt64.write(value.kyberSpkUploadedAt, into: &buf)
+        FfiConverterUInt32.write(value.kyberSpkRotationEpoch, into: &buf)
+        FfiConverterOptionSequenceUInt8.write(value.kyberPreKeyPublic, into: &buf)
+        FfiConverterOptionSequenceUInt8.write(value.kyberOneTimePrekeyPublic, into: &buf)
+        FfiConverterOptionUInt32.write(value.kyberOneTimePrekeyId, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeBinaryKeyBundle_lift(_ buf: RustBuffer) throws -> BinaryKeyBundle {
+    return try FfiConverterTypeBinaryKeyBundle.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeBinaryKeyBundle_lower(_ value: BinaryKeyBundle) -> RustBuffer {
+    return FfiConverterTypeBinaryKeyBundle.lower(value)
 }
 
 
@@ -5058,6 +5225,30 @@ public func FfiConverterCallbackInterfacePowProgressCallback_lower(_ v: PowProgr
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionUInt32: FfiConverterRustBuffer {
+    typealias SwiftType = UInt32?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterUInt32.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterUInt32.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionString: FfiConverterRustBuffer {
     typealias SwiftType = String?
 
@@ -5823,10 +6014,10 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_classiccryptocore_import_session_json() != 8946) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_classiccryptocore_init_receiving_session() != 32989) {
+    if (uniffi_construct_core_checksum_method_classiccryptocore_init_receiving_session() != 3042) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_classiccryptocore_init_session() != 20828) {
+    if (uniffi_construct_core_checksum_method_classiccryptocore_init_session() != 23651) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_classiccryptocore_one_time_prekey_count() != 49375) {
@@ -5943,10 +6134,10 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_orchestratorcore_import_session_json() != 46860) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_init_receiving_session() != 270) {
+    if (uniffi_construct_core_checksum_method_orchestratorcore_init_receiving_session() != 36112) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_init_session() != 47404) {
+    if (uniffi_construct_core_checksum_method_orchestratorcore_init_session() != 15049) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_one_time_prekey_count() != 21478) {
