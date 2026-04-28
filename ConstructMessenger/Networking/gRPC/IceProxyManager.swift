@@ -225,8 +225,8 @@ struct IceRelay: Codable, Identifiable {
         id            = try c.decode(UUID.self, forKey: .id)
         address       = try c.decode(String.self, forKey: .address)
         bridgeCert    = try c.decode(String.self, forKey: .bridgeCert)
-        let raw       = (try? c.decode(Int.self, forKey: .iatMode)) ?? 0
-        iatMode       = IceIATMode(rawValue: raw) ?? .none
+        let raw       = (try? c.decode(Int.self, forKey: .iatMode)) ?? 1
+        iatMode       = IceIATMode(rawValue: raw) ?? .enabled
         tlsServerName = try? c.decode(String.self, forKey: .tlsServerName)
         pinnedSpki    = try? c.decode(String.self, forKey: .pinnedSpki)
         wtPath        = try? c.decode(String.self, forKey: .wtPath)
