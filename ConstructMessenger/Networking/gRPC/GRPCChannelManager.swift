@@ -59,6 +59,8 @@ final class GRPCChannelManager: Sendable {
     ///   `await` suspension points. Avoids a race where `activeRelay` is cleared on MainActor by a
     ///   concurrent `networkPathChanged` before this Task runs.
     func recordICEFailure(failedAddress: String? = nil) {
+        let until = Date().addingTimeInterval(Self.iceCooldown)
+        _iceLock.withLock { _iceCooldownUntil = until }
         UserDefaults.standard.set(Date().timeIntervalSinceReferenceDate, forKey: Self.iceFailedAtKey)
         invalidatePersistentClient()  // routing will change (ICE → direct)
         Log.info("⚠️ ICE relay failure recorded — bypassing ICE for \(Int(Self.iceCooldown))s", category: "gRPC")
@@ -94,30 +96,34 @@ final class GRPCChannelManager: Sendable {
     var isICEOnCooldown: Bool { isICEOnCooldownInternal() }
 
     private func isICEOnCooldownInternal() -> Bool {
-        let stored = UserDefaults.standard.double(forKey: Self.iceFailedAtKey)
-        guard stored > 0 else { return false }
-        let elapsed = Date().timeIntervalSinceReferenceDate - stored
-        return elapsed < Self.iceCooldown
+        guard let until = _iceLock.withLock({ _iceCooldownUntil }) else { return false }
+        return Date() < until
+    }
+
+    /// Clears the ICE cooldown both in-memory and from UserDefaults.
+    /// Called from `IceProxyManager.clearCooldown()` so both systems stay in sync.
+    func clearICECooldownState() {
+        _iceLock.withLock { _iceCooldownUntil = nil }
+        UserDefaults.standard.removeObject(forKey: Self.iceFailedAtKey)
+    }
+
+    /// Updates the in-memory ICE mode cache. Called from `IceProxyManager.mode.didSet`
+    /// so `iceProxyPort()` never needs to read UserDefaults on the hot path.
+    func updateCachedIceMode(_ mode: IceMode) {
+        _iceModeLock.withLock { _cachedIceMode = mode }
     }
 
     /// Returns the local proxy port if ICE is running AND should be used for routing, nil otherwise.
-    /// Mode-aware:
-    ///   `.off`  → always nil (no ICE routing)
-    ///   `.auto` → only when DPI confirmed this session (prevents EU users on ICE)
-    ///   `.on`   → always returns port when proxy running
-    private func iceProxyPort() -> UInt16? {
+    /// Routing rule: use ICE whenever the Rust proxy is alive, unless mode is `.off`.
+    ///   `.off`        → always nil (user explicitly disabled ICE)
+    ///   `.auto`/`.on` → use ICE if the proxy is running
+    ///
+    /// In `.auto` mode the proxy starts on-demand when DPI is detected (see
+    /// `IceProxyManager.activateDPIAutoMode()`). Once started it stays running for the
+    /// session — mode changes do NOT tear down an active tunnel.
+    func iceProxyPort() -> UInt16? {
         guard ice_proxy_is_running() != 0 else { return nil }
-        // Read mode from UserDefaults for fast nonisolated access.
-        let rawMode = UserDefaults.standard.string(forKey: IceMode.defaultsKey) ?? IceMode.platformDefault.rawValue
-        let mode = IceMode(rawValue: rawMode) ?? .auto
-        switch mode {
-        case .off:
-            return nil
-        case .auto:
-            return nil
-        case .on:
-            break // Always route through ICE
-        }
+        guard _iceModeLock.withLock({ _cachedIceMode }) != .off else { return nil }
         guard !isICEOnCooldownInternal() else {
             Log.debug("🧊 ICE on cooldown — using direct TLS", category: "gRPC")
             return nil
@@ -139,8 +145,7 @@ final class GRPCChannelManager: Sendable {
     /// the tunnel may take 3–8 s to establish — hence the 10-second default.
     func waitForProxyReady(timeout: TimeInterval = NetworkTiming.ICE.proxyReadyWaitTimeout) async {
         // ICE OFF: proxy will never start — return immediately, no polling.
-        let rawMode = UserDefaults.standard.string(forKey: IceMode.defaultsKey) ?? IceMode.platformDefault.rawValue
-        guard (IceMode(rawValue: rawMode) ?? .auto) != .off else { return }
+        guard _iceModeLock.withLock({ _cachedIceMode }) != .off else { return }
         // On WiFi the proxy typically starts in <500 ms; the full 15 s cellular timeout
         // wastes 10+ s in failure paths on fast networks.
         let effectiveTimeout = NetworkReachabilityManager.shared.connectionType == .cellular
@@ -155,6 +160,16 @@ final class GRPCChannelManager: Sendable {
     }
 
     private init() {
+        // Populate in-memory ICE state from UserDefaults — one-time reads at startup.
+        let storedMode = UserDefaults.standard.string(forKey: IceMode.defaultsKey)
+            .flatMap(IceMode.init) ?? IceMode.platformDefault
+        _cachedIceMode = storedMode
+        let storedCooldownAt = UserDefaults.standard.double(forKey: Self.iceFailedAtKey)
+        if storedCooldownAt > 0 {
+            let until = Date(timeIntervalSinceReferenceDate: storedCooldownAt + Self.iceCooldown)
+            if until > Date() { _iceCooldownUntil = until }
+        }
+
         // Invalidate the persistent connection whenever the network path changes
         // (cellular ↔ WiFi switch, VPN on/off, etc.).  The old TCP connection is dead
         // after a path change; proactively evicting it prevents the first post-switch
@@ -198,6 +213,18 @@ final class GRPCChannelManager: Sendable {
     private nonisolated(unsafe) var _connGeneration: UInt64 = 0
     private let _connLock = NSLock()
 
+    // In-memory ICE cooldown state.
+    // Written by recordICEFailure/clearICECooldownState; read by isICEOnCooldownInternal.
+    // UserDefaults is still written for cross-launch persistence but never read on hot path.
+    private nonisolated(unsafe) var _iceCooldownUntil: Date?
+    private let _iceLock = NSLock()
+
+    // In-memory cache of the current ICE operation mode.
+    // Updated via updateCachedIceMode() when IceProxyManager.mode changes.
+    // Falls back to UserDefaults only at init time (one-time read).
+    private nonisolated(unsafe) var _cachedIceMode: IceMode = .auto
+    private let _iceModeLock = NSLock()
+
     private func routingKey() -> String {
         if let icePort = iceProxyPort() { return "ice:\(icePort)" }
         return "direct:\(currentHost):\(currentPort)"
@@ -207,7 +234,7 @@ final class GRPCChannelManager: Sendable {
     var currentRoutingKey: String { routingKey() }
 
     /// Returns a reusable persistent client, creating/replacing it when routing changes.
-    private func acquirePersistentClient() throws -> GRPCClient<HTTP2ClientTransport.TransportServices> {
+    func acquirePersistentClient() throws -> GRPCClient<HTTP2ClientTransport.TransportServices> {
         _connLock.lock()
         defer { _connLock.unlock() }
 
@@ -262,10 +289,27 @@ final class GRPCChannelManager: Sendable {
     func invalidatePersistentClient() {
         _connLock.lock()
         defer { _connLock.unlock() }
+        // Guard against multiple concurrent RPC failures all calling this simultaneously.
+        // Only the first call does real work; subsequent calls with _conn == nil are no-ops.
+        guard _conn != nil else { return }
         _conn?.client.beginGracefulShutdown()
         // Do NOT call task.cancel() here — let runConnections() exit naturally.
         _conn = nil
         // Bump generation so any pending runConnections() task knows it is stale.
+        _connGeneration &+= 1
+        Log.debug("🔌 Persistent gRPC connection invalidated (gen=\(_connGeneration))", category: "GRPCChannel")
+    }
+
+    /// Invalidates only if the current connection generation matches `gen`.
+    /// Used in GRPCCallExecutor so a background RPC that started on an old connection
+    /// (e.g., fetchMissedMessages on direct gen=1) does not kill the current
+    /// connection (e.g., ICE gen=3) when routing changed while it was in-flight.
+    func invalidatePersistentClientIfGeneration(_ gen: UInt64) {
+        _connLock.lock()
+        defer { _connLock.unlock() }
+        guard _connGeneration == gen, _conn != nil else { return }
+        _conn?.client.beginGracefulShutdown()
+        _conn = nil
         _connGeneration &+= 1
         Log.debug("🔌 Persistent gRPC connection invalidated (gen=\(_connGeneration))", category: "GRPCChannel")
     }
@@ -276,6 +320,13 @@ final class GRPCChannelManager: Sendable {
     /// The stream itself can close/reopen freely; the channel stays alive.
     func acquireChannel() throws -> GRPCClient<HTTP2ClientTransport.TransportServices> {
         try acquirePersistentClient()
+    }
+
+    /// Captures the current connection generation counter for generation-aware invalidation.
+    /// The caller captures this *after* acquiring a client; GRPCCallExecutor uses the captured
+    /// value to skip invalidation when routing has already changed by the time an RPC fails.
+    func captureConnectionGeneration() -> UInt64 {
+        _connLock.withLock { _connGeneration }
     }
 
     /// Creates a new `GRPCClient` with TLS transport.
@@ -350,289 +401,23 @@ final class GRPCChannelManager: Sendable {
         return GRPCClient(transport: transport, interceptors: [AuthInterceptor()])
     }
 
-    /// Execute a gRPC operation with automatic client lifecycle management.
-    /// Creates a client, runs connections in background, executes the operation, then shuts down.
-    /// If the operation fails while ICE is active, records the failure so future calls bypass ICE.
+    /// Execute a gRPC operation with automatic retry, auth refresh, and ICE failover.
+    /// Delegates to `GRPCCallExecutor` — all RPC policy logic lives there.
     func performRPC<Result: Sendable>(
         timeout: TimeInterval? = nil,
         allowAuthRetry: Bool = true,
+        /// When `false`, a failure will not invalidate the shared persistent connection.
+        /// Default is `false` — transport-level cleanup is handled by `runConnections()` and relay
+        /// rotation. Only set `true` for interactive flows where you want immediate channel teardown.
+        invalidatesConnectionOnFailure: Bool = false,
         _ operation: @Sendable @escaping (GRPCClient<HTTP2ClientTransport.TransportServices>) async throws -> Result
     ) async throws -> Result {
-        func shouldRecordIceFailure(_ error: Error) -> Bool {
-            if error is CancellationError { return false }
-            if let rpc = error as? RPCError {
-                switch rpc.code {
-                // These are application-level errors — the relay delivered the response fine.
-                case .unauthenticated, .permissionDenied, .invalidArgument, .notFound,
-                     .alreadyExists, .resourceExhausted, .cancelled,
-                     .internalError:
-                    return false
-                case .unimplemented:
-                    // "Unexpected non-200 HTTP Status Code" is NOT an app-level error when ICE
-                    // is active — it means the relay→upstream HTTP path is broken (the relay
-                    // accepted the obfs4 connection but returned a non-200 HTTP response instead
-                    // of proxying gRPC). This is a relay failure and must trigger relay rotation.
-                    // Other .unimplemented errors (real missing RPC methods) are app-level — skip.
-                    let msg = rpc.message.lowercased()
-                    if msg.contains("non-200") || msg.contains("http status code") ||
-                       msg.contains("unexpected") && msg.contains("http") {
-                        return true
-                    }
-                    return false
-                case .unavailable, .deadlineExceeded, .unknown:
-                    // Distinguish relay failures (TCP/TLS errors) from non-relay failures
-                    // (server-side closes or our own connection invalidation).
-                    // "Stream unexpectedly closed" / "channel is closed" / "CancellationError"
-                    // all indicate the relay itself was not the problem.
-                    let msg = rpc.message.lowercased()
-                    if msg.contains("stream") && msg.contains("closed") { return false }
-                    if msg.contains("channel is closed")                 { return false }
-                    if msg.contains("cancellation")                      { return false }
-                    if msg.contains("cancelled")                         { return false }
-                    // "The server accepted the TCP connection but closed the connection before
-                    // completing the HTTP/2 connection preface."
-                    // When this function is called, usingICE is always true (call-site guard).
-                    // This error occurs because the local ICE proxy accepted the gRPC socket but
-                    // immediately dropped it when the remote relay refused the connection.
-                    // That IS a relay failure — record it so the relay gets blacklisted.
-                    // (On the direct path this would mean the gRPC server itself reset the
-                    // connection, but shouldRecordIceFailure is never called on the direct path.)
-                    return true
-                default:
-                    return true
-                }
-            }
-            return true
-        }
-
-        /// True when the error is ECONNREFUSED on the local ICE proxy port (127.0.0.1).
-        /// This means the Rust proxy process died but Swift state was not updated.
-        /// Distinct from a relay failure — no cooldown should be entered, just restart the process.
-        func isStaleLocalProxy(_ error: Error) -> Bool {
-            guard let rpc = error as? RPCError, rpc.code == .unavailable else { return false }
-            return rpc.message.contains("127.0.0.1")
-        }
-
-        /// True when the error is "WebTunnel blocked by a carrier transparent HTTP proxy":
-        /// the proxy intercepted the WebSocket UPGRADE and returned a non-101 response.
-        /// obfs4 is a binary protocol that transparent HTTP proxies cannot interpret.
-        func isWebTunnelBlocked(_ error: Error) -> Bool {
-            guard let rpc = error as? RPCError, rpc.code == .unimplemented else { return false }
-            let msg = rpc.message.lowercased()
-            return msg.contains("non-200") || msg.contains("http status code") ||
-                   (msg.contains("unexpected") && msg.contains("http"))
-        }
-
-        var lastError: Error?
-
-        for attempt in 0..<3 {
-            let usingICE = iceProxyPort() != nil
-            let iceRelayVerified = usingICE ? await IceProxyManager.shared.isCurrentRelayVerified : true
-            let effectiveTimeout: TimeInterval? = {
-                guard let timeout else { return nil }
-                // Unverified ICE relay: use a short timeout so DPI-blocked obfs4 tunnels
-                // are detected in ~5s instead of 15–30s, enabling fast relay rotation.
-                if usingICE, !iceRelayVerified {
-                    return min(timeout, NetworkTiming.ICE.unverifiedRelayTimeout)
-                }
-                return timeout
-            }()
-
-            // ------------------------------------------------------------------
-            // Prefer the persistent connection (no TLS handshake on hot path).
-            // Fall back to a per-call client only when persistence isn't available.
-            // ------------------------------------------------------------------
-            let usingPersistent: Bool
-            let client: GRPCClient<HTTP2ClientTransport.TransportServices>
-            if let pc = try? acquirePersistentClient() {
-                client = pc
-                usingPersistent = true
-            } else {
-                client = try makeClient()
-                usingPersistent = false
-            }
-
-            do {
-                let result: Result
-
-                if usingPersistent {
-                    // runConnections() is already running in a background task.
-                    // Execute the operation directly; timeout is still enforced.
-                    if let effectiveTimeout {
-                        result = try await withThrowingTaskGroup(of: Result.self) { inner in
-                            inner.addTask { try await operation(client) }
-                            inner.addTask {
-                                try await Task.sleep(for: .seconds(effectiveTimeout))
-                                throw RPCError(code: .deadlineExceeded, message: "Request timed out")
-                            }
-                            guard let first = try await inner.next() else {
-                                throw RPCError(code: .internalError, message: "performRPC: task group returned nil unexpectedly")
-                            }
-                            inner.cancelAll()
-                            return first
-                        }
-                    } else {
-                        result = try await operation(client)
-                    }
-                } else {
-                    // Per-call client: co-run with runConnections() so a transport
-                    // failure fails the RPC promptly instead of hanging.
-                    result = try await withThrowingTaskGroup(of: Result?.self) { group in
-                        group.addTask {
-                            do {
-                                try await client.runConnections()
-                                return nil
-                            } catch is CancellationError {
-                                return nil
-                            } catch {
-                                Log.error("⚠️ gRPC transport error: \(error)", category: "GRPCChannel")
-                                throw error
-                            }
-                        }
-
-                        group.addTask {
-                            let r: Result
-                            if let effectiveTimeout {
-                                r = try await withThrowingTaskGroup(of: Result.self) { inner in
-                                    inner.addTask { try await operation(client) }
-                                    inner.addTask {
-                                        try await Task.sleep(for: .seconds(effectiveTimeout))
-                                        throw RPCError(code: .deadlineExceeded, message: "Request timed out")
-                                    }
-                                    guard let first = try await inner.next() else {
-                                        throw RPCError(code: .internalError, message: "performRPC: task group returned nil unexpectedly")
-                                    }
-                                    inner.cancelAll()
-                                    return first
-                                }
-                            } else {
-                                r = try await operation(client)
-                            }
-                            client.beginGracefulShutdown()
-                            return r
-                        }
-
-                        while let next = try await group.next() {
-                            if let r = next {
-                                group.cancelAll()
-                                return r
-                            }
-                        }
-                        group.cancelAll()
-                        throw NetworkError.connectionFailed
-                    }
-                }
-
-                PerformanceMetrics.shared.end(.grpcConnectStart, endEvent: .grpcConnectEnd, label: routingKey())
-                if usingICE, !iceRelayVerified {
-                    await IceProxyManager.shared.markCurrentRelayVerified()
-                }
-                return result
-            } catch {
-                lastError = error
-
-                if usingPersistent {
-                    // Persistent connection failed — invalidate so next attempt gets a fresh one.
-                    invalidatePersistentClient()
-                } else {
-                    client.beginGracefulShutdown()
-                }
-
-                if let rpc = error as? RPCError,
-                   rpc.code == .unauthenticated,
-                   allowAuthRetry,
-                   attempt == 0 {
-                    // Try to refresh access token once, then retry the RPC.
-                    var refreshError: Error?
-                    do {
-                        let refreshed = try await TokenRefreshCoordinator.shared.refreshIfPossible()
-                        if refreshed {
-                            continue
-                        }
-                    } catch {
-                        refreshError = error
-                        Log.error("⚠️ Token refresh failed during RPC retry: \(error)", category: "GRPCChannel")
-                    }
-                    // Only wipe the refresh token if the server explicitly rejected it
-                    // (unauthenticated / permission denied = token is genuinely invalid).
-                    // Network errors (unavailable, deadline) mean the refresh endpoint was
-                    // unreachable — the existing token may still be valid once connectivity
-                    // returns, so keep it rather than forcing a full device re-auth offline.
-                    let serverRejected: Bool
-                    if let rpcErr = refreshError as? RPCError {
-                        serverRejected = rpcErr.code == .unauthenticated || rpcErr.code == .permissionDenied
-                    } else {
-                        // refreshIfPossible() returned false (no refresh token stored).
-                        serverRejected = refreshError == nil
-                    }
-                    if serverRejected {
-                        Log.info("🔑 Refresh rejected by server — triggering device re-auth", category: "GRPCChannel")
-                        SessionManager.shared.invalidateTokensForReauth()
-                    } else {
-                        Log.info("🔑 Refresh failed (network error) — keeping tokens for retry when online", category: "GRPCChannel")
-                    }
-                }
-
-                // If the call failed while routing through ICE, record relay failure only for
-                // network-ish failures. Don't disable ICE due to auth/validation errors.
-                if usingICE, isStaleLocalProxy(error) {
-                    // ECONNREFUSED on 127.0.0.1 — local proxy died in background.
-                    // Restart immediately; do NOT enter cooldown (this is a process crash, not relay failure).
-                    Log.info("🧊 ICE proxy port dead (ECONNREFUSED) — restarting proxy", category: "gRPC")
-                    await IceProxyManager.shared.restartAfterCrash()
-                    await waitForProxyReady()
-                    if iceProxyPort() != nil {
-                        continue
-                    }
-                } else if usingICE, shouldRecordIceFailure(error) {
-                    // Relay tunnel broken (DPI-blocked or unreachable). Before rotating,
-                    // check if this is a WebTunnel-specific failure (carrier transparent
-                    // proxy intercepted the WebSocket UPGRADE). obfs4 is a binary protocol
-                    // that such proxies cannot inspect — try the same relay in obfs4 mode.
-                    let failedAddr = await IceProxyManager.shared.activeRelay?.address
-                    let webTunnelActive = await IceProxyManager.shared.isWebTunnelActive
-                    if isWebTunnelBlocked(error), webTunnelActive {
-                        Log.info("🧊 WebTunnel blocked (non-200) — retrying relay via obfs4", category: "gRPC")
-                        // Pass failedAddr as hint: networkPathChanged may have reset activeRelay
-                        // between the read above and the actual retry call (race condition on MainActor).
-                        let obfs4OK = await IceProxyManager.shared.retryCurrentRelayAsObfs4(hintAddress: failedAddr)
-                        if obfs4OK {
-                            invalidatePersistentClient()
-                            await waitForProxyReady()
-                            Log.info("🧊 ICE obfs4 fallback active — retrying via same relay", category: "gRPC")
-                            continue
-                        }
-                        // obfs4 also failed — blacklist the relay (activeRelay is nil now,
-                        // use the address captured above) and rotate to the next one.
-                        if let addr = failedAddr { await IceProxyManager.shared.recordRelayFailure(address: addr) }
-                    } else {
-                        if let addr = failedAddr { await IceProxyManager.shared.recordRelayFailure(address: addr) }
-                    }
-                    // Rotate INLINE so the retry loop can use the new relay immediately.
-                    let rotated = await IceProxyManager.shared.rotateToNextRelay()
-                    if rotated {
-                        // If every known relay was recently blacklisted, we've just restarted the
-                        // least-bad one. Cycling immediately fills the relay's per-IP connection
-                        // limit (8 concurrent), making every new attempt fail at the TCP layer.
-                        // A 30 s pause lets old connections drain before we create new ones.
-                        if await IceProxyManager.shared.allRelaysRecentlyFailed {
-                            Log.info("🧊 All relays blacklisted — waiting 30s to let connections drain", category: "gRPC")
-                            try? await Task.sleep(for: .seconds(30))
-                        }
-                        invalidatePersistentClient()
-                        await waitForProxyReady()
-                        Log.info("🧊 Relay rotated inline — retrying via new relay", category: "gRPC")
-                        continue
-                    }
-                    // All relays exhausted — enter cooldown for direct fallback.
-                    recordICEFailure(failedAddress: failedAddr)
-                }
-
-                throw error
-            }
-        }
-
-        throw lastError ?? NetworkError.connectionFailed
+        try await GRPCCallExecutor.shared.performRPC(
+            timeout: timeout,
+            allowAuthRetry: allowAuthRetry,
+            invalidatesConnectionOnFailure: invalidatesConnectionOnFailure,
+            operation
+        )
     }
 }
 

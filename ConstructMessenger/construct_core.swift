@@ -621,17 +621,9 @@ public protocol ClassicCryptoCoreProtocol: AnyObject, Sendable {
     
     func exportOneTimePrekeys() throws  -> [UInt8]
     
-    func exportOneTimePrekeysJson() throws  -> String
-    
     func exportPrivateKeys() throws  -> [UInt8]
     
-    func exportPrivateKeysJson() throws  -> String
-    
-    func exportRegistrationBundleJson() throws  -> String
-    
     func exportSession(contactId: String) throws  -> [UInt8]
-    
-    func exportSessionJson(contactId: String) throws  -> String
     
     func generateOneTimePrekeys(count: UInt32) throws  -> [OtpkPair]
     
@@ -643,7 +635,7 @@ public protocol ClassicCryptoCoreProtocol: AnyObject, Sendable {
     func getIdentityKeyBytes() throws  -> Data
     
     /**
-     * Typed registration bundle fields — replaces JSON parsing.
+     * Typed registration bundle fields.
      */
     func getRegistrationBundleFields() throws  -> RegistrationBundleJson
     
@@ -656,13 +648,9 @@ public protocol ClassicCryptoCoreProtocol: AnyObject, Sendable {
     
     func importOneTimePrekeys(data: [UInt8]) throws 
     
-    func importOneTimePrekeysJson(json: String) throws 
-    
     func importPrivateKeys(data: [UInt8]) throws 
     
     func importSession(contactId: String, data: [UInt8]) throws  -> String
-    
-    func importSessionJson(contactId: String, sessionJson: String) throws  -> String
     
     func initReceivingSession(contactId: String, recipientBundle: BinaryKeyBundle, firstMessage: BinaryFirstMessage) throws  -> SessionInitResult
     
@@ -781,14 +769,6 @@ open func exportOneTimePrekeys()throws  -> [UInt8]  {
 })
 }
     
-open func exportOneTimePrekeysJson()throws  -> String  {
-    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_method_classiccryptocore_export_one_time_prekeys_json(
-            self.uniffiCloneHandle(),$0
-    )
-})
-}
-    
 open func exportPrivateKeys()throws  -> [UInt8]  {
     return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_method_classiccryptocore_export_private_keys(
@@ -797,34 +777,9 @@ open func exportPrivateKeys()throws  -> [UInt8]  {
 })
 }
     
-open func exportPrivateKeysJson()throws  -> String  {
-    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_method_classiccryptocore_export_private_keys_json(
-            self.uniffiCloneHandle(),$0
-    )
-})
-}
-    
-open func exportRegistrationBundleJson()throws  -> String  {
-    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_method_classiccryptocore_export_registration_bundle_json(
-            self.uniffiCloneHandle(),$0
-    )
-})
-}
-    
 open func exportSession(contactId: String)throws  -> [UInt8]  {
     return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_method_classiccryptocore_export_session(
-            self.uniffiCloneHandle(),
-        FfiConverterString.lower(contactId),$0
-    )
-})
-}
-    
-open func exportSessionJson(contactId: String)throws  -> String  {
-    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_method_classiccryptocore_export_session_json(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(contactId),$0
     )
@@ -860,7 +815,7 @@ open func getIdentityKeyBytes()throws  -> Data  {
 }
     
     /**
-     * Typed registration bundle fields — replaces JSON parsing.
+     * Typed registration bundle fields.
      */
 open func getRegistrationBundleFields()throws  -> RegistrationBundleJson  {
     return try  FfiConverterTypeRegistrationBundleJson_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
@@ -898,14 +853,6 @@ open func importOneTimePrekeys(data: [UInt8])throws   {try rustCallWithError(Ffi
 }
 }
     
-open func importOneTimePrekeysJson(json: String)throws   {try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_method_classiccryptocore_import_one_time_prekeys_json(
-            self.uniffiCloneHandle(),
-        FfiConverterString.lower(json),$0
-    )
-}
-}
-    
 open func importPrivateKeys(data: [UInt8])throws   {try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_method_classiccryptocore_import_private_keys(
             self.uniffiCloneHandle(),
@@ -920,16 +867,6 @@ open func importSession(contactId: String, data: [UInt8])throws  -> String  {
             self.uniffiCloneHandle(),
         FfiConverterString.lower(contactId),
         FfiConverterSequenceUInt8.lower(data),$0
-    )
-})
-}
-    
-open func importSessionJson(contactId: String, sessionJson: String)throws  -> String  {
-    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_method_classiccryptocore_import_session_json(
-            self.uniffiCloneHandle(),
-        FfiConverterString.lower(contactId),
-        FfiConverterString.lower(sessionJson),$0
     )
 })
 }
@@ -1079,9 +1016,9 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
     func ackIsProcessed(messageId: String)  -> AckCheckResult
     
     /**
-     * Mark a message as processed in the ACK cache. Returns action JSON.
+     * Mark a message as processed in the ACK cache.
      */
-    func ackMarkProcessed(messageId: String)  -> String
+    func ackMarkProcessed(messageId: String) 
     
     func applyPqContribution(contactId: String, kemSharedSecret: [UInt8]) throws 
     
@@ -1097,8 +1034,6 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
     
     func exportOneTimePrekeys() throws  -> [UInt8]
     
-    func exportOneTimePrekeysJson() throws  -> String
-    
     /**
      * Export the full orchestrator coordination state (ACK cache, healing queue,
      * init locks, archive index, prekey tracker) as a CFE binary blob.
@@ -1108,18 +1043,7 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
     
     func exportPrivateKeys() throws  -> [UInt8]
     
-    func exportPrivateKeysJson() throws  -> String
-    
-    func exportRegistrationBundleJson() throws  -> String
-    
     func exportSession(contactId: String) throws  -> [UInt8]
-    
-    func exportSessionJson(contactId: String) throws  -> String
-    
-    /**
-     * Export non-crypto orchestration state to JSON.
-     */
-    func exportStateJson() throws  -> String
     
     func generateOneTimePrekeys(count: UInt32) throws  -> [OtpkPair]
     
@@ -1149,18 +1073,9 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
     func getSigningKeyBytes() throws  -> Data
     
     /**
-     * Typed event handler — replaces `handle_event_json`.
-     * Accepts a typed `CfeIncomingEvent` and returns typed `CfeAction` list.
+     * Typed event handler — accepts a typed `CfeIncomingEvent` and returns typed `CfeAction` list.
      */
     func handleEvent(event: CfeIncomingEvent) throws  -> [CfeAction]
-    
-    /**
-     * Unified event handler (legacy JSON interface — kept for fallback).
-     *
-     * `event_json` — JSON-encoded `IncomingEvent` (see Rust `orchestration::actions`).
-     * Returns a JSON array of `Action` objects for the platform to execute.
-     */
-    func handleEventJson(eventJson: String) throws  -> [String]
     
     func hasSession(contactId: String)  -> Bool
     
@@ -1176,8 +1091,6 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
     
     func importOneTimePrekeys(data: [UInt8]) throws 
     
-    func importOneTimePrekeysJson(json: String) throws 
-    
     /**
      * Restore the full orchestrator coordination state from a CFE blob.
      * Call at app start before processing any messages.
@@ -1185,8 +1098,6 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
     func importOrchestratorState(data: [UInt8]) throws 
     
     func importSession(contactId: String, data: [UInt8]) throws  -> String
-    
-    func importSessionJson(contactId: String, sessionJson: String) throws  -> String
     
     func initReceivingSession(contactId: String, recipientBundle: BinaryKeyBundle, firstMessage: BinaryFirstMessage) throws  -> SessionInitResult
     
@@ -1198,9 +1109,8 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
     
     /**
      * Register a KEM shared secret as a deferred contribution.
-     * Returns JSON action string (SaveSessionToSecureStore for per-entry backup).
      */
-    func registerPqDeferred(contactId: String, otpkId: UInt32, sharedSecret: [UInt8])  -> String
+    func registerPqDeferred(contactId: String, otpkId: UInt32, sharedSecret: [UInt8]) 
     
     func removeSession(contactId: String)  -> Bool
     
@@ -1260,20 +1170,7 @@ open class OrchestratorCore: OrchestratorCoreProtocol, @unchecked Sendable {
     public func uniffiCloneHandle() -> UInt64 {
         return try! rustCall { uniffi_construct_core_fn_clone_orchestratorcore(self.handle, $0) }
     }
-    /**
-     * Construct from an existing `ClassicCryptoCore` key JSON export and a
-     * `PlatformBridge` implementation.
-     */
-public convenience init(keysJson: String, myUserId: String)throws  {
-    let handle =
-        try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_constructor_orchestratorcore_new(
-        FfiConverterString.lower(keysJson),
-        FfiConverterString.lower(myUserId),$0
-    )
-}
-    self.init(unsafeFromHandle: handle)
-}
+    // No primary constructor declared for this class.
 
     deinit {
         try! rustCall { uniffi_construct_core_fn_free_orchestratorcore(handle, $0) }
@@ -1295,15 +1192,14 @@ open func ackIsProcessed(messageId: String) -> AckCheckResult  {
 }
     
     /**
-     * Mark a message as processed in the ACK cache. Returns action JSON.
+     * Mark a message as processed in the ACK cache.
      */
-open func ackMarkProcessed(messageId: String) -> String  {
-    return try!  FfiConverterString.lift(try! rustCall() {
+open func ackMarkProcessed(messageId: String)  {try! rustCall() {
     uniffi_construct_core_fn_method_orchestratorcore_ack_mark_processed(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(messageId),$0
     )
-})
+}
 }
     
 open func applyPqContribution(contactId: String, kemSharedSecret: [UInt8])throws   {try rustCallWithError(FfiConverterTypeCryptoError_lift) {
@@ -1357,14 +1253,6 @@ open func exportOneTimePrekeys()throws  -> [UInt8]  {
 })
 }
     
-open func exportOneTimePrekeysJson()throws  -> String  {
-    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_method_orchestratorcore_export_one_time_prekeys_json(
-            self.uniffiCloneHandle(),$0
-    )
-})
-}
-    
     /**
      * Export the full orchestrator coordination state (ACK cache, healing queue,
      * init locks, archive index, prekey tracker) as a CFE binary blob.
@@ -1386,47 +1274,11 @@ open func exportPrivateKeys()throws  -> [UInt8]  {
 })
 }
     
-open func exportPrivateKeysJson()throws  -> String  {
-    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_method_orchestratorcore_export_private_keys_json(
-            self.uniffiCloneHandle(),$0
-    )
-})
-}
-    
-open func exportRegistrationBundleJson()throws  -> String  {
-    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_method_orchestratorcore_export_registration_bundle_json(
-            self.uniffiCloneHandle(),$0
-    )
-})
-}
-    
 open func exportSession(contactId: String)throws  -> [UInt8]  {
     return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_method_orchestratorcore_export_session(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(contactId),$0
-    )
-})
-}
-    
-open func exportSessionJson(contactId: String)throws  -> String  {
-    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_method_orchestratorcore_export_session_json(
-            self.uniffiCloneHandle(),
-        FfiConverterString.lower(contactId),$0
-    )
-})
-}
-    
-    /**
-     * Export non-crypto orchestration state to JSON.
-     */
-open func exportStateJson()throws  -> String  {
-    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_method_orchestratorcore_export_state_json(
-            self.uniffiCloneHandle(),$0
     )
 })
 }
@@ -1504,29 +1356,13 @@ open func getSigningKeyBytes()throws  -> Data  {
 }
     
     /**
-     * Typed event handler — replaces `handle_event_json`.
-     * Accepts a typed `CfeIncomingEvent` and returns typed `CfeAction` list.
+     * Typed event handler — accepts a typed `CfeIncomingEvent` and returns typed `CfeAction` list.
      */
 open func handleEvent(event: CfeIncomingEvent)throws  -> [CfeAction]  {
     return try  FfiConverterSequenceTypeCfeAction.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_method_orchestratorcore_handle_event(
             self.uniffiCloneHandle(),
         FfiConverterTypeCfeIncomingEvent_lower(event),$0
-    )
-})
-}
-    
-    /**
-     * Unified event handler (legacy JSON interface — kept for fallback).
-     *
-     * `event_json` — JSON-encoded `IncomingEvent` (see Rust `orchestration::actions`).
-     * Returns a JSON array of `Action` objects for the platform to execute.
-     */
-open func handleEventJson(eventJson: String)throws  -> [String]  {
-    return try  FfiConverterSequenceString.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_method_orchestratorcore_handle_event_json(
-            self.uniffiCloneHandle(),
-        FfiConverterString.lower(eventJson),$0
     )
 })
 }
@@ -1571,14 +1407,6 @@ open func importOneTimePrekeys(data: [UInt8])throws   {try rustCallWithError(Ffi
 }
 }
     
-open func importOneTimePrekeysJson(json: String)throws   {try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_method_orchestratorcore_import_one_time_prekeys_json(
-            self.uniffiCloneHandle(),
-        FfiConverterString.lower(json),$0
-    )
-}
-}
-    
     /**
      * Restore the full orchestrator coordination state from a CFE blob.
      * Call at app start before processing any messages.
@@ -1597,16 +1425,6 @@ open func importSession(contactId: String, data: [UInt8])throws  -> String  {
             self.uniffiCloneHandle(),
         FfiConverterString.lower(contactId),
         FfiConverterSequenceUInt8.lower(data),$0
-    )
-})
-}
-    
-open func importSessionJson(contactId: String, sessionJson: String)throws  -> String  {
-    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_method_orchestratorcore_import_session_json(
-            self.uniffiCloneHandle(),
-        FfiConverterString.lower(contactId),
-        FfiConverterString.lower(sessionJson),$0
     )
 })
 }
@@ -1650,17 +1468,15 @@ open func prekeysAvailableCount() -> UInt32  {
     
     /**
      * Register a KEM shared secret as a deferred contribution.
-     * Returns JSON action string (SaveSessionToSecureStore for per-entry backup).
      */
-open func registerPqDeferred(contactId: String, otpkId: UInt32, sharedSecret: [UInt8]) -> String  {
-    return try!  FfiConverterString.lift(try! rustCall() {
+open func registerPqDeferred(contactId: String, otpkId: UInt32, sharedSecret: [UInt8])  {try! rustCall() {
     uniffi_construct_core_fn_method_orchestratorcore_register_pq_deferred(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(contactId),
         FfiConverterUInt32.lower(otpkId),
         FfiConverterSequenceUInt8.lower(sharedSecret),$0
     )
-})
+}
 }
     
 open func removeSession(contactId: String) -> Bool  {
@@ -1751,7 +1567,7 @@ public func FfiConverterTypeOrchestratorCore_lower(_ value: OrchestratorCore) ->
  * Thread-safe ACK deduplication store.
  *
  * Replaces Swift `PersistentACKStore`. The in-memory `HashSet` lives here;
- * CoreData / Room persistence is requested via returned `Action` JSON strings.
+ * CoreData / Room persistence is handled by the orchestrator CFE state.
  */
 public protocol RustAckStoreProtocol: AnyObject, Sendable {
     
@@ -1766,22 +1582,21 @@ public protocol RustAckStoreProtocol: AnyObject, Sendable {
     func isProcessed(messageId: String)  -> AckCheckResult
     
     /**
-     * Mark `message_id` as processed.  Returns a JSON-encoded `Action` array
-     * (typically a single `PersistMessage` action) that the platform must execute.
+     * Mark `message_id` as processed in the in-memory cache.
      */
-    func markProcessed(messageId: String)  -> String
+    func markProcessed(messageId: String) 
     
     /**
-     * Returns a JSON-encoded `Action` requesting the platform to delete expired records.
+     * Evict expired entries from the in-memory cache.
      */
-    func pruneExpired()  -> String
+    func pruneExpired() 
     
 }
 /**
  * Thread-safe ACK deduplication store.
  *
  * Replaces Swift `PersistentACKStore`. The in-memory `HashSet` lives here;
- * CoreData / Room persistence is requested via returned `Action` JSON strings.
+ * CoreData / Room persistence is handled by the orchestrator CFE state.
  */
 open class RustAckStore: RustAckStoreProtocol, @unchecked Sendable {
     fileprivate let handle: UInt64
@@ -1862,27 +1677,24 @@ open func isProcessed(messageId: String) -> AckCheckResult  {
 }
     
     /**
-     * Mark `message_id` as processed.  Returns a JSON-encoded `Action` array
-     * (typically a single `PersistMessage` action) that the platform must execute.
+     * Mark `message_id` as processed in the in-memory cache.
      */
-open func markProcessed(messageId: String) -> String  {
-    return try!  FfiConverterString.lift(try! rustCall() {
+open func markProcessed(messageId: String)  {try! rustCall() {
     uniffi_construct_core_fn_method_rustackstore_mark_processed(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(messageId),$0
     )
-})
+}
 }
     
     /**
-     * Returns a JSON-encoded `Action` requesting the platform to delete expired records.
+     * Evict expired entries from the in-memory cache.
      */
-open func pruneExpired() -> String  {
-    return try!  FfiConverterString.lift(try! rustCall() {
+open func pruneExpired()  {try! rustCall() {
     uniffi_construct_core_fn_method_rustackstore_prune_expired(
             self.uniffiCloneHandle(),$0
     )
-})
+}
 }
     
 
@@ -5963,22 +5775,10 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_classiccryptocore_export_one_time_prekeys() != 45190) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_classiccryptocore_export_one_time_prekeys_json() != 33094) {
-        return InitializationResult.apiChecksumMismatch
-    }
     if (uniffi_construct_core_checksum_method_classiccryptocore_export_private_keys() != 61671) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_classiccryptocore_export_private_keys_json() != 62808) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_method_classiccryptocore_export_registration_bundle_json() != 47405) {
-        return InitializationResult.apiChecksumMismatch
-    }
     if (uniffi_construct_core_checksum_method_classiccryptocore_export_session() != 12774) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_method_classiccryptocore_export_session_json() != 62166) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_classiccryptocore_generate_one_time_prekeys() != 24636) {
@@ -6002,16 +5802,10 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_classiccryptocore_import_one_time_prekeys() != 47991) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_classiccryptocore_import_one_time_prekeys_json() != 4481) {
-        return InitializationResult.apiChecksumMismatch
-    }
     if (uniffi_construct_core_checksum_method_classiccryptocore_import_private_keys() != 9774) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_classiccryptocore_import_session() != 41224) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_method_classiccryptocore_import_session_json() != 8946) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_classiccryptocore_init_receiving_session() != 3042) {
@@ -6041,7 +5835,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_orchestratorcore_ack_is_processed() != 63134) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_ack_mark_processed() != 8078) {
+    if (uniffi_construct_core_checksum_method_orchestratorcore_ack_mark_processed() != 13454) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_apply_pq_contribution() != 43446) {
@@ -6059,28 +5853,13 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_orchestratorcore_export_one_time_prekeys() != 58452) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_export_one_time_prekeys_json() != 49177) {
-        return InitializationResult.apiChecksumMismatch
-    }
     if (uniffi_construct_core_checksum_method_orchestratorcore_export_orchestrator_state() != 49630) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_export_private_keys() != 53846) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_export_private_keys_json() != 1679) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_export_registration_bundle_json() != 25604) {
-        return InitializationResult.apiChecksumMismatch
-    }
     if (uniffi_construct_core_checksum_method_orchestratorcore_export_session() != 59847) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_export_session_json() != 54141) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_export_state_json() != 38010) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_generate_one_time_prekeys() != 33822) {
@@ -6107,9 +5886,6 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_orchestratorcore_handle_event() != 2823) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_handle_event_json() != 27506) {
-        return InitializationResult.apiChecksumMismatch
-    }
     if (uniffi_construct_core_checksum_method_orchestratorcore_has_session() != 45817) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -6122,16 +5898,10 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_orchestratorcore_import_one_time_prekeys() != 21471) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_import_one_time_prekeys_json() != 33728) {
-        return InitializationResult.apiChecksumMismatch
-    }
     if (uniffi_construct_core_checksum_method_orchestratorcore_import_orchestrator_state() != 51713) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_import_session() != 64657) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_import_session_json() != 46860) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_init_receiving_session() != 36112) {
@@ -6146,7 +5916,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_orchestratorcore_prekeys_available_count() != 33104) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_register_pq_deferred() != 34432) {
+    if (uniffi_construct_core_checksum_method_orchestratorcore_register_pq_deferred() != 43713) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_remove_session() != 15351) {
@@ -6167,10 +5937,10 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_rustackstore_is_processed() != 16063) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_rustackstore_mark_processed() != 42779) {
+    if (uniffi_construct_core_checksum_method_rustackstore_mark_processed() != 36744) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_rustackstore_prune_expired() != 30275) {
+    if (uniffi_construct_core_checksum_method_rustackstore_prune_expired() != 19780) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_rusthealingqueue_can_heal() != 46759) {
@@ -6225,9 +5995,6 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_trafficprotectionmanager_update_battery_level() != 31087) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_constructor_orchestratorcore_new() != 18118) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_constructor_rustackstore_new() != 64675) {

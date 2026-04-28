@@ -245,9 +245,25 @@ struct DiagnosticsView: View {
 
     #if DEBUG
     private func resetLocalData() {
-        // Wipe Keychain
-        KeychainManager.shared.deleteAllKeys()
-        // Wipe UserDefaults registration / migration flags
+        // --- Keychain: crypto keys ---
+        KeychainManager.shared.deleteAllKeys()       // identity_key, signing_key, crypto_private_keys_json, sessions
+        KeychainManager.shared.deleteDeviceKeys()    // deviceId, deviceSigningKey, deviceIdentityKey
+        KeychainManager.shared.deleteOtpks()     // crypto_otpks (OTPK bundle)
+        KeychainManager.shared.deleteSessionToken()
+        KeychainManager.shared.deleteRefreshToken()
+
+        // Kyber SPK — keys are stored under these fixed names in PQCKeyManager
+        KeychainManager.shared.deleteData(forKey: "construct.kyber.spk.public")
+        KeychainManager.shared.deleteData(forKey: "construct.kyber.spk.secret")
+        KeychainManager.shared.deleteData(forKey: "construct.kyber.spk.id")
+
+        // Orchestrator CFE state (session archive index, locks, etc.)
+        CryptoManager.shared.clearOrchestratorStateCFE()
+
+        // Clear in-memory session state so the app shows the registration screen
+        SessionManager.shared.clearSession()
+
+        // --- UserDefaults: registration / migration flags ---
         let keysToRemove = [
             "construct.deviceId", "construct.userId",
             "pqcKyberSPKMigrationV1Done",
@@ -256,7 +272,7 @@ struct DiagnosticsView: View {
             "construct.kyber.otpk.nextKeyId",
         ]
         keysToRemove.forEach { UserDefaults.standard.removeObject(forKey: $0) }
-        Log.info("🗑️ [DEV] Local data and Keychain wiped", category: "Diagnostics")
+        Log.info("🗑️ [DEV] Full Keychain + UserDefaults wipe complete (device will re-register on next launch)", category: "Diagnostics")
     }
     #endif
 }

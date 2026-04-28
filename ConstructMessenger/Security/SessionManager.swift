@@ -36,6 +36,7 @@ class SessionManager {
         guard !uid.isEmpty else { return }
         KeychainManager.shared.saveUserID(uid)
         self.userId = uid
+        syncAuthCache()
     }
 
     /// Clears stored tokens so restoreOrAuthenticateDevice() will fall through to device
@@ -47,6 +48,7 @@ class SessionManager {
         self.sessionToken = nil
         self.refreshToken = nil
         isSessionInvalidated = true
+        GRPCAuthCache.shared.invalidate()
         Log.info("🔑 Tokens invalidated — device re-auth will be triggered", category: "SessionManager")
     }
     
@@ -106,7 +108,9 @@ class SessionManager {
             Log.error("❌ Unsupported JWT alg in cached token: \(alg). Clearing session.", category: "SessionManager")
             clearSession()
             isSessionInvalidated = true
+            return
         }
+        syncAuthCache()
     }
     
     // ✅ Save both access and refresh tokens with expiration and userId
@@ -131,6 +135,7 @@ class SessionManager {
         self.refreshToken = refreshToken
         
         Log.info("✅ Tokens saved - expires in: \(expiresIn / 60) minutes", category: "SessionManager")
+        syncAuthCache()
     }
 
     func clearSession() {
@@ -143,5 +148,20 @@ class SessionManager {
         self.sessionToken = nil
         self.refreshToken = nil
         self.userId = nil
+        syncAuthCache()
+    }
+
+    // MARK: - Auth cache sync
+
+    /// Snapshots the current session state into `GRPCAuthCache` so `AuthInterceptor`
+    /// can read auth credentials without a MainActor hop on every RPC call.
+    /// Must be called after any mutation to session token, userId, or expiry.
+    private func syncAuthCache() {
+        GRPCAuthCache.shared.update(AuthSnapshot(
+            token: sessionToken,
+            userId: currentUserId,
+            deviceId: currentDeviceId,
+            expiresAt: sessionExpires
+        ))
     }
 }

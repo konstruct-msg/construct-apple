@@ -36,8 +36,6 @@ enum MetricEvent: String {
     case streamOpenEnd          = "stream_open_end"
 
     // Routing/failover
-    case rpcFastICEFallbackArmed      = "rpc_fast_ice_fallback_armed"
-    case rpcFastICEFallbackTriggered  = "rpc_fast_ice_fallback_triggered"
     case streamOpenFastFailover       = "stream_open_fast_failover"
 
     // Calls

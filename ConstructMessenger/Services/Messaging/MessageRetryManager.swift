@@ -106,8 +106,13 @@ class MessageRetryManager {
                         fetchRequest.predicate = NSPredicate(format: "id == %@", capturedMessageId)
                         fetchRequest.fetchLimit = 1
                         guard let liveMsg = try? context.fetch(fetchRequest).first else { return }
-                        let code = (error as? RPCError).map { String(describing: $0.code).lowercased() } ?? ""
-                        let isRetryableTransport = code == "deadlineexceeded" || code == "unavailable" || code == "cancelled"
+                        let isRetryableTransport: Bool = {
+                            if error is GRPCClientError { return true }
+                            if let rpc = error as? RPCError {
+                                return rpc.code == .deadlineExceeded || rpc.code == .unavailable || rpc.code == .cancelled
+                            }
+                            return false
+                        }()
                         liveMsg.deliveryStatus = isRetryableTransport ? .queued : .failed
                         context.saveAndLog()
                         if isRetryableTransport {
@@ -133,6 +138,33 @@ class MessageRetryManager {
         onError("payload_expired")
     }
     
+    // MARK: - Global Queued Messages Processing
+
+    /// Process queued messages for ALL chats — called from the background service layer
+    /// so retry works even when no chat screen is open.
+    func processAllQueuedMessages(currentUserId: String, context: NSManagedObjectContext) {
+        let fetchRequest: NSFetchRequest<Chat> = Chat.fetchRequest()
+        guard let chats = try? context.fetch(fetchRequest) else { return }
+
+        for chat in chats {
+            guard let recipientId = chat.otherUser?.id, !recipientId.isEmpty else { continue }
+            let queuedCheck = NSFetchRequest<Message>(entityName: "Message")
+            queuedCheck.predicate = NSCompoundPredicate(orPredicateWithSubpredicates: [
+                NSPredicate(format: "chat == %@ AND deliveryStatusRaw == %d", chat, DeliveryStatus.queued.rawValue),
+                NSPredicate(format: "chat == %@ AND deliveryStatusRaw == %d AND retryCount < %d",
+                            chat, DeliveryStatus.failed.rawValue, FeatureFlags.maxMessageRetryAttempts)
+            ])
+            queuedCheck.fetchLimit = 1
+            guard (try? context.count(for: queuedCheck)) ?? 0 > 0 else { continue }
+            sendQueuedMessages(
+                for: chat,
+                recipientId: recipientId,
+                currentUserId: currentUserId,
+                context: context
+            )
+        }
+    }
+
     // MARK: - Queued Messages Processing
     
     /// Send all queued messages for a chat (called when connection is restored)
@@ -242,8 +274,13 @@ class MessageRetryManager {
                         fr.predicate = NSPredicate(format: "id == %@", messageId)
                         fr.fetchLimit = 1
                         guard let liveMsg = try? context.fetch(fr).first else { return }
-                        let code = (error as? RPCError).map { String(describing: $0.code).lowercased() } ?? ""
-                        let isRetryableTransport = code == "deadlineexceeded" || code == "unavailable" || code == "cancelled"
+                        let isRetryableTransport: Bool = {
+                            if error is GRPCClientError { return true }
+                            if let rpc = error as? RPCError {
+                                return rpc.code == .deadlineExceeded || rpc.code == .unavailable || rpc.code == .cancelled
+                            }
+                            return false
+                        }()
                         liveMsg.deliveryStatus = isRetryableTransport ? .queued : .failed
                         context.saveAndLog()
                     }

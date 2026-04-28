@@ -50,6 +50,10 @@ enum NetworkTiming {
         // Routing failover ("happy eyeballs")
         static let fastFallbackDirectTimeout: TimeInterval = 4.0
         static let streamOpenAcceptTimeout: TimeInterval = 2.5
+        /// Faster timeout used when the relay is already verified (TCP/TLS/obfs4/HTTP2 are
+        /// all warm). A verified relay should respond to any new RPC within one RTT (≤200ms
+        /// for AMS). 1.0s is a comfortable upper bound; anything longer signals a broken tunnel.
+        static let streamOpenAcceptTimeoutVerified: TimeInterval = 1.0
         static let streamOpenAcceptPollInterval: TimeInterval = 0.05
 
         // Transport keepalive (HTTP/2)
@@ -79,7 +83,7 @@ enum NetworkTiming {
             static let endSession: TimeInterval = 20
 
             // Messaging (background/service)
-            static let getPendingMessages: TimeInterval = 30
+            static let getPendingMessages: TimeInterval = 8
 
             // Key service (session init / rotations)
             static let getPreKeyBundle: TimeInterval = 20
@@ -166,7 +170,11 @@ enum NetworkTiming {
         static let maxRetryDelay: TimeInterval = 60
         static let cleanEndReconnectDelay: TimeInterval = 3
         static let backoffBaseDelay: TimeInterval = 2
-        static let fetchMissedMessagesWallClockCap: TimeInterval = 3
+        static let fetchMissedMessagesWallClockCap: TimeInterval = 1.5
+        /// Faster fetch cap used when the relay is already verified. On a warm relay the
+        /// fetchMissedMessages RPC should complete in <100ms; 0.5s gives ample headroom while
+        /// keeping the overall broken-relay detection window at ≤1.5s (0.5 + 1.0 stream timeout).
+        static let fetchMissedMessagesWallClockCapVerified: TimeInterval = 0.5
     }
 
     // MARK: - Media

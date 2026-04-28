@@ -46,7 +46,7 @@ final class PersistentACKStore {
                 fetch.fetchLimit = 1
                 found = (try? context.fetch(fetch))?.isEmpty == false
                 if found {
-                    _ = rustAck.markProcessed(messageId: messageId)
+                    rustAck.markProcessed(messageId: messageId)
                 }
             }
             return found
@@ -68,7 +68,7 @@ final class PersistentACKStore {
                 fetch.fetchLimit = 1
                 let found = (try? context.fetch(fetch))?.isEmpty == false
                 if found {
-                    _ = rustAck.markProcessed(messageId: messageId)
+                    rustAck.markProcessed(messageId: messageId)
                 }
                 return found
             }
@@ -86,12 +86,12 @@ final class PersistentACKStore {
     /// Always follow up with `markProcessed(_:senderId:in:)` on the background thread to
     /// persist the ACK to Core Data across app restarts.
     func preemptACK(_ messageId: String) {
-        _ = rustAck.markProcessed(messageId: messageId)
+        rustAck.markProcessed(messageId: messageId)
     }
 
     /// Marks `messageId` as processed. Idempotent — safe to call multiple times.
     func markProcessed(_ messageId: String, senderId: String, in context: NSManagedObjectContext) {
-        _ = rustAck.markProcessed(messageId: messageId)
+        rustAck.markProcessed(messageId: messageId)
 
         context.performAndWait {
             let fetch = ProcessedMessage.fetchRequest()
@@ -116,7 +116,7 @@ final class PersistentACKStore {
 
     /// Deletes ACK entries older than `retentionDays`. Call once per app launch.
     func pruneExpired(in context: NSManagedObjectContext) {
-        _ = rustAck.pruneExpired()
+        rustAck.pruneExpired()
 
         let cutoff = Calendar.current.date(byAdding: .day, value: -Self.retentionDays, to: Date()) ?? Date.distantPast
         let fetch = ProcessedMessage.fetchRequest()

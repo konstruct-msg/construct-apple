@@ -26,22 +26,16 @@ struct AuthInterceptor: ClientInterceptor {
         var request = request
 
         if !Self.unauthenticatedMethods.contains(methodName) {
-            let (token, userId, deviceId, isValid) = await MainActor.run {
-                (SessionManager.shared.sessionToken,
-                 SessionManager.shared.currentUserId,
-                 SessionManager.shared.currentDeviceId,
-                 SessionManager.shared.isSessionValid)
-            }
-            guard let token, isValid else {
+            // Read from the lock-protected cache — no actor hop needed.
+            let snap = GRPCAuthCache.shared.snapshot
+            guard let token = snap.token, snap.isValid else {
                 throw RPCError(code: .unauthenticated, message: "Session token expired — please log in")
             }
             request.metadata.addString("Bearer \(token)", forKey: "authorization")
-            if let userId {
+            if let userId = snap.userId {
                 request.metadata.addString(userId, forKey: "x-user-id")
             } else {
-                // userId absent — attempt last-resort recovery from JWT before sending.
-                // If recovery fails, the RPC will be rejected by the server; fail early
-                // with a clear error rather than letting the server return UNAUTHENTICATED.
+                // Rare recovery path: userId missing from cache, extract from JWT claim.
                 if let recovered = JWTUtils.extractUserId(from: token) {
                     await MainActor.run { SessionManager.shared.updateUserId(recovered) }
                     request.metadata.addString(recovered, forKey: "x-user-id")
@@ -49,7 +43,7 @@ struct AuthInterceptor: ClientInterceptor {
                     throw RPCError(code: .unauthenticated, message: "x-user-id unavailable — userId missing from session")
                 }
             }
-            if let deviceId {
+            if let deviceId = snap.deviceId {
                 request.metadata.addString(deviceId, forKey: "x-device-id")
             }
         }

@@ -148,49 +148,42 @@ class ChatsViewModel {
             while !Task.isCancelled {
                 guard let self else { return }
 
-                // Read current state and register for change notification in a single call,
-                // eliminating the missed-observation window between two separate tracking blocks.
-                var capturedState: PollingState?
+                // Register observations on all three tracked properties.
+                // capturedState is read here solely to register the @Observable observations —
+                // by the time onChange fires the captured values are stale (they reflect the
+                // state at registration time, BEFORE the mutation that triggered onChange).
+                // We therefore never compare capturedState to lastState; instead we always
+                // re-read the current state as `settled` after onChange fires.
                 await withCheckedContinuation { continuation in
                     withObservationTracking {
-                        capturedState = PollingState(
-                            hasToken: SessionManager.shared.sessionToken != nil,
-                            status: self.connectionStatusManager.connectionStatus,
-                            pushEnabled: {
-                                #if canImport(UIKit)
-                                PushNotificationManager.shared.isPushEnabled
-                                #else
-                                false
-                                #endif
-                            }()
-                        )
+                        _ = SessionManager.shared.sessionToken
+                        _ = self.connectionStatusManager.connectionStatus
+                        #if canImport(UIKit)
+                        _ = PushNotificationManager.shared.isPushEnabled
+                        #endif
                     } onChange: {
                         continuation.resume()
                     }
                 }
-                guard let nextState = capturedState else { continue }
 
-                if nextState != lastState {
-                    lastState = nextState
-                    // Yield so any pending @Observable property writes (e.g.
-                    // markStreamConnected()) settle before we act on the state.
-                    await Task.yield()
-                    // Re-read after yield in case status changed during yield
-                    let settled = PollingState(
-                        hasToken: SessionManager.shared.sessionToken != nil,
-                        status: self.connectionStatusManager.connectionStatus,
-                        pushEnabled: {
-                            #if canImport(UIKit)
-                            PushNotificationManager.shared.isPushEnabled
-                            #else
-                            false
-                            #endif
-                        }()
-                    )
-                    lastState = settled
-                    Log.debug("📡 Stream state: token=\(settled.hasToken ? "present" : "nil"), status=\(settled.status.displayText), push=\(settled.pushEnabled)", category: "ChatsViewModel")
-                    self.handlePollingState(settled)
-                }
+                // onChange fired — something changed. Yield so any concurrent
+                // @Observable mutations (e.g. markStreamConnected()) settle first.
+                await Task.yield()
+                let settled = PollingState(
+                    hasToken: SessionManager.shared.sessionToken != nil,
+                    status: self.connectionStatusManager.connectionStatus,
+                    pushEnabled: {
+                        #if canImport(UIKit)
+                        PushNotificationManager.shared.isPushEnabled
+                        #else
+                        false
+                        #endif
+                    }()
+                )
+                guard settled != lastState else { continue }
+                lastState = settled
+                Log.debug("📡 Stream state: token=\(settled.hasToken ? "present" : "nil"), status=\(settled.status.displayText), push=\(settled.pushEnabled)", category: "ChatsViewModel")
+                self.handlePollingState(settled)
             }
         }
         observationTasks.append(streamTask)
@@ -214,7 +207,14 @@ class ChatsViewModel {
             // of waiting for the next retry window (up to 18+ seconds).
             if !pollingStateHadToken {
                 pollingStateHadToken = true
-                forceReconnectStream()
+                // Skip forceReconnect if a connection attempt is already in progress
+                // (e.g. app-active handler fired first). Cancelling and restarting would
+                // waste the time already spent on TLS + fetchMissedMessages (~5-10s).
+                if streamManager.isActivelyConnecting || streamManager.isConnected {
+                    startMessageStream()
+                } else {
+                    forceReconnectStream()
+                }
             } else {
                 startMessageStream()
             }

@@ -31,7 +31,6 @@ class CryptoManager {
     /// False when the user is authenticated but device keys are missing (partial Keychain state).
     var isInitialized: Bool { orchestratorCore != nil }
     private var _bootstrapCore: ClassicCryptoCore?
-    private var _cachedKeysJson: String?
     private var _cachedUserId: String?
 
     /// Returns the local user identity for Double Ratchet AEAD associated data.
@@ -352,7 +351,7 @@ class CryptoManager {
     func markAckProcessedInOrchestrator(messageId: String) {
         coreLock.lock()
         defer { coreLock.unlock() }
-        _ = orchestratorCore?.ackMarkProcessed(messageId: messageId)
+        orchestratorCore?.ackMarkProcessed(messageId: messageId)
     }
 
     // MARK: - Orchestrator Event Bridge
@@ -493,11 +492,11 @@ class CryptoManager {
     // External callers MUST use these instead of accessing orchestratorCore directly.
 
     /// Sign binary data using the device Ed25519 identity key.
-    func signBundleData(_ bundleDataJson: [UInt8]) throws -> Data {
+    func signBundleData(_ bundleData: [UInt8]) throws -> Data {
         coreLock.lock()
         defer { coreLock.unlock() }
         guard let core = orchestratorCore else { throw CryptoManagerError.coreNotInitialized }
-        let sigBase64 = try core.signBundleData(bundleDataJson: bundleDataJson)
+        let sigBase64 = try core.signBundleData(bundleDataJson: bundleData)
         guard let data = Data(base64Encoded: sigBase64) else { throw CryptoManagerError.invalidSignature }
         return data
     }
@@ -512,13 +511,13 @@ class CryptoManager {
 
     /// Register a Kyber KEM shared secret for deferred application and persist CFE snapshot.
     @discardableResult
-    func registerPqDeferred(contactId: String, otpkId: UInt32, sharedSecret: [UInt8]) -> String? {
+    func registerPqDeferred(contactId: String, otpkId: UInt32, sharedSecret: [UInt8]) -> Bool {
         coreLock.lock()
         defer { coreLock.unlock() }
-        guard let core = orchestratorCore else { return nil }
-        let result = core.registerPqDeferred(contactId: contactId, otpkId: otpkId, sharedSecret: sharedSecret)
+        guard let core = orchestratorCore else { return false }
+        core.registerPqDeferred(contactId: contactId, otpkId: otpkId, sharedSecret: sharedSecret)
         PQCKeyManager.saveCFESnapshot(to: core)
-        return result
+        return true
     }
 
     /// Export the Kyber session state as a CFE blob.
@@ -665,7 +664,7 @@ class CryptoManager {
         self._bootstrapCore = nil
 
         // Delete private keys JSON (identity, signed prekey, signing key)
-        KeychainManager.shared.deletePrivateKeysJson()
+        KeychainManager.shared.deletePrivateKeys()
 
         // Delete all individual keys and ALL sessions
         KeychainManager.shared.deleteAllKeys()
@@ -730,11 +729,9 @@ class CryptoManager {
             return
         }
 
-        // Build OrchestratorCore — prefer CFE binary from Keychain, fallback to cached JSON
+        // Build OrchestratorCore from Keychain or bootstrap core keys.
         let keysData: [UInt8]?
-        if let cached = _cachedKeysJson, let d = cached.data(using: .utf8) {
-            keysData = [UInt8](d)
-        } else if let d = KeychainManager.shared.loadPrivateKeysData() {
+        if let d = KeychainManager.shared.loadPrivateKeysData() {
             keysData = [UInt8](d)
         } else if let bootstrapData = try? _bootstrapCore?.exportPrivateKeys() {
             keysData = bootstrapData
@@ -764,7 +761,6 @@ class CryptoManager {
             loadOrchestratorStateCFE(into: newCore)
             orchestratorCore = newCore
             _bootstrapCore = nil
-            _cachedKeysJson = nil
             Log.debug("🔑 CryptoManager: OrchestratorCore created (cryptoId=\(cryptoId))", category: "CryptoManager")
         } catch {
             Log.error("❌ setLocalUserId: OrchestratorCore init failed: \(error)", category: "CryptoManager")
@@ -960,18 +956,15 @@ class CryptoManager {
     private func logLocalKeyDiagnostics() {
         guard let core = orchestratorCore else { return }
         do {
-            let bundleJson = try core.exportRegistrationBundleJson()
-            if let data = bundleJson.data(using: .utf8),
-               let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                func hexPrefix(_ base64: String) -> String {
-                    guard let d = Data(base64Encoded: base64) else { return "?" }
-                    return d.prefix(8).map { String(format: "%02x", $0) }.joined()
-                }
-                let ik = (dict["identity_public"] as? String).map(hexPrefix) ?? "?"
-                let spk = (dict["signed_prekey_public"] as? String).map(hexPrefix) ?? "?"
-                let vk = (dict["verifying_key"] as? String).map(hexPrefix) ?? "?"
-                Log.error("🔍 LOCAL KEY DIAGNOSTICS — identity=\(ik)… spk=\(spk)… vk=\(vk)…", category: "CryptoManager")
+            let fields = try core.getRegistrationBundleFields()
+            func hexPrefix(_ b64: String) -> String {
+                guard let d = Data(base64Encoded: b64) else { return "?" }
+                return d.prefix(8).map { String(format: "%02x", $0) }.joined()
             }
+            let ik = hexPrefix(fields.identityPublic)
+            let spk = hexPrefix(fields.signedPrekeyPublic)
+            let vk = hexPrefix(fields.verifyingKey)
+            Log.error("🔍 LOCAL KEY DIAGNOSTICS — identity=\(ik)… spk=\(spk)… vk=\(vk)…", category: "CryptoManager")
         } catch {
             Log.error("🔍 LOCAL KEY DIAGNOSTICS: export failed: \(error)", category: "CryptoManager")
         }
@@ -988,14 +981,10 @@ class CryptoManager {
         }
 
         do {
-            let bundleJson = try core.exportRegistrationBundleJson()
-            guard let data = bundleJson.data(using: .utf8),
-                  let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let localIkB64 = dict["identity_public"] as? String,
-                  let localSpkB64 = dict["signed_prekey_public"] as? String,
-                  let localIk = Data(base64Encoded: localIkB64),
-                  let localSpk = Data(base64Encoded: localSpkB64) else {
-                Log.error("🔍 Key consistency: failed to parse local bundle", category: "CryptoManager")
+            let fields = try core.getRegistrationBundleFields()
+            guard let localIk = Data(base64Encoded: fields.identityPublic),
+                  let localSpk = Data(base64Encoded: fields.signedPrekeyPublic) else {
+                Log.error("🔍 Key consistency: failed to decode local bundle fields", category: "CryptoManager")
                 return true
             }
 

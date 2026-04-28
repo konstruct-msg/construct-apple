@@ -39,11 +39,11 @@ enum OtpkReplenishmentService {
         }
 
         // Persist private keys to Keychain BEFORE uploading so they survive even if the
-        // network call fails or the app is killed mid-flight.  Without this, deleteOtpksJson()
+        // network call fails or the app is killed mid-flight.  Without this, deleteOtpks()
         // followed by a throw leaves the Keychain empty on the next restart, triggering the
         // full-replace fallback again and permanently destroying messages encrypted to the old set.
         if replaceExisting {
-            KeychainManager.shared.deleteOtpksJson()
+            KeychainManager.shared.deleteOtpks()
         }
         persistOtpks()
 

@@ -92,13 +92,6 @@ struct DebugMetricsOverlay: View {
                 Text("count: \(vm.streamFastFailoverCount)")
                     .foregroundColor(vm.streamFastFailoverCount == 0 ? .orange.opacity(0.7) : .yellow)
             }
-            HStack {
-                Text("RPC fast ICE fallback")
-                    .frame(width: 160, alignment: .leading)
-                    .foregroundColor(.orange.opacity(0.8))
-                Text("count: \(vm.rpcFastFallbackCount)")
-                    .foregroundColor(vm.rpcFastFallbackCount == 0 ? .orange.opacity(0.7) : .yellow)
-            }
         }
     }
 
@@ -156,7 +149,7 @@ final class DebugMetricsViewModel {
     var avgGRPCConnect: Double? = nil
     var avgICEStart: Double? = nil
     var streamFastFailoverCount: Int = 0
-    var rpcFastFallbackCount: Int = 0
+
 
     private var refreshTimer: Timer?
 
@@ -182,7 +175,7 @@ final class DebugMetricsViewModel {
         avgGRPCConnect = m.averageLatency(for: "grpc_connect_start→grpc_connect_end")
         avgICEStart = m.averageLatency(for: "ice_proxy_start_begin→ice_proxy_start_end")
         streamFastFailoverCount = m.count(event: .streamOpenFastFailover, last: 200)
-        rpcFastFallbackCount = m.count(event: .rpcFastICEFallbackTriggered, last: 200)
+
     }
 
     func clear() {

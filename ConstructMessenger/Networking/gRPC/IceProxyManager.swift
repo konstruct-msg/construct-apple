@@ -304,7 +304,9 @@ private func makeRelay(address: String, bridgeCert: String, forceObfs4: Bool = f
         wtPath = nil
         wtHostHeader = nil
     }
-    return IceRelay(address: address, bridgeCert: resolvedCert, iatMode: .none,
+    // IAT mode: use server-pushed value when available, default to .enabled.
+    let iatMode = IceCertFetcher.iatModeSync(for: address) ?? .enabled
+    return IceRelay(address: address, bridgeCert: resolvedCert, iatMode: iatMode,
                     tlsServerName: sni, pinnedSpki: pin,
                     wtPath: wtPath, wtHostHeader: wtHostHeader)
 }
@@ -487,6 +489,9 @@ final class IceProxyManager: ObservableObject {
             UserDefaults.standard.set(mode.rawValue, forKey: IceMode.defaultsKey)
             // Also keep legacy key in sync for iceProxyPort() fast-path reads.
             UserDefaults.standard.set(mode == .on, forKey: enabledKey)
+            // Push new mode into GRPCChannelManager's in-memory cache immediately
+            // so iceProxyPort() never needs a UserDefaults read on the hot path.
+            GRPCChannelManager.shared.updateCachedIceMode(mode)
             // User explicitly changed mode — give relay selection a clean slate.
             clearRelayFailures()
         }
@@ -535,7 +540,7 @@ final class IceProxyManager: ObservableObject {
         cooldownTask?.cancel()
         cooldownTask = nil
         isOnCooldown = false
-        UserDefaults.standard.removeObject(forKey: GRPCChannelManager.iceFailedAtKey)
+        GRPCChannelManager.shared.clearICECooldownState()
         Log.info("🧊 ICE cooldown cleared by user", category: "ICE")
     }
 
@@ -1044,11 +1049,19 @@ final class IceProxyManager: ObservableObject {
 
     /// Start with the stored relay (called at app launch).
     /// In `.on` mode: starts ICE immediately.
-    /// In `.auto`/`.off` mode: skips (ICE will start on-demand if needed).
+    /// In `.auto`/`.off` mode: skips (ICE will start on-demand via `activateDPIAutoMode()` if needed).
     func startIfEnabled() async {
         migrateToModeIfNeeded()
 
         guard mode == .on else { return }
+
+        // No device keys → app is in onboarding/first-run state. ICE serves no purpose
+        // without an auth session, and attempting to connect causes a visible hang
+        // (obfs4 handshake timeout). Registration flows use startEphemeralOnDemandIfNeeded().
+        guard KeychainManager.shared.isDeviceRegistered() else {
+            Log.info("🧊 ICE startup skipped — device not registered", category: "ICE")
+            return
+        }
 
         // Restore cooldown state from previous session (persisted in UserDefaults by GRPCChannelManager).
         let stored = UserDefaults.standard.double(forKey: "iceRelayLastFailedAt")
@@ -1070,6 +1083,28 @@ final class IceProxyManager: ObservableObject {
         Log.info("🧊 All ICE endpoints failed — fetching fresh cert and retrying", category: "ICE")
         guard let freshCert = await IceCertFetcher.shared.fetchFromHTTPS() else {
             Log.error("🧊 ICE start failed and fresh cert unavailable — proxy not running", category: "ICE")
+            return
+        }
+        KeychainManager.shared.saveIceBridgeCert(freshCert)
+        await startWithRelayFallback(cert: freshCert)
+    }
+
+    /// Called when consecutive direct stream failures indicate DPI blocking (`.auto` mode only).
+    /// Starts the ICE proxy so `GRPCChannelManager.iceProxyPort()` returns a port on the next
+    /// connection. State is session-scoped: not persisted and resets on next app launch.
+    func activateDPIAutoMode() async {
+        guard mode == .auto, !isRunning else { return }
+        Log.info("🧊 DPI suspected — activating ICE for this session (auto mode)", category: "ICE")
+
+        let cert = await getIceBridgeCert()
+        if await startWithRelayFallback(cert: cert) {
+            Task { await IceCertFetcher.shared.fetchAndCacheRelayList() }
+            return
+        }
+        // Cert may be stale — try fetching a fresh one before giving up.
+        Log.info("🧊 ICE start failed with cached cert — fetching fresh cert", category: "ICE")
+        guard let freshCert = await IceCertFetcher.shared.fetchFromHTTPS() else {
+            Log.error("🧊 ICE start failed (auto mode) — no fresh cert available", category: "ICE")
             return
         }
         KeychainManager.shared.saveIceBridgeCert(freshCert)
@@ -1160,7 +1195,7 @@ final class IceProxyManager: ObservableObject {
         let relay = IceRelay(
             address: "\(iceHost):443",
             bridgeCert: cert,
-            iatMode: .none,
+            iatMode: .enabled,
             tlsServerName: iceHost
         )
         saveRelay(relay)

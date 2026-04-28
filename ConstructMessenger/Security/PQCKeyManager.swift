@@ -295,11 +295,11 @@ final class PQCKeyManager {
         rustContributions.storeDeferred(contactId: contactId, sharedSecret: encapsulation.sharedSecret)
         // Register with OrchestratorCore's PQContributionManager (single source of truth for CFE).
         // Falls back to per-entry Keychain backup if core is unavailable.
-        if CryptoManager.shared.registerPqDeferred(
+        if !CryptoManager.shared.registerPqDeferred(
             contactId: contactId,
             otpkId: 0,   // otpk_id not tracked at this layer; 0 = unknown
             sharedSecret: encapsulation.sharedSecret
-        ) == nil {
+        ) == false {
             _ = KeychainManager.shared.saveData(
                 Data(encapsulation.sharedSecret),
                 forKey: "construct.pq_deferred.\(contactId)"

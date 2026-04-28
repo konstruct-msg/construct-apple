@@ -488,12 +488,24 @@ class AuthViewModel {
     }
 
     /// Called from KeysRecoveryView "Create New Account" button — explicit user action.
-    /// Wipes ALL local state so the user goes through fresh onboarding.
+    /// Wipes ALL local crypto state so the user goes through fresh onboarding.
+    /// Core Data (message history, contacts) is intentionally preserved.
     func wipeAndReregister() {
         Log.info("🗑️ [Auth] User chose to wipe and re-register", category: "Auth")
         cancelTimeouts()
         SessionManager.shared.clearSession()
+
+        // Nullify in-memory cores before Keychain deletions so no stale reference survives.
+        CryptoManager.shared.deleteAllCryptoKeys()
+
+        // Delete device registration keys, OTPKs, and Kyber SPK — must come after
+        // deleteAllCryptoKeys() so the orchestrator core is already nil.
         KeychainManager.shared.deleteDeviceKeys()
+        KeychainManager.shared.deleteOtpks()
+        KeychainManager.shared.deleteData(forKey: "construct.kyber.spk.public")
+        KeychainManager.shared.deleteData(forKey: "construct.kyber.spk.secret")
+        KeychainManager.shared.deleteData(forKey: "construct.kyber.spk.id")
+
         deviceKeysUnavailable = false
         isAuthenticated = false
         hasRegisteredDeviceKeys = false

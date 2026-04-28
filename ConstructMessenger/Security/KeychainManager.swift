@@ -231,68 +231,42 @@ class KeychainManager {
 
     // MARK: - Private Keys JSON (for Rust persistence)
 
-    /// Save all private keys as JSON string (from Rust export)
-    func savePrivateKeysJson(_ jsonString: String) -> Bool {
-        guard let data = jsonString.data(using: .utf8) else { return false }
-        return save(data, forKey: "crypto_private_keys_json", accessible: kSecAttrAccessibleWhenUnlockedThisDeviceOnly)
-    }
-
-    /// Load private keys JSON string (for Rust import)
-    func loadPrivateKeysJson() -> String? {
-        guard let data = load(forKey: "crypto_private_keys_json") else { return nil }
-        return String(data: data, encoding: .utf8)
-    }
-
-    /// Delete private keys JSON
-    func deletePrivateKeysJson() {
-        delete(forKey: "crypto_private_keys_json")
-    }
-
-    // CFE binary variants — use the SAME Keychain key for transparent migration.
-    // Rust's importPrivateKeys() handles both CFE binary and legacy JSON automatically.
-
     /// Save private keys in CFE binary format.
     @discardableResult
     func savePrivateKeys(_ data: Data) -> Bool {
-        return save(data, forKey: "crypto_private_keys_json", accessible: kSecAttrAccessibleWhenUnlockedThisDeviceOnly)
+        return save(data, forKey: "crypto_private_keys", accessible: kSecAttrAccessibleWhenUnlockedThisDeviceOnly)
     }
 
-    /// Load raw private key bytes (CFE or legacy JSON) — format detection done in Rust.
+    /// Load raw private key bytes (CFE binary).
     func loadPrivateKeysData() -> Data? {
-        return load(forKey: "crypto_private_keys_json")
+        // Fall back to the legacy key name for users upgrading from an older build.
+        load(forKey: "crypto_private_keys") ?? load(forKey: "crypto_private_keys_json")
+    }
+
+    /// Delete private keys CFE blob.
+    func deletePrivateKeys() {
+        delete(forKey: "crypto_private_keys")
+        delete(forKey: "crypto_private_keys_json") // legacy key, may be present on older installs
     }
 
     // MARK: - One-Time Prekeys (OTPK) persistence
 
-    /// Persist the OTPK set (JSON from Rust exportOneTimePrekeysJson) so it survives app restarts.
-    @discardableResult
-    func saveOtpksJson(_ jsonString: String) -> Bool {
-        guard let data = jsonString.data(using: .utf8) else { return false }
-        return save(data, forKey: "crypto_otpks_json", accessible: kSecAttrAccessibleWhenUnlockedThisDeviceOnly)
-    }
-
-    /// Load the persisted OTPK set JSON (nil if not yet saved).
-    func loadOtpksJson() -> String? {
-        guard let data = load(forKey: "crypto_otpks_json") else { return nil }
-        return String(data: data, encoding: .utf8)
-    }
-
-    /// Delete the OTPK set (call when replacing all keys on server).
-    func deleteOtpksJson() {
-        delete(forKey: "crypto_otpks_json")
-    }
-
-    // CFE binary variants — same Keychain key, format detection in Rust.
-
     /// Save OTPKs in CFE binary format.
     @discardableResult
     func saveOtpks(_ data: Data) -> Bool {
-        return save(data, forKey: "crypto_otpks_json", accessible: kSecAttrAccessibleWhenUnlockedThisDeviceOnly)
+        return save(data, forKey: "crypto_otpks", accessible: kSecAttrAccessibleWhenUnlockedThisDeviceOnly)
     }
 
-    /// Load raw OTPK bytes (CFE or legacy JSON).
+    /// Load raw OTPK bytes (CFE binary).
     func loadOtpksData() -> Data? {
-        return load(forKey: "crypto_otpks_json")
+        // Fall back to the legacy key name for users upgrading from an older build.
+        load(forKey: "crypto_otpks") ?? load(forKey: "crypto_otpks_json")
+    }
+
+    /// Delete the OTPK set.
+    func deleteOtpks() {
+        delete(forKey: "crypto_otpks")
+        delete(forKey: "crypto_otpks_json") // legacy key, may be present on older installs
     }
     func saveCustomServerURL(_ url: String) {
         guard let data = url.data(using: .utf8) else { return }
@@ -340,7 +314,7 @@ class KeychainManager {
         delete(forKey: "signed_prekey")
         delete(forKey: "signing_key")
         delete(forKey: "userId")
-        deletePrivateKeysJson()
+        deletePrivateKeys()
         deleteAllSessions()
         Log.info("🗑️ All cryptographic keys and sessions deleted", category: "Keychain")
     }
@@ -387,22 +361,7 @@ class KeychainManager {
     ///   - sessionJson: JSON string of the serialized session
     ///   - contactId: The contact/user ID this session belongs to
     /// - Returns: true if saved successfully
-    func saveSessionJson(_ sessionJson: String, for contactId: String) -> Bool {
-        guard let data = sessionJson.data(using: .utf8) else { return false }
-        let key = "session_\(contactId)"
-        return save(data, forKey: key, accessible: kSecAttrAccessibleWhenUnlockedThisDeviceOnly)
-    }
-
-    /// Load a session JSON string for a specific contact
-    /// - Parameter contactId: The contact/user ID
-    /// - Returns: JSON string of the serialized session, or nil if not found
-    func loadSessionJson(for contactId: String) -> String? {
-        let key = "session_\(contactId)"
-        guard let data = load(forKey: key) else { return nil }
-        return String(data: data, encoding: .utf8)
-    }
-
-    /// Save session in CFE binary format (same Keychain key — format detection in Rust).
+    /// Save session in CFE binary format.
     @discardableResult
     func saveSessionData(_ data: Data, for contactId: String) -> Bool {
         let key = "session_\(contactId)"

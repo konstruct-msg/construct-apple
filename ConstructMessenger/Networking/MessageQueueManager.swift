@@ -23,6 +23,7 @@ class MessageQueueManager {
     private init() {
         // Skip setup in preview mode
         if !PreviewDetector.isRunningInPreview {
+            resetStuckSendingMessages()
             setupSubscribers()
             startPeriodicCheck()
             Log.info("📦 MessageQueueManager initialized", category: "MessageQueue")
@@ -30,7 +31,32 @@ class MessageQueueManager {
     }
     
     // MARK: - Setup
-    
+
+    /// Reset any messages left in `sending` state from a previous app run.
+    /// On force-quit the in-memory `pendingSends` is lost, so those messages
+    /// would never time-out.  Resetting them to `queued` on startup guarantees
+    /// they enter the normal retry pipeline.
+    private func resetStuckSendingMessages() {
+        let context = PersistenceController.shared.container.viewContext
+        context.perform {
+            let fetchRequest: NSFetchRequest<Message> = Message.fetchRequest()
+            fetchRequest.predicate = NSPredicate(
+                format: "deliveryStatusRaw == %d",
+                DeliveryStatus.sending.rawValue
+            )
+            guard let stuck = try? context.fetch(fetchRequest), !stuck.isEmpty else { return }
+            for message in stuck {
+                message.deliveryStatus = .queued
+            }
+            do {
+                try context.save()
+                Log.info("🔄 Reset \(stuck.count) stuck-sending message(s) to queued on launch", category: "MessageQueue")
+            } catch {
+                Log.error("⚠️ Failed to reset stuck-sending messages: \(error)", category: "MessageQueue")
+            }
+        }
+    }
+
     private func setupSubscribers() {
         // Monitor network reachability using @Observable tracking
         reachabilityTask = Task { [weak self] in
@@ -131,40 +157,20 @@ class MessageQueueManager {
     
     // MARK: - Process Queued Messages
     
-    /// Process all queued messages (called when network is restored)
+    /// Process all queued messages (called when network is restored).
     func processQueuedMessages() {
         guard networkManager.isReachable else {
             Log.debug("⏸️ Cannot process queued messages - network not reachable", category: "MessageQueue")
             return
         }
-        
-        let context = PersistenceController.shared.container.viewContext
-        guard context.persistentStoreCoordinator != nil else {
-            Log.info("⚠️ Core Data store coordinator unavailable, cannot process queued messages", category: "MessageQueue")
+        guard let currentUserId = SessionManager.shared.currentUserId else {
+            Log.debug("⏸️ Cannot process queued messages - no current user", category: "MessageQueue")
             return
         }
-        
-        context.perform {
-            let fetchRequest: NSFetchRequest<Message> = Message.fetchRequest()
-            fetchRequest.predicate = NSPredicate(format: "deliveryStatusRaw == %d", DeliveryStatus.queued.rawValue)
-            fetchRequest.sortDescriptors = [NSSortDescriptor(key: "timestamp", ascending: true)]
-            fetchRequest.fetchLimit = 10 // Process in batches
-            
-            guard let queuedMessages = try? context.fetch(fetchRequest), !queuedMessages.isEmpty else {
-                return
-            }
-            
-            Log.info("📤 Processing \(queuedMessages.count) queued messages", category: "MessageQueue")
-            
-            // Post notification for ViewModels to handle resending
-            DispatchQueue.main.async {
-                NotificationCenter.default.post(
-                    name: .processQueuedMessages,
-                    object: nil,
-                    userInfo: ["messageIds": queuedMessages.map { $0.id }]
-                )
-            }
-        }
+        MessageRetryManager.shared.processAllQueuedMessages(
+            currentUserId: currentUserId,
+            context: PersistenceController.shared.container.viewContext
+        )
     }
     
     /// Get count of queued messages
@@ -179,9 +185,4 @@ class MessageQueueManager {
         
         return (try? context.count(for: fetchRequest)) ?? 0
     }
-}
-
-// MARK: - Notifications
-extension Notification.Name {
-    static let processQueuedMessages = Notification.Name("processQueuedMessages")
 }

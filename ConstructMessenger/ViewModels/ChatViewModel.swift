@@ -128,9 +128,6 @@ class ChatViewModel: NSObject {
         // ❌ REMOVED: loadMessages() - FRC already loaded messages in setupFetchedResultsController()
         Log.debug("🔧 ChatViewModel initialized with viewContext", category: "ChatViewModel")
         
-        // Listen for queued messages processing
-        setupMessageQueueListener()
-
         // Suppress in-app banners while this chat is open.
         // Uses instanceID so a discarded SwiftUI-diffing copy's deinit can't clear it.
         InAppNotificationService.shared.registerActiveChat(chat.id, ownerID: instanceID)
@@ -206,16 +203,6 @@ class ChatViewModel: NSObject {
         observationTasks.append(connTask)
     }
     
-    private func setupMessageQueueListener() {
-        // Listen for queued messages processing requests
-        let queueTask = Task { [weak self] in
-            for await _ in NotificationCenter.default.notifications(named: .processQueuedMessages) {
-                self?.sendQueuedMessages()
-            }
-        }
-        observationTasks.append(queueTask)
-    }
-
     // ✅ FIXED: Check if we already have a session for this user
     private func checkExistingSession() {
         guard let userId = chat.otherUser?.id else { return }

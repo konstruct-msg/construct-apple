@@ -36,6 +36,8 @@ struct RelayInfo: Codable {
     /// Optional HTTP Host header override for the WebSocket upgrade request.
     /// nil → falls back to `sni`.
     let wtHostHeader: String?
+    /// IAT mode pushed by server. Defaults to `.enabled` (1) when absent.
+    let iatMode: IceIATMode
 
     var addressWithPort: String { "\(addr):\(port)" }
 
@@ -45,6 +47,36 @@ struct RelayInfo: Codable {
         case bridgeCert  = "bridge_cert"
         case wtPath      = "wt_path"
         case wtHostHeader = "wt_host_header"
+        case iatMode     = "iat_mode"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id          = try c.decode(String.self,  forKey: .id)
+        addr        = try c.decode(String.self,  forKey: .addr)
+        port        = try c.decode(Int.self,     forKey: .port)
+        domain      = try c.decode(String.self,  forKey: .domain)
+        sni         = try c.decode(String.self,  forKey: .sni)
+        spkiSha256  = try c.decode(String.self,  forKey: .spkiSha256)
+        bridgeCert  = try c.decodeIfPresent(String.self, forKey: .bridgeCert)
+        wtPath      = try c.decodeIfPresent(String.self, forKey: .wtPath)
+        wtHostHeader = try c.decodeIfPresent(String.self, forKey: .wtHostHeader)
+        let rawIat  = (try? c.decodeIfPresent(Int.self, forKey: .iatMode)) ?? nil
+        iatMode     = rawIat.flatMap { IceIATMode(rawValue: $0) } ?? .enabled
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id,           forKey: .id)
+        try c.encode(addr,         forKey: .addr)
+        try c.encode(port,         forKey: .port)
+        try c.encode(domain,       forKey: .domain)
+        try c.encode(sni,          forKey: .sni)
+        try c.encode(spkiSha256,   forKey: .spkiSha256)
+        try c.encodeIfPresent(bridgeCert,   forKey: .bridgeCert)
+        try c.encodeIfPresent(wtPath,       forKey: .wtPath)
+        try c.encodeIfPresent(wtHostHeader, forKey: .wtHostHeader)
+        try c.encode(iatMode.rawValue,      forKey: .iatMode)
     }
 }
 
@@ -285,6 +317,12 @@ actor IceCertFetcher {
             return relay.sni.isEmpty ? nil : relay.sni
         }
         return ICEConfig.hardcodedRelaySNIs[address]
+    }
+
+    /// IAT mode pushed by server for this relay. Returns nil when relay is not in cache
+    /// (caller should fall back to `.enabled`).
+    static func iatModeSync(for address: String) -> IceIATMode? {
+        cachedRelayInfosSync()?.first(where: { $0.addressWithPort == address })?.iatMode
     }
 
     // MARK: - Legacy shim (backward compat)
