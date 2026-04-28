@@ -160,6 +160,13 @@ enum NetworkTiming {
         static let happyEyeballsICEStaggerMs: UInt64 = 250
         /// Stagger between starting the ICE-TLS leg and the ICE-plain (relay) leg.
         static let happyEyeballsRelayStaggerMs: UInt64 = 200
+
+        // Background direct probe (auto mode only)
+        /// How often to probe whether direct gRPC is accessible while on ICE.
+        static let directProbeInterval: TimeInterval = 5 * 60  // 5 min
+        /// TLS connection timeout for the direct probe. Short enough to not stall
+        /// UX, long enough to survive high-latency networks.
+        static let directProbeTimeout: TimeInterval = 4.0
     }
 
     // MARK: - Stream

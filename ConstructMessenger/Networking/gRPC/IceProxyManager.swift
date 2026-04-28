@@ -386,6 +386,9 @@ final class IceProxyManager: ObservableObject {
     @Published private(set) var secondaryRelay: IceRelay?
 
     private var cooldownTask: Task<Void, Never>?
+    /// Background probe task: periodically checks if direct gRPC is reachable
+    /// while running on ICE in `.auto` mode. Cancelled when ICE stops or mode changes.
+    private var directProbeTask: Task<Void, Never>?
 
     // MARK: - Persistence keys
 
@@ -393,6 +396,17 @@ final class IceProxyManager: ObservableObject {
     private let relayKey   = "iceActiveRelay"
     /// Bump to trigger migration from old boolean ice_enabled → IceMode tri-state.
     private static let modesMigrationVersion = 1
+
+    /// Persists which path successfully handled gRPC traffic last session.
+    /// Used in `.auto` mode to decide the initial routing strategy on launch:
+    ///   "ice"    → start ICE proxy proactively (DPI was present last time)
+    ///   "direct" → try direct first; ICE starts on demand if DPI detected
+    ///   nil      → no history; default to direct-first
+    private static let lastSuccessfulPathKey = "ice_last_successful_path"
+    static var lastSuccessfulPath: String? {
+        get { UserDefaults.standard.string(forKey: lastSuccessfulPathKey) }
+        set { UserDefaults.standard.set(newValue, forKey: lastSuccessfulPathKey) }
+    }
 
     // MARK: - Failed relay tracking
     //
@@ -429,6 +443,10 @@ final class IceProxyManager: ObservableObject {
         guard let addr = activeRelay?.address, addr != verifiedRelayAddress else { return }
         verifiedRelayAddress = addr
         Log.info("🧊 Relay \(addr) verified (first successful RPC)", category: "ICE")
+        // Remember that ICE was the working path. In `.auto` mode this enables
+        // proactive ICE startup on the next launch (avoids DPI detection delay).
+        Self.lastSuccessfulPath = "ice"
+        scheduleBackgroundDirectProbe()
     }
 
     /// Mark a relay address as recently failed. Called from GRPCChannelManager.recordICEFailure()
@@ -494,6 +512,21 @@ final class IceProxyManager: ObservableObject {
             GRPCChannelManager.shared.updateCachedIceMode(mode)
             // User explicitly changed mode — give relay selection a clean slate.
             clearRelayFailures()
+
+            // Seamless .on → .auto: if ICE is already running, don't tear it down.
+            // Keep the existing connection alive and switch to background-probe logic.
+            if oldValue == .on, mode == .auto, isRunning {
+                Log.info("🧊 Mode .on → .auto — keeping live ICE connection, starting background direct probe", category: "ICE")
+                Self.lastSuccessfulPath = "ice"
+                scheduleBackgroundDirectProbe()
+                return  // skip stop()
+            }
+
+            // Cancel probe when leaving .auto or when switching to .on/.off directly.
+            if mode != .auto {
+                directProbeTask?.cancel()
+                directProbeTask = nil
+            }
         }
     }
 
@@ -1049,11 +1082,12 @@ final class IceProxyManager: ObservableObject {
 
     /// Start with the stored relay (called at app launch).
     /// In `.on` mode: starts ICE immediately.
-    /// In `.auto`/`.off` mode: skips (ICE will start on-demand via `activateDPIAutoMode()` if needed).
+    /// In `.auto` mode with prior "ice" path memory: starts ICE proactively to avoid DPI detection delay.
+    /// In `.auto` without memory or `.off`: skips (ICE will start on-demand if needed).
     func startIfEnabled() async {
         migrateToModeIfNeeded()
 
-        guard mode == .on else { return }
+        guard mode == .on || (mode == .auto && Self.lastSuccessfulPath == "ice") else { return }
 
         // No device keys → app is in onboarding/first-run state. ICE serves no purpose
         // without an auth session, and attempting to connect causes a visible hang
@@ -1142,13 +1176,97 @@ final class IceProxyManager: ObservableObject {
         clearCooldown()
         clearRelayFailures()
 
-        guard mode == .on else { return }
+        // Restart ICE if: always-on OR auto mode with a remembered ICE path.
+        guard mode == .on || (mode == .auto && Self.lastSuccessfulPath == "ice") else { return }
         let cert = await getIceBridgeCert()
         if await startWithRelayFallback(cert: cert) {
             Log.info("🧊 ICE proxy restarted after network path change", category: "ICE")
             Task { await IceCertFetcher.shared.fetchAndCacheRelayList() }
         } else {
             Log.error("🧊 ICE proxy restart failed after network path change", category: "ICE")
+        }
+    }
+
+    // MARK: - Background direct probe (auto mode)
+
+    /// Record that a direct gRPC stream just opened successfully.
+    /// Called from `MessageStreamTransport` when the stream's first response
+    /// arrives and we're routing via direct (no ICE proxy).
+    @MainActor
+    func recordDirectStreamConnected() {
+        guard mode == .auto else { return }
+        Self.lastSuccessfulPath = "direct"
+        directProbeTask?.cancel()
+        directProbeTask = nil
+        Log.debug("🧊 Direct stream verified — last path = direct", category: "ICE")
+    }
+
+    /// Schedule a repeating background probe that checks if direct gRPC is reachable
+    /// while we're routing through ICE in `.auto` mode.
+    /// The probe uses a plain TLS handshake — lightweight, no auth required.
+    /// On success: records "direct" path so the *next* natural reconnect uses direct.
+    /// The current live ICE connection is never torn down by the probe.
+    @MainActor
+    func scheduleBackgroundDirectProbe() {
+        guard mode == .auto else { return }
+        directProbeTask?.cancel()
+        directProbeTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(NetworkTiming.ICE.directProbeInterval))
+                guard !Task.isCancelled else { break }
+                guard let self, self.mode == .auto, self.isRunning else { break }
+                let reachable = await self.probeDirectTLSConnection()
+                guard !Task.isCancelled else { break }
+                if reachable {
+                    Log.info("🧊 Background direct probe succeeded — will switch to direct on next reconnect", category: "ICE")
+                    await MainActor.run { self.recordDirectStreamConnected() }
+                    break  // path recorded; probe cancelled by recordDirectStreamConnected
+                } else {
+                    Log.debug("🧊 Background direct probe failed — staying on ICE", category: "ICE")
+                }
+            }
+        }
+    }
+
+    /// Perform a single TLS handshake to the main gRPC server without going through ICE.
+    /// Returns true if the handshake completes (direct path is not DPI-blocked).
+    private func probeDirectTLSConnection() async -> Bool {
+        let host = GRPCChannelManager.shared.currentHost
+        let port = GRPCChannelManager.shared.currentPort
+        guard let nwPort = NWEndpoint.Port(rawValue: UInt16(port)) else { return false }
+        let params = NWParameters.tls
+        let conn = NWConnection(
+            to: .hostPort(host: NWEndpoint.Host(host), port: nwPort),
+            using: params
+        )
+        return await withCheckedContinuation { cont in
+            let lock = NSLock()
+            var done = false
+            conn.stateUpdateHandler = { state in
+                lock.lock()
+                defer { lock.unlock() }
+                guard !done else { return }
+                switch state {
+                case .ready:
+                    done = true
+                    cont.resume(returning: true)
+                    conn.cancel()
+                case .failed:
+                    done = true
+                    cont.resume(returning: false)
+                    conn.cancel()
+                case .cancelled:
+                    if !done { done = true; cont.resume(returning: false) }
+                default: break
+                }
+            }
+            conn.start(queue: .global(qos: .utility))
+            Task {
+                try? await Task.sleep(for: .seconds(NetworkTiming.ICE.directProbeTimeout))
+                lock.lock()
+                defer { lock.unlock() }
+                if !done { done = true; cont.resume(returning: false); conn.cancel() }
+            }
         }
     }
 

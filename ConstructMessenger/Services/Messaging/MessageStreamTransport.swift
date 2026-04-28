@@ -288,6 +288,10 @@ extension MessageStreamManager {
                         } else {
                             Log.info("✅ MessageStream connected — stream: \(streamMsStr)ms via \(metricsLabel)", category: "MessageStream")
                         }
+                        // Record direct path success for ICE auto-mode probe memory.
+                        if metricsLabel.hasPrefix("direct:") {
+                            IceProxyManager.shared.recordDirectStreamConnected()
+                        }
                     }
                     contents = c
                 case .failure(let error):
