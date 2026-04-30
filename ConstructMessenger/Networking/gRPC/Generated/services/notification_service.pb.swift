@@ -350,8 +350,7 @@ public struct Shared_Proto_Services_V1_SendVoipIncomingCallRequest: Sendable {
 
   public var callerName: String = String()
 
-  /// "audio" | "video"
-  public var callType: String = String()
+  public var callType: Shared_Proto_Signaling_V1_CallType = .unspecified
 
   /// Unix ms
   public var offeredAt: Int64 = 0
@@ -839,7 +838,7 @@ extension Shared_Proto_Services_V1_SendVoipIncomingCallRequest: SwiftProtobuf.Me
       case 2: try { try decoder.decodeSingularStringField(value: &self.callID) }()
       case 3: try { try decoder.decodeSingularStringField(value: &self.callerID) }()
       case 4: try { try decoder.decodeSingularStringField(value: &self.callerName) }()
-      case 5: try { try decoder.decodeSingularStringField(value: &self.callType) }()
+      case 5: try { try decoder.decodeSingularEnumField(value: &self.callType) }()
       case 6: try { try decoder.decodeSingularInt64Field(value: &self.offeredAt) }()
       default: break
       }
@@ -859,8 +858,8 @@ extension Shared_Proto_Services_V1_SendVoipIncomingCallRequest: SwiftProtobuf.Me
     if !self.callerName.isEmpty {
       try visitor.visitSingularStringField(value: self.callerName, fieldNumber: 4)
     }
-    if !self.callType.isEmpty {
-      try visitor.visitSingularStringField(value: self.callType, fieldNumber: 5)
+    if self.callType != .unspecified {
+      try visitor.visitSingularEnumField(value: self.callType, fieldNumber: 5)
     }
     if self.offeredAt != 0 {
       try visitor.visitSingularInt64Field(value: self.offeredAt, fieldNumber: 6)

@@ -19,7 +19,7 @@ final class ContactRequestsViewModel {
 
     struct SentRequest: Identifiable {
         let id: String
-        let status: String
+        let status: Shared_Proto_Services_V1_ContactRequestStatus
         let createdAt: Date
     }
 
@@ -174,7 +174,7 @@ extension ContactRequestsViewModel {
             let result = try await userServiceClient.getContactRequests()
             var newContacts: [User] = []
 
-            for sent in result.sent where sent.status == "accepted" {
+            for sent in result.sent where sent.status == .accepted {
                 let requestId = sent.requestID
                 let udKey = "cr_reqid_\(requestId)"
                 guard let toUserId = UserDefaults.standard.string(forKey: udKey),

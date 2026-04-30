@@ -121,6 +121,53 @@ public enum Shared_Proto_Services_V1_ContactRequestAction: SwiftProtobuf.Enum, S
 
 }
 
+/// Status of a sent contact request.
+public enum Shared_Proto_Services_V1_ContactRequestStatus: SwiftProtobuf.Enum, Swift.CaseIterable {
+  public typealias RawValue = Int
+  case unspecified // = 0
+  case pending // = 1
+  case accepted // = 2
+  case declinedBlocked // = 3
+  case spamBlocked // = 4
+  case UNRECOGNIZED(Int)
+
+  public init() {
+    self = .unspecified
+  }
+
+  public init?(rawValue: Int) {
+    switch rawValue {
+    case 0: self = .unspecified
+    case 1: self = .pending
+    case 2: self = .accepted
+    case 3: self = .declinedBlocked
+    case 4: self = .spamBlocked
+    default: self = .UNRECOGNIZED(rawValue)
+    }
+  }
+
+  public var rawValue: Int {
+    switch self {
+    case .unspecified: return 0
+    case .pending: return 1
+    case .accepted: return 2
+    case .declinedBlocked: return 3
+    case .spamBlocked: return 4
+    case .UNRECOGNIZED(let i): return i
+    }
+  }
+
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  public static let allCases: [Shared_Proto_Services_V1_ContactRequestStatus] = [
+    .unspecified,
+    .pending,
+    .accepted,
+    .declinedBlocked,
+    .spamBlocked,
+  ]
+
+}
+
 /// UserProfile - User profile information
 public struct Shared_Proto_Services_V1_UserProfile: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
@@ -869,8 +916,8 @@ public struct Shared_Proto_Services_V1_SentContactRequest: Sendable {
   /// Opaque request ID.
   public var requestID: String = String()
 
-  /// Current status: "pending", "accepted", "declined_blocked", "spam_blocked".
-  public var status: String = String()
+  /// Current status.
+  public var status: Shared_Proto_Services_V1_ContactRequestStatus = .unspecified
 
   /// Unix timestamp when sent.
   public var createdAt: Int64 = 0
@@ -902,8 +949,8 @@ public struct Shared_Proto_Services_V1_SendContactRequestResponse: Sendable {
   /// Opaque request ID assigned by the server.
   public var requestID: String = String()
 
-  /// Status immediately after sending: always "pending".
-  public var status: String = String()
+  /// Status immediately after sending: always PENDING.
+  public var status: Shared_Proto_Services_V1_ContactRequestStatus = .unspecified
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -959,8 +1006,8 @@ public struct Shared_Proto_Services_V1_RespondToContactRequestResponse: Sendable
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// Final status after the action: "accepted", "declined_blocked", or "spam_blocked".
-  public var status: String = String()
+  /// Final status after the action.
+  public var status: Shared_Proto_Services_V1_ContactRequestStatus = .unspecified
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -977,6 +1024,10 @@ extension Shared_Proto_Services_V1_PrivacyLevel: SwiftProtobuf._ProtoNameProvidi
 
 extension Shared_Proto_Services_V1_ContactRequestAction: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0CONTACT_REQUEST_ACTION_UNSPECIFIED\0\u{1}CONTACT_REQUEST_ACTION_ACCEPT\0\u{1}CONTACT_REQUEST_ACTION_DECLINE_BLOCK\0\u{1}CONTACT_REQUEST_ACTION_SPAM_BLOCK\0")
+}
+
+extension Shared_Proto_Services_V1_ContactRequestStatus: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0CONTACT_REQUEST_STATUS_UNSPECIFIED\0\u{1}CONTACT_REQUEST_STATUS_PENDING\0\u{1}CONTACT_REQUEST_STATUS_ACCEPTED\0\u{1}CONTACT_REQUEST_STATUS_DECLINED_BLOCKED\0\u{1}CONTACT_REQUEST_STATUS_SPAM_BLOCKED\0")
 }
 
 extension Shared_Proto_Services_V1_UserProfile: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
@@ -2211,7 +2262,7 @@ extension Shared_Proto_Services_V1_SentContactRequest: SwiftProtobuf.Message, Sw
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.requestID) }()
-      case 2: try { try decoder.decodeSingularStringField(value: &self.status) }()
+      case 2: try { try decoder.decodeSingularEnumField(value: &self.status) }()
       case 3: try { try decoder.decodeSingularInt64Field(value: &self.createdAt) }()
       default: break
       }
@@ -2222,8 +2273,8 @@ extension Shared_Proto_Services_V1_SentContactRequest: SwiftProtobuf.Message, Sw
     if !self.requestID.isEmpty {
       try visitor.visitSingularStringField(value: self.requestID, fieldNumber: 1)
     }
-    if !self.status.isEmpty {
-      try visitor.visitSingularStringField(value: self.status, fieldNumber: 2)
+    if self.status != .unspecified {
+      try visitor.visitSingularEnumField(value: self.status, fieldNumber: 2)
     }
     if self.createdAt != 0 {
       try visitor.visitSingularInt64Field(value: self.createdAt, fieldNumber: 3)
@@ -2281,7 +2332,7 @@ extension Shared_Proto_Services_V1_SendContactRequestResponse: SwiftProtobuf.Mes
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.requestID) }()
-      case 2: try { try decoder.decodeSingularStringField(value: &self.status) }()
+      case 2: try { try decoder.decodeSingularEnumField(value: &self.status) }()
       default: break
       }
     }
@@ -2291,8 +2342,8 @@ extension Shared_Proto_Services_V1_SendContactRequestResponse: SwiftProtobuf.Mes
     if !self.requestID.isEmpty {
       try visitor.visitSingularStringField(value: self.requestID, fieldNumber: 1)
     }
-    if !self.status.isEmpty {
-      try visitor.visitSingularStringField(value: self.status, fieldNumber: 2)
+    if self.status != .unspecified {
+      try visitor.visitSingularEnumField(value: self.status, fieldNumber: 2)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -2404,15 +2455,15 @@ extension Shared_Proto_Services_V1_RespondToContactRequestResponse: SwiftProtobu
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeSingularStringField(value: &self.status) }()
+      case 1: try { try decoder.decodeSingularEnumField(value: &self.status) }()
       default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    if !self.status.isEmpty {
-      try visitor.visitSingularStringField(value: self.status, fieldNumber: 1)
+    if self.status != .unspecified {
+      try visitor.visitSingularEnumField(value: self.status, fieldNumber: 1)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
