@@ -34,10 +34,15 @@ class CryptoManager {
     private var _cachedUserId: String?
 
     /// Returns the local user identity for Double Ratchet AEAD associated data.
-    /// Uses the device ID (hash of identity public key) — deterministic and independent
-    /// of server-assigned UUIDs, so session AD never breaks on re-auth or UUID changes.
+    ///
+    /// MUST be the server-assigned UUID so both parties bind the session to the same
+    /// identifier: the INITIATOR stores `local_user_id = serverUUID` and the RESPONDER
+    /// stores `contact_id = serverUUID` for the same party — making the swapped AD
+    /// (`local_user_id || contact_id` on encrypt ↔ `contact_id || local_user_id` on
+    /// decrypt) deterministically symmetric.  Using the device-hash here (32 hex chars)
+    /// while `contact_id` is a 36-char UUID causes permanent AEAD failure.
     private var cryptoLocalUserId: String {
-        KeychainManager.shared.loadDeviceID() ?? (_cachedUserId ?? "")
+        _cachedUserId ?? ""
     }
     private let coreProvider = CryptoCoreProvider()
     
@@ -47,13 +52,22 @@ class CryptoManager {
     // (e.g. encrypt/decrypt → saveSessionToKeychain).
     private let coreLock = NSRecursiveLock()
 
+    /// Set to true when the orchestrator is initialized fresh (no CFE state found).
+    /// In this case next_otpk_id resets to 1,000,000, so any OTPKs the server holds
+    /// from a previous session have different key material for overlapping IDs.
+    /// The next OTPK upload MUST use replaceExisting=true to wipe stale server keys.
+    private(set) var needsFullOtpkReplacement = false
+
+    func clearNeedsFullOtpkReplacement() {
+        needsFullOtpkReplacement = false
+    }
+
     // MARK: - Session Archive
     private let archiveManager = SessionArchiveManager()
     private let messageCrypto = MessageCryptoService()
     private let sessionInitService = CryptoSessionInitializationService()
     private let registrationBundleService = RegistrationBundleService()
     private let sessionRestoreService = SessionRestoreService()
-    private let bundleSignatureService = BundleSignatureService()
     
     // MARK: - Prekey ID Tracking
     private let preKeyTracker = PreKeyTrackingStore()
@@ -331,6 +345,10 @@ class CryptoManager {
     private func loadOrchestratorStateCFE(into core: OrchestratorCore) {
         guard let data = KeychainManager.shared.loadData(forKey: Self.orchestratorStateCFEKey) else {
             Log.debug("ℹ️ No orchestrator state CFE found in Keychain (first launch or cleared)", category: "CryptoManager")
+            // Fresh orchestrator: next_otpk_id resets to 1,000,000. Any OTPKs on the server
+            // from a previous partial upload share those IDs but have different key material.
+            // Force a replace-all on the next OTPK upload to eliminate the stale server keys.
+            needsFullOtpkReplacement = true
             return
         }
         do {
@@ -496,9 +514,8 @@ class CryptoManager {
         coreLock.lock()
         defer { coreLock.unlock() }
         guard let core = orchestratorCore else { throw CryptoManagerError.coreNotInitialized }
-        let sigBase64 = try core.signBundleData(bundleDataJson: bundleData)
-        guard let data = Data(base64Encoded: sigBase64) else { throw CryptoManagerError.invalidSignature }
-        return data
+        let sigBytes = try core.signBundleData(bundleDataJson: bundleData)
+        return Data(sigBytes)
     }
 
     /// Apply a Kyber KEM shared secret to the named DR session.
@@ -717,15 +734,17 @@ class CryptoManager {
     }
 
     /// Set the local user ID in the crypto core so AAD correctly binds sender identity.
-    /// `userId` is the server-assigned account UUID stored for routing/UI purposes.
-    /// The crypto layer always uses `deviceId` (hash of identity public key) — see `cryptoLocalUserId`.
+    /// `userId` is the server-assigned account UUID; this same UUID is stored as
+    /// `local_user_id` in the Rust Double Ratchet session and must match the `contact_id`
+    /// the remote party uses for the local device — see `cryptoLocalUserId`.
     func setLocalUserId(_ userId: String) {
         _cachedUserId = userId
         let cryptoId = cryptoLocalUserId
 
         if let existing = orchestratorCore {
             existing.setLocalUserId(userId: cryptoId)
-            Log.debug("🔑 CryptoManager: updated local user ID to \(cryptoId) (crypto)", category: "CryptoManager")
+            migrateSessionsIfNeeded(core: existing)
+            Log.debug("🔑 CryptoManager: updated local user ID to \(cryptoId.prefix(8))… (server UUID)", category: "CryptoManager")
             return
         }
 
@@ -759,12 +778,31 @@ class CryptoManager {
             PQCKeyManager.loadCFESnapshot(into: newCore)
             // Restore ACK cache, healing queue, and init locks.
             loadOrchestratorStateCFE(into: newCore)
+            migrateSessionsIfNeeded(core: newCore)
             orchestratorCore = newCore
             _bootstrapCore = nil
-            Log.debug("🔑 CryptoManager: OrchestratorCore created (cryptoId=\(cryptoId))", category: "CryptoManager")
+            Log.debug("🔑 CryptoManager: OrchestratorCore created (userId=\(cryptoId.prefix(8))…)", category: "CryptoManager")
         } catch {
             Log.error("❌ setLocalUserId: OrchestratorCore init failed: \(error)", category: "CryptoManager")
         }
+    }
+
+    /// One-time migration: sessions saved before the AD fix (build < 350) stored
+    /// `local_user_id` as a 32-char device-hash instead of the server UUID.  Those
+    /// sessions can never decrypt correctly.  On first launch with the fixed code we
+    /// wipe all persisted sessions so fresh X3DH handshakes establish correct AD.
+    private func migrateSessionsIfNeeded(core: OrchestratorCore) {
+        let migrationKey = "construct.adMigration.serverUUID.v1.done"
+        guard !UserDefaults.standard.bool(forKey: migrationKey) else { return }
+        let contactIds = core.getAllSessionContactIds()
+        for contactId in contactIds {
+            _ = core.removeSession(contactId: contactId)
+            KeychainManager.shared.deleteSession(for: contactId)
+        }
+        if !contactIds.isEmpty {
+            Log.info("🔄 AD migration: cleared \(contactIds.count) stale session(s) with wrong local_user_id — fresh handshakes will use server UUID", category: "CryptoManager")
+        }
+        UserDefaults.standard.set(true, forKey: migrationKey)
     }
 
     /// Check if a session exists for a user
@@ -859,8 +897,35 @@ class CryptoManager {
         archiveManager.storeArchive(archive, for: contactId)
         let count = archiveManager.loadArchives(for: contactId)?.count ?? 0
         Log.info("📦 acceptRustSessionArchive: archived session for \(contactId.prefix(8))… (\(count) total)", category: "CryptoManager")
+
+        // Rust has already removed this session from memory. Clear the Keychain hot entry so
+        // restoreSession() cannot reimport stale state and make hasSession() return true.
+        KeychainManager.shared.deleteSession(for: contactId)
+        KeychainManager.shared.deleteSessionSuiteId(userId: contactId)
+        Log.debug("🗑️ acceptRustSessionArchive: Keychain hot session cleared for \(contactId.prefix(8))…", category: "CryptoManager")
     }
 
+    /// Handle the `CfeAction.sessionTerminated` semantic action from Rust.
+    ///
+    /// Rust has already removed the session from memory via `archive_session()`.
+    /// Platform responsibility:
+    ///   1. Store `archiveBytes` in `SessionArchiveManager`.
+    ///   2. Delete the hot session Keychain entry so `restoreSession()` cannot
+    ///      reimport stale state and make `hasSession()` return true.
+    func acceptSessionTerminated(contactId: String, archiveBytes: Data) {
+        guard !archiveBytes.isEmpty else {
+            Log.error("❌ acceptSessionTerminated: empty archive for \(contactId.prefix(8))…", category: "CryptoManager")
+            return
+        }
+        let archive = SessionArchive(sessionData: archiveBytes, archivedAt: Date(), reason: .endSessionReceived)
+        archiveManager.storeArchive(archive, for: contactId)
+        let count = archiveManager.loadArchives(for: contactId)?.count ?? 0
+        Log.info("📦 acceptSessionTerminated: archived session for \(contactId.prefix(8))… (\(count) total)", category: "CryptoManager")
+
+        KeychainManager.shared.deleteSession(for: contactId)
+        KeychainManager.shared.deleteSessionSuiteId(userId: contactId)
+        Log.debug("🗑️ acceptSessionTerminated: Keychain hot session cleared for \(contactId.prefix(8))…", category: "CryptoManager")
+    }
 
     /// Used for tie-breaking when we are the INITIATOR in a dual-INITIATOR clash:
     /// after a failed decrypt the INITIATOR session was just moved to archives —

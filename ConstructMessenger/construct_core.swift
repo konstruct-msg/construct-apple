@@ -672,7 +672,7 @@ public protocol ClassicCryptoCoreProtocol: AnyObject, Sendable {
     
     func setLocalUserId(userId: String) 
     
-    func signBundleData(bundleDataJson: [UInt8]) throws  -> String
+    func signBundleData(bundleDataJson: [UInt8]) throws  -> [UInt8]
     
 }
 open class ClassicCryptoCore: ClassicCryptoCoreProtocol, @unchecked Sendable {
@@ -939,8 +939,8 @@ open func setLocalUserId(userId: String)  {try! rustCall() {
 }
 }
     
-open func signBundleData(bundleDataJson: [UInt8])throws  -> String  {
-    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+open func signBundleData(bundleDataJson: [UInt8])throws  -> [UInt8]  {
+    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_method_classiccryptocore_sign_bundle_data(
             self.uniffiCloneHandle(),
         FfiConverterSequenceUInt8.lower(bundleDataJson),$0
@@ -1118,7 +1118,7 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
     
     func setLocalUserId(userId: String) 
     
-    func signBundleData(bundleDataJson: [UInt8]) throws  -> String
+    func signBundleData(bundleDataJson: [UInt8]) throws  -> [UInt8]
     
 }
 /**
@@ -1504,8 +1504,8 @@ open func setLocalUserId(userId: String)  {try! rustCall() {
 }
 }
     
-open func signBundleData(bundleDataJson: [UInt8])throws  -> String  {
-    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+open func signBundleData(bundleDataJson: [UInt8])throws  -> [UInt8]  {
+    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_method_orchestratorcore_sign_bundle_data(
             self.uniffiCloneHandle(),
         FfiConverterSequenceUInt8.lower(bundleDataJson),$0
@@ -3539,16 +3539,15 @@ public func FfiConverterTypeRegistrationBundleJson_lower(_ value: RegistrationBu
 
 /**
  * Result of a signed pre-key rotation.
- * All byte fields are base64-encoded for cross-language compatibility.
  */
 public struct RotatedSpkBundle: Equatable, Hashable {
     public var keyId: UInt32
-    public var publicKey: String
-    public var signature: String
+    public var publicKey: [UInt8]
+    public var signature: [UInt8]
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(keyId: UInt32, publicKey: String, signature: String) {
+    public init(keyId: UInt32, publicKey: [UInt8], signature: [UInt8]) {
         self.keyId = keyId
         self.publicKey = publicKey
         self.signature = signature
@@ -3569,15 +3568,15 @@ public struct FfiConverterTypeRotatedSpkBundle: FfiConverterRustBuffer {
         return
             try RotatedSpkBundle(
                 keyId: FfiConverterUInt32.read(from: &buf), 
-                publicKey: FfiConverterString.read(from: &buf), 
-                signature: FfiConverterString.read(from: &buf)
+                publicKey: FfiConverterSequenceUInt8.read(from: &buf), 
+                signature: FfiConverterSequenceUInt8.read(from: &buf)
         )
     }
 
     public static func write(_ value: RotatedSpkBundle, into buf: inout [UInt8]) {
         FfiConverterUInt32.write(value.keyId, into: &buf)
-        FfiConverterString.write(value.publicKey, into: &buf)
-        FfiConverterString.write(value.signature, into: &buf)
+        FfiConverterSequenceUInt8.write(value.publicKey, into: &buf)
+        FfiConverterSequenceUInt8.write(value.signature, into: &buf)
     }
 }
 
@@ -4011,6 +4010,13 @@ public enum CfeAction: Equatable, Hashable {
      */
     case notifyLinkedDevicesOfSessionReset(contactId: String
     )
+    /**
+     * Rust archived and removed the session for `contact_id`.
+     * Platform MUST: (1) store `archive_bytes` in the archive store, (2) delete the
+     * hot session Keychain/Keystore entry for `contact_id`.
+     */
+    case sessionTerminated(contactId: String, archiveBytes: Data
+    )
 
 
 
@@ -4109,6 +4115,9 @@ public struct FfiConverterTypeCfeAction: FfiConverterRustBuffer {
         )
         
         case 27: return .notifyLinkedDevicesOfSessionReset(contactId: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 28: return .sessionTerminated(contactId: try FfiConverterString.read(from: &buf), archiveBytes: try FfiConverterData.read(from: &buf)
         )
         
         default: throw UniffiInternalError.unexpectedEnumCase
@@ -4271,6 +4280,12 @@ public struct FfiConverterTypeCfeAction: FfiConverterRustBuffer {
         case let .notifyLinkedDevicesOfSessionReset(contactId):
             writeInt(&buf, Int32(27))
             FfiConverterString.write(contactId, into: &buf)
+            
+        
+        case let .sessionTerminated(contactId,archiveBytes):
+            writeInt(&buf, Int32(28))
+            FfiConverterString.write(contactId, into: &buf)
+            FfiConverterData.write(archiveBytes, into: &buf)
             
         }
     }
@@ -5829,7 +5844,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_classiccryptocore_set_local_user_id() != 65330) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_classiccryptocore_sign_bundle_data() != 39138) {
+    if (uniffi_construct_core_checksum_method_classiccryptocore_sign_bundle_data() != 22123) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_ack_is_processed() != 63134) {
@@ -5928,7 +5943,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_orchestratorcore_set_local_user_id() != 22865) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_sign_bundle_data() != 12427) {
+    if (uniffi_construct_core_checksum_method_orchestratorcore_sign_bundle_data() != 20046) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_rustackstore_cache_len() != 41894) {

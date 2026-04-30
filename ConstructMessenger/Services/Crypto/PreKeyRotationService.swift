@@ -106,11 +106,8 @@ final class PreKeyRotationService {
         // NOTE: rotateSignedPrekey() mutates the Rust core in memory immediately.
         // If Phase 2 (RPC) fails, we MUST reload from Keychain to roll back.
         let rotatedSpk = try CryptoManager.shared.rotateSignedPrekey()
-        guard let classicPubData = Data(base64Encoded: rotatedSpk.publicKey),
-              let classicSigData = Data(base64Encoded: rotatedSpk.signature) else {
-            CryptoManager.shared.reloadCoreFromKeychain()
-            throw PreKeyRotationError.invalidKeyMaterial
-        }
+        let classicPubData = Data(rotatedSpk.publicKey)
+        let classicSigData = Data(rotatedSpk.signature)
         let classicKey = (keyId: rotatedSpk.keyId, publicKey: classicPubData, signature: classicSigData)
 
         // Kyber SPK: generated in memory only — NOT committed yet
