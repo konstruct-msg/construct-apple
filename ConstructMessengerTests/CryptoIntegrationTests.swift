@@ -26,19 +26,8 @@ final class CryptoIntegrationTests: XCTestCase {
         }
 
         func exportRegistrationBundle() throws -> (identityPublic: String, signedPrekeyPublic: String, signature: String, verifyingKey: String, suiteId: String) {
-            let jsonString = try core.exportRegistrationBundleJson()
-
-            guard let jsonData = jsonString.data(using: .utf8),
-                  let bundle = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
-                  let identityPublic = bundle["identity_public"] as? String,
-                  let signedPrekeyPublic = bundle["signed_prekey_public"] as? String,
-                  let signature = bundle["signature"] as? String,
-                  let verifyingKey = bundle["verifying_key"] as? String,
-                  let suiteId = bundle["suite_id"] as? String else {
-                throw NSError(domain: "TestError", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to parse bundle"])
-            }
-
-            return (identityPublic, signedPrekeyPublic, signature, verifyingKey, suiteId)
+            let fields = try core.getRegistrationBundleFields()
+            return (fields.identityPublic, fields.signedPrekeyPublic, fields.signature, fields.verifyingKey, fields.suiteId)
         }
 
         func initSession(contactId: String, recipientBundle: (identityPublic: String, signedPrekeyPublic: String, signature: String, verifyingKey: String, suiteId: String)) throws {
@@ -49,19 +38,17 @@ final class CryptoIntegrationTests: XCTestCase {
                   let suiteID = UInt16(recipientBundle.suiteId) else {
                 throw NSError(domain: "TestError", code: 2, userInfo: [NSLocalizedDescriptionKey: "Invalid bundle data"])
             }
-
-            let bundleDict: [String: Any] = [
-                "identity_public": [UInt8](identityPublicData),
-                "signed_prekey_public": [UInt8](signedPrekeyPublicData),
-                "signature": [UInt8](signatureData),
-                "verifying_key": [UInt8](verifyingKeyData),
-                "suite_id": suiteID,
-            ]
-
-            let bundleData = try JSONSerialization.data(withJSONObject: bundleDict)
-            let bytes = [UInt8](bundleData)
-
-            let sessionId = try core.initSession(contactId: contactId, recipientBundle: bytes)
+            let bundle = BinaryKeyBundle(
+                identityPublic: [UInt8](identityPublicData),
+                signedPrekeyPublic: [UInt8](signedPrekeyPublicData),
+                signature: [UInt8](signatureData),
+                verifyingKey: [UInt8](verifyingKeyData),
+                suiteId: suiteID, oneTimePrekeyPublic: nil, oneTimePrekeyId: nil,
+                spkUploadedAt: 0, spkRotationEpoch: 0,
+                kyberSpkUploadedAt: 0, kyberSpkRotationEpoch: 0,
+                kyberPreKeyPublic: nil, kyberOneTimePrekeyPublic: nil, kyberOneTimePrekeyId: nil
+            )
+            let sessionId = try core.initSession(contactId: contactId, recipientBundle: bundle)
             sessions[contactId] = sessionId
         }
 
@@ -82,34 +69,28 @@ final class CryptoIntegrationTests: XCTestCase {
                   let suiteID = UInt16(senderBundle.suiteId) else {
                 throw NSError(domain: "TestError", code: 4, userInfo: [NSLocalizedDescriptionKey: "Invalid sender bundle"])
             }
-
-            let bundleDict: [String: Any] = [
-                "identity_public": [UInt8](identityPublicData),
-                "signed_prekey_public": [UInt8](signedPrekeyPublicData),
-                "signature": [UInt8](signatureData),
-                "verifying_key": [UInt8](verifyingKeyData),
-                "suite_id": suiteID,
-            ]
-
-            let messageDict: [String: Any] = [
-                "ephemeral_public_key": [UInt8](firstMessage.ephemeralPublicKey),
-                "message_number": firstMessage.messageNumber,
-                "content": firstMessage.content
-            ]
-
-            let bundleData = try JSONSerialization.data(withJSONObject: bundleDict)
-            let bundleBytes = [UInt8](bundleData)
-
-            let messageData = try JSONSerialization.data(withJSONObject: messageDict)
-            let messageBytes = [UInt8](messageData)
-
+            let bundle = BinaryKeyBundle(
+                identityPublic: [UInt8](identityPublicData),
+                signedPrekeyPublic: [UInt8](signedPrekeyPublicData),
+                signature: [UInt8](signatureData),
+                verifyingKey: [UInt8](verifyingKeyData),
+                suiteId: suiteID, oneTimePrekeyPublic: nil, oneTimePrekeyId: nil,
+                spkUploadedAt: 0, spkRotationEpoch: 0,
+                kyberSpkUploadedAt: 0, kyberSpkRotationEpoch: 0,
+                kyberPreKeyPublic: nil, kyberOneTimePrekeyPublic: nil, kyberOneTimePrekeyId: nil
+            )
+            let firstMsg = BinaryFirstMessage(
+                ephemeralPublicKey: [UInt8](firstMessage.ephemeralPublicKey),
+                messageNumber: firstMessage.messageNumber,
+                content: firstMessage.content,
+                oneTimePrekeyId: 0
+            )
             // ✅ NEW API: Returns SessionInitResult with decrypted message
             let result = try core.initReceivingSession(
                 contactId: contactId,
-                recipientBundle: bundleBytes,
-                firstMessage: messageBytes
+                recipientBundle: bundle,
+                firstMessage: firstMsg
             )
-
             sessions[contactId] = result.sessionId
             return String(bytes: result.decryptedMessage, encoding: .utf8) ?? "__binary_init__"
         }

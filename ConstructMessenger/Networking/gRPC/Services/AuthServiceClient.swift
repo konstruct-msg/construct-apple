@@ -52,10 +52,10 @@ final class AuthServiceClient: Sendable {
             let authClient = Shared_Proto_Services_V1_AuthService.Client(wrapping: grpcClient)
 
             var publicKeys = Shared_Proto_Services_V1_DevicePublicKeys()
-            publicKeys.verifyingKey = registrationBundle.verifyingKey
-            publicKeys.identityPublic = registrationBundle.identityPublic
-            publicKeys.signedPrekeyPublic = registrationBundle.signedPrekeyPublic
-            publicKeys.signedPrekeySignature = registrationBundle.signature
+            publicKeys.verifyingKey = Data(base64Encoded: registrationBundle.verifyingKey) ?? Data()
+            publicKeys.identityPublic = Data(base64Encoded: registrationBundle.identityPublic) ?? Data()
+            publicKeys.signedPrekeyPublic = Data(base64Encoded: registrationBundle.signedPrekeyPublic) ?? Data()
+            publicKeys.signedPrekeySignature = Data(base64Encoded: registrationBundle.signature) ?? Data()
             publicKeys.cryptoSuite = "Curve25519+Ed25519"
 
             var pow = Shared_Proto_Services_V1_PowSolution()
@@ -88,7 +88,7 @@ final class AuthServiceClient: Sendable {
 
     // MARK: - Authenticate Device (replaces AuthAPI.authenticateDevice)
 
-    func authenticateDevice(deviceId: String, timestamp: Int64, signature: String) async throws -> AuthResponse {
+    func authenticateDevice(deviceId: String, timestamp: Int64, signature: Data) async throws -> AuthResponse {
         try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.authenticateDevice, allowAuthRetry: false) { grpcClient in
             let authClient = Shared_Proto_Services_V1_AuthService.Client(wrapping: grpcClient)
 

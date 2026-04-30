@@ -26,7 +26,15 @@ class ChatsViewModel {
     /// How long to wait before treating the app as "truly backgrounded" and tearing down
     /// the stream. Brief app-switches (Notification Center, App Switcher, <5 s away) cancel
     /// this task and preserve the live connection — no reconnect penalty.
-    private static let backgroundGracePeriod: Duration = .seconds(15)
+    /// On macOS, NSApplication.didResignActiveNotification fires on every app-switch (⌘Tab),
+    /// so we use a much longer window to avoid constant reconnects while multitasking.
+    private static let backgroundGracePeriod: Duration = {
+        #if os(macOS)
+        return .seconds(300)  // 5 min: resign-active fires on every ⌘Tab, not true backgrounding
+        #else
+        return .seconds(15)
+        #endif
+    }()
 
     // 🔑 OTPK replenishment: check server count once per app session on stream connect
     private var hasPerformedStartupOtpkCheck = false

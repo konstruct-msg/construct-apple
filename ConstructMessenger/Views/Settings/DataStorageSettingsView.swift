@@ -9,6 +9,8 @@ import SwiftUI
 
 struct DataStorageSettingsView: View {
 
+    var showNavBar: Bool = true
+
     // MARK: - Persisted settings
 
     @AppStorage(MediaManager.maxDiskCacheBytesKey)
@@ -47,11 +49,13 @@ struct DataStorageSettingsView: View {
             
         ScrollView {
             VStack(spacing: 20) {
-                CTNavBar(
-                    title: NSLocalizedString("data_and_storage", comment: ""),
-                    showBack: true,
-                    backAction: { dismiss() }
-                )
+                if showNavBar {
+                    CTNavBar(
+                        title: NSLocalizedString("data_and_storage", comment: ""),
+                        showBack: true,
+                        backAction: { dismiss() }
+                    )
+                }
                 
                 // MARK: - Usage section
                 VStack(alignment: .leading, spacing: 6) {

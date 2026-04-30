@@ -112,7 +112,7 @@ final class CryptoSessionInitializationService {
         Log.debug("🔐 RESPONDER bundle: ik=\(recipientBundle.identityPublic.count)B spk=\(recipientBundle.signedPrekeyPublic.count)B suite=\(suiteID)", category: "CryptoManager")
         Log.debug("   ik_prefix: \(recipientBundle.identityPublic.prefix(8).hexString)", category: "CryptoManager")
         Log.debug("   eph_prefix: \(firstMessage.ephemeralPublicKey.prefix(8).hexString)", category: "CryptoManager")
-        Log.debug("   msgNum: \(firstMessage.messageNumber) sealedBox: \(sealedBox.count)B", category: "CryptoManager")
+        Log.debug("   msgNum: \(firstMessage.messageNumber) sealedBox: \(sealedBox.count)B oneTimePrekeyId: \(firstMessage.oneTimePreKeyId) kemCiphertext: \(firstMessage.kemCiphertext.count)B kyberOtpkId: \(firstMessage.kyberOtpkId)", category: "CryptoManager")
         #endif
 
         let bundle = BinaryKeyBundle(

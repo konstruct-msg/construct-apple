@@ -96,6 +96,7 @@
 "pin_codes_dont_match" = "ПИН-коды не совпадают";
 "wrong_pin_code" = "Неверный ПИН-код";
 "lock_delay" = "Блокировать через";
+"lock_now" = "Заблокировать";
 "lock_delay_immediate" = "Немедленно";
 "lock_delay_30s" = "30 секунд";
 "lock_delay_1m" = "1 минуту";

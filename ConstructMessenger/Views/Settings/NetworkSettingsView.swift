@@ -6,6 +6,12 @@
 import SwiftUI
 
 struct NetworkSettingsView: View {
+    var showNavBar: Bool = true
+
+    init(showNavBar: Bool = true) {
+        self.showNavBar = showNavBar
+    }
+
     @Environment(\.dismiss) private var dismiss
     private var connectionManager = ConnectionStatusManager.shared
     private var streamManager = MessageStreamManager.shared
@@ -19,11 +25,13 @@ struct NetworkSettingsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            CTNavBar(
-                title: NSLocalizedString("network", comment: ""),
-                showBack: true,
-                backAction: { dismiss() }
-            )
+            if showNavBar {
+                CTNavBar(
+                    title: NSLocalizedString("network", comment: ""),
+                    showBack: true,
+                    backAction: { dismiss() }
+                )
+            }
             ScrollView {
             VStack(spacing: 0) {
 

@@ -389,6 +389,19 @@ final class IceProxyManager: ObservableObject {
     /// Background probe task: periodically checks if direct gRPC is reachable
     /// while running on ICE in `.auto` mode. Cancelled when ICE stops or mode changes.
     private var directProbeTask: Task<Void, Never>?
+    /// Pre-warm background task: starts ICE while direct is being attempted.
+    private var standbyPrewarmTask: Task<Void, Never>?
+
+    /// ICE is running in standby pre-warm mode: proxy is up but `iceProxyPort()` returns nil.
+    /// Routing stays direct until DPI is confirmed (`activateDPIAutoMode`), mode is promoted to
+    /// `.on`, or a network switch occurs. Suppresses the "direct path hijack" that would happen
+    /// if a pre-warmed proxy were exposed to gRPC before direct is confirmed blocked.
+    private(set) var isStandbyPrewarm: Bool = false {
+        didSet {
+            guard isStandbyPrewarm != oldValue else { return }
+            GRPCChannelManager.shared.updateCachedICEStandby(isStandbyPrewarm)
+        }
+    }
 
     // MARK: - Persistence keys
 
@@ -519,6 +532,21 @@ final class IceProxyManager: ObservableObject {
                 Log.info("🧊 Mode .on → .auto — keeping live ICE connection, starting background direct probe", category: "ICE")
                 Self.lastSuccessfulPath = "ice"
                 scheduleBackgroundDirectProbe()
+                return  // skip stop()
+            }
+
+            // Seamless .auto → .on: ICE is already running (active or standby) — promote it.
+            // No restart needed; just clear standby flag so iceProxyPort() starts returning a port.
+            if oldValue == .auto, mode == .on, isRunning {
+                if isStandbyPrewarm {
+                    isStandbyPrewarm = false
+                    Log.info("🧊 Mode .auto → .on — standby ICE promoted to active", category: "ICE")
+                    GRPCChannelManager.shared.invalidatePersistentClient()
+                } else {
+                    Log.info("🧊 Mode .auto → .on — ICE already active, no restart needed", category: "ICE")
+                }
+                directProbeTask?.cancel()
+                directProbeTask = nil
                 return  // skip stop()
             }
 
@@ -1087,7 +1115,8 @@ final class IceProxyManager: ObservableObject {
     func startIfEnabled() async {
         migrateToModeIfNeeded()
 
-        guard mode == .on || (mode == .auto && Self.lastSuccessfulPath == "ice") else { return }
+        // If already running in active mode (not standby), no restart needed.
+        if isRunning, !isStandbyPrewarm { return }
 
         // No device keys → app is in onboarding/first-run state. ICE serves no purpose
         // without an auth session, and attempting to connect causes a visible hang
@@ -1106,28 +1135,65 @@ final class IceProxyManager: ObservableObject {
             }
         }
 
-        let cert = await getIceBridgeCert()
-        if await startWithRelayFallback(cert: cert) {
-            // Background: refresh relay list so it's up-to-date for next time.
-            Task { await IceCertFetcher.shared.fetchAndCacheRelayList() }
+        // Full start: mode == .on, or .auto with known-ICE history.
+        let shouldStartFull = mode == .on || (mode == .auto && Self.lastSuccessfulPath == "ice")
+        if shouldStartFull {
+            let cert = await getIceBridgeCert()
+            if await startWithRelayFallback(cert: cert) {
+                Task { await IceCertFetcher.shared.fetchAndCacheRelayList() }
+                return
+            }
+            Log.info("🧊 All ICE endpoints failed — fetching fresh cert and retrying", category: "ICE")
+            guard let freshCert = await IceCertFetcher.shared.fetchFromHTTPS() else {
+                Log.error("🧊 ICE start failed and fresh cert unavailable — proxy not running", category: "ICE")
+                return
+            }
+            KeychainManager.shared.saveIceBridgeCert(freshCert)
+            await startWithRelayFallback(cert: freshCert)
             return
         }
 
-        // All endpoints failed with current cert. May be stale after key rotation.
-        Log.info("🧊 All ICE endpoints failed — fetching fresh cert and retrying", category: "ICE")
-        guard let freshCert = await IceCertFetcher.shared.fetchFromHTTPS() else {
-            Log.error("🧊 ICE start failed and fresh cert unavailable — proxy not running", category: "ICE")
-            return
+        // Standby pre-warm: .auto mode + direct/unknown history.
+        // Start ICE in the background with a 1 s delay so it doesn't compete with
+        // the direct connection attempt. iceProxyPort() is suppressed while in standby,
+        // so gRPC continues routing direct until DPI is confirmed.
+        guard mode == .auto, !isRunning else { return }
+        standbyPrewarmTask?.cancel()
+        standbyPrewarmTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 s
+            guard let self, !Task.isCancelled, mode == .auto, !isRunning else { return }
+            Log.info("🧊 Starting ICE standby pre-warm (auto mode, direct history)", category: "ICE")
+            isStandbyPrewarm = true
+            let cert = await getIceBridgeCert()
+            let started = await startWithRelayFallback(cert: cert)
+            if started {
+                Log.info("🧊 ICE standby pre-warm ready — waiting for DPI confirmation", category: "ICE")
+                Task { await IceCertFetcher.shared.fetchAndCacheRelayList() }
+            } else {
+                isStandbyPrewarm = false
+                Log.info("🧊 ICE standby pre-warm failed — will start on demand if DPI detected", category: "ICE")
+            }
         }
-        KeychainManager.shared.saveIceBridgeCert(freshCert)
-        await startWithRelayFallback(cert: freshCert)
     }
 
     /// Called when consecutive direct stream failures indicate DPI blocking (`.auto` mode only).
     /// Starts the ICE proxy so `GRPCChannelManager.iceProxyPort()` returns a port on the next
     /// connection. State is session-scoped: not persisted and resets on next app launch.
     func activateDPIAutoMode() async {
-        guard mode == .auto, !isRunning else { return }
+        guard mode == .auto else { return }
+
+        // If ICE is already pre-warmed in standby, promote it instantly — no startup delay.
+        if isRunning, isStandbyPrewarm {
+            standbyPrewarmTask?.cancel()
+            standbyPrewarmTask = nil
+            isStandbyPrewarm = false
+            Self.lastSuccessfulPath = "ice"
+            GRPCChannelManager.shared.invalidatePersistentClient()
+            Log.info("🧊 DPI confirmed — standby ICE promoted to active (instant failover)", category: "ICE")
+            return
+        }
+
+        guard !isRunning else { return }
         Log.info("🧊 DPI suspected — activating ICE for this session (auto mode)", category: "ICE")
 
         let cert = await getIceBridgeCert()
@@ -1198,7 +1264,16 @@ final class IceProxyManager: ObservableObject {
         Self.lastSuccessfulPath = "direct"
         directProbeTask?.cancel()
         directProbeTask = nil
-        Log.debug("🧊 Direct stream verified — last path = direct", category: "ICE")
+        // If ICE was pre-warming in standby, stop it — direct path is confirmed working.
+        if isRunning, isStandbyPrewarm {
+            standbyPrewarmTask?.cancel()
+            standbyPrewarmTask = nil
+            isStandbyPrewarm = false
+            stop()
+            Log.info("🧊 Direct stream confirmed — standby ICE stopped (saving resources)", category: "ICE")
+        } else {
+            Log.debug("🧊 Direct stream verified — last path = direct", category: "ICE")
+        }
     }
 
     /// Schedule a repeating background probe that checks if direct gRPC is reachable
@@ -1281,6 +1356,9 @@ final class IceProxyManager: ObservableObject {
         isSecondaryRunning  = false
         secondaryProxyPort  = 0
         secondaryRelay      = nil
+        isStandbyPrewarm    = false
+        standbyPrewarmTask?.cancel()
+        standbyPrewarmTask  = nil
     }
 
     /// Called on app foreground to verify the ICE proxy process is actually alive.

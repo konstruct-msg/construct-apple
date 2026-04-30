@@ -57,10 +57,17 @@ enum NetworkTiming {
         static let streamOpenAcceptPollInterval: TimeInterval = 0.05
 
         // Transport keepalive (HTTP/2)
+        // Keepalive detects dead TCP connections. On mobile, interfaces go down silently
+        // (WiFi → airplane mode, VPN toggle) without a TCP RST. The sum of keepaliveTime +
+        // keepaliveTimeout is the worst-case detection latency before the client gives up and
+        // creates a fresh channel. Keep it low: 10+5=15s direct, 8+5=13s ICE.
         static let maxIdleTimeSeconds: Int64 = 300
-        static let keepaliveTimeDirectSeconds: Int64 = 30
-        static let keepaliveTimeIceSeconds: Int64 = 25
-        static let keepaliveTimeoutSeconds: Int64 = 10
+        // Keepalive: ping after N seconds idle, give up after M seconds with no ACK.
+        // Our server (tonic/h2) has no minimum ping interval enforcement.
+        // Detection time = keepaliveTime + keepaliveTimeout.
+        static let keepaliveTimeDirectSeconds: Int64 = 5
+        static let keepaliveTimeIceSeconds: Int64 = 5
+        static let keepaliveTimeoutSeconds: Int64 = 3
 
         enum Timeouts {
             // Authentication

@@ -32,34 +32,27 @@ final class PerformanceBenchmarks: XCTestCase {
             self.core = try createOrchestratorCoreFromKeys(keysData: keys, myUserId: userId)
         }
 
-        func bundle() throws -> [UInt8] {
-            let json = try core.exportRegistrationBundleJson()
-            guard let data = json.data(using: .utf8),
-                  let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let ip = dict["identityPublic"] as? String,
-                  let sp = dict["signedPrekeyPublic"] as? String,
-                  let sig = dict["signature"] as? String,
-                  let vk = dict["verifyingKey"] as? String,
-                  let sid = dict["suiteId"] as? String,
-                  let ipData = Data(base64Encoded: ip),
-                  let spData = Data(base64Encoded: sp),
-                  let sigData = Data(base64Encoded: sig),
-                  let vkData = Data(base64Encoded: vk),
-                  let sidVal = UInt16(sid) else {
+        func bundle() throws -> BinaryKeyBundle {
+            let fields = try core.getRegistrationBundleFields()
+            guard let ipData  = Data(base64Encoded: fields.identityPublic),
+                  let spData  = Data(base64Encoded: fields.signedPrekeyPublic),
+                  let sigData = Data(base64Encoded: fields.signature),
+                  let vkData  = Data(base64Encoded: fields.verifyingKey),
+                  let sidVal  = UInt16(fields.suiteId) else {
                 throw NSError(domain: "Bench", code: 1)
             }
-            let dict2: [String: Any] = [
-                "identity_public": [UInt8](ipData),
-                "signed_prekey_public": [UInt8](spData),
-                "signature": [UInt8](sigData),
-                "verifying_key": [UInt8](vkData),
-                "suite_id": sidVal,
-            ]
-            return [UInt8](try JSONSerialization.data(withJSONObject: dict2))
+            return BinaryKeyBundle(
+                identityPublic: [UInt8](ipData), signedPrekeyPublic: [UInt8](spData),
+                signature: [UInt8](sigData), verifyingKey: [UInt8](vkData),
+                suiteId: sidVal, oneTimePrekeyPublic: nil, oneTimePrekeyId: nil,
+                spkUploadedAt: 0, spkRotationEpoch: 0,
+                kyberSpkUploadedAt: 0, kyberSpkRotationEpoch: 0,
+                kyberPreKeyPublic: nil, kyberOneTimePrekeyPublic: nil, kyberOneTimePrekeyId: nil
+            )
         }
 
-        func initSenderSession(to contactId: String, bundleBytes: [UInt8]) throws {
-            _ = try core.initSession(contactId: contactId, recipientBundle: bundleBytes)
+        func initSenderSession(to contactId: String, bundle: BinaryKeyBundle) throws {
+            _ = try core.initSession(contactId: contactId, recipientBundle: bundle)
         }
     }
 
@@ -120,7 +113,7 @@ final class PerformanceBenchmarks: XCTestCase {
         let alice = try CryptoPeer(userId: "bench-alice-\(UUID().uuidString)")
         let bob   = try CryptoPeer(userId: "bench-bob-\(UUID().uuidString)")
         let bobBundle = try bob.bundle()
-        try alice.initSenderSession(to: bob.userId, bundleBytes: bobBundle)
+        try alice.initSenderSession(to: bob.userId, bundle: bobBundle)
 
         let plaintext = Data("Hello, benchmark! This is a typical short message.".utf8)
 
@@ -152,22 +145,21 @@ final class PerformanceBenchmarks: XCTestCase {
 
         let aliceBundle = try alice.bundle()
         let bobBundle   = try bob.bundle()
-        try alice.initSenderSession(to: bob.userId, bundleBytes: bobBundle)
+        try alice.initSenderSession(to: bob.userId, bundle: bobBundle)
 
         // Establish Bob's session via msgNum=0
         let init0 = try alice.core.encryptMessage(contactId: bob.userId, plaintext: Data("__init__".utf8))
         let init0Padded = MessagePadding.padCiphertext(Data(init0.content))
-        let init0Dict: [String: Any] = [
-            "ephemeral_public_key": init0.ephemeralPublicKey,
-            "message_number": init0.messageNumber,
-            "content": [UInt8](init0Padded),
-        ]
-        let init0Bytes = [UInt8](try JSONSerialization.data(withJSONObject: init0Dict))
-        let aliceBundleBytes = try alice.bundle()
+        let firstMsg = BinaryFirstMessage(
+            ephemeralPublicKey: init0.ephemeralPublicKey,
+            messageNumber: init0.messageNumber,
+            content: [UInt8](init0Padded),
+            oneTimePrekeyId: init0.oneTimePrekeyId
+        )
         _ = try bob.core.initReceivingSession(
             contactId: alice.userId,
-            recipientBundle: aliceBundleBytes,
-            firstMessage: init0Bytes
+            recipientBundle: aliceBundle,
+            firstMessage: firstMsg
         )
 
         let plaintext = Data("Benchmark round-trip message".utf8)

@@ -55,6 +55,9 @@ enum OtpkReplenishmentService {
 
         let mode = replaceExisting ? "replacing all" : "appending"
         Log.info("✅ OTPK upload (\(mode)): \(pairs.count) keys for device \(deviceId.prefix(8))...", category: "OTPK")
+        if replaceExisting {
+            CryptoManager.shared.clearNeedsFullOtpkReplacement()
+        }
         return pairs.count
     }
 
@@ -99,6 +102,17 @@ enum OtpkReplenishmentService {
         lastReplenishDate = Date()
         defer { isReplenishing = false }
         do {
+            // If the orchestrator was freshly initialized (no prior CFE state), next_otpk_id
+            // reset to 1,000,000 and the server may hold OTPKs from an older session with
+            // the same IDs but different key material.  Replace all server OTPKs regardless
+            // of the current server count so every ID on the server matches our private keys.
+            let forceReplace = CryptoManager.shared.needsFullOtpkReplacement
+            if forceReplace {
+                Log.info("🔑 Fresh orchestrator detected — replacing all server OTPKs [\(source)]", category: "OTPK")
+                try await generateAndUpload(count: replenishBatchSize, deviceId: deviceId, replaceExisting: true)
+                return
+            }
+
             let (serverCount, recommendedMin) = try await KeyServiceClient.shared.getPreKeyCountFull(deviceId: deviceId)
             let effective = max(recommendedMin, lowWaterMark)
             Log.debug("🔑 OTPK server count: \(serverCount) / recommended min: \(effective) [\(source)]", category: "OTPK")

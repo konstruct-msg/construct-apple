@@ -2,8 +2,6 @@
 //  DesktopSecurityView.swift
 //  Construct Desktop
 //
-//  Minimal macOS-friendly security settings.
-//
 
 import SwiftUI
 
@@ -12,23 +10,78 @@ struct DesktopSecurityView: View {
 
     var body: some View {
         @Bindable var securityViewModel = securityViewModel
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("App PIN")
-                Spacer()
-                Text(securityViewModel.isPinEnabled ? "Enabled" : "Disabled")
-                    .foregroundStyle(securityViewModel.isPinEnabled ? .green : .secondary)
+        VStack(spacing: 0) {
+
+            // MARK: - App Lock
+            CTSettingsSectionHeader(title: NSLocalizedString("security", comment: ""))
+
+            if securityViewModel.isBiometricAvailable {
+                // Biometric lock toggle
+                HStack(spacing: 10) {
+                    CTRowIcon(CTSymbol.biometric,
+                              color: securityViewModel.isBiometricEnabled
+                                ? Color.CT.accent : Color.CT.textDim)
+                    Text(String(format: NSLocalizedString("use_biometric", comment: ""),
+                                securityViewModel.biometricDisplayName))
+                        .font(CTFont.regular(13))
+                        .foregroundStyle(Color.CT.text)
+                    Spacer()
+                    Toggle("", isOn: $securityViewModel.isBiometricEnabled)
+                        .labelsHidden()
+                        .tint(Color.CT.accent)
+                }
+                .padding(.horizontal, 12).padding(.vertical, 10)
+
+                if securityViewModel.isBiometricEnabled {
+                    CTSep(style: .thin)
+
+                    // Lock delay picker
+                    HStack(spacing: 10) {
+                        Text(NSLocalizedString("lock_delay", comment: ""))
+                            .font(CTFont.regular(13))
+                            .foregroundStyle(Color.CT.text)
+                        Spacer()
+                        Picker("", selection: $securityViewModel.lockDelay) {
+                            ForEach(LockDelay.allCases) { delay in
+                                Text(delay.localizedTitle).tag(delay)
+                            }
+                        }
+                        .labelsHidden()
+                        .font(CTFont.regular(12))
+                        .frame(maxWidth: 140)
+                    }
+                    .padding(.horizontal, 12).padding(.vertical, 8)
+
+                    CTSep(style: .thin)
+
+                    // Lock Now
+                    Button {
+                        securityViewModel.lockIfNeeded()
+                    } label: {
+                        HStack(spacing: 10) {
+                            CTRowIcon(CTSymbol.lock)
+                            Text(NSLocalizedString("lock_now", comment: ""))
+                                .font(CTFont.regular(13))
+                                .foregroundStyle(Color.CT.text)
+                            Spacer()
+                            Text("[→]").font(CTFont.regular(12)).foregroundStyle(Color.CT.textDim)
+                        }
+                        .padding(.horizontal, 12).padding(.vertical, 10)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            } else {
+                Text(NSLocalizedString("biometric_unavailable", comment: ""))
+                    .font(CTFont.regular(13))
+                    .foregroundStyle(Color.CT.textDim)
+                    .padding(.horizontal, 12).padding(.vertical, 10)
             }
 
-            if securityViewModel.isPinEnabled {
-                Toggle("Use Biometrics", isOn: $securityViewModel.isBiometricEnabled)
-                    .disabled(!securityViewModel.isBiometricAvailable)
-            }
-
-            Text("PIN setup and advanced security actions are currently managed in the iOS app.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            Spacer()
         }
-        .onAppear { securityViewModel.refreshPinState() }
+        .onAppear {
+            securityViewModel.refreshBiometricAvailability()
+        }
     }
 }

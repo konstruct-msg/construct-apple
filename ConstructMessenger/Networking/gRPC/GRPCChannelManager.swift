@@ -113,6 +113,13 @@ final class GRPCChannelManager: Sendable {
         _iceModeLock.withLock { _cachedIceMode = mode }
     }
 
+    /// Syncs ICE standby pre-warm state from IceProxyManager.
+    /// When `true`, `iceProxyPort()` returns nil even if the proxy is running —
+    /// direct routing is used until DPI is confirmed (or mode promoted to .on).
+    func updateCachedICEStandby(_ isStandby: Bool) {
+        _iceStandbyLock.withLock { _cachedICEStandby = isStandby }
+    }
+
     /// Returns the local proxy port if ICE is running AND should be used for routing, nil otherwise.
     /// Routing rule: use ICE whenever the Rust proxy is alive, unless mode is `.off`.
     ///   `.off`        → always nil (user explicitly disabled ICE)
@@ -124,6 +131,8 @@ final class GRPCChannelManager: Sendable {
     func iceProxyPort() -> UInt16? {
         guard ice_proxy_is_running() != 0 else { return nil }
         guard _iceModeLock.withLock({ _cachedIceMode }) != .off else { return nil }
+        // Standby pre-warm: proxy is running but routing suppressed — use direct until DPI confirmed.
+        guard !_iceStandbyLock.withLock({ _cachedICEStandby }) else { return nil }
         guard !isICEOnCooldownInternal() else {
             Log.debug("🧊 ICE on cooldown — using direct TLS", category: "gRPC")
             return nil
@@ -224,6 +233,11 @@ final class GRPCChannelManager: Sendable {
     // Falls back to UserDefaults only at init time (one-time read).
     private nonisolated(unsafe) var _cachedIceMode: IceMode = .auto
     private let _iceModeLock = NSLock()
+
+    // ICE standby pre-warm flag: proxy is running but routing suppressed until DPI is confirmed.
+    // Updated via updateCachedICEStandby() from IceProxyManager (MainActor → non-isolated bridge).
+    private nonisolated(unsafe) var _cachedICEStandby: Bool = false
+    private let _iceStandbyLock = NSLock()
 
     private func routingKey() -> String {
         if let icePort = iceProxyPort() { return "ice:\(icePort)" }
@@ -358,6 +372,10 @@ final class GRPCChannelManager: Sendable {
         let port = currentPort
         Log.debug("🔌 gRPC creating channel → \(host):\(port) TLS=true", category: "gRPC")
 
+        // MPTCP TODO: grpc-swift-nio-transport does not expose NIOTSChannelOptions.multipathServiceType
+        // in its public Config API (verified up to v2.7.0). Once the library adds a channelOptions
+        // field, add: `NIOTSChannelOptions.multipathServiceType → .handover` here.
+        // The MPTCP entitlement is already present in ConstructMessenger.entitlements.
         let transport = try HTTP2ClientTransport.TransportServices(
             target: .dns(host: host, port: port),
             transportSecurity: .tls,

@@ -113,10 +113,10 @@ final class DeviceLinkViewModel {
             let (deviceId, bundle, _, _) = try CryptoManager.shared.generateRegistrationBundle()
 
             var publicKeys = Shared_Proto_Services_V1_DevicePublicKeys()
-            publicKeys.verifyingKey = bundle.verifyingKey
-            publicKeys.identityPublic = bundle.identityPublic
-            publicKeys.signedPrekeyPublic = bundle.signedPrekeyPublic
-            publicKeys.signedPrekeySignature = bundle.signature
+            publicKeys.verifyingKey = Data(base64Encoded: bundle.verifyingKey) ?? Data()
+            publicKeys.identityPublic = Data(base64Encoded: bundle.identityPublic) ?? Data()
+            publicKeys.signedPrekeyPublic = Data(base64Encoded: bundle.signedPrekeyPublic) ?? Data()
+            publicKeys.signedPrekeySignature = Data(base64Encoded: bundle.signature) ?? Data()
             publicKeys.cryptoSuite = "Curve25519+Ed25519"
 
             Log.info("🔑 Device B: generated deviceId=\(deviceId) for link confirmation", category: "DeviceLink")

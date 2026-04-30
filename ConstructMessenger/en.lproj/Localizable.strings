@@ -96,6 +96,7 @@
 "pin_codes_dont_match" = "PIN codes don't match";
 "wrong_pin_code" = "Wrong PIN Code";
 "lock_delay" = "Lock After";
+"lock_now" = "Lock Now";
 "lock_delay_immediate" = "Immediately";
 "lock_delay_30s" = "30 Seconds";
 "lock_delay_1m" = "1 Minute";

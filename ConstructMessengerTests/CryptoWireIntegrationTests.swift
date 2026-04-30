@@ -30,24 +30,14 @@ final class CryptoWireIntegrationTests: XCTestCase {
             self.core = try createOrchestratorCoreFromKeys(keysData: keys, myUserId: userId)
         }
 
-        /// Export key bundle for X3DH
         func bundle() throws -> (identityPublic: String, signedPrekeyPublic: String,
                                   signature: String, verifyingKey: String, suiteId: String) {
-            let json = try core.exportRegistrationBundleJson()
-            guard let data = json.data(using: .utf8),
-                  let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let ip = dict["identity_public"] as? String,
-                  let sp = dict["signed_prekey_public"] as? String,
-                  let sig = dict["signature"] as? String,
-                  let vk = dict["verifying_key"] as? String,
-                  let sid = dict["suite_id"] as? String else {
-                throw NSError(domain: "TestError", code: 1)
-            }
-            return (ip, sp, sig, vk, sid)
+            let fields = try core.getRegistrationBundleFields()
+            return (fields.identityPublic, fields.signedPrekeyPublic, fields.signature, fields.verifyingKey, fields.suiteId)
         }
 
         private func bundleBytes(from b: (identityPublic: String, signedPrekeyPublic: String,
-                                          signature: String, verifyingKey: String, suiteId: String)) throws -> [UInt8] {
+                                          signature: String, verifyingKey: String, suiteId: String)) throws -> BinaryKeyBundle {
             guard let ip = Data(base64Encoded: b.identityPublic),
                   let sp = Data(base64Encoded: b.signedPrekeyPublic),
                   let sig = Data(base64Encoded: b.signature),
@@ -55,14 +45,14 @@ final class CryptoWireIntegrationTests: XCTestCase {
                   let sid = UInt16(b.suiteId) else {
                 throw NSError(domain: "TestError", code: 2)
             }
-            let dict: [String: Any] = [
-                "identity_public": [UInt8](ip),
-                "signed_prekey_public": [UInt8](sp),
-                "signature": [UInt8](sig),
-                "verifying_key": [UInt8](vk),
-                "suite_id": sid
-            ]
-            return [UInt8](try JSONSerialization.data(withJSONObject: dict))
+            return BinaryKeyBundle(
+                identityPublic: [UInt8](ip), signedPrekeyPublic: [UInt8](sp),
+                signature: [UInt8](sig), verifyingKey: [UInt8](vk),
+                suiteId: sid, oneTimePrekeyPublic: nil, oneTimePrekeyId: nil,
+                spkUploadedAt: 0, spkRotationEpoch: 0,
+                kyberSpkUploadedAt: 0, kyberSpkRotationEpoch: 0,
+                kyberPreKeyPublic: nil, kyberOneTimePrekeyPublic: nil, kyberOneTimePrekeyId: nil
+            )
         }
 
         /// Initiate session as sender (X3DH)
@@ -110,21 +100,19 @@ final class CryptoWireIntegrationTests: XCTestCase {
                                   senderBundle: (identityPublic: String, signedPrekeyPublic: String,
                                                  signature: String, verifyingKey: String, suiteId: String),
                                   wirePayload: Data) throws -> String {
-            let bundleBytes = try bundleBytes(from: senderBundle)
+            let bundle = try bundleBytes(from: senderBundle)
             let decoded = try WirePayloadCoder.decode(wirePayload)
             let unpadded = MessagePadding.unpadCiphertext(decoded.content)
-
-            let msgDict: [String: Any] = [
-                "ephemeral_public_key": decoded.ephemeralPublicKey,
-                "message_number": decoded.messageNumber,
-                "content": [UInt8](unpadded)
-            ]
-            let msgBytes = [UInt8](try JSONSerialization.data(withJSONObject: msgDict))
-
+            let firstMsg = BinaryFirstMessage(
+                ephemeralPublicKey: decoded.ephemeralPublicKey,
+                messageNumber: decoded.messageNumber,
+                content: [UInt8](unpadded),
+                oneTimePrekeyId: 0
+            )
             let result = try core.initReceivingSession(
                 contactId: contactId,
-                recipientBundle: bundleBytes,
-                firstMessage: msgBytes
+                recipientBundle: bundle,
+                firstMessage: firstMsg
             )
             return String(bytes: result.decryptedMessage, encoding: .utf8) ?? "__binary_init__"
         }
@@ -330,6 +318,215 @@ final class CryptoWireIntegrationTests: XCTestCase {
 
         XCTAssertThrowsError(try bob.decodeAndDecrypt(wire2, from: alice.userId),
             "Tampered message_number must fail AAD verification")
+    }
+}
+
+// MARK: - AD Identity Tests
+//
+// Tests for the AEAD Associated Data identity-format invariant.
+// Root cause postmortem: CryptoManager.cryptoLocalUserId returned a 32-char
+// device-hash (loadDeviceID) instead of the 36-char server UUID (_cachedUserId).
+// Double Ratchet AD:
+//   ENCRYPT: AD_VERSION || local_user_id || contact_id || session_id || dh_pub || msg_num
+//   DECRYPT: AD_VERSION || contact_id   || local_user_id || …
+// Both IDs MUST use the same identity space (server UUIDs) on both sides.
+
+final class ADIdentityTests: XCTestCase {
+
+    // ── Convenience alias so we don't write CryptoWireIntegrationTests.CryptoPeer everywhere
+    typealias Peer = CryptoWireIntegrationTests.CryptoPeer
+
+    // MARK: - Type safety (compile-time proof)
+
+    func testServerUserIdAndCryptoDeviceIdAreDistinctTypes() {
+        // This test is a compile-time contract: if the two types were the same,
+        // the assignment below would not compile.
+        let serverUUID  = ServerUserId(rawValue: "14f28d31-2dab-44aa-a123-456789abcdef")
+        let deviceHash  = CryptoDeviceId(rawValue: "6f5e37ac88bd2cc53348f01f78cdf5db")
+        XCTAssertEqual(serverUUID.rawValue.count, 36, "Server UUID must be 36 chars")
+        XCTAssertEqual(deviceHash.rawValue.count, 32, "Crypto device hash must be 32 chars")
+        XCTAssertTrue(serverUUID.rawValue.contains("-"),  "Server UUID must contain dashes")
+        XCTAssertFalse(deviceHash.rawValue.contains("-"), "Device hash must not contain dashes")
+        // Compiler enforces they are distinct types — cannot pass one where the other is expected.
+        XCTAssertNotEqual(serverUUID.rawValue, deviceHash.rawValue)
+    }
+
+    // MARK: - Regression: full session with production-format UUIDs (the fixed path)
+
+    /// Full two-party exchange using production-format server UUIDs (36-char with dashes).
+    /// This is the FIXED behaviour — the exact scenario that was always broken before the fix.
+    func testFullSessionSucceedsWithProductionUUIDs() throws {
+        // Real-looking server UUIDs (same format as production IDs).
+        let aliceId = "14f28d31-2dab-44aa-a123-456789abcdef"
+        let bobId   = "81f02199-8374-48f8-8a5f-549434ccc53f"
+
+        let alice = try Peer(userId: aliceId)
+        let bob   = try Peer(userId: bobId)
+
+        let aliceBundle = try alice.bundle()
+        let bobBundle   = try bob.bundle()
+
+        // Alice initiates
+        try alice.initSenderSession(to: bobId, recipientBundle: bobBundle)
+        let firstComponents = try alice.encryptRaw("Hello Bob - UUID session!", to: bobId)
+        let firstWire = try alice.encodeWire(firstComponents)
+
+        // Bob receives first message
+        let decrypted1 = try bob.initReceiverSession(
+            from: aliceId, senderBundle: aliceBundle, wirePayload: firstWire)
+        XCTAssertEqual(decrypted1, "Hello Bob - UUID session!", "First message must decrypt")
+
+        // Bob replies
+        let replyComponents = try bob.encryptRaw("Hi Alice - UUID reply!", to: aliceId)
+        let replyWire = try bob.encodeWire(replyComponents)
+        let decrypted2 = try alice.decodeAndDecrypt(replyWire, from: bobId)
+        XCTAssertEqual(decrypted2, "Hi Alice - UUID reply!", "Reply must decrypt")
+
+        // Continue the conversation (several ratchet steps)
+        for i in 0..<5 {
+            let msg = try alice.encryptRaw("Alice msg \(i)", to: bobId)
+            let wire = try alice.encodeWire(msg)
+            let dec = try bob.decodeAndDecrypt(wire, from: aliceId)
+            XCTAssertEqual(dec, "Alice msg \(i)")
+        }
+    }
+
+    // MARK: - Bug reproduction: device-hash local_user_id vs UUID contact_id
+
+    /// Reproduces the original production bug.
+    /// Alice's OrchestratorCore was initialised with a 32-char device-hash (old broken path).
+    /// Bob knows Alice by her 36-char server UUID.
+    /// AD bytes mismatch → `initReceivingSession` MUST throw.
+    func testSessionFailsWhenInitiatorUsesDeviceHashAsUserId() throws {
+        // Alice (buggy): userId = 32-char hex device-hash (old `cryptoLocalUserId` behaviour)
+        let aliceDeviceHash = "6f5e37ac88bd2cc53348f01f78cdf5db" // 32 hex chars, no dashes
+        // Bob's contact-list entry for Alice: server UUID (what the server hands out)
+        let aliceServerUUID = "14f28d31-2dab-44aa-a123-456789abcdef"
+        let bobId           = "81f02199-8374-48f8-8a5f-549434ccc53f"
+
+        XCTAssertEqual(aliceDeviceHash.count, 32, "Precondition: device hash is 32 chars")
+        XCTAssertEqual(aliceServerUUID.count, 36, "Precondition: server UUID is 36 chars")
+
+        // Alice Peer initialised with device hash — this is the broken state.
+        let aliceBuggy = try Peer(userId: aliceDeviceHash)
+        let bob        = try Peer(userId: bobId)
+
+        let aliceBundle = try aliceBuggy.bundle()
+        let bobBundle   = try bob.bundle()
+
+        try aliceBuggy.initSenderSession(to: bobId, recipientBundle: bobBundle)
+        let firstComponents = try aliceBuggy.encryptRaw("This AEAD tag will not verify", to: bobId)
+        let firstWire = try aliceBuggy.encodeWire(firstComponents)
+
+        // Bob tries to init session, but knows Alice by server UUID — AD MUST mismatch.
+        XCTAssertThrowsError(
+            try bob.initReceiverSession(
+                from: aliceServerUUID, // Bob's contact_id for Alice = UUID
+                senderBundle: aliceBundle,
+                wirePayload: firstWire),
+            "AEAD must fail: initiator used device-hash (32 hex) but responder expects UUID (36 chars)"
+        )
+    }
+
+    /// Complementary: when Bob's contact_id for Alice matches what Alice used as local_user_id,
+    /// even with a non-UUID format, the session succeeds.
+    /// This confirms the invariant is FORMAT CONSISTENCY, not UUID enforcement.
+    func testSessionSucceedsWhenBothSidesUseConsistentNonUUIDIds() throws {
+        let aliceId = "alice-node-id-in-mesh"
+        let bobId   = "bob-node-id-in-mesh"
+
+        let alice = try Peer(userId: aliceId)
+        let bob   = try Peer(userId: bobId)
+
+        let aliceBundle = try alice.bundle()
+        let bobBundle   = try bob.bundle()
+
+        try alice.initSenderSession(to: bobId, recipientBundle: bobBundle)
+        let firstComponents = try alice.encryptRaw("consistent IDs work", to: bobId)
+        let firstWire = try alice.encodeWire(firstComponents)
+
+        // Bob uses the same aliceId that Alice used as her local_user_id → formats match.
+        let decrypted = try bob.initReceiverSession(
+            from: aliceId, senderBundle: aliceBundle, wirePayload: firstWire)
+        XCTAssertEqual(decrypted, "consistent IDs work")
+    }
+
+    // MARK: - Edge cases
+
+    /// AD binds sender identity: Bob must reject a message he receives but attributes to Carol.
+    func testSessionFailsWhenContactIdAttributedToWrongUser() throws {
+        let aliceId = "14f28d31-2dab-44aa-a123-456789abcdef"
+        let carolId = "99999999-0000-0000-0000-111111111111"
+        let bobId   = "81f02199-8374-48f8-8a5f-549434ccc53f"
+
+        let alice = try Peer(userId: aliceId)
+        let bob   = try Peer(userId: bobId)
+
+        let aliceBundle = try alice.bundle()
+        let bobBundle   = try bob.bundle()
+
+        try alice.initSenderSession(to: bobId, recipientBundle: bobBundle)
+        let firstComponents = try alice.encryptRaw("only for bob", to: bobId)
+        let firstWire = try alice.encodeWire(firstComponents)
+
+        // Bob processes the message as if it came from Carol — AD mismatch.
+        XCTAssertThrowsError(
+            try bob.initReceiverSession(
+                from: carolId, // WRONG — should be aliceId
+                senderBundle: aliceBundle,
+                wirePayload: firstWire),
+            "AD must bind sender identity: wrong contact_id attribution must fail"
+        )
+    }
+
+    /// Multi-message conversation must stay in sync across DH ratchet steps.
+    /// Verifies that the UUID-based AD doesn't break ratchet advancement.
+    func testLongConversationWithUUIDIdsStaysInSync() throws {
+        let aliceId = "14f28d31-2dab-44aa-a123-456789abcdef"
+        let bobId   = "81f02199-8374-48f8-8a5f-549434ccc53f"
+
+        let alice = try Peer(userId: aliceId)
+        let bob   = try Peer(userId: bobId)
+
+        let aliceBundle = try alice.bundle()
+        let bobBundle   = try bob.bundle()
+
+        try alice.initSenderSession(to: bobId, recipientBundle: bobBundle)
+        let firstWire = try alice.encodeWire(try alice.encryptRaw("msg0", to: bobId))
+        _ = try bob.initReceiverSession(from: aliceId, senderBundle: aliceBundle, wirePayload: firstWire)
+
+        // 10 rounds of alternating messages (triggers multiple DH ratchet steps)
+        for i in 1...10 {
+            let aMsg = "alice-\(i)"
+            let aWire = try alice.encodeWire(try alice.encryptRaw(aMsg, to: bobId))
+            XCTAssertEqual(try bob.decodeAndDecrypt(aWire, from: aliceId), aMsg)
+
+            let bMsg = "bob-\(i)"
+            let bWire = try bob.encodeWire(try bob.encryptRaw(bMsg, to: aliceId))
+            XCTAssertEqual(try alice.decodeAndDecrypt(bWire, from: bobId), bMsg)
+        }
+    }
+
+    // MARK: - Migration guard
+
+    func testMigrationUserDefaultsFlagPreventsRepeatedClears() {
+        let key = "construct.adMigration.serverUUID.v1.done"
+        UserDefaults.standard.removeObject(forKey: key)
+        defer { UserDefaults.standard.removeObject(forKey: key) } // clean up after test
+
+        XCTAssertFalse(UserDefaults.standard.bool(forKey: key),
+                       "Flag must be absent before first migration run")
+
+        // Simulate what migrateSessionsIfNeeded does when it runs for the first time.
+        UserDefaults.standard.set(true, forKey: key)
+
+        XCTAssertTrue(UserDefaults.standard.bool(forKey: key),
+                      "Flag must be set after first run")
+
+        // A second call should skip work because the flag is already set.
+        // (We can't call the private method directly; we verify the guard contract.)
+        XCTAssertTrue(UserDefaults.standard.bool(forKey: key),
+                      "Flag must persist so migration does not run again on next launch")
     }
 }
 

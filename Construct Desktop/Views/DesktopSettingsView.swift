@@ -71,7 +71,7 @@ struct DesktopSettingsView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .ctBackground()
         }
-        .frame(width: 660, height: 500)
+        .frame(width: 720, height: 560)
     }
 
     private func sidebarRow(_ section: Section) -> some View {
@@ -202,16 +202,19 @@ private struct DesktopSecuritySettingsTab: View {
 
 private struct DesktopNotificationsSettingsTab: View {
     @State private var authStatus: UNAuthorizationStatus = .notDetermined
+    @AppStorage("notificationsEnabled") private var notificationsEnabled: Bool = true
+    @AppStorage("showMessageNotifications") private var showMessageNotifications: Bool = true
+    @AppStorage("notificationPreviewType") private var notificationPreviewType: NotificationPreviewType = .nameAndMessage
+    @AppStorage("notificationSound") private var notificationSound: Bool = true
 
     var body: some View {
         Form {
-            Section("System Notifications") {
+            Section("System Permission") {
                 HStack {
-                    Text("Permission")
+                    Text("Status")
                     Spacer()
                     statusBadge
                 }
-
                 if authStatus == .denied {
                     Button("Open System Settings…") {
                         NSWorkspace.shared.open(
@@ -230,8 +233,21 @@ private struct DesktopNotificationsSettingsTab: View {
             }
             .task { await refreshStatus() }
 
-            Section("Delivery") {
-                NotificationsSettingsView()
+            Section("Notifications") {
+                Toggle("Enable notifications", isOn: $notificationsEnabled)
+            }
+
+            if notificationsEnabled {
+                Section("Messages") {
+                    Toggle("Show message notifications", isOn: $showMessageNotifications)
+                    Toggle("Sound", isOn: $notificationSound)
+                    Picker("Preview", selection: $notificationPreviewType) {
+                        ForEach(NotificationPreviewType.allCases, id: \.self) { type in
+                            Text(type.displayName).tag(type)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                }
             }
         }
         .formStyle(.grouped)
@@ -258,12 +274,7 @@ private struct DesktopNotificationsSettingsTab: View {
 
 private struct DesktopStorageSettingsTab: View {
     var body: some View {
-        Form {
-            Section("Media Cache") {
-                DataStorageSettingsView()
-            }
-        }
-        .formStyle(.grouped)
+        DataStorageSettingsView(showNavBar: false)
     }
 }
 
@@ -271,7 +282,7 @@ private struct DesktopStorageSettingsTab: View {
 
 private struct DesktopNetworkSettingsTab: View {
     var body: some View {
-        NetworkSettingsView()
+        NetworkSettingsView(showNavBar: false)
     }
 }
 
@@ -279,7 +290,7 @@ private struct DesktopNetworkSettingsTab: View {
 
 private struct DesktopDiagnosticsSettingsTab: View {
     var body: some View {
-        DiagnosticsView()
+        DiagnosticsView(showNavBar: false)
     }
 }
 

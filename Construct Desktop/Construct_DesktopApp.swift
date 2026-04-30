@@ -22,6 +22,12 @@ struct Construct_DesktopApp: App {
     // Command bridge — owned here, wired up in DesktopRootView
     @State private var commandBridge = DesktopCommandBridge()
 
+    init() {
+        // Set UNUserNotificationCenterDelegate for macOS so foreground notifications
+        // show as banners. On iOS this is handled by PushNotificationManager.
+        UNUserNotificationCenter.current().delegate = LocalNotificationManager.shared
+    }
+
     var body: some Scene {
         // MARK: - Main window
         WindowGroup {

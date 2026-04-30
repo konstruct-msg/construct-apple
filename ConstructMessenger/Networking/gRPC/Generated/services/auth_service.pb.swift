@@ -223,14 +223,19 @@ public struct Shared_Proto_Services_V1_DevicePublicKeys: Sendable {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var verifyingKey: String = String()
+  /// Ed25519 verifying key, 32 bytes
+  public var verifyingKey: Data = Data()
 
-  public var identityPublic: String = String()
+  /// Identity public key for E2EE
+  public var identityPublic: Data = Data()
 
-  public var signedPrekeyPublic: String = String()
+  /// Signed prekey public for Double Ratchet
+  public var signedPrekeyPublic: Data = Data()
 
-  public var signedPrekeySignature: String = String()
+  /// Ed25519 signature of SPK, 64 bytes
+  public var signedPrekeySignature: Data = Data()
 
+  /// Suite identifier, e.g. "Curve25519+Ed25519"
   public var cryptoSuite: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -306,7 +311,8 @@ public struct Shared_Proto_Services_V1_AuthenticateDeviceRequest: Sendable {
 
   public var timestamp: Int64 = 0
 
-  public var signature: String = String()
+  /// Ed25519 signature of "{device_id}{timestamp}", 64 bytes
+  public var signature: Data = Data()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -1534,10 +1540,10 @@ extension Shared_Proto_Services_V1_DevicePublicKeys: SwiftProtobuf.Message, Swif
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeSingularStringField(value: &self.verifyingKey) }()
-      case 2: try { try decoder.decodeSingularStringField(value: &self.identityPublic) }()
-      case 3: try { try decoder.decodeSingularStringField(value: &self.signedPrekeyPublic) }()
-      case 4: try { try decoder.decodeSingularStringField(value: &self.signedPrekeySignature) }()
+      case 1: try { try decoder.decodeSingularBytesField(value: &self.verifyingKey) }()
+      case 2: try { try decoder.decodeSingularBytesField(value: &self.identityPublic) }()
+      case 3: try { try decoder.decodeSingularBytesField(value: &self.signedPrekeyPublic) }()
+      case 4: try { try decoder.decodeSingularBytesField(value: &self.signedPrekeySignature) }()
       case 5: try { try decoder.decodeSingularStringField(value: &self.cryptoSuite) }()
       default: break
       }
@@ -1546,16 +1552,16 @@ extension Shared_Proto_Services_V1_DevicePublicKeys: SwiftProtobuf.Message, Swif
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.verifyingKey.isEmpty {
-      try visitor.visitSingularStringField(value: self.verifyingKey, fieldNumber: 1)
+      try visitor.visitSingularBytesField(value: self.verifyingKey, fieldNumber: 1)
     }
     if !self.identityPublic.isEmpty {
-      try visitor.visitSingularStringField(value: self.identityPublic, fieldNumber: 2)
+      try visitor.visitSingularBytesField(value: self.identityPublic, fieldNumber: 2)
     }
     if !self.signedPrekeyPublic.isEmpty {
-      try visitor.visitSingularStringField(value: self.signedPrekeyPublic, fieldNumber: 3)
+      try visitor.visitSingularBytesField(value: self.signedPrekeyPublic, fieldNumber: 3)
     }
     if !self.signedPrekeySignature.isEmpty {
-      try visitor.visitSingularStringField(value: self.signedPrekeySignature, fieldNumber: 4)
+      try visitor.visitSingularBytesField(value: self.signedPrekeySignature, fieldNumber: 4)
     }
     if !self.cryptoSuite.isEmpty {
       try visitor.visitSingularStringField(value: self.cryptoSuite, fieldNumber: 5)
@@ -1675,7 +1681,7 @@ extension Shared_Proto_Services_V1_AuthenticateDeviceRequest: SwiftProtobuf.Mess
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.deviceID) }()
       case 2: try { try decoder.decodeSingularInt64Field(value: &self.timestamp) }()
-      case 3: try { try decoder.decodeSingularStringField(value: &self.signature) }()
+      case 3: try { try decoder.decodeSingularBytesField(value: &self.signature) }()
       default: break
       }
     }
@@ -1689,7 +1695,7 @@ extension Shared_Proto_Services_V1_AuthenticateDeviceRequest: SwiftProtobuf.Mess
       try visitor.visitSingularInt64Field(value: self.timestamp, fieldNumber: 2)
     }
     if !self.signature.isEmpty {
-      try visitor.visitSingularStringField(value: self.signature, fieldNumber: 3)
+      try visitor.visitSingularBytesField(value: self.signature, fieldNumber: 3)
     }
     try unknownFields.traverse(visitor: &visitor)
   }

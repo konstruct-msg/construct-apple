@@ -227,6 +227,36 @@ If any answer is "no", fix the design before merging.
 
 ---
 
+## User Identity Spaces (CRITICAL — two distinct ID formats)
+
+There are two separate user identity formats in this codebase. **Never mix them.**
+
+| Type | Swift | Format | Source | Correct use |
+|------|-------|--------|--------|-------------|
+| `ServerUserId` | `Utilities/UserIdentity.swift` | 36-char UUID with dashes `14f28d31-…` | Server-assigned at registration | All session addressing: `local_user_id`, `contact_id`, `conversation_id`, contact lists |
+| `CryptoDeviceId` | `Utilities/UserIdentity.swift` | 32-char hex `6f5e37ac…` | `deriveDeviceId(identityPublicKey)` | Multi-device linking, QR codes ONLY |
+
+### The AD bug (postmortem — fixed in commit that adds this section)
+
+`CryptoManager.cryptoLocalUserId` previously returned `loadDeviceID()` (32-hex CryptoDeviceId)
+instead of `_cachedUserId` (36-char ServerUserId). The Double Ratchet AD is:
+
+```
+ENCRYPT: AD_VERSION || local_user_id || contact_id || …
+DECRYPT: AD_VERSION || contact_id   || local_user_id || …
+```
+
+INITIATOR stored `local_user_id = "6f5e37ac…"` (32 hex).
+RESPONDER stored `contact_id    = "14f28d31-…"` (36 UUID).
+These never matched → permanent AEAD failure on every session, 100% reproducible.
+
+**Invariant to maintain**: Everything passed to the Rust session layer (`init_session`,
+`init_receiving_session`, `set_local_user_id`) MUST be a `ServerUserId`. The Rust
+`debug_assert!` guards in `new_initiator_session` / `new_responder_session` catch this
+in test builds. The `UserIdentity.swift` types make the distinction compiler-visible.
+
+---
+
 ## Commits
 
 Follow [Conventional Commits](https://www.conventionalcommits.org/):

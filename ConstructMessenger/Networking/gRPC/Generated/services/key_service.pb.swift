@@ -96,9 +96,8 @@ public struct Shared_Proto_Services_V1_GetPreKeyBundleRequest: Sendable {
   public mutating func clearDeviceID() {self._deviceID = nil}
 
   /// Preferred crypto suite (optional)
-  /// Values: "X25519_CHACHA20", "X25519_AES256", "KYBER_HYBRID"
-  public var preferredSuite: String {
-    get {_preferredSuite ?? String()}
+  public var preferredSuite: Shared_Proto_Core_V1_CryptoSuite {
+    get {_preferredSuite ?? .unspecified}
     set {_preferredSuite = newValue}
   }
   /// Returns true if `preferredSuite` has been explicitly set.
@@ -111,7 +110,7 @@ public struct Shared_Proto_Services_V1_GetPreKeyBundleRequest: Sendable {
   public init() {}
 
   fileprivate var _deviceID: String? = nil
-  fileprivate var _preferredSuite: String? = nil
+  fileprivate var _preferredSuite: Shared_Proto_Core_V1_CryptoSuite? = nil
 }
 
 public struct Shared_Proto_Services_V1_GetPreKeyBundleResponse: Sendable {
@@ -246,7 +245,7 @@ public struct Shared_Proto_Services_V1_PreKeyBundle: @unchecked Sendable {
   public mutating func clearOneTimePreKeyID() {_uniqueStorage()._oneTimePreKeyID = nil}
 
   /// Crypto suite used
-  public var cryptoSuite: String {
+  public var cryptoSuite: Shared_Proto_Core_V1_CryptoSuite {
     get {_storage._cryptoSuite}
     set {_uniqueStorage()._cryptoSuite = newValue}
   }
@@ -369,8 +368,8 @@ public struct Shared_Proto_Services_V1_GetPreKeyBundlesRequest: Sendable {
   public var deviceIds: [String] = []
 
   /// Preferred crypto suite
-  public var preferredSuite: String {
-    get {_preferredSuite ?? String()}
+  public var preferredSuite: Shared_Proto_Core_V1_CryptoSuite {
+    get {_preferredSuite ?? .unspecified}
     set {_preferredSuite = newValue}
   }
   /// Returns true if `preferredSuite` has been explicitly set.
@@ -382,7 +381,7 @@ public struct Shared_Proto_Services_V1_GetPreKeyBundlesRequest: Sendable {
 
   public init() {}
 
-  fileprivate var _preferredSuite: String? = nil
+  fileprivate var _preferredSuite: Shared_Proto_Core_V1_CryptoSuite? = nil
 }
 
 public struct Shared_Proto_Services_V1_GetPreKeyBundlesResponse: Sendable {
@@ -862,7 +861,7 @@ extension Shared_Proto_Services_V1_GetPreKeyBundleRequest: SwiftProtobuf.Message
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.userID) }()
       case 2: try { try decoder.decodeSingularStringField(value: &self._deviceID) }()
-      case 3: try { try decoder.decodeSingularStringField(value: &self._preferredSuite) }()
+      case 3: try { try decoder.decodeSingularEnumField(value: &self._preferredSuite) }()
       default: break
       }
     }
@@ -880,7 +879,7 @@ extension Shared_Proto_Services_V1_GetPreKeyBundleRequest: SwiftProtobuf.Message
       try visitor.visitSingularStringField(value: v, fieldNumber: 2)
     } }()
     try { if let v = self._preferredSuite {
-      try visitor.visitSingularStringField(value: v, fieldNumber: 3)
+      try visitor.visitSingularEnumField(value: v, fieldNumber: 3)
     } }()
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -1010,7 +1009,7 @@ extension Shared_Proto_Services_V1_PreKeyBundle: SwiftProtobuf.Message, SwiftPro
     var _signedPreKeySignature: Data = Data()
     var _oneTimePreKey: Data? = nil
     var _oneTimePreKeyID: UInt32? = nil
-    var _cryptoSuite: String = String()
+    var _cryptoSuite: Shared_Proto_Core_V1_CryptoSuite = .unspecified
     var _generatedAt: Int64 = 0
     var _kyberPreKey: Data? = nil
     var _kyberPreKeyID: UInt32? = nil
@@ -1076,7 +1075,7 @@ extension Shared_Proto_Services_V1_PreKeyBundle: SwiftProtobuf.Message, SwiftPro
         case 5: try { try decoder.decodeSingularBytesField(value: &_storage._signedPreKeySignature) }()
         case 6: try { try decoder.decodeSingularBytesField(value: &_storage._oneTimePreKey) }()
         case 7: try { try decoder.decodeSingularUInt32Field(value: &_storage._oneTimePreKeyID) }()
-        case 8: try { try decoder.decodeSingularStringField(value: &_storage._cryptoSuite) }()
+        case 8: try { try decoder.decodeSingularEnumField(value: &_storage._cryptoSuite) }()
         case 9: try { try decoder.decodeSingularInt64Field(value: &_storage._generatedAt) }()
         case 10: try { try decoder.decodeSingularBytesField(value: &_storage._kyberPreKey) }()
         case 11: try { try decoder.decodeSingularUInt32Field(value: &_storage._kyberPreKeyID) }()
@@ -1121,8 +1120,8 @@ extension Shared_Proto_Services_V1_PreKeyBundle: SwiftProtobuf.Message, SwiftPro
       try { if let v = _storage._oneTimePreKeyID {
         try visitor.visitSingularUInt32Field(value: v, fieldNumber: 7)
       } }()
-      if !_storage._cryptoSuite.isEmpty {
-        try visitor.visitSingularStringField(value: _storage._cryptoSuite, fieldNumber: 8)
+      if _storage._cryptoSuite != .unspecified {
+        try visitor.visitSingularEnumField(value: _storage._cryptoSuite, fieldNumber: 8)
       }
       if _storage._generatedAt != 0 {
         try visitor.visitSingularInt64Field(value: _storage._generatedAt, fieldNumber: 9)
@@ -1206,7 +1205,7 @@ extension Shared_Proto_Services_V1_GetPreKeyBundlesRequest: SwiftProtobuf.Messag
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.userID) }()
       case 2: try { try decoder.decodeRepeatedStringField(value: &self.deviceIds) }()
-      case 3: try { try decoder.decodeSingularStringField(value: &self._preferredSuite) }()
+      case 3: try { try decoder.decodeSingularEnumField(value: &self._preferredSuite) }()
       default: break
       }
     }
@@ -1224,7 +1223,7 @@ extension Shared_Proto_Services_V1_GetPreKeyBundlesRequest: SwiftProtobuf.Messag
       try visitor.visitRepeatedStringField(value: self.deviceIds, fieldNumber: 2)
     }
     try { if let v = self._preferredSuite {
-      try visitor.visitSingularStringField(value: v, fieldNumber: 3)
+      try visitor.visitSingularEnumField(value: v, fieldNumber: 3)
     } }()
     try unknownFields.traverse(visitor: &visitor)
   }

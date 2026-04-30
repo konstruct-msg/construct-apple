@@ -38,20 +38,11 @@ private final class SessionPeer {
                         signature: String, verifyingKey: String, suiteId: String)
 
     func exportBundle() throws -> Bundle {
-        let json = try core.exportRegistrationBundleJson()
-        guard let data = json.data(using: .utf8),
-              let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let ip = dict["identity_public"] as? String,
-              let sp = dict["signed_prekey_public"] as? String,
-              let sig = dict["signature"] as? String,
-              let vk = dict["verifying_key"] as? String,
-              let sid = dict["suite_id"] as? String else {
-            throw TestError.bundleParseFailed
-        }
-        return (ip, sp, sig, vk, sid)
+        let fields = try core.getRegistrationBundleFields()
+        return (fields.identityPublic, fields.signedPrekeyPublic, fields.signature, fields.verifyingKey, fields.suiteId)
     }
 
-    private func bundleBytes(from b: Bundle) throws -> [UInt8] {
+    private func bundleBytes(from b: Bundle) throws -> BinaryKeyBundle {
         guard let ipData = Data(base64Encoded: b.identityPublic),
               let spData = Data(base64Encoded: b.signedPrekeyPublic),
               let sigData = Data(base64Encoded: b.signature),
@@ -59,14 +50,14 @@ private final class SessionPeer {
               let sid = UInt16(b.suiteId) else {
             throw TestError.bundleDecodeFailed
         }
-        let dict: [String: Any] = [
-            "identity_public": [UInt8](ipData),
-            "signed_prekey_public": [UInt8](spData),
-            "signature": [UInt8](sigData),
-            "verifying_key": [UInt8](vkData),
-            "suite_id": sid
-        ]
-        return [UInt8](try JSONSerialization.data(withJSONObject: dict))
+        return BinaryKeyBundle(
+            identityPublic: [UInt8](ipData), signedPrekeyPublic: [UInt8](spData),
+            signature: [UInt8](sigData), verifyingKey: [UInt8](vkData),
+            suiteId: sid, oneTimePrekeyPublic: nil, oneTimePrekeyId: nil,
+            spkUploadedAt: 0, spkRotationEpoch: 0,
+            kyberSpkUploadedAt: 0, kyberSpkRotationEpoch: 0,
+            kyberPreKeyPublic: nil, kyberOneTimePrekeyPublic: nil, kyberOneTimePrekeyId: nil
+        )
     }
 
     // MARK: Session init (INITIATOR)
@@ -96,7 +87,7 @@ private final class SessionPeer {
     // MARK: initReceivingSession (RESPONDER)
 
     func initReceivingSession(contactId: String, senderBundle: Bundle, firstMsg: EncryptedComponents) throws -> String {
-        let msg = try firstMsg.toMessageBytes()
+        let msg = firstMsg.toBinaryFirstMessage()
         let bytes = try core.initReceivingSession(
             contactId: contactId,
             recipientBundle: bundleBytes(from: senderBundle),
@@ -126,14 +117,13 @@ private struct EncryptedComponents {
     let content: [UInt8]
     let oneTimePrekeyId: UInt32
 
-    func toMessageBytes() throws -> [UInt8] {
-        let dict: [String: Any] = [
-            "ephemeral_public_key": ephemeralPublicKey,
-            "message_number": messageNumber,
-            "content": content,
-            "one_time_prekey_id": oneTimePrekeyId
-        ]
-        return [UInt8](try JSONSerialization.data(withJSONObject: dict))
+    func toBinaryFirstMessage() -> BinaryFirstMessage {
+        return BinaryFirstMessage(
+            ephemeralPublicKey: ephemeralPublicKey,
+            messageNumber: messageNumber,
+            content: content,
+            oneTimePrekeyId: oneTimePrekeyId
+        )
     }
 }
 

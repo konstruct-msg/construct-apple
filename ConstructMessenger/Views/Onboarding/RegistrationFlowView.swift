@@ -415,7 +415,8 @@ struct RegistrationFlowView: View {
             do {
                 let uploadedCount = try await OtpkReplenishmentService.generateAndUpload(
                     count: 100,
-                    deviceId: deviceId
+                    deviceId: deviceId,
+                    replaceExisting: true
                 )
                 Log.info("   ✅ Uploaded \(uploadedCount) one-time prekeys", category: "Registration")
             } catch {

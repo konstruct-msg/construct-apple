@@ -12,6 +12,12 @@ import UIKit
 #endif
 
 struct DiagnosticsView: View {
+    var showNavBar: Bool = true
+
+    init(showNavBar: Bool = true) {
+        self.showNavBar = showNavBar
+    }
+
     @Environment(\.dismiss) private var dismiss
     
     @State private var logText: String = ""
@@ -22,11 +28,13 @@ struct DiagnosticsView: View {
         ScrollView {
             VStack(spacing: 20) {
                 
-                CTNavBar(
-                    title: NSLocalizedString("diagnostics", comment: ""),
-                    showBack: true,
-                    backAction: { dismiss() }
-                )
+                if showNavBar {
+                    CTNavBar(
+                        title: NSLocalizedString("diagnostics", comment: ""),
+                        showBack: true,
+                        backAction: { dismiss() }
+                    )
+                }
 
                 // MARK: - Push Notifications
                 VStack(alignment: .leading, spacing: 6) {

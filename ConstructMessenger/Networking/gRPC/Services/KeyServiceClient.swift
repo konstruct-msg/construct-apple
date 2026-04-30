@@ -98,7 +98,7 @@ final class KeyServiceClient: Sendable {
                 request: .init(message: request)
             )
 
-            return response.bundles.compactMap { deviceBundle in
+            return response.bundles.compactMap { deviceBundle -> DeviceBundleData? in
                 let b = deviceBundle.bundle
                 guard !b.identityKey.isEmpty else { return nil }
 
@@ -226,6 +226,17 @@ final class KeyServiceClient: Sendable {
                 kyberSpkUploadedAt: 0,
                 kyberSpkRotationEpoch: 0
             )
+        }
+    }
+
+    /// Map proto CryptoSuite enum → numeric suite ID used by CryptoCore.
+    private static func parseSuiteId(_ cryptoSuite: Shared_Proto_Core_V1_CryptoSuite) -> UInt16 {
+        switch cryptoSuite {
+        case .classicX25519Chacha20: return 1
+        case .classicX25519Aes256:   return 2
+        case .hybridKyber1024X25519: return 3
+        case .hybridKyber768X25519:  return 3
+        default:                     return 1
         }
     }
 

@@ -141,6 +141,17 @@ actor IceCertFetcher {
 
     private let timeout: TimeInterval = NetworkTiming.ICE.certFetchTimeoutHTTPS
 
+    // MPTCP .handover: OS migrates in-flight requests to cellular when WiFi drops,
+    // preventing cert/relay-config fetches from failing on interface transitions.
+    // MPTCP is iOS-only; macOS uses a standard URLSession.
+    private let session: URLSession = {
+        let config = URLSessionConfiguration.default
+        #if os(iOS)
+        config.multipathServiceType = .handover
+        #endif
+        return URLSession(configuration: config)
+    }()
+
     // UserDefaults key for cached relay infos (JSON-encoded [RelayInfo])
     private static let cachedRelayInfosKey = "construct.ice_relay_infos"
     /// UserDefaults key for cached server Ed25519 bundle-signing public key (raw Data, 32 bytes).
@@ -158,7 +169,7 @@ actor IceCertFetcher {
         request.cachePolicy = .reloadIgnoringLocalCacheData
 
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await session.data(for: request)
             guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
                 Log.debug("🧊 ICE .well-known returned non-200", category: "ICE")
                 return nil
@@ -207,7 +218,7 @@ actor IceCertFetcher {
                     do {
                         var request = URLRequest(url: url, timeoutInterval: self.timeout)
                         request.cachePolicy = .reloadIgnoringLocalCacheData
-                        let (data, response) = try await URLSession.shared.data(for: request)
+                        let (data, response) = try await self.session.data(for: request)
                         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
                             Log.debug("🧊 \(url.host ?? "") returned non-200", category: "ICE")
                             return nil

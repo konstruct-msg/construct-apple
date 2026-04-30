@@ -8,7 +8,9 @@
 import Foundation
 import CoreData
 import CryptoKit
+#if canImport(UIKit)
 import UIKit
+#endif
 
 @MainActor
 @Observable
@@ -304,12 +306,11 @@ class AuthViewModel {
             }
             let privateKey = try Curve25519.Signing.PrivateKey(rawRepresentation: Data(signingKeyBytes))
             let signatureData = try privateKey.signature(for: messageData)
-            let signature = signatureData.base64EncodedString()
             
             let response = try await AuthServiceClient.shared.authenticateDevice(
                     deviceId: deviceId,
                     timestamp: timestamp,
-                    signature: signature
+                    signature: signatureData
                 )
             
             // Save tokens
@@ -467,10 +468,12 @@ class AuthViewModel {
         // condition — the keys haven't been wiped; they just can't be read right now.
         // Skip the recovery screen in this case; restoreOrAuthenticateDevice() will be
         // retried when the user brings the app to the foreground.
+        #if canImport(UIKit)
         guard UIApplication.shared.applicationState != .background else {
             Log.info("⚠️ [Auth] Keys inaccessible in background (device locked) — deferring recovery to foreground", category: "Auth")
             return
         }
+        #endif
         deviceKeysUnavailable = true
     }
 

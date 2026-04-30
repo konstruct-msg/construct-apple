@@ -116,8 +116,10 @@ class MessageRouter {
             case .notifyError(let code, let msg):
                 Log.error("❌ Rust timer action error [\(code)]: \(msg)", category: "MessageRouter")
             default:
-                // Route storage actions through the storage pipeline; log others.
+                // Route storage/session-lifecycle actions through the storage pipeline; log others.
                 if case .saveSessionToSecureStore = action {
+                    executeStorageActions([action])
+                } else if case .sessionTerminated = action {
                     executeStorageActions([action])
                 } else {
                     Log.debug("🔷 Unhandled Rust timer action: \(action)", category: "MessageRouter")
@@ -549,6 +551,10 @@ class MessageRouter {
                 Log.debug("📡 Notifying linked devices of session reset with \(contactId.prefix(8))…", category: "MessageRouter")
                 Task { await MultiDeviceSendCoordinator.shared.broadcastSessionReset(contactId: contactId) }
 
+            case .sessionTerminated(let contactId, let archiveBytes):
+                CryptoManager.shared.acceptSessionTerminated(contactId: contactId, archiveBytes: archiveBytes)
+                CryptoManager.shared.saveOrchestratorStateCFE()
+
             case .notifyError(let code, let msg):
                 Log.error("❌ Rust orchestrator error [\(code)]: \(msg)", category: "MessageRouter")
 
@@ -655,8 +661,14 @@ class MessageRouter {
 
     private func executeStorageActions(_ actions: [CfeAction]) {
         for action in actions {
-            if case .saveSessionToSecureStore(let key, let data) = action {
+            switch action {
+            case .saveSessionToSecureStore(let key, let data):
                 handleStorageAction(key: key, data: [UInt8](data))
+            case .sessionTerminated(let contactId, let archiveBytes):
+                CryptoManager.shared.acceptSessionTerminated(contactId: contactId, archiveBytes: archiveBytes)
+                CryptoManager.shared.saveOrchestratorStateCFE()
+            default:
+                break
             }
         }
     }
@@ -1271,6 +1283,14 @@ class MessageRouter {
             CryptoManager.shared.archiveSession(for: userId, reason: .endSessionReceived)
             Log.debug("✅ END_SESSION: session archived via Swift fallback for \(userId.prefix(8))…", category: "MessageRouter")
         }
+
+        // Defence-in-depth: guarantee Keychain is clear even if the Rust path
+        // did not reach archive_session() (e.g. export failure returning vec![]).
+        // The normal path now emits CfeAction.sessionTerminated which already clears
+        // Keychain via acceptSessionTerminated(), so this is a no-op in the happy path.
+        KeychainManager.shared.deleteSession(for: userId)
+        KeychainManager.shared.deleteSessionSuiteId(userId: userId)
+        Log.debug("🗑️ END_SESSION: Keychain hot session cleared for \(userId.prefix(8))… (post-archive)", category: "MessageRouter")
 
         // 2. Re-queue any outgoing messages that were sent to the server but not yet
         //    delivered (no ACK). These were encrypted with the now-archived session keys
