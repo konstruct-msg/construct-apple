@@ -1315,32 +1315,22 @@ final class IceProxyManager: ObservableObject {
             using: params
         )
         return await withCheckedContinuation { cont in
-            let lock = NSLock()
-            var done = false
+            let flag = OnceResumeFlag()
             conn.stateUpdateHandler = { state in
-                lock.lock()
-                defer { lock.unlock() }
-                guard !done else { return }
                 switch state {
                 case .ready:
-                    done = true
-                    cont.resume(returning: true)
-                    conn.cancel()
+                    if flag.trigger() { cont.resume(returning: true);  conn.cancel() }
                 case .failed:
-                    done = true
-                    cont.resume(returning: false)
-                    conn.cancel()
+                    if flag.trigger() { cont.resume(returning: false); conn.cancel() }
                 case .cancelled:
-                    if !done { done = true; cont.resume(returning: false) }
+                    if flag.trigger() { cont.resume(returning: false) }
                 default: break
                 }
             }
             conn.start(queue: .global(qos: .utility))
             Task {
                 try? await Task.sleep(for: .seconds(NetworkTiming.ICE.directProbeTimeout))
-                lock.lock()
-                defer { lock.unlock() }
-                if !done { done = true; cont.resume(returning: false); conn.cancel() }
+                if flag.trigger() { cont.resume(returning: false); conn.cancel() }
             }
         }
     }
