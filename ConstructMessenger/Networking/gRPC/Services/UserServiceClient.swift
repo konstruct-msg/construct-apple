@@ -24,7 +24,8 @@ final class UserServiceClient: Sendable {
             var request = Shared_Proto_Services_V1_GetUserProfileRequest()
             request.userID = userId
 
-            return try await client.getUserProfile(request: .init(message: request))
+            let response = try await client.getUserProfile(request: .init(message: request))
+            return response.profile
         }
     }
 

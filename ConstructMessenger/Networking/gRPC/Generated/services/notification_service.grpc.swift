@@ -134,15 +134,14 @@ extension Shared_Proto_Services_V1_NotificationService {
     ///
     /// > Source IDL Documentation:
     /// >
-    /// > NotificationService - отвечает за управление push-уведомлениями
-    /// > и отправку "слепых" уведомлений (privacy-preserving notifications).
+    /// > NotificationService - manages push notifications and privacy-preserving blind notifications.
     public protocol ClientProtocol: Sendable {
         /// Call the "SendBlindNotification" method.
         ///
         /// > Source IDL Documentation:
         /// >
-        /// > Отправляет обобщенное, сохраняющее приватность уведомление,
-        /// > чтобы сообщить о новой активности, не раскрывая содержания.
+        /// > SendBlindNotification - send a generalized, privacy-preserving notification
+        /// > to inform the recipient about new activity without revealing its content.
         ///
         /// - Parameters:
         ///   - request: A request containing a single `Shared_Proto_Services_V1_SendBlindNotificationRequest` message.
@@ -165,7 +164,7 @@ extension Shared_Proto_Services_V1_NotificationService {
         ///
         /// > Source IDL Documentation:
         /// >
-        /// > Регистрация device token для push-уведомлений (APNs/FCM)
+        /// > RegisterDeviceToken - register a device push token (APNs/FCM)
         ///
         /// - Parameters:
         ///   - request: A request containing a single `Shared_Proto_Services_V1_RegisterDeviceTokenRequest` message.
@@ -188,7 +187,7 @@ extension Shared_Proto_Services_V1_NotificationService {
         ///
         /// > Source IDL Documentation:
         /// >
-        /// > Удаление device token (при выходе с устройства)
+        /// > UnregisterDeviceToken - remove a device push token on logout
         ///
         /// - Parameters:
         ///   - request: A request containing a single `Shared_Proto_Services_V1_UnregisterDeviceTokenRequest` message.
@@ -211,7 +210,7 @@ extension Shared_Proto_Services_V1_NotificationService {
         ///
         /// > Source IDL Documentation:
         /// >
-        /// > Обновление настроек уведомлений для устройства
+        /// > UpdateNotificationPreferences - update notification settings for a device
         ///
         /// - Parameters:
         ///   - request: A request containing a single `Shared_Proto_Services_V1_UpdateNotificationPreferencesRequest` message.
@@ -234,8 +233,8 @@ extension Shared_Proto_Services_V1_NotificationService {
         ///
         /// > Source IDL Documentation:
         /// >
-        /// > Регистрация VoIP token (APNs VoIP) — используется для входящих звонков (CallKit),
-        /// > когда приложение в фоне/убито.
+        /// > RegisterVoipToken - register APNs VoIP token (PKPushRegistry)
+        /// > Used for incoming calls via CallKit when the app is backgrounded or killed.
         ///
         /// - Parameters:
         ///   - request: A request containing a single `Shared_Proto_Services_V1_RegisterVoipTokenRequest` message.
@@ -258,7 +257,7 @@ extension Shared_Proto_Services_V1_NotificationService {
         ///
         /// > Source IDL Documentation:
         /// >
-        /// > Удаление VoIP token (при выходе с устройства).
+        /// > UnregisterVoipToken - remove VoIP token on logout
         ///
         /// - Parameters:
         ///   - request: A request containing a single `Shared_Proto_Services_V1_UnregisterVoipTokenRequest` message.
@@ -281,8 +280,8 @@ extension Shared_Proto_Services_V1_NotificationService {
         ///
         /// > Source IDL Documentation:
         /// >
-        /// > Внутренний RPC: отправить VoIP push о входящем звонке (APNs VoIP).
-        /// > Вызывается signaling-service когда callee оффлайн.
+        /// > SendVoipIncomingCall - internal RPC: deliver an APNs VoIP push for an incoming call.
+        /// > Called by signaling-service when the callee is offline.
         ///
         /// - Parameters:
         ///   - request: A request containing a single `Shared_Proto_Services_V1_SendVoipIncomingCallRequest` message.
@@ -310,8 +309,7 @@ extension Shared_Proto_Services_V1_NotificationService {
     ///
     /// > Source IDL Documentation:
     /// >
-    /// > NotificationService - отвечает за управление push-уведомлениями
-    /// > и отправку "слепых" уведомлений (privacy-preserving notifications).
+    /// > NotificationService - manages push notifications and privacy-preserving blind notifications.
     public struct Client<Transport>: ClientProtocol where Transport: GRPCCore.ClientTransport {
         private let client: GRPCCore.GRPCClient<Transport>
 
@@ -327,8 +325,8 @@ extension Shared_Proto_Services_V1_NotificationService {
         ///
         /// > Source IDL Documentation:
         /// >
-        /// > Отправляет обобщенное, сохраняющее приватность уведомление,
-        /// > чтобы сообщить о новой активности, не раскрывая содержания.
+        /// > SendBlindNotification - send a generalized, privacy-preserving notification
+        /// > to inform the recipient about new activity without revealing its content.
         ///
         /// - Parameters:
         ///   - request: A request containing a single `Shared_Proto_Services_V1_SendBlindNotificationRequest` message.
@@ -362,7 +360,7 @@ extension Shared_Proto_Services_V1_NotificationService {
         ///
         /// > Source IDL Documentation:
         /// >
-        /// > Регистрация device token для push-уведомлений (APNs/FCM)
+        /// > RegisterDeviceToken - register a device push token (APNs/FCM)
         ///
         /// - Parameters:
         ///   - request: A request containing a single `Shared_Proto_Services_V1_RegisterDeviceTokenRequest` message.
@@ -396,7 +394,7 @@ extension Shared_Proto_Services_V1_NotificationService {
         ///
         /// > Source IDL Documentation:
         /// >
-        /// > Удаление device token (при выходе с устройства)
+        /// > UnregisterDeviceToken - remove a device push token on logout
         ///
         /// - Parameters:
         ///   - request: A request containing a single `Shared_Proto_Services_V1_UnregisterDeviceTokenRequest` message.
@@ -430,7 +428,7 @@ extension Shared_Proto_Services_V1_NotificationService {
         ///
         /// > Source IDL Documentation:
         /// >
-        /// > Обновление настроек уведомлений для устройства
+        /// > UpdateNotificationPreferences - update notification settings for a device
         ///
         /// - Parameters:
         ///   - request: A request containing a single `Shared_Proto_Services_V1_UpdateNotificationPreferencesRequest` message.
@@ -464,8 +462,8 @@ extension Shared_Proto_Services_V1_NotificationService {
         ///
         /// > Source IDL Documentation:
         /// >
-        /// > Регистрация VoIP token (APNs VoIP) — используется для входящих звонков (CallKit),
-        /// > когда приложение в фоне/убито.
+        /// > RegisterVoipToken - register APNs VoIP token (PKPushRegistry)
+        /// > Used for incoming calls via CallKit when the app is backgrounded or killed.
         ///
         /// - Parameters:
         ///   - request: A request containing a single `Shared_Proto_Services_V1_RegisterVoipTokenRequest` message.
@@ -499,7 +497,7 @@ extension Shared_Proto_Services_V1_NotificationService {
         ///
         /// > Source IDL Documentation:
         /// >
-        /// > Удаление VoIP token (при выходе с устройства).
+        /// > UnregisterVoipToken - remove VoIP token on logout
         ///
         /// - Parameters:
         ///   - request: A request containing a single `Shared_Proto_Services_V1_UnregisterVoipTokenRequest` message.
@@ -533,8 +531,8 @@ extension Shared_Proto_Services_V1_NotificationService {
         ///
         /// > Source IDL Documentation:
         /// >
-        /// > Внутренний RPC: отправить VoIP push о входящем звонке (APNs VoIP).
-        /// > Вызывается signaling-service когда callee оффлайн.
+        /// > SendVoipIncomingCall - internal RPC: deliver an APNs VoIP push for an incoming call.
+        /// > Called by signaling-service when the callee is offline.
         ///
         /// - Parameters:
         ///   - request: A request containing a single `Shared_Proto_Services_V1_SendVoipIncomingCallRequest` message.
@@ -573,8 +571,8 @@ extension Shared_Proto_Services_V1_NotificationService.ClientProtocol {
     ///
     /// > Source IDL Documentation:
     /// >
-    /// > Отправляет обобщенное, сохраняющее приватность уведомление,
-    /// > чтобы сообщить о новой активности, не раскрывая содержания.
+    /// > SendBlindNotification - send a generalized, privacy-preserving notification
+    /// > to inform the recipient about new activity without revealing its content.
     ///
     /// - Parameters:
     ///   - request: A request containing a single `Shared_Proto_Services_V1_SendBlindNotificationRequest` message.
@@ -603,7 +601,7 @@ extension Shared_Proto_Services_V1_NotificationService.ClientProtocol {
     ///
     /// > Source IDL Documentation:
     /// >
-    /// > Регистрация device token для push-уведомлений (APNs/FCM)
+    /// > RegisterDeviceToken - register a device push token (APNs/FCM)
     ///
     /// - Parameters:
     ///   - request: A request containing a single `Shared_Proto_Services_V1_RegisterDeviceTokenRequest` message.
@@ -632,7 +630,7 @@ extension Shared_Proto_Services_V1_NotificationService.ClientProtocol {
     ///
     /// > Source IDL Documentation:
     /// >
-    /// > Удаление device token (при выходе с устройства)
+    /// > UnregisterDeviceToken - remove a device push token on logout
     ///
     /// - Parameters:
     ///   - request: A request containing a single `Shared_Proto_Services_V1_UnregisterDeviceTokenRequest` message.
@@ -661,7 +659,7 @@ extension Shared_Proto_Services_V1_NotificationService.ClientProtocol {
     ///
     /// > Source IDL Documentation:
     /// >
-    /// > Обновление настроек уведомлений для устройства
+    /// > UpdateNotificationPreferences - update notification settings for a device
     ///
     /// - Parameters:
     ///   - request: A request containing a single `Shared_Proto_Services_V1_UpdateNotificationPreferencesRequest` message.
@@ -690,8 +688,8 @@ extension Shared_Proto_Services_V1_NotificationService.ClientProtocol {
     ///
     /// > Source IDL Documentation:
     /// >
-    /// > Регистрация VoIP token (APNs VoIP) — используется для входящих звонков (CallKit),
-    /// > когда приложение в фоне/убито.
+    /// > RegisterVoipToken - register APNs VoIP token (PKPushRegistry)
+    /// > Used for incoming calls via CallKit when the app is backgrounded or killed.
     ///
     /// - Parameters:
     ///   - request: A request containing a single `Shared_Proto_Services_V1_RegisterVoipTokenRequest` message.
@@ -720,7 +718,7 @@ extension Shared_Proto_Services_V1_NotificationService.ClientProtocol {
     ///
     /// > Source IDL Documentation:
     /// >
-    /// > Удаление VoIP token (при выходе с устройства).
+    /// > UnregisterVoipToken - remove VoIP token on logout
     ///
     /// - Parameters:
     ///   - request: A request containing a single `Shared_Proto_Services_V1_UnregisterVoipTokenRequest` message.
@@ -749,8 +747,8 @@ extension Shared_Proto_Services_V1_NotificationService.ClientProtocol {
     ///
     /// > Source IDL Documentation:
     /// >
-    /// > Внутренний RPC: отправить VoIP push о входящем звонке (APNs VoIP).
-    /// > Вызывается signaling-service когда callee оффлайн.
+    /// > SendVoipIncomingCall - internal RPC: deliver an APNs VoIP push for an incoming call.
+    /// > Called by signaling-service when the callee is offline.
     ///
     /// - Parameters:
     ///   - request: A request containing a single `Shared_Proto_Services_V1_SendVoipIncomingCallRequest` message.
@@ -783,8 +781,8 @@ extension Shared_Proto_Services_V1_NotificationService.ClientProtocol {
     ///
     /// > Source IDL Documentation:
     /// >
-    /// > Отправляет обобщенное, сохраняющее приватность уведомление,
-    /// > чтобы сообщить о новой активности, не раскрывая содержания.
+    /// > SendBlindNotification - send a generalized, privacy-preserving notification
+    /// > to inform the recipient about new activity without revealing its content.
     ///
     /// - Parameters:
     ///   - message: request message to send.
@@ -817,7 +815,7 @@ extension Shared_Proto_Services_V1_NotificationService.ClientProtocol {
     ///
     /// > Source IDL Documentation:
     /// >
-    /// > Регистрация device token для push-уведомлений (APNs/FCM)
+    /// > RegisterDeviceToken - register a device push token (APNs/FCM)
     ///
     /// - Parameters:
     ///   - message: request message to send.
@@ -850,7 +848,7 @@ extension Shared_Proto_Services_V1_NotificationService.ClientProtocol {
     ///
     /// > Source IDL Documentation:
     /// >
-    /// > Удаление device token (при выходе с устройства)
+    /// > UnregisterDeviceToken - remove a device push token on logout
     ///
     /// - Parameters:
     ///   - message: request message to send.
@@ -883,7 +881,7 @@ extension Shared_Proto_Services_V1_NotificationService.ClientProtocol {
     ///
     /// > Source IDL Documentation:
     /// >
-    /// > Обновление настроек уведомлений для устройства
+    /// > UpdateNotificationPreferences - update notification settings for a device
     ///
     /// - Parameters:
     ///   - message: request message to send.
@@ -916,8 +914,8 @@ extension Shared_Proto_Services_V1_NotificationService.ClientProtocol {
     ///
     /// > Source IDL Documentation:
     /// >
-    /// > Регистрация VoIP token (APNs VoIP) — используется для входящих звонков (CallKit),
-    /// > когда приложение в фоне/убито.
+    /// > RegisterVoipToken - register APNs VoIP token (PKPushRegistry)
+    /// > Used for incoming calls via CallKit when the app is backgrounded or killed.
     ///
     /// - Parameters:
     ///   - message: request message to send.
@@ -950,7 +948,7 @@ extension Shared_Proto_Services_V1_NotificationService.ClientProtocol {
     ///
     /// > Source IDL Documentation:
     /// >
-    /// > Удаление VoIP token (при выходе с устройства).
+    /// > UnregisterVoipToken - remove VoIP token on logout
     ///
     /// - Parameters:
     ///   - message: request message to send.
@@ -983,8 +981,8 @@ extension Shared_Proto_Services_V1_NotificationService.ClientProtocol {
     ///
     /// > Source IDL Documentation:
     /// >
-    /// > Внутренний RPC: отправить VoIP push о входящем звонке (APNs VoIP).
-    /// > Вызывается signaling-service когда callee оффлайн.
+    /// > SendVoipIncomingCall - internal RPC: deliver an APNs VoIP push for an incoming call.
+    /// > Called by signaling-service when the callee is offline.
     ///
     /// - Parameters:
     ///   - message: request message to send.

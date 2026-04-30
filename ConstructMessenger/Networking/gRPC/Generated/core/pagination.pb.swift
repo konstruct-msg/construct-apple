@@ -74,7 +74,7 @@ public enum Shared_Proto_Core_V1_Direction: SwiftProtobuf.Enum, Swift.CaseIterab
 public enum Shared_Proto_Core_V1_ConversationType: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
 
-  /// Unscpecified type (must be 0)
+  /// Unspecified type (must be 0)
   case unspecified // = 0
 
   /// Direct 1-to-1 conversation

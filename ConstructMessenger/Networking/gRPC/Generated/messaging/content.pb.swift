@@ -94,7 +94,7 @@ public enum Shared_Proto_Messaging_V1_MediaType: SwiftProtobuf.Enum, Swift.CaseI
 public enum Shared_Proto_Messaging_V1_ReactionAction: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
 
-  /// Uncspecified action (must be 0)
+  /// Unspecified action (must be 0)
   case unspecified // = 0
 
   /// Add reaction
@@ -139,7 +139,7 @@ public enum Shared_Proto_Messaging_V1_ReactionAction: SwiftProtobuf.Enum, Swift.
 public enum Shared_Proto_Messaging_V1_DeleteScope: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
 
-  /// Unscpecified scope (must be 0)
+  /// Unspecified scope (must be 0)
   case unspecified // = 0
 
   /// Delete for self only (other recipients still see it)

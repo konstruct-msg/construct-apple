@@ -26,7 +26,7 @@ public enum Shared_Proto_Services_V1_PrivacyLevel: SwiftProtobuf.Enum, Swift.Cas
   public typealias RawValue = Int
 
   /// Unknown level (must be 0)
-  case unspecfied // = 0
+  case unspecified // = 0
 
   /// Everyone can see
   case everyone // = 1
@@ -39,12 +39,12 @@ public enum Shared_Proto_Services_V1_PrivacyLevel: SwiftProtobuf.Enum, Swift.Cas
   case UNRECOGNIZED(Int)
 
   public init() {
-    self = .unspecfied
+    self = .unspecified
   }
 
   public init?(rawValue: Int) {
     switch rawValue {
-    case 0: self = .unspecfied
+    case 0: self = .unspecified
     case 1: self = .everyone
     case 2: self = .contacts
     case 3: self = .nobody
@@ -54,7 +54,7 @@ public enum Shared_Proto_Services_V1_PrivacyLevel: SwiftProtobuf.Enum, Swift.Cas
 
   public var rawValue: Int {
     switch self {
-    case .unspecfied: return 0
+    case .unspecified: return 0
     case .everyone: return 1
     case .contacts: return 2
     case .nobody: return 3
@@ -64,7 +64,7 @@ public enum Shared_Proto_Services_V1_PrivacyLevel: SwiftProtobuf.Enum, Swift.Cas
 
   // The compiler won't synthesize support with the UNRECOGNIZED case.
   public static let allCases: [Shared_Proto_Services_V1_PrivacyLevel] = [
-    .unspecfied,
+    .unspecified,
     .everyone,
     .contacts,
     .nobody,
@@ -249,19 +249,19 @@ public struct Shared_Proto_Services_V1_PrivacySettings: Sendable {
   // methods supported on all messages.
 
   /// Who can see last seen?
-  public var lastSeenVisibility: Shared_Proto_Services_V1_PrivacyLevel = .unspecfied
+  public var lastSeenVisibility: Shared_Proto_Services_V1_PrivacyLevel = .unspecified
 
   /// Who can see profile picture?
-  public var profilePictureVisibility: Shared_Proto_Services_V1_PrivacyLevel = .unspecfied
+  public var profilePictureVisibility: Shared_Proto_Services_V1_PrivacyLevel = .unspecified
 
   /// Who can see bio?
-  public var bioVisibility: Shared_Proto_Services_V1_PrivacyLevel = .unspecfied
+  public var bioVisibility: Shared_Proto_Services_V1_PrivacyLevel = .unspecified
 
   /// Who can message me?
-  public var messageVisibility: Shared_Proto_Services_V1_PrivacyLevel = .unspecfied
+  public var messageVisibility: Shared_Proto_Services_V1_PrivacyLevel = .unspecified
 
   /// Who can call me?
-  public var callVisibility: Shared_Proto_Services_V1_PrivacyLevel = .unspecfied
+  public var callVisibility: Shared_Proto_Services_V1_PrivacyLevel = .unspecified
 
   /// Read receipts enabled?
   public var readReceiptsEnabled: Bool = false
@@ -286,6 +286,50 @@ public struct Shared_Proto_Services_V1_GetUserProfileRequest: Sendable {
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
+}
+
+/// GetUserProfileResponse - wraps the fetched profile
+public struct Shared_Proto_Services_V1_GetUserProfileResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var profile: Shared_Proto_Services_V1_UserProfile {
+    get {_profile ?? Shared_Proto_Services_V1_UserProfile()}
+    set {_profile = newValue}
+  }
+  /// Returns true if `profile` has been explicitly set.
+  public var hasProfile: Bool {self._profile != nil}
+  /// Clears the value of `profile`. Subsequent reads from it will return its default value.
+  public mutating func clearProfile() {self._profile = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _profile: Shared_Proto_Services_V1_UserProfile? = nil
+}
+
+/// UpdateUserProfileResponse - wraps the updated profile
+public struct Shared_Proto_Services_V1_UpdateUserProfileResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var profile: Shared_Proto_Services_V1_UserProfile {
+    get {_profile ?? Shared_Proto_Services_V1_UserProfile()}
+    set {_profile = newValue}
+  }
+  /// Returns true if `profile` has been explicitly set.
+  public var hasProfile: Bool {self._profile != nil}
+  /// Clears the value of `profile`. Subsequent reads from it will return its default value.
+  public mutating func clearProfile() {self._profile = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _profile: Shared_Proto_Services_V1_UserProfile? = nil
 }
 
 /// UpdateUserProfileRequest - Update profile
@@ -928,7 +972,7 @@ public struct Shared_Proto_Services_V1_RespondToContactRequestResponse: Sendable
 fileprivate let _protobuf_package = "shared.proto.services.v1"
 
 extension Shared_Proto_Services_V1_PrivacyLevel: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0PRIVACY_LEVEL_UNSPECFIED\0\u{1}PRIVACY_LEVEL_EVERYONE\0\u{1}PRIVACY_LEVEL_CONTACTS\0\u{1}PRIVACY_LEVEL_NOBODY\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0PRIVACY_LEVEL_UNSPECIFIED\0\u{1}PRIVACY_LEVEL_EVERYONE\0\u{1}PRIVACY_LEVEL_CONTACTS\0\u{1}PRIVACY_LEVEL_NOBODY\0")
 }
 
 extension Shared_Proto_Services_V1_ContactRequestAction: SwiftProtobuf._ProtoNameProviding {
@@ -1105,19 +1149,19 @@ extension Shared_Proto_Services_V1_PrivacySettings: SwiftProtobuf.Message, Swift
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    if self.lastSeenVisibility != .unspecfied {
+    if self.lastSeenVisibility != .unspecified {
       try visitor.visitSingularEnumField(value: self.lastSeenVisibility, fieldNumber: 1)
     }
-    if self.profilePictureVisibility != .unspecfied {
+    if self.profilePictureVisibility != .unspecified {
       try visitor.visitSingularEnumField(value: self.profilePictureVisibility, fieldNumber: 2)
     }
-    if self.bioVisibility != .unspecfied {
+    if self.bioVisibility != .unspecified {
       try visitor.visitSingularEnumField(value: self.bioVisibility, fieldNumber: 3)
     }
-    if self.messageVisibility != .unspecfied {
+    if self.messageVisibility != .unspecified {
       try visitor.visitSingularEnumField(value: self.messageVisibility, fieldNumber: 4)
     }
-    if self.callVisibility != .unspecfied {
+    if self.callVisibility != .unspecified {
       try visitor.visitSingularEnumField(value: self.callVisibility, fieldNumber: 5)
     }
     if self.readReceiptsEnabled != false {
@@ -1167,6 +1211,74 @@ extension Shared_Proto_Services_V1_GetUserProfileRequest: SwiftProtobuf.Message,
 
   public static func ==(lhs: Shared_Proto_Services_V1_GetUserProfileRequest, rhs: Shared_Proto_Services_V1_GetUserProfileRequest) -> Bool {
     if lhs.userID != rhs.userID {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Shared_Proto_Services_V1_GetUserProfileResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".GetUserProfileResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}profile\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._profile) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._profile {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Services_V1_GetUserProfileResponse, rhs: Shared_Proto_Services_V1_GetUserProfileResponse) -> Bool {
+    if lhs._profile != rhs._profile {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Shared_Proto_Services_V1_UpdateUserProfileResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".UpdateUserProfileResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}profile\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._profile) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._profile {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Services_V1_UpdateUserProfileResponse, rhs: Shared_Proto_Services_V1_UpdateUserProfileResponse) -> Bool {
+    if lhs._profile != rhs._profile {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

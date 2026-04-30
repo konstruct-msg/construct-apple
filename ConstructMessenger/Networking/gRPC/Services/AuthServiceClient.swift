@@ -76,12 +76,12 @@ final class AuthServiceClient: Sendable {
             )
 
             return RegisterSuccessData(
-                userId: response.userID,
+                userId: response.tokens.userID,
                 username: username ?? "",
-                sessionToken: response.accessToken,
-                refreshToken: response.refreshToken,
-                expires: response.expiresAt,
-                iceBridgeCert: response.hasIceBridgeCert ? response.iceBridgeCert : nil
+                sessionToken: response.tokens.accessToken,
+                refreshToken: response.tokens.refreshToken,
+                expires: response.tokens.expiresAt,
+                iceBridgeCert: response.tokens.hasIceBridgeCert ? response.tokens.iceBridgeCert : nil
             )
         }
     }
@@ -102,12 +102,12 @@ final class AuthServiceClient: Sendable {
             )
 
             return AuthResponse(
-                userId: response.userID,
-                accessToken: response.accessToken,
-                refreshToken: response.refreshToken,
-                expiresAt: response.expiresAt,
+                userId: response.tokens.userID,
+                accessToken: response.tokens.accessToken,
+                refreshToken: response.tokens.refreshToken,
+                expiresAt: response.tokens.expiresAt,
                 expiresIn: nil,
-                iceBridgeCert: response.hasIceBridgeCert ? response.iceBridgeCert : nil
+                iceBridgeCert: response.tokens.hasIceBridgeCert ? response.tokens.iceBridgeCert : nil
             )
         }
     }
@@ -294,11 +294,11 @@ final class AuthServiceClient: Sendable {
                 request: .init(message: request)
             )
             return ConfirmLinkResult(
-                userId: response.userID,
-                accessToken: response.accessToken,
-                refreshToken: response.refreshToken,
-                expiresAt: response.expiresAt,
-                iceBridgeCert: response.hasIceBridgeCert ? response.iceBridgeCert : nil
+                userId: response.tokens.userID,
+                accessToken: response.tokens.accessToken,
+                refreshToken: response.tokens.refreshToken,
+                expiresAt: response.tokens.expiresAt,
+                iceBridgeCert: response.tokens.hasIceBridgeCert ? response.tokens.iceBridgeCert : nil
             )
         }
     }

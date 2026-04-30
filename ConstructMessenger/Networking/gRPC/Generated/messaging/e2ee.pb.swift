@@ -25,7 +25,7 @@ fileprivate struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAP
 public enum Shared_Proto_Messaging_V1_SessionResetReason: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
 
-  /// Unscpecified reason (must be 0)
+  /// Unspecified reason (must be 0)
   case unspecified // = 0
 
   /// Session corruption detected (MAC verification failed)
@@ -82,7 +82,7 @@ public enum Shared_Proto_Messaging_V1_SessionResetReason: SwiftProtobuf.Enum, Sw
 public enum Shared_Proto_Messaging_V1_DecryptionErrorType: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
 
-  /// Unscpecified error (must be 0)
+  /// Unspecified error (must be 0)
   case unspecified // = 0
 
   /// MAC verification failed (message tampered)

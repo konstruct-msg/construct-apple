@@ -25,7 +25,7 @@ public enum Shared_Proto_Services_V1_UserService: Sendable {
             /// Request type for "GetUserProfile".
             public typealias Input = Shared_Proto_Services_V1_GetUserProfileRequest
             /// Response type for "GetUserProfile".
-            public typealias Output = Shared_Proto_Services_V1_UserProfile
+            public typealias Output = Shared_Proto_Services_V1_GetUserProfileResponse
             /// Descriptor for "GetUserProfile".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.UserService"),
@@ -37,7 +37,7 @@ public enum Shared_Proto_Services_V1_UserService: Sendable {
             /// Request type for "UpdateUserProfile".
             public typealias Input = Shared_Proto_Services_V1_UpdateUserProfileRequest
             /// Response type for "UpdateUserProfile".
-            public typealias Output = Shared_Proto_Services_V1_UserProfile
+            public typealias Output = Shared_Proto_Services_V1_UpdateUserProfileResponse
             /// Descriptor for "UpdateUserProfile".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.UserService"),
@@ -249,7 +249,7 @@ extension Shared_Proto_Services_V1_UserService {
         /// - Parameters:
         ///   - request: A request containing a single `Shared_Proto_Services_V1_GetUserProfileRequest` message.
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_GetUserProfileRequest` messages.
-        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_UserProfile` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_GetUserProfileResponse` messages.
         ///   - options: Options to apply to this RPC.
         ///   - handleResponse: A closure which handles the response, the result of which is
         ///       returned to the caller. Returning from the closure will cancel the RPC if it
@@ -258,9 +258,9 @@ extension Shared_Proto_Services_V1_UserService {
         func getUserProfile<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_GetUserProfileRequest>,
             serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_GetUserProfileRequest>,
-            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_UserProfile>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_GetUserProfileResponse>,
             options: GRPCCore.CallOptions,
-            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_UserProfile>) async throws -> Result
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_GetUserProfileResponse>) async throws -> Result
         ) async throws -> Result where Result: Sendable
 
         /// Call the "UpdateUserProfile" method.
@@ -272,7 +272,7 @@ extension Shared_Proto_Services_V1_UserService {
         /// - Parameters:
         ///   - request: A request containing a single `Shared_Proto_Services_V1_UpdateUserProfileRequest` message.
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_UpdateUserProfileRequest` messages.
-        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_UserProfile` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_UpdateUserProfileResponse` messages.
         ///   - options: Options to apply to this RPC.
         ///   - handleResponse: A closure which handles the response, the result of which is
         ///       returned to the caller. Returning from the closure will cancel the RPC if it
@@ -281,9 +281,9 @@ extension Shared_Proto_Services_V1_UserService {
         func updateUserProfile<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_UpdateUserProfileRequest>,
             serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_UpdateUserProfileRequest>,
-            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_UserProfile>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_UpdateUserProfileResponse>,
             options: GRPCCore.CallOptions,
-            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_UserProfile>) async throws -> Result
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_UpdateUserProfileResponse>) async throws -> Result
         ) async throws -> Result where Result: Sendable
 
         /// Call the "UpdateProfilePicture" method.
@@ -626,7 +626,7 @@ extension Shared_Proto_Services_V1_UserService {
         /// - Parameters:
         ///   - request: A request containing a single `Shared_Proto_Services_V1_GetUserProfileRequest` message.
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_GetUserProfileRequest` messages.
-        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_UserProfile` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_GetUserProfileResponse` messages.
         ///   - options: Options to apply to this RPC.
         ///   - handleResponse: A closure which handles the response, the result of which is
         ///       returned to the caller. Returning from the closure will cancel the RPC if it
@@ -635,9 +635,9 @@ extension Shared_Proto_Services_V1_UserService {
         public func getUserProfile<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_GetUserProfileRequest>,
             serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_GetUserProfileRequest>,
-            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_UserProfile>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_GetUserProfileResponse>,
             options: GRPCCore.CallOptions = .defaults,
-            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_UserProfile>) async throws -> Result = { response in
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_GetUserProfileResponse>) async throws -> Result = { response in
                 try response.message
             }
         ) async throws -> Result where Result: Sendable {
@@ -660,7 +660,7 @@ extension Shared_Proto_Services_V1_UserService {
         /// - Parameters:
         ///   - request: A request containing a single `Shared_Proto_Services_V1_UpdateUserProfileRequest` message.
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_UpdateUserProfileRequest` messages.
-        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_UserProfile` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_UpdateUserProfileResponse` messages.
         ///   - options: Options to apply to this RPC.
         ///   - handleResponse: A closure which handles the response, the result of which is
         ///       returned to the caller. Returning from the closure will cancel the RPC if it
@@ -669,9 +669,9 @@ extension Shared_Proto_Services_V1_UserService {
         public func updateUserProfile<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_UpdateUserProfileRequest>,
             serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_UpdateUserProfileRequest>,
-            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_UserProfile>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_UpdateUserProfileResponse>,
             options: GRPCCore.CallOptions = .defaults,
-            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_UserProfile>) async throws -> Result = { response in
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_UpdateUserProfileResponse>) async throws -> Result = { response in
                 try response.message
             }
         ) async throws -> Result where Result: Sendable {
@@ -1159,14 +1159,14 @@ extension Shared_Proto_Services_V1_UserService.ClientProtocol {
     public func getUserProfile<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_GetUserProfileRequest>,
         options: GRPCCore.CallOptions = .defaults,
-        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_UserProfile>) async throws -> Result = { response in
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_GetUserProfileResponse>) async throws -> Result = { response in
             try response.message
         }
     ) async throws -> Result where Result: Sendable {
         try await self.getUserProfile(
             request: request,
             serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_GetUserProfileRequest>(),
-            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_UserProfile>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_GetUserProfileResponse>(),
             options: options,
             onResponse: handleResponse
         )
@@ -1188,14 +1188,14 @@ extension Shared_Proto_Services_V1_UserService.ClientProtocol {
     public func updateUserProfile<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_UpdateUserProfileRequest>,
         options: GRPCCore.CallOptions = .defaults,
-        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_UserProfile>) async throws -> Result = { response in
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_UpdateUserProfileResponse>) async throws -> Result = { response in
             try response.message
         }
     ) async throws -> Result where Result: Sendable {
         try await self.updateUserProfile(
             request: request,
             serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_UpdateUserProfileRequest>(),
-            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_UserProfile>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_UpdateUserProfileResponse>(),
             options: options,
             onResponse: handleResponse
         )
@@ -1611,7 +1611,7 @@ extension Shared_Proto_Services_V1_UserService.ClientProtocol {
         _ message: Shared_Proto_Services_V1_GetUserProfileRequest,
         metadata: GRPCCore.Metadata = [:],
         options: GRPCCore.CallOptions = .defaults,
-        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_UserProfile>) async throws -> Result = { response in
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_GetUserProfileResponse>) async throws -> Result = { response in
             try response.message
         }
     ) async throws -> Result where Result: Sendable {
@@ -1644,7 +1644,7 @@ extension Shared_Proto_Services_V1_UserService.ClientProtocol {
         _ message: Shared_Proto_Services_V1_UpdateUserProfileRequest,
         metadata: GRPCCore.Metadata = [:],
         options: GRPCCore.CallOptions = .defaults,
-        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_UserProfile>) async throws -> Result = { response in
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_UpdateUserProfileResponse>) async throws -> Result = { response in
             try response.message
         }
     ) async throws -> Result where Result: Sendable {

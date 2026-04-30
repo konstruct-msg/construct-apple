@@ -37,7 +37,7 @@ public enum Shared_Proto_Services_V1_AuthService: Sendable {
             /// Request type for "RegisterDevice".
             public typealias Input = Shared_Proto_Services_V1_RegisterDeviceRequest
             /// Response type for "RegisterDevice".
-            public typealias Output = Shared_Proto_Services_V1_AuthTokensResponse
+            public typealias Output = Shared_Proto_Services_V1_RegisterDeviceResponse
             /// Descriptor for "RegisterDevice".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.AuthService"),
@@ -49,7 +49,7 @@ public enum Shared_Proto_Services_V1_AuthService: Sendable {
             /// Request type for "AuthenticateDevice".
             public typealias Input = Shared_Proto_Services_V1_AuthenticateDeviceRequest
             /// Response type for "AuthenticateDevice".
-            public typealias Output = Shared_Proto_Services_V1_AuthTokensResponse
+            public typealias Output = Shared_Proto_Services_V1_AuthenticateDeviceResponse
             /// Descriptor for "AuthenticateDevice".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.AuthService"),
@@ -181,7 +181,7 @@ public enum Shared_Proto_Services_V1_AuthService: Sendable {
             /// Request type for "ApproveJoinRequest".
             public typealias Input = Shared_Proto_Services_V1_ApproveJoinRequestRequest
             /// Response type for "ApproveJoinRequest".
-            public typealias Output = Shared_Proto_Services_V1_AuthTokensResponse
+            public typealias Output = Shared_Proto_Services_V1_ApproveJoinRequestResponse
             /// Descriptor for "ApproveJoinRequest".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.AuthService"),
@@ -259,7 +259,7 @@ extension Shared_Proto_Services_V1_AuthService {
         /// - Parameters:
         ///   - request: A request containing a single `Shared_Proto_Services_V1_RegisterDeviceRequest` message.
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_RegisterDeviceRequest` messages.
-        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_AuthTokensResponse` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_RegisterDeviceResponse` messages.
         ///   - options: Options to apply to this RPC.
         ///   - handleResponse: A closure which handles the response, the result of which is
         ///       returned to the caller. Returning from the closure will cancel the RPC if it
@@ -268,9 +268,9 @@ extension Shared_Proto_Services_V1_AuthService {
         func registerDevice<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_RegisterDeviceRequest>,
             serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_RegisterDeviceRequest>,
-            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_AuthTokensResponse>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_RegisterDeviceResponse>,
             options: GRPCCore.CallOptions,
-            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_AuthTokensResponse>) async throws -> Result
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_RegisterDeviceResponse>) async throws -> Result
         ) async throws -> Result where Result: Sendable
 
         /// Call the "AuthenticateDevice" method.
@@ -282,7 +282,7 @@ extension Shared_Proto_Services_V1_AuthService {
         /// - Parameters:
         ///   - request: A request containing a single `Shared_Proto_Services_V1_AuthenticateDeviceRequest` message.
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_AuthenticateDeviceRequest` messages.
-        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_AuthTokensResponse` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_AuthenticateDeviceResponse` messages.
         ///   - options: Options to apply to this RPC.
         ///   - handleResponse: A closure which handles the response, the result of which is
         ///       returned to the caller. Returning from the closure will cancel the RPC if it
@@ -291,9 +291,9 @@ extension Shared_Proto_Services_V1_AuthService {
         func authenticateDevice<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_AuthenticateDeviceRequest>,
             serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_AuthenticateDeviceRequest>,
-            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_AuthTokensResponse>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_AuthenticateDeviceResponse>,
             options: GRPCCore.CallOptions,
-            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_AuthTokensResponse>) async throws -> Result
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_AuthenticateDeviceResponse>) async throws -> Result
         ) async throws -> Result where Result: Sendable
 
         /// Call the "RefreshToken" method.
@@ -551,7 +551,7 @@ extension Shared_Proto_Services_V1_AuthService {
         /// - Parameters:
         ///   - request: A request containing a single `Shared_Proto_Services_V1_ApproveJoinRequestRequest` message.
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_ApproveJoinRequestRequest` messages.
-        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_AuthTokensResponse` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_ApproveJoinRequestResponse` messages.
         ///   - options: Options to apply to this RPC.
         ///   - handleResponse: A closure which handles the response, the result of which is
         ///       returned to the caller. Returning from the closure will cancel the RPC if it
@@ -560,9 +560,9 @@ extension Shared_Proto_Services_V1_AuthService {
         func approveJoinRequest<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_ApproveJoinRequestRequest>,
             serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_ApproveJoinRequestRequest>,
-            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_AuthTokensResponse>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_ApproveJoinRequestResponse>,
             options: GRPCCore.CallOptions,
-            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_AuthTokensResponse>) async throws -> Result
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_ApproveJoinRequestResponse>) async throws -> Result
         ) async throws -> Result where Result: Sendable
     }
 
@@ -629,7 +629,7 @@ extension Shared_Proto_Services_V1_AuthService {
         /// - Parameters:
         ///   - request: A request containing a single `Shared_Proto_Services_V1_RegisterDeviceRequest` message.
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_RegisterDeviceRequest` messages.
-        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_AuthTokensResponse` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_RegisterDeviceResponse` messages.
         ///   - options: Options to apply to this RPC.
         ///   - handleResponse: A closure which handles the response, the result of which is
         ///       returned to the caller. Returning from the closure will cancel the RPC if it
@@ -638,9 +638,9 @@ extension Shared_Proto_Services_V1_AuthService {
         public func registerDevice<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_RegisterDeviceRequest>,
             serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_RegisterDeviceRequest>,
-            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_AuthTokensResponse>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_RegisterDeviceResponse>,
             options: GRPCCore.CallOptions = .defaults,
-            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_AuthTokensResponse>) async throws -> Result = { response in
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_RegisterDeviceResponse>) async throws -> Result = { response in
                 try response.message
             }
         ) async throws -> Result where Result: Sendable {
@@ -663,7 +663,7 @@ extension Shared_Proto_Services_V1_AuthService {
         /// - Parameters:
         ///   - request: A request containing a single `Shared_Proto_Services_V1_AuthenticateDeviceRequest` message.
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_AuthenticateDeviceRequest` messages.
-        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_AuthTokensResponse` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_AuthenticateDeviceResponse` messages.
         ///   - options: Options to apply to this RPC.
         ///   - handleResponse: A closure which handles the response, the result of which is
         ///       returned to the caller. Returning from the closure will cancel the RPC if it
@@ -672,9 +672,9 @@ extension Shared_Proto_Services_V1_AuthService {
         public func authenticateDevice<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_AuthenticateDeviceRequest>,
             serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_AuthenticateDeviceRequest>,
-            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_AuthTokensResponse>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_AuthenticateDeviceResponse>,
             options: GRPCCore.CallOptions = .defaults,
-            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_AuthTokensResponse>) async throws -> Result = { response in
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_AuthenticateDeviceResponse>) async throws -> Result = { response in
                 try response.message
             }
         ) async throws -> Result where Result: Sendable {
@@ -1053,7 +1053,7 @@ extension Shared_Proto_Services_V1_AuthService {
         /// - Parameters:
         ///   - request: A request containing a single `Shared_Proto_Services_V1_ApproveJoinRequestRequest` message.
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_ApproveJoinRequestRequest` messages.
-        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_AuthTokensResponse` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_ApproveJoinRequestResponse` messages.
         ///   - options: Options to apply to this RPC.
         ///   - handleResponse: A closure which handles the response, the result of which is
         ///       returned to the caller. Returning from the closure will cancel the RPC if it
@@ -1062,9 +1062,9 @@ extension Shared_Proto_Services_V1_AuthService {
         public func approveJoinRequest<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_ApproveJoinRequestRequest>,
             serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_ApproveJoinRequestRequest>,
-            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_AuthTokensResponse>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_ApproveJoinRequestResponse>,
             options: GRPCCore.CallOptions = .defaults,
-            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_AuthTokensResponse>) async throws -> Result = { response in
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_ApproveJoinRequestResponse>) async throws -> Result = { response in
                 try response.message
             }
         ) async throws -> Result where Result: Sendable {
@@ -1128,14 +1128,14 @@ extension Shared_Proto_Services_V1_AuthService.ClientProtocol {
     public func registerDevice<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_RegisterDeviceRequest>,
         options: GRPCCore.CallOptions = .defaults,
-        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_AuthTokensResponse>) async throws -> Result = { response in
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_RegisterDeviceResponse>) async throws -> Result = { response in
             try response.message
         }
     ) async throws -> Result where Result: Sendable {
         try await self.registerDevice(
             request: request,
             serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_RegisterDeviceRequest>(),
-            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_AuthTokensResponse>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_RegisterDeviceResponse>(),
             options: options,
             onResponse: handleResponse
         )
@@ -1157,14 +1157,14 @@ extension Shared_Proto_Services_V1_AuthService.ClientProtocol {
     public func authenticateDevice<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_AuthenticateDeviceRequest>,
         options: GRPCCore.CallOptions = .defaults,
-        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_AuthTokensResponse>) async throws -> Result = { response in
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_AuthenticateDeviceResponse>) async throws -> Result = { response in
             try response.message
         }
     ) async throws -> Result where Result: Sendable {
         try await self.authenticateDevice(
             request: request,
             serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_AuthenticateDeviceRequest>(),
-            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_AuthTokensResponse>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_AuthenticateDeviceResponse>(),
             options: options,
             onResponse: handleResponse
         )
@@ -1492,14 +1492,14 @@ extension Shared_Proto_Services_V1_AuthService.ClientProtocol {
     public func approveJoinRequest<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_ApproveJoinRequestRequest>,
         options: GRPCCore.CallOptions = .defaults,
-        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_AuthTokensResponse>) async throws -> Result = { response in
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_ApproveJoinRequestResponse>) async throws -> Result = { response in
             try response.message
         }
     ) async throws -> Result where Result: Sendable {
         try await self.approveJoinRequest(
             request: request,
             serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_ApproveJoinRequestRequest>(),
-            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_AuthTokensResponse>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_ApproveJoinRequestResponse>(),
             options: options,
             onResponse: handleResponse
         )
@@ -1560,7 +1560,7 @@ extension Shared_Proto_Services_V1_AuthService.ClientProtocol {
         _ message: Shared_Proto_Services_V1_RegisterDeviceRequest,
         metadata: GRPCCore.Metadata = [:],
         options: GRPCCore.CallOptions = .defaults,
-        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_AuthTokensResponse>) async throws -> Result = { response in
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_RegisterDeviceResponse>) async throws -> Result = { response in
             try response.message
         }
     ) async throws -> Result where Result: Sendable {
@@ -1593,7 +1593,7 @@ extension Shared_Proto_Services_V1_AuthService.ClientProtocol {
         _ message: Shared_Proto_Services_V1_AuthenticateDeviceRequest,
         metadata: GRPCCore.Metadata = [:],
         options: GRPCCore.CallOptions = .defaults,
-        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_AuthTokensResponse>) async throws -> Result = { response in
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_AuthenticateDeviceResponse>) async throws -> Result = { response in
             try response.message
         }
     ) async throws -> Result where Result: Sendable {
@@ -1972,7 +1972,7 @@ extension Shared_Proto_Services_V1_AuthService.ClientProtocol {
         _ message: Shared_Proto_Services_V1_ApproveJoinRequestRequest,
         metadata: GRPCCore.Metadata = [:],
         options: GRPCCore.CallOptions = .defaults,
-        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_AuthTokensResponse>) async throws -> Result = { response in
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_ApproveJoinRequestResponse>) async throws -> Result = { response in
             try response.message
         }
     ) async throws -> Result where Result: Sendable {
@@ -2062,7 +2062,7 @@ public enum Shared_Proto_Services_V1_DeviceService: Sendable {
             /// Request type for "GetDeviceInfo".
             public typealias Input = Shared_Proto_Services_V1_GetDeviceInfoRequest
             /// Response type for "GetDeviceInfo".
-            public typealias Output = Shared_Proto_Services_V1_DeviceInfo
+            public typealias Output = Shared_Proto_Services_V1_GetDeviceInfoResponse
             /// Descriptor for "GetDeviceInfo".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.DeviceService"),
@@ -2237,7 +2237,7 @@ extension Shared_Proto_Services_V1_DeviceService {
         /// - Parameters:
         ///   - request: A request containing a single `Shared_Proto_Services_V1_GetDeviceInfoRequest` message.
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_GetDeviceInfoRequest` messages.
-        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_DeviceInfo` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_GetDeviceInfoResponse` messages.
         ///   - options: Options to apply to this RPC.
         ///   - handleResponse: A closure which handles the response, the result of which is
         ///       returned to the caller. Returning from the closure will cancel the RPC if it
@@ -2246,9 +2246,9 @@ extension Shared_Proto_Services_V1_DeviceService {
         func getDeviceInfo<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_GetDeviceInfoRequest>,
             serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_GetDeviceInfoRequest>,
-            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_DeviceInfo>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_GetDeviceInfoResponse>,
             options: GRPCCore.CallOptions,
-            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_DeviceInfo>) async throws -> Result
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_GetDeviceInfoResponse>) async throws -> Result
         ) async throws -> Result where Result: Sendable
 
         /// Call the "InitiateDeviceLink" method.
@@ -2473,7 +2473,7 @@ extension Shared_Proto_Services_V1_DeviceService {
         /// - Parameters:
         ///   - request: A request containing a single `Shared_Proto_Services_V1_GetDeviceInfoRequest` message.
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_GetDeviceInfoRequest` messages.
-        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_DeviceInfo` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_GetDeviceInfoResponse` messages.
         ///   - options: Options to apply to this RPC.
         ///   - handleResponse: A closure which handles the response, the result of which is
         ///       returned to the caller. Returning from the closure will cancel the RPC if it
@@ -2482,9 +2482,9 @@ extension Shared_Proto_Services_V1_DeviceService {
         public func getDeviceInfo<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_GetDeviceInfoRequest>,
             serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_GetDeviceInfoRequest>,
-            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_DeviceInfo>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_GetDeviceInfoResponse>,
             options: GRPCCore.CallOptions = .defaults,
-            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_DeviceInfo>) async throws -> Result = { response in
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_GetDeviceInfoResponse>) async throws -> Result = { response in
                 try response.message
             }
         ) async throws -> Result where Result: Sendable {
@@ -2697,14 +2697,14 @@ extension Shared_Proto_Services_V1_DeviceService.ClientProtocol {
     public func getDeviceInfo<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_GetDeviceInfoRequest>,
         options: GRPCCore.CallOptions = .defaults,
-        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_DeviceInfo>) async throws -> Result = { response in
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_GetDeviceInfoResponse>) async throws -> Result = { response in
             try response.message
         }
     ) async throws -> Result where Result: Sendable {
         try await self.getDeviceInfo(
             request: request,
             serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_GetDeviceInfoRequest>(),
-            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_DeviceInfo>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_GetDeviceInfoResponse>(),
             options: options,
             onResponse: handleResponse
         )
@@ -2925,7 +2925,7 @@ extension Shared_Proto_Services_V1_DeviceService.ClientProtocol {
         _ message: Shared_Proto_Services_V1_GetDeviceInfoRequest,
         metadata: GRPCCore.Metadata = [:],
         options: GRPCCore.CallOptions = .defaults,
-        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_DeviceInfo>) async throws -> Result = { response in
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_GetDeviceInfoResponse>) async throws -> Result = { response in
             try response.message
         }
     ) async throws -> Result where Result: Sendable {
@@ -2989,7 +2989,7 @@ public enum Shared_Proto_Services_V1_DeviceLinkService: Sendable {
             /// Request type for "ConfirmDeviceLink".
             public typealias Input = Shared_Proto_Services_V1_ConfirmDeviceLinkRequest
             /// Response type for "ConfirmDeviceLink".
-            public typealias Output = Shared_Proto_Services_V1_AuthTokensResponse
+            public typealias Output = Shared_Proto_Services_V1_ConfirmDeviceLinkResponse
             /// Descriptor for "ConfirmDeviceLink".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.DeviceLinkService"),
@@ -3058,7 +3058,7 @@ extension Shared_Proto_Services_V1_DeviceLinkService {
         /// - Parameters:
         ///   - request: A request containing a single `Shared_Proto_Services_V1_ConfirmDeviceLinkRequest` message.
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_ConfirmDeviceLinkRequest` messages.
-        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_AuthTokensResponse` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_ConfirmDeviceLinkResponse` messages.
         ///   - options: Options to apply to this RPC.
         ///   - handleResponse: A closure which handles the response, the result of which is
         ///       returned to the caller. Returning from the closure will cancel the RPC if it
@@ -3067,9 +3067,9 @@ extension Shared_Proto_Services_V1_DeviceLinkService {
         func confirmDeviceLink<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_ConfirmDeviceLinkRequest>,
             serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_ConfirmDeviceLinkRequest>,
-            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_AuthTokensResponse>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_ConfirmDeviceLinkResponse>,
             options: GRPCCore.CallOptions,
-            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_AuthTokensResponse>) async throws -> Result
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_ConfirmDeviceLinkResponse>) async throws -> Result
         ) async throws -> Result where Result: Sendable
 
         /// Call the "SubmitJoinRequest" method.
@@ -3152,7 +3152,7 @@ extension Shared_Proto_Services_V1_DeviceLinkService {
         /// - Parameters:
         ///   - request: A request containing a single `Shared_Proto_Services_V1_ConfirmDeviceLinkRequest` message.
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_ConfirmDeviceLinkRequest` messages.
-        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_AuthTokensResponse` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_ConfirmDeviceLinkResponse` messages.
         ///   - options: Options to apply to this RPC.
         ///   - handleResponse: A closure which handles the response, the result of which is
         ///       returned to the caller. Returning from the closure will cancel the RPC if it
@@ -3161,9 +3161,9 @@ extension Shared_Proto_Services_V1_DeviceLinkService {
         public func confirmDeviceLink<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_ConfirmDeviceLinkRequest>,
             serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_ConfirmDeviceLinkRequest>,
-            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_AuthTokensResponse>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_ConfirmDeviceLinkResponse>,
             options: GRPCCore.CallOptions = .defaults,
-            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_AuthTokensResponse>) async throws -> Result = { response in
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_ConfirmDeviceLinkResponse>) async throws -> Result = { response in
                 try response.message
             }
         ) async throws -> Result where Result: Sendable {
@@ -3270,14 +3270,14 @@ extension Shared_Proto_Services_V1_DeviceLinkService.ClientProtocol {
     public func confirmDeviceLink<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_ConfirmDeviceLinkRequest>,
         options: GRPCCore.CallOptions = .defaults,
-        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_AuthTokensResponse>) async throws -> Result = { response in
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_ConfirmDeviceLinkResponse>) async throws -> Result = { response in
             try response.message
         }
     ) async throws -> Result where Result: Sendable {
         try await self.confirmDeviceLink(
             request: request,
             serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_ConfirmDeviceLinkRequest>(),
-            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_AuthTokensResponse>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_ConfirmDeviceLinkResponse>(),
             options: options,
             onResponse: handleResponse
         )
@@ -3367,7 +3367,7 @@ extension Shared_Proto_Services_V1_DeviceLinkService.ClientProtocol {
         _ message: Shared_Proto_Services_V1_ConfirmDeviceLinkRequest,
         metadata: GRPCCore.Metadata = [:],
         options: GRPCCore.CallOptions = .defaults,
-        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_AuthTokensResponse>) async throws -> Result = { response in
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_ConfirmDeviceLinkResponse>) async throws -> Result = { response in
             try response.message
         }
     ) async throws -> Result where Result: Sendable {

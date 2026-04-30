@@ -25,7 +25,7 @@ fileprivate struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAP
 public enum Shared_Proto_Messaging_V1_MLSContentType: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
 
-  /// Unscpecified content (must be 0)
+  /// Unspecified content (must be 0)
   case unspecified // = 0
 
   /// Regular text/media message
@@ -82,7 +82,7 @@ public enum Shared_Proto_Messaging_V1_MLSContentType: SwiftProtobuf.Enum, Swift.
 public enum Shared_Proto_Messaging_V1_MLSProposalType: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
 
-  /// Unscpecified proposal (must be 0)
+  /// Unspecified proposal (must be 0)
   case unspecified // = 0
 
   /// Add member
@@ -157,7 +157,7 @@ public enum Shared_Proto_Messaging_V1_MLSProposalType: SwiftProtobuf.Enum, Swift
 public enum Shared_Proto_Messaging_V1_MLSCipherSuite: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
 
-  /// Unscpecified cipher suite (must be 0)
+  /// Unspecified cipher suite (must be 0)
   case unspecified // = 0
 
   /// MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519

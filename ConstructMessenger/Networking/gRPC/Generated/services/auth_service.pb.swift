@@ -345,6 +345,93 @@ public struct Shared_Proto_Services_V1_AuthTokensResponse: Sendable {
   fileprivate var _iceBridgeCert: String? = nil
 }
 
+/// Per-RPC response wrappers (buf lint RPC_RESPONSE_STANDARD_NAME)
+/// Each wraps AuthTokensResponse so callers get a uniquely-named type
+/// while the shared token payload can still evolve independently.
+public struct Shared_Proto_Services_V1_RegisterDeviceResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var tokens: Shared_Proto_Services_V1_AuthTokensResponse {
+    get {_tokens ?? Shared_Proto_Services_V1_AuthTokensResponse()}
+    set {_tokens = newValue}
+  }
+  /// Returns true if `tokens` has been explicitly set.
+  public var hasTokens: Bool {self._tokens != nil}
+  /// Clears the value of `tokens`. Subsequent reads from it will return its default value.
+  public mutating func clearTokens() {self._tokens = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _tokens: Shared_Proto_Services_V1_AuthTokensResponse? = nil
+}
+
+public struct Shared_Proto_Services_V1_AuthenticateDeviceResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var tokens: Shared_Proto_Services_V1_AuthTokensResponse {
+    get {_tokens ?? Shared_Proto_Services_V1_AuthTokensResponse()}
+    set {_tokens = newValue}
+  }
+  /// Returns true if `tokens` has been explicitly set.
+  public var hasTokens: Bool {self._tokens != nil}
+  /// Clears the value of `tokens`. Subsequent reads from it will return its default value.
+  public mutating func clearTokens() {self._tokens = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _tokens: Shared_Proto_Services_V1_AuthTokensResponse? = nil
+}
+
+public struct Shared_Proto_Services_V1_ApproveJoinRequestResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var tokens: Shared_Proto_Services_V1_AuthTokensResponse {
+    get {_tokens ?? Shared_Proto_Services_V1_AuthTokensResponse()}
+    set {_tokens = newValue}
+  }
+  /// Returns true if `tokens` has been explicitly set.
+  public var hasTokens: Bool {self._tokens != nil}
+  /// Clears the value of `tokens`. Subsequent reads from it will return its default value.
+  public mutating func clearTokens() {self._tokens = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _tokens: Shared_Proto_Services_V1_AuthTokensResponse? = nil
+}
+
+public struct Shared_Proto_Services_V1_ConfirmDeviceLinkResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var tokens: Shared_Proto_Services_V1_AuthTokensResponse {
+    get {_tokens ?? Shared_Proto_Services_V1_AuthTokensResponse()}
+    set {_tokens = newValue}
+  }
+  /// Returns true if `tokens` has been explicitly set.
+  public var hasTokens: Bool {self._tokens != nil}
+  /// Clears the value of `tokens`. Subsequent reads from it will return its default value.
+  public mutating func clearTokens() {self._tokens = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _tokens: Shared_Proto_Services_V1_AuthTokensResponse? = nil
+}
+
 /// RefreshTokenRequest - Refresh access token
 public struct Shared_Proto_Services_V1_RefreshTokenRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
@@ -556,6 +643,28 @@ public struct Shared_Proto_Services_V1_DeviceInfo: Sendable {
 
 /// ListDevicesResponse - wraps a single device in the stream
 public struct Shared_Proto_Services_V1_ListDevicesResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var device: Shared_Proto_Services_V1_DeviceInfo {
+    get {_device ?? Shared_Proto_Services_V1_DeviceInfo()}
+    set {_device = newValue}
+  }
+  /// Returns true if `device` has been explicitly set.
+  public var hasDevice: Bool {self._device != nil}
+  /// Clears the value of `device`. Subsequent reads from it will return its default value.
+  public mutating func clearDevice() {self._device = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _device: Shared_Proto_Services_V1_DeviceInfo? = nil
+}
+
+/// GetDeviceInfoResponse - wraps a single device info response
+public struct Shared_Proto_Services_V1_GetDeviceInfoResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1648,6 +1757,142 @@ extension Shared_Proto_Services_V1_AuthTokensResponse: SwiftProtobuf.Message, Sw
   }
 }
 
+extension Shared_Proto_Services_V1_RegisterDeviceResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".RegisterDeviceResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}tokens\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._tokens) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._tokens {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Services_V1_RegisterDeviceResponse, rhs: Shared_Proto_Services_V1_RegisterDeviceResponse) -> Bool {
+    if lhs._tokens != rhs._tokens {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Shared_Proto_Services_V1_AuthenticateDeviceResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".AuthenticateDeviceResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}tokens\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._tokens) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._tokens {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Services_V1_AuthenticateDeviceResponse, rhs: Shared_Proto_Services_V1_AuthenticateDeviceResponse) -> Bool {
+    if lhs._tokens != rhs._tokens {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Shared_Proto_Services_V1_ApproveJoinRequestResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ApproveJoinRequestResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}tokens\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._tokens) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._tokens {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Services_V1_ApproveJoinRequestResponse, rhs: Shared_Proto_Services_V1_ApproveJoinRequestResponse) -> Bool {
+    if lhs._tokens != rhs._tokens {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Shared_Proto_Services_V1_ConfirmDeviceLinkResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ConfirmDeviceLinkResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}tokens\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._tokens) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._tokens {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Services_V1_ConfirmDeviceLinkResponse, rhs: Shared_Proto_Services_V1_ConfirmDeviceLinkResponse) -> Bool {
+    if lhs._tokens != rhs._tokens {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
 extension Shared_Proto_Services_V1_RefreshTokenRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".RefreshTokenRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}refresh_token\0\u{3}device_id\0")
@@ -2002,6 +2247,40 @@ extension Shared_Proto_Services_V1_ListDevicesResponse: SwiftProtobuf.Message, S
   }
 
   public static func ==(lhs: Shared_Proto_Services_V1_ListDevicesResponse, rhs: Shared_Proto_Services_V1_ListDevicesResponse) -> Bool {
+    if lhs._device != rhs._device {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Shared_Proto_Services_V1_GetDeviceInfoResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".GetDeviceInfoResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}device\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._device) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._device {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Services_V1_GetDeviceInfoResponse, rhs: Shared_Proto_Services_V1_GetDeviceInfoResponse) -> Bool {
     if lhs._device != rhs._device {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true

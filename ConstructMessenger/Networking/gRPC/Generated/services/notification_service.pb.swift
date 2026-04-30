@@ -20,26 +20,26 @@ fileprivate struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAP
   typealias Version = _2
 }
 
-/// Фильтр уведомлений - определяет какие события вызывают видимое уведомление
+/// NotificationFilter - controls which events trigger a visible notification
 public enum Shared_Proto_Services_V1_NotificationFilter: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
 
-  /// Не указан (по умолчанию silent)
+  /// Unspecified (defaults to silent)
   case unspecified // = 0
 
-  /// Только "слепые" уведомления (без текста, только бейдж)
+  /// Silent notifications only (no text, badge only)
   case silent // = 1
 
-  /// Все уведомления видимые
+  /// All notifications visible
   case visibleAll // = 2
 
-  /// Только direct messages
+  /// Direct messages only
   case visibleDm // = 3
 
-  /// Только упоминания (@mention)
+  /// Mentions (@mention) only
   case visibleMentions // = 4
 
-  /// Только от контактов
+  /// Messages from contacts only
   case visibleContacts // = 5
   case UNRECOGNIZED(Int)
 
@@ -83,17 +83,17 @@ public enum Shared_Proto_Services_V1_NotificationFilter: SwiftProtobuf.Enum, Swi
 
 }
 
-/// Запрос на отправку "слепого" уведомления
+/// Request to send a blind (privacy-preserving) notification
 public struct Shared_Proto_Services_V1_SendBlindNotificationRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// ID пользователя-получателя.
+  /// Recipient user ID.
   public var userID: String = String()
 
-  /// Опционально: новое количество для бейджа на иконке приложения.
-  /// Показывает число непрочитанных событий, но не их содержание.
+  /// Optional: new badge count for the app icon.
+  /// Indicates the number of unread events without revealing content.
   public var badgeCount: Int32 {
     get {_badgeCount ?? 0}
     set {_badgeCount = newValue}
@@ -103,9 +103,9 @@ public struct Shared_Proto_Services_V1_SendBlindNotificationRequest: Sendable {
   /// Clears the value of `badgeCount`. Subsequent reads from it will return its default value.
   public mutating func clearBadgeCount() {self._badgeCount = nil}
 
-  /// Опционально: Тип активности (например, "new_message", "new_call").
-  /// Клиент может использовать это для отображения обобщенного текста,
-  /// например "Новое сообщение" или "Входящий вызов", не раскрывая деталей.
+  /// Optional: activity type hint (e.g., "new_message", "new_call").
+  /// Client may use this to display a generic label such as "New message" or
+  /// "Incoming call" without exposing any details.
   public var activityType: String {
     get {_activityType ?? String()}
     set {_activityType = newValue}
@@ -115,8 +115,8 @@ public struct Shared_Proto_Services_V1_SendBlindNotificationRequest: Sendable {
   /// Clears the value of `activityType`. Subsequent reads from it will return its default value.
   public mutating func clearActivityType() {self._activityType = nil}
 
-  /// Опционально: opaque UUID чата для deep-link на конкретный чат.
-  /// Не раскрывает контент или участников.
+  /// Optional: opaque conversation UUID for deep-linking to a specific chat.
+  /// Does not reveal content or participants.
   public var conversationID: String {
     get {_conversationID ?? String()}
     set {_conversationID = newValue}
@@ -135,13 +135,13 @@ public struct Shared_Proto_Services_V1_SendBlindNotificationRequest: Sendable {
   fileprivate var _conversationID: String? = nil
 }
 
-/// Ответ после постановки уведомления в очередь
+/// Response after enqueueing the notification
 public struct Shared_Proto_Services_V1_SendBlindNotificationResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// true, если уведомление было успешно поставлено в очередь.
+  /// true if the notification was successfully enqueued.
   public var success: Bool = false
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -149,16 +149,16 @@ public struct Shared_Proto_Services_V1_SendBlindNotificationResponse: Sendable {
   public init() {}
 }
 
-/// Запрос на регистрацию device token
+/// Request to register a device push token
 public struct Shared_Proto_Services_V1_RegisterDeviceTokenRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// Device token (APNs для iOS, FCM для Android)
+  /// Device token (APNs for iOS, FCM for Android)
   public var deviceToken: String = String()
 
-  /// Опционально: имя устройства (для отображения в настройках)
+  /// Optional: human-readable device name (displayed in settings)
   public var deviceName: String {
     get {_deviceName ?? String()}
     set {_deviceName = newValue}
@@ -168,17 +168,17 @@ public struct Shared_Proto_Services_V1_RegisterDeviceTokenRequest: Sendable {
   /// Clears the value of `deviceName`. Subsequent reads from it will return its default value.
   public mutating func clearDeviceName() {self._deviceName = nil}
 
-  /// Фильтр уведомлений
+  /// Notification filter
   public var notificationFilter: Shared_Proto_Services_V1_NotificationFilter = .unspecified
 
-  /// ID устройства из Keychain — стабильный идентификатор для upsert.
-  /// Позволяет обновить токен при его ротации, не создавая дубликат.
+  /// Stable device ID from Keychain — used as upsert key.
+  /// Allows token rotation without creating a duplicate entry.
   public var deviceID: String = String()
 
-  /// Провайдер push-уведомлений
+  /// Push notification provider
   public var provider: Shared_Proto_Services_V1_PushProvider = .unspecified
 
-  /// Окружение APNs (sandbox для debug-сборок, production для релиза)
+  /// APNs environment (sandbox for debug builds, production for release)
   public var environment: Shared_Proto_Services_V1_PushEnvironment = .pushEnvUnspecified
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -188,16 +188,16 @@ public struct Shared_Proto_Services_V1_RegisterDeviceTokenRequest: Sendable {
   fileprivate var _deviceName: String? = nil
 }
 
-/// Ответ на регистрацию device token
+/// Response to device token registration
 public struct Shared_Proto_Services_V1_RegisterDeviceTokenResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// true, если токен успешно зарегистрирован
+  /// true if the token was successfully registered
   public var success: Bool = false
 
-  /// ID зарегистрированного токена (для последующего управления)
+  /// Assigned token ID (for subsequent management)
   public var tokenID: String {
     get {_tokenID ?? String()}
     set {_tokenID = newValue}
@@ -214,13 +214,13 @@ public struct Shared_Proto_Services_V1_RegisterDeviceTokenResponse: Sendable {
   fileprivate var _tokenID: String? = nil
 }
 
-/// Запрос на удаление device token
+/// Request to remove a device push token
 public struct Shared_Proto_Services_V1_UnregisterDeviceTokenRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// Device token для удаления
+  /// Device token to remove
   public var deviceToken: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -228,13 +228,13 @@ public struct Shared_Proto_Services_V1_UnregisterDeviceTokenRequest: Sendable {
   public init() {}
 }
 
-/// Ответ на удаление device token
+/// Response to device token removal
 public struct Shared_Proto_Services_V1_UnregisterDeviceTokenResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// true, если токен успешно удалён
+  /// true if the token was successfully removed
   public var success: Bool = false
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -242,19 +242,19 @@ public struct Shared_Proto_Services_V1_UnregisterDeviceTokenResponse: Sendable {
   public init() {}
 }
 
-/// Запрос на обновление настроек уведомлений
+/// Request to update notification preferences
 public struct Shared_Proto_Services_V1_UpdateNotificationPreferencesRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// Device token для которого обновляются настройки
+  /// Device token whose preferences are being updated
   public var deviceToken: String = String()
 
-  /// Фильтр уведомлений
+  /// Notification filter
   public var notificationFilter: Shared_Proto_Services_V1_NotificationFilter = .unspecified
 
-  /// Включены ли уведомления для этого устройства
+  /// Whether notifications are enabled for this device
   public var enabled: Bool = false
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -262,13 +262,13 @@ public struct Shared_Proto_Services_V1_UpdateNotificationPreferencesRequest: Sen
   public init() {}
 }
 
-/// Ответ на обновление настроек
+/// Response to preference update
 public struct Shared_Proto_Services_V1_UpdateNotificationPreferencesResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// true, если настройки успешно обновлены
+  /// true if preferences were successfully updated
   public var success: Bool = false
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -281,10 +281,10 @@ public struct Shared_Proto_Services_V1_RegisterVoipTokenRequest: Sendable {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// APNs VoIP token (PKPushRegistry)
+  /// APNs VoIP token (from PKPushRegistry)
   public var voipToken: String = String()
 
-  /// Stable device ID for upsert (Keychain UUID).
+  /// Stable device ID for upsert (Keychain UUID)
   public var deviceID: String = String()
 
   /// Platform string: "ios" | "macos"

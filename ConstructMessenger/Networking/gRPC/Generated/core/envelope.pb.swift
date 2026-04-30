@@ -25,7 +25,7 @@ fileprivate struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAP
 public enum Shared_Proto_Core_V1_ContentType: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
 
-  /// Unscpecified content type (must be 0)
+  /// Unspecified content type (must be 0)
   case unspecified // = 0
 
   /// Signal Protocol E2EE message (1-to-1)
