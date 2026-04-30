@@ -239,14 +239,12 @@ class KeychainManager {
 
     /// Load raw private key bytes (CFE binary).
     func loadPrivateKeysData() -> Data? {
-        // Fall back to the legacy key name for users upgrading from an older build.
-        load(forKey: "crypto_private_keys") ?? load(forKey: "crypto_private_keys_json")
+        load(forKey: "crypto_private_keys")
     }
 
     /// Delete private keys CFE blob.
     func deletePrivateKeys() {
         delete(forKey: "crypto_private_keys")
-        delete(forKey: "crypto_private_keys_json") // legacy key, may be present on older installs
     }
 
     // MARK: - One-Time Prekeys (OTPK) persistence
@@ -259,14 +257,12 @@ class KeychainManager {
 
     /// Load raw OTPK bytes (CFE binary).
     func loadOtpksData() -> Data? {
-        // Fall back to the legacy key name for users upgrading from an older build.
-        load(forKey: "crypto_otpks") ?? load(forKey: "crypto_otpks_json")
+        load(forKey: "crypto_otpks")
     }
 
     /// Delete the OTPK set.
     func deleteOtpks() {
         delete(forKey: "crypto_otpks")
-        delete(forKey: "crypto_otpks_json") // legacy key, may be present on older installs
     }
     func saveCustomServerURL(_ url: String) {
         guard let data = url.data(using: .utf8) else { return }
