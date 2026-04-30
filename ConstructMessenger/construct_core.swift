@@ -5339,13 +5339,6 @@ public func createCryptoCoreFromKeys(keys: [UInt8])throws  -> ClassicCryptoCore 
     )
 })
 }
-public func createCryptoCoreFromKeysJson(keysJson: String)throws  -> ClassicCryptoCore  {
-    return try  FfiConverterTypeClassicCryptoCore_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_func_create_crypto_core_from_keys_json(
-        FfiConverterString.lower(keysJson),$0
-    )
-})
-}
 /**
  * Create an OrchestratorCore from CFE binary or legacy JSON key bytes.
  * Accepts both formats — Rust handles detection and migration internally.
@@ -5677,9 +5670,6 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_create_crypto_core_from_keys() != 41063) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_func_create_crypto_core_from_keys_json() != 4455) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_create_orchestrator_core_from_keys() != 63491) {
