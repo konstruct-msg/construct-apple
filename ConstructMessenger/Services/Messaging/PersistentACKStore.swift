@@ -75,7 +75,59 @@ final class PersistentACKStore {
         }
     }
 
+    /// Query ONLY Core Data — bypass the in-memory ACK cache.
+    ///
+    /// Use this exclusively in the `CheckAckInDb` handler to avoid false-positive duplicates
+    /// caused by `preemptACK` being called before the Rust orchestrator processes the message.
+    /// `preemptACK` marks the message in the Swift-side RustAckStore to block BackgroundFetch,
+    /// but the `CheckAckInDb` question is "was this processed in a *prior* session?" — the
+    /// preempt mark must NOT answer that question with `true`.
+    func isProcessedInCoreData(_ messageId: String, in context: NSManagedObjectContext) -> Bool {
+        var found = false
+        context.performAndWait {
+            let fetch = ProcessedMessage.fetchRequest()
+            fetch.predicate = NSPredicate(format: "messageId == %@", messageId)
+            fetch.fetchLimit = 1
+            found = (try? context.fetch(fetch))?.isEmpty == false
+            if found {
+                rustAck.markProcessed(messageId: messageId)
+            }
+        }
+        return found
+    }
+
+    /// Async Core-Data-only variant for the `CheckAckInDb` async callback path.
+    /// Same rationale as `isProcessedInCoreData(_:in:)` — bypasses the preempt cache.
+    func isProcessedInCoreData(messageId: String) async -> Bool {
+        let context = PersistenceController.shared.container.newBackgroundContext()
+        let rustAckCopy = rustAck
+        return await context.perform { [rustAck = rustAckCopy] in
+            let fetch = ProcessedMessage.fetchRequest()
+            fetch.predicate = NSPredicate(format: "messageId == %@", messageId)
+            fetch.fetchLimit = 1
+            let found = (try? context.fetch(fetch))?.isEmpty == false
+            if found {
+                rustAck.markProcessed(messageId: messageId)
+            }
+            return found
+        }
+    }
+
     // MARK: - Mark
+
+    /// Synchronous in-memory-only duplicate check — does NOT touch Core Data.
+    ///
+    /// Returns `true` only if `preemptACK` or `markProcessed` was called for this
+    /// `messageId` in the current process lifetime.  Use this in hot paths (e.g. crypto
+    /// failure guards) where a fast, I/O-free check is needed.
+    ///
+    /// A `false` result does NOT mean the message was never processed — it may simply
+    /// not have been cached yet after an app restart.  Use `isProcessed(_:in:)` for a
+    /// definitive answer that also consults Core Data.
+    func isProcessedInMemory(_ messageId: String) -> Bool {
+        if case .inCache = rustAck.isProcessed(messageId: messageId) { return true }
+        return false
+    }
 
     /// Immediately marks `messageId` as processed **in the in-memory Rust cache only** (no IO).
     ///

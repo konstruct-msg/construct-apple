@@ -88,7 +88,7 @@ final class CryptoSessionInitializationService {
         core: OrchestratorCore?,
         archiveSession: (String, ArchiveReason) -> Void,
         saveSession: (String) -> Void
-    ) throws -> String {
+    ) throws -> Data {
         guard let core = core else {
             throw CryptoManagerError.coreNotInitialized
         }
@@ -183,7 +183,7 @@ final class CryptoSessionInitializationService {
 
             saveSession(userId)
 
-            return String(bytes: plaintext, encoding: .utf8) ?? "__binary_init_\(UUID().uuidString)__"
+            return Data(plaintext)
         } catch {
             Log.error("❌ Rust core initReceivingSession failed: \(error)", category: "CryptoManager")
             Log.error("   Error type: \(type(of: error))", category: "CryptoManager")

@@ -394,8 +394,8 @@ final class SessionCoordinator {
             let success = publicKeyBundleHandler.handlePublicKeyBundleForIncomingMessage(
                 bundle,
                 message: message
-            ) { [weak self] chat, msg, decryptedContent in
-                self?.saveMessage(for: chat, with: msg, decryptedContent: decryptedContent)
+            ) { [weak self] chat, msg, decryptedBytes in
+                self?.saveMessage(for: chat, with: msg, decryptedBytes: decryptedBytes)
             }
 
             if success {
@@ -493,8 +493,8 @@ final class SessionCoordinator {
             let healed = publicKeyBundleHandler.handlePublicKeyBundleForIncomingMessage(
                 bundle,
                 message: failedMessage
-            ) { [weak self] chat, msg, decryptedContent in
-                self?.saveMessage(for: chat, with: msg, decryptedContent: decryptedContent)
+            ) { [weak self] chat, msg, decryptedBytes in
+                self?.saveMessage(for: chat, with: msg, decryptedBytes: decryptedBytes)
             }
 
             if healed {
@@ -811,20 +811,24 @@ final class SessionCoordinator {
 
     // MARK: - Message persistence (session-init path only)
 
-    private func saveMessage(for chat: Chat, with messageData: ChatMessage, decryptedContent: String) {
+    private func saveMessage(for chat: Chat, with messageData: ChatMessage, decryptedBytes: Data) {
         guard let context = viewContext else { return }
 
-        // Unwrap KNST1 chunk envelope to get actual plaintext
+        // Decode raw bytes through the same binary pipeline as normal messages.
+        // Handles KNST-framed protobuf (real user messages as X3DH init carrier),
+        // raw protobuf (single-message delivery), and UTF-8 control strings (pings).
         let plaintext: String
-        switch initMessageReassembler.process(decryptedText: decryptedContent) {
-        case .legacy(let text), .assembled(let text, _):
+        switch initMessageReassembler.process(data: decryptedBytes) {
+        case .assembled(let text, _):
+            plaintext = text
+        case .legacy(let text):
             plaintext = text
         case .incomplete:
             Log.debug("⏳ Session-init message is a partial chunk — will be reassembled later", category: "SessionCoordinator")
             return
         case .invalid(let reason):
-            Log.error("❌ Session-init message envelope invalid: \(reason) — saving raw", category: "SessionCoordinator")
-            plaintext = decryptedContent
+            Log.error("❌ Session-init message envelope invalid: \(reason) — dropping", category: "SessionCoordinator")
+            return
         }
 
         // Silently discard SESSION_RESET_INIT control payloads — they are sent as the X3DH
@@ -842,18 +846,8 @@ final class SessionCoordinator {
         // Format: "__session_ping_<UUID>__" (legacy: "__session_ping__").
         if plaintext.hasPrefix("__session_ping") && plaintext.hasSuffix("__") {
             Log.info("🏓 SESSION_STATE[ping_received]: session established as RESPONDER (ping discarded)", category: "SessionCoordinator")
-            // Cancel any watchdog or fallback for this peer — they proved they have an active session.
             cancelTieBreakWatchdog(for: messageData.from)
             cancelResponderFallback(for: messageData.from)
-            return
-        }
-
-        // Silently discard binary-init sentinels. These are generated when the INITIATOR's
-        // msgNum=0 payload cannot be decoded as UTF-8 (legacy clients sending protobuf instead
-        // of the ping-first ASCII payload). The session IS established — the X3DH handshake
-        // completed — but there is no user-readable content to show.
-        if plaintext.hasPrefix("__binary_init_") {
-            Log.info("🔇 SESSION_STATE[binary_init_discarded]: non-UTF8 msgNum=0 payload from \(messageData.from.prefix(8))… — session established, sentinel discarded", category: "SessionCoordinator")
             return
         }
 
@@ -863,14 +857,10 @@ final class SessionCoordinator {
         if plaintext.hasPrefix("__session_ready") || plaintext.hasPrefix("session_ready_") {
             let peerId = messageData.from
             Log.info("🤝 SESSION_STATE[session_ready_received]: RESPONDER \(peerId.prefix(8))… confirmed — session established both sides", category: "SessionCoordinator")
-            // Cancel watchdog or fallback — RESPONDER proved they have a working session.
             cancelTieBreakWatchdog(for: peerId)
             cancelResponderFallback(for: peerId)
-            // Transition to .active — records establishment time for stale END_SESSION filtering.
             markActive(peerId)
-            // Mark session as confirmed so ChatViewModel stops buffering.
             SessionConfirmationTracker.shared.markConfirmed(peerId)
-            // Flush any messages that were buffered while session was unconfirmed.
             sendSessionQueuedMessages(for: peerId)
             return
         }

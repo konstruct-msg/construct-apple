@@ -319,129 +319,151 @@ class BackgroundFetchManager: NSObject {
                 }
             }
             
-            // Process each chat's messages
+            // ── Pass 1: Filter eligible messages ───────────────────────────────────────
+            // Check Core Data + ACK guards per message, collect all eligible messages
+            // with their chat/contact context so the batch decrypt can operate on them.
+            var eligible: [(chatId: String, chat: Chat, otherUserId: String, messageData: ChatMessage)] = []
+
             for (chatId, chatMessages) in messagesByChat {
                 guard let otherUserId = chatUserIds[chatId] else { continue }
-                
-                // Find chat
+
                 let chatFetch = Chat.fetchRequest()
                 chatFetch.predicate = NSPredicate(format: "id == %@", chatId)
                 guard let chat = try? backgroundContext.fetch(chatFetch).first else {
                     Log.error("❌ Chat not found: \(chatId)", category: "BackgroundFetch")
                     continue
                 }
-                
-                // Process messages
+
                 for messageData in chatMessages {
-                    // Check if message already exists
+                    // Guard 1: Core Data dedup (survives app restart via ProcessedMessage entity).
                     let messageFetch = Message.fetchRequest()
                     messageFetch.predicate = NSPredicate(format: "id == %@", messageData.id)
-                    
-                    if (try? backgroundContext.fetch(messageFetch).first) != nil {
-                        continue // Already exists
-                    }
+                    if (try? backgroundContext.fetch(messageFetch).first) != nil { continue }
 
-                    // Skip control messages (END_SESSION, SENDER_SYNC): these are session
-                    // management signals, not user-visible messages. Attempting to decrypt
-                    // "END_SESSION" as AEAD ciphertext corrupts the live session — causing
-                    // subsequent messages to show as "Encrypted" in the UI. The real-time
-                    // stream handles all control messages when the app comes to foreground.
-                    if messageData.messageType == "CONTROL_MESSAGE" || messageData.messageType == "SENDER_SYNC" {
-                        Log.debug("⏭️ Skipping control message \(messageData.id) (\(messageData.messageType ?? "nil")) in background fetch", category: "BackgroundFetch")
+                    // Guard 2: RustAckStore in-memory cache — catches the race where the
+                    // foreground stream called markProcessed but the save hasn't propagated.
+                    if PersistentACKStore.shared.isProcessed(messageData.id, in: backgroundContext) {
+                        Log.debug("⏭️ BackgroundFetch: \(messageData.id.prefix(8))… already ACK'd, skipping", category: "BackgroundFetch")
                         continue
                     }
 
-                    // Try to decrypt message.
-                    // CryptoManager is not thread-safe: all crypto calls must run on MainActor.
-                    // Use DispatchQueue.main.sync to serialize with foreground session state.
-                    // This is safe because backgroundContext.perform runs on a private queue,
-                    // not the main queue, so there is no deadlock risk.
-                    var decryptedContent: Data?
+                    // Guard 3: Skip session-management control messages — the real-time
+                    // stream handles these; decrypting them here would corrupt DR state.
+                    if messageData.messageType == "CONTROL_MESSAGE" || messageData.messageType == "SENDER_SYNC" {
+                        Log.debug("⏭️ Skipping control message \(messageData.id) (\(messageData.messageType ?? "nil")) in BG fetch", category: "BackgroundFetch")
+                        continue
+                    }
 
-                    // Targeted session restore before the hasSession check.
-                    _ = DispatchQueue.main.sync { CryptoManager.shared.restoreSession(for: otherUserId) }
+                    eligible.append((chatId: chatId, chat: chat, otherUserId: otherUserId, messageData: messageData))
+                }
+            }
 
-                    if CryptoManager.shared.hasSession(for: otherUserId) {
-                        DispatchQueue.main.sync {
-                            do {
-                                let result = try CryptoManager.shared.decryptMessage(messageData)
-                                decryptedContent = result.plaintext
-                                if !result.storageKey.isEmpty {
-                                    MessageKeyStore.shared.store(messageId: messageData.id, key: result.storageKey, contactId: otherUserId)
-                                }
-                                Log.debug("✅ Decrypted message \(messageData.id)", category: "BackgroundFetch")
-                                PersistentACKStore.shared.preemptACK(messageData.id)
-                            } catch {
-                                Log.error("❌ Failed to decrypt message \(messageData.id): \(error)", category: "BackgroundFetch")
-                            }
+            // ── Batch decrypt ───────────────────────────────────────────────────────────
+            // Restore sessions for unique contactIds (once per user, not once per message),
+            // then call decryptOfflineBatch — a single Rust mutex acquisition for all messages.
+            // No archiveSession is called on per-message failure; the foreground stream owns
+            // all session recovery (END_SESSION, re-init, healing).
+            var resultsByMessageId: [String: OfflineBatchDecryptResult] = [:]
+
+            if !eligible.isEmpty {
+                let uniqueUserIds = Set(eligible.map { $0.otherUserId })
+                for userId in uniqueUserIds {
+                    _ = DispatchQueue.main.sync { CryptoManager.shared.restoreSession(for: userId) }
+                }
+
+                let batchResults: [OfflineBatchDecryptResult] = DispatchQueue.main.sync {
+                    CryptoManager.shared.decryptOfflineBatch(eligible.map { $0.messageData })
+                }
+
+                for result in batchResults {
+                    resultsByMessageId[result.message.id] = result
+                    if result.succeeded {
+                        // Claim the message in the ACK cache before any Core Data write —
+                        // closes the race window where the stream could re-decrypt the same msg.
+                        PersistentACKStore.shared.preemptACK(result.message.id)
+                        if !result.storageKey.isEmpty {
+                            MessageKeyStore.shared.store(
+                                messageId: result.message.id,
+                                key: result.storageKey,
+                                contactId: result.message.from
+                            )
                         }
                     } else {
-                        Log.info("⚠️ No session for user \(otherUserId), message will be decrypted later", category: "BackgroundFetch")
-                    }
-
-                    // Chunk messages: if the decrypted bytes start with binary KNST magic or legacy
-                    // "KNST1:" prefix, feed to ChunkedMessageReassembler.
-                    let legacyPrefixBytes = Data(ChunkedMessageCodec.legacyPrefix.utf8)
-                    let binaryMagic = Data([0x4B, 0x4E, 0x53, 0x54]) // "KNST"
-                    if let dc = decryptedContent,
-                       dc.starts(with: binaryMagic) || dc.starts(with: legacyPrefixBytes) {
-                        var assembled: String? = nil
-                        DispatchQueue.main.sync {
-                            switch ChunkedMessageReassembler.shared.process(data: dc) {
-                            case .assembled(let text, _):
-                                assembled = text
-                            case .legacy(let text):
-                                assembled = text
-                            case .incomplete, .invalid:
-                                break
-                            }
-                        }
-                        PersistentACKStore.shared.markProcessed(messageData.id, senderId: messageData.from, in: backgroundContext)
-                        if let text = assembled {
-                            Log.debug("✅ Chunk assembled in background fetch \(messageData.id.prefix(8))", category: "BackgroundFetch")
-                            decryptedContent = Data(text.utf8)
-                        } else {
-                            Log.debug("⏭️ Chunk fragment \(messageData.id.prefix(8)) ACK'd; waiting for remaining chunks", category: "BackgroundFetch")
-                            continue
-                        }
-                    }
-
-                    // Persist the ACK to Core Data for non-chunk messages.
-                    // The in-memory cache was already updated by preemptACK inside main.sync,
-                    // which closed the stream race window.  This call durably persists across
-                    // app restarts.  Idempotent — calling markProcessed on an already-cached
-                    // ID is a no-op in Core Data (guarded by fetchLimit:1 check).
-                    // Skip for failed decryptions (nil) so the stream can retry with the live session.
-                    if decryptedContent != nil {
-                        PersistentACKStore.shared.markProcessed(messageData.id, senderId: messageData.from, in: backgroundContext)
-                    }
-                    
-                    // Save message
-                    let message = Message(context: backgroundContext)
-                    message.id = messageData.id
-                    message.fromUserId = messageData.from
-                    message.toUserId = messageData.to
-                    let decryptedString = decryptedContent.flatMap { String(data: $0, encoding: .utf8) } ?? ""
-                    message.contentType = .regular
-                    message.timestamp = Date(timeIntervalSince1970: TimeInterval(messageData.timestamp))
-                    message.isSentByMe = false
-                    message.deliveryStatus = .delivered
-                    message.retryCount = 0
-                    message.chat = chat
-
-                    message.applyStoredEncryption(plaintext: decryptedString, contactId: messageData.from)
-                    
-                    newMessagesCount += 1
-                    chat.unreadCount += 1
-
-                    // Update chat's last message
-                    if let lastMessage = chatMessages.last {
-                        chat.lastMessageText = Chat.formatPreviewText(decryptedString.isEmpty ? NSLocalizedString("message_unavailable", comment: "") : decryptedString)
-                        chat.lastMessageTime = Date(timeIntervalSince1970: TimeInterval(lastMessage.timestamp))
+                        Log.info("⚠️ BackgroundFetch: \(result.message.id.prefix(8))… decrypt failed — foreground stream will recover", category: "BackgroundFetch")
                     }
                 }
             }
-            
+
+            // ── Pass 2: Post-decrypt processing and Core Data writes ────────────────────
+            // Track per-chat last-message info (overwritten on each successful message so
+            // the final successful message per chat wins — matches original behaviour).
+            var lastDecryptedByChatId: [String: (text: String, timestamp: UInt64)] = [:]
+
+            for item in eligible {
+                guard let batchResult = resultsByMessageId[item.messageData.id],
+                      batchResult.succeeded else {
+                    // Decrypt failed — do not create Message entity. The foreground stream
+                    // will receive this message on next app foreground and handle recovery.
+                    continue
+                }
+
+                var decryptedContent: Data? = batchResult.plaintext
+
+                // Chunk messages: feed KNST-prefixed payloads to ChunkedMessageReassembler.
+                let legacyPrefixBytes = Data(ChunkedMessageCodec.legacyPrefix.utf8)
+                let binaryMagic = Data([0x4B, 0x4E, 0x53, 0x54]) // "KNST"
+                if let dc = decryptedContent,
+                   dc.starts(with: binaryMagic) || dc.starts(with: legacyPrefixBytes) {
+                    var assembled: String? = nil
+                    DispatchQueue.main.sync {
+                        switch ChunkedMessageReassembler.shared.process(data: dc) {
+                        case .assembled(let text, _): assembled = text
+                        case .legacy(let text):        assembled = text
+                        case .incomplete, .invalid:    break
+                        }
+                    }
+                    PersistentACKStore.shared.markProcessed(item.messageData.id, senderId: item.messageData.from, in: backgroundContext)
+                    if let text = assembled {
+                        Log.debug("✅ Chunk assembled in BG fetch \(item.messageData.id.prefix(8))", category: "BackgroundFetch")
+                        decryptedContent = Data(text.utf8)
+                    } else {
+                        Log.debug("⏭️ Chunk fragment \(item.messageData.id.prefix(8)) ACK'd; waiting for remaining chunks", category: "BackgroundFetch")
+                        continue
+                    }
+                }
+
+                // Persist ACK to Core Data (durable across restarts).
+                PersistentACKStore.shared.markProcessed(item.messageData.id, senderId: item.messageData.from, in: backgroundContext)
+
+                // Create Message entity.
+                let message = Message(context: backgroundContext)
+                message.id = item.messageData.id
+                message.fromUserId = item.messageData.from
+                message.toUserId = item.messageData.to
+                let decryptedString = decryptedContent.flatMap { String(data: $0, encoding: .utf8) } ?? ""
+                message.contentType = .regular
+                message.timestamp = Date(timeIntervalSince1970: TimeInterval(item.messageData.timestamp))
+                message.isSentByMe = false
+                message.deliveryStatus = .delivered
+                message.retryCount = 0
+                message.chat = item.chat
+                message.applyStoredEncryption(plaintext: decryptedString, contactId: item.messageData.from)
+
+                newMessagesCount += 1
+                item.chat.unreadCount += 1
+
+                lastDecryptedByChatId[item.chatId] = (text: decryptedString, timestamp: item.messageData.timestamp)
+            }
+
+            // Apply last-message preview to each chat.
+            for (chatId, last) in lastDecryptedByChatId {
+                guard let chat = eligible.first(where: { $0.chatId == chatId })?.chat else { continue }
+                chat.lastMessageText = Chat.formatPreviewText(
+                    last.text.isEmpty ? NSLocalizedString("message_unavailable", comment: "") : last.text
+                )
+                chat.lastMessageTime = Date(timeIntervalSince1970: TimeInterval(last.timestamp))
+            }
+
             // Save context — standalone context writes directly to disk.
             // Capture the NSManagedObjectContextDidSave notification so we can merge
             // into viewContext on the main thread (keeps FRC/Observable updates on main thread).

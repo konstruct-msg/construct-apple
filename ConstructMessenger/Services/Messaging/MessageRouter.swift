@@ -221,6 +221,14 @@ class MessageRouter {
             Log.info("🔄 Re-processing orphaned session init \(message.id.prefix(8))… (no active session for \(otherUserId.prefix(8))…)", category: "MessageRouter")
         }
 
+        // Claim this message ID in the in-memory ACK cache immediately — before any async
+        // Core Data or crypto operations.  Closes the race window with BackgroundFetch:
+        // if a silent push triggers a background fetch while this message is mid-processing,
+        // PersistentACKStore.isProcessed() will return `.inCache` and BackgroundFetch will
+        // skip the decrypt attempt, preventing DR-state corruption.
+        PersistentACKStore.shared.preemptACK(message.id)
+        Log.debug("🔒 MessageRouter: preemptACK \(message.id.prefix(8))… from=\(otherUserId.prefix(8))… msgNum=\(message.messageNumber) — claimed for foreground processing", category: "MessageRouter")
+
         // 2. SENDER_SYNC — copy of own outgoing message from another device.
         //    Route separately: decrypt with per-device session, save as outgoing in the
         //    conversation with the original partner (extracted from conversationId).
@@ -368,7 +376,11 @@ class MessageRouter {
         // Rust returns [checkAckInDb(id)] when its in-memory cache misses; Swift checks Core Data
         // and feeds back ackDbResult so Rust can decide whether to decrypt or drop the message.
         if actions.count == 1, case .checkAckInDb(let ackMsgId) = actions[0] {
-            let isProcessed = PersistentACKStore.shared.isProcessed(ackMsgId, in: context)
+            // Use Core-Data-only check here — NOT the in-memory preempt cache.
+            // preemptACK was already called above, so the Swift RustAckStore has this ID
+            // marked as "in-cache". Using isProcessed() would always return true here,
+            // causing every message after an app restart to be silently dropped as a duplicate.
+            let isProcessed = PersistentACKStore.shared.isProcessedInCoreData(ackMsgId, in: context)
             let ackResult = CfeIncomingEvent.ackDbResult(messageId: ackMsgId, isProcessed: isProcessed)
             if let followup = try? CryptoManager.shared.handleOrchestratorEvent(ackResult, tag: "ack_db_result"), !followup.isEmpty {
                 actions = followup
@@ -413,7 +425,26 @@ class MessageRouter {
         }
 
         // No actionable routing decision (e.g. duplicate, cooldown) — ACK and skip.
-        Log.debug("⚠️ handleEvent produced no routing decision for \(message.id.prefix(8))… — ACKing as delivered", category: "MessageRouter")
+        // Include the action types in the log so we can diagnose why Rust returned no
+        // routable event without a live debugger (e.g. a msgNum=0 session init arriving
+        // while we're already mid-INITIATOR — the most common source of this fallthrough).
+        let actionNames = actions.map { action -> String in
+            switch action {
+            case .messageDecrypted:              return "messageDecrypted"
+            case .callSignalDecrypted:           return "callSignalDecrypted"
+            case .sessionHealNeeded:             return "sessionHealNeeded"
+            case .sendEndSession:                return "sendEndSession"
+            case .fetchPublicKeyBundle:          return "fetchPublicKeyBundle"
+            case .saveSessionToSecureStore:      return "saveSessionToSecureStore"
+            case .notifyNewMessage:              return "notifyNewMessage"
+            case .persistMessage:                return "persistMessage"
+            case .persistAck:                    return "persistAck"
+            case .pruneAckStore:                 return "pruneAckStore"
+            case .checkAckInDb:                  return "checkAckInDb"
+            default:                             return "unknown(\(action))"
+            }
+        }.joined(separator: ",")
+        Log.info("⚠️ handleEvent produced no routing decision for \(message.id.prefix(8))… msgNum=\(message.messageNumber) actions=[\(actionNames)] — ACKing as delivered", category: "MessageRouter")
         onReceiptNeeded?([message.id], otherUserId, .delivered)
         if isNewChat { context.delete(chat) }
         return
@@ -530,8 +561,10 @@ class MessageRouter {
 
             case .checkAckInDb(let messageId):
                 // Rust cache miss after restart — check Core Data and report back.
+                // Use Core-Data-only check (not in-memory preempt cache) — see
+                // PersistentACKStore.isProcessedInCoreData for rationale.
                 Task { @MainActor in
-                    let isProcessed = await PersistentACKStore.shared.isProcessed(messageId: messageId)
+                    let isProcessed = await PersistentACKStore.shared.isProcessedInCoreData(messageId: messageId)
                     let result = CfeIncomingEvent.ackDbResult(messageId: messageId, isProcessed: isProcessed)
                     _ = try? CryptoManager.shared.handleOrchestratorEvent(result, tag: "ack_db_result_async")
                 }
@@ -1560,8 +1593,7 @@ class MessageRouter {
                 Log.error("❌ SENDER_SYNC: decryption failed for contactId=\(contactId.prefix(20))…", category: "MessageRouter")
                 return
             }
-            let decrypted = String(data: decryptResult.plaintext, encoding: .utf8) ?? ""
-            saveSenderSyncMessage(decrypted, original: message, partnerUserId: partnerUserId, in: context)
+            saveSenderSyncMessage(decryptResult.plaintext, original: message, partnerUserId: partnerUserId, in: context)
         } else if message.messageNumber == 0 {
             // New device: init receiving session async, then save
             guard !message.senderDeviceId.isEmpty else {
@@ -1595,16 +1627,29 @@ class MessageRouter {
 
     /// Save a decrypted SENDER_SYNC message as an outgoing bubble.
     private func saveSenderSyncMessage(
-        _ decrypted: String,
+        _ decryptedBytes: Data,
         original: ChatMessage,
         partnerUserId: String,
         in context: NSManagedObjectContext
     ) {
         let (chat, _) = findOrCreateChat(for: partnerUserId, in: context)
 
-        // Discard binary-init sentinels (non-UTF8 msgNum=0 legacy payloads) — no user content.
-        if decrypted.hasPrefix("__binary_init_") {
-            Log.info("🔇 SENDER_SYNC: discarding binary_init sentinel for \(partnerUserId.prefix(8))…", category: "MessageRouter")
+        // Decode raw bytes through the binary pipeline (same as normal messages).
+        let decrypted: String
+        switch ChunkedMessageReassembler().process(data: decryptedBytes) {
+        case .assembled(let text, _):
+            decrypted = text
+        case .legacy(let text):
+            decrypted = text
+        case .incomplete, .invalid:
+            Log.info("🔇 SENDER_SYNC: could not decode init-carrier payload for \(partnerUserId.prefix(8))… — session established, no user content", category: "MessageRouter")
+            return
+        }
+
+        // Discard session control strings — they carry no user-visible content.
+        if decrypted.hasPrefix("__session_ping") || decrypted.hasPrefix("__session_reset_init")
+            || decrypted.hasPrefix("__session_ready") || decrypted.hasPrefix("session_ready_")
+        {
             return
         }
 

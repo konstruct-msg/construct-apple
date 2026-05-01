@@ -980,10 +980,10 @@ class CryptoManager {
         Log.info("✅ Removed session from Keychain: \(userId)", category: "CryptoManager")
     }
 
-    /// Initialize a receiving session (for responder/Bob) using sender's bundle + first message
-    /// This is called when Bob receives the first message from Alice
-    /// Returns the decrypted plaintext of the first message
-    func initReceivingSession(for userId: String, recipientBundle: (identityPublic: Data, signedPrekeyPublic: Data, signature: Data, verifyingKey: Data, suiteId: String), firstMessage: ChatMessage) throws -> String {
+    /// Initialize a receiving session (for responder/Bob) using sender's bundle + first message.
+    /// Returns the raw decrypted bytes of the first message (KNST frame, protobuf, or UTF-8 control string).
+    /// Callers must decode via `ChunkedMessageReassembler.process(data:)` — do NOT convert to String here.
+    func initReceivingSession(for userId: String, recipientBundle: (identityPublic: Data, signedPrekeyPublic: Data, signature: Data, verifyingKey: Data, suiteId: String), firstMessage: ChatMessage) throws -> Data {
         do {
             let plaintext = try sessionInitService.initReceivingSession(
                 for: userId,
@@ -1138,6 +1138,16 @@ class CryptoManager {
         Log.debug("   ephemeralPublicKey: \(message.ephemeralPublicKey.count) bytes", category: "CryptoManager")
         Log.debug("   content length: \(message.content.count) bytes", category: "CryptoManager")
 
+        // Last-resort duplicate guard: if the foreground stream already processed this
+        // message (preemptACK was called in routeIncomingMessage), the DR state has
+        // already advanced past it.  Attempting to decrypt would fail and incorrectly
+        // archive a healthy session — throw duplicateMessage instead so the caller can
+        // skip silently without triggering session recovery.
+        if PersistentACKStore.shared.isProcessedInMemory(message.id) {
+            Log.info("⚠️ CryptoManager: \(message.id.prefix(8))… already in ACK cache — skipping duplicate decrypt", category: "CryptoManager")
+            throw CryptoManagerError.duplicateMessage
+        }
+
         // coreLock serializes decrypt alongside encrypt — concurrent decrypts on the same
         // session advance the DR receive chain non-deterministically.
         coreLock.lock()
@@ -1156,7 +1166,10 @@ class CryptoManager {
                     self?.saveSessionToKeychain(for: userId)
                 },
                 archiveSession: { [weak self] userId, reason in
-                    Log.debug("🔄 Archiving corrupted session for \(userId) to allow reinitialization", category: "CryptoManager")
+                    // ERROR-level so this appears in exported logs even at INFO filter.
+                    // The message ID is included so the log can be correlated with the
+                    // BackgroundFetch / MessageStream event that triggered the archive.
+                    Log.error("🗑️ CryptoManager: archiving session for \(userId.prefix(8))… reason=\(reason) msgId=\(message.id.prefix(8))… msgNum=\(message.messageNumber)", category: "CryptoManager")
                     self?.archiveSession(for: userId, reason: reason)
                 },
                 tryDecryptWithArchived: { [weak self] message in
@@ -1176,7 +1189,114 @@ class CryptoManager {
         Log.info("✅ Message decrypted successfully (messageNumber: \(message.messageNumber), plaintext: \(decryptResult.plaintext.count) bytes)", category: "CryptoManager")
         return MessageDecryptResult(plaintext: decryptResult.plaintext, storageKey: decryptResult.storageKey)
     }
-    
+
+    /// Background-safe DR decrypt — no `archiveSession` callback on failure.
+    ///
+    /// Called exclusively from `BackgroundFetchManager` (private BG queue, hopped to main
+    /// via `DispatchQueue.main.sync`). Unlike the foreground `decryptMessage`, this method
+    /// never archives the session on failure — it simply throws `.decryptionFailedNoArchive`
+    /// so the caller can skip the message.  The foreground stream will handle recovery
+    /// (END_SESSION, re-init, healing) when the app becomes active.
+    ///
+    /// Precondition: the caller must restore the session with `restoreSession(for:)` before
+    /// calling this method.  If no session exists, throws `.sessionNotFound`.
+    func decryptMessageForBackground(_ message: ChatMessage) throws -> MessageDecryptResult {
+        // Fast duplicate guard — no I/O, protects DR state.
+        if PersistentACKStore.shared.isProcessedInMemory(message.id) {
+            throw CryptoManagerError.duplicateMessage
+        }
+
+        coreLock.lock()
+        defer { coreLock.unlock() }
+
+        guard let core = orchestratorCore else {
+            throw CryptoManagerError.coreNotInitialized
+        }
+
+        guard core.hasSession(contactId: message.from) else {
+            throw CryptoManagerError.sessionNotFound
+        }
+
+        let contentForDecrypt = MessagePadding.unpadCiphertext(message.content)
+
+        do {
+            let result = try core.decryptMessage(
+                contactId: message.from,
+                ephemeralPublicKey: [UInt8](message.ephemeralPublicKey),
+                messageNumber: message.messageNumber,
+                content: [UInt8](contentForDecrypt)
+            )
+            saveSessionToKeychain(for: message.from)
+            Log.info("✅ BG decrypt OK \(message.id.prefix(8))… msgNum=\(message.messageNumber) (\(result.plaintext.count) bytes)", category: "CryptoManager")
+            return MessageDecryptResult(plaintext: Data(result.plaintext), storageKey: Data(result.storageKey))
+        } catch {
+            // Do NOT call archiveSession here. The session may still be healthy —
+            // failure here is likely a race (duplicate), a skipped key, or a stale
+            // message from before session re-init. The foreground stream owns recovery.
+            Log.info("⚠️ BG decrypt failed \(message.id.prefix(8))… msgNum=\(message.messageNumber): \(error) — session preserved", category: "CryptoManager")
+            throw CryptoManagerError.decryptionFailedNoArchive(reason: error.localizedDescription)
+        }
+    }
+
+    /// Batch offline decrypt — single Rust mutex acquisition for the entire batch.
+    ///
+    /// Maps each `ChatMessage` to an `OfflineBatchMessage`, calls the Rust
+    /// `decrypt_offline_batch` method, then returns typed `OfflineBatchDecryptResult`
+    /// values.  Per-message failures do NOT abort the batch and do NOT archive any session.
+    ///
+    /// The caller is responsible for:
+    ///   - session restore (call `restoreSession(for:)` per contactId before calling this)
+    ///   - storing returned `storageKey` values in `MessageKeyStore`
+    ///   - calling `PersistentACKStore.preemptACK` for successfully decrypted messages
+    func decryptOfflineBatch(_ messages: [ChatMessage]) -> [OfflineBatchDecryptResult] {
+        // Fast pre-filter: drop anything already in the in-memory ACK cache.
+        let filtered = messages.filter { !PersistentACKStore.shared.isProcessedInMemory($0.id) }
+        guard !filtered.isEmpty else { return [] }
+
+        coreLock.lock()
+        defer { coreLock.unlock() }
+
+        guard let core = orchestratorCore else {
+            return filtered.map { OfflineBatchDecryptResult(message: $0, plaintext: nil,
+                error: CryptoManagerError.coreNotInitialized, storageKey: Data()) }
+        }
+
+        let inputs: [OfflineBatchMessage] = filtered.map { msg in
+            OfflineBatchMessage(
+                id: msg.id,
+                contactId: msg.from,
+                ephemeralPublicKey: [UInt8](msg.ephemeralPublicKey),
+                messageNumber: msg.messageNumber,
+                content: [UInt8](MessagePadding.unpadCiphertext(msg.content))
+            )
+        }
+
+        let results = core.decryptOfflineBatch(messages: inputs)
+
+        // Zip back to ChatMessage for the caller.
+        return zip(filtered, results).map { (chatMsg, batchResult) in
+            if let plaintext = batchResult.plaintext {
+                saveSessionToKeychain(for: chatMsg.from)
+                Log.info("✅ Batch BG decrypt OK \(chatMsg.id.prefix(8))… msgNum=\(chatMsg.messageNumber) (\(plaintext.count) bytes)", category: "CryptoManager")
+                return OfflineBatchDecryptResult(
+                    message: chatMsg,
+                    plaintext: Data(plaintext),
+                    error: nil,
+                    storageKey: Data(batchResult.storageKey)
+                )
+            } else {
+                let reason = batchResult.error ?? "unknown"
+                Log.info("⚠️ Batch BG decrypt failed \(chatMsg.id.prefix(8))… msgNum=\(chatMsg.messageNumber): \(reason) — session preserved", category: "CryptoManager")
+                return OfflineBatchDecryptResult(
+                    message: chatMsg,
+                    plaintext: nil,
+                    error: CryptoManagerError.decryptionFailedNoArchive(reason: reason),
+                    storageKey: Data()
+                )
+            }
+        }
+    }
+
     /// Decrypt raw Double Ratchet components — used for call signaling fields, not ChatMessage.
     /// Returns UTF-8 string (call signals are always valid UTF-8).
     /// Handles session restore from Keychain if needed. Does not try archived sessions.
@@ -1279,11 +1399,18 @@ enum CryptoManagerError: Error, LocalizedError {
     case decryptionFailed
     case invalidCiphertext
     case invalidKeyData
+    /// Message was already processed by the foreground stream (in-memory ACK cache hit).
+    /// The DR state has advanced past this message — attempting decryption would fail and
+    /// incorrectly archive the healthy session.  Callers should skip silently.
+    case duplicateMessage
     /// Kyber OTPK secret is missing locally for the given key ID.
     /// Throwing this forces session init to fail, which triggers END_SESSION + clean re-init
     /// instead of silently establishing a PQ-diverged session that will break on msg1+.
     case pqxdhOtpkMissing(UInt32)
     case invalidSignature
+    /// DR decryption failed in the background path. Session is NOT archived — the
+    /// foreground stream will handle recovery when the app becomes active.
+    case decryptionFailedNoArchive(reason: String)
 
     var errorDescription: String? {
         switch self {
@@ -1301,10 +1428,14 @@ enum CryptoManagerError: Error, LocalizedError {
             return "Invalid ciphertext format"
         case .invalidKeyData:
             return "Invalid key data"
+        case .duplicateMessage:
+            return "Message already processed (ACK cache hit) — skipped to protect DR state"
         case .pqxdhOtpkMissing(let id):
             return "Kyber OTPK id=\(id) not found locally — session init failed to prevent PQ root key divergence"
         case .invalidSignature:
             return "Invalid signature data from Rust core (expected base64)"
+        case .decryptionFailedNoArchive(let reason):
+            return "BG decrypt failed (session preserved): \(reason)"
         }
     }
 }
@@ -1320,6 +1451,15 @@ struct MessageDecryptResult {
     /// True only when decryption succeeded with an archived session — in that case
     /// a fresh storage key was NOT generated (no DR message key consumed).
     var isArchivedSessionDecrypt: Bool { storageKey.isEmpty }
+}
+
+/// Per-message result from `CryptoManager.decryptOfflineBatch`.
+struct OfflineBatchDecryptResult {
+    let message: ChatMessage
+    let plaintext: Data?      // non-nil on success
+    let error: Error?         // non-nil on failure; session is NOT archived
+    let storageKey: Data      // 32-byte key; empty when error is non-nil
+    var succeeded: Bool { plaintext != nil }
 }
 
 // MARK: - Session Archive

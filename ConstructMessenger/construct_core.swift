@@ -1024,6 +1024,12 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
     
     func decryptMessage(contactId: String, ephemeralPublicKey: [UInt8], messageNumber: UInt32, content: [UInt8]) throws  -> DecryptedMessageResult
     
+    /**
+     * Batch offline decrypt — single mutex acquisition for the whole batch.
+     * Session is never archived on per-message failure.
+     */
+    func decryptOfflineBatch(messages: [OfflineBatchMessage])  -> [OfflineBatchResult]
+    
     func encryptMessage(contactId: String, plaintext: Data) throws  -> EncryptedMessageComponents
     
     /**
@@ -1219,6 +1225,19 @@ open func decryptMessage(contactId: String, ephemeralPublicKey: [UInt8], message
         FfiConverterSequenceUInt8.lower(ephemeralPublicKey),
         FfiConverterUInt32.lower(messageNumber),
         FfiConverterSequenceUInt8.lower(content),$0
+    )
+})
+}
+    
+    /**
+     * Batch offline decrypt — single mutex acquisition for the whole batch.
+     * Session is never archived on per-message failure.
+     */
+open func decryptOfflineBatch(messages: [OfflineBatchMessage]) -> [OfflineBatchResult]  {
+    return try!  FfiConverterSequenceTypeOfflineBatchResult.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_orchestratorcore_decrypt_offline_batch(
+            self.uniffiCloneHandle(),
+        FfiConverterSequenceTypeOfflineBatchMessage.lower(messages),$0
     )
 })
 }
@@ -3126,6 +3145,137 @@ public func FfiConverterTypeMLKEMKeyPair_lift(_ buf: RustBuffer) throws -> Mlkem
 #endif
 public func FfiConverterTypeMLKEMKeyPair_lower(_ value: MlkemKeyPair) -> RustBuffer {
     return FfiConverterTypeMLKEMKeyPair.lower(value)
+}
+
+
+/**
+ * Input slot for decrypt_offline_batch.
+ */
+public struct OfflineBatchMessage: Equatable, Hashable {
+    public var id: String
+    public var contactId: String
+    public var ephemeralPublicKey: [UInt8]
+    public var messageNumber: UInt32
+    public var content: [UInt8]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(id: String, contactId: String, ephemeralPublicKey: [UInt8], messageNumber: UInt32, content: [UInt8]) {
+        self.id = id
+        self.contactId = contactId
+        self.ephemeralPublicKey = ephemeralPublicKey
+        self.messageNumber = messageNumber
+        self.content = content
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension OfflineBatchMessage: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeOfflineBatchMessage: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> OfflineBatchMessage {
+        return
+            try OfflineBatchMessage(
+                id: FfiConverterString.read(from: &buf), 
+                contactId: FfiConverterString.read(from: &buf), 
+                ephemeralPublicKey: FfiConverterSequenceUInt8.read(from: &buf), 
+                messageNumber: FfiConverterUInt32.read(from: &buf), 
+                content: FfiConverterSequenceUInt8.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: OfflineBatchMessage, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.id, into: &buf)
+        FfiConverterString.write(value.contactId, into: &buf)
+        FfiConverterSequenceUInt8.write(value.ephemeralPublicKey, into: &buf)
+        FfiConverterUInt32.write(value.messageNumber, into: &buf)
+        FfiConverterSequenceUInt8.write(value.content, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOfflineBatchMessage_lift(_ buf: RustBuffer) throws -> OfflineBatchMessage {
+    return try FfiConverterTypeOfflineBatchMessage.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOfflineBatchMessage_lower(_ value: OfflineBatchMessage) -> RustBuffer {
+    return FfiConverterTypeOfflineBatchMessage.lower(value)
+}
+
+
+/**
+ * Per-message result from decrypt_offline_batch.
+ * Exactly one of plaintext / error is populated.
+ */
+public struct OfflineBatchResult: Equatable, Hashable {
+    public var id: String
+    public var plaintext: [UInt8]?
+    public var error: String?
+    public var storageKey: [UInt8]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(id: String, plaintext: [UInt8]?, error: String?, storageKey: [UInt8]) {
+        self.id = id
+        self.plaintext = plaintext
+        self.error = error
+        self.storageKey = storageKey
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension OfflineBatchResult: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeOfflineBatchResult: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> OfflineBatchResult {
+        return
+            try OfflineBatchResult(
+                id: FfiConverterString.read(from: &buf), 
+                plaintext: FfiConverterOptionSequenceUInt8.read(from: &buf), 
+                error: FfiConverterOptionString.read(from: &buf), 
+                storageKey: FfiConverterSequenceUInt8.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: OfflineBatchResult, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.id, into: &buf)
+        FfiConverterOptionSequenceUInt8.write(value.plaintext, into: &buf)
+        FfiConverterOptionString.write(value.error, into: &buf)
+        FfiConverterSequenceUInt8.write(value.storageKey, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOfflineBatchResult_lift(_ buf: RustBuffer) throws -> OfflineBatchResult {
+    return try FfiConverterTypeOfflineBatchResult.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOfflineBatchResult_lower(_ value: OfflineBatchResult) -> RustBuffer {
+    return FfiConverterTypeOfflineBatchResult.lower(value)
 }
 
 
@@ -5246,6 +5396,56 @@ fileprivate struct FfiConverterSequenceString: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeOfflineBatchMessage: FfiConverterRustBuffer {
+    typealias SwiftType = [OfflineBatchMessage]
+
+    public static func write(_ value: [OfflineBatchMessage], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeOfflineBatchMessage.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [OfflineBatchMessage] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [OfflineBatchMessage]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeOfflineBatchMessage.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeOfflineBatchResult: FfiConverterRustBuffer {
+    typealias SwiftType = [OfflineBatchResult]
+
+    public static func write(_ value: [OfflineBatchResult], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeOfflineBatchResult.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [OfflineBatchResult] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [OfflineBatchResult]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeOfflineBatchResult.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeOtpkPair: FfiConverterRustBuffer {
     typealias SwiftType = [OtpkPair]
 
@@ -5847,6 +6047,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_decrypt_message() != 56464) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_decrypt_offline_batch() != 51852) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_encrypt_message() != 55888) {

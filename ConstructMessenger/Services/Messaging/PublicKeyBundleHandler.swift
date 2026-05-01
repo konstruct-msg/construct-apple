@@ -18,8 +18,9 @@ class PublicKeyBundleHandler {
     /// Called when username needs to be updated
     var onUsernameUpdate: ((String, String) -> Void)?
     
-    /// Called when incoming message is successfully decrypted and needs to be saved
-    var onMessageDecrypted: ((Chat, ChatMessage, String) -> Void)?
+    /// Called when incoming message is successfully decrypted and needs to be saved.
+    /// Carries raw decrypted bytes — callers must decode via `ChunkedMessageReassembler.process(data:)`.
+    var onMessageDecrypted: ((Chat, ChatMessage, Data) -> Void)?
     
     // MARK: - Core Data
     
@@ -74,16 +75,16 @@ class PublicKeyBundleHandler {
         return false
     }
     
-    /// Handle public key bundle for incoming first message
+    /// Handle public key bundle for incoming first message.
     /// - Parameters:
     ///   - data: Public key bundle data
     ///   - message: The encrypted first message
-    ///   - onSuccess: Called when message is decrypted and ready to save (chat, message, decryptedContent)
+    ///   - onSuccess: Called with raw decrypted bytes when session init succeeds. Caller decodes via `ChunkedMessageReassembler.process(data:)`.
     /// - Returns: True if session was initialized and message decrypted successfully
     func handlePublicKeyBundleForIncomingMessage(
         _ data: PublicKeyBundleData,
         message: ChatMessage,
-        onSuccess: @escaping (Chat, ChatMessage, String) -> Void
+        onSuccess: @escaping (Chat, ChatMessage, Data) -> Void
     ) -> Bool {
         guard let context = viewContext else {
             Log.error("❌ PublicKeyBundleHandler: No viewContext available", category: "PublicKeyBundleHandler")
@@ -128,9 +129,9 @@ class PublicKeyBundleHandler {
                 suiteId: String(data.suiteId)
             )
             
-            // For incoming messages, we are the RECIPIENT
-            // Use initReceivingSession which takes the first message and returns decrypted content
-            let decryptedContent = try CryptoManager.shared.initReceivingSession(
+            // For incoming messages, we are the RECIPIENT.
+            // initReceivingSession now returns raw decrypted bytes; decoding happens in saveMessage.
+            let decryptedBytes = try CryptoManager.shared.initReceivingSession(
                 for: data.userId,
                 recipientBundle: bundleWithSuite,
                 firstMessage: message
@@ -170,7 +171,7 @@ class PublicKeyBundleHandler {
                 chat = newChat
             }
 
-            onSuccess(chat, message, decryptedContent)
+            onSuccess(chat, message, decryptedBytes)
             context.saveAndLog()
             Log.info("✅ Successfully saved decrypted pending message", category: "PublicKeyBundleHandler")
             return true
