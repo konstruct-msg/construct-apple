@@ -841,3 +841,7 @@
 "tab_chats" = "СОБ";
 "tab_synaps" = "УЗЛ";
 "tab_settings" = "НСТ";
+
+/* Engine background push notifications */
+"notification.new_message.title" = "Новое сообщение";
+"notification.new_message.body" = "У вас новое зашифрованное сообщение.";

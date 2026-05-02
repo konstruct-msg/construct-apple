@@ -831,3 +831,7 @@
 "tab_chats" = "MSG";
 "tab_synaps" = "SYN";
 "tab_settings" = "CFG";
+
+/* Engine background push notifications */
+"notification.new_message.title" = "New message";
+"notification.new_message.body" = "You have a new encrypted message.";

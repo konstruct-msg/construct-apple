@@ -8,6 +8,9 @@
 
 /* Begin PBXBuildFile section */
 		BF3DE8702F62C2000058C1AA /* ConstructCore.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = BF7098D02F01D3C400CC6F04 /* ConstructCore.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		D5E79C3D4B5A42FA99FF5106 /* ConstructEngine.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = D06B095D08AE45F0AEBB363D /* ConstructEngine.xcframework */; };
+		BFFC4EA2519D4225A3E4836D /* ConstructEngine.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = D06B095D08AE45F0AEBB363D /* ConstructEngine.xcframework */; };
+		A8FFA5FBCF4E4BCDBBE6AA04 /* ConstructEngine.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = D06B095D08AE45F0AEBB363D /* ConstructEngine.xcframework */; };
 		BF3DE8722F62C2000058C1AA /* GRPCCore in Frameworks */ = {isa = PBXBuildFile; productRef = BF3DE8712F62C2000058C1AA /* GRPCCore */; };
 		BF3DE8742F62C2000058C1AA /* GRPCProtobuf in Frameworks */ = {isa = PBXBuildFile; productRef = BF3DE8732F62C2000058C1AA /* GRPCProtobuf */; };
 		BF3DE8762F62C2000058C1AA /* GRPCNIOTransportHTTP2 in Frameworks */ = {isa = PBXBuildFile; productRef = BF3DE8752F62C2000058C1AA /* GRPCNIOTransportHTTP2 */; };
@@ -52,6 +55,7 @@
 		BF3DE83C2F62C1C40058C1AA /* Construct DesktopTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Construct DesktopTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		BF3DE8462F62C1C40058C1AA /* Construct DesktopUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Construct DesktopUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		BF7098D02F01D3C400CC6F04 /* ConstructCore.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = ConstructCore.xcframework; sourceTree = "<group>"; };
+		D06B095D08AE45F0AEBB363D /* ConstructEngine.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = ConstructEngine.xcframework; sourceTree = "<group>"; };
 		BF8A96FA2EFF0FAF009C5EF7 /* ConstructMessengerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ConstructMessengerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -134,6 +138,7 @@
 				BFF6FD002F4C4E5300A31F36 /* SwiftProtobuf in Frameworks */,
 				BFF6FCF92F4C4D6600A31F36 /* GRPCNIOTransportHTTP2 in Frameworks */,
 				BF7098D12F01D3C400CC6F04 /* ConstructCore.xcframework in Frameworks */,
+				D5E79C3D4B5A42FA99FF5106 /* ConstructEngine.xcframework in Frameworks */,
 				BFF6FCF42F4C4CCA00A31F36 /* GRPCProtobuf in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -143,6 +148,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				BF3DE8702F62C2000058C1AA /* ConstructCore.xcframework in Frameworks */,
+				BFFC4EA2519D4225A3E4836D /* ConstructEngine.xcframework in Frameworks */,
 				BF3DE8722F62C2000058C1AA /* GRPCCore in Frameworks */,
 				BF3DE8742F62C2000058C1AA /* GRPCProtobuf in Frameworks */,
 				BF3DE8762F62C2000058C1AA /* GRPCNIOTransportHTTP2 in Frameworks */,
@@ -169,6 +175,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				BF7098D22F01D3C400CC6F04 /* ConstructCore.xcframework in Frameworks */,
+				A8FFA5FBCF4E4BCDBBE6AA04 /* ConstructEngine.xcframework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -205,6 +212,7 @@
 			children = (
 				1FC23B2B49E141EBA1C6CE15 /* ConstructMessenger.xcdatamodeld */,
 				BF7098D02F01D3C400CC6F04 /* ConstructCore.xcframework */,
+				D06B095D08AE45F0AEBB363D /* ConstructEngine.xcframework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
