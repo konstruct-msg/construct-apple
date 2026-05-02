@@ -132,11 +132,20 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 
         // Race the fetch against a 27-second safety timeout so we always call
         // the completion handler before iOS's 30-second hard deadline.
-        // fetchPendingMessages → processOfflineMessages → showNewMessageNotification.
+        // Engine path: dispatch BackgroundPush → EngineAdapter handles decrypt + persist.
+        // Legacy path: BackgroundFetchManager (kept as fallback during parallel run phase).
         Task {
             await withTaskGroup(of: Void.self) { group in
                 group.addTask {
-                    await BackgroundFetchManager.shared.fetchPendingMessages()
+                    // Engine path: decrypt via construct-engine, persist via EngineAdapter.
+                    await withCheckedContinuation { continuation in
+                        Task { @MainActor in
+                            EngineAdapter.shared.backgroundFetchCompletion = { _ in
+                                continuation.resume()
+                            }
+                            EngineAdapter.shared.dispatch(.backgroundPush(sinceCursor: nil))
+                        }
+                    }
                 }
                 group.addTask {
                     try? await Task.sleep(nanoseconds: 27_000_000_000)

@@ -1030,7 +1030,7 @@ public enum PlatformAction: Equatable, Hashable {
     )
     case updateMessageStatus(localId: String, status: UInt8
     )
-    case displayMessage(plaintext: Data, senderId: String, conversationId: String, timestamp: Int64
+    case displayMessage(messageId: String, plaintext: Data, senderId: String, conversationId: String, timestamp: Int64
     )
     case deliveryReceipt(messageId: String, conversationId: String, timestamp: Int64
     )
@@ -1106,7 +1106,7 @@ public struct FfiConverterTypePlatformAction: FfiConverterRustBuffer {
         case 8: return .updateMessageStatus(localId: try FfiConverterString.read(from: &buf), status: try FfiConverterUInt8.read(from: &buf)
         )
         
-        case 9: return .displayMessage(plaintext: try FfiConverterData.read(from: &buf), senderId: try FfiConverterString.read(from: &buf), conversationId: try FfiConverterString.read(from: &buf), timestamp: try FfiConverterInt64.read(from: &buf)
+        case 9: return .displayMessage(messageId: try FfiConverterString.read(from: &buf), plaintext: try FfiConverterData.read(from: &buf), senderId: try FfiConverterString.read(from: &buf), conversationId: try FfiConverterString.read(from: &buf), timestamp: try FfiConverterInt64.read(from: &buf)
         )
         
         case 10: return .deliveryReceipt(messageId: try FfiConverterString.read(from: &buf), conversationId: try FfiConverterString.read(from: &buf), timestamp: try FfiConverterInt64.read(from: &buf)
@@ -1213,8 +1213,9 @@ public struct FfiConverterTypePlatformAction: FfiConverterRustBuffer {
             FfiConverterUInt8.write(status, into: &buf)
             
         
-        case let .displayMessage(plaintext,senderId,conversationId,timestamp):
+        case let .displayMessage(messageId,plaintext,senderId,conversationId,timestamp):
             writeInt(&buf, Int32(9))
+            FfiConverterString.write(messageId, into: &buf)
             FfiConverterData.write(plaintext, into: &buf)
             FfiConverterString.write(senderId, into: &buf)
             FfiConverterString.write(conversationId, into: &buf)

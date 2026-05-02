@@ -165,12 +165,20 @@ extension EngineAdapter: EngineCallback {
             }
 
         // ── Messages ─────────────────────────────────────────────────────────
-        case .displayMessage(let plaintext, let senderId, let conversationId, let timestamp):
+        case .displayMessage(let messageId, let plaintext, let senderId, let conversationId, let timestamp):
+            persistIncomingMessage(
+                messageId: messageId,
+                plaintext: plaintext,
+                senderId: senderId,
+                conversationId: conversationId,
+                timestamp: timestamp
+            )
             Task { @MainActor in
                 NotificationCenter.default.post(
                     name: .engineMessageReceived,
                     object: nil,
                     userInfo: [
+                        "messageId":      messageId,
                         "senderId":       senderId,
                         "conversationId": conversationId,
                         "plaintext":      plaintext,
@@ -180,6 +188,7 @@ extension EngineAdapter: EngineCallback {
             }
 
         case .updateMessageStatus(let localId, let status):
+            persistUpdateMessageStatus(localId: localId, status: status)
             Task { @MainActor in
                 NotificationCenter.default.post(
                     name: .engineMessageStatusUpdated,
@@ -189,17 +198,15 @@ extension EngineAdapter: EngineCallback {
             }
 
         case .saveMessage(_, let senderId, let conversationId, let timestamp):
-            // saveMessage is fired for *outgoing* messages the engine persisted.
-            // The CoreData write is handled by the ViewModel's send path — here
-            // we only need to surface it if the ViewModel missed it (e.g. app restart).
             Log.debug("EngineAdapter: saveMessage sender=\(senderId) conv=\(conversationId) ts=\(timestamp)", category: "Engine")
 
         case .deliveryReceipt(let messageId, let conversationId, _):
+            persistUpdateMessageStatus(localId: messageId, status: 2) // 2 = delivered
             Task { @MainActor in
                 NotificationCenter.default.post(
                     name: .engineMessageStatusUpdated,
                     object: nil,
-                    userInfo: ["localId": messageId, "conversationId": conversationId, "status": UInt8(3)]
+                    userInfo: ["localId": messageId, "conversationId": conversationId, "status": UInt8(2)]
                 )
             }
 
@@ -299,6 +306,138 @@ extension EngineAdapter: EngineCallback {
                     object: nil,
                     userInfo: ["decryptedCount": count, "hadErrors": hadErrors]
                 )
+            }
+        }
+    }
+
+    // MARK: - CoreData persistence (incoming messages)
+
+    /// Persists a decrypted incoming message to CoreData on a private background context.
+    /// Merges changes into the viewContext so FetchRequest / @Observable views update automatically.
+    private nonisolated func persistIncomingMessage(
+        messageId: String,
+        plaintext: Data,
+        senderId: String,
+        conversationId: String,
+        timestamp: Int64
+    ) {
+        guard let plaintext = String(data: plaintext, encoding: .utf8), !plaintext.isEmpty else {
+            Log.debug("EngineAdapter: displayMessage plaintext empty or non-UTF8 — skipping persist", category: "Engine")
+            return
+        }
+        let container = PersistenceController.shared.container
+        let bgCtx = NSManagedObjectContext(concurrencyType: .privateQueueConcurrencyType)
+        bgCtx.persistentStoreCoordinator = container.viewContext.persistentStoreCoordinator
+
+        bgCtx.perform {
+            // Deduplication: skip if already persisted.
+            let dedupReq = Message.fetchRequest()
+            dedupReq.predicate = NSPredicate(format: "id ==[c] %@", messageId)
+            dedupReq.fetchLimit = 1
+            if (try? bgCtx.fetch(dedupReq).first) != nil {
+                Log.debug("EngineAdapter: duplicate message \(messageId.prefix(8))… — skipping", category: "Engine")
+                return
+            }
+
+            // Find or create the Chat entity (id = conversationId = other user's userId for DMs).
+            let chat = self.findOrCreateChat(conversationId: conversationId, in: bgCtx)
+
+            let message = Message(context: bgCtx)
+            message.id = messageId.lowercased()
+            message.fromUserId = senderId
+            message.toUserId = KeychainManager.shared.loadUserID() ?? ""
+            message.contentType = .regular
+            message.timestamp = Date(timeIntervalSince1970: TimeInterval(timestamp) / 1000.0)
+            message.isSentByMe = false
+            message.deliveryStatus = .delivered
+            message.retryCount = 0
+            message.chat = chat
+
+            message.applyStoredEncryption(plaintext: plaintext, contactId: conversationId)
+
+            chat.unreadCount += 1
+            let msgTime = message.timestamp
+            if chat.lastMessageTime == nil || msgTime > (chat.lastMessageTime ?? .distantPast) {
+                chat.lastMessageText = Chat.formatPreviewText(plaintext)
+                chat.lastMessageTime = msgTime
+            }
+
+            do {
+                try bgCtx.save()
+                // Merge into viewContext on main thread so FRC/Observable updates fire.
+                DispatchQueue.main.async {
+                    container.viewContext.mergeChanges(
+                        fromContextDidSave: Notification(
+                            name: NSManagedObjectContext.didSaveObjectsNotification,
+                            object: bgCtx
+                        )
+                    )
+                }
+                Log.debug("EngineAdapter: persisted message \(messageId.prefix(8))…", category: "Engine")
+            } catch {
+                Log.error("EngineAdapter: CoreData save failed: \(error)", category: "Engine")
+            }
+        }
+    }
+
+    /// Finds the Chat entity for the given conversationId, or creates it if not found.
+    /// Must be called on the context's queue.
+    private nonisolated func findOrCreateChat(
+        conversationId: String,
+        in context: NSManagedObjectContext
+    ) -> Chat {
+        let req = Chat.fetchRequest()
+        req.predicate = NSPredicate(format: "id ==[c] %@", conversationId)
+        req.fetchLimit = 1
+        if let existing = try? context.fetch(req).first {
+            return existing
+        }
+        let chat = Chat(context: context)
+        chat.id = conversationId
+        chat.unreadCount = 0
+        chat.isPinned = false
+        chat.isMuted = false
+        return chat
+    }
+
+    /// Updates delivery status of an existing message in CoreData.
+    private nonisolated func persistUpdateMessageStatus(localId: String, status: UInt8) {
+        let deliveryStatus: DeliveryStatus = {
+            switch status {
+            case 0: return .sending
+            case 1: return .sent
+            case 2: return .delivered
+            case 3: return .queued
+            case 4: return .failed
+            default: return .sent
+            }
+        }()
+
+        let container = PersistenceController.shared.container
+        let bgCtx = NSManagedObjectContext(concurrencyType: .privateQueueConcurrencyType)
+        bgCtx.persistentStoreCoordinator = container.viewContext.persistentStoreCoordinator
+
+        bgCtx.perform {
+            let req = Message.fetchRequest()
+            req.predicate = NSPredicate(format: "id ==[c] %@", localId)
+            req.fetchLimit = 1
+            guard let message = try? bgCtx.fetch(req).first else {
+                Log.debug("EngineAdapter: updateMessageStatus — message \(localId.prefix(8))… not found", category: "Engine")
+                return
+            }
+            message.deliveryStatus = deliveryStatus
+            do {
+                try bgCtx.save()
+                DispatchQueue.main.async {
+                    container.viewContext.mergeChanges(
+                        fromContextDidSave: Notification(
+                            name: NSManagedObjectContext.didSaveObjectsNotification,
+                            object: bgCtx
+                        )
+                    )
+                }
+            } catch {
+                Log.error("EngineAdapter: status update CoreData save failed: \(error)", category: "Engine")
             }
         }
     }
