@@ -54,6 +54,13 @@ struct Construct_MessengerApp: App {
                    let deviceId = KeychainManager.shared.loadDeviceID() {
                     await PQCKeyManager.migrateIfNeeded(deviceId: deviceId)
                 }
+                // Start ConstructEngine (parallel run — old gRPC services remain active).
+                // Engine runs its own QUIC/H3 connection alongside legacy gRPC stream.
+                do {
+                    try EngineAdapter.shared.start()
+                } catch {
+                    Log.error("❌ EngineAdapter failed to start: \(error)", category: "Engine")
+                }
             }
         }
     }

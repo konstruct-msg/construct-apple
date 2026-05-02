@@ -201,6 +201,24 @@ class ChatViewModel: NSObject {
             }
         }
         observationTasks.append(connTask)
+
+        // Parallel run: mark session ready when engine establishes an E2EE session.
+        // This mirrors the existing CryptoManager.hasSession check but driven by engine events.
+        let contactId = chat.otherUser?.id ?? ""
+        guard !contactId.isEmpty else { return }
+        let engineSessionTask = Task { [weak self] in
+            let notifications = NotificationCenter.default.notifications(
+                named: .engineSessionEstablished
+            )
+            for await notification in notifications {
+                guard !Task.isCancelled, let self else { return }
+                guard let peerId = notification.userInfo?["contactId"] as? String,
+                      peerId == contactId else { continue }
+                self.isSessionReady = true
+                Log.info("✅ Engine session established for \(peerId.prefix(8))…", category: "ChatViewModel")
+            }
+        }
+        observationTasks.append(engineSessionTask)
     }
     
     // ✅ FIXED: Check if we already have a session for this user
@@ -970,6 +988,20 @@ class ChatViewModel: NSObject {
             Log.debug("📤 Sending message with ID: \(messageId)", category: "ChatViewModel")
 
             saveMessage(message, decryptedContent: text, isSentByMe: true, status: .sending, replyTo: replyTo, replyToContentOverride: replyToContentOverride, localThumbnails: localThumbnails, suiteId: 0)
+
+            // Parallel-run send: when the feature flag is enabled, route through the engine
+            // instead of the legacy OutboundMessagePipeline path.
+            if FeatureFlags.useEngineForSend {
+                Log.info("📮 Sending message via ConstructEngine: \(messageId)", category: "ChatViewModel")
+                EngineAdapter.shared.dispatch(.sendMessage(
+                    contactId: recipientId,
+                    plaintext: plaintextData,
+                    localId: messageId,
+                    conversationId: recipientId
+                ))
+                isSending = false
+                return
+            }
 
             Log.info("📮 Sending message via gRPC: \(messageId)", category: "ChatViewModel")
             Task { [weak self] in

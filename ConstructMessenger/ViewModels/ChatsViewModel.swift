@@ -414,6 +414,16 @@ class ChatsViewModel {
             self?.handleIncomingMessage(message)
         }
 
+        // Parallel run: open engine stream alongside legacy gRPC stream.
+        let conversationIds = currentConversationIds()
+        if !conversationIds.isEmpty {
+            EngineAdapter.shared.dispatch(.openMessageStream(
+                conversationIds: conversationIds,
+                sinceCursor: nil
+            ))
+            Log.debug("📡 Engine stream opened for \(conversationIds.count) conversation(s)", category: "ChatsViewModel")
+        }
+
         // On first stream connect per app session, check if OTPKs need replenishment.
         // Covers the case where OTPKs were consumed while the app was offline.
         if !hasPerformedStartupOtpkCheck {
@@ -484,6 +494,15 @@ class ChatsViewModel {
                 self?.handleIncomingMessage(message)
             }
             self.sessionCoordinator.prewarmSessions(for: self.prewarmEligibleContactIds())
+
+            // Parallel run: re-open engine stream on reconnect.
+            let conversationIds = self.currentConversationIds()
+            if !conversationIds.isEmpty {
+                EngineAdapter.shared.dispatch(.openMessageStream(
+                    conversationIds: conversationIds,
+                    sinceCursor: nil
+                ))
+            }
         }
     }
 

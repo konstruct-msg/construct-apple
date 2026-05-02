@@ -248,6 +248,11 @@ struct FeatureFlags {
     static let enableOfflineQueue = true
     static let enablePushNotifications = false // Пока не реализовано
     static let maxMessageRetryAttempts = 3
+
+    // Parallel-run flag: when true, outgoing messages are routed through ConstructEngine
+    // instead of (and not in addition to) the legacy OutboundMessagePipeline path.
+    // Enable in ce-p2ios-parallel to validate engine send path; disable for cutover prep.
+    static let useEngineForSend = false
 }
 
 // MARK: - Traffic Protection Configuration
