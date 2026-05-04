@@ -551,15 +551,15 @@ private struct ContactCircle: View {
                     .resizable()
                     .scaledToFill()
             } else {
-                HexagonShape().fill(accentColor.opacity(0.18))
+                Circle().fill(accentColor.opacity(0.18))
                 Text(initials)
                     .font(CTFont.bold(effectiveSize * 0.26))
                     .foregroundStyle(accentColor)
             }
         }
         .frame(width: effectiveSize, height: effectiveSize)
-        .clipShape(HexagonShape())
-        .overlay(HexagonShape().stroke(borderColor, lineWidth: 1.5))
+        .clipShape(Circle())
+        .overlay(Circle().stroke(borderColor, lineWidth: 1.5))
         .scaleEffect(proximityScale)
         .opacity(proximityOpacity)
         // Use DragGesture(minimumDistance: 0) so we can distinguish a stationary

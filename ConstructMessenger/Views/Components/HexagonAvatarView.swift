@@ -110,7 +110,7 @@ struct HexagonAvatarView: View {
             }
 
             // Stroke ring
-            HexagonShape()
+            Circle()
                 .stroke(
                     accentColor.opacity(isActive ? 1.0 : 0.45),
                     lineWidth: strokeWidth
@@ -118,13 +118,13 @@ struct HexagonAvatarView: View {
 
             // Active glow — extra outer ring
             if isActive {
-                HexagonShape()
+                Circle()
                     .stroke(accentColor.opacity(0.25), lineWidth: 3)
                     .blur(radius: 2)
             }
         }
-        .clipShape(HexagonShape())
-        .contentShape(HexagonShape())
+        .clipShape(Circle())
+        .contentShape(Circle())
     }
 
     // MARK: - Image layer

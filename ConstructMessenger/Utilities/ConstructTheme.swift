@@ -284,13 +284,13 @@ struct CTHexAvatar: View {
                     .resizable()
                     .scaledToFill()
                     .frame(width: size.rawValue, height: size.rawValue)
-                    .clipShape(CTHexShape())
-                CTHexShape()
+                    .clipShape(Circle())
+                Circle()
                     .stroke(accentColor, lineWidth: 1)
             } else {
-                CTHexShape()
+                Circle()
                     .fill(accentColor.opacity(0.18))
-                CTHexShape()
+                Circle()
                     .stroke(accentColor, lineWidth: 1)
                 Text(String(initials.prefix(2)).uppercased())
                     .font(CTFont.bold(size.rawValue * 0.28))
@@ -485,8 +485,7 @@ struct CTNavBar: View {
 
 struct CTTabItem {
     let symbol: String
-    let label: String
-    var sfName: String? = nil
+    var sfName: String
 }
 
 struct CTTabBar: View {
@@ -501,9 +500,9 @@ struct CTTabBar: View {
 
     static var defaultItems: [CTTabItem] {
         [
-            CTTabItem(symbol: CTSymbol.tabChats,    label: NSLocalizedString("tab_chats",    comment: ""), sfName: "message"),
-            CTTabItem(symbol: CTSymbol.tabSynaps,   label: NSLocalizedString("tab_synaps",   comment: ""), sfName: "circle.grid.cross.fill"),
-            CTTabItem(symbol: CTSymbol.tabSettings, label: NSLocalizedString("tab_settings", comment: ""), sfName: "gearshape"),
+            CTTabItem(symbol: CTSymbol.tabChats, sfName: "message"),
+            CTTabItem(symbol: CTSymbol.tabSynaps, sfName: "circle.grid.cross"),
+            CTTabItem(symbol: CTSymbol.tabSettings, sfName: "gearshape"),
         ]
     }
 
@@ -512,20 +511,11 @@ struct CTTabBar: View {
             ForEach(items.indices, id: \.self) { i in
                 Spacer()
                 Button(action: { selected = i }) {
-                    VStack(spacing: 2) {
-                        if let sf = items[i].sfName {
-                            Image(systemName: selected == i && !sf.hasSuffix(".fill") ? sf + ".fill" : sf)
-                                .font(.system(size: 20))
-                                .foregroundColor(selected == i ? Color.CT.accent : Color.CT.textDim)
-                        } else {
-                            Text(items[i].symbol)
-                                .font(selected == i ? CTFont.bold(13) : CTFont.regular(13))
-                                .foregroundColor(selected == i ? Color.CT.accent : Color.CT.textDim)
-                        }
-                        Text(selected == i ? "> \(items[i].label)" : items[i].label)
-                            .font(selected == i ? CTFont.bold(9) : CTFont.regular(9))
-                            .foregroundColor(selected == i ? Color.CT.accent : Color.CT.textDim)
-                    }
+                    let sf = items[i].sfName
+                    Image(systemName: selected == i && !sf.hasSuffix(".fill") ? sf + ".fill" : sf)
+                        .font(.system(size: 20))
+                        .foregroundColor(selected == i ? Color.CT.accent : Color.CT.textDim)
+                    
                 }
                 Spacer()
             }
