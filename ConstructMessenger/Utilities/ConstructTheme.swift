@@ -482,7 +482,7 @@ struct CTTabBar: View {
     static var defaultItems: [CTTabItem] {
         [
             CTTabItem(symbol: CTSymbol.tabChats,    label: NSLocalizedString("tab_chats",    comment: ""), sfName: "message"),
-            CTTabItem(symbol: CTSymbol.tabSynaps,   label: NSLocalizedString("tab_synaps",   comment: ""), sfName: "person.2"),
+            CTTabItem(symbol: CTSymbol.tabSynaps,   label: NSLocalizedString("tab_synaps",   comment: ""), sfName: "circle.grid.cross.fill"),
             CTTabItem(symbol: CTSymbol.tabSettings, label: NSLocalizedString("tab_settings", comment: ""), sfName: "gearshape"),
         ]
     }
@@ -494,7 +494,7 @@ struct CTTabBar: View {
                 Button(action: { selected = i }) {
                     VStack(spacing: 2) {
                         if let sf = items[i].sfName {
-                            Image(systemName: selected == i ? sf + ".fill" : sf)
+                            Image(systemName: selected == i && !sf.hasSuffix(".fill") ? sf + ".fill" : sf)
                                 .font(.system(size: 20))
                                 .foregroundColor(selected == i ? Color.CT.accent : Color.CT.textDim)
                         } else {
