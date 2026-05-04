@@ -532,7 +532,7 @@ class ChatsViewModel {
         // Merge ephemeral subscriptions — contacts from whom we received END_SESSION but
         // for whom no User record exists yet. Once their X3DH message arrives and the Chat
         // is created, the User record covers them and the ephemeral entry is cleared.
-        return Array(coreDataIds.union(ephemeralSubscriptionUserIds))
+        return Array(coreDataIds.union(ephemeralSubscriptionUserIds)).sorted()
     }
 
     /// Contact IDs eligible for proactive prewarm on stream connect.

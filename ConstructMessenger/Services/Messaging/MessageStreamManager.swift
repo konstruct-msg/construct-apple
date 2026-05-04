@@ -132,7 +132,11 @@ final class MessageStreamManager {
     func connect(contactUserIds: [String] = [], onMessageReceived: @escaping (ChatMessage) -> Void) {
         self.onMessageReceived = onMessageReceived
 
-        let subscriptionChanged = contactUserIds != subscriptionUserIds
+        // Use Set comparison: currentConversationIds() builds from Array(Set) whose order is
+        // non-deterministic across calls, so the same 3 IDs may arrive in a different order on
+        // each reconnect attempt.  An order-sensitive != would trigger a spurious forceDisconnect()
+        // even when the actual subscription set hasn't changed, causing the stream to loop.
+        let subscriptionChanged = Set(contactUserIds) != Set(subscriptionUserIds)
 
         // If subscriptions changed and a loop is running, force reconnect so the
         // new contact's conversation ID is included in the subscribe request.

@@ -234,18 +234,26 @@ extension MessageStreamManager {
                     IceProxyManager.shared.clearCooldown()
                 }
 
-                // Only invalidate the persistent client when the routing path actually changed
-                // (e.g. direct → ICE). Unconditional invalidation kills the in-progress TLS/ICE
-                // connection and restarts a cold one on every 2.5 s timeout, causing a ~60 s retry
-                // loop: 3 s (fetch cap) + 2.5 s (timeout) = 5.5 s/cycle × ~11 cycles ≈ 60 s.
-                // If routing is unchanged the existing warm connection will succeed on the next
-                // retry once the ICE tunnel or TLS handshake finishes (typically within one cycle).
+                // Always invalidate the persistent client on stream timeout.
+                // When routing is unchanged this costs one extra TLS handshake per retry cycle
+                // (~200–500 ms), but it is necessary to prevent a fatalError:
+                //
+                //   If the underlying TCP connection was RST'd (server keepalive timeout, NAT
+                //   expiry, etc.) the gRPC runConnections() error handler fires *asynchronously*.
+                //   The immediate ICE retry (no backoff) calls acquireChannel() before that async
+                //   cleanup completes, gets the dead connection back, and then
+                //   GRPCStreamStateMachine asserts "Client is closed: can't send metadata" —
+                //   a fatalError that kills the app.
+                //
+                // DPI detection is unaffected: after 2 consecutive routing-unchanged timeouts
+                // (direct path, .auto mode) the connectLoop activates ICE, changing the routing
+                // key and resetting the counter — the same threshold as before.
                 let routingKeyAfter = GRPCChannelManager.shared.currentRoutingKey
+                GRPCChannelManager.shared.invalidatePersistentClient()
                 if routingKeyAfter != routingKeyBefore {
-                    GRPCChannelManager.shared.invalidatePersistentClient()
                     Log.info("🧊 Routing changed \(routingKeyBefore) → \(routingKeyAfter) — persistent client invalidated", category: "MessageStream")
                 } else {
-                    Log.info("🧊 Routing unchanged (\(routingKeyAfter)) — keeping persistent client, retrying on same connection", category: "MessageStream")
+                    Log.info("🧊 Routing unchanged (\(routingKeyAfter)) — persistent client invalidated (TCP may be dead)", category: "MessageStream")
                 }
                 // Immediate retry: propagate an error to exit openStream() and let connectLoop retry.
                 throw RPCError(code: .unavailable, message: "Stream open timed out — retrying with ICE")
