@@ -115,11 +115,11 @@ struct MessageBubbleRegularView: View {
                             isSelected: isSelected
                         )
                     )
-                    .clipShape(Rectangle())
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
                     .overlay(
                         Group {
                             if !message.isSentByMe {
-                                Rectangle().stroke(Color.CT.noise, lineWidth: 0.5)
+                                RoundedRectangle(cornerRadius: 10).stroke(Color.CT.noise, lineWidth: 0.5)
                             }
                         }
                     )

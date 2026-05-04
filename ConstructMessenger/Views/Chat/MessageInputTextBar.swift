@@ -26,7 +26,8 @@ struct MessageInputTextBar: View {
             voiceButton
         }
         .background(Color.CT.outMsgBg)
-        .overlay(Rectangle().stroke(Color.CT.noise, lineWidth: 0.5))
+        .clipShape(RoundedRectangle(cornerRadius: 18))
+        .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.CT.noise, lineWidth: 0.5))
     }
 
     // MARK: - Text field
