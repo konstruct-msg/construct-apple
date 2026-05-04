@@ -607,7 +607,8 @@ struct CTTextField: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 11)
         .background(Color.CT.bgMsg)
-        .overlay(Rectangle().stroke(Color.CT.noise, lineWidth: 0.5))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.CT.noise, lineWidth: 0.5))
         #if os(macOS)
         .textFieldStyle(.plain)
         #endif
@@ -640,8 +641,9 @@ struct CTButton: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
                 .background(bgColor)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
                 .overlay(
-                    Rectangle()
+                    RoundedRectangle(cornerRadius: 8)
                         .stroke(isEnabled ? Color.clear : Color.CT.noise, lineWidth: 0.5)
                 )
         }
