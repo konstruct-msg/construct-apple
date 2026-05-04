@@ -466,6 +466,7 @@ struct CTNavBar: View {
 struct CTTabItem {
     let symbol: String
     let label: String
+    var sfName: String? = nil
 }
 
 struct CTTabBar: View {
@@ -480,9 +481,9 @@ struct CTTabBar: View {
 
     static var defaultItems: [CTTabItem] {
         [
-            CTTabItem(symbol: CTSymbol.tabChats,    label: NSLocalizedString("tab_chats",    comment: "")),
-            CTTabItem(symbol: CTSymbol.tabSynaps,   label: NSLocalizedString("tab_synaps",   comment: "")),
-            CTTabItem(symbol: CTSymbol.tabSettings, label: NSLocalizedString("tab_settings", comment: "")),
+            CTTabItem(symbol: CTSymbol.tabChats,    label: NSLocalizedString("tab_chats",    comment: ""), sfName: "message"),
+            CTTabItem(symbol: CTSymbol.tabSynaps,   label: NSLocalizedString("tab_synaps",   comment: ""), sfName: "person.2"),
+            CTTabItem(symbol: CTSymbol.tabSettings, label: NSLocalizedString("tab_settings", comment: ""), sfName: "gearshape"),
         ]
     }
 
@@ -492,9 +493,15 @@ struct CTTabBar: View {
                 Spacer()
                 Button(action: { selected = i }) {
                     VStack(spacing: 2) {
-                        Text(items[i].symbol)
-                            .font(selected == i ? CTFont.bold(13) : CTFont.regular(13))
-                            .foregroundColor(selected == i ? Color.CT.accent : Color.CT.textDim)
+                        if let sf = items[i].sfName {
+                            Image(systemName: selected == i ? sf + ".fill" : sf)
+                                .font(.system(size: 20))
+                                .foregroundColor(selected == i ? Color.CT.accent : Color.CT.textDim)
+                        } else {
+                            Text(items[i].symbol)
+                                .font(selected == i ? CTFont.bold(13) : CTFont.regular(13))
+                                .foregroundColor(selected == i ? Color.CT.accent : Color.CT.textDim)
+                        }
                         Text(selected == i ? "> \(items[i].label)" : items[i].label)
                             .font(selected == i ? CTFont.bold(9) : CTFont.regular(9))
                             .foregroundColor(selected == i ? Color.CT.accent : Color.CT.textDim)

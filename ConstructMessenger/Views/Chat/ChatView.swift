@@ -592,8 +592,8 @@ struct ChatView: View {
                 Button {
                     withAnimation { isSearchActive.toggle(); if !isSearchActive { searchText = "" } }
                 } label: {
-                    Text(isSearchActive ? CTSymbol.close : CTSymbol.search)
-                        .font(CTFont.bold(14))
+                    Image(systemName: isSearchActive ? "xmark" : "magnifyingglass")
+                        .font(.system(size: 16, weight: .medium))
                         .foregroundColor(Color.CT.accent)
                 }
             }

@@ -221,8 +221,8 @@ struct SettingsView: View {
                 recoveryBannerDismissed = true
                 UserDefaults.standard.set(true, forKey: "recovery_banner_dismissed")
             } label: {
-                Text(CTSymbol.close)
-                    .font(CTFont.regular(12))
+                Image(systemName: "xmark")
+                    .font(.system(size: 11))
                     .foregroundColor(Color.CT.textDim)
             }
         }

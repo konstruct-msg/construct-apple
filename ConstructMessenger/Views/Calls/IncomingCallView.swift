@@ -43,13 +43,12 @@ struct IncomingCallView: View {
                         Button {
                             CallManager.shared.declineIncomingCall()
                         } label: {
-                            Text(CTSymbol.callEnd)
-                                .font(CTFont.bold(18))
+                            Image(systemName: "phone.down.fill")
+                                .font(.system(size: 24, weight: .medium))
                                 .foregroundStyle(.white)
                                 .frame(width: 64, height: 64)
                                 .background(Color.CT.danger)
                                 .overlay(Rectangle().strokeBorder(Color.CT.danger, lineWidth: 1))
-                                .lineLimit(1).fixedSize()
                         }
                         Text(NSLocalizedString("call_decline", comment: ""))
                             .font(CTFont.regular(10))
@@ -61,13 +60,12 @@ struct IncomingCallView: View {
                         Button {
                             CallManager.shared.answerIncomingCall()
                         } label: {
-                            Text(CTSymbol.callAnswer)
-                                .font(CTFont.bold(18))
+                            Image(systemName: "phone.fill")
+                                .font(.system(size: 24, weight: .medium))
                                 .foregroundStyle(.white)
                                 .frame(width: 64, height: 64)
                                 .background(Color.CT.accent)
                                 .overlay(Rectangle().strokeBorder(Color.CT.accent, lineWidth: 1))
-                                .lineLimit(1).fixedSize()
                         }
                         Text(NSLocalizedString("call_answer", comment: ""))
                             .font(CTFont.regular(10))

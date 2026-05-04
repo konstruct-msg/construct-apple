@@ -122,8 +122,8 @@ struct MessageInputTextBar: View {
         #if os(iOS)
         if !canSend, let onStartVoice {
             Button(action: onStartVoice) {
-                Text(CTSymbol.mic)
-                    .font(CTFont.regular(13))
+                Image(systemName: "mic.fill")
+                    .font(.system(size: 16))
                     .foregroundColor(Color.CT.textDim)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 10)

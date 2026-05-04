@@ -139,8 +139,8 @@ struct ChatsListView: View {
             Spacer()
             #if os(iOS)
             Button { showingQRScanner = true } label: {
-                Text(CTSymbol.scan)
-                    .font(CTFont.bold(14))
+                Image(systemName: "qrcode.viewfinder")
+                    .font(.system(size: 20, weight: .medium))
                     .foregroundColor(Color.CT.accent)
             }
             #endif
