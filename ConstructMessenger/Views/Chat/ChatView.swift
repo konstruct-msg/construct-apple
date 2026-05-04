@@ -584,8 +584,8 @@ struct ChatView: View {
                             hasVideo: false
                         ) }
                     } label: {
-                        Text(CTSymbol.tabCalls)
-                            .font(CTFont.bold(14))
+                        Image(systemName: "phone")
+                            .font(.system(size: 17, weight: .medium))
                             .foregroundColor(Color.CT.accent)
                     }
                 }

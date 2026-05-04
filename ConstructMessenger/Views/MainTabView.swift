@@ -112,13 +112,13 @@ struct MainTabView: View {
     private var tabItems: [CTTabItem] {
         #if os(iOS)
         var items: [CTTabItem] = [
-            CTTabItem(symbol: CTSymbol.tabChats,  label: "MSG"),
-            CTTabItem(symbol: CTSymbol.tabSynaps, label: "SYN"),
+            CTTabItem(symbol: CTSymbol.tabChats,  label: NSLocalizedString("tab_chats",    comment: ""), sfName: "message"),
+            CTTabItem(symbol: CTSymbol.tabSynaps, label: NSLocalizedString("tab_synaps",   comment: ""), sfName: "circle.grid.cross.fill"),
         ]
         if CallsFeature.isEnabled {
-            items.append(CTTabItem(symbol: CTSymbol.tabCalls, label: "TEL"))
+            items.append(CTTabItem(symbol: CTSymbol.tabCalls, label: NSLocalizedString("tab_calls", comment: ""), sfName: "phone"))
         }
-        items.append(CTTabItem(symbol: CTSymbol.tabSettings, label: "CFG"))
+        items.append(CTTabItem(symbol: CTSymbol.tabSettings, label: NSLocalizedString("tab_settings", comment: ""), sfName: "gearshape"))
         return items
         #else
         return CTTabBar.defaultItems
