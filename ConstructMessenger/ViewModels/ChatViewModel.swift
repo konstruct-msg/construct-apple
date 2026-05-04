@@ -999,6 +999,10 @@ class ChatViewModel: NSObject {
                     localId: messageId,
                     conversationId: recipientId
                 ))
+                // Register with the stuck-message watchdog so that if the engine never calls
+                // back (e.g. it is in networkError backoff), the message transitions to .queued
+                // after messageSendTimeout (20 s) instead of staying stuck in .sending forever.
+                MessageQueueManager.shared.markMessageAsSending(messageId)
                 isSending = false
                 return
             }

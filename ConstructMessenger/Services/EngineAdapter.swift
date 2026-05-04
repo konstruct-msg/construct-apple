@@ -435,6 +435,17 @@ extension EngineAdapter: EngineCallback {
                             object: bgCtx
                         )
                     )
+                    // Keep MessageQueueManager watchdog in sync: clear the pending timer
+                    // when the engine confirms the send so the watchdog doesn't
+                    // incorrectly re-queue a message that was already delivered.
+                    switch deliveryStatus {
+                    case .sent, .delivered:
+                        MessageQueueManager.shared.markMessageAsSent(localId)
+                    case .failed, .queued:
+                        MessageQueueManager.shared.markMessageAsFailed(localId)
+                    case .sending:
+                        break
+                    }
                 }
             } catch {
                 Log.error("EngineAdapter: status update CoreData save failed: \(error)", category: "Engine")
