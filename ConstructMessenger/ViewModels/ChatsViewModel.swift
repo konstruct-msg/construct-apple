@@ -401,6 +401,16 @@ class ChatsViewModel {
             Log.debug("📡 Stream paused — skipping startMessageStream", category: "ChatsViewModel")
             return
         }
+        let ids = currentConversationIds()
+        // Don't downgrade an active subscription to an empty list.
+        // This happens transiently when handlePollingState fires mid-forceReconnect
+        // cycle and viewContext hasn't settled (fetch returns []). Letting connect([])
+        // through would cancel the in-flight 3-contact loop and restart with 0,
+        // causing the 0↔N oscillation seen on network interface changes.
+        guard !ids.isEmpty || streamManager.subscriptionUserIds.isEmpty else {
+            Log.debug("📡 startMessageStream — skipping empty ids (would clear \(streamManager.subscriptionUserIds.count) active subscriptions)", category: "ChatsViewModel")
+            return
+        }
         streamManager.onDeliveryReceipt = { [weak self] messageIds in
             self?.handleDeliveryReceipts(messageIds)
         }
@@ -410,18 +420,18 @@ class ChatsViewModel {
         MessageRouter.shared.onE2EDeliveryReceiptDecrypted = { [weak self] messageIds in
             self?.handleDeliveryReceipts(messageIds)
         }
-        streamManager.connect(contactUserIds: currentConversationIds()) { [weak self] message in
+        streamManager.connect(contactUserIds: ids) { [weak self] message in
             self?.handleIncomingMessage(message)
         }
 
         // Parallel run: open engine stream alongside legacy gRPC stream.
-        let conversationIds = currentConversationIds()
-        if !conversationIds.isEmpty {
+        // Re-use `ids` captured above — avoids a second DB fetch and keeps both calls consistent.
+        if !ids.isEmpty {
             EngineAdapter.shared.dispatch(.openMessageStream(
-                conversationIds: conversationIds,
+                conversationIds: ids,
                 sinceCursor: nil
             ))
-            Log.debug("📡 Engine stream opened for \(conversationIds.count) conversation(s)", category: "ChatsViewModel")
+            Log.debug("📡 Engine stream opened for \(ids.count) conversation(s)", category: "ChatsViewModel")
         }
 
         // On first stream connect per app session, check if OTPKs need replenishment.
@@ -532,7 +542,7 @@ class ChatsViewModel {
         // Merge ephemeral subscriptions — contacts from whom we received END_SESSION but
         // for whom no User record exists yet. Once their X3DH message arrives and the Chat
         // is created, the User record covers them and the ephemeral entry is cleared.
-        return Array(coreDataIds.union(ephemeralSubscriptionUserIds))
+        return Array(coreDataIds.union(ephemeralSubscriptionUserIds)).sorted()
     }
 
     /// Contact IDs eligible for proactive prewarm on stream connect.

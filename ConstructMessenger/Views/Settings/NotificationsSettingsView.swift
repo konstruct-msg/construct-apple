@@ -37,75 +37,78 @@ struct NotificationsSettingsView: View {
 
                 // MARK: - General Notifications
                 CTSettingsSectionHeader(title: NSLocalizedString("notifications", comment: "").uppercased())
-                HStack {
-                    Text(LocalizedStringKey("enable_notifications"))
-                        .font(CTFont.regular(13))
-                        .foregroundColor(Color.CT.textDim)
-                    Spacer()
-                    Toggle("", isOn: $notificationsEnabled)
-                        .labelsHidden()
-                        .tint(Color.CT.accent)
+                CTSectionGroup {
+                    HStack {
+                        Text(LocalizedStringKey("enable_notifications"))
+                            .font(CTFont.regular(13))
+                            .foregroundColor(Color.CT.textDim)
+                        Spacer()
+                        Toggle("", isOn: $notificationsEnabled)
+                            .labelsHidden()
+                            .tint(Color.CT.accent)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 12)
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 12)
                 Text(LocalizedStringKey("notifications_footer"))
                     .font(CTFont.regular(11))
                     .foregroundStyle(Color.CT.textDim)
                     .padding(.horizontal, 12)
                     .padding(.bottom, 8)
-                CTSep()
 
                 // MARK: - System Permission Status
                 CTSettingsSectionHeader(title: NSLocalizedString("system_notification_settings", comment: "").uppercased())
-                HStack {
-                    Text(LocalizedStringKey("status"))
-                        .font(CTFont.regular(13))
-                        .foregroundColor(Color.CT.textDim)
-                    Spacer()
-                    Text(statusText)
-                        .font(CTFont.regular(13))
-                        .foregroundColor(statusColor)
-                    Text(statusIcon)
-                        .font(CTFont.regular(13))
-                        .foregroundColor(statusColor)
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 12)
+                CTSectionGroup {
+                    HStack {
+                        Text(LocalizedStringKey("status"))
+                            .font(CTFont.regular(13))
+                            .foregroundColor(Color.CT.textDim)
+                        Spacer()
+                        Text(statusText)
+                            .font(CTFont.regular(13))
+                            .foregroundColor(statusColor)
+                        Text(statusIcon)
+                            .font(CTFont.regular(13))
+                            .foregroundColor(statusColor)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 12)
 
-                if authorizationStatus == .denied {
-                    CTSep(style: .thin)
-                    Button(action: openSystemSettings) {
-                        HStack {
-                            Text(LocalizedStringKey("open_system_settings"))
-                                .font(CTFont.regular(13))
-                                .foregroundColor(Color.CT.textDim)
-                            Spacer()
-                            Text("[→]")
-                                .font(CTFont.regular(13))
-                                .foregroundColor(Color.CT.accent)
+                    if authorizationStatus == .denied {
+                        CTSep(style: .thin)
+                        Button(action: openSystemSettings) {
+                            HStack {
+                                Text(LocalizedStringKey("open_system_settings"))
+                                    .font(CTFont.regular(13))
+                                    .foregroundColor(Color.CT.textDim)
+                                Spacer()
+                                Text("[→]")
+                                    .font(CTFont.regular(13))
+                                    .foregroundColor(Color.CT.accent)
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 12)
+                            .contentShape(Rectangle())
                         }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 12)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                } else if authorizationStatus == .notDetermined {
-                    CTSep(style: .thin)
-                    Button(action: requestNotificationPermission) {
-                        HStack {
-                            Text(LocalizedStringKey("grant_permission"))
-                                .font(CTFont.regular(13))
-                                .foregroundColor(Color.CT.accent)
-                            Spacer()
-                            Text("[→]")
-                                .font(CTFont.regular(13))
-                                .foregroundColor(Color.CT.accent)
+                        .buttonStyle(.plain)
+                    } else if authorizationStatus == .notDetermined {
+                        CTSep(style: .thin)
+                        Button(action: requestNotificationPermission) {
+                            HStack {
+                                Text(LocalizedStringKey("grant_permission"))
+                                    .font(CTFont.regular(13))
+                                    .foregroundColor(Color.CT.accent)
+                                Spacer()
+                                Text("[→]")
+                                    .font(CTFont.regular(13))
+                                    .foregroundColor(Color.CT.accent)
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 12)
+                            .contentShape(Rectangle())
                         }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 12)
-                        .contentShape(Rectangle())
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 }
 
                 if authorizationStatus == .denied {
@@ -121,99 +124,100 @@ struct NotificationsSettingsView: View {
                         .padding(.horizontal, 12)
                         .padding(.bottom, 8)
                 }
-                CTSep()
 
                 // MARK: - Message Notifications
                 if notificationsEnabled {
                     CTSettingsSectionHeader(title: NSLocalizedString("MESSAGE_NOTIFICATIONS", comment: "").uppercased())
-                    HStack {
-                        Text(LocalizedStringKey("show_message_notifications"))
-                            .font(CTFont.regular(13))
-                            .foregroundColor(Color.CT.textDim)
-                        Spacer()
-                        Toggle("", isOn: $showMessageNotifications)
-                            .labelsHidden()
-                            .tint(Color.CT.accent)
+                    CTSectionGroup {
+                        HStack {
+                            Text(LocalizedStringKey("show_message_notifications"))
+                                .font(CTFont.regular(13))
+                                .foregroundColor(Color.CT.textDim)
+                            Spacer()
+                            Toggle("", isOn: $showMessageNotifications)
+                                .labelsHidden()
+                                .tint(Color.CT.accent)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 12)
+
+                        CTSep(style: .thin)
+
+                        HStack {
+                            Text(LocalizedStringKey("notification_sound"))
+                                .font(CTFont.regular(13))
+                                .foregroundColor(Color.CT.textDim)
+                            Spacer()
+                            Toggle("", isOn: $notificationSound)
+                                .labelsHidden()
+                                .tint(Color.CT.accent)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 12)
+
+                        CTSep(style: .thin)
+
+                        HStack {
+                            Text(LocalizedStringKey("vibration"))
+                                .font(CTFont.regular(13))
+                                .foregroundColor(Color.CT.textDim)
+                            Spacer()
+                            Toggle("", isOn: $notificationVibration)
+                                .labelsHidden()
+                                .tint(Color.CT.accent)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 12)
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 12)
-
-                    CTSep(style: .thin)
-
-                    HStack {
-                        Text(LocalizedStringKey("notification_sound"))
-                            .font(CTFont.regular(13))
-                            .foregroundColor(Color.CT.textDim)
-                        Spacer()
-                        Toggle("", isOn: $notificationSound)
-                            .labelsHidden()
-                            .tint(Color.CT.accent)
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 12)
-
-                    CTSep(style: .thin)
-
-                    HStack {
-                        Text(LocalizedStringKey("vibration"))
-                            .font(CTFont.regular(13))
-                            .foregroundColor(Color.CT.textDim)
-                        Spacer()
-                        Toggle("", isOn: $notificationVibration)
-                            .labelsHidden()
-                            .tint(Color.CT.accent)
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 12)
-                    CTSep()
 
                     // MARK: - Push Notifications
                     CTSettingsSectionHeader(title: NSLocalizedString("PUSH_NOTIFICATIONS", comment: "").uppercased())
-                    #if targetEnvironment(macCatalyst)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(NSLocalizedString("push_not_available_mac", comment: ""))
-                            .font(CTFont.regular(13))
-                            .foregroundColor(Color.CT.textDim)
-                        Text(NSLocalizedString("push_not_available_mac_hint", comment: ""))
-                            .font(CTFont.regular(11))
-                            .foregroundColor(Color.CT.textDim)
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 12)
-                    #else
-                    HStack {
+                    CTSectionGroup {
+                        #if targetEnvironment(macCatalyst)
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(LocalizedStringKey("enable_push_notifications"))
+                            Text(NSLocalizedString("push_not_available_mac", comment: ""))
                                 .font(CTFont.regular(13))
                                 .foregroundColor(Color.CT.textDim)
-                            Text(LocalizedStringKey("push_notifications_footer"))
+                            Text(NSLocalizedString("push_not_available_mac_hint", comment: ""))
                                 .font(CTFont.regular(11))
                                 .foregroundColor(Color.CT.textDim)
                         }
-                        Spacer()
-                        Toggle("", isOn: $pushNotificationsEnabled)
-                            .labelsHidden()
-                            .tint(Color.CT.accent)
-                            .disabled(authorizationStatus != .authorized)
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 12)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 12)
+                        #else
+                        HStack {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(LocalizedStringKey("enable_push_notifications"))
+                                    .font(CTFont.regular(13))
+                                    .foregroundColor(Color.CT.textDim)
+                                Text(LocalizedStringKey("push_notifications_footer"))
+                                    .font(CTFont.regular(11))
+                                    .foregroundColor(Color.CT.textDim)
+                            }
+                            Spacer()
+                            Toggle("", isOn: $pushNotificationsEnabled)
+                                .labelsHidden()
+                                .tint(Color.CT.accent)
+                                .disabled(authorizationStatus != .authorized)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 12)
 
-                    CTSep(style: .thin)
+                        CTSep(style: .thin)
 
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(LocalizedStringKey("push_privacy_notice"))
-                            .font(CTFont.regular(13))
-                            .foregroundColor(Color.CT.textDim)
-                        Text(LocalizedStringKey("push_privacy_notice_text"))
-                            .font(CTFont.regular(11))
-                            .foregroundColor(Color.CT.textDim)
-                            .fixedSize(horizontal: false, vertical: true)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(LocalizedStringKey("push_privacy_notice"))
+                                .font(CTFont.regular(13))
+                                .foregroundColor(Color.CT.textDim)
+                            Text(LocalizedStringKey("push_privacy_notice_text"))
+                                .font(CTFont.regular(11))
+                                .foregroundColor(Color.CT.textDim)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 12)
+                        #endif
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 12)
-                    #endif
-                    CTSep()
                 }
             }
             .padding(.vertical, 20)

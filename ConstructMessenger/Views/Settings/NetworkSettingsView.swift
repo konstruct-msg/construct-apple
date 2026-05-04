@@ -38,144 +38,146 @@ struct NetworkSettingsView: View {
                 // MARK: - Connection Status
                 CTSettingsSectionHeader(title: NSLocalizedString("status", comment: "").uppercased())
                 let path = iceManager.currentTrafficPath
-                HStack(spacing: 12) {
-                    Text(connectionStatusASCII)
-                        .font(CTFont.regular(13))
-                        .foregroundColor(statusColor)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(connectionManager.connectionStatus.displayText)
+                CTSectionGroup {
+                    HStack(spacing: 12) {
+                        Text(connectionStatusASCII)
                             .font(CTFont.regular(13))
-                            .foregroundStyle(Color.CT.text)
-                        Text(path.displayDetail)
-                            .font(CTFont.regular(11))
-                            .foregroundStyle(Color.CT.textDim)
-                            .textSelection(.enabled)
-                    }
-                    Spacer()
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 12)
-
-                if let heartbeat = streamManager.lastHeartbeatDate {
-                    CTSep(style: .thin)
-                    HStack {
-                        Text(LocalizedStringKey("last_heartbeat"))
-                            .font(CTFont.regular(13))
-                            .foregroundStyle(Color.CT.textDim)
+                            .foregroundColor(statusColor)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(connectionManager.connectionStatus.displayText)
+                                .font(CTFont.regular(13))
+                                .foregroundStyle(Color.CT.text)
+                            Text(path.displayDetail)
+                                .font(CTFont.regular(11))
+                                .foregroundStyle(Color.CT.textDim)
+                                .textSelection(.enabled)
+                        }
                         Spacer()
-                        Text(heartbeat, style: .relative)
-                            .font(CTFont.regular(13))
-                            .foregroundStyle(Color.CT.textDim)
-                            .monospacedDigit()
                     }
                     .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
-                }
+                    .padding(.vertical, 12)
 
-                if let error = connectionManager.lastError {
-                    CTSep(style: .thin)
-                    Text(error)
-                        .font(.system(size: 11, design: .monospaced))
-                        .foregroundStyle(Color.CT.danger)
-                        .textSelection(.enabled)
+                    if let heartbeat = streamManager.lastHeartbeatDate {
+                        CTSep(style: .thin)
+                        HStack {
+                            Text(LocalizedStringKey("last_heartbeat"))
+                                .font(CTFont.regular(13))
+                                .foregroundStyle(Color.CT.textDim)
+                            Spacer()
+                            Text(heartbeat, style: .relative)
+                                .font(CTFont.regular(13))
+                                .foregroundStyle(Color.CT.textDim)
+                                .monospacedDigit()
+                        }
                         .padding(.horizontal, 12)
                         .padding(.vertical, 10)
+                    }
+
+                    if let error = connectionManager.lastError {
+                        CTSep(style: .thin)
+                        Text(error)
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundStyle(Color.CT.danger)
+                            .textSelection(.enabled)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 10)
+                    }
                 }
-                CTSep()
 
                 // MARK: - Traffic Protection (ICE)
                 CTSettingsSectionHeader(title: NSLocalizedString("traffic_protection", comment: "").uppercased())
+                CTSectionGroup {
+                    // Tri-state mode selector
+                    HStack {
+                        Text(LocalizedStringKey("ice_title"))
+                            .font(CTFont.regular(13))
+                            .foregroundColor(iceManager.hasCert ? Color.CT.textDim : Color.CT.textDim.opacity(0.5))
+                        Spacer()
+                        CTModeSelector(
+                            selection: Binding(
+                                get: { iceManager.mode },
+                                set: { newMode in
+                                    let oldMode = iceManager.mode
+                                    iceManager.mode = newMode
+                                    switch newMode {
+                                    case .off:
+                                        iceManager.stop()
+                                    case .auto:
+                                        // Switching to auto: stop proxy, let DPI detection handle it.
+                                        if oldMode == .on { iceManager.stop() }
+                                    case .on:
+                                        Task { await iceManager.startIfEnabled() }
+                                    }
+                                }
+                            ),
+                            options: IceMode.allCases,
+                            labels: [
+                                .off:  NSLocalizedString("ice_mode_off", comment: ""),
+                                .auto: NSLocalizedString("ice_mode_auto", comment: ""),
+                                .on:   NSLocalizedString("ice_mode_on", comment: "")
+                            ]
+                        )
+                        .disabled(!iceManager.hasCert)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 12)
 
-                // Tri-state mode selector
-                HStack {
-                    Text(LocalizedStringKey("ice_title"))
-                        .font(CTFont.regular(13))
-                        .foregroundColor(iceManager.hasCert ? Color.CT.textDim : Color.CT.textDim.opacity(0.5))
-                    Spacer()
-                    CTModeSelector(
-                        selection: Binding(
-                            get: { iceManager.mode },
-                            set: { newMode in
-                                let oldMode = iceManager.mode
-                                iceManager.mode = newMode
-                                switch newMode {
-                                case .off:
-                                    iceManager.stop()
-                                case .auto:
-                                    // Switching to auto: stop proxy, let DPI detection handle it.
-                                    if oldMode == .on { iceManager.stop() }
-                                case .on:
-                                    Task { await iceManager.startIfEnabled() }
+                    if (iceManager.mode != .off || iceManager.isRunning) && iceManager.hasCert {
+                        if iceManager.isOnCooldown {
+                            CTSep(style: .thin)
+                            HStack {
+                                Text(LocalizedStringKey("ice_retry"))
+                                    .font(CTFont.regular(13))
+                                    .foregroundColor(Color.CT.textDim)
+                                Spacer()
+                                Text(CTSymbol.refresh)
+                                    .font(CTFont.regular(13))
+                                    .foregroundColor(Color.CT.textDim)
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 12)
+                        } else if iceManager.isRunning, let relay = iceManager.activeRelay {
+                            CTSep(style: .thin)
+                            HStack {
+                                Text(pathASCII(iceManager.currentTrafficPath))
+                                    .font(CTFont.regular(13))
+                                    .foregroundColor(pathColor(iceManager.currentTrafficPath))
+                                Text(relay.address)
+                                    .font(.system(size: 13, design: .monospaced))
+                                    .foregroundColor(Color.CT.textDim)
+                                    .textSelection(.enabled)
+                                Spacer()
+                                if relay.tlsServerName != nil {
+                                    Text("TLS")
+                                        .font(CTFont.regular(10))
+                                        .foregroundColor(Color.CT.accentDim)
+                                        .padding(.horizontal, 5).padding(.vertical, 2)
+                                        .overlay(Rectangle().stroke(Color.CT.accent.opacity(0.4), lineWidth: 0.5))
+                                    Text("obfs4")
+                                        .font(CTFont.regular(10))
+                                        .foregroundColor(Color.CT.accentDim)
+                                        .padding(.horizontal, 5).padding(.vertical, 2)
+                                        .overlay(Rectangle().stroke(Color.CT.accent.opacity(0.4), lineWidth: 0.5))
+                                } else {
+                                    Text("obfs4")
+                                        .font(CTFont.regular(10))
+                                        .foregroundColor(Color.CT.accentDim)
+                                        .padding(.horizontal, 5).padding(.vertical, 2)
+                                        .overlay(Rectangle().stroke(Color.CT.accent.opacity(0.4), lineWidth: 0.5))
                                 }
                             }
-                        ),
-                        options: IceMode.allCases,
-                        labels: [
-                            .off:  NSLocalizedString("ice_mode_off", comment: ""),
-                            .auto: NSLocalizedString("ice_mode_auto", comment: ""),
-                            .on:   NSLocalizedString("ice_mode_on", comment: "")
-                        ]
-                    )
-                    .disabled(!iceManager.hasCert)
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 12)
-
-                if (iceManager.mode != .off || iceManager.isRunning) && iceManager.hasCert {
-                    if iceManager.isOnCooldown {
-                        CTSep(style: .thin)
-                        HStack {
-                            Text(LocalizedStringKey("ice_retry"))
-                                .font(CTFont.regular(13))
-                                .foregroundColor(Color.CT.textDim)
-                            Spacer()
-                            Text(CTSymbol.refresh)
-                                .font(CTFont.regular(13))
-                                .foregroundColor(Color.CT.textDim)
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 12)
-                    } else if iceManager.isRunning, let relay = iceManager.activeRelay {
-                        CTSep(style: .thin)
-                        HStack {
-                            Text(pathASCII(iceManager.currentTrafficPath))
-                                .font(CTFont.regular(13))
-                                .foregroundColor(pathColor(iceManager.currentTrafficPath))
-                            Text(relay.address)
-                                .font(.system(size: 13, design: .monospaced))
-                                .foregroundColor(Color.CT.textDim)
-                                .textSelection(.enabled)
-                            Spacer()
-                            if relay.tlsServerName != nil {
-                                Text("TLS")
-                                    .font(CTFont.regular(10))
-                                    .foregroundColor(Color.CT.accentDim)
-                                    .padding(.horizontal, 5).padding(.vertical, 2)
-                                    .overlay(Rectangle().stroke(Color.CT.accent.opacity(0.4), lineWidth: 0.5))
-                                Text("obfs4")
-                                    .font(CTFont.regular(10))
-                                    .foregroundColor(Color.CT.accentDim)
-                                    .padding(.horizontal, 5).padding(.vertical, 2)
-                                    .overlay(Rectangle().stroke(Color.CT.accent.opacity(0.4), lineWidth: 0.5))
-                            } else {
-                                Text("obfs4")
-                                    .font(CTFont.regular(10))
-                                    .foregroundColor(Color.CT.accentDim)
-                                    .padding(.horizontal, 5).padding(.vertical, 2)
-                                    .overlay(Rectangle().stroke(Color.CT.accent.opacity(0.4), lineWidth: 0.5))
-                            }
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-
-                    } else if iceManager.mode != .off && !iceManager.isRunning {
-                        CTSep(style: .thin)
-                        Text(iceManager.lastError ?? NSLocalizedString("ice_unavailable", comment: ""))
-                            .font(CTFont.regular(11))
-                            .foregroundStyle(Color.CT.textDim)
-                            .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, 12)
-                            .padding(.vertical, 10)
+                            .padding(.vertical, 8)
+
+                        } else if iceManager.mode != .off && !iceManager.isRunning {
+                            CTSep(style: .thin)
+                            Text(iceManager.lastError ?? NSLocalizedString("ice_unavailable", comment: ""))
+                                .font(CTFont.regular(11))
+                                .foregroundStyle(Color.CT.textDim)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 10)
+                        }
                     }
                 }
 
@@ -195,7 +197,6 @@ struct NetworkSettingsView: View {
                         .padding(.horizontal, 12)
                         .padding(.bottom, 8)
                 }
-                CTSep()
             }
             .padding(.vertical, 20)
             #if os(iOS)

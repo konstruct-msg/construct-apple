@@ -156,9 +156,9 @@ private struct SingleMediaCell: View {
         Rectangle()
             .fill(Color.CT.bgMsg).frame(width: 200, height: 200)
             .overlay {
-                Text(CTSymbol.image)
-                    .font(CTFont.regular(20)).foregroundColor(Color.CT.textDim)
-                    .lineLimit(1).fixedSize()
+                Image(systemName: "photo")
+                    .font(.system(size: 28))
+                    .foregroundColor(Color.CT.textDim)
             }
             .overlay(Rectangle().stroke(isSelected ? Color.CT.accent : Color.clear, lineWidth: 2))
     }
@@ -279,9 +279,9 @@ private struct GridCell: View {
                 Image(platformImage: img).resizable().scaledToFill()
             } else {
                 Color.CT.bgMsg
-                Text(CTSymbol.image)
-                    .font(CTFont.regular(16)).foregroundColor(Color.CT.textDim)
-                    .lineLimit(1).fixedSize()
+                Image(systemName: "photo")
+                    .font(.system(size: 22))
+                    .foregroundColor(Color.CT.textDim)
             }
 
             if extraCount > 0 {

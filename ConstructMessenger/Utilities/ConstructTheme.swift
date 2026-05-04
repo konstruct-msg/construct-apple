@@ -404,6 +404,26 @@ struct CTSep: View {
     }
 }
 
+// MARK: - Section Group
+
+/// Rounded card container for settings sections that use the flat CTSettingsRow pattern.
+/// Wraps rows in a subtle elevated background with cornerRadius 8.
+/// Usage: wrap the rows of one section (not the CTSettingsSectionHeader) in CTSectionGroup { ... }
+/// Remove CTSep(style: .thick) between sections — CTSettingsSectionHeader's .padding(.top, 16) provides the gap.
+struct CTSectionGroup<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        VStack(spacing: 0) {
+            content
+        }
+        .background(Color.CT.outMsgBg)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.CT.noise, lineWidth: 0.5))
+        .padding(.horizontal, 12)
+    }
+}
+
 // MARK: - System Message  (> text)
 
 struct CTSystemMessage: View {
@@ -466,6 +486,7 @@ struct CTNavBar: View {
 struct CTTabItem {
     let symbol: String
     let label: String
+    var sfName: String? = nil
 }
 
 struct CTTabBar: View {
@@ -480,9 +501,9 @@ struct CTTabBar: View {
 
     static var defaultItems: [CTTabItem] {
         [
-            CTTabItem(symbol: CTSymbol.tabChats,    label: NSLocalizedString("tab_chats",    comment: "")),
-            CTTabItem(symbol: CTSymbol.tabSynaps,   label: NSLocalizedString("tab_synaps",   comment: "")),
-            CTTabItem(symbol: CTSymbol.tabSettings, label: NSLocalizedString("tab_settings", comment: "")),
+            CTTabItem(symbol: CTSymbol.tabChats,    label: NSLocalizedString("tab_chats",    comment: ""), sfName: "message"),
+            CTTabItem(symbol: CTSymbol.tabSynaps,   label: NSLocalizedString("tab_synaps",   comment: ""), sfName: "circle.grid.cross.fill"),
+            CTTabItem(symbol: CTSymbol.tabSettings, label: NSLocalizedString("tab_settings", comment: ""), sfName: "gearshape"),
         ]
     }
 
@@ -492,9 +513,15 @@ struct CTTabBar: View {
                 Spacer()
                 Button(action: { selected = i }) {
                     VStack(spacing: 2) {
-                        Text(items[i].symbol)
-                            .font(selected == i ? CTFont.bold(13) : CTFont.regular(13))
-                            .foregroundColor(selected == i ? Color.CT.accent : Color.CT.textDim)
+                        if let sf = items[i].sfName {
+                            Image(systemName: selected == i && !sf.hasSuffix(".fill") ? sf + ".fill" : sf)
+                                .font(.system(size: 20))
+                                .foregroundColor(selected == i ? Color.CT.accent : Color.CT.textDim)
+                        } else {
+                            Text(items[i].symbol)
+                                .font(selected == i ? CTFont.bold(13) : CTFont.regular(13))
+                                .foregroundColor(selected == i ? Color.CT.accent : Color.CT.textDim)
+                        }
                         Text(selected == i ? "> \(items[i].label)" : items[i].label)
                             .font(selected == i ? CTFont.bold(9) : CTFont.regular(9))
                             .foregroundColor(selected == i ? Color.CT.accent : Color.CT.textDim)
@@ -580,7 +607,8 @@ struct CTTextField: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 11)
         .background(Color.CT.bgMsg)
-        .overlay(Rectangle().stroke(Color.CT.noise, lineWidth: 0.5))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.CT.noise, lineWidth: 0.5))
         #if os(macOS)
         .textFieldStyle(.plain)
         #endif
@@ -613,8 +641,9 @@ struct CTButton: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
                 .background(bgColor)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
                 .overlay(
-                    Rectangle()
+                    RoundedRectangle(cornerRadius: 8)
                         .stroke(isEnabled ? Color.clear : Color.CT.noise, lineWidth: 0.5)
                 )
         }
