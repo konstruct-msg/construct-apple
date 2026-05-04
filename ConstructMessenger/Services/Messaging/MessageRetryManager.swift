@@ -265,7 +265,11 @@ class MessageRetryManager {
                         } else if finalStatus == .failed {
                             OutgoingWirePayloadStore.shared.remove(baseMessageId: messageId)
                         }
-                        Log.debug("📮 Re-sent queued message via gRPC: \(messageId) status=\(finalStatus) (attempt \(liveMsg.retryCount))", category: "MessageRetryManager")
+                        if finalStatus == .failed && OutgoingWirePayloadStore.shared.loadChunks(baseMessageId: messageId) == nil {
+                            Log.error("❌ Message \(messageId.prefix(8))… marked failed: no wire payload (engine-path message lost while transport was down)", category: "MessageRetryManager")
+                        } else {
+                            Log.debug("📮 Re-sent queued message via gRPC: \(messageId) status=\(finalStatus) (attempt \(liveMsg.retryCount))", category: "MessageRetryManager")
+                        }
                     }
                 } catch {
                     await MainActor.run {

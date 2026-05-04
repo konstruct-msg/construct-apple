@@ -991,7 +991,10 @@ class ChatViewModel: NSObject {
 
             // Parallel-run send: when the feature flag is enabled, route through the engine
             // instead of the legacy OutboundMessagePipeline path.
-            if FeatureFlags.useEngineForSend {
+            // Guard: only use the engine path if the engine transport is live. If the engine
+            // is in backoff (isConnected == false), fall through to the Swift gRPC path which
+            // has a working HTTP/2 transport and stores the wire payload for safe retry.
+            if FeatureFlags.useEngineForSend && EngineAdapter.shared.isConnected {
                 Log.info("📮 Sending message via ConstructEngine: \(messageId)", category: "ChatViewModel")
                 EngineAdapter.shared.dispatch(.sendMessage(
                     contactId: recipientId,
@@ -1005,6 +1008,10 @@ class ChatViewModel: NSObject {
                 MessageQueueManager.shared.markMessageAsSending(messageId)
                 isSending = false
                 return
+            }
+
+            if FeatureFlags.useEngineForSend && !EngineAdapter.shared.isConnected {
+                Log.error("⚠️ Engine transport down — falling back to Swift gRPC for \(messageId.prefix(8))…", category: "ChatViewModel")
             }
 
             Log.info("📮 Sending message via gRPC: \(messageId)", category: "ChatViewModel")
