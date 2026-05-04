@@ -404,6 +404,26 @@ struct CTSep: View {
     }
 }
 
+// MARK: - Section Group
+
+/// Rounded card container for settings sections that use the flat CTSettingsRow pattern.
+/// Wraps rows in a subtle elevated background with cornerRadius 8.
+/// Usage: wrap the rows of one section (not the CTSettingsSectionHeader) in CTSectionGroup { ... }
+/// Remove CTSep(style: .thick) between sections — CTSettingsSectionHeader's .padding(.top, 16) provides the gap.
+struct CTSectionGroup<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        VStack(spacing: 0) {
+            content
+        }
+        .background(Color.CT.outMsgBg)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.CT.noise, lineWidth: 0.5))
+        .padding(.horizontal, 12)
+    }
+}
+
 // MARK: - System Message  (> text)
 
 struct CTSystemMessage: View {

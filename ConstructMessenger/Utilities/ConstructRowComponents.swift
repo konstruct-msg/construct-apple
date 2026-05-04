@@ -265,15 +265,9 @@ struct ConstructSection<Content: View>: View {
             VStack(spacing: 0) {
                 content()
             }
-            .background(
-                Rectangle()
-                    .fill(Color.CT.bgMsg)
-                    .overlay(
-                        Rectangle()
-                            .strokeBorder(Color.CT.noise, lineWidth: 1)
-                    )
-            )
-            .clipShape(Rectangle())
+            .background(Color.CT.bgMsg)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.CT.noise, lineWidth: 0.5))
         }
         .padding(.horizontal, 16)
     }
