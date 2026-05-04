@@ -550,6 +550,7 @@ struct CTSettingsSectionHeader: View {
 struct CTSettingsRow: View {
     let label: String
     let value: String
+    var icon: String?        = nil
     var labelColor: Color   = Color.CT.textDim
     var valueColor: Color   = Color.CT.text
     var isAction: Bool      = false
@@ -557,10 +558,17 @@ struct CTSettingsRow: View {
 
     var body: some View {
         HStack(spacing: 0) {
+            if let icon {
+                Image(systemName: icon)
+                    .font(.system(size: 15, weight: .regular))
+                    .foregroundColor(isDestructive ? Color.CT.danger : labelColor)
+                    .frame(width: 28, alignment: .center)
+                    .padding(.trailing, 4)
+            }
             Text(label)
                 .font(CTFont.regular(13))
                 .foregroundColor(isDestructive ? Color.CT.danger : labelColor)
-                .frame(width: 150, alignment: .leading)
+                .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
             Spacer(minLength: 8)
             Text(value)
                 .font(isAction ? CTFont.bold(13) : CTFont.regular(13))
