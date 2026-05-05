@@ -424,15 +424,9 @@ class ChatsViewModel {
             self?.handleIncomingMessage(message)
         }
 
-        // Parallel run: open engine stream alongside legacy gRPC stream.
-        // Re-use `ids` captured above — avoids a second DB fetch and keeps both calls consistent.
-        if !ids.isEmpty {
-            EngineAdapter.shared.dispatch(.openMessageStream(
-                conversationIds: ids,
-                sinceCursor: nil
-            ))
-            Log.debug("📡 Engine stream opened for \(ids.count) conversation(s)", category: "ChatsViewModel")
-        }
+        // FIXME(masque): Engine stream disabled on iOS (UDP 443 blocked by OS).
+        // Re-enable after MASQUE-over-TCP implementation.
+        // EngineAdapter.shared.dispatch(.openMessageStream(conversationIds: ids, sinceCursor: nil))
 
         // On first stream connect per app session, check if OTPKs need replenishment.
         // Covers the case where OTPKs were consumed while the app was offline.
@@ -505,14 +499,10 @@ class ChatsViewModel {
             }
             self.sessionCoordinator.prewarmSessions(for: self.prewarmEligibleContactIds())
 
-            // Parallel run: re-open engine stream on reconnect.
-            let conversationIds = self.currentConversationIds()
-            if !conversationIds.isEmpty {
-                EngineAdapter.shared.dispatch(.openMessageStream(
-                    conversationIds: conversationIds,
-                    sinceCursor: nil
-                ))
-            }
+            // FIXME(masque): Engine stream disabled on iOS (UDP 443 blocked by OS).
+            // Re-enable after MASQUE-over-TCP implementation.
+            // let conversationIds = self.currentConversationIds()
+            // EngineAdapter.shared.dispatch(.openMessageStream(conversationIds: conversationIds, sinceCursor: nil))
         }
     }
 

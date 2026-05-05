@@ -54,13 +54,11 @@ struct Construct_MessengerApp: App {
                    let deviceId = KeychainManager.shared.loadDeviceID() {
                     await PQCKeyManager.migrateIfNeeded(deviceId: deviceId)
                 }
-                // Start ConstructEngine (parallel run — old gRPC services remain active).
-                // Engine runs its own QUIC/H3 connection alongside legacy gRPC stream.
-                do {
-                    try EngineAdapter.shared.start()
-                } catch {
-                    Log.error("❌ EngineAdapter failed to start: \(error)", category: "Engine")
-                }
+                // FIXME(masque): iOS blocks raw UDP port 443 (owned by Network.framework).
+                // construct-engine's QUIC handshake times out immediately on iOS —
+                // the engine event loop never starts and every dispatch is a no-op.
+                // Re-enable once the MASQUE-over-TCP bridge is implemented.
+                // do { try EngineAdapter.shared.start() } catch { ... }
             }
         }
     }

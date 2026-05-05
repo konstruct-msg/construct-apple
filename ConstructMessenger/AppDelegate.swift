@@ -130,22 +130,13 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             return
         }
 
-        // Race the fetch against a 27-second safety timeout so we always call
-        // the completion handler before iOS's 30-second hard deadline.
-        // Engine path: dispatch BackgroundPush → EngineAdapter handles decrypt + persist.
-        // Legacy path: BackgroundFetchManager (kept as fallback during parallel run phase).
+        // FIXME(masque): When MASQUE-over-TCP is implemented, the engine path replaces this.
+        // For now the engine never starts on iOS (UDP 443 blocked by OS), so use the
+        // legacy BackgroundFetchManager path directly.
         Task {
             await withTaskGroup(of: Void.self) { group in
                 group.addTask {
-                    // Engine path: decrypt via construct-engine, persist via EngineAdapter.
-                    await withCheckedContinuation { continuation in
-                        Task { @MainActor in
-                            EngineAdapter.shared.backgroundFetchCompletion = { _ in
-                                continuation.resume()
-                            }
-                            EngineAdapter.shared.dispatch(.backgroundPush(sinceCursor: nil))
-                        }
-                    }
+                    await BackgroundFetchManager.shared.fetchPendingMessages()
                 }
                 group.addTask {
                     try? await Task.sleep(nanoseconds: 27_000_000_000)
