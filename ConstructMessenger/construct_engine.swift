@@ -859,6 +859,164 @@ public func FfiConverterTypeEngineConfig_lower(_ value: EngineConfig) -> RustBuf
 }
 
 
+public struct IceCandidate: Equatable, Hashable {
+    public var candidateType: CandidateType
+    public var address: String
+    public var priority: UInt32
+    public var foundation: String?
+    public var interfaceName: String?
+    public var transport: String
+    public var generation: UInt32
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(candidateType: CandidateType, address: String, priority: UInt32, foundation: String?, interfaceName: String?, transport: String, generation: UInt32) {
+        self.candidateType = candidateType
+        self.address = address
+        self.priority = priority
+        self.foundation = foundation
+        self.interfaceName = interfaceName
+        self.transport = transport
+        self.generation = generation
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension IceCandidate: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeICECandidate: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> IceCandidate {
+        return
+            try IceCandidate(
+                candidateType: FfiConverterTypeCandidateType.read(from: &buf), 
+                address: FfiConverterString.read(from: &buf), 
+                priority: FfiConverterUInt32.read(from: &buf), 
+                foundation: FfiConverterOptionString.read(from: &buf), 
+                interfaceName: FfiConverterOptionString.read(from: &buf), 
+                transport: FfiConverterString.read(from: &buf), 
+                generation: FfiConverterUInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: IceCandidate, into buf: inout [UInt8]) {
+        FfiConverterTypeCandidateType.write(value.candidateType, into: &buf)
+        FfiConverterString.write(value.address, into: &buf)
+        FfiConverterUInt32.write(value.priority, into: &buf)
+        FfiConverterOptionString.write(value.foundation, into: &buf)
+        FfiConverterOptionString.write(value.interfaceName, into: &buf)
+        FfiConverterString.write(value.transport, into: &buf)
+        FfiConverterUInt32.write(value.generation, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeICECandidate_lift(_ buf: RustBuffer) throws -> IceCandidate {
+    return try FfiConverterTypeICECandidate.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeICECandidate_lower(_ value: IceCandidate) -> RustBuffer {
+    return FfiConverterTypeICECandidate.lower(value)
+}
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum CandidateType: Equatable, Hashable {
+    
+    case localLan
+    case publicIp
+    case relay
+    case ipv6LinkLocal
+    case ipv6Global
+
+
+
+}
+
+#if compiler(>=6)
+extension CandidateType: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeCandidateType: FfiConverterRustBuffer {
+    typealias SwiftType = CandidateType
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> CandidateType {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .localLan
+        
+        case 2: return .publicIp
+        
+        case 3: return .relay
+        
+        case 4: return .ipv6LinkLocal
+        
+        case 5: return .ipv6Global
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: CandidateType, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .localLan:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .publicIp:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .relay:
+            writeInt(&buf, Int32(3))
+        
+        
+        case .ipv6LinkLocal:
+            writeInt(&buf, Int32(4))
+        
+        
+        case .ipv6Global:
+            writeInt(&buf, Int32(5))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCandidateType_lift(_ buf: RustBuffer) throws -> CandidateType {
+    return try FfiConverterTypeCandidateType.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCandidateType_lower(_ value: CandidateType) -> RustBuffer {
+    return FfiConverterTypeCandidateType.lower(value)
+}
+
+
+
 public enum EngineError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError {
 
     
@@ -1377,6 +1535,12 @@ public enum UiEvent: Equatable, Hashable {
     case keychainResult(key: String, data: Data?
     )
     case platformReady
+    case p2pHandoffInitiate(peerId: String, candidates: [IceCandidate]
+    )
+    case p2pHandoffAck(sessionId: String, success: Bool, candidates: [IceCandidate], measuredLatencyMs: UInt32?
+    )
+    case p2pStatusReport(peerId: String, connected: Bool, latencyMs: UInt32?, isRelay: Bool
+    )
 
 
 
@@ -1449,6 +1613,15 @@ public struct FfiConverterTypeUiEvent: FfiConverterRustBuffer {
         )
         
         case 19: return .platformReady
+        
+        case 20: return .p2pHandoffInitiate(peerId: try FfiConverterString.read(from: &buf), candidates: try FfiConverterSequenceTypeICECandidate.read(from: &buf)
+        )
+        
+        case 21: return .p2pHandoffAck(sessionId: try FfiConverterString.read(from: &buf), success: try FfiConverterBool.read(from: &buf), candidates: try FfiConverterSequenceTypeICECandidate.read(from: &buf), measuredLatencyMs: try FfiConverterOptionUInt32.read(from: &buf)
+        )
+        
+        case 22: return .p2pStatusReport(peerId: try FfiConverterString.read(from: &buf), connected: try FfiConverterBool.read(from: &buf), latencyMs: try FfiConverterOptionUInt32.read(from: &buf), isRelay: try FfiConverterBool.read(from: &buf)
+        )
         
         default: throw UniffiInternalError.unexpectedEnumCase
         }
@@ -1562,6 +1735,28 @@ public struct FfiConverterTypeUiEvent: FfiConverterRustBuffer {
         case .platformReady:
             writeInt(&buf, Int32(19))
         
+        
+        case let .p2pHandoffInitiate(peerId,candidates):
+            writeInt(&buf, Int32(20))
+            FfiConverterString.write(peerId, into: &buf)
+            FfiConverterSequenceTypeICECandidate.write(candidates, into: &buf)
+            
+        
+        case let .p2pHandoffAck(sessionId,success,candidates,measuredLatencyMs):
+            writeInt(&buf, Int32(21))
+            FfiConverterString.write(sessionId, into: &buf)
+            FfiConverterBool.write(success, into: &buf)
+            FfiConverterSequenceTypeICECandidate.write(candidates, into: &buf)
+            FfiConverterOptionUInt32.write(measuredLatencyMs, into: &buf)
+            
+        
+        case let .p2pStatusReport(peerId,connected,latencyMs,isRelay):
+            writeInt(&buf, Int32(22))
+            FfiConverterString.write(peerId, into: &buf)
+            FfiConverterBool.write(connected, into: &buf)
+            FfiConverterOptionUInt32.write(latencyMs, into: &buf)
+            FfiConverterBool.write(isRelay, into: &buf)
+            
         }
     }
 }
@@ -1733,6 +1928,30 @@ fileprivate struct FfiConverterOptionUInt16: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionUInt32: FfiConverterRustBuffer {
+    typealias SwiftType = UInt32?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterUInt32.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterUInt32.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionString: FfiConverterRustBuffer {
     typealias SwiftType = String?
 
@@ -1798,6 +2017,31 @@ fileprivate struct FfiConverterSequenceString: FfiConverterRustBuffer {
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterString.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeICECandidate: FfiConverterRustBuffer {
+    typealias SwiftType = [IceCandidate]
+
+    public static func write(_ value: [IceCandidate], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeICECandidate.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [IceCandidate] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [IceCandidate]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeICECandidate.read(from: &buf))
         }
         return seq
     }

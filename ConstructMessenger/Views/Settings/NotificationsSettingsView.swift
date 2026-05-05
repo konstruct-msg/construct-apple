@@ -12,6 +12,8 @@ import UIKit
 import UserNotifications
 
 struct NotificationsSettingsView: View {
+    var showNavBar: Bool = true
+
     // MARK: - Notification Settings
     @Environment(\.dismiss) private var dismiss
     @AppStorage("notificationsEnabled") private var notificationsEnabled: Bool = true
@@ -27,11 +29,13 @@ struct NotificationsSettingsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            CTNavBar(
-                title: NSLocalizedString("notifications", comment: ""),
-                showBack: true,
-                backAction: { dismiss() }
-            )
+            if showNavBar {
+                CTNavBar(
+                    title: NSLocalizedString("notifications", comment: ""),
+                    showBack: true,
+                    backAction: { dismiss() }
+                )
+            }
             ScrollView {
             VStack(spacing: 0) {
 

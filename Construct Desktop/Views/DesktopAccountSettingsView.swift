@@ -2,8 +2,8 @@
 //  DesktopAccountSettingsView.swift
 //  Construct Desktop
 //
-//  Full-featured macOS account settings:
-//  avatar, display name, username, export data, delete account.
+//  CT-terminal-style macOS identity settings:
+//  hexagonal avatar, display name, username, export data, delete account.
 //
 
 import SwiftUI
@@ -19,22 +19,30 @@ struct DesktopAccountSettingsView: View {
     @State private var originalUsername: String = ""
     @State private var showDeleteConfirm = false
     @State private var showExportAlert = false
-    @State private var showAvatarMenu = false
 
     var body: some View {
+        @Bindable var vm = viewModel
         ScrollView {
             VStack(spacing: 0) {
                 avatarSection
-                Divider().padding(.horizontal, 24)
+                CTSep(style: .thick)
                 identitySection
-                Divider().padding(.horizontal, 24)
+                CTSep(style: .thick)
                 privacySection
-                Divider().padding(.horizontal, 24)
+                CTSep(style: .thick)
                 dangerSection
+                CTSep(style: .thick)
+
+                Text(NSLocalizedString("changes_encrypted_footer", comment: ""))
+                    .font(CTFont.regular(11))
+                    .foregroundStyle(Color.CT.accent.opacity(0.6))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 12)
             }
-            .padding(.bottom, 32)
+            .padding(.bottom, 24)
         }
-        .background(DesktopTheme.backgroundPrimary)
+        .background(Color.CT.bg)
         .onAppear {
             viewModel.setContext(viewContext)
             viewModel.loadUserInfo(from: authViewModel)
@@ -43,10 +51,10 @@ struct DesktopAccountSettingsView: View {
         .onChange(of: viewModel.usernameSaved) { _, saved in
             if saved { originalUsername = viewModel.username }
         }
-        .alert("Export My Data", isPresented: $showExportAlert) {
+        .alert(NSLocalizedString("export_my_data", comment: ""), isPresented: $showExportAlert) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text("Data export is coming soon. Your encrypted messages never leave your device without your key.")
+            Text(NSLocalizedString("export_coming_soon_message", comment: ""))
         }
         .sheet(isPresented: $showDeleteConfirm) {
             DesktopDeleteAccountSheet(
@@ -60,231 +68,173 @@ struct DesktopAccountSettingsView: View {
     // MARK: - Avatar
 
     private var avatarSection: some View {
-        VStack(spacing: 16) {
-            ZStack(alignment: .bottomTrailing) {
-                avatarImage
-                    .frame(width: 96, height: 96)
-                    .clipShape(Circle())
+        VStack(spacing: 14) {
+            let seed = viewModel.userId
+            let initials: String = {
+                let name = viewModel.displayName.isEmpty
+                    ? DisplayNameGenerator.generate(from: viewModel.userId)
+                    : viewModel.displayName
+                let parts = name.split(separator: " ")
+                if parts.count >= 2 {
+                    return String(parts[0].prefix(1) + parts[1].prefix(1)).uppercased()
+                }
+                return String(name.prefix(2)).uppercased()
+            }()
+
+            if let img = viewModel.profileImage {
+                CTHexAvatar(initials: initials,
+                            image: Image(nsImage: img),
+                            size: .large,
+                            colorSeed: seed)
                     .onTapGesture { pickAvatar() }
-
-                Button {
-                    pickAvatar()
-                } label: {
-                    Image(systemName: "camera.fill")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 26, height: 26)
-                        .background(DesktopTheme.accent)
-                        .clipShape(Circle())
-                        .overlay(Circle().strokeBorder(DesktopTheme.backgroundPrimary, lineWidth: 2))
-                }
-                .buttonStyle(.plain)
-                .offset(x: 4, y: 4)
-                .help("Change avatar")
+            } else {
+                CTHexAvatar(initials: initials, size: .large, colorSeed: seed)
+                    .onTapGesture { pickAvatar() }
             }
 
-            VStack(spacing: 4) {
-                if !viewModel.displayName.isEmpty {
-                    Text(viewModel.displayName)
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(DesktopTheme.textPrimary)
-                }
-                Text(viewModel.username.isEmpty
-                     ? DisplayNameGenerator.generate(from: viewModel.userId)
-                     : "@\(viewModel.username)")
-                    .font(DesktopTheme.monoFont(12))
-                    .foregroundStyle(DesktopTheme.textSecondary)
+            Button { pickAvatar() } label: {
+                Text("[\(NSLocalizedString("change_photo", comment: ""))]")
+                    .font(CTFont.regular(13))
+                    .foregroundStyle(Color.CT.accent)
             }
+            .buttonStyle(.plain)
 
             if viewModel.profileImage != nil {
-                Button("Remove Avatar") {
-                    removeAvatar()
+                Button { removeAvatar() } label: {
+                    Text("[\(NSLocalizedString("remove_avatar", comment: ""))]")
+                        .font(CTFont.regular(12))
+                        .foregroundStyle(Color.CT.danger)
                 }
-                .font(.system(size: 12))
-                .foregroundStyle(.red.opacity(0.8))
                 .buttonStyle(.plain)
             }
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 32)
-    }
-
-    @ViewBuilder
-    private var avatarImage: some View {
-        if let img = viewModel.profileImage {
-            Image(nsImage: img)
-                .resizable()
-                .scaledToFill()
-        } else {
-            Circle()
-                .fill(DesktopTheme.accent.opacity(0.15))
-                .overlay {
-                    Text(viewModel.displayName.prefix(1).uppercased())
-                        .font(.system(size: 38, weight: .semibold))
-                        .foregroundStyle(DesktopTheme.accent)
-                }
-        }
+        .padding(.vertical, 28)
     }
 
     // MARK: - Identity
 
     private var identitySection: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            sectionHeader("Account Information")
+        @Bindable var vm = viewModel
+        return VStack(alignment: .leading, spacing: 0) {
+            CTSettingsSectionHeader(title: NSLocalizedString("identity_section", comment: ""))
 
-            settingsRow(label: "User ID") {
-                Text(viewModel.userId.isEmpty ? "—" : viewModel.userId)
-                    .font(DesktopTheme.monoFont(11))
-                    .foregroundStyle(DesktopTheme.textSecondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
+            // User ID (read-only)
+            HStack {
+                Text(NSLocalizedString("user_id", comment: ""))
+                    .font(CTFont.regular(13))
+                    .foregroundStyle(Color.CT.textDim)
+                    .frame(width: 120, alignment: .leading)
+                let uid = viewModel.userId
+                let short = uid.count > 16 ? "\(uid.prefix(8))…\(uid.suffix(4))" : uid
+                Text(short.isEmpty ? "—" : short)
+                    .font(CTFont.regular(11))
+                    .foregroundStyle(Color.CT.textDim)
                     .textSelection(.enabled)
+                Spacer()
             }
+            .padding(.horizontal, 12).padding(.vertical, 10)
 
-            rowDivider
+            CTSep(style: .thin)
 
-            settingsRow(label: "Display Name") {
-                @Bindable var vm = viewModel
+            // Display Name (editable)
+            HStack {
+                Text(NSLocalizedString("display_name", comment: ""))
+                    .font(CTFont.regular(13))
+                    .foregroundStyle(Color.CT.textDim)
+                    .frame(width: 120, alignment: .leading)
                 TextField("", text: $vm.displayName)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 13))
-                    .foregroundStyle(DesktopTheme.textPrimary)
-                    .onChange(of: viewModel.displayName) { _, newValue in
-                        viewModel.saveDisplayName(newValue, authViewModel: authViewModel)
+                    .font(CTFont.regular(13))
+                    .foregroundStyle(Color.CT.text)
+                    .onChange(of: vm.displayName) { _, val in
+                        viewModel.saveDisplayName(val, authViewModel: authViewModel)
                     }
             }
+            .padding(.horizontal, 12).padding(.vertical, 10)
 
-            rowDivider
+            CTSep(style: .thin)
 
-            settingsRow(label: "Username") {
-                @Bindable var vm = viewModel
-                HStack(spacing: 8) {
-                    TextField("", text: $vm.username)
-                        .textFieldStyle(.plain)
-                        .font(DesktopTheme.monoFont(13))
-                        .foregroundStyle(DesktopTheme.textPrimary)
-                        .autocorrectionDisabled()
-                        .onSubmit { Task { await saveUsernameIfNeeded() } }
-
-                    if viewModel.isSavingUsername {
-                        ProgressView().scaleEffect(0.7)
-                    } else if viewModel.username != originalUsername {
-                        Button("Save") { Task { await saveUsernameIfNeeded() } }
-                            .buttonStyle(.borderedProminent)
-                            .controlSize(.mini)
-                    } else if viewModel.usernameSaved {
-                        Label("Saved", systemImage: "checkmark.circle.fill")
-                            .font(.system(size: 11))
-                            .foregroundStyle(.green)
-                            .transition(.opacity)
+            // Username (editable, server-validated)
+            HStack {
+                Text(NSLocalizedString("username", comment: ""))
+                    .font(CTFont.regular(13))
+                    .foregroundStyle(Color.CT.textDim)
+                    .frame(width: 120, alignment: .leading)
+                TextField("", text: $vm.username)
+                    .textFieldStyle(.plain)
+                    .font(CTFont.regular(13))
+                    .foregroundStyle(Color.CT.text)
+                    .autocorrectionDisabled()
+                    .onSubmit { Task { await saveUsernameIfNeeded() } }
+                Spacer()
+                if viewModel.isSavingUsername {
+                    ProgressView().scaleEffect(0.6)
+                } else if viewModel.username != originalUsername {
+                    Button(NSLocalizedString("save", comment: "")) {
+                        Task { await saveUsernameIfNeeded() }
                     }
+                    .font(CTFont.regular(11))
+                    .foregroundStyle(Color.CT.accent)
+                    .buttonStyle(.plain)
+                } else if viewModel.usernameSaved {
+                    Text("[ok]")
+                        .font(CTFont.regular(11))
+                        .foregroundStyle(Color.CT.accent)
                 }
             }
+            .padding(.horizontal, 12).padding(.vertical, 10)
 
             if let error = viewModel.usernameSaveError {
                 Text(error)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.red)
-                    .padding(.horizontal, 24)
-                    .padding(.bottom, 10)
+                    .font(CTFont.regular(11))
+                    .foregroundStyle(Color.CT.danger)
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 8)
             }
         }
-        .padding(.vertical, 8)
     }
 
     // MARK: - Privacy
 
     private var privacySection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            sectionHeader("Data & Privacy")
+            CTSettingsSectionHeader(title: NSLocalizedString("privacy", comment: ""))
 
-            Button {
-                showExportAlert = true
-            } label: {
-                HStack(spacing: 12) {
-                    Image(systemName: "square.and.arrow.up")
-                        .frame(width: 20)
-                        .foregroundStyle(DesktopTheme.accent)
-                    Text("Export My Data")
-                        .foregroundStyle(DesktopTheme.textPrimary)
+            Button { showExportAlert = true } label: {
+                HStack {
+                    Text(NSLocalizedString("export_my_data", comment: ""))
+                        .font(CTFont.regular(13))
+                        .foregroundStyle(Color.CT.text)
                     Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 11))
-                        .foregroundStyle(DesktopTheme.textTertiary)
+                    Text("[→]").font(CTFont.regular(12)).foregroundStyle(Color.CT.textDim)
                 }
-                .padding(.horizontal, 24)
-                .padding(.vertical, 12)
+                .padding(.horizontal, 12).padding(.vertical, 10)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-
-            Text("Your encrypted messages never leave your device without your cryptographic key.")
-                .font(.system(size: 11))
-                .foregroundStyle(DesktopTheme.textTertiary)
-                .padding(.horizontal, 24)
-                .padding(.bottom, 16)
         }
-        .padding(.top, 8)
     }
 
     // MARK: - Danger Zone
 
     private var dangerSection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            sectionHeader("Danger Zone")
+            CTSettingsSectionHeader(title: NSLocalizedString("danger_zone", comment: ""), color: Color.CT.danger)
 
-            Button {
-                showDeleteConfirm = true
-            } label: {
-                HStack(spacing: 12) {
-                    Image(systemName: "trash")
-                        .frame(width: 20)
-                        .foregroundStyle(.red)
-                    Text("Delete My Account")
-                        .foregroundStyle(.red)
+            Button { showDeleteConfirm = true } label: {
+                HStack {
+                    Text(NSLocalizedString("delete_account", comment: ""))
+                        .font(CTFont.regular(13))
+                        .foregroundStyle(Color.CT.danger)
                     Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 11))
-                        .foregroundStyle(DesktopTheme.textTertiary)
+                    Text("[→]").font(CTFont.regular(12)).foregroundStyle(Color.CT.danger.opacity(0.6))
                 }
-                .padding(.horizontal, 24)
-                .padding(.vertical, 12)
+                .padding(.horizontal, 12).padding(.vertical, 10)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
         }
-        .padding(.top, 8)
-    }
-
-    // MARK: - Layout helpers
-
-    private func sectionHeader(_ title: String) -> some View {
-        Text(title.uppercased())
-            .font(.system(size: 10, weight: .semibold))
-            .foregroundStyle(DesktopTheme.textTertiary)
-            .tracking(1.2)
-            .padding(.horizontal, 24)
-            .padding(.top, 20)
-            .padding(.bottom, 8)
-    }
-
-    private func settingsRow<Content: View>(label: String, @ViewBuilder content: () -> Content) -> some View {
-        HStack(spacing: 0) {
-            Text(label)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(DesktopTheme.textSecondary)
-                .frame(width: 130, alignment: .leading)
-            content()
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 24)
-        .padding(.vertical, 10)
-    }
-
-    private var rowDivider: some View {
-        Divider()
-            .padding(.leading, 24 + 130)
-            .padding(.trailing, 24)
     }
 
     // MARK: - Actions
@@ -294,8 +244,7 @@ struct DesktopAccountSettingsView: View {
         panel.allowedContentTypes = [.image]
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
-        panel.prompt = "Choose"
-        panel.message = "Select a profile photo"
+        panel.prompt = NSLocalizedString("save", comment: "")
         guard panel.runModal() == .OK, let url = panel.url,
               let image = NSImage(contentsOf: url) else { return }
         viewModel.saveAvatar(image, authViewModel: authViewModel)
@@ -318,7 +267,7 @@ struct DesktopAccountSettingsView: View {
     }
 }
 
-// MARK: - Delete Account Sheet (macOS)
+// MARK: - Delete Account Sheet (macOS, CT-style)
 
 struct DesktopDeleteAccountSheet: View {
     @Environment(\.dismiss) private var dismiss
@@ -332,61 +281,72 @@ struct DesktopDeleteAccountSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header
-            VStack(spacing: 12) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.system(size: 44, weight: .light))
-                    .foregroundStyle(.red)
-                    .padding(.top, 32)
+            // CT nav bar
+            CTNavBar(
+                title: NSLocalizedString("delete_account", comment: ""),
+                showBack: true,
+                backAction: { onCancel(); dismiss() }
+            )
 
-                Text("Delete Account")
-                    .font(.title2)
-                    .fontWeight(.semibold)
+            Rectangle().fill(Color.CT.noise).frame(height: 1)
 
-                Text("This will permanently delete your account, all messages, and cryptographic keys. This action cannot be undone.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+            Spacer()
+
+            // Warning block
+            VStack(spacing: 8) {
+                Text("[!]")
+                    .font(CTFont.bold(32))
+                    .foregroundStyle(Color.CT.danger)
+
+                Text(NSLocalizedString("delete_account", comment: "").uppercased())
+                    .font(CTFont.bold(14))
+                    .foregroundStyle(Color.CT.danger)
+                    .tracking(2)
+
+                Text(NSLocalizedString("delete_account_warning", comment: ""))
+                    .font(CTFont.regular(12))
+                    .foregroundStyle(Color.CT.textDim)
                     .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, 32)
+                    .padding(.top, 4)
             }
             .padding(.bottom, 24)
 
-            // Countdown ring
+            // Countdown
             if countdown > 0 && !authViewModel.isLoading {
-                ZStack {
-                    Circle()
-                        .stroke(Color.red.opacity(0.15), lineWidth: 4)
-                    Circle()
-                        .trim(from: 0, to: CGFloat(7 - countdown) / 7.0)
-                        .stroke(Color.red.opacity(0.7),
-                                style: StrokeStyle(lineWidth: 4, lineCap: .round))
-                        .rotationEffect(.degrees(-90))
-                        .animation(.linear(duration: 1), value: countdown)
-                    Text("\(countdown)")
-                        .font(.system(size: 22, weight: .semibold, design: .monospaced))
-                        .foregroundStyle(.red.opacity(0.8))
-                }
-                .frame(width: 64, height: 64)
-                .padding(.bottom, 24)
+                Text("[ \(countdown) ]")
+                    .font(CTFont.bold(22))
+                    .foregroundStyle(Color.CT.danger)
+                    .padding(.bottom, 24)
             }
 
             if authViewModel.deleteAccountFailed {
-                Button("Delete locally only (offline mode)") {
+                Button {
                     showLocalDeleteConfirm = true
+                } label: {
+                    Text(NSLocalizedString("delete_locally_only", comment: ""))
+                        .font(CTFont.regular(12))
+                        .foregroundStyle(Color.CT.danger.opacity(0.75))
                 }
-                .font(.footnote)
-                .foregroundStyle(.red.opacity(0.75))
+                .buttonStyle(.plain)
                 .padding(.bottom, 12)
             }
 
             Spacer()
 
             // Actions
-            HStack(spacing: 12) {
-                Button("Cancel") {
+            Rectangle().fill(Color.CT.noise).frame(height: 1)
+            HStack(spacing: 16) {
+                Button {
                     onCancel()
                     dismiss()
+                } label: {
+                    Text("[cancel]")
+                        .font(CTFont.regular(13))
+                        .foregroundStyle(Color.CT.textDim)
                 }
+                .buttonStyle(.plain)
                 .keyboardShortcut(.escape)
                 .disabled(authViewModel.isLoading)
 
@@ -395,28 +355,29 @@ struct DesktopDeleteAccountSheet: View {
                 if authViewModel.isLoading {
                     ProgressView()
                 } else {
-                    Button(role: .destructive) {
+                    Button {
                         onDelete()
                     } label: {
-                        Text("Delete My Account")
-                            .frame(minWidth: 140)
+                        Text("[\(NSLocalizedString("delete_account", comment: "").uppercased())]")
+                            .font(CTFont.bold(13))
+                            .foregroundStyle(countdown > 0 ? Color.CT.danger.opacity(0.35) : Color.CT.danger)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.red)
+                    .buttonStyle(.plain)
                     .disabled(countdown > 0)
                 }
             }
-            .padding(.horizontal, 24)
-            .padding(.bottom, 24)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
         }
-        .frame(width: 400, height: 360)
-        .alert("Delete Locally?", isPresented: $showLocalDeleteConfirm) {
-            Button("Delete Locally", role: .destructive) {
+        .frame(width: 400, height: 340)
+        .ctBackground()
+        .alert(NSLocalizedString("delete_locally_question", comment: ""), isPresented: $showLocalDeleteConfirm) {
+            Button(NSLocalizedString("delete_locally_action", comment: ""), role: .destructive) {
                 authViewModel.deleteAccountLocally()
             }
-            Button("Cancel", role: .cancel) {}
+            Button(NSLocalizedString("cancel", comment: ""), role: .cancel) {}
         } message: {
-            Text("This removes all local data. The server account may still exist if the network request failed.")
+            Text(NSLocalizedString("delete_locally_message", comment: ""))
         }
         .task {
             while countdown > 0 {
@@ -435,6 +396,6 @@ struct DesktopDeleteAccountSheet: View {
     DesktopAccountSettingsView()
         .environment(AuthViewModel(context: PersistenceController.shared.container.viewContext))
         .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
-        .frame(width: 500, height: 700)
+        .frame(width: 500, height: 600)
 }
 

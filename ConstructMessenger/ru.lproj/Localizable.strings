@@ -845,3 +845,27 @@
 /* Engine background push notifications */
 "notification.new_message.title" = "Новое сообщение";
 "notification.new_message.body" = "У вас новое зашифрованное сообщение.";
+
+/* Desktop settings — new keys */
+"remove_avatar" = "удалить аватар";
+"general" = "Основные";
+"composing" = "Набор текста";
+"send_on_enter" = "Отправить по ⏎ (Shift+⏎ для новой строки)";
+"show_timestamps" = "Показывать время у каждого сообщения";
+"sign_out_confirm_title" = "Выйти?";
+"sign_out_confirm_message" = "Вы выйдете только на этом Mac.";
+"sign_out_confirm_action" = "Выйти";
+"session_section" = "Сессия";
+"encryption_section" = "Шифрование";
+"e2e_protocol" = "Протокол";
+"e2e_forward_secrecy" = "Прямая секретность";
+"e2e_key_agreement" = "Соглашение о ключах";
+
+/* Desktop delete account sheet */
+"delete_locally_only" = "Удалить только локально (оффлайн)";
+"delete_locally_question" = "Удалить локально?";
+"delete_locally_action" = "Удалить локально";
+"delete_locally_message" = "Это удалит все локальные данные. Серверный аккаунт может остаться, если сетевой запрос не прошёл.";
+
+/* Desktop general settings */
+"message_section" = "Сообщения";

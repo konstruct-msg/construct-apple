@@ -835,3 +835,27 @@
 /* Engine background push notifications */
 "notification.new_message.title" = "New message";
 "notification.new_message.body" = "You have a new encrypted message.";
+
+/* Desktop settings — new keys */
+"remove_avatar" = "remove avatar";
+"general" = "General";
+"composing" = "Composing";
+"send_on_enter" = "Send with ⏎ (Shift+⏎ for new line)";
+"show_timestamps" = "Show timestamps on every message";
+"sign_out_confirm_title" = "Sign Out?";
+"sign_out_confirm_message" = "You will be signed out on this Mac only.";
+"sign_out_confirm_action" = "Sign Out";
+"session_section" = "Session";
+"encryption_section" = "Encryption";
+"e2e_protocol" = "Protocol";
+"e2e_forward_secrecy" = "Forward Secrecy";
+"e2e_key_agreement" = "Key Agreement";
+
+/* Desktop delete account sheet */
+"delete_locally_only" = "Delete locally only (offline)";
+"delete_locally_question" = "Delete Locally?";
+"delete_locally_action" = "Delete Locally";
+"delete_locally_message" = "This removes all local data. The server account may still exist if the network request failed.";
+
+/* Desktop general settings */
+"message_section" = "Messages";
