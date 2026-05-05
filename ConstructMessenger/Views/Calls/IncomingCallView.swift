@@ -44,7 +44,7 @@ struct IncomingCallView: View {
                             CallManager.shared.declineIncomingCall()
                         } label: {
                             Image(systemName: "phone.down.fill")
-                                .font(.system(size: 24, weight: .medium))
+                                .font(.system(size: CTLayout.callIconSize, weight: .medium))
                                 .foregroundStyle(.white)
                                 .frame(width: 64, height: 64)
                                 .background(Color.CT.danger)
@@ -61,7 +61,7 @@ struct IncomingCallView: View {
                             CallManager.shared.answerIncomingCall()
                         } label: {
                             Image(systemName: "phone.fill")
-                                .font(.system(size: 24, weight: .medium))
+                                .font(.system(size: CTLayout.callIconSize, weight: .medium))
                                 .foregroundStyle(.white)
                                 .frame(width: 64, height: 64)
                                 .background(Color.CT.accent)

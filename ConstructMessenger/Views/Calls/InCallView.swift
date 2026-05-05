@@ -81,7 +81,7 @@ struct InCallView: View {
                             CallManager.shared.endCall()
                         } label: {
                             Image(systemName: "phone.down.fill")
-                                .font(.system(size: 24, weight: .medium))
+                                .font(.system(size: CTLayout.callIconSize, weight: .medium))
                                 .foregroundStyle(.white)
                                 .frame(width: 68, height: 68)
                                 .background(Color.CT.danger)

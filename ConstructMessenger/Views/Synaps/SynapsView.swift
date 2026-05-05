@@ -212,13 +212,13 @@ struct SynapsView: View {
             #if os(iOS)
             Button { showingQRScanner = true } label: {
                 Image(systemName: "qrcode.viewfinder")
-                    .font(.system(size: 16, weight: .medium))
+                    .font(.system(size: CTLayout.navIconSize, weight: .medium))
                     .foregroundColor(Color.CT.accent)
             }
             #endif
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 11)
+        .padding(.horizontal, CTLayout.edgePad)
+        .padding(.vertical, CTLayout.navVPad)
         .ctBorderBottom()
     }
 

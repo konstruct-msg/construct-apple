@@ -123,7 +123,7 @@ struct MessageInputTextBar: View {
         if !canSend, let onStartVoice {
             Button(action: onStartVoice) {
                 Image(systemName: "mic.fill")
-                    .font(.system(size: 16))
+                    .font(.system(size: CTLayout.navIconSize))
                     .foregroundColor(Color.CT.textDim)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 10)

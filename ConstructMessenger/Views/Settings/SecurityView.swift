@@ -40,11 +40,8 @@ struct SecurityView: View {
             VStack(spacing: 0) {
 
                 // MARK: - PIN Code
-                CTSettingsSectionHeader(title: NSLocalizedString("pin_code", comment: ""))
-
                 Button { showingPinSetup = true } label: {
                     HStack(spacing: 10) {
-                        CTRowIcon(CTSymbol.lock)
                         Text(securityViewModel.isPinEnabled
                              ? LocalizedStringKey("change_pin_code")
                              : LocalizedStringKey("enable_pin_code"))
@@ -96,12 +93,8 @@ struct SecurityView: View {
                 CTSep()
 
                 // MARK: - Account Recovery
-                CTSettingsSectionHeader(title: NSLocalizedString("account_recovery", comment: ""))
-
                 Button { showingRecoverySetup = true } label: {
                     HStack(spacing: 10) {
-                        CTRowIcon(recoveryVM.isSetup ? CTSymbol.ok : CTSymbol.key,
-                                  color: recoveryVM.isSetup ? Color.CT.accent : Color.CT.textDim)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(LocalizedStringKey("account_recovery_seed"))
                                 .font(CTFont.regular(13))
@@ -135,8 +128,6 @@ struct SecurityView: View {
                 CTSep()
 
                 // MARK: - Duress PIN
-                CTSettingsSectionHeader(title: NSLocalizedString("duress_pin", comment: ""))
-
                 if securityViewModel.isDuresspinEnabled {
                     Button { showingDuressPinSetup = true } label: {
                         HStack(spacing: 10) {
@@ -193,8 +184,6 @@ struct SecurityView: View {
                 CTSep()
 
                 // MARK: - Lockdown
-                CTSettingsSectionHeader(title: NSLocalizedString("lockdown_mode", comment: ""))
-
                 HStack(spacing: 10) {
                     CTRowIcon(lockdown.isActive ? "[]" : CTSymbol.lock,
                               color: lockdown.isActive ? .orange : Color.CT.textDim)
@@ -235,8 +224,6 @@ struct SecurityView: View {
                 CTSep()
 
                 // MARK: - Stealth
-                CTSettingsSectionHeader(title: NSLocalizedString("stealth_section", comment: ""))
-
                 HStack(spacing: 10) {
                     CTRowIcon(stealthEnabled ? "[~]" : CTSymbol.lock, color: stealthEnabled ? Color.CT.accent : Color.CT.textDim)
                     VStack(alignment: .leading, spacing: 2) {
@@ -345,8 +332,6 @@ struct SecurityView: View {
                 CTSep()
 
                 // MARK: - Discovery
-                CTSettingsSectionHeader(title: NSLocalizedString("discovery", comment: ""))
-
                 let hasUsername = !authVM.currentUsername.isEmpty
                 HStack(spacing: 10) {
                     CTRowIcon("[⊙]", color: settingsViewModel.isDiscoverable ? Color.CT.accent : Color.CT.textDim)

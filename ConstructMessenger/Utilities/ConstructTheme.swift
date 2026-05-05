@@ -122,6 +122,30 @@ enum CTFont {
     static func bold(_ size: CGFloat)    -> Font { ConstructFont.mono(size, weight: .bold)    }
 }
 
+// MARK: - Layout Constants
+
+/// Canonical sizing tokens for nav bars, action icons, and content rows.
+///
+/// All icon sizes are derived from `CTFont.bold(13)` line height (~16 pt) so that
+/// a nav bar containing only an SF Symbol is the same height as one containing text.
+enum CTLayout {
+    /// Horizontal edge inset shared by nav bars, section headers, and content rows.
+    static let edgePad: CGFloat = 12
+
+    /// Vertical padding for navigation bar rows.
+    static let navVPad: CGFloat = 11
+
+    /// SF Symbol size for standard nav-bar action buttons (QR scan, search, dismiss).
+    /// Equals CTFont.bold(13) line height so icon and text bars have identical heights.
+    static let navIconSize: CGFloat = 16
+
+    /// Slightly larger icon for elevated primary-action buttons (e.g., phone call in chat).
+    static let navIconSizeLg: CGFloat = 17
+
+    /// Large icon for full-screen call UI (accept / decline / mute buttons).
+    static let callIconSize: CGFloat = 24
+}
+
 // MARK: - Cross-platform helpers
 
 extension Color {
@@ -475,8 +499,8 @@ struct CTNavBar: View {
                 }
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 11)
+        .padding(.horizontal, CTLayout.edgePad)
+        .padding(.vertical, CTLayout.navVPad)
         .ctBorderBottom()
     }
 }

@@ -585,7 +585,7 @@ struct ChatView: View {
                         ) }
                     } label: {
                         Image(systemName: "phone")
-                            .font(.system(size: 17, weight: .medium))
+                            .font(.system(size: CTLayout.navIconSizeLg, weight: .medium))
                             .foregroundColor(Color.CT.accent)
                     }
                 }
@@ -593,13 +593,13 @@ struct ChatView: View {
                     withAnimation { isSearchActive.toggle(); if !isSearchActive { searchText = "" } }
                 } label: {
                     Image(systemName: isSearchActive ? "xmark" : "magnifyingglass")
-                        .font(.system(size: 16, weight: .medium))
+                        .font(.system(size: CTLayout.navIconSize, weight: .medium))
                         .foregroundColor(Color.CT.accent)
                 }
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 11)
+        .padding(.horizontal, CTLayout.edgePad)
+        .padding(.vertical, CTLayout.navVPad)
         .ctBorderBottom()
     }
 

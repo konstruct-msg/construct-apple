@@ -7,10 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		BF3DE8702F62C2000058C1AA /* ConstructCore.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = BF7098D02F01D3C400CC6F04 /* ConstructCore.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
-		D5E79C3D4B5A42FA99FF5106 /* ConstructEngine.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = D06B095D08AE45F0AEBB363D /* ConstructEngine.xcframework */; };
-		BFFC4EA2519D4225A3E4836D /* ConstructEngine.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = D06B095D08AE45F0AEBB363D /* ConstructEngine.xcframework */; };
 		A8FFA5FBCF4E4BCDBBE6AA04 /* ConstructEngine.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = D06B095D08AE45F0AEBB363D /* ConstructEngine.xcframework */; };
+		BF3DE8702F62C2000058C1AA /* ConstructCore.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = BF7098D02F01D3C400CC6F04 /* ConstructCore.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		BF3DE8722F62C2000058C1AA /* GRPCCore in Frameworks */ = {isa = PBXBuildFile; productRef = BF3DE8712F62C2000058C1AA /* GRPCCore */; };
 		BF3DE8742F62C2000058C1AA /* GRPCProtobuf in Frameworks */ = {isa = PBXBuildFile; productRef = BF3DE8732F62C2000058C1AA /* GRPCProtobuf */; };
 		BF3DE8762F62C2000058C1AA /* GRPCNIOTransportHTTP2 in Frameworks */ = {isa = PBXBuildFile; productRef = BF3DE8752F62C2000058C1AA /* GRPCNIOTransportHTTP2 */; };
@@ -22,6 +20,8 @@
 		BFF6FCF42F4C4CCA00A31F36 /* GRPCProtobuf in Frameworks */ = {isa = PBXBuildFile; productRef = BFF6FCF32F4C4CCA00A31F36 /* GRPCProtobuf */; };
 		BFF6FCF92F4C4D6600A31F36 /* GRPCNIOTransportHTTP2 in Frameworks */ = {isa = PBXBuildFile; productRef = BFF6FCF82F4C4D6600A31F36 /* GRPCNIOTransportHTTP2 */; };
 		BFF6FD002F4C4E5300A31F36 /* SwiftProtobuf in Frameworks */ = {isa = PBXBuildFile; productRef = BFF6FCFF2F4C4E5300A31F36 /* SwiftProtobuf */; };
+		BFFC4EA2519D4225A3E4836D /* ConstructEngine.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = D06B095D08AE45F0AEBB363D /* ConstructEngine.xcframework */; };
+		D5E79C3D4B5A42FA99FF5106 /* ConstructEngine.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = D06B095D08AE45F0AEBB363D /* ConstructEngine.xcframework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -55,8 +55,8 @@
 		BF3DE83C2F62C1C40058C1AA /* Construct DesktopTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Construct DesktopTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		BF3DE8462F62C1C40058C1AA /* Construct DesktopUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Construct DesktopUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		BF7098D02F01D3C400CC6F04 /* ConstructCore.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = ConstructCore.xcframework; sourceTree = "<group>"; };
-		D06B095D08AE45F0AEBB363D /* ConstructEngine.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = ConstructEngine.xcframework; sourceTree = "<group>"; };
 		BF8A96FA2EFF0FAF009C5EF7 /* ConstructMessengerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ConstructMessengerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		D06B095D08AE45F0AEBB363D /* ConstructEngine.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = ConstructEngine.xcframework; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -546,7 +546,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = ConstructMessenger/ConstructMessenger.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 356;
+				CURRENT_PROJECT_VERSION = 359;
 				DEVELOPMENT_TEAM = PK2473XF3P;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -731,7 +731,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = ConstructMessenger/ConstructMessenger.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 356;
+				CURRENT_PROJECT_VERSION = 359;
 				DEVELOPMENT_TEAM = PK2473XF3P;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -787,7 +787,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = ConstructMessenger/ConstructMessenger.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 356;
+				CURRENT_PROJECT_VERSION = 359;
 				DEVELOPMENT_TEAM = PK2473XF3P;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
