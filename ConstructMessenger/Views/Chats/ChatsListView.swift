@@ -140,7 +140,7 @@ struct ChatsListView: View {
             #if os(iOS)
             Button { showingQRScanner = true } label: {
                 Image(systemName: "qrcode.viewfinder")
-                    .font(.system(size: 20, weight: .medium))
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundColor(Color.CT.accent)
             }
             #endif

@@ -45,6 +45,9 @@ struct SynapsView: View {
     @State private var remoteState: RemoteSearchState = .idle
     @State private var searchTask: Task<Void, Never>? = nil
 
+    // MARK: - QR Scanner
+    @State private var showingQRScanner = false
+
     // MARK: - Contact requests
     @State private var contactRequestsVM: ContactRequestsViewModel? = nil
     @State private var selectedRequest: ContactRequestsViewModel.IncomingRequest? = nil
@@ -136,6 +139,9 @@ struct SynapsView: View {
             #if os(iOS)
             .toolbar(.hidden, for: .navigationBar)
             #endif
+            .sheet(isPresented: $showingQRScanner) {
+                QRScannerView { contactURL in handleScannedQR(contactURL) }
+            }
             .sheet(item: $selectedContact) { user in
                 UserProfileView(
                     user: user,
@@ -197,7 +203,23 @@ struct SynapsView: View {
     // MARK: - Nav Bar
 
     private var synapsNavBar: some View {
-        CTNavBar(title: NSLocalizedString("synaps", comment: ""))
+        HStack(spacing: 10) {
+            Text(NSLocalizedString("synaps", comment: "").uppercased())
+                .font(CTFont.bold(13))
+                .foregroundColor(Color.CT.text)
+                .tracking(4)
+            Spacer()
+            #if os(iOS)
+            Button { showingQRScanner = true } label: {
+                Image(systemName: "qrcode.viewfinder")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(Color.CT.accent)
+            }
+            #endif
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 11)
+        .ctBorderBottom()
     }
 
     // MARK: - Search Bar
@@ -436,6 +458,42 @@ struct SynapsView: View {
             chatsViewModel.openOrCreateChat(with: user)
         } catch {
             Log.error("❌ addRemoteUserAndChat failed: \(error)", category: "SynapsView")
+        }
+    }
+
+    // MARK: - QR Handler
+
+    private func handleScannedQR(_ urlString: String) {
+        guard let url = URL(string: urlString) else {
+            showingQRScanner = false
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                ErrorRouter.shared.report(.unknown(NSLocalizedString("invalid_qr_code_construct", comment: "")))
+            }
+            return
+        }
+        Task {
+            do {
+                let contactInfo = try await LinkParser.parseContactLink(url)
+                await MainActor.run {
+                    showingQRScanner = false
+                    if contactInfo.userId == SessionManager.shared.currentUserId { return }
+                    let publicUserInfo = PublicUserInfo(
+                        id: contactInfo.userId,
+                        username: contactInfo.username,
+                        avatarUrl: nil,
+                        bio: nil,
+                        deviceId: contactInfo.deviceId
+                    )
+                    _ = chatsViewModel.startChat(with: publicUserInfo)
+                }
+            } catch {
+                await MainActor.run {
+                    showingQRScanner = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                        ErrorRouter.shared.report(.unknown(error.localizedDescription))
+                    }
+                }
+            }
         }
     }
 }

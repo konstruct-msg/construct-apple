@@ -27,9 +27,6 @@ struct CallHistoryView: View {
                 trailingColor: Color.CT.danger,
                 trailingAction: { showClearConfirm = true }
             )
-            Rectangle()
-                .fill(Color.CT.noise)
-                .frame(height: 1)
 
             if records.isEmpty {
                 emptyState
