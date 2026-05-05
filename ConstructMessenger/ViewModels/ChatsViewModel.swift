@@ -424,9 +424,11 @@ class ChatsViewModel {
             self?.handleIncomingMessage(message)
         }
 
-        // FIXME(masque): Engine stream disabled on iOS (UDP 443 blocked by OS).
-        // Re-enable after MASQUE-over-TCP implementation.
-        // EngineAdapter.shared.dispatch(.openMessageStream(conversationIds: ids, sinceCursor: nil))
+        // Engine stream: enabled on macOS (QUIC works), disabled on iOS (UDP 443 blocked).
+        // FIXME(masque): re-enable on iOS after MASQUE-over-TCP implementation.
+        if EngineAdapter.isSupported {
+            EngineAdapter.shared.dispatch(.openMessageStream(conversationIds: ids, sinceCursor: nil))
+        }
 
         // On first stream connect per app session, check if OTPKs need replenishment.
         // Covers the case where OTPKs were consumed while the app was offline.
@@ -499,10 +501,12 @@ class ChatsViewModel {
             }
             self.sessionCoordinator.prewarmSessions(for: self.prewarmEligibleContactIds())
 
-            // FIXME(masque): Engine stream disabled on iOS (UDP 443 blocked by OS).
-            // Re-enable after MASQUE-over-TCP implementation.
-            // let conversationIds = self.currentConversationIds()
-            // EngineAdapter.shared.dispatch(.openMessageStream(conversationIds: conversationIds, sinceCursor: nil))
+            // Engine stream: enabled on macOS (QUIC works), disabled on iOS (UDP 443 blocked).
+            // FIXME(masque): re-enable on iOS after MASQUE-over-TCP implementation.
+            if EngineAdapter.isSupported {
+                let conversationIds = self.currentConversationIds()
+                EngineAdapter.shared.dispatch(.openMessageStream(conversationIds: conversationIds, sinceCursor: nil))
+            }
         }
     }
 

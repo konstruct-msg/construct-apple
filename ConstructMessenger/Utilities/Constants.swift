@@ -251,8 +251,13 @@ struct FeatureFlags {
 
     // Parallel-run flag: when true, outgoing messages are routed through ConstructEngine
     // instead of (and not in addition to) the legacy OutboundMessagePipeline path.
-    // Enable in ce-p2ios-parallel to validate engine send path; disable for cutover prep.
+    // iOS: always false — UDP 443 blocked by OS until MASQUE is implemented.
+    // macOS Desktop: true — QUIC works, use engine as primary send path.
+    #if os(iOS)
+    static let useEngineForSend = false
+    #else
     static let useEngineForSend = true
+    #endif
 }
 
 // MARK: - Traffic Protection Configuration

@@ -12,8 +12,10 @@
 
 import Foundation
 import CoreData
-import UIKit
 import UserNotifications
+#if os(iOS)
+import UIKit
+#endif
 
 // MARK: - Notification names posted by the adapter
 
@@ -64,8 +66,22 @@ final class EngineAdapter {
     // MARK: - Private
 
     private var engine: ConstructEngine?
+    // MARK: - Platform-specific
+
+    /// True when the engine QUIC transport is supported on this platform.
+    /// iOS blocks UDP 443 at OS level — engine is disabled there until MASQUE is implemented.
+    static var isSupported: Bool {
+        #if os(iOS)
+        return false
+        #else
+        return true
+        #endif
+    }
+
+    #if os(iOS)
     /// APNs background completion handler. Set by AppDelegate, called in BackgroundFetchComplete.
     var backgroundFetchCompletion: ((UIBackgroundFetchResult) -> Void)?
+    #endif
 
     private init() {}
 
@@ -272,7 +288,7 @@ extension EngineAdapter: EngineCallback {
             }
 
         case .networkError(let message):
-            Log.warning("EngineAdapter: networkError \(message)", category: "Engine")
+            Log.debug("EngineAdapter: networkError \(message)", category: "Engine")
             Task { @MainActor in
                 self.lastError = message
                 self.isConnected = false
@@ -298,9 +314,11 @@ extension EngineAdapter: EngineCallback {
         case .backgroundFetchComplete(let count, let hadErrors):
             Log.info("EngineAdapter: backgroundFetchComplete decrypted=\(count) errors=\(hadErrors)", category: "Engine")
             Task { @MainActor in
+                #if os(iOS)
                 let result: UIBackgroundFetchResult = count > 0 ? .newData : (hadErrors ? .failed : .noData)
                 self.backgroundFetchCompletion?(result)
                 self.backgroundFetchCompletion = nil
+                #endif
                 NotificationCenter.default.post(
                     name: .engineBackgroundFetchComplete,
                     object: nil,

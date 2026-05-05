@@ -42,6 +42,10 @@ struct Construct_DesktopApp: App {
                 .task {
                     NSApp.appearance = NSAppearance(named: .darkAqua)
                     chatsViewModel.setContext(PersistenceController.shared.container.viewContext)
+                    // Start QUIC engine — macOS has no UDP 443 OS restriction (unlike iOS).
+                    do { try EngineAdapter.shared.start() } catch {
+                        Log.error("Engine start failed: \(error)", category: "Engine")
+                    }
                     await IceProxyManager.shared.startIfEnabled()
                     if authViewModel.isAuthenticated,
                        let deviceId = KeychainManager.shared.loadDeviceID() {
