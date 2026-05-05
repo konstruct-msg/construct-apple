@@ -272,7 +272,7 @@ extension EngineAdapter: EngineCallback {
             }
 
         case .networkError(let message):
-            Log.error("EngineAdapter: networkError \(message)", category: "Engine")
+            Log.warning("EngineAdapter: networkError \(message)", category: "Engine")
             Task { @MainActor in
                 self.lastError = message
                 self.isConnected = false
