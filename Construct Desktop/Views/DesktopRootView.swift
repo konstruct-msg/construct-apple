@@ -113,7 +113,7 @@ struct DesktopRootView: View {
                 .environment(\.managedObjectContext, viewContext)
             } else if let chatId = chatsViewModel.chatToOpen,
                let chat = fetchChat(id: chatId) {
-                ChatView(chat: chat, context: viewContext)
+                DesktopChatView(chat: chat, context: viewContext)
                     .onDrop(of: [.image, .fileURL], isTargeted: nil) { providers in
                         handleDrop(providers: providers, into: chat)
                     }
@@ -143,19 +143,8 @@ struct DesktopRootView: View {
                 .environment(\.managedObjectContext, viewContext)
                 .frame(minWidth: 400, minHeight: 300)
         }
-        // Toolbar — CT ASCII style (no mode switcher — it lives in the sidebar only)
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button {
-                    showAddContact = true
-                } label: {
-                    Text("[QR]")
-                        .font(CTFont.regular(11))
-                        .foregroundStyle(Color.CT.textDim)
-                }
-                .help("Scan QR code to add contact")
-            }
-        }
+        // No custom toolbar items — window title bar is hidden via .windowStyle(.hiddenTitleBar)
+        // [QR] button lives in the sidebar mode bar below.
     }
 
     // MARK: - Sidebar mode toggle bar
@@ -167,6 +156,18 @@ struct DesktopRootView: View {
             sidebarTab(label: "SYNAPS", mode: .synaps)
 
             Spacer()
+
+            // QR scan button (add contact via QR)
+            Button {
+                showAddContact = true
+            } label: {
+                Image(systemName: "qrcode.viewfinder")
+                    .font(.system(size: 13, weight: .regular))
+                    .foregroundStyle(Color.CT.textDim)
+                    .padding(.horizontal, 10)
+            }
+            .buttonStyle(.plain)
+            .help("Scan QR code to add contact")
 
             // Contextual action: [+] in Synaps mode, [+] new chat in Chats mode
             Button {

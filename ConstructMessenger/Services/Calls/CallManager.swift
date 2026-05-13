@@ -1,3 +1,4 @@
+// swiftlint:disable file_length
 //
 //  CallManager.swift
 //  Construct Messenger
@@ -5,6 +6,9 @@
 //  Minimal scaffolding for calls (signaling + PushKit + CallKit).
 //  Full WebRTC implementation will be layered in later.
 //
+//  macOS uses CallManagerStub.swift instead.
+//
+#if os(iOS)
 
 import Foundation
 import AVFoundation
@@ -1039,3 +1043,5 @@ final class CallManager {
         return h
     }
 }
+
+#endif // os(iOS)

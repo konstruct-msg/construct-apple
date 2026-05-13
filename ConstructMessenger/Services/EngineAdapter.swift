@@ -39,6 +39,10 @@ extension Notification.Name {
     static let engineAuthTokenUpdated = Notification.Name("cc.konstruct.engine.authTokenUpdated")
     /// Background fetch finished. userInfo: ["decryptedCount": UInt32, "hadErrors": Bool]
     static let engineBackgroundFetchComplete = Notification.Name("cc.konstruct.engine.backgroundFetchComplete")
+    /// User discovery: contact found. userInfo: ["userId": String, "username": String]
+    static let engineUserFound = Notification.Name("cc.konstruct.engine.userFound")
+    /// User discovery: no contact found. userInfo: ["query": String]
+    static let engineUserNotFound = Notification.Name("cc.konstruct.engine.userNotFound")
 }
 
 // MARK: - EngineAdapter
@@ -323,6 +327,30 @@ extension EngineAdapter: EngineCallback {
                     name: .engineBackgroundFetchComplete,
                     object: nil,
                     userInfo: ["decryptedCount": count, "hadErrors": hadErrors]
+                )
+            }
+
+        // ── P2P / User discovery ──────────────────────────────────────────────
+        case .p2pStatusReport(let peerId, let connected, let latencyMs, let isRelay):
+            Log.debug("EngineAdapter: p2pStatus peer=\(peerId.prefix(8))… connected=\(connected) relay=\(isRelay) latency=\(latencyMs.map { "\($0)ms" } ?? "n/a")", category: "Engine")
+
+        case .userFound(let userId, let username):
+            Log.info("EngineAdapter: userFound userId=\(userId) username=\(username)", category: "Engine")
+            Task { @MainActor in
+                NotificationCenter.default.post(
+                    name: .engineUserFound,
+                    object: nil,
+                    userInfo: ["userId": userId, "username": username]
+                )
+            }
+
+        case .userNotFound(let query):
+            Log.info("EngineAdapter: userNotFound query=\(query)", category: "Engine")
+            Task { @MainActor in
+                NotificationCenter.default.post(
+                    name: .engineUserNotFound,
+                    object: nil,
+                    userInfo: ["query": query]
                 )
             }
         }

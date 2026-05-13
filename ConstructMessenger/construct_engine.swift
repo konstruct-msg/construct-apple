@@ -1222,6 +1222,12 @@ public enum PlatformAction: Equatable, Hashable {
     )
     case backgroundFetchComplete(decryptedCount: UInt32, hadErrors: Bool
     )
+    case p2pStatusReport(peerId: String, connected: Bool, latencyMs: UInt32?, isRelay: Bool
+    )
+    case userFound(userId: String, username: String
+    )
+    case userNotFound(query: String
+    )
 
 
 
@@ -1313,6 +1319,15 @@ public struct FfiConverterTypePlatformAction: FfiConverterRustBuffer {
         )
         
         case 25: return .backgroundFetchComplete(decryptedCount: try FfiConverterUInt32.read(from: &buf), hadErrors: try FfiConverterBool.read(from: &buf)
+        )
+        
+        case 26: return .p2pStatusReport(peerId: try FfiConverterString.read(from: &buf), connected: try FfiConverterBool.read(from: &buf), latencyMs: try FfiConverterOptionUInt32.read(from: &buf), isRelay: try FfiConverterBool.read(from: &buf)
+        )
+        
+        case 27: return .userFound(userId: try FfiConverterString.read(from: &buf), username: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 28: return .userNotFound(query: try FfiConverterString.read(from: &buf)
         )
         
         default: throw UniffiInternalError.unexpectedEnumCase
@@ -1474,6 +1489,25 @@ public struct FfiConverterTypePlatformAction: FfiConverterRustBuffer {
             writeInt(&buf, Int32(25))
             FfiConverterUInt32.write(decryptedCount, into: &buf)
             FfiConverterBool.write(hadErrors, into: &buf)
+            
+        
+        case let .p2pStatusReport(peerId,connected,latencyMs,isRelay):
+            writeInt(&buf, Int32(26))
+            FfiConverterString.write(peerId, into: &buf)
+            FfiConverterBool.write(connected, into: &buf)
+            FfiConverterOptionUInt32.write(latencyMs, into: &buf)
+            FfiConverterBool.write(isRelay, into: &buf)
+            
+        
+        case let .userFound(userId,username):
+            writeInt(&buf, Int32(27))
+            FfiConverterString.write(userId, into: &buf)
+            FfiConverterString.write(username, into: &buf)
+            
+        
+        case let .userNotFound(query):
+            writeInt(&buf, Int32(28))
+            FfiConverterString.write(query, into: &buf)
             
         }
     }

@@ -110,6 +110,11 @@ extension Message {
     @NSManaged public var editedAt: Date?
     @NSManaged public var chat: Chat?
 
+    // Voice message transcript (on-device STT via WhisperKit)
+    @NSManaged public var transcriptText: String?
+    @NSManaged public var transcriptLanguage: String?
+    @NSManaged public var transcriptGeneratedAt: Date?
+
     /// Safe accessor for `timestamp` — guards against nil NSDate bridging crash
     /// which can occur when optimistically-inserted messages are not yet fully persisted.
     var safeTimestamp: Date {

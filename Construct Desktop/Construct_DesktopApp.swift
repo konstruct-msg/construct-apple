@@ -54,6 +54,7 @@ struct Construct_DesktopApp: App {
                     _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
                 }
         }
+        .windowStyle(.hiddenTitleBar)
         .commands {
             ConstructCommands(bridge: commandBridge)
         }

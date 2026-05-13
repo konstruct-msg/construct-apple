@@ -5,6 +5,9 @@
 //  Persists call records to Core Data when calls end.
 //  Called from CallManager.endActiveCall.
 //
+//  macOS: calls not yet implemented, stub out to avoid linking CoreData call types.
+//
+#if os(iOS)
 
 import Foundation
 import CoreData
@@ -67,3 +70,5 @@ final class CallHistoryService {
         }
     }
 }
+
+#endif // os(iOS)
