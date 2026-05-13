@@ -64,17 +64,14 @@ struct VoiceMessageBubbleView: View {
                 }
             } label: {
                 if isLoading {
-                    Text(CTSymbol.loading)
-                        .font(CTFont.regular(13))
-                        .lineLimit(1)
-                        .fixedSize()
-                        .foregroundColor(isSentByMe ? .white : Color.CT.accent)
+                    ProgressView()
+                        .progressViewStyle(.circular)
+                        .scaleEffect(0.7)
+                        .tint(isSentByMe ? .white : Color.CT.accent)
                         .frame(minWidth: 38)
                 } else {
-                    Text(isPlaying ? "[||]" : "[>]")
-                        .font(CTFont.regular(13))
-                        .lineLimit(1)
-                        .fixedSize()
+                    Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                        .font(.system(size: 14, weight: .regular))
                         .foregroundColor(isSentByMe ? .white : Color.CT.accent)
                         .frame(minWidth: 38)
                 }
@@ -107,11 +104,10 @@ struct VoiceMessageBubbleView: View {
 
     private var uploadingBody: some View {
         HStack(spacing: 8) {
-            Text(CTSymbol.loading)
-                .font(CTFont.regular(13))
-                .lineLimit(1)
-                .fixedSize()
-                .foregroundColor(isSentByMe ? .white : Color.CT.textDim)
+            ProgressView()
+                .progressViewStyle(.circular)
+                .scaleEffect(0.7)
+                .tint(isSentByMe ? .white : Color.CT.textDim)
                 .frame(minWidth: 38)
 
             CTWaveformView(
@@ -141,8 +137,8 @@ struct VoiceMessageBubbleView: View {
     private var failedBody: some View {
         HStack(spacing: 8) {
             Button { onRetry?() } label: {
-                Text(CTSymbol.refresh)
-                    .font(CTFont.regular(13))
+                Image(systemName: "arrow.clockwise")
+                    .font(.system(size: 14, weight: .regular))
                     .foregroundColor(Color(hex: 0xE05555))
                     .frame(width: 38)
             }
@@ -174,8 +170,8 @@ struct VoiceMessageBubbleView: View {
 
     private var unavailableBody: some View {
         HStack(spacing: 8) {
-            Text("[—]")
-                .font(CTFont.regular(13))
+            Image(systemName: "waveform.slash")
+                .font(.system(size: 14, weight: .regular))
                 .foregroundColor(Color.CT.textDim)
                 .frame(width: 38)
 
