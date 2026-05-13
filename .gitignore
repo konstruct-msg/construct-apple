@@ -90,3 +90,4 @@ __pycache__/
 venv/
 *.egg-info/
 .mypy_cache/
+ConstructEngine.xcframework/**/*.a
