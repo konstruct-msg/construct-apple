@@ -40,7 +40,6 @@ struct VoiceMessageBubbleView: View {
                 playerBody
             }
         }
-        .frame(maxWidth: 360)
         .onDisappear {
             if isPlaying { player.stop() }
         }
@@ -98,8 +97,10 @@ struct VoiceMessageBubbleView: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
+        .frame(maxWidth: 360)
         .background(CTMessageBubbleTheme.background(isSentByMe: isSentByMe))
-        .ctNoiseBorder()
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.CT.noise, lineWidth: 0.5))
     }
 
     // MARK: - Uploading state
@@ -129,8 +130,10 @@ struct VoiceMessageBubbleView: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
+        .frame(maxWidth: 360)
         .background(CTMessageBubbleTheme.background(isSentByMe: isSentByMe).opacity(0.7))
-        .ctNoiseBorder()
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.CT.noise, lineWidth: 0.5))
     }
 
     // MARK: - Failed state
@@ -161,11 +164,10 @@ struct VoiceMessageBubbleView: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
+        .frame(maxWidth: 360)
         .background(Color.CT.bgMsg)
-        .overlay(
-            Rectangle()
-                .stroke(Color(hex: 0xE05555).opacity(0.5), lineWidth: 1)
-        )
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color(hex: 0xE05555).opacity(0.5), lineWidth: 1))
     }
 
     // MARK: - Unavailable state
@@ -193,8 +195,10 @@ struct VoiceMessageBubbleView: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
+        .frame(maxWidth: 360)
         .background(CTMessageBubbleTheme.background(isSentByMe: isSentByMe).opacity(0.35))
-        .ctNoiseBorder()
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.CT.noise, lineWidth: 0.5))
     }
 
     // MARK: - Duration
