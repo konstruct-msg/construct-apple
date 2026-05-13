@@ -184,6 +184,7 @@ struct DesktopChatView: View {
         }
         // macOS: deterministic size for NSSplitView constraint stability
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.CT.bg)
         .onDrop(of: [.image, .fileURL], isTargeted: $isChatDropTargeted) { providers in
             handleChatDrop(providers: providers)
         }
@@ -489,7 +490,6 @@ struct DesktopChatView: View {
         .padding(.horizontal, 16)
         .padding(.top, 12)
         .padding(.bottom, 4)
-        .background(Color.CT.bg)
     }
 
     @ViewBuilder private var ktBadge: some View {

@@ -168,22 +168,6 @@ struct DesktopRootView: View {
             }
             .buttonStyle(.plain)
             .help("Scan QR code to add contact")
-
-            // Contextual action: [+] in Synaps mode, [+] new chat in Chats mode
-            Button {
-                if sidebarMode == .synaps {
-                    NotificationCenter.default.post(name: .desktopShowAddContact, object: nil)
-                } else {
-                    chatsViewModel.showNewChat = true
-                }
-            } label: {
-                Text("[+]")
-                    .font(CTFont.regular(12))
-                    .foregroundStyle(Color.CT.accent)
-                    .padding(.horizontal, 12)
-            }
-            .buttonStyle(.plain)
-            .help(sidebarMode == .synaps ? "Add contact" : "New conversation (⌘N)")
         }
         .frame(height: 34)
         .background(Color.CT.bg)
