@@ -25,6 +25,7 @@ struct MessageInputTextBar: View {
             sendButton
             voiceButton
         }
+        .fixedSize(horizontal: false, vertical: true)
         .background(Color.CT.outMsgBg)
         .clipShape(RoundedRectangle(cornerRadius: 18))
         .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.CT.noise, lineWidth: 0.5))
@@ -115,11 +116,10 @@ struct MessageInputTextBar: View {
         }
     }
 
-    // MARK: - Voice button (iOS only, shown when input is empty)
+    // MARK: - Voice button (shown when input is empty and voice is available)
 
     @ViewBuilder
     private var voiceButton: some View {
-        #if os(iOS)
         if !canSend, let onStartVoice {
             Button(action: onStartVoice) {
                 Image(systemName: "mic.fill")
@@ -131,7 +131,6 @@ struct MessageInputTextBar: View {
             .buttonStyle(.plain)
             .transition(.scale.combined(with: .opacity))
         }
-        #endif
     }
 }
 

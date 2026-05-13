@@ -40,6 +40,7 @@ struct VoiceMessageBubbleView: View {
                 playerBody
             }
         }
+        .frame(maxWidth: 360)
         .onDisappear {
             if isPlaying { player.stop() }
         }
