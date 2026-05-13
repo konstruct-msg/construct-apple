@@ -864,6 +864,29 @@ final class IceProxyManager: ObservableObject {
         return (server + fallback).filter { seen.insert($0).inserted }
     }
 
+    /// Returns the OTA-cached relay-region rules, falling back to hardcoded defaults.
+    private func effectiveRelayRegions() -> [ICERelayRegion] {
+        if let data = UserDefaults.standard.data(forKey: ICEConfig.cachedRelayRegionsKey),
+           let regions = try? JSONDecoder().decode([ICERelayRegion].self, from: data) {
+            return regions
+        }
+        return ICEConfig.hardcodedRelayRegions
+    }
+
+    /// Reorders `candidates` so that region-preferred relay addresses appear first.
+    /// Matches the device's current UTC offset against the first applicable rule.
+    /// Candidates not listed in `preferredRelays` keep their relative order at the end.
+    private func applyRegionPreference(to candidates: [String]) -> [String] {
+        let tzOffset = TimeZone.current.secondsFromGMT() / 3600
+        guard let rule = effectiveRelayRegions().first(where: {
+            tzOffset >= $0.tzOffsetMin && tzOffset <= $0.tzOffsetMax
+        }) else { return candidates }
+        let preferred = rule.preferredRelays
+        let front = preferred.filter { candidates.contains($0) }
+        let back  = candidates.filter { !preferred.contains($0) }
+        return front + back
+    }
+
     // MARK: - Latency probing
 
     /// Opens a TCP connection to `host:port` and returns the time-to-ready, or nil if unreachable
@@ -979,10 +1002,8 @@ final class IceProxyManager: ObservableObject {
         for addr in allAddresses where seen.insert(addr).inserted { candidates.append(addr) }
 
         // Probe all endpoints concurrently and sort by TCP latency (fastest first).
-        var ordered = await Self.sortByLatency(candidates)
-
-        // Deprioritize relays that failed recently in production — move them to the end.
-        // They're still tried as a last resort in case all others fail.
+        // Region preference is applied first so that region-preferred relays win tie-breaks.
+        var ordered = await Self.sortByLatency(applyRegionPreference(to: candidates))
         let notFailed = ordered.filter { !isRelayRecentlyFailed($0) }
         let failed    = ordered.filter { isRelayRecentlyFailed($0) }
         if !failed.isEmpty {
@@ -1027,10 +1048,8 @@ final class IceProxyManager: ObservableObject {
             + (UserDefaults.standard.stringArray(forKey: ICEConfig.cachedRelayListKey) ?? [])
         for addr in allAddresses where seen.insert(addr).inserted { candidates.append(addr) }
 
-        var ordered = await Self.sortByLatency(candidates)
+        var ordered = await Self.sortByLatency(applyRegionPreference(to: candidates))
         guard !ordered.isEmpty else { return false }
-
-        // Deprioritize recently-failed relays (same as startWithRelayFallback).
         let notFailed = ordered.filter { !isRelayRecentlyFailed($0) }
         let failed    = ordered.filter { isRelayRecentlyFailed($0) }
         if !failed.isEmpty {

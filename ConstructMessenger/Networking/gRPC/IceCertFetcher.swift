@@ -96,6 +96,12 @@ private struct ConstructServerWellKnown: Decodable {
     struct ICESection: Decodable {
         let primary: String?
         let relays: [RelayInfo]?
+        let relayRegions: [ICERelayRegion]?
+
+        enum CodingKeys: String, CodingKey {
+            case primary, relays
+            case relayRegions = "relay_regions"
+        }
     }
     let version: String?
     let ice: ICESection?
@@ -240,6 +246,10 @@ actor IceCertFetcher {
                         }
                         let addressList = relays.map(\.addressWithPort)
                         UserDefaults.standard.set(addressList, forKey: ICEConfig.cachedRelayListKey)
+                        if let regions = parsed.ice?.relayRegions,
+                           let regionsData = try? JSONEncoder().encode(regions) {
+                            UserDefaults.standard.set(regionsData, forKey: ICEConfig.cachedRelayRegionsKey)
+                        }
 
                         Log.info("🧊 Relay config via \(url.host ?? "?"): \(relays.count) relay(s)", category: "ICE")
                         return relays
