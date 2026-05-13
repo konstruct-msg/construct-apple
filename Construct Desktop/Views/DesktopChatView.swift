@@ -185,6 +185,9 @@ struct DesktopChatView: View {
         // macOS: deterministic size for NSSplitView constraint stability
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.CT.bg)
+        // Collapse the NavigationSplitView toolbar safe-area so the floating capsule
+        // sits at the true top of the detail column (no empty header zone above it).
+        .ignoresSafeArea(.container, edges: .top)
         .onDrop(of: [.image, .fileURL], isTargeted: $isChatDropTargeted) { providers in
             handleChatDrop(providers: providers)
         }
