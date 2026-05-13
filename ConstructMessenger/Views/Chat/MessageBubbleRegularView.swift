@@ -83,10 +83,11 @@ struct MessageBubbleRegularView: View {
                         deliveryStatus: message.deliveryStatus,
                         onRetry: onRetry != nil ? { onRetry?(message) } : nil
                     )
-                        .overlay(
-                            Rectangle()
-                                .stroke(isSelected ? Color.CT.accent : Color.clear, lineWidth: 2)
-                        )
+                    .frame(maxWidth: 360)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(isSelected ? Color.CT.accent : Color.clear, lineWidth: 2)
+                    )
                 } else {
                     VStack(alignment: .leading, spacing: 0) {
                         replyIndicatorView
