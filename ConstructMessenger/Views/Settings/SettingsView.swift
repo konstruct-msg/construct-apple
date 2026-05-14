@@ -76,7 +76,7 @@ struct SettingsView: View {
                             .buttonStyle(.plain)
                             CTSep(style: .thin)
                             NavigationLink(destination: AppearanceSettingsView()) {
-                                CTSettingsRow(label: NSLocalizedString("appearance", comment: "").uppercased(), value: CTSymbol.forward, icon: "wand.and.rays")
+                                CTSettingsRow(label: NSLocalizedString("appearance", comment: "").uppercased(), value: CTSymbol.forward, icon: "paintbrush")
                             }
                             .buttonStyle(.plain)
                             CTSep(style: .thin)
@@ -228,7 +228,10 @@ struct SettingsView: View {
             }
         }
         .padding(12)
-        .overlay(Rectangle().stroke(Color.CT.danger.opacity(0.4), lineWidth: 0.5))
+        .background(Color.CT.danger.opacity(0.06))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10)
+            .stroke(Color.CT.danger.opacity(0.4), lineWidth: 0.5))
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
     }
