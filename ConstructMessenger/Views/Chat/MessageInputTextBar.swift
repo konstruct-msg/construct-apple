@@ -19,7 +19,7 @@ struct MessageInputTextBar: View {
     @FocusState private var focused: Bool
 
     var body: some View {
-        HStack(spacing: 0) {
+        HStack(alignment: .bottom, spacing: 0) {
             textField
             charCounter
             sendButton
@@ -106,11 +106,12 @@ struct MessageInputTextBar: View {
                     .font(.system(size: 28, weight: .regular))
                     .foregroundColor(Color.CT.accent)
                     .padding(.horizontal, 6)
-                    .padding(.vertical, 6)
+                    .padding(.bottom, 4)
                     #if os(macOS)
                     .help("Send (⏎) · New line (⇧⏎)")
                     #endif
             }
+            .buttonStyle(.plain)
             .disabled(isSending)
             .transition(.scale.combined(with: .opacity))
         }
