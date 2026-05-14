@@ -11,13 +11,14 @@ import SwiftUI
 struct DesktopSettingsView: View {
 
     enum Section: String, CaseIterable, Identifiable {
-        case account      = "> IDENTITY"
-        case general      = "> GENERAL"
-        case security     = "> SECURITY"
-        case notifications = "> NOTIFICATIONS"
-        case storage      = "> STORAGE"
-        case network      = "> NETWORK"
-        case diagnostics  = "> DIAGNOSTICS"
+        case account        = "> IDENTITY"
+        case general        = "> GENERAL"
+        case security       = "> SECURITY"
+        case notifications  = "> NOTIFICATIONS"
+        case storage        = "> STORAGE"
+        case transcription  = "> TRANSCRIPTION"
+        case network        = "> NETWORK"
+        case diagnostics    = "> DIAGNOSTICS"
 
         var id: String { rawValue }
     }
@@ -61,9 +62,10 @@ struct DesktopSettingsView: View {
                 case .account:       DesktopAccountSettingsTab()
                 case .general:       DesktopGeneralSettingsTab()
                 case .security:      DesktopSecuritySettingsTab()
-                case .notifications: DesktopNotificationsSettingsTab()
-                case .storage:       DesktopStorageSettingsTab()
-                case .network:       DesktopNetworkSettingsTab()
+                case .notifications:  DesktopNotificationsSettingsTab()
+                case .storage:        DesktopStorageSettingsTab()
+                case .transcription:  DesktopTranscriptionSettingsTab()
+                case .network:        DesktopNetworkSettingsTab()
                 case .diagnostics:   DesktopDiagnosticsSettingsTab()
                 }
             }
@@ -273,6 +275,19 @@ private struct DesktopNotificationsSettingsTab: View {
 private struct DesktopStorageSettingsTab: View {
     var body: some View {
         DataStorageSettingsView(showNavBar: false)
+    }
+}
+
+// MARK: - Transcription
+
+private struct DesktopTranscriptionSettingsTab: View {
+    var body: some View {
+        ScrollView {
+            STTSettingsSection()
+                .padding(.horizontal, 24)
+                .padding(.vertical, 20)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
 

@@ -73,11 +73,14 @@ public final class VoiceTranscriptionService {
         defer { try? FileManager.default.removeItem(at: tempURL) }
 
         let translateEnabled = UserDefaults.standard.bool(forKey: "stt_translate")
-        // Default: auto-detect (nil). System language ≠ language spoken in voice messages.
-        // User can pin a source language in Settings for better accuracy.
+        // Default: auto-detect (nil). User can pin a source language for better accuracy.
         let storedLanguage = UserDefaults.standard.string(forKey: "stt_language") ?? "auto"
-        let task: DecodingTask = translateEnabled ? .translate : .transcribe
         let language: String? = (storedLanguage.isEmpty || storedLanguage == "auto") ? nil : storedLanguage
+        // "Translate" mode always outputs English. Guard: if a non-English source language is
+        // explicitly pinned, force transcribe — translating from a known non-English source is
+        // only meaningful when the user really wants English output (toggle ON + language auto/en).
+        let effectiveTranslate = translateEnabled && (language == nil || language == "en")
+        let task: DecodingTask = effectiveTranslate ? .translate : .transcribe
         let options = DecodingOptions(task: task, language: language)
 
         let start = Date()

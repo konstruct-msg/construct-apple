@@ -312,16 +312,16 @@ private struct DesktopContactNode: View {
                     .resizable()
                     .scaledToFill()
             } else {
-                HexagonShape().fill(accentColor.opacity(0.18))
+                Circle().fill(accentColor.opacity(0.18))
                 Text(initials)
                     .font(CTFont.bold(effectiveSize * 0.26))
                     .foregroundStyle(accentColor)
             }
         }
         .frame(width: effectiveSize, height: effectiveSize)
-        .clipShape(HexagonShape())
+        .clipShape(Circle())
         .overlay(
-            HexagonShape().stroke(
+            Circle().stroke(
                 isHovered ? Color.CT.accent : borderColor,
                 lineWidth: isHovered ? 2 : 1.5
             )
@@ -491,10 +491,10 @@ private struct DesktopNodePopover: View {
                     .resizable()
                     .scaledToFill()
                     .frame(width: size, height: size)
-                    .clipShape(HexagonShape())
+                    .clipShape(Circle())
             } else {
                 let accent = Color.hexagonAccent(for: user.id)
-                HexagonShape()
+                Circle()
                     .fill(accent.opacity(0.18))
                     .frame(width: size, height: size)
                 Text(initials)
@@ -503,7 +503,7 @@ private struct DesktopNodePopover: View {
             }
         }
         .overlay(
-            HexagonShape().stroke(
+            Circle().stroke(
                 user.isBlocked ? Color.red.opacity(0.5) : Color.CT.textDim.opacity(0.4),
                 lineWidth: 1.5
             )
