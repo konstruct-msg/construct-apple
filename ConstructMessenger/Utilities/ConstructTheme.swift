@@ -481,10 +481,17 @@ struct CTNavBar: View {
         HStack(spacing: 10) {
             if showBack {
                 Button(action: { backAction?() }) {
+                    #if os(iOS)
+                    Image(systemName: "chevron.backward.circle.fill")
+                        .font(.system(size: 22))
+                        .foregroundColor(Color.CT.accent)
+                    #else
                     Text(CTSymbol.back)
                         .font(CTFont.bold(14))
                         .foregroundColor(Color.CT.accent)
+                    #endif
                 }
+                .buttonStyle(.plain)
             }
             Text(title.uppercased())
                 .font(CTFont.bold(13))

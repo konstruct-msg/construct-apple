@@ -33,14 +33,14 @@ struct MainTabView: View {
             // In-app incoming call sheet (CallKit handles lock-screen / background)
             #if os(iOS)
             .overlay(alignment: .bottom) {
-                if case .incoming(let session) = callManager.state {
+                if CallsFeature.isEnabled, case .incoming(let session) = callManager.state {
                     IncomingCallView(session: session)
                         .zIndex(100)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: isIncomingState)
                 }
             }
-            .fullScreenCover(isPresented: .constant(isActiveOrConnecting)) {
+            .fullScreenCover(isPresented: .constant(CallsFeature.isEnabled && isActiveOrConnecting)) {
                 if let session = activeCallSession {
                     InCallView(session: session, isConnecting: isConnectingState, endReason: callEndReason)
                 }
