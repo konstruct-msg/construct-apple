@@ -185,9 +185,6 @@ struct DesktopChatView: View {
         // macOS: deterministic size for NSSplitView constraint stability
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.CT.bg)
-        // Collapse the NavigationSplitView toolbar safe-area so the floating capsule
-        // sits at the true top of the detail column (no empty header zone above it).
-        .ignoresSafeArea(.container, edges: .top)
         .onDrop(of: [.image, .fileURL], isTargeted: $isChatDropTargeted) { providers in
             handleChatDrop(providers: providers)
         }
@@ -416,6 +413,7 @@ struct DesktopChatView: View {
                         }
                     }
                 }
+                .buttonStyle(.plain)
                 .padding(.trailing, 16)
                 .padding(.bottom, 80)
                 .transition(.scale(scale: 0.7).combined(with: .opacity))
@@ -474,6 +472,7 @@ struct DesktopChatView: View {
                             .font(.system(size: CTLayout.navIconSizeLg, weight: .medium))
                             .foregroundColor(Color.CT.accent)
                     }
+                    .buttonStyle(.plain)
                 }
                 Button {
                     withAnimation { isSearchActive.toggle(); if !isSearchActive { searchText = "" } }
@@ -482,10 +481,12 @@ struct DesktopChatView: View {
                         .font(.system(size: CTLayout.navIconSize, weight: .medium))
                         .foregroundColor(Color.CT.accent)
                 }
+                .buttonStyle(.plain)
             }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
+        .background(Color.CT.bg)
         .ctBorderBottom()
     }
 
