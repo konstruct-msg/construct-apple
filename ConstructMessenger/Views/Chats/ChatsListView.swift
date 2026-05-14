@@ -100,9 +100,11 @@ struct ChatsListView: View {
 
     private var searchBar: some View {
         HStack(spacing: 6) {
+            #if os(iOS)
             Text("[")
                 .font(CTFont.regular(13))
                 .foregroundColor(Color.CT.textDim)
+            #endif
             TextField("", text: $searchQuery, prompt: Text("search_")
                 .font(CTFont.regular(13))
                 .foregroundColor(Color.CT.textDim))
@@ -120,9 +122,11 @@ struct ChatsListView: View {
                         .foregroundColor(Color.CT.textDim)
                 }
             } else {
+                #if os(iOS)
                 Text("]")
                     .font(CTFont.regular(13))
                     .foregroundColor(Color.CT.textDim)
+                #endif
             }
         }
         .padding(.horizontal, 12)

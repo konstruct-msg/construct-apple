@@ -486,13 +486,7 @@ struct DesktopChatView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(Color.CT.outMsgBg)
-        .clipShape(RoundedRectangle(cornerRadius: 20))
-        .overlay(RoundedRectangle(cornerRadius: 20).stroke(Color.CT.noise, lineWidth: 1))
-        .shadow(color: .black.opacity(0.3), radius: 6, x: 0, y: 2)
-        .padding(.horizontal, 16)
-        .padding(.top, 12)
-        .padding(.bottom, 4)
+        .ctBorderBottom()
     }
 
     @ViewBuilder private var ktBadge: some View {
