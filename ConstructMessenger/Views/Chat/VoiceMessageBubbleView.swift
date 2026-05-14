@@ -14,6 +14,9 @@ struct VoiceMessageBubbleView: View {
     let isSentByMe: Bool
     let deliveryStatus: DeliveryStatus
     let onRetry: (() -> Void)?
+    var transcript: String? = nil
+    var isTranscribing: Bool = false
+    var onTranscribe: (() -> Void)? = nil
 
     @StateObject private var player = AudioPlayerService.shared
 
@@ -55,49 +58,90 @@ struct VoiceMessageBubbleView: View {
     // MARK: - Player (normal state)
 
     private var playerBody: some View {
-        HStack(spacing: 8) {
-            Button {
-                if let data = audioData {
-                    player.togglePlay(mediaId: voiceContent.mediaId, data: data)
-                } else if !isLoading {
-                    loadAndPlay()
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                Button {
+                    if let data = audioData {
+                        player.togglePlay(mediaId: voiceContent.mediaId, data: data)
+                    } else if !isLoading {
+                        loadAndPlay()
+                    }
+                } label: {
+                    if isLoading {
+                        ProgressView()
+                            .progressViewStyle(.circular)
+                            .scaleEffect(0.7)
+                            .tint(isSentByMe ? .white : Color.CT.accent)
+                            .frame(minWidth: 38)
+                    } else {
+                        Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                            .font(.system(size: 14, weight: .regular))
+                            .foregroundColor(isSentByMe ? .white : Color.CT.accent)
+                            .frame(minWidth: 38)
+                    }
                 }
-            } label: {
-                if isLoading {
-                    ProgressView()
-                        .progressViewStyle(.circular)
-                        .scaleEffect(0.7)
-                        .tint(isSentByMe ? .white : Color.CT.accent)
-                        .frame(minWidth: 38)
-                } else {
-                    Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                        .font(.system(size: 14, weight: .regular))
-                        .foregroundColor(isSentByMe ? .white : Color.CT.accent)
-                        .frame(minWidth: 38)
-                }
+                .buttonStyle(.plain)
+                .disabled(isLoading)
+
+                CTWaveformView(
+                    samples: voiceContent.waveform,
+                    progress: isPlaying ? player.progress : 0,
+                    isSentByMe: isSentByMe
+                )
+                .frame(maxWidth: .infinity, minHeight: 28, maxHeight: 28)
+
+                Text(durationLabel)
+                    .font(CTFont.regular(11))
+                    .foregroundColor(isSentByMe ? Color.white.opacity(0.85) : Color.CT.textDim)
+                    .monospacedDigit()
+                    .frame(width: 34, alignment: .trailing)
             }
-            .buttonStyle(.plain)
-            .disabled(isLoading)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
 
-            CTWaveformView(
-                samples: voiceContent.waveform,
-                progress: isPlaying ? player.progress : 0,
-                isSentByMe: isSentByMe
-            )
-            .frame(maxWidth: .infinity, minHeight: 28, maxHeight: 28)
-
-            Text(durationLabel)
-                .font(CTFont.regular(11))
-                .foregroundColor(isSentByMe ? Color.white.opacity(0.85) : Color.CT.textDim)
-                .monospacedDigit()
-                .frame(width: 34, alignment: .trailing)
+            transcriptSection
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
         .frame(maxWidth: 360)
         .background(CTMessageBubbleTheme.background(isSentByMe: isSentByMe))
         .clipShape(RoundedRectangle(cornerRadius: 10))
         .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.CT.noise, lineWidth: 0.5))
+    }
+
+    @ViewBuilder
+    private var transcriptSection: some View {
+        if let text = transcript, !text.isEmpty {
+            Rectangle().fill(Color.CT.noise).frame(height: 1)
+            Text(text)
+                .font(CTFont.regular(12))
+                .foregroundColor(isSentByMe ? .white.opacity(0.85) : Color.CT.textDim)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+        } else if let onTranscribe, VoiceTranscriptionService.shared.isAvailable {
+            Rectangle().fill(Color.CT.noise).frame(height: 1)
+            Button(action: onTranscribe) {
+                HStack(spacing: 4) {
+                    if isTranscribing {
+                        ProgressView()
+                            .progressViewStyle(.circular)
+                            .scaleEffect(0.5)
+                            .tint(isSentByMe ? .white : Color.CT.accent)
+                    } else {
+                        Image(systemName: "waveform.and.mic")
+                            .font(.system(size: 11))
+                    }
+                    Text(isTranscribing
+                         ? NSLocalizedString("stt_transcribing", comment: "")
+                         : NSLocalizedString("stt_transcribe_button", comment: ""))
+                        .font(CTFont.regular(11))
+                }
+                .foregroundColor(isSentByMe ? .white.opacity(0.65) : Color.CT.textDim)
+            }
+            .buttonStyle(.plain)
+            .disabled(isTranscribing)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+        }
     }
 
     // MARK: - Uploading state

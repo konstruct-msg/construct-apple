@@ -859,3 +859,19 @@
 
 /* Desktop general settings */
 "message_section" = "Messages";
+
+/* STT / Transcription */
+"stt_section_title" = "Transcription";
+"stt_auto_transcribe" = "Auto-transcribe voice messages";
+"stt_translate_toggle" = "Translate to English";
+"stt_translate_footer" = "Transcription will be translated to English using the model.";
+"stt_language_label" = "Language";
+"stt_language_auto" = "Auto-detect";
+"stt_models_on_disk" = "Models on disk";
+"stt_no_models" = "None";
+"stt_footer" = "On-device transcription via WhisperKit. No audio leaves your device.";
+"stt_download" = "Download";
+"stt_delete_model" = "Delete Model";
+"stt_delete_confirm_title" = "Delete this model?";
+"stt_transcribe_button" = "Transcribe";
+"stt_transcribing" = "Transcribing…";

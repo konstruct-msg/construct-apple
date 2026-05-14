@@ -206,6 +206,9 @@ struct DataStorageSettingsView: View {
                         }
                     }
                     sectionFooter("storage_auto_clear_footer")
+
+                    // MARK: Transcription (STT)
+                    STTSettingsSection()
                 }
                 .padding(.bottom, 32)
             }

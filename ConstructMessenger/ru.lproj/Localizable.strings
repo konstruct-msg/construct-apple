@@ -869,3 +869,19 @@
 
 /* Desktop general settings */
 "message_section" = "Сообщения";
+
+/* STT / Transcription */
+"stt_section_title" = "Транскрипция";
+"stt_auto_transcribe" = "Автотранскрипция голосовых";
+"stt_translate_toggle" = "Переводить на английский";
+"stt_translate_footer" = "Транскрипция будет переведена на английский с помощью модели.";
+"stt_language_label" = "Язык";
+"stt_language_auto" = "Автоопределение";
+"stt_models_on_disk" = "Моделей на диске";
+"stt_no_models" = "Нет";
+"stt_footer" = "Транскрипция на устройстве через WhisperKit. Аудио не покидает устройство.";
+"stt_download" = "Загрузить";
+"stt_delete_model" = "Удалить модель";
+"stt_delete_confirm_title" = "Удалить эту модель?";
+"stt_transcribe_button" = "Транскрибировать";
+"stt_transcribing" = "Транскрипция…";

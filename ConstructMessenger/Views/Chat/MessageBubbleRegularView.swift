@@ -31,6 +31,7 @@ struct MessageBubbleRegularView: View {
     let onReplyWithQuote: ((Message, String) -> Void)?
 
     @State private var swipeOffset: CGFloat = 0
+    @State private var isTranscribingVoice = false
 
     var body: some View {
         HStack(spacing: 8) {
@@ -81,7 +82,32 @@ struct MessageBubbleRegularView: View {
                         voiceContent: voiceContent,
                         isSentByMe: message.isSentByMe,
                         deliveryStatus: message.deliveryStatus,
-                        onRetry: onRetry != nil ? { onRetry?(message) } : nil
+                        onRetry: onRetry != nil ? { onRetry?(message) } : nil,
+                        transcript: message.transcriptText,
+                        isTranscribing: isTranscribingVoice,
+                        onTranscribe: {
+                            guard !isTranscribingVoice else { return }
+                            isTranscribingVoice = true
+                            Task {
+                                defer { isTranscribingVoice = false }
+                                do {
+                                    let data = try await MediaManager.shared.downloadAndDecryptMedia(
+                                        mediaId: voiceContent.mediaId,
+                                        mediaUrl: voiceContent.mediaUrl,
+                                        mediaKeyBase64: voiceContent.mediaKey
+                                    )
+                                    if let ctx = message.managedObjectContext {
+                                        try await VoiceTranscriptionService.shared.transcribe(
+                                            audioData: data,
+                                            message: message,
+                                            context: ctx
+                                        )
+                                    }
+                                } catch {
+                                    Log.error("Transcription failed: \(error)", category: "MessageBubbleRegularView")
+                                }
+                            }
+                        }
                     )
                     .frame(maxWidth: 360)
                     .overlay(
