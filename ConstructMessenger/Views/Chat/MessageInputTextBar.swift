@@ -102,11 +102,11 @@ struct MessageInputTextBar: View {
     private var sendButton: some View {
         if canSend {
             Button(action: onSend) {
-                Text(CTSymbol.upload)
-                    .font(CTFont.bold(15))
+                Image(systemName: "arrow.up.circle.fill")
+                    .font(.system(size: 28, weight: .regular))
                     .foregroundColor(Color.CT.accent)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 10)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 6)
                     #if os(macOS)
                     .help("Send (⏎) · New line (⇧⏎)")
                     #endif
