@@ -240,21 +240,22 @@ class ChatsViewModel {
     // MARK: - App Lifecycle
     
     private func setupAppLifecycleObservers() {
-        // When the app enters background: start a grace-period timer instead of disconnecting
-        // immediately.  If the user returns within 5 s (brief app-switch, notification peek,
-        // Control Center) the timer is cancelled and the live stream is preserved — zero
-        // reconnect overhead.  If the grace period expires the app is truly in background
-        // and we tear down the stream + invalidate the gRPC channel.
+        // Background disconnect — iOS only.
+        // On iOS: start a grace-period timer instead of disconnecting immediately.
+        // If the user returns within the window the timer is cancelled and the live stream
+        // is preserved — zero reconnect overhead. When the grace period expires the app is
+        // truly suspended and we tear down the stream + invalidate the gRPC channel.
         //
-        // A UIBackgroundTask is acquired for the grace period so iOS doesn't suspend us
-        // before the timer fires (gives the OS the 5 s to keep us running).
+        // On macOS: NSApplication.didResignActiveNotification fires on every ⌘Tab / window
+        // switch. A desktop app must never disconnect just because focus moved. The stream
+        // runs persistently until the process terminates.
+        #if canImport(UIKit)
         let backgroundTask = Task { [weak self] in
             for await _ in NotificationCenter.default.notifications(named: .appDidEnterBackground) {
                 guard let self else { continue }
                 Log.debug("📱 App entered background — grace period started (\(Int(Self.backgroundGracePeriod.components.seconds))s)", category: "ChatsViewModel")
                 self.backgroundDisconnectTask?.cancel()
                 self.backgroundDisconnectTask = Task { [weak self] in
-                    #if canImport(UIKit)
                     // Acquire a background task so iOS keeps us alive during the grace window.
                     let bgTaskId = UIApplication.shared.beginBackgroundTask(withName: "stream-grace") {
                         // Expiry handler: iOS is about to suspend — disconnect immediately.
@@ -266,7 +267,6 @@ class ChatsViewModel {
                             UIApplication.shared.endBackgroundTask(bgTaskId)
                         }
                     }
-                    #endif
                     do {
                         try await Task.sleep(for: Self.backgroundGracePeriod)
                     } catch {
@@ -277,12 +277,13 @@ class ChatsViewModel {
                     Log.info("📱 App backgrounded (grace expired) — pausing stream", category: "ChatsViewModel")
                     self.streamManager.pause()
                     // Invalidate the persistent gRPC channel: OS may have closed the TCP socket
-                    // during suspension.  The next RPC after foreground creates a fresh channel.
+                    // during suspension. The next RPC after foreground creates a fresh channel.
                     GRPCChannelManager.shared.invalidatePersistentClient()
                 }
             }
         }
         observationTasks.append(backgroundTask)
+        #endif
 
         // On foreground: cancel any pending grace-period disconnect first.
         // If the disconnect already fired (app was truly backgrounded), reconnect.
