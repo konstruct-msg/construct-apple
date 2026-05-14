@@ -35,42 +35,22 @@ struct MessageInputTextBar: View {
 
     @ViewBuilder
     private var textField: some View {
-        #if os(macOS)
-        ZStack(alignment: .topLeading) {
-            if text.isEmpty {
-                Text(LocalizedStringKey("message_placeholder"))
-                    .foregroundStyle(Color.CT.textDim)
-                    .font(CTFont.regular(13))
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 9)
-                    .allowsHitTesting(false)
-            }
-            TextEditor(text: $text)
-                .font(CTFont.regular(13))
-                .foregroundColor(Color.CT.text)
-                .scrollContentBackground(.hidden)
-                .scrollIndicators(.hidden)
-                .focused($focused)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 4)
-                .onKeyPress(keys: [.return], phases: .down) { press in
-                    guard !press.modifiers.contains(.shift) else { return .ignored }
-                    if canSend { onSend() }
-                    return .handled
-                }
-        }
-        .frame(minHeight: 36, maxHeight: 120)
-        .padding(.trailing, canSend ? 8 : 12)
-        #else
-        TextField("message_placeholder", text: $text, axis: .vertical)
-            .font(CTFont.regular(14))
+        TextField(LocalizedStringKey("message_placeholder"), text: $text, axis: .vertical)
+            .font(CTFont.regular(13))
             .foregroundColor(Color.CT.text)
-            .lineLimit(1...5)
-            .padding(.leading, 12)
-            .padding(.trailing, canSend ? 8 : 12)
-            .padding(.vertical, 10)
+            .textFieldStyle(.plain)
+            .lineLimit(1...8)
             .focused($focused)
-        #endif
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .padding(.trailing, canSend ? 4 : 0)
+            #if os(macOS)
+            .onKeyPress(keys: [.return], phases: .down) { press in
+                guard !press.modifiers.contains(.shift) else { return .ignored }
+                if canSend { onSend() }
+                return .handled
+            }
+            #endif
     }
 
     // MARK: - Character counter
