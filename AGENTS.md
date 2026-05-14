@@ -416,23 +416,36 @@ These instructions apply to GitHub Copilot, Codex, OpenCode, and similar coding 
 
 ### Where to save durable reasoning
 
-- If a task produces durable implementation notes, rationale, architecture conclusions, or cross-repo findings, store them in the wiki vault instead of creating ad-hoc markdown notes in this repository unless repo-local docs are explicitly requested.
-- Use `/Users/maximeliseyev/Code/constrcut-docs/wiki/sessions/YYYY-MM-DD-<topic>.md` for session notes.
-- Use `/Users/maximeliseyev/Code/constrcut-docs/wiki/decisions/` for long-lived decisions that should survive beyond one task.
-- Before creating a new session or decision note, look for an existing relevant note and extend it instead of duplicating content.
+**The goal**: any reasoning that informed a code change must survive beyond the chat session.
+Conclusions, trade-offs, and "why we didn't do X" must be written down — not left in chat history.
+
+**After any session involving architectural changes, design decisions, API changes, data format
+changes, bug root-cause analysis, or non-obvious implementation choices:**
+
+1. **Always** create or update a session note at
+   `wiki/sessions/YYYY-MM-DD-<topic>.md`.
+2. **Always** fill in `# Why` — the reasoning that drove the decision, including considered
+   alternatives and why they were rejected. This is the most important section.
+3. If the decision will constrain future work across sessions or the same question is likely
+   to recur, also create a `wiki/decisions/<topic>.md` entry.
+4. Before creating a new note, search for an existing relevant note and extend it.
+
+Do not skip session notes for "small" changes — if the decision required non-trivial reasoning,
+it belongs in the wiki. Future agents (and the developer) should never need to re-derive it.
 
 ### Session note template
 
-When you create or update a session note, prefer these sections:
+Required sections (fill all of them):
 
-1. `# Context`
-2. `# What Changed`
-3. `# Why`
-4. `# Intended Outcome`
-5. `# Decisions`
-6. `# Open Questions`
+1. `# Context` — what problem prompted this work
+2. `# What Changed` — concrete file/API/behaviour changes
+3. `# Why` — **the reasoning**: why this approach, what alternatives were considered, why rejected
+4. `# Intended Outcome` — what success looks like; what should be true after this change
+5. `# Decisions` — discrete decisions made, each as a one-liner fact
+6. `# Open Questions` — known unknowns, follow-up work, things that were deferred
 
 ### Operational logging
 
-- Keep `/Users/maximeliseyev/Code/constrcut-docs/wiki/log.md` as a short operational log.
-- Append a concise entry there when work materially updates the knowledge base or when a durable audit trail is useful.
+- Append a one-line entry to `/Users/maximeliseyev/Code/constrcut-docs/wiki/log.md` whenever
+  a session note or decision note is created/updated. Format: `[YYYY-MM-DD HH:MM] <verb> | <topic>`.
+- Keep detailed rationale out of `log.md` — it belongs in the session/decision note.
