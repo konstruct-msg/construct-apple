@@ -49,6 +49,7 @@ struct MessageInputTextBar: View {
                 .font(CTFont.regular(13))
                 .foregroundColor(Color.CT.text)
                 .scrollContentBackground(.hidden)
+                .scrollIndicators(.hidden)
                 .focused($focused)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 4)
