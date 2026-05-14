@@ -472,6 +472,8 @@ struct CTSystemMessage: View {
 struct CTNavBar: View {
     let title: String
     var showBack: Bool      = false
+    /// On macOS sheet/modal contexts pass true — renders xmark.circle (close) instead of chevron (back).
+    var isModal: Bool       = false
     var trailingSymbol: String? = nil
     var trailingColor: Color    = Color.CT.accent
     var backAction: (() -> Void)?     = nil
@@ -481,13 +483,13 @@ struct CTNavBar: View {
         HStack(spacing: 10) {
             if showBack {
                 Button(action: { backAction?() }) {
-                    #if os(iOS)
-                    Image(systemName: "chevron.backward.circle.fill")
-                        .font(.system(size: 22))
+                    #if os(macOS)
+                    Image(systemName: isModal ? "xmark.circle" : "chevron.backward.circle")
+                        .font(.system(size: 18))
                         .foregroundColor(Color.CT.accent)
                     #else
-                    Text(CTSymbol.back)
-                        .font(CTFont.bold(14))
+                    Image(systemName: "chevron.backward.circle.fill")
+                        .font(.system(size: 22))
                         .foregroundColor(Color.CT.accent)
                     #endif
                 }

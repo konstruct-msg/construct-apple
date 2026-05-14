@@ -138,13 +138,13 @@ private struct ChatScreenPreview: View {
             VStack(spacing: 0) {
                 // Nav bar — chat-specific layout with user name
                 HStack(spacing: 10) {
-                    #if os(iOS)
-                    Image(systemName: "chevron.backward.circle.fill")
-                        .font(.system(size: 22))
+                    #if os(macOS)
+                    Image(systemName: "chevron.backward.circle")
+                        .font(.system(size: 18))
                         .foregroundColor(Color.CT.accent)
                     #else
-                    Text(CTSymbol.back)
-                        .font(CTFont.bold(14))
+                    Image(systemName: "chevron.backward.circle.fill")
+                        .font(.system(size: 22))
                         .foregroundColor(Color.CT.accent)
                     #endif
                     Text("<@axiom>")

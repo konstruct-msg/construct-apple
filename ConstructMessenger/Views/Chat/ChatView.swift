@@ -541,13 +541,13 @@ struct ChatView: View {
     private var chatNavBar: some View {
         HStack(spacing: 10) {
             Button { dismiss() } label: {
-                #if os(iOS)
+                #if os(macOS)
                 Image(systemName: "chevron.backward.circle")
-                    .font(.system(size: 22))
+                    .font(.system(size: 18))
                     .foregroundColor(Color.CT.accent)
                 #else
-                Text(CTSymbol.back)
-                    .font(CTFont.bold(14))
+                Image(systemName: "chevron.backward.circle.fill")
+                    .font(.system(size: 22))
                     .foregroundColor(Color.CT.accent)
                 #endif
             }

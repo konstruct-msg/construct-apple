@@ -75,14 +75,19 @@ decorative elements (noise, separators, `>` section headers, `✷`, bracket glyp
 ### Rules
 
 #### Symbols
-- **SF Symbols** (`Image(systemName:)`): use for **interactive controls** — action buttons, tab bar
-  items, media controls, call buttons, send button, attach, mic, search magnifying glass, close (×).
-  These are universally recognised by Apple platform users and their absence causes confusion.
-- **`CTSymbol.*` ASCII glyphs**: use for **structural and navigational elements** — back `[←]`,
+- **SF Symbols** (`Image(systemName:)`): use for **all interactive controls** on both iOS and macOS —
+  back/close buttons, action buttons, tab bar items, media controls, send, attach (`plus.circle`),
+  mic, search, close (×). This rule applies to both platforms.
+- **`CTSymbol.*` ASCII glyphs**: use for **structural / decorative elements only** —
   forward `[→]`, section headers (`> TITLE`), separators, status indicators, decorative symbols.
-- Both can coexist on the same screen. The dividing line is: *does the user need to immediately
-  recognise this as a tappable action?* → SF Symbol. *Is it part of the terminal aesthetic or
-  navigation chrome?* → CTSymbol.
+  Do **not** use `CTSymbol.back` (`[←]`) or `CTSymbol.attach` (`[+]`) — these are replaced by SF Symbols.
+- Dividing line: *interactive tappable action?* → SF Symbol. *Terminal aesthetic chrome?* → CTSymbol.
+
+**Platform-specific SF Symbol conventions (iOS is primary, macOS follows):**
+- Back navigation: iOS → `chevron.backward.circle.fill` (size 22); macOS → `chevron.backward.circle` (size 18)
+- **Modal / sheet close on macOS**: use `xmark.circle` (size 18) — NOT chevron. macOS users expect a close button in sheets. Pass `isModal: true` to `CTNavBar`.
+- iOS modals: `chevron.backward.circle.fill` same as navigation (sheet dismiss via swipe is the primary affordance)
+- Design code is shared: no `#if os(iOS)` / `#else` blocks for the same symbol concept — use `#if os(macOS)` only to swap to the macOS platform variant.
 
 #### Shapes & Corners
 - **Rounded corners**: use `RoundedRectangle(cornerRadius:)` where Apple HIG implies it —
@@ -407,12 +412,28 @@ Rules for writing documentation: `~/Documents/Konstruct/README.md`
 
 These instructions apply to GitHub Copilot, Codex, OpenCode, and similar coding agents.
 
+### Division of labour — read this first
+
+The wiki is maintained by a three-way workflow. **Do not overstep your role.**
+
+| Role | Tool | Responsibility |
+|------|------|----------------|
+| **Coding agent** (you) | Copilot / Codex / OpenCode | Write code + drop raw session notes into `wiki/sessions/` and `wiki/decisions/`. That is all. |
+| **Wiki pipeline** | `obsidian-llm-wiki-local` (olw) | Reads `raw/`, synthesizes concepts, creates/updates wiki articles, generates cross-links. Runs separately. |
+| **Developer** | Human + Obsidian | Reviews wiki draft articles, approves or rejects with feedback. Curates `raw/`. |
+
+**Your job is code.** olw handles article synthesis, concept extraction, and cross-referencing.
+You do not need to write wiki articles, create `[[wikilinks]]`, or add YAML frontmatter.
+Just write clear, factual session notes and let the pipeline do the rest.
+
 ### Shared knowledge base
 
-- Use `/Users/maximeliseyev/Code/constrcut-docs` as the shared Construct documentation vault.
-- Treat `/Users/maximeliseyev/Code/constrcut-docs/raw` as the source corpus. Do not rewrite, normalize, or reorganize files there unless the task explicitly targets raw-doc curation.
-- Treat `/Users/maximeliseyev/Code/constrcut-docs/wiki` as the canonical curated knowledge base.
-- Treat `/Users/maximeliseyev/Code/constrcut-docs/wiki/.drafts` as reserved for the `obsidian-llm-wiki-local` draft-review workflow. Do not write there manually unless the task explicitly involves `olw`.
+- Vault: `/Users/maximeliseyev/Code/constrcut-docs`
+- `raw/` — source corpus. Do **not** rewrite, normalize, or reorganize unless explicitly asked.
+- `wiki/` — canonical curated knowledge base. **Read** from here before architectural work.
+- `wiki/.drafts/` — **reserved for olw**. Never write here manually.
+- `wiki/sessions/` — where coding agents write session notes.
+- `wiki/decisions/` — where coding agents write long-lived decision records.
 
 ### Where to save durable reasoning
 
@@ -422,30 +443,30 @@ Conclusions, trade-offs, and "why we didn't do X" must be written down — not l
 **After any session involving architectural changes, design decisions, API changes, data format
 changes, bug root-cause analysis, or non-obvious implementation choices:**
 
-1. **Always** create or update a session note at
-   `wiki/sessions/YYYY-MM-DD-<topic>.md`.
+1. **Always** create or update a session note at `wiki/sessions/YYYY-MM-DD-<topic>.md`.
 2. **Always** fill in `# Why` — the reasoning that drove the decision, including considered
    alternatives and why they were rejected. This is the most important section.
 3. If the decision will constrain future work across sessions or the same question is likely
    to recur, also create a `wiki/decisions/<topic>.md` entry.
-4. Before creating a new note, search for an existing relevant note and extend it.
+4. Before creating a new note, search for an existing one and extend it instead of duplicating.
 
-Do not skip session notes for "small" changes — if the decision required non-trivial reasoning,
-it belongs in the wiki. Future agents (and the developer) should never need to re-derive it.
+Do not skip session notes for "small" changes — if non-trivial reasoning was involved, it
+belongs in the wiki. Future agents and the developer should never need to re-derive it.
 
-### Session note template
+### Session note format
 
+Write plain markdown. No YAML frontmatter, no `[[wikilinks]]` — olw will add those.
 Required sections (fill all of them):
 
 1. `# Context` — what problem prompted this work
 2. `# What Changed` — concrete file/API/behaviour changes
 3. `# Why` — **the reasoning**: why this approach, what alternatives were considered, why rejected
-4. `# Intended Outcome` — what success looks like; what should be true after this change
-5. `# Decisions` — discrete decisions made, each as a one-liner fact
-6. `# Open Questions` — known unknowns, follow-up work, things that were deferred
+4. `# Intended Outcome` — what success looks like after this change
+5. `# Decisions` — discrete decisions, each as a one-liner fact
+6. `# Open Questions` — known unknowns, deferred work
 
 ### Operational logging
 
-- Append a one-line entry to `/Users/maximeliseyev/Code/constrcut-docs/wiki/log.md` whenever
-  a session note or decision note is created/updated. Format: `[YYYY-MM-DD HH:MM] <verb> | <topic>`.
+- Append a one-line entry to `wiki/log.md` after creating/updating a session or decision note.
+  Format: `[YYYY-MM-DD HH:MM] note | <topic>`
 - Keep detailed rationale out of `log.md` — it belongs in the session/decision note.

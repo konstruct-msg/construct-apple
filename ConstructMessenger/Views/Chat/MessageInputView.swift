@@ -164,15 +164,9 @@ struct MessageInputView: View {
 
     private var attachmentButton: some View {
         Button { showAttachmentMenu = true } label: {
-            #if os(iOS)
             Image(systemName: "plus.circle")
                 .font(.system(size: 22))
                 .foregroundColor(Color.CT.textDim)
-            #else
-            Text(CTSymbol.attach)
-                .font(CTFont.bold(15))
-                .foregroundColor(Color.CT.textDim)
-            #endif
         }
         .buttonStyle(.plain)
         #if os(iOS)
