@@ -56,16 +56,43 @@ xcodebuild -scheme ConstructMessenger \
 
 ## Design System (CRITICAL — read before touching any UI)
 
-All UI must follow the Construct Terminal (CT) design system.
+### Design Philosophy: CT + Apple Fusion
+
+Construct uses a **hybrid design language**: the terminal / cyberpunk aesthetic of CT fused with
+Apple's HIG conventions so that users intuitively understand how to interact with the interface.
+The goal is a **bespoke look** that does not clash with iOS / macOS platform norms.
+
+**Keep**: JetBrains Mono, `#090909` background, CT color palette, information density, ASCII
+decorative elements (noise, separators, `>` section headers, `✷`, bracket glyphs).  
+**Evolve**: touch affordances, icon legibility for interactive controls, bubble readability.  
+**Never**: sacrifice usability or clash visibly with iOS 26 / macOS guidelines.
 
 ### Tokens
 - Colors: `Color.CT.bg`, `Color.CT.text`, `Color.CT.accent`, `Color.CT.danger`, `Color.CT.noise`, `Color.CT.textDim`
 - Fonts: `CTFont.regular(size)`, `CTFont.bold(size)` — always JetBrains Mono
-- Symbols: `CTSymbol.back`, `CTSymbol.forward`, `CTSymbol.close`, etc. (ASCII, no SF Symbols)
+- Symbols: `CTSymbol.*` ASCII glyphs for structural/nav elements; `Image(systemName:)` SF Symbols for interactive controls
 
 ### Rules
-- **NO SF Symbols** anywhere in app UI. Exceptions: system context menus, FaceID/TouchID prompts.
-- **NO rounded corners** — `cornerRadius > 0` is forbidden in new code. Use `Rectangle()`.
+
+#### Symbols
+- **SF Symbols** (`Image(systemName:)`): use for **interactive controls** — action buttons, tab bar
+  items, media controls, call buttons, send button, attach, mic, search magnifying glass, close (×).
+  These are universally recognised by Apple platform users and their absence causes confusion.
+- **`CTSymbol.*` ASCII glyphs**: use for **structural and navigational elements** — back `[←]`,
+  forward `[→]`, section headers (`> TITLE`), separators, status indicators, decorative symbols.
+- Both can coexist on the same screen. The dividing line is: *does the user need to immediately
+  recognise this as a tappable action?* → SF Symbol. *Is it part of the terminal aesthetic or
+  navigation chrome?* → CTSymbol.
+
+#### Shapes & Corners
+- **Rounded corners**: use `RoundedRectangle(cornerRadius:)` where Apple HIG implies it —
+  `cornerRadius: 10` for message bubbles and input/search fields,
+  `cornerRadius: 6` for small inline badges or tags.
+- **`Rectangle()`**: for nav bars, row backgrounds, list containers, full-width structural
+  dividers and backdrops. Avoids the "card stack" look that clashes with CT's flat terminal feel.
+- Avoid `cornerRadius > 18` except for input pill bars.
+
+#### Other rules
 - **NO NavigationStack** inside sheet/modal views — use `CTNavBar(showBack: true, backAction: { dismiss() })` + `@Environment(\.dismiss)`.
 - **Background color**: always `Color.CT.bg` (`#090909`). Use `.ctBackground()` modifier.
 - **Section headers**: `CTSettingsSectionHeader(title:)` — renders `> TITLE` in accent color.
@@ -309,3 +336,39 @@ Rules for writing documentation: `~/Documents/Konstruct/README.md`
 - iOS bug fixes go in `04_Client_Applications/ios/fixes/`
 - New specs go in `04_Client_Applications/specs/`
 - All spec documents must have a **Version**, **Status**, and **Platform** header
+
+---
+
+## Shared Construct Docs Workflow
+
+These instructions apply to GitHub Copilot, Codex, OpenCode, and similar coding agents.
+
+### Shared knowledge base
+
+- Use `/Users/maximeliseyev/Code/constrcut-docs` as the shared Construct documentation vault.
+- Treat `/Users/maximeliseyev/Code/constrcut-docs/raw` as the source corpus. Do not rewrite, normalize, or reorganize files there unless the task explicitly targets raw-doc curation.
+- Treat `/Users/maximeliseyev/Code/constrcut-docs/wiki` as the canonical curated knowledge base.
+- Treat `/Users/maximeliseyev/Code/constrcut-docs/wiki/.drafts` as reserved for the `obsidian-llm-wiki-local` draft-review workflow. Do not write there manually unless the task explicitly involves `olw`.
+
+### Where to save durable reasoning
+
+- If a task produces durable implementation notes, rationale, architecture conclusions, or cross-repo findings, store them in the wiki vault instead of creating ad-hoc markdown notes in this repository unless repo-local docs are explicitly requested.
+- Use `/Users/maximeliseyev/Code/constrcut-docs/wiki/sessions/YYYY-MM-DD-<topic>.md` for session notes.
+- Use `/Users/maximeliseyev/Code/constrcut-docs/wiki/decisions/` for long-lived decisions that should survive beyond one task.
+- Before creating a new session or decision note, look for an existing relevant note and extend it instead of duplicating content.
+
+### Session note template
+
+When you create or update a session note, prefer these sections:
+
+1. `# Context`
+2. `# What Changed`
+3. `# Why`
+4. `# Intended Outcome`
+5. `# Decisions`
+6. `# Open Questions`
+
+### Operational logging
+
+- Keep `/Users/maximeliseyev/Code/constrcut-docs/wiki/log.md` as a short operational log.
+- Append a concise entry there when work materially updates the knowledge base or when a durable audit trail is useful.
