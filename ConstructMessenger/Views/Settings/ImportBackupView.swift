@@ -51,6 +51,7 @@ struct ImportBackupView: View {
                         .font(CTFont.regular(14))
                         .foregroundStyle(Color.CT.text)
                         .scrollContentBackground(.hidden)
+                        .scrollIndicators(.hidden)
                         .background(Color.CT.noise.opacity(0.1))
                         .frame(height: 96)
                         .padding(10)

@@ -32,6 +32,8 @@ struct DraftsView: View {
                         .background(Color.CT.bgMsg)
                         .font(CTFont.regular(13))
                         .foregroundColor(Color.CT.text)
+                        .scrollContentBackground(.hidden)
+                        .scrollIndicators(.hidden)
                         .overlay(Rectangle().stroke(Color.CT.noise, lineWidth: 1))
 
                     Button {

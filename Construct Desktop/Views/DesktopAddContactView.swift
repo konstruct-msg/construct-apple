@@ -233,8 +233,12 @@ private struct MyQRTab: View {
                 .foregroundStyle(timeRemaining < 60 ? DesktopTheme.destructive : DesktopTheme.textSecondary)
             } else {
                 Button("Regenerate") { generate() }
-                    .buttonStyle(.borderedProminent)
-                    .tint(DesktopTheme.accent)
+                    .buttonStyle(.plain)
+                    .font(CTFont.regular(13))
+                    .foregroundStyle(Color.CT.accent)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(RoundedRectangle(cornerRadius: 8).stroke(Color.CT.accent.opacity(0.6), lineWidth: 1))
             }
 
             Text("Show this to a contact so they can scan it")
@@ -357,8 +361,12 @@ private struct CameraTab: View {
             Button("Open System Settings") {
                 NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Camera")!)
             }
-            .buttonStyle(.borderedProminent)
-            .tint(DesktopTheme.accent)
+            .buttonStyle(.plain)
+            .font(CTFont.regular(13))
+            .foregroundStyle(Color.CT.bg)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .background(RoundedRectangle(cornerRadius: 8).fill(Color.CT.accent))
         }
         .padding(32)
     }
@@ -435,11 +443,13 @@ private struct FileTab: View {
                 openFilePicker()
             } label: {
                 Label("Choose File…", systemImage: "folder")
+                    .font(CTFont.regular(13))
+                    .foregroundStyle(Color.CT.accent)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 10)
+                    .background(RoundedRectangle(cornerRadius: 8).stroke(Color.CT.accent.opacity(0.6), lineWidth: 1))
             }
-            .buttonStyle(.bordered)
-            .tint(DesktopTheme.accent)
+            .buttonStyle(.plain)
         }
         .padding(24)
     }
@@ -559,14 +569,24 @@ private struct PasteTab: View {
                     if let str = NSPasteboard.general.string(forType: .string) { text = str }
                 } label: {
                     Label("Paste from Clipboard", systemImage: "doc.on.clipboard")
+                        .font(CTFont.regular(13))
+                        .foregroundStyle(Color.CT.textDim)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(RoundedRectangle(cornerRadius: 8).stroke(Color.CT.noise, lineWidth: 1))
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.plain)
 
                 Spacer()
 
                 Button("Add Contact") { submit() }
-                    .buttonStyle(.borderedProminent)
-                    .tint(DesktopTheme.accent)
+                    .buttonStyle(.plain)
+                    .font(CTFont.regular(13))
+                    .foregroundStyle(Color.CT.bg)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(RoundedRectangle(cornerRadius: 8).fill(Color.CT.accent))
+                    .opacity(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.4 : 1)
                     .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     .keyboardShortcut(.return, modifiers: .command)
             }

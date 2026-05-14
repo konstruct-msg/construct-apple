@@ -322,6 +322,7 @@ private struct AddShareSheet: View {
                     .font(CTFont.regular(13))
                     .foregroundColor(Color.CT.text)
                     .scrollContentBackground(.hidden)
+                    .scrollIndicators(.hidden)
                     .background(Color.CT.bg)
                     .frame(minHeight: 140)
                     .padding(10)
