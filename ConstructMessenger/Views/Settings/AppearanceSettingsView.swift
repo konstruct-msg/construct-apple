@@ -29,8 +29,8 @@ struct AppearanceSettingsView: View {
                                 appTheme = theme
                             } label: {
                                 HStack(spacing: 14) {
-                                    CTRowIcon(theme.asciiIcon,
-                                              color: theme.isAvailable ? theme.color : Color.CT.textDim)
+                            CTRowIcon(sf: theme.iconName,
+                                      color: theme.isAvailable ? theme.color : Color.CT.textDim)
                                     Text(theme.displayName)
                                         .font(CTFont.bold(16))
                                         .foregroundStyle(theme.isAvailable ? Color.CT.text : Color.CT.textDim)
@@ -92,14 +92,6 @@ enum AppTheme: String, CaseIterable {
         case .automatic: return "automatic"
         case .light: return "light"
         case .dark: return "dark"
-        }
-    }
-
-    var asciiIcon: String {
-        switch self {
-        case .automatic: return "[◐]"
-        case .light:     return "[□]"
-        case .dark:      return "[■]"
         }
     }
 

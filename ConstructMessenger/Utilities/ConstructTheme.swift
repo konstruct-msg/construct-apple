@@ -243,24 +243,47 @@ enum CTSymbol {
 /// Usage:
 ///   CTRowIcon(CTSymbol.biometric)
 ///   CTRowIcon(CTSymbol.key, color: .CT.accent)
+///   CTRowIcon(sf: "moon.fill", color: .CT.accent)   // SF Symbol variant
 struct CTRowIcon: View {
-    let symbol: String
+    private enum Content {
+        case ascii(String)
+        case sfSymbol(String)
+    }
+
+    private let content: Content
     var color: Color  = Color.CT.textDim
     var size: CGFloat = 14
 
+    // ASCII / CTSymbol init
     init(_ symbol: String, color: Color = Color.CT.textDim, size: CGFloat = 14) {
-        self.symbol = symbol
-        self.color  = color
-        self.size   = size
+        self.content = .ascii(symbol)
+        self.color   = color
+        self.size    = size
+    }
+
+    // SF Symbol init
+    init(sf symbolName: String, color: Color = Color.CT.textDim, size: CGFloat = 16) {
+        self.content = .sfSymbol(symbolName)
+        self.color   = color
+        self.size    = size
     }
 
     var body: some View {
-        Text(symbol)
-            .font(CTFont.bold(size))
-            .foregroundStyle(color)
-            .lineLimit(1)
-            .fixedSize()                     // measure natural width — never truncate
-            .frame(minWidth: 36, alignment: .leading)
+        Group {
+            switch content {
+            case .ascii(let symbol):
+                Text(symbol)
+                    .font(CTFont.bold(size))
+                    .foregroundStyle(color)
+                    .lineLimit(1)
+                    .fixedSize()
+            case .sfSymbol(let name):
+                Image(systemName: name)
+                    .font(.system(size: size, weight: .medium))
+                    .foregroundStyle(color)
+            }
+        }
+        .frame(minWidth: 36, alignment: .leading)
     }
 }
 
@@ -488,7 +511,7 @@ struct CTNavBar: View {
                         .font(.system(size: 18))
                         .foregroundColor(Color.CT.accent)
                     #else
-                    Image(systemName: "chevron.backward.circle.fill")
+                    Image(systemName: "chevron.backward.circle")
                         .font(.system(size: 22))
                         .foregroundColor(Color.CT.accent)
                     #endif
