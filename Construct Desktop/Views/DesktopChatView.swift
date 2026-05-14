@@ -425,14 +425,20 @@ struct DesktopChatView: View {
     // MARK: - Navigation Bar
 
     private var chatNavBar: some View {
-        HStack(spacing: 10) {
-            // No back button — navigation is controlled by NavigationSplitView sidebar
-
+        // ZStack lets the title occupy the centre of the bar (regardless of how wide
+        // the detail column is) while action buttons stay pinned to the trailing edge.
+        // This mirrors the layout used by Messages.app and Telegram on macOS and avoids
+        // the large "dead zone" that a Spacer()-based HStack produces on wide windows.
+        ZStack {
+            // — Centred title —
             Button { showingUserProfile = true } label: {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text((viewModel.chat.otherUser?.resolvedDisplayName ?? NSLocalizedString("chat", comment: "")).uppercased())
-                        .font(CTFont.bold(13))
-                        .foregroundColor(Color.CT.text)
+                VStack(spacing: 1) {
+                    HStack(spacing: 5) {
+                        Text((viewModel.chat.otherUser?.resolvedDisplayName ?? NSLocalizedString("chat", comment: "")).uppercased())
+                            .font(CTFont.bold(13))
+                            .foregroundColor(Color.CT.text)
+                        ktBadge
+                    }
                     if let subtitle = navigationStatusSubtitle {
                         Text(subtitle)
                             .font(CTFont.regular(10))
@@ -441,47 +447,52 @@ struct DesktopChatView: View {
                     }
                 }
                 .animation(.easeInOut(duration: 0.25), value: navigationStatusSubtitle)
+                .multilineTextAlignment(.center)
             }
             .buttonStyle(.plain)
+            .frame(maxWidth: .infinity)
 
-            ktBadge
-
-            Spacer()
-
-            if isEditMode {
-                Button {
-                    withAnimation { isEditMode = false; selectedMessages.removeAll() }
-                } label: {
-                    Text("[done]")
-                        .font(CTFont.bold(13))
-                        .foregroundColor(Color.CT.accent)
-                }
-            } else {
-                if CallsFeature.isEnabled, let otherUser = viewModel.chat.otherUser,
-                   case .idle = callManager.state {
+            // — Trailing actions —
+            HStack {
+                Spacer()
+                if isEditMode {
                     Button {
-                        Task {
-                            await callManager.startOutgoingCall(
-                                to: otherUser.id,
-                                displayName: otherUser.resolvedDisplayName,
-                                hasVideo: false
-                            )
-                        }
+                        withAnimation { isEditMode = false; selectedMessages.removeAll() }
                     } label: {
-                        Image(systemName: "phone")
-                            .font(.system(size: CTLayout.navIconSizeLg, weight: .medium))
+                        Text("[done]")
+                            .font(CTFont.bold(13))
                             .foregroundColor(Color.CT.accent)
                     }
                     .buttonStyle(.plain)
+                } else {
+                    HStack(spacing: 18) {
+                        if CallsFeature.isEnabled, let otherUser = viewModel.chat.otherUser,
+                           case .idle = callManager.state {
+                            Button {
+                                Task {
+                                    await callManager.startOutgoingCall(
+                                        to: otherUser.id,
+                                        displayName: otherUser.resolvedDisplayName,
+                                        hasVideo: false
+                                    )
+                                }
+                            } label: {
+                                Image(systemName: "phone")
+                                    .font(.system(size: CTLayout.navIconSizeLg, weight: .medium))
+                                    .foregroundColor(Color.CT.accent)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        Button {
+                            withAnimation { isSearchActive.toggle(); if !isSearchActive { searchText = "" } }
+                        } label: {
+                            Image(systemName: isSearchActive ? "xmark" : "magnifyingglass")
+                                .font(.system(size: CTLayout.navIconSize, weight: .medium))
+                                .foregroundColor(Color.CT.accent)
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
-                Button {
-                    withAnimation { isSearchActive.toggle(); if !isSearchActive { searchText = "" } }
-                } label: {
-                    Image(systemName: isSearchActive ? "xmark" : "magnifyingglass")
-                        .font(.system(size: CTLayout.navIconSize, weight: .medium))
-                        .foregroundColor(Color.CT.accent)
-                }
-                .buttonStyle(.plain)
             }
         }
         .padding(.horizontal, 14)
