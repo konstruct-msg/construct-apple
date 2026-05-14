@@ -3,6 +3,7 @@
 //  Construct Messenger
 //
 
+#if os(iOS)
 import SwiftUI
 import CoreData
 
@@ -28,92 +29,64 @@ struct ChatsListView: View {
     }
 
     var body: some View {
-        #if os(iOS)
         NavigationStack(path: $navigationPath) {
             VStack(spacing: 0) {
-                navBar
-                searchBar
-                chatList
+                    navBar
+                    searchBar
+                    chatList
             }
             .ctBackground()
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: String.self) { chatId in
-                if let chat = chats.first(where: { $0.id == chatId }) {
-                    ChatView(chat: chat, context: viewContext)
-                }
+                    if let chat = chats.first(where: { $0.id == chatId }) {
+                        ChatView(chat: chat, context: viewContext)
+                    }
             }
             .sheet(isPresented: $showingQRScanner) {
-                QRScannerView { contactURL in handleScannedContact(contactURL) }
+                    QRScannerView { contactURL in handleScannedContact(contactURL) }
             }
             .onAppear {
-                chatsViewModel.setContext(viewContext)
-                LocalNotificationManager.shared.clearBadge()
+                    chatsViewModel.setContext(viewContext)
+                    LocalNotificationManager.shared.clearBadge()
             }
             .onChange(of: navigationPath) { _, path in
-                chatsViewModel.isInChat = !path.isEmpty
+                    chatsViewModel.isInChat = !path.isEmpty
             }
             .onChange(of: chatsViewModel.chatToOpen) { _, chatId in
-                if let chatId {
-                    chatsViewModel.chatToOpen = nil
-                    Task { @MainActor in
-                        try? await Task.sleep(nanoseconds: 100_000_000)
-                        navigationPath.append(chatId)
+                    if let chatId {
+                        chatsViewModel.chatToOpen = nil
+                        Task { @MainActor in
+                            try? await Task.sleep(nanoseconds: 100_000_000)
+                            navigationPath.append(chatId)
+                        }
                     }
-                }
             }
             .onReceive(NotificationCenter.default.publisher(for: .deleteChat)) { note in
-                guard let chatId = note.object as? String,
-                      let chat = chats.first(where: { $0.id == chatId }) else { return }
-                Task { await chatsViewModel.deleteChatWithEndSession(chat: chat) }
+                    guard let chatId = note.object as? String,
+                          let chat = chats.first(where: { $0.id == chatId }) else { return }
+                    Task { await chatsViewModel.deleteChatWithEndSession(chat: chat) }
             }
             .onChange(of: chats.reduce(0, { $0 + Int($1.unreadCount) })) { _, total in
-                chatsViewModel.totalUnreadCount = total
+                    chatsViewModel.totalUnreadCount = total
             }
         }
-        #else
-        // macOS: no NavigationStack — chat selection drives the detail column
-        // in NavigationSplitView via chatsViewModel.chatToOpen.
-        VStack(spacing: 0) {
-            navBar
-            searchBar
-            chatList
-        }
-        .ctBackground()
-        .sheet(isPresented: $showingQRScanner) {
-            QRScannerView { contactURL in handleScannedContact(contactURL) }
-        }
-        .onAppear {
-            chatsViewModel.setContext(viewContext)
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .deleteChat)) { note in
-            guard let chatId = note.object as? String,
-                  let chat = chats.first(where: { $0.id == chatId }) else { return }
-            Task { await chatsViewModel.deleteChatWithEndSession(chat: chat) }
-        }
-        .onChange(of: chats.reduce(0, { $0 + Int($1.unreadCount) })) { _, total in
-            chatsViewModel.totalUnreadCount = total
-        }
-        #endif
     }
 
     // MARK: - Search Bar
 
     private var searchBar: some View {
         HStack(spacing: 6) {
-            #if os(iOS)
             Text("[")
                 .font(CTFont.regular(13))
                 .foregroundColor(Color.CT.textDim)
-            #endif
             TextField("", text: $searchQuery, prompt: Text("search_")
                 .font(CTFont.regular(13))
                 .foregroundColor(Color.CT.textDim))
+                .textFieldStyle(.plain)
                 .font(CTFont.regular(13))
                 .foregroundColor(Color.CT.text)
                 .autocorrectionDisabled()
-                #if os(iOS)
                 .textInputAutocapitalization(.never)
-                #endif
                 .tint(Color.CT.accent)
             if !searchQuery.isEmpty {
                 Button { searchQuery = "" } label: {
@@ -122,11 +95,9 @@ struct ChatsListView: View {
                         .foregroundColor(Color.CT.textDim)
                 }
             } else {
-                #if os(iOS)
                 Text("]")
                     .font(CTFont.regular(13))
                     .foregroundColor(Color.CT.textDim)
-                #endif
             }
         }
         .padding(.horizontal, 12)
@@ -141,13 +112,11 @@ struct ChatsListView: View {
         HStack(spacing: 10) {
             ConnectionStatusIndicator()
             Spacer()
-            #if os(iOS)
             Button { showingQRScanner = true } label: {
                 Image(systemName: "qrcode.viewfinder")
                     .font(.system(size: CTLayout.navIconSize, weight: .medium))
                     .foregroundColor(Color.CT.accent)
             }
-            #endif
         }
         .padding(.horizontal, CTLayout.edgePad)
         .padding(.vertical, CTLayout.navVPad)
@@ -171,11 +140,7 @@ struct ChatsListView: View {
         List {
             ForEach(filteredChats) { chat in
                 Button {
-                    #if os(iOS)
                     navigationPath.append(chat.id)
-                    #else
-                    chatsViewModel.chatToOpen = chat.id
-                    #endif
                 } label: {
                     ChatRowView(chat: chat)
                 }
@@ -212,9 +177,7 @@ struct ChatsListView: View {
             }
         }
         .refreshable {
-            #if os(iOS)
             await BackgroundFetchManager.shared.fetchPendingMessages()
-            #endif
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
@@ -296,3 +259,5 @@ struct ChatsListView: View {
         .environment(\.managedObjectContext, context)
         .environment(chatsViewModel)
 }
+
+#endif

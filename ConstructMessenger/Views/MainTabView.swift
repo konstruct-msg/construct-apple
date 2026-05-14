@@ -5,6 +5,7 @@
 //  Created by Maxim Eliseyev on 14.12.2025.
 //
 
+#if os(iOS)
 import SwiftUI
 import CoreData
 
@@ -193,4 +194,6 @@ private final class MainTabPreviewState {
         .environment(state.chatsViewModel)
         .environment(SecurityViewModel())
 }
+#endif
+
 #endif

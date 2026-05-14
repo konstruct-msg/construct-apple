@@ -95,7 +95,7 @@ struct DesktopRootView: View {
                 Rectangle().fill(Color.CT.noise).frame(height: 1)
 
                 if sidebarMode == .chats {
-                    ChatsListView()
+                    DesktopChatsListView()
                         .environment(chatsViewModel)
                 } else {
                     // Synaps cloud is in the detail pane — sidebar shows nothing
