@@ -140,6 +140,11 @@ We have our own terminology. Use it consistently in UI, code, and comments.
 
 ## Architecture Notes
 
+> **Before making any architectural decision**, search the wiki first:
+> `ls /Users/maximeliseyev/Code/constrcut-docs/wiki/ | grep <topic>`
+> The wiki has 500+ curated articles covering every component. AGENTS.md is operational rules;
+> the wiki is the authoritative architecture documentation.
+
 ### Session lifecycle
 12 stages: registration → key upload → prewarm → bundle fetch → init → send →
 receive → decrypt → heal → END_SESSION → stream → Kyber OTPK.
@@ -187,9 +192,68 @@ invisible tabs during layout. Tab 0 (ChatsListView) is always in the set at init
 - `confirmationDialog` is blocked in ZStack hierarchy — use `.alert` instead
 - State is preserved across tab switches (intended)
 
+### construct-engine and EngineAdapter (CRITICAL for macOS/Desktop work)
+
+**Full spec**: `constrcut-docs/raw/04_Client_Applications/specs/DESKTOP_ENGINE_REFACTORING_SPEC.md`
+**Wiki article**: `constrcut-docs/wiki/EngineAdapter.md`
+
+#### Two crypto paths — never confuse them
+
+```
+iOS (ConstructMessenger target)
+└── CryptoManager / Services → ConstructCore.xcframework (UniFFI) → OrchestratorCore
+
+macOS (Construct Desktop target)  ← TARGET ARCHITECTURE
+└── EngineAdapter → construct-engine → [internal OrchestratorCore]
+    ├── Transport (QUIC/H3)      ← already done
+    ├── Auth / token management  ← already done
+    ├── CryptoSession management ← TO DO (Phase 1)
+    ├── Message encrypt/decrypt  ← TO DO (Phase 2)
+    ├── Session healing          ← TO DO (Phase 4)
+    └── PQ key management        ← TO DO (Phase 5)
+```
+
+**Current state (technical debt)**: macOS Desktop still has a *second* path — it compiles
+the shared `CryptoManager.swift` / `MessageCryptoService.swift` / etc. which call
+`OrchestratorCore` directly via `ConstructCore.xcframework`. This is wrong — the goal is to
+route all crypto through `EngineAdapter` and remove `ConstructCore.xcframework` from the
+Desktop target entirely (saves ~83 MB binary, eliminates dual-state OrchestratorCore).
+
+#### iOS keeps direct UniFFI path (intentional)
+
+iOS cannot run `construct-engine` with QUIC natively. The iOS direct path is production-stable.
+Do NOT use `EngineAdapter` for crypto on iOS.
+
+#### Compiler guard pattern for crypto code
+
+When a service needs different crypto paths per platform:
+```swift
+#if os(macOS)
+// Use engine for crypto
+engineHandle.dispatch(.encryptMessage(...))
+#else
+// Use OrchestratorCore directly (iOS path)
+cryptoManager.orchestratorCore?.encryptMessage(...)
+#endif
+```
+
+#### Migration phases (do not skip ahead)
+
+1. **Phase 1** — Session init: `InitSession`, `InitReceivingSession`, `EndSession` via engine
+2. **Phase 2** — Message encrypt/decrypt via engine
+3. **Phase 3** — Offline batch decrypt via engine
+4. **Phase 4** — Session healing via engine
+5. **Phase 5** — PQ key management via engine
+6. **Phase 6** — Remove `ConstructCore.xcframework` + `construct_core.swift` from Desktop target
+
+Before implementing any macOS-only crypto feature, check which phase it belongs to.
+Do not implement a later-phase feature before earlier phases are done.
+
 ### UniFFI bindings
 `construct_core.swift` is auto-generated — **never edit it manually**.
 Regenerate with: `./generate_swift_bindings.sh`
+`construct_core.swift` is compiled for **iOS only** — it must not be compiled for macOS once
+Phase 6 is complete. Wrap any new UniFFI call in `#if os(iOS)` if it has no engine equivalent yet.
 
 ### gRPC
 Generated protobuf files in `Networking/gRPC/Generated/` — do not edit manually.
