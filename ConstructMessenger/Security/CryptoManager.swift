@@ -62,6 +62,9 @@ class CryptoManager {
         needsFullOtpkReplacement = false
     }
 
+    /// Guards against calling restoreRecentSessions() more than once per process lifetime.
+    private var hasRestoredSessions = false
+
     // MARK: - Session Archive
     private let archiveManager = SessionArchiveManager()
     private let messageCrypto = MessageCryptoService()
@@ -90,15 +93,11 @@ class CryptoManager {
         self._bootstrapCore = loadedCore
         self.wasRestoredFromKeychain = restoredFromKeychain
 
-        // ✅ Restore recent sessions (pagination - first 10 chats)
-        // ⚠️ Defer to avoid accessing Core Data before stores are loaded
-        // This will be called later when Core Data is ready
+        // ⚠️ Defer GC and timer to avoid accessing Core Data before stores are loaded.
+        // Session restore is intentionally NOT done here — orchestratorCore is not yet
+        // available. It will be triggered inside setLocalUserId() once the core is ready.
         DispatchQueue.main.async { [weak self] in
-            self?.restoreRecentSessions(limit: 10)
-            // 🆕 Run garbage collection after restoring sessions
             self?.cleanupArchivedSessions()
-            // 🆕 Prekey tracker loads from storage on init
-            // 🆕 Start periodic GC timer (24 hours)
             self?.startGarbageCollectionTimer()
         }
     }
@@ -782,6 +781,15 @@ class CryptoManager {
             orchestratorCore = newCore
             _bootstrapCore = nil
             Log.debug("🔑 CryptoManager: OrchestratorCore created (userId=\(cryptoId.prefix(8))…)", category: "CryptoManager")
+            // Session restore was skipped in init() because orchestratorCore was not yet
+            // available. Now that the core is ready, restore sessions on the next run loop
+            // tick (Core Data is guaranteed to be loaded by this point).
+            if !hasRestoredSessions {
+                hasRestoredSessions = true
+                DispatchQueue.main.async { [weak self] in
+                    self?.restoreRecentSessions(limit: 10)
+                }
+            }
         } catch {
             Log.error("❌ setLocalUserId: OrchestratorCore init failed: \(error)", category: "CryptoManager")
         }

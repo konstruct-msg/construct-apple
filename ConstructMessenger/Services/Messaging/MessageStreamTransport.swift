@@ -26,15 +26,22 @@ extension MessageStreamManager {
         let port = GRPCChannelManager.shared.currentPort
         Log.info("📡 openStream → \(host):\(port) subscriptions=[\(subscriptionUserIds.joined(separator: ", "))]", category: "MessageStream")
 
-        // Reuse the shared persistent channel — do NOT call makeClient() here.
-        // makeClient() opens a new TLS/HTTP-2 connection on every call; using the shared channel
-        // means the stream reuses the same HTTP-2 connection across reconnects, which is what
-        // the server expects (channel = singleton, stream can close/reopen freely).
-        // When routing changes (ICE failover), GRPCChannelManager.invalidatePersistentClient()
-        // is called externally, acquireChannel() creates a new channel, and the stream
-        // reconnects naturally via the retry loop — exactly one new handshake per routing change.
-        let grpcClient = try GRPCChannelManager.shared.acquireChannel()
-        let msgClient = Shared_Proto_Services_V1_MessagingService.Client(wrapping: grpcClient)
+        // Use the shared persistent channel for the stream transport.
+        // On iOS 16+ with a direct (non-ICE) path, prefer HTTP/3 (QUIC) for connection
+        // migration across WiFi↔cellular switches and head-of-line blocking elimination.
+        // H3 is never used over ICE — obfs4 tunnels terminate at an H2 proxy.
+        // Fall back to the H2 persistent channel on older OS or when ICE is active.
+        let transportLabel: String
+#if canImport(Network)
+        if #available(iOS 16.0, macOS 13.0, *), GRPCChannelManager.shared.iceProxyPort() == nil {
+            transportLabel = "H3"
+        } else {
+            transportLabel = "H2"
+        }
+#else
+        transportLabel = "H2"
+#endif
+        Log.debug("🔌 openStream transport=\(transportLabel) → \(host):\(port)", category: "MessageStream")
 
         // Create outbound stream
         let (outboundStream, continuation) = AsyncStream<Shared_Proto_Services_V1_MessageStreamRequest>.makeStream()
@@ -168,12 +175,38 @@ extension MessageStreamManager {
         defer { processingTask.cancel() }
 
         let streamTask = Task {
+            // Acquire the appropriate persistent channel inside the Task.
+            // Both branches call the generic `runMessageStream<Transport>` — Swift specialises it.
+#if canImport(Network)
+            if #available(iOS 16.0, macOS 13.0, *), GRPCChannelManager.shared.iceProxyPort() == nil {
+                let h3Client = GRPCChannelManager.shared.acquireH3Channel()
+                let msgClient = Shared_Proto_Services_V1_MessagingService.Client(wrapping: h3Client)
+                try await runMessageStream(
+                    client: msgClient,
+                    request: request,
+                    incomingContinuation: incomingContinuation,
+                    metricsLabel: metricsLabel
+                )
+            } else {
+                let grpcClient = try GRPCChannelManager.shared.acquireChannel()
+                let msgClient = Shared_Proto_Services_V1_MessagingService.Client(wrapping: grpcClient)
+                try await runMessageStream(
+                    client: msgClient,
+                    request: request,
+                    incomingContinuation: incomingContinuation,
+                    metricsLabel: metricsLabel
+                )
+            }
+#else
+            let grpcClient = try GRPCChannelManager.shared.acquireChannel()
+            let msgClient = Shared_Proto_Services_V1_MessagingService.Client(wrapping: grpcClient)
             try await runMessageStream(
                 client: msgClient,
                 request: request,
                 incomingContinuation: incomingContinuation,
                 metricsLabel: metricsLabel
             )
+#endif
         }
         // Ensure the inner (unstructured) runMessageStream task is always cancelled
         // when openStream() exits — whether cleanly, via error, or via outer task
@@ -264,8 +297,8 @@ extension MessageStreamManager {
         try await streamTask.value
     }
 
-    nonisolated func runMessageStream(
-        client: Shared_Proto_Services_V1_MessagingService.Client<HTTP2ClientTransport.TransportServices>,
+    nonisolated func runMessageStream<Transport: ClientTransport & Sendable>(
+        client: Shared_Proto_Services_V1_MessagingService.Client<Transport>,
         request: StreamingClientRequest<Shared_Proto_Services_V1_MessageStreamRequest>,
         incomingContinuation: AsyncStream<StreamEvent>.Continuation,
         metricsLabel: String

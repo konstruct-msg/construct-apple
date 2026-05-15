@@ -245,8 +245,8 @@ final class GRPCCallExecutor: Sendable {
         // Network errors (unavailable, deadline) mean the endpoint was unreachable —
         // keep the existing token so the user can retry when connectivity returns.
         let serverRejected: Bool
-        if let rpcErr = refreshError as? RPCError {
-            serverRejected = rpcErr.code == .unauthenticated || rpcErr.code == .permissionDenied
+        if let rpcErr = refreshError {
+            serverRejected = TokenRefreshCoordinator.isRefreshTokenPermanentlyInvalid(rpcErr)
         } else {
             serverRejected = refreshError == nil   // refreshIfPossible() returned false
         }

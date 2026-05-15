@@ -397,8 +397,8 @@ final class MessageStreamManager {
                     // Only wipe tokens if the server explicitly rejected the refresh token.
                     // Network errors mean the refresh was unreachable, not that the token is invalid.
                     let serverRejected: Bool
-                    if let rpcErr = refreshError as? RPCError {
-                        serverRejected = rpcErr.code == .unauthenticated || rpcErr.code == .permissionDenied
+                    if let rpcErr = refreshError {
+                        serverRejected = TokenRefreshCoordinator.isRefreshTokenPermanentlyInvalid(rpcErr)
                     } else {
                         serverRejected = refreshError == nil  // returned false = no refresh token
                     }

@@ -222,6 +222,20 @@ final class GRPCChannelManager: Sendable {
     private nonisolated(unsafe) var _connGeneration: UInt64 = 0
     private let _connLock = NSLock()
 
+    // H3 persistent connection — stored as Any? because @available stored properties are
+    // not allowed in Swift. Actual value is PersistentConnH3 on iOS 16+/macOS 13+.
+    private nonisolated(unsafe) var _h3connBox: Any? = nil
+    private nonisolated(unsafe) var _h3connGeneration: UInt64 = 0
+    private let _h3connLock = NSLock()
+
+#if canImport(Network)
+    private struct PersistentConnH3: @unchecked Sendable {
+        let client: GRPCClient<HTTP3ClientTransport>
+        let task:   Task<Void, Never>
+        let key:    String   // always "direct:<host>:<port>" — H3 never used over ICE
+    }
+#endif
+
     // In-memory ICE cooldown state.
     // Written by recordICEFailure/clearICECooldownState; read by isICEOnCooldownInternal.
     // UserDefaults is still written for cross-launch persistence but never read on hot path.
@@ -301,17 +315,27 @@ final class GRPCChannelManager: Sendable {
     /// Graceful shutdown signals "no new RPCs"; the runConnections() task exits naturally
     /// once all existing streams drain (typically <100 ms for unary calls).
     func invalidatePersistentClient() {
+        var didInvalidate = false
         _connLock.lock()
-        defer { _connLock.unlock() }
         // Guard against multiple concurrent RPC failures all calling this simultaneously.
         // Only the first call does real work; subsequent calls with _conn == nil are no-ops.
-        guard _conn != nil else { return }
-        _conn?.client.beginGracefulShutdown()
-        // Do NOT call task.cancel() here — let runConnections() exit naturally.
-        _conn = nil
-        // Bump generation so any pending runConnections() task knows it is stale.
-        _connGeneration &+= 1
+        if _conn != nil {
+            _conn?.client.beginGracefulShutdown()
+            // Do NOT call task.cancel() here — let runConnections() exit naturally.
+            _conn = nil
+            // Bump generation so any pending runConnections() task knows it is stale.
+            _connGeneration &+= 1
+            didInvalidate = true
+        }
+        _connLock.unlock()
+        guard didInvalidate else { return }
         Log.debug("🔌 Persistent gRPC connection invalidated (gen=\(_connGeneration))", category: "GRPCChannel")
+        // H3 is only valid on the direct path. Any routing change that kills H2 also kills H3.
+#if canImport(Network)
+        if #available(iOS 16.0, macOS 13.0, *) {
+            invalidateH3Connection()
+        }
+#endif
     }
 
     /// Invalidates only if the current connection generation matches `gen`.
@@ -418,6 +442,79 @@ final class GRPCChannelManager: Sendable {
         )
         return GRPCClient(transport: transport, interceptors: [AuthInterceptor()])
     }
+
+    /// Creates a gRPC client using the HTTP/3 (QUIC/Network.framework) transport.
+    /// Requires iOS 16+/macOS 13+ for stable QUIC support (NWProtocolQUIC available since iOS 15).
+    /// Only called for direct-path connections — never over ICE/obfs4 proxy.
+    @available(iOS 16.0, macOS 13.0, *)
+    func makeClientH3() -> GRPCClient<HTTP3ClientTransport> {
+        let host = currentHost
+        let port = currentPort
+        Log.debug("🚀 gRPC creating HTTP/3 channel → \(host):\(port)", category: "gRPC")
+        let transport = HTTP3ClientTransport(host: host, port: UInt16(clamping: port))
+        return GRPCClient(transport: transport, interceptors: [AuthInterceptor()])
+    }
+
+#if canImport(Network)
+    /// Returns (or lazily creates) the shared persistent H3 channel.
+    /// Only valid on the direct path — callers must check `iceProxyPort() == nil` before calling.
+    /// Analogous to `acquirePersistentClient()` for the H2 path.
+    @available(iOS 16.0, macOS 13.0, *)
+    func acquireH3Channel() -> GRPCClient<HTTP3ClientTransport> {
+        _h3connLock.lock()
+        defer { _h3connLock.unlock() }
+
+        let key = "direct:\(currentHost):\(currentPort)"
+        if let conn = _h3connBox as? PersistentConnH3, conn.key == key, !conn.task.isCancelled {
+            return conn.client
+        }
+
+        // Tear down stale connection gracefully.
+        if let old = _h3connBox as? PersistentConnH3 {
+            old.client.beginGracefulShutdown()
+        }
+        _h3connBox = nil
+        _h3connGeneration &+= 1
+        let gen = _h3connGeneration
+
+        let client = makeClientH3()
+        let task = Task.detached { [weak self, gen] in
+            guard let self else { return }
+            let valid = self._h3connLock.withLock { self._h3connGeneration == gen }
+            guard valid else {
+                Log.debug("🚀 H3 client gen=\(gen) already superseded — skipping runConnections()", category: "GRPCChannel")
+                return
+            }
+            do {
+                try await client.runConnections()
+            } catch is CancellationError {
+                // Normal shutdown.
+            } catch {
+                Log.error("⚠️ H3 persistent connection closed: \(error)", category: "GRPCChannel")
+                if #available(iOS 16.0, macOS 13.0, *) {
+                    self.invalidateH3Connection()
+                }
+            }
+        }
+        let conn = PersistentConnH3(client: client, task: task, key: key)
+        _h3connBox = conn
+        Log.debug("🚀 H3 persistent connection created (key=\(key) gen=\(gen))", category: "GRPCChannel")
+        return client
+    }
+
+    /// Gracefully shuts down the H3 persistent connection.
+    /// Called automatically from `invalidatePersistentClient()` and on H3 transport errors.
+    @available(iOS 16.0, macOS 13.0, *)
+    func invalidateH3Connection() {
+        _h3connLock.lock()
+        defer { _h3connLock.unlock() }
+        guard let conn = _h3connBox as? PersistentConnH3 else { return }
+        conn.client.beginGracefulShutdown()
+        _h3connBox = nil
+        _h3connGeneration &+= 1
+        Log.debug("🚀 H3 persistent connection invalidated (gen=\(_h3connGeneration))", category: "GRPCChannel")
+    }
+#endif
 
     /// Execute a gRPC operation with automatic retry, auth refresh, and ICE failover.
     /// Delegates to `GRPCCallExecutor` — all RPC policy logic lives there.
