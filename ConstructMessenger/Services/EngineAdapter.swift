@@ -67,6 +67,15 @@ final class EngineAdapter {
     /// Last unrecoverable error from the engine.
     private(set) var lastError: String?
 
+    /// Contacts for which the engine has an established E2EE session.
+    /// Populated by `SessionEstablished` callbacks (including restored sessions at startup).
+    private(set) var sessionStates: [String: Bool] = [:]
+
+    /// Returns true if the engine has an active session with the given contact.
+    func hasSession(for contactId: String) -> Bool {
+        return sessionStates[contactId] == true
+    }
+
     // MARK: - Private
 
     private var engine: ConstructEngine?
@@ -233,6 +242,7 @@ extension EngineAdapter: EngineCallback {
         // ── Sessions ─────────────────────────────────────────────────────────
         case .sessionEstablished(let contactId, let sessionId):
             Task { @MainActor in
+                self.sessionStates[contactId] = true
                 NotificationCenter.default.post(
                     name: .engineSessionEstablished,
                     object: nil,
@@ -243,6 +253,7 @@ extension EngineAdapter: EngineCallback {
         case .sessionError(let contactId, let message):
             Log.error("EngineAdapter: sessionError contact=\(contactId) \(message)", category: "Engine")
             Task { @MainActor in
+                self.sessionStates[contactId] = false
                 NotificationCenter.default.post(
                     name: .engineSessionError,
                     object: nil,

@@ -160,8 +160,8 @@ private struct DesktopGeneralSettingsTab: View {
                         appTheme = theme
                     } label: {
                         HStack(spacing: 10) {
-                            Text(theme.asciiIcon)
-                                .font(CTFont.regular(13))
+                            Image(systemName: theme.iconName)
+                                .font(.system(size: 13))
                                 .foregroundStyle(appTheme == theme ? Color.CT.accent : Color.CT.textDim)
                                 .frame(width: 28, alignment: .leading)
                             Text(LocalizedStringKey(theme.rawValue))

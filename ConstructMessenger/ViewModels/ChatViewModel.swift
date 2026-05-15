@@ -225,7 +225,11 @@ class ChatViewModel: NSObject {
     private func checkExistingSession() {
         guard let userId = chat.otherUser?.id else { return }
         
+        #if os(macOS)
+        isSessionReady = EngineAdapter.shared.hasSession(for: userId)
+        #else
         isSessionReady = CryptoManager.shared.hasSession(for: userId)
+        #endif
         if isSessionReady {
             Log.info("✅ Session already exists for user: \(userId)", category: "ChatViewModel")
         } else {
@@ -428,6 +432,64 @@ class ChatViewModel: NSObject {
             isInitializingSession = true
         }
         
+        #if os(macOS)
+        // Engine manages OrchestratorCore on macOS — dispatch to it.
+        // The engine fetches the key bundle, runs X3DH, sends the msgNum=0 init ping,
+        // and fires SessionEstablished (or SessionError) asynchronously.
+        EngineAdapter.shared.dispatch(.initSessionInitiator(contactId: userId))
+
+        let success = await withCheckedContinuation { (cont: CheckedContinuation<Bool, Never>) in
+            let lock = NSLock()
+            var hasResumed = false
+            func resume(_ value: Bool) {
+                lock.lock(); defer { lock.unlock() }
+                guard !hasResumed else { return }
+                hasResumed = true
+                cont.resume(returning: value)
+            }
+
+            // Token box avoids non-Sendable var capture in @Sendable NotificationCenter closures.
+            final class Tokens: @unchecked Sendable {
+                var success: NSObjectProtocol?
+                var error: NSObjectProtocol?
+            }
+            let tokens = Tokens()
+
+            tokens.success = NotificationCenter.default.addObserver(
+                forName: .engineSessionEstablished, object: nil, queue: nil
+            ) { n in
+                guard let peerId = n.userInfo?["contactId"] as? String, peerId == userId else { return }
+                if let t = tokens.error { NotificationCenter.default.removeObserver(t) }
+                resume(true)
+            }
+            tokens.error = NotificationCenter.default.addObserver(
+                forName: .engineSessionError, object: nil, queue: nil
+            ) { n in
+                guard let peerId = n.userInfo?["contactId"] as? String, peerId == userId else { return }
+                if let t = tokens.success { NotificationCenter.default.removeObserver(t) }
+                resume(false)
+            }
+
+            // 30-second timeout — engine offline or bundle fetch failed
+            Task {
+                try? await Task.sleep(for: .seconds(30))
+                if let t = tokens.success { NotificationCenter.default.removeObserver(t) }
+                if let t = tokens.error   { NotificationCenter.default.removeObserver(t) }
+                resume(false)
+            }
+        }
+
+        isSessionReady = success
+        isInitializingSession = false
+        if success {
+            await sendQueuedMessages(userId: userId)
+        } else {
+            ErrorRouter.shared.report(.sessionInitFailed(contactId: userId), recovery: { [weak self] in
+                self?.fetchRecipientPublicKey()
+            })
+            failQueuedMessages(reason: "Engine session init failed")
+        }
+        #else
         // ✅ REFACTOR: Use SessionInitializationService
         await sessionInitService.initializeSessionProactively(
             userId: userId,
@@ -463,6 +525,7 @@ class ChatViewModel: NSObject {
                 self.failQueuedMessages(reason: error.userFacingMessage)
             }
         )
+        #endif
     }
     
     /// Send a session-init ping as the first DR message (msgNum=0).
@@ -578,7 +641,11 @@ class ChatViewModel: NSObject {
         }
 
         // Session check applies to ALL send paths (text, media, files).
+        #if os(macOS)
+        let hasSession = EngineAdapter.shared.hasSession(for: recipientId)
+        #else
         let hasSession = CryptoManager.shared.hasSession(for: recipientId)
+        #endif
         if !hasSession {
             let queued = QueuedMessage(text: text, images: images, replyTo: replyTo)
             queuedMessages.append(queued)
