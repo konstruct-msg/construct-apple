@@ -15,6 +15,7 @@
 		BF3DE8782F62C2000058C1AA /* SwiftProtobuf in Frameworks */ = {isa = PBXBuildFile; productRef = BF3DE8772F62C2000058C1AA /* SwiftProtobuf */; };
 		BF7098D12F01D3C400CC6F04 /* ConstructCore.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = BF7098D02F01D3C400CC6F04 /* ConstructCore.xcframework */; };
 		BF7098D22F01D3C400CC6F04 /* ConstructCore.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = BF7098D02F01D3C400CC6F04 /* ConstructCore.xcframework */; };
+		BF9C79220C774589B73B6121 /* WebRTC in Frameworks */ = {isa = PBXBuildFile; productRef = 27E01FB194D24BD696982B92 /* WebRTC */; };
 		BFCB6D932F7C4C4800C59B83 /* WebRTC in Frameworks */ = {isa = PBXBuildFile; productRef = BFCB6D922F7C4C4800C59B83 /* WebRTC */; };
 		BFF6FC9D2F4C3E1F00A31F36 /* GRPCCore in Frameworks */ = {isa = PBXBuildFile; productRef = BFF6FC9C2F4C3E1F00A31F36 /* GRPCCore */; };
 		BFF6FCF42F4C4CCA00A31F36 /* GRPCProtobuf in Frameworks */ = {isa = PBXBuildFile; productRef = BFF6FCF32F4C4CCA00A31F36 /* GRPCProtobuf */; };
@@ -153,6 +154,7 @@
 				BF3DE8742F62C2000058C1AA /* GRPCProtobuf in Frameworks */,
 				BF3DE8762F62C2000058C1AA /* GRPCNIOTransportHTTP2 in Frameworks */,
 				BF3DE8782F62C2000058C1AA /* SwiftProtobuf in Frameworks */,
+				BF9C79220C774589B73B6121 /* WebRTC in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -269,6 +271,7 @@
 				BF3DE8732F62C2000058C1AA /* GRPCProtobuf */,
 				BF3DE8752F62C2000058C1AA /* GRPCNIOTransportHTTP2 */,
 				BF3DE8772F62C2000058C1AA /* SwiftProtobuf */,
+				27E01FB194D24BD696982B92 /* WebRTC */,
 			);
 			productName = "Construct Desktop";
 			productReference = BF3DE8302F62C1C30058C1AA /* Construct Desktop.app */;
@@ -1351,6 +1354,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		27E01FB194D24BD696982B92 /* WebRTC */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BFCB6D912F7C4C4800C59B83 /* XCRemoteSwiftPackageReference "WebRTC" */;
+			productName = WebRTC;
+		};
 		BF3DE8712F62C2000058C1AA /* GRPCCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = BFF6FD0A2F5C000000A31F36 /* XCRemoteSwiftPackageReference "grpc-swift-2" */;

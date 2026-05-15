@@ -8,7 +8,6 @@
 //
 //  macOS uses CallManagerStub.swift instead.
 //
-#if os(iOS)
 
 import Foundation
 import AVFoundation
@@ -525,6 +524,16 @@ final class CallManager {
                     "caller_id": call.callerID
                 ]
                 handleIncomingPush(payload, reportedUUID: reportedUUID)
+                #else
+                // macOS: no PushKit/CallKit; show incoming call UI directly.
+                let session = CallSession(
+                    id: call.callID,
+                    uuid: UUID(),
+                    peerUserId: call.callerID,
+                    peerName: call.callerName,
+                    direction: .incoming
+                )
+                begin(session: session, initialState: .incoming(session))
                 #endif
             }
         case .signal(let s):
@@ -603,12 +612,14 @@ final class CallManager {
             if case .ended = self.state { self.state = .idle }
         }
 
+        #if os(iOS)
         CallHistoryService.shared.record(
             session: session,
             status: historyStatus,
             startedAt: startedAt,
             durationSeconds: duration
         )
+        #endif
 
         #if os(iOS)
         if reportToCallKit && wasRegisteredWithCallKit {
@@ -1043,5 +1054,3 @@ final class CallManager {
         return h
     }
 }
-
-#endif // os(iOS)
