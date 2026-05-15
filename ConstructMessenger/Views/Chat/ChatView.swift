@@ -239,12 +239,6 @@ struct ChatView: View {
             
             messageInputView
         }
-        // macOS: give the VStack deterministic size so NavigationSplitView's
-        // NSSplitView doesn't enter an infinite constraint-update loop when
-        // the TextField(axis:) resizes inside an NSHostingView.
-        #if os(macOS)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        #endif
         #if os(iOS)
         .toolbar(.hidden, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
@@ -344,17 +338,6 @@ struct ChatView: View {
         }
         #if os(iOS)
         .fullScreenCover(item: $galleryStartItem) { item in
-            MediaGalleryViewer(
-                messages: mediaMessages,
-                initialMessageId: item.id,
-                isPresented: Binding(
-                    get: { galleryStartItem != nil },
-                    set: { if !$0 { galleryStartItem = nil } }
-                )
-            )
-        }
-        #else
-        .sheet(item: $galleryStartItem) { item in
             MediaGalleryViewer(
                 messages: mediaMessages,
                 initialMessageId: item.id,
@@ -763,12 +746,9 @@ struct ChatView: View {
 
     // ✅ REMOVED: Message grouping logic moved to Message+Grouping.swift extension
     
-    /// Hide keyboard
     private func hideKeyboard() {
         #if canImport(UIKit)
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-        #else
-        NSApp.keyWindow?.makeFirstResponder(nil)
         #endif
     }
 

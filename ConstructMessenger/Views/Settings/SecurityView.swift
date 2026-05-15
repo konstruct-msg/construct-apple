@@ -418,9 +418,7 @@ struct SecurityView: View {
         .task { await recoveryVM.loadStatus() }
         .onAppear { securityViewModel.refreshPinState() }
         }
-        #if os(iOS)
         .toolbar(.hidden, for: .navigationBar)
-        #endif
         .background(Color.CT.bg.ignoresSafeArea())
     }
 

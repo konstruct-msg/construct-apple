@@ -140,9 +140,7 @@ struct SettingsView: View {
                 }
             }
             .ctBackground()
-            #if os(iOS)
             .toolbar(.hidden, for: .navigationBar)
-            #endif
             .onAppear {
                 viewModel.setContext(viewContext)
                 viewModel.loadUserInfo(from: authViewModel)
