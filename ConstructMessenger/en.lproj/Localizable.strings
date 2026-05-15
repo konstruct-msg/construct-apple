@@ -5,6 +5,7 @@
 "done" = "Done";
 "unknown" = "Unknown";
 "constrcut_titlte" = "KONSTRUCT";
+"search_prompt" = "Search";
 
 // MARK: - Main Tabs
 "chats" = "Chats";
@@ -385,6 +386,7 @@
 "recovery_restored_body" = "Your account has been recovered on this device. Previous sessions have been revoked.";
 "recovery_banner_title" = "Protect Your Account";
 "recovery_banner_subtitle" = "Set up your recovery phrase to avoid losing access.";
+"recovery_setup_action" = "CONFIGURE";
 
 // macOS Catalyst — push notifications
 "push_not_available_mac" = "Push Notifications Unavailable on Desktop";

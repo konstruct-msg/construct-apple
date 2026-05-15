@@ -15,7 +15,7 @@ struct DesktopEmptyStateView: View {
 
             // Wordmark
             VStack(spacing: 4) {
-                Text("CONSTRUCT")
+                Text("KONSTRUCT")
                     .font(CTFont.bold(20))
                     .foregroundStyle(Color.CT.text)
                     .tracking(8)

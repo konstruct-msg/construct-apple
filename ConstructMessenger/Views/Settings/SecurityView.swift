@@ -58,7 +58,7 @@ struct SecurityView: View {
                 if securityViewModel.isPinEnabled {
                     CTSep(style: .thin)
                     HStack(spacing: 10) {
-                        CTRowIcon(CTSymbol.biometric,
+                        CTRowIcon(sf: securityViewModel.biometricIconName,
                                   color: securityViewModel.isBiometricEnabled ? Color.CT.accent : Color.CT.textDim)
                         Text(String(format: NSLocalizedString("use_biometric", comment: ""),
                                     securityViewModel.biometricDisplayName))
@@ -185,7 +185,7 @@ struct SecurityView: View {
 
                 // MARK: - Lockdown
                 HStack(spacing: 10) {
-                    CTRowIcon(lockdown.isActive ? "[]" : CTSymbol.lock,
+                    CTRowIcon(sf: lockdown.isActive ? "lock.slash.fill" : "lock.fill",
                               color: lockdown.isActive ? .orange : Color.CT.textDim)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(LocalizedStringKey("lockdown_mode"))
@@ -225,7 +225,7 @@ struct SecurityView: View {
 
                 // MARK: - Stealth
                 HStack(spacing: 10) {
-                    CTRowIcon(stealthEnabled ? "[~]" : CTSymbol.lock, color: stealthEnabled ? Color.CT.accent : Color.CT.textDim)
+                    CTRowIcon(sf: stealthEnabled ? "eye.slash.fill" : "lock.fill", color: stealthEnabled ? Color.CT.accent : Color.CT.textDim)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(LocalizedStringKey("stealth_toggle_title"))
                             .font(CTFont.regular(13))

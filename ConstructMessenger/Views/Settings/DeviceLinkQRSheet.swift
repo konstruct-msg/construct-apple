@@ -47,9 +47,9 @@ struct DeviceLinkQRSheet: View {
 
     private var loadingState: some View {
         VStack(spacing: 12) {
-            Text(CTSymbol.loading)
-                .font(CTFont.regular(24))
-                .foregroundColor(Color.CT.textDim)
+            ProgressView()
+                .tint(Color.CT.textDim)
+                .scaleEffect(1.4)
             Text(NSLocalizedString("generating", comment: ""))
                 .font(CTFont.regular(13))
                 .foregroundColor(Color.CT.textDim)

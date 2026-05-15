@@ -225,36 +225,7 @@ struct SynapsView: View {
     // MARK: - Search Bar
 
     private var synapsSearchBar: some View {
-        HStack(spacing: 6) {
-            Text("[")
-                .font(CTFont.regular(13))
-                .foregroundColor(Color.CT.textDim)
-            TextField("", text: $searchText, prompt: Text(LocalizedStringKey("synaps_search_prompt"))
-                .font(CTFont.regular(13))
-                .foregroundColor(Color.CT.textDim))
-                .font(CTFont.regular(13))
-                .foregroundColor(Color.CT.text)
-                .autocorrectionDisabled()
-                #if os(iOS)
-                .textInputAutocapitalization(.never)
-                #endif
-                .tint(Color.CT.accent)
-            if !searchText.isEmpty {
-                Button { searchText = "" } label: {
-                    Text("×")
-                        .font(CTFont.regular(13))
-                        .foregroundColor(Color.CT.textDim)
-                }
-            } else {
-                Text("]")
-                    .font(CTFont.regular(13))
-                    .foregroundColor(Color.CT.textDim)
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 9)
-        .background(Color.CT.bgMsg)
-        .ctBorderBottom()
+        CTSearchBar(text: $searchText)
     }
 
     // MARK: - Empty state

@@ -387,6 +387,7 @@
 "recovery_restored_body" = "Ваш аккаунт восстановлен на этом устройстве. Предыдущие сессии отозваны.";
 "recovery_banner_title" = "Защитите свой аккаунт";
 "recovery_banner_subtitle" = "Настройте фразу восстановления, чтобы не потерять доступ.";
+"recovery_setup_action" = "НАСТРОИТЬ";
 
 // macOS Catalyst — push уведомления
 "push_not_available_mac" = "Push-уведомления недоступны на десктопе";

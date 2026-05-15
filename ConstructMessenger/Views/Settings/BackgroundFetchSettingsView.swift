@@ -179,8 +179,8 @@ struct BackgroundFetchSettingsView: View {
                     handleIntervalChange(newVal)
                 }
             } label: {
-                Text("[-]")
-                    .font(CTFont.bold(13))
+                Image(systemName: "minus")
+                    .font(.system(size: 13, weight: .bold))
                     .foregroundColor(intervalMinutes > BackgroundFetchConfig.minIntervalMinutes ? Color.CT.accent : Color.CT.textDim)
                     .frame(width: 44, height: 32)
                     .contentShape(Rectangle())
@@ -227,8 +227,8 @@ struct BackgroundFetchSettingsView: View {
                     handleIntervalChange(newVal)
                 }
             } label: {
-                Text("[+]")
-                    .font(CTFont.bold(13))
+                Image(systemName: "plus")
+                    .font(.system(size: 13, weight: .bold))
                     .foregroundColor(intervalMinutes < BackgroundFetchConfig.maxIntervalMinutes ? Color.CT.accent : Color.CT.textDim)
                     .frame(width: 44, height: 32)
                     .contentShape(Rectangle())

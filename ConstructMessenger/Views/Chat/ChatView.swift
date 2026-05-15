@@ -541,15 +541,9 @@ struct ChatView: View {
     private var chatNavBar: some View {
         HStack(spacing: 10) {
             Button { dismiss() } label: {
-                #if os(macOS)
                 Image(systemName: "chevron.backward.circle")
-                    .font(.system(size: 18))
-                    .foregroundColor(Color.CT.accent)
-                #else
-                Image(systemName: "chevron.backward.circle.fill")
                     .font(.system(size: 22))
                     .foregroundColor(Color.CT.accent)
-                #endif
             }
 
             Button { showingUserProfile = true } label: {

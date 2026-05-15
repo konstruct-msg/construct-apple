@@ -137,10 +137,10 @@ enum CTLayout {
 
     /// SF Symbol size for standard nav-bar action buttons (QR scan, search, dismiss).
     /// Equals CTFont.bold(13) line height so icon and text bars have identical heights.
-    static let navIconSize: CGFloat = 16
+    static let navIconSize: CGFloat = 22
 
     /// Slightly larger icon for elevated primary-action buttons (e.g., phone call in chat).
-    static let navIconSizeLg: CGFloat = 17
+    static let navIconSizeLg: CGFloat = 22
 
     /// Large icon for full-screen call UI (accept / decline / mute buttons).
     static let callIconSize: CGFloat = 24
@@ -473,6 +473,54 @@ struct CTSectionGroup<Content: View>: View {
 
 // MARK: - System Message  (> text)
 
+// MARK: - Search Bar
+
+/// Unified terminal-style search bar. Used in ChatsListView and SynapsView.
+/// Renders as a full-width row with bottom border (same visual weight as nav bars).
+///
+/// Usage:
+///   CTSearchBar(text: $searchQuery)
+///   CTSearchBar(text: $searchText, placeholder: LocalizedStringKey("search_prompt"))
+struct CTSearchBar: View {
+    @Binding var text: String
+    var placeholder: LocalizedStringKey = "search_prompt"
+    var focused: FocusState<Bool>.Binding? = nil
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 13, weight: .regular))
+                .foregroundColor(Color.CT.textDim)
+
+            TextField("", text: $text,
+                      prompt: Text(placeholder)
+                        .font(CTFont.regular(13))
+                        .foregroundColor(Color.CT.textDim))
+                .font(CTFont.regular(13))
+                .foregroundColor(Color.CT.text)
+                .autocorrectionDisabled()
+                #if os(iOS)
+                .textInputAutocapitalization(.never)
+                #endif
+                .tint(Color.CT.accent)
+
+            if !text.isEmpty {
+                Button { text = "" } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 13))
+                        .foregroundColor(Color.CT.textDim)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .background(Color.CT.bgMsg)
+        .ctBorderBottom()
+    }
+}
+
+
 struct CTSystemMessage: View {
     let text: String
 
@@ -503,7 +551,7 @@ struct CTNavBar: View {
     var trailingAction: (() -> Void)? = nil
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(alignment: .center, spacing: 10) {
             if showBack {
                 Button(action: { backAction?() }) {
                     #if os(macOS)
@@ -519,7 +567,7 @@ struct CTNavBar: View {
                 .buttonStyle(.plain)
             }
             Text(title.uppercased())
-                .font(CTFont.bold(13))
+                .font(CTFont.bold(14))
                 .foregroundColor(Color.CT.text)
                 .tracking(4)
             Spacer()

@@ -75,35 +75,7 @@ struct ChatsListView: View {
     // MARK: - Search Bar
 
     private var searchBar: some View {
-        HStack(spacing: 6) {
-            Text("[")
-                .font(CTFont.regular(13))
-                .foregroundColor(Color.CT.textDim)
-            TextField("", text: $searchQuery, prompt: Text("search_")
-                .font(CTFont.regular(13))
-                .foregroundColor(Color.CT.textDim))
-                .textFieldStyle(.plain)
-                .font(CTFont.regular(13))
-                .foregroundColor(Color.CT.text)
-                .autocorrectionDisabled()
-                .textInputAutocapitalization(.never)
-                .tint(Color.CT.accent)
-            if !searchQuery.isEmpty {
-                Button { searchQuery = "" } label: {
-                    Text("×")
-                        .font(CTFont.regular(13))
-                        .foregroundColor(Color.CT.textDim)
-                }
-            } else {
-                Text("]")
-                    .font(CTFont.regular(13))
-                    .foregroundColor(Color.CT.textDim)
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 9)
-        .background(Color.CT.bgMsg)
-        .ctBorderBottom()
+        CTSearchBar(text: $searchQuery)
     }
 
     // MARK: - Nav Bar

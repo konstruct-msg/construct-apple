@@ -199,8 +199,8 @@ struct SettingsView: View {
 
     private var recoveryBanner: some View {
         HStack(alignment: .top, spacing: 10) {
-            Text(CTSymbol.error)
-                .font(CTFont.bold(12))
+            Image(systemName: "exclamationmark.circle.fill")
+                .font(.system(size: 15, weight: .semibold))
                 .foregroundColor(Color.CT.danger)
             VStack(alignment: .leading, spacing: 4) {
                 Text(NSLocalizedString("recovery_not_configured_title", comment: "").uppercased())
@@ -212,9 +212,13 @@ struct SettingsView: View {
                 Button {
                     showingRecoverySetup = true
                 } label: {
-                    Text(CTSymbol.setup)
-                        .font(CTFont.bold(11))
-                        .foregroundColor(Color.CT.accent)
+                    HStack(spacing: 3) {
+                        Text(NSLocalizedString("recovery_setup_action", comment: ""))
+                            .font(CTFont.bold(11))
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 9, weight: .semibold))
+                    }
+                    .foregroundColor(Color.CT.accent)
                 }
             }
             Spacer()
