@@ -85,9 +85,8 @@ final class MessageStreamManager {
     private var serverChangedObserver: NSObjectProtocol?
     private var retryCount = 0
     private let maxRetryDelay: TimeInterval = NetworkTiming.Stream.maxRetryDelay
-    /// Counts consecutive stream-open timeouts where the ICE routing key did NOT change
-    /// (relay reachable at TCP level but streaming RPCs failing). After 2 consecutive
-    /// unchanged-routing timeouts the current relay is blacklisted and rotation is forced.
+    /// Counts consecutive stream-open timeouts where the ICE routing key did NOT change.
+    /// See inline `blacklistThreshold` logic in `connectLoop` for the per-relay threshold.
     private var consecutiveRoutingUnchangedTimeouts = 0
     private(set) var isPaused = false
     private(set) var subscriptionUserIds: [String] = []
@@ -316,6 +315,8 @@ final class MessageStreamManager {
         let host = GRPCChannelManager.shared.currentHost
         let port = GRPCChannelManager.shared.currentPort
         Log.info("🔄 MessageStream connectLoop started → \(host):\(port)", category: "MessageStream")
+        // Reset per-task state so stale counts from a previous stream session don't bleed in.
+        consecutiveRoutingUnchangedTimeouts = 0
 
         while !Task.isCancelled {
             let attemptStart = Date()
@@ -418,10 +419,18 @@ final class MessageStreamManager {
                     // attempt inside openStream(). "Unchanged" means the relay is reachable
                     // at TCP level but streaming RPCs are silently failing (e.g. relay v0.3.3
                     // obfs4 session corruption bug).
+                    /// Counts consecutive stream-open timeouts where the ICE routing key did NOT change
+                    /// (relay reachable at TCP level but streaming RPCs failing). Threshold differs:
+                    ///   - Verified relay (at least one successful RPC on this relay this session): 1 timeout
+                    ///     is sufficient evidence of regression — fail fast and rotate.
+                    ///   - Unverified relay (fresh start / post-network-change): allow 2 timeouts before
+                    ///     blacklisting. The obfs4 tunnel may still be warming up (handshake + first RTT);
+                    ///     one spurious timeout should not permanently deprioritize a healthy relay.
+                    let blacklistThreshold = IceProxyManager.shared.isCurrentRelayVerified ? 1 : 2
                     let routingKeyNow = GRPCChannelManager.shared.currentRoutingKey
                     if routingKeyNow == routingKeyAtLoopStart {
                         consecutiveRoutingUnchangedTimeouts += 1
-                        if consecutiveRoutingUnchangedTimeouts >= 1,
+                        if consecutiveRoutingUnchangedTimeouts >= blacklistThreshold,
                            routingKeyAtLoopStart.hasPrefix("ice:"),
                            let failedAddr = IceProxyManager.shared.activeRelay?.address {
                             // ICE path: streaming keeps failing on this relay → blacklist + rotate.
