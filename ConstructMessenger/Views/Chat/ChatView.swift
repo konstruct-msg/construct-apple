@@ -582,12 +582,9 @@ struct ChatView: View {
             }
         }
         .padding(.horizontal, CTLayout.edgePad)
-        .padding(.vertical, CTLayout.navVPad)
+        .frame(height: CTLayout.navBarHeight)
         .ctBorderBottom()
-    }
-
-
-    /// KT badge shown in the nav bar.  `[✓]` when verified, `[!]` on key-change/failure, hidden otherwise.
+    }  `[✓]` when verified, `[!]` on key-change/failure, hidden otherwise.
     @ViewBuilder private var ktBadge: some View {
         switch contactKTStatus {
         case .verified:

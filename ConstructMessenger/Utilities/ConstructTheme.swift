@@ -135,9 +135,13 @@ enum CTLayout {
     /// Vertical padding for navigation bar rows.
     static let navVPad: CGFloat = 11
 
+    /// Fixed height for every navigation bar. Using frame(height:) instead of
+    /// padding ensures the title sits at the same absolute vertical position
+    /// regardless of whether the bar has a back button, trailing icon, or text only.
+    static let navBarHeight: CGFloat = 44
+
     /// SF Symbol size for standard nav-bar action buttons (QR scan, search, dismiss).
-    /// Equals CTFont.bold(13) line height so icon and text bars have identical heights.
-    static let navIconSize: CGFloat = 22
+    static let navIconSize: CGFloat = 20
 
     /// Slightly larger icon for elevated primary-action buttons (e.g., phone call in chat).
     static let navIconSizeLg: CGFloat = 22
@@ -580,7 +584,7 @@ struct CTNavBar: View {
             }
         }
         .padding(.horizontal, CTLayout.edgePad)
-        .padding(.vertical, CTLayout.navVPad)
+        .frame(height: CTLayout.navBarHeight)
         .ctBorderBottom()
     }
 }

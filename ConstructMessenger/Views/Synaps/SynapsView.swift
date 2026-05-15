@@ -218,7 +218,7 @@ struct SynapsView: View {
             #endif
         }
         .padding(.horizontal, CTLayout.edgePad)
-        .padding(.vertical, CTLayout.navVPad)
+        .frame(height: CTLayout.navBarHeight)
         .ctBorderBottom()
     }
 
