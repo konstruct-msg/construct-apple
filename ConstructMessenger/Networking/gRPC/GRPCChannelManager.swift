@@ -61,7 +61,10 @@ final class GRPCChannelManager: Sendable {
     func recordICEFailure(failedAddress: String? = nil) {
         let until = Date().addingTimeInterval(Self.iceCooldown)
         _iceLock.withLock { _iceCooldownUntil = until }
-        UserDefaults.standard.set(Date().timeIntervalSinceReferenceDate, forKey: Self.iceFailedAtKey)
+        // Cooldown is intentionally NOT persisted to UserDefaults.
+        // If the app is killed and relaunched, the network state may have changed
+        // (different WiFi, cellular handoff), so a fresh ICE attempt is preferred
+        // over carrying over a stale cooldown from a previous session.
         invalidatePersistentClient()  // routing will change (ICE → direct)
         Log.info("⚠️ ICE relay failure recorded — bypassing ICE for \(Int(Self.iceCooldown))s", category: "gRPC")
         Task { @MainActor [weak self] in
@@ -100,10 +103,11 @@ final class GRPCChannelManager: Sendable {
         return Date() < until
     }
 
-    /// Clears the ICE cooldown both in-memory and from UserDefaults.
+    /// Clears the ICE cooldown in-memory state.
     /// Called from `IceProxyManager.clearCooldown()` so both systems stay in sync.
     func clearICECooldownState() {
         _iceLock.withLock { _iceCooldownUntil = nil }
+        // Also remove any legacy persisted value from older builds.
         UserDefaults.standard.removeObject(forKey: Self.iceFailedAtKey)
     }
 
@@ -169,15 +173,14 @@ final class GRPCChannelManager: Sendable {
     }
 
     private init() {
-        // Populate in-memory ICE state from UserDefaults — one-time reads at startup.
+        // Populate in-memory ICE mode from UserDefaults — one-time read at startup.
         let storedMode = UserDefaults.standard.string(forKey: IceMode.defaultsKey)
             .flatMap(IceMode.init) ?? IceMode.platformDefault
         _cachedIceMode = storedMode
-        let storedCooldownAt = UserDefaults.standard.double(forKey: Self.iceFailedAtKey)
-        if storedCooldownAt > 0 {
-            let until = Date(timeIntervalSinceReferenceDate: storedCooldownAt + Self.iceCooldown)
-            if until > Date() { _iceCooldownUntil = until }
-        }
+        // ICE cooldown is NOT restored on startup — the network may have changed since
+        // the app was last killed. A fresh connection attempt is always preferred.
+        // Remove any legacy persisted value from older builds.
+        UserDefaults.standard.removeObject(forKey: Self.iceFailedAtKey)
 
         // Invalidate the persistent connection whenever the network path changes
         // (cellular ↔ WiFi switch, VPN on/off, etc.).  The old TCP connection is dead

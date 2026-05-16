@@ -1204,15 +1204,6 @@ final class IceProxyManager: ObservableObject {
             return
         }
 
-        // Restore cooldown state from previous session (persisted in UserDefaults by GRPCChannelManager).
-        let stored = UserDefaults.standard.double(forKey: "iceRelayLastFailedAt")
-        if stored > 0 {
-            let remaining = GRPCChannelManager.iceCooldownDuration - (Date().timeIntervalSinceReferenceDate - stored)
-            if remaining > 0 {
-                enterCooldown(duration: remaining)
-            }
-        }
-
         // Full start: mode == .on, or .auto with known-ICE history.
         let shouldStartFull = mode == .on || (mode == .auto && Self.lastSuccessfulPath == "ice")
         if shouldStartFull {
