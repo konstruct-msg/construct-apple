@@ -184,6 +184,9 @@ struct IceRelay: Codable, Identifiable {
     /// May differ from `tlsServerName` for domain fronting.
     /// Defaults to the relay's hostname when nil.
     let wtHostHeader: String?
+    /// Alternative TLS SNI values to try for WebTunnel before falling back to obfs4.
+    /// OTA-configurable via relay config. Empty when not applicable.
+    let alternativeSNIs: [String]
 
     /// Full bridge line string passed to Rust: "cert=<cert> iat-mode=<n>"
     var bridgeLine: String {
@@ -208,32 +211,36 @@ struct IceRelay: Codable, Identifiable {
 
     init(address: String, bridgeCert: String, iatMode: IceIATMode = .none,
          tlsServerName: String? = nil, pinnedSpki: String? = nil,
-         wtPath: String? = nil, wtHostHeader: String? = nil) {
-        self.id            = UUID()
-        self.address       = address
-        self.bridgeCert    = bridgeCert
-        self.iatMode       = iatMode
-        self.tlsServerName = tlsServerName
-        self.pinnedSpki    = pinnedSpki
-        self.wtPath        = wtPath
-        self.wtHostHeader  = wtHostHeader
+         wtPath: String? = nil, wtHostHeader: String? = nil,
+         alternativeSNIs: [String] = []) {
+        self.id             = UUID()
+        self.address        = address
+        self.bridgeCert     = bridgeCert
+        self.iatMode        = iatMode
+        self.tlsServerName  = tlsServerName
+        self.pinnedSpki     = pinnedSpki
+        self.wtPath         = wtPath
+        self.wtHostHeader   = wtHostHeader
+        self.alternativeSNIs = alternativeSNIs
     }
 
     // Codable conformance for IceIATMode (stored as rawValue Int)
     enum CodingKeys: String, CodingKey {
         case id, address, bridgeCert, iatMode, tlsServerName, pinnedSpki, wtPath, wtHostHeader
+        case alternativeSNIs = "alternativeSNIs"
     }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        id            = try c.decode(UUID.self, forKey: .id)
-        address       = try c.decode(String.self, forKey: .address)
-        bridgeCert    = try c.decode(String.self, forKey: .bridgeCert)
-        let raw       = (try? c.decode(Int.self, forKey: .iatMode)) ?? 1
-        iatMode       = IceIATMode(rawValue: raw) ?? .enabled
-        tlsServerName = try? c.decode(String.self, forKey: .tlsServerName)
-        pinnedSpki    = try? c.decode(String.self, forKey: .pinnedSpki)
-        wtPath        = try? c.decode(String.self, forKey: .wtPath)
-        wtHostHeader  = try? c.decode(String.self, forKey: .wtHostHeader)
+        id              = try c.decode(UUID.self, forKey: .id)
+        address         = try c.decode(String.self, forKey: .address)
+        bridgeCert      = try c.decode(String.self, forKey: .bridgeCert)
+        let raw         = (try? c.decode(Int.self, forKey: .iatMode)) ?? 1
+        iatMode         = IceIATMode(rawValue: raw) ?? .enabled
+        tlsServerName   = try? c.decode(String.self, forKey: .tlsServerName)
+        pinnedSpki      = try? c.decode(String.self, forKey: .pinnedSpki)
+        wtPath          = try? c.decode(String.self, forKey: .wtPath)
+        wtHostHeader    = try? c.decode(String.self, forKey: .wtHostHeader)
+        alternativeSNIs = (try? c.decode([String].self, forKey: .alternativeSNIs)) ?? []
     }
     func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
@@ -245,6 +252,7 @@ struct IceRelay: Codable, Identifiable {
         try? c.encode(pinnedSpki, forKey: .pinnedSpki)
         try? c.encode(wtPath, forKey: .wtPath)
         try? c.encode(wtHostHeader, forKey: .wtHostHeader)
+        if !alternativeSNIs.isEmpty { try? c.encode(alternativeSNIs, forKey: .alternativeSNIs) }
     }
 }
 
@@ -309,9 +317,11 @@ private func makeRelay(address: String, bridgeCert: String, forceObfs4: Bool = f
     }
     // IAT mode: use server-pushed value when available, default to .enabled.
     let iatMode = IceCertFetcher.iatModeSync(for: address) ?? .enabled
+    let altSNIs = IceCertFetcher.alternativeSNIsSync(for: address)
     return IceRelay(address: address, bridgeCert: resolvedCert, iatMode: iatMode,
                     tlsServerName: sni, pinnedSpki: pin,
-                    wtPath: wtPath, wtHostHeader: wtHostHeader)
+                    wtPath: wtPath, wtHostHeader: wtHostHeader,
+                    alternativeSNIs: altSNIs)
 }
 
 /// Compute a WebTunnel path auth token for a given time period.
@@ -600,6 +610,10 @@ final class IceProxyManager: ObservableObject {
     /// Cleared on network path change — the new network may allow WebTunnel.
     private var webTunnelBlockedRelays: Set<String> = []
 
+    /// Per-relay index into `IceRelay.alternativeSNIs` for the next SNI rotation attempt.
+    /// Incremented each time an alternate SNI is tried. Reset on network change or relay rotation.
+    private var relayCurrentSNIIndex: [String: Int] = [:]
+
     /// Whether the currently active relay has been verified by a successful RPC
     /// either this session or from persisted quality history.
     var isCurrentRelayVerified: Bool {
@@ -717,10 +731,11 @@ final class IceProxyManager: ObservableObject {
     /// Quality scores are NOT cleared — they are persisted historical data.
     private func clearRelayFailures() {
         guard !recentlyFailedRelays.isEmpty || !sessionVerifiedRelays.isEmpty
-                || !webTunnelBlockedRelays.isEmpty else { return }
+                || !webTunnelBlockedRelays.isEmpty || !relayCurrentSNIIndex.isEmpty else { return }
         recentlyFailedRelays.removeAll()
         sessionVerifiedRelays.removeAll()   // re-verify on new network
         webTunnelBlockedRelays.removeAll()
+        relayCurrentSNIIndex.removeAll()    // DPI profile may differ on new network
         // Quality scores and latency EWMA are kept: historical data remains valid.
         // sortByLatency() will re-probe if latencyMeasuredAt is stale.
         Log.info("🧊 Relay failure blacklist + session verification cleared", category: "ICE")
@@ -899,19 +914,25 @@ final class IceProxyManager: ObservableObject {
     }
 
     /// Called when WebTunnel returns a non-200 HTTP status code (carrier transparent proxy
-    /// intercepted the WebSocket UPGRADE). obfs4 is a binary protocol that such proxies
-    /// cannot inspect, so this restarts the same relay in obfs4 mode.
+    /// intercepted the WebSocket UPGRADE).
     ///
-    /// For CDN-fronted relays (e.g. MSK behind Yandex CDN), the CDN terminates TLS so
-    /// raw obfs4 bytes never reach the relay process. Instead of attempting obfs4 on the
-    /// CDN port (which always fails in <1s), this switches to a companion obfs4 port that
-    /// connects directly to the relay VM, bypassing the CDN entirely.
+    /// **SNI rotation first**: if this relay has untried `alternativeSNIs`, restarts WebTunnel
+    /// with the next SNI before falling back to obfs4. Domain-fronting rotations can bypass
+    /// SNI-based DPI blocks without abandoning WebTunnel entirely.
+    ///
+    /// **obfs4 fallback**: after all alternate SNIs are exhausted (or if none are configured),
+    /// restarts the same relay in obfs4 mode. obfs4 is a binary protocol that carrier transparent
+    /// proxies cannot inspect.
+    ///
+    /// **CDN-fronted relays** (e.g. MSK behind Yandex CDN): CDN terminates TLS at the edge so
+    /// raw obfs4 bytes never reach the relay process. Switches to a companion obfs4 port that
+    /// connects directly to the relay VM, bypassing the CDN.
     ///
     /// Marks the relay address in `webTunnelBlockedRelays` so subsequent
     /// `startWithRelayFallback()` calls also bypass WebTunnel on this network.
-    /// The set is cleared on network path change — new network may allow WebTunnel.
+    /// Clears on network path change — new network may allow WebTunnel.
     ///
-    /// - Returns: true if obfs4 started successfully, false if it also failed.
+    /// - Returns: true if a usable transport (alternate SNI or obfs4) started successfully.
     func retryCurrentRelayAsObfs4(hintAddress: String? = nil) async -> Bool {
         // Prefer current live state. If networkPathChanged raced and already called
         // resetAllProxyState() between the caller's webTunnelActive read and this call,
@@ -929,9 +950,29 @@ final class IceProxyManager: ObservableObject {
 
         webTunnelBlockedRelays.insert(relay.address)
 
-        // CDN-fronted relays (e.g., MSK behind Yandex CDN) terminate TLS at the CDN edge —
-        // obfs4 bytes inside the TLS tunnel never reach the relay process. Switch to the
-        // companion obfs4 port (direct VM access, no CDN) if one is configured.
+        // ── SNI rotation: try alternate SNIs before falling back to obfs4 ────────────────
+        // This handles SNI-based DPI blocks (e.g. GFW blocking specific WebTunnel domains)
+        // without abandoning the more covert WebTunnel transport entirely.
+        if let altSNI = nextAlternativeSNI(for: relay) {
+            Log.info("🧊 WebTunnel blocked — trying alternate SNI \(altSNI) on \(relay.address)", category: "ICE")
+            ice_proxy_stop()
+            resetAllProxyState()
+            let altRelay = IceRelay(address: relay.address, bridgeCert: relay.bridgeCert,
+                                    iatMode: relay.iatMode, tlsServerName: altSNI,
+                                    pinnedSpki: relay.pinnedSpki,
+                                    wtPath: relay.wtPath, wtHostHeader: altSNI,
+                                    alternativeSNIs: relay.alternativeSNIs)
+            if start(relay: altRelay) != nil {
+                saveRelay(altRelay)
+                Log.info("🧊 ICE WebTunnel active via alternate SNI \(altSNI) on \(relay.address)", category: "ICE")
+                return true
+            }
+            Log.info("🧊 Alternate SNI \(altSNI) also failed — continuing to obfs4 fallback", category: "ICE")
+        }
+
+        // ── CDN-fronted relays ────────────────────────────────────────────────────────────
+        // CDN terminates TLS at the edge — obfs4 bytes inside the TLS tunnel never reach
+        // the relay process. Switch to a companion obfs4 port (direct VM access, no CDN).
         if relay.isCDNFronted {
             if let companionAddr = ICEConfig.hardcodedRelayObfs4Companions[relay.address] {
                 Log.info("🧊 CDN-fronted relay \(relay.address) — switching to companion obfs4 port \(companionAddr)", category: "ICE")
@@ -950,7 +991,8 @@ final class IceProxyManager: ObservableObject {
             return false
         }
 
-        Log.info("🧊 WebTunnel blocked by carrier proxy — retrying \(relay.address) via obfs4", category: "ICE")
+        // ── obfs4 fallback ────────────────────────────────────────────────────────────────
+        Log.info("🧊 WebTunnel blocked (all SNIs exhausted) — retrying \(relay.address) via obfs4", category: "ICE")
         ice_proxy_stop()
         resetAllProxyState()
         let obfs4Relay = makeRelay(address: relay.address, bridgeCert: relay.bridgeCert, forceObfs4: true)
@@ -961,6 +1003,17 @@ final class IceProxyManager: ObservableObject {
         }
         Log.error("🧊 ICE obfs4 also failed on \(relay.address) — will rotate to next relay", category: "ICE")
         return false
+    }
+
+    /// Returns the next untried alternative SNI for the given relay, advancing the index.
+    /// Returns nil when all alternatives have been tried or the relay has none.
+    private func nextAlternativeSNI(for relay: IceRelay) -> String? {
+        let alts = relay.alternativeSNIs
+        guard !alts.isEmpty else { return nil }
+        let idx = relayCurrentSNIIndex[relay.address, default: 0]
+        guard idx < alts.count else { return nil }
+        relayCurrentSNIIndex[relay.address] = idx + 1
+        return alts[idx]
     }
 
     // MARK: - Start / Stop

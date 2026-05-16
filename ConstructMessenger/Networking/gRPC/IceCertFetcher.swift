@@ -38,29 +38,35 @@ struct RelayInfo: Codable {
     let wtHostHeader: String?
     /// IAT mode pushed by server. Defaults to `.enabled` (1) when absent.
     let iatMode: IceIATMode
+    /// Additional TLS SNI values to try for WebTunnel on this relay before falling back to obfs4.
+    /// Allows domain-fronting rotation without a binary update.
+    /// nil / empty → no SNI alternatives available.
+    let alternativeSNIs: [String]?
 
     var addressWithPort: String { "\(addr):\(port)" }
 
     enum CodingKeys: String, CodingKey {
         case id, addr, port, domain, sni
-        case spkiSha256  = "spki_sha256"
-        case bridgeCert  = "bridge_cert"
-        case wtPath      = "wt_path"
-        case wtHostHeader = "wt_host_header"
-        case iatMode     = "iat_mode"
+        case spkiSha256      = "spki_sha256"
+        case bridgeCert      = "bridge_cert"
+        case wtPath          = "wt_path"
+        case wtHostHeader    = "wt_host_header"
+        case iatMode         = "iat_mode"
+        case alternativeSNIs = "alternative_snis"
     }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        id          = try c.decode(String.self,  forKey: .id)
-        addr        = try c.decode(String.self,  forKey: .addr)
-        port        = try c.decode(Int.self,     forKey: .port)
-        domain      = try c.decode(String.self,  forKey: .domain)
-        sni         = try c.decode(String.self,  forKey: .sni)
-        spkiSha256  = try c.decode(String.self,  forKey: .spkiSha256)
-        bridgeCert  = try c.decodeIfPresent(String.self, forKey: .bridgeCert)
-        wtPath      = try c.decodeIfPresent(String.self, forKey: .wtPath)
-        wtHostHeader = try c.decodeIfPresent(String.self, forKey: .wtHostHeader)
+        id              = try c.decode(String.self,  forKey: .id)
+        addr            = try c.decode(String.self,  forKey: .addr)
+        port            = try c.decode(Int.self,     forKey: .port)
+        domain          = try c.decode(String.self,  forKey: .domain)
+        sni             = try c.decode(String.self,  forKey: .sni)
+        spkiSha256      = try c.decode(String.self,  forKey: .spkiSha256)
+        bridgeCert      = try c.decodeIfPresent(String.self, forKey: .bridgeCert)
+        wtPath          = try c.decodeIfPresent(String.self, forKey: .wtPath)
+        wtHostHeader    = try c.decodeIfPresent(String.self, forKey: .wtHostHeader)
+        alternativeSNIs = try c.decodeIfPresent([String].self, forKey: .alternativeSNIs)
         let rawIat  = (try? c.decodeIfPresent(Int.self, forKey: .iatMode)) ?? nil
         iatMode     = rawIat.flatMap { IceIATMode(rawValue: $0) } ?? .enabled
     }
@@ -73,10 +79,11 @@ struct RelayInfo: Codable {
         try c.encode(domain,       forKey: .domain)
         try c.encode(sni,          forKey: .sni)
         try c.encode(spkiSha256,   forKey: .spkiSha256)
-        try c.encodeIfPresent(bridgeCert,   forKey: .bridgeCert)
-        try c.encodeIfPresent(wtPath,       forKey: .wtPath)
-        try c.encodeIfPresent(wtHostHeader, forKey: .wtHostHeader)
-        try c.encode(iatMode.rawValue,      forKey: .iatMode)
+        try c.encodeIfPresent(bridgeCert,      forKey: .bridgeCert)
+        try c.encodeIfPresent(wtPath,          forKey: .wtPath)
+        try c.encodeIfPresent(wtHostHeader,    forKey: .wtHostHeader)
+        try c.encodeIfPresent(alternativeSNIs, forKey: .alternativeSNIs)
+        try c.encode(iatMode.rawValue,         forKey: .iatMode)
     }
 }
 
@@ -338,6 +345,16 @@ actor IceCertFetcher {
             return relay.sni.isEmpty ? nil : relay.sni
         }
         return ICEConfig.hardcodedRelaySNIs[address]
+    }
+
+    /// Synchronous alternative SNI list for non-async contexts.
+    /// Returns all alternative SNIs pushed by the server for this relay, or hardcoded fallback.
+    static func alternativeSNIsSync(for address: String) -> [String] {
+        if let relay = cachedRelayInfosSync()?.first(where: { $0.addressWithPort == address }),
+           let alts = relay.alternativeSNIs, !alts.isEmpty {
+            return alts
+        }
+        return ICEConfig.hardcodedRelayAlternativeSNIs[address] ?? []
     }
 
     /// IAT mode pushed by server for this relay. Returns nil when relay is not in cache

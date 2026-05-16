@@ -508,6 +508,12 @@ struct ICEConfig {
     // MSK relay removed — 9443 also RST by DPI
     static let hardcodedRelayObfs4Companions: [String: String] = [:]
 
+    /// Alternative TLS SNI values per relay address for WebTunnel domain-fronting rotation.
+    /// When WebTunnel is blocked by SNI-based DPI, these are tried in order before obfs4 fallback.
+    /// Override (and extend) via `.well-known/construct-server` `ice.relays[].alternative_snis`
+    /// without a binary update.
+    static let hardcodedRelayAlternativeSNIs: [String: [String]] = [:]
+
     /// Fallback relay-region rules used when the server config has not been fetched yet.
     /// Each rule maps a UTC offset range (hours, inclusive) to a preferred relay ordering.
     /// The first matching rule wins; unmatched → default ordering.

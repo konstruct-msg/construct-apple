@@ -285,11 +285,10 @@ final class GRPCCallExecutor: Sendable {
 
         if invalidatesConnectionOnFailure {
             // Relay tunnel broken. Check for WebTunnel-specific failure first:
-            // obfs4 is a binary protocol that carrier transparent proxies can't inspect —
-            // try the same relay in obfs4 mode before rotating.
+            // try alternate SNIs then obfs4 before rotating to a new relay.
             let webTunnelActive = await IceProxyManager.shared.isWebTunnelActive
             if isWebTunnelBlocked(error), webTunnelActive {
-                Log.info("🧊 WebTunnel blocked (non-200) — retrying relay via obfs4", category: "gRPC")
+                Log.info("🧊 WebTunnel blocked (non-200) — retrying relay via alternate SNI or obfs4", category: "gRPC")
                 let obfs4OK = await IceProxyManager.shared.retryCurrentRelayAsObfs4(hintAddress: failedAddr)
                 if obfs4OK {
                     cm.invalidatePersistentClient()
