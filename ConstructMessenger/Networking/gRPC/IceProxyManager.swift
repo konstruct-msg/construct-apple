@@ -19,6 +19,8 @@ import Combine
 import Network
 import os
 import CryptoKit
+import GRPCCore
+import GRPCNIOTransportHTTP2
 
 /// Thread-safe one-shot flag used to prevent double-resuming a CheckedContinuation
 /// when multiple concurrent closures (NW state handler + timeout) race to complete.
@@ -1347,9 +1349,13 @@ final class IceProxyManager: ObservableObject {
 
     /// Schedule a repeating background probe that checks if direct gRPC is reachable
     /// while we're routing through ICE in `.auto` mode.
-    /// The probe uses a plain TLS handshake — lightweight, no auth required.
-    /// On success: records "direct" path so the *next* natural reconnect uses direct.
-    /// The current live ICE connection is never torn down by the probe.
+    ///
+    /// Uses a two-step probe to avoid false positives from TLS-only checks:
+    ///   Step 1: Plain TLS handshake (fast, no auth needed)
+    ///   Step 2: Real gRPC call 30s later (confirms HTTP/2 not DPI-blocked)
+    ///
+    /// Only if BOTH steps succeed does the path record "direct" and switch on the
+    /// next natural reconnect.  The current live ICE connection is never torn down.
     @MainActor
     func scheduleBackgroundDirectProbe() {
         guard mode == .auto else { return }
@@ -1359,14 +1365,27 @@ final class IceProxyManager: ObservableObject {
                 try? await Task.sleep(for: .seconds(NetworkTiming.ICE.directProbeInterval))
                 guard !Task.isCancelled else { break }
                 guard let self, self.mode == .auto, self.isRunning else { break }
-                let reachable = await self.probeDirectTLSConnection()
+
+                // Step 1: TLS handshake
+                guard await self.probeDirectTLSConnection() else {
+                    Log.debug("🧊 Direct probe step 1 (TLS) failed — staying on ICE", category: "ICE")
+                    continue
+                }
+                Log.info("🧊 Direct probe step 1 (TLS) succeeded — waiting \(Int(NetworkTiming.ICE.directProbeGRPCDelay))s before step 2 (gRPC)", category: "ICE")
+
+                // Debounce: wait before step 2 to avoid acting on a transient TLS blip
+                try? await Task.sleep(for: .seconds(NetworkTiming.ICE.directProbeGRPCDelay))
                 guard !Task.isCancelled else { break }
-                if reachable {
-                    Log.info("🧊 Background direct probe succeeded — will switch to direct on next reconnect", category: "ICE")
+                guard self.mode == .auto, self.isRunning else { break }
+
+                // Step 2: real gRPC call (proves HTTP/2 not DPI-blocked)
+                if await self.probeDirectGRPCConnection() {
+                    Log.info("🧊 Direct probe step 2 (gRPC) succeeded — switching to direct on next reconnect", category: "ICE")
                     await MainActor.run { self.recordDirectStreamConnected() }
-                    break  // path recorded; probe cancelled by recordDirectStreamConnected
+                    break
                 } else {
-                    Log.debug("🧊 Background direct probe failed — staying on ICE", category: "ICE")
+                    Log.info("🧊 Direct probe step 2 (gRPC) failed — TLS works but gRPC is DPI-blocked; staying on ICE", category: "ICE")
+                    // Continue probing — DPI may be intermittent or temporarily active
                 }
             }
         }
@@ -1401,6 +1420,66 @@ final class IceProxyManager: ObservableObject {
                 try? await Task.sleep(for: .seconds(NetworkTiming.ICE.directProbeTimeout))
                 if flag.trigger() { cont.resume(returning: false); conn.cancel() }
             }
+        }
+    }
+
+    /// Step 2 of the two-step direct probe.
+    /// Makes a real gRPC call on a temporary direct-only channel (bypassing ICE).
+    /// Returns true if any gRPC-level response arrives — even UNAUTHENTICATED or NOT_FOUND
+    /// counts as success because it proves HTTP/2 is not DPI-blocked.
+    /// Returns false only on transport-level failure (connection refused, timeout).
+    private func probeDirectGRPCConnection() async -> Bool {
+        guard let client = try? GRPCChannelManager.shared.makeDirectProbeClient() else { return false }
+        let deviceId = KeychainManager.shared.loadDeviceID() ?? ""
+        return await withThrowingTaskGroup(of: Bool?.self) { group in
+            // Transport task: drives the HTTP/2 connection; errors surfaced here are transport-level.
+            group.addTask {
+                do {
+                    try await client.runConnections()
+                    return nil
+                } catch is CancellationError {
+                    return nil
+                } catch {
+                    return false  // transport-level error = gRPC path blocked
+                }
+            }
+
+            // Probe task: make one gRPC call; any gRPC response = HTTP/2 works.
+            group.addTask {
+                let keyClient = Shared_Proto_Services_V1_KeyService.Client(wrapping: client)
+                var req = Shared_Proto_Services_V1_GetPreKeyCountRequest()
+                req.deviceID = deviceId
+                do {
+                    _ = try await keyClient.getPreKeyCount(request: .init(message: req))
+                    // Successful call: direct gRPC is fully operational.
+                } catch let e as RPCError where e.code != .unavailable && e.code != .deadlineExceeded {
+                    // Any gRPC error except transport failures: HTTP/2 works, gRPC frames pass DPI.
+                    // e.g. UNAUTHENTICATED, NOT_FOUND, PERMISSION_DENIED all count as success.
+                }  catch {
+                    // Transport/timeout failure: gRPC may be blocked.
+                    client.beginGracefulShutdown()
+                    return false
+                }
+                client.beginGracefulShutdown()
+                return true
+            }
+
+            // Timeout task
+            group.addTask {
+                try? await Task.sleep(for: .seconds(NetworkTiming.ICE.directProbeGRPCTimeout))
+                client.beginGracefulShutdown()
+                return false
+            }
+
+            var result = false
+            while let next = try? await group.next() {
+                if let r = next {
+                    result = r
+                    group.cancelAll()
+                    break
+                }
+            }
+            return result
         }
     }
 

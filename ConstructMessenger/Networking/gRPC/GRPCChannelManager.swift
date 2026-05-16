@@ -437,6 +437,30 @@ final class GRPCChannelManager: Sendable {
     }
 
     /// Creates a one-shot gRPC client targeting a local ICE proxy port over plaintext.
+    /// Creates a temporary gRPC client that always connects directly to the server,
+    /// bypassing any active ICE proxy. Use ONLY for direct-path connectivity probes.
+    /// The caller must co-run with `client.runConnections()` to actually establish the connection.
+    func makeDirectProbeClient() throws -> GRPCClient<HTTP2ClientTransport.TransportServices> {
+        let host = currentHost
+        let port = currentPort
+        Log.debug("🧊 Direct probe client → \(host):\(port) (no ICE)", category: "ICE")
+        let transport = try HTTP2ClientTransport.TransportServices(
+            target: .dns(host: host, port: port),
+            transportSecurity: .tls,
+            config: .defaults {
+                $0.connection = .init(
+                    maxIdleTime: .seconds(15),
+                    keepalive: .init(
+                        time: .seconds(10),
+                        timeout: .seconds(5),
+                        allowWithoutCalls: false
+                    )
+                )
+            }
+        )
+        return GRPCClient(transport: transport, interceptors: [AuthInterceptor()])
+    }
+
     /// Used for the ICE legs of a happy-eyeballs 3-way race.
     func makeICEClient(port: UInt16) throws -> GRPCClient<HTTP2ClientTransport.TransportServices> {
         let transport = try HTTP2ClientTransport.TransportServices(

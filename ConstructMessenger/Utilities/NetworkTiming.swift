@@ -174,6 +174,12 @@ enum NetworkTiming {
         /// TLS connection timeout for the direct probe. Short enough to not stall
         /// UX, long enough to survive high-latency networks.
         static let directProbeTimeout: TimeInterval = 4.0
+        /// Debounce between step 1 (TLS) and step 2 (gRPC) of the two-step direct probe.
+        /// After TLS succeeds we wait this long before making a real gRPC call.
+        /// This prevents acting on a transient TLS blip.
+        static let directProbeGRPCDelay: TimeInterval = 30.0
+        /// Timeout for the gRPC step of the direct probe.
+        static let directProbeGRPCTimeout: TimeInterval = 6.0
     }
 
     // MARK: - Stream
