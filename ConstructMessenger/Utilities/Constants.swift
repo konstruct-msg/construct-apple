@@ -439,9 +439,16 @@ struct ICEConfig {
 
     // ── SPB relay removed 2026-05-16 ─────────────────────────────────────────
     // 45.135.233.5:52143 (VKCS SPb, s3.vkcs.cloud SNI) — IP blocked by RU DPI (TCP RST at TLS handshake).
-    // VPS deleted. New relay to be provisioned with port 443 + SNI camouflage + gRPC-H2 transport.
+    // VPS deleted. Replaced by ruRelay below (2026-05-16).
 
-    // ── Relay 2: future SPB/RU relay placeholder ─────────────────────────────
+    // ── Relay 3: RU relay (194.87.232.51 / api.divany-kresla.uk) ─────────────
+    /// construct-relay on VKCS, SNI-camouflaged behind Nginx, anti-probe → Apple CDN.
+    /// Upstream: ams.konstruct.cc:443. Provisioned 2026-05-16.
+    static let ruRelayAddress    = "api.divany-kresla.uk:443"
+    static let ruRelaySNI        = "api.divany-kresla.uk"
+    static let ruRelayPinnedSPKI = "bb42af0f12a95779fb45dcbe3039746616b51aacf8c7cc954ba6cbb048055943"
+    /// Update when relay container is recreated (new keypair in /data/relay.obfs4).
+    static let ruRelayBridgeCert = "zdfEJKLpy4nVo09zbd/5q3Yx02FyL7Tlr+5Aurww51IbYacIWIqbcTndB1UL+n2g68XBQw"
 
     /// Ed25519 public key used to verify `.well-known/construct-server` signature.
     /// This is the ONLY value hardcoded permanently — everything else is OTA-updatable.
@@ -452,7 +459,7 @@ struct ICEConfig {
     /// Used by makeRelay() to override the AMS cert for relays with their own obfs4 keypair.
     static let hardcodedRelayCerts: [String: String] = [
         amsRelayAddress: amsRelayBridgeCert,
-        // spbRelayAddress: spbRelayBridgeCert,  // SPB relay removed 2026-05-16 — IP blocked (TCP RST)
+        ruRelayAddress:  ruRelayBridgeCert,
         // mskRelayAddress: mskRelayBridgeCert,  // MSK relay removed — IP blocked by RU DPI
     ]
 
@@ -460,7 +467,7 @@ struct ICEConfig {
     /// Order matters: relays are probed concurrently but this sets tie-break priority.
     static let hardcodedRelayAddresses: [String] = [
         amsRelayAddress,
-        // spbRelayAddress,  // SPB relay removed 2026-05-16 — VPS deleted, new relay pending
+        ruRelayAddress,
         // mskRelayAddress,  // MSK relay removed — 158.160.140.67 blocked by RU DPI (TLS RST)
     ]
 
@@ -469,7 +476,7 @@ struct ICEConfig {
     /// Also used for domain-based relays that need explicit SPKI pinning.
     static let hardcodedRelaySNIs: [String: String] = [
         amsRelayAddress: amsRelaySNI,
-        // spbRelayAddress: spbRelaySNI,         // SPB removed
+        ruRelayAddress:  ruRelaySNI,
         // mskRelayAddress:      mskRelaySNI,    // MSK removed
         // mskRelayObfs4Address: mskRelaySNI,    // MSK removed
     ]
@@ -478,7 +485,7 @@ struct ICEConfig {
     /// that appears in hardcodedRelaySNIs.
     static let hardcodedRelaySPKIs: [String: String] = [
         amsRelayAddress: amsRelayPinnedSPKI,
-        // spbRelayAddress: spbRelayPinnedSPKI,         // SPB removed
+        ruRelayAddress:  ruRelayPinnedSPKI,
         // mskRelayAddress:      mskRelayPinnedSPKI,    // MSK removed
         // mskRelayObfs4Address: mskRelayPinnedSPKI,    // MSK removed
     ]
@@ -495,7 +502,7 @@ struct ICEConfig {
     /// Override via `.well-known/construct-server` `ice.relays[].wt_path` without a new build.
     static let hardcodedRelayWTPaths: [String: String] = [
         amsRelayAddress: "/construct-ice",
-        // spbRelayAddress: no WebTunnel — bare IP, no CDN fronting
+        ruRelayAddress:  "/api/stream",
         // mskRelayAddress: "/construct-ice",   // MSK removed
     ]
 
@@ -519,7 +526,7 @@ struct ICEConfig {
     /// not by timezone heuristics — timezone is a poor proxy for DPI presence.
     /// Override via `.well-known/construct-server` `ice.relay_regions` without a new build.
     static let hardcodedRelayRegions: [ICERelayRegion] = [
-        ICERelayRegion(tzOffsetMin: -12, tzOffsetMax: 12, preferredRelays: [amsRelayAddress, spbRelayAddress]),
+        ICERelayRegion(tzOffsetMin: -12, tzOffsetMax: 12, preferredRelays: [amsRelayAddress]),
     ]
 }
 
