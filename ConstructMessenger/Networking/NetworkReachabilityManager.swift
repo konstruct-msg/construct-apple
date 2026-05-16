@@ -26,6 +26,19 @@ class NetworkReachabilityManager {
         case unknown
     }
 
+    /// Describes the nature of a network path change so consumers can choose
+    /// how aggressively to reset connection state.
+    enum NetworkChangeKind {
+        /// The high-level interface type switched (e.g. WiFi → cellular).
+        /// All relay blacklists should be cleared; relays reachable on one
+        /// interface may be unreachable on the other and vice-versa.
+        case newInterface
+        /// The topology changed without switching interface type (VPN toggle,
+        /// IP rotation, interface added/removed). Relay DPI-block status is
+        /// likely unchanged; keep blacklist, skip expensive relay rediscovery.
+        case pathTopology
+    }
+
     private var monitor: NWPathMonitor?
     private var queue: DispatchQueue?
     /// Tracks the previous connection type to detect interface changes (e.g. WiFi → cellular).
@@ -117,10 +130,11 @@ class NetworkReachabilityManager {
                     // Also post a path-changed notification so subscribers can restart ICE /
                     // cancel stale TCP connections even when reachability stays .satisfied.
                     if interfaceSwitched {
+                        let changeKind: NetworkChangeKind = interfaceTypeSwitched ? .newInterface : .pathTopology
                         NotificationCenter.default.post(
                             name: .networkPathChanged,
                             object: nil,
-                            userInfo: ["connectionType": self.connectionType]
+                            userInfo: ["connectionType": self.connectionType, "changeKind": changeKind]
                         )
                     }
                 }

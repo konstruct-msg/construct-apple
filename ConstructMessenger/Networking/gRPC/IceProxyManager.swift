@@ -351,10 +351,12 @@ final class IceProxyManager: ObservableObject {
             forName: .networkPathChanged,
             object: nil,
             queue: nil
-        ) { [weak self] _ in
+        ) { [weak self] notification in
+            let changeKind = notification.userInfo?["changeKind"]
+                as? NetworkReachabilityManager.NetworkChangeKind ?? .newInterface
             Task { @MainActor in
                 guard let self, self.isRunning else { return }
-                await self.handleNetworkPathChange()
+                await self.handleNetworkPathChange(changeKind: changeKind)
             }
         }
     }
@@ -1306,19 +1308,32 @@ final class IceProxyManager: ObservableObject {
     /// returns 1 (the Rust goroutine hasn't discovered the broken connection yet).
     /// We force-restart proactively so the next RPC finds a healthy proxy immediately.
     @MainActor
-    func handleNetworkPathChange() async {
-        Log.info("🧊 Network path changed — restarting ICE proxy for new interface", category: "ICE")
-        ice_proxy_stop()
-        resetAllProxyState()
-        clearCooldown()
-        clearRelayFailures()
+    func handleNetworkPathChange(changeKind: NetworkReachabilityManager.NetworkChangeKind = .newInterface) async {
+        switch changeKind {
+        case .newInterface:
+            Log.info("🧊 Network path changed (new interface) — full ICE reset", category: "ICE")
+            ice_proxy_stop()
+            resetAllProxyState()
+            clearCooldown()
+            clearRelayFailures()   // relay DPI profile may differ on new interface
+
+        case .pathTopology:
+            // VPN toggle or IP rotation: same interface, same DPI environment.
+            // Keep relay blacklist and verifiedRelayAddress — relay reachability is unchanged.
+            // Just stop the proxy (TCP tunnel is dead) and clear cooldown.
+            Log.info("🧊 Network path changed (topology/VPN) — partial ICE reset (blacklist preserved)", category: "ICE")
+            ice_proxy_stop()
+            resetAllProxyState()
+            clearCooldown()
+        }
 
         // Restart ICE if: always-on OR auto mode with a remembered ICE path.
         guard mode == .on || (mode == .auto && Self.lastSuccessfulPath == "ice") else { return }
 
-        // Spread reconnects across clients to avoid thundering-herd when many users
-        // simultaneously switch networks (e.g. office WiFi comes back after outage).
-        let startDelay = NetworkTiming.randomDelay(max: 2.0)
+        // Spread reconnects across clients to avoid thundering-herd.
+        // New interface → wider window (0-2s); topology change → tighter window (0-0.5s).
+        let maxDelay: TimeInterval = (changeKind == .newInterface) ? 2.0 : 0.5
+        let startDelay = NetworkTiming.randomDelay(max: maxDelay)
         if startDelay > 0.05 {
             Log.debug("🧊 Network-change ICE restart staggered by \(String(format: "%.2f", startDelay))s", category: "ICE")
             try? await Task.sleep(for: .seconds(startDelay))
