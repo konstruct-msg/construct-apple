@@ -42,12 +42,24 @@ class SettingsViewModel {
     var discoverableError: String?
 
     private var viewContext: NSManagedObjectContext?
+    private var avatarLoadAttemptUserId: String?
 
     /// Exposed read-only for platform-specific views (e.g. Desktop avatar removal).
     var viewContextPublic: NSManagedObjectContext? { viewContext }
 
     func setContext(_ context: NSManagedObjectContext) {
         self.viewContext = context
+    }
+
+    /// Prevents redundant reloads on repeated onAppear while still allowing refresh
+    /// when auth identity data changed or avatar wasn't loaded for this user yet.
+    func needsUserInfoRefresh(from authViewModel: AuthViewModel) -> Bool {
+        let latestUserId = authViewModel.currentUserId ?? SessionManager.shared.currentUserId ?? ""
+        if userId != latestUserId { return true }
+        if username != authViewModel.currentUsername { return true }
+        if displayName != authViewModel.currentDisplayName { return true }
+        if !latestUserId.isEmpty && avatarLoadAttemptUserId != latestUserId { return true }
+        return false
     }
 
     func loadUserInfo(from authViewModel: AuthViewModel) {
@@ -72,6 +84,7 @@ class SettingsViewModel {
     /// Loads avatar from the current user's User entity in Core Data
     private func loadAvatarFromCoreData() {
         guard let context = viewContext, !userId.isEmpty else { return }
+        avatarLoadAttemptUserId = userId
         
         // ✅ FIX: Check if persistent store coordinator is ready before accessing entities
         guard context.persistentStoreCoordinator != nil else {
@@ -120,6 +133,7 @@ class SettingsViewModel {
 
                 // Update UI
                 profileImage = ImageHelper.imageFromData(processedData)
+                avatarLoadAttemptUserId = userId
                 print("✅ Avatar saved successfully")
 
                 // Re-send profile to all contacts we share with so they see the new avatar

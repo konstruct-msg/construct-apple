@@ -29,6 +29,7 @@ struct DevicesView: View {
     @State private var showSignOutAllConfirm = false
 
     var body: some View {
+        let otherDevices = devices.filter { !$0.isCurrent }
         VStack(spacing: 0) {
             CTNavBar(
                 title: NSLocalizedString("linked_devices", comment: ""),
@@ -37,7 +38,7 @@ struct DevicesView: View {
             )
 
             ScrollView {
-            VStack(spacing: 20) {
+            LazyVStack(spacing: 20) {
                 if isLoading && devices.isEmpty {
                     ConstructSection {
                         HStack { Spacer(); ProgressView(); Spacer() }.padding()
@@ -53,11 +54,10 @@ struct DevicesView: View {
                     }
 
                     // MARK: - Other Devices
-                    let others = devices.filter { !$0.isCurrent }
-                    if !others.isEmpty {
+                    if !otherDevices.isEmpty {
                         VStack(alignment: .leading, spacing: 6) {
                             ConstructSection(header: NSLocalizedString("other_devices", comment: "")) {
-                                ForEach(Array(others.enumerated()), id: \.element.id) { index, device in
+                                ForEach(Array(otherDevices.enumerated()), id: \.element.id) { index, device in
                                     if index > 0 { ConstructRowDivider(indent: 52) }
                                     DeviceRow(device: device, isCurrent: false) {
                                         deviceToRevoke = device
@@ -67,7 +67,7 @@ struct DevicesView: View {
                                     .padding(.vertical, 14)
                                 }
                             }
-                            if others.count > 1 {
+                            if otherDevices.count > 1 {
                                 Text(LocalizedStringKey("other_devices_hint"))
                                     .font(CTFont.regular(11))
                                     .foregroundStyle(Color.CT.textDim)
@@ -114,7 +114,7 @@ struct DevicesView: View {
                             ConstructActionRow(icon: "[→]", title: LocalizedStringKey("sign_out_this_device"), role: .destructive) {
                                 showSignOutConfirm = true
                             }
-                            if devices.filter({ !$0.isCurrent }).count > 0 {
+                            if !otherDevices.isEmpty {
                                 ConstructRowDivider(indent: 52)
                                 ConstructActionRow(icon: "[x]", title: LocalizedStringKey("sign_out_other_devices"), role: .destructive) {
                                     showSignOutOthersConfirm = true
@@ -259,6 +259,19 @@ struct DevicesView: View {
 // MARK: - Device Row
 
 private struct DeviceRow: View {
+    private static let addedDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .none
+        return formatter
+    }()
+
+    private static let relativeLastSeenFormatter: RelativeDateTimeFormatter = {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .full
+        return formatter
+    }()
+
     let device: AuthServiceClient.LinkedDevice
     let isCurrent: Bool
     let onRevoke: () -> Void
@@ -312,14 +325,12 @@ private struct DeviceRow: View {
 
     private var lastSeenText: String {
         if abs(device.lastSeen.timeIntervalSince(device.createdAt)) < 5 {
-            let fmt = DateFormatter()
-            fmt.dateStyle = .medium
-            fmt.timeStyle = .none
-            return String(format: NSLocalizedString("device_added_%@", comment: ""), fmt.string(from: device.createdAt))
+            return String(
+                format: NSLocalizedString("device_added_%@", comment: ""),
+                Self.addedDateFormatter.string(from: device.createdAt)
+            )
         }
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .full
-        return formatter.localizedString(for: device.lastSeen, relativeTo: Date())
+        return Self.relativeLastSeenFormatter.localizedString(for: device.lastSeen, relativeTo: Date())
     }
 }
 

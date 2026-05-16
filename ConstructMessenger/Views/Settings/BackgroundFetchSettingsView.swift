@@ -8,6 +8,12 @@
 import SwiftUI
 
 struct BackgroundFetchSettingsView: View {
+    private static let lastCheckFormatter: RelativeDateTimeFormatter = {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .full
+        return formatter
+    }()
+
     // MARK: - State
     @Environment(\.dismiss) private var dismiss
     @AppStorage("backgroundFetchEnabled") private var isEnabled: Bool = true
@@ -25,7 +31,7 @@ struct BackgroundFetchSettingsView: View {
                 backAction: { dismiss() }
             )
             ScrollView {
-                VStack(spacing: 0) {
+                LazyVStack(spacing: 0) {
 
                     // MARK: - Enable/Disable section
                     CTSettingsSectionHeader(title: NSLocalizedString("enable_background_fetch", comment: "").uppercased())
@@ -289,9 +295,7 @@ struct BackgroundFetchSettingsView: View {
     }
 
     private func formatLastCheckDate(_ date: Date) -> String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .full
-        return formatter.localizedString(for: date, relativeTo: Date())
+        Self.lastCheckFormatter.localizedString(for: date, relativeTo: Date())
     }
 }
 

@@ -54,12 +54,9 @@ struct SynapsView: View {
     @State private var contactMetricsByUser: [String: ContactMetrics] = [:]
 
     private var filtered: [User] {
-        guard !searchText.isEmpty else { return Array(contacts) }
-        let q = searchText.lowercased()
-        return contacts.filter {
-            $0.displayName.lowercased().contains(q) ||
-            $0.username.lowercased().contains(q)
-        }
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return Array(contacts) }
+        return contacts.filter { userMatchesQuery($0, query: query) }
     }
 
     var body: some View {
@@ -117,7 +114,10 @@ struct SynapsView: View {
                 searchTask = Task {
                     try? await Task.sleep(nanoseconds: 500_000_000)  // 0.5s debounce
                     guard !Task.isCancelled else { return }
-                    await performRemoteSearch(username: newValue)
+                    let query = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !query.isEmpty else { return }
+                    let hasLocalMatches = contacts.contains { userMatchesQuery($0, query: query) }
+                    await performRemoteSearch(username: query, localMatchesExist: hasLocalMatches)
                 }
             }
             .onChange(of: contacts.count) { _, _ in
@@ -396,8 +396,8 @@ struct SynapsView: View {
 
     // MARK: - Remote Search Logic
 
-    private func performRemoteSearch(username: String) async {
-        guard filtered.isEmpty else { return }
+    private func performRemoteSearch(username: String, localMatchesExist: Bool) async {
+        guard !localMatchesExist else { return }
         remoteState = .searching
 
         do {
@@ -410,6 +410,11 @@ struct SynapsView: View {
         } catch {
             remoteState = .notFound
         }
+    }
+
+    private func userMatchesQuery(_ user: User, query: String) -> Bool {
+        user.displayName.localizedCaseInsensitiveContains(query)
+            || user.username.localizedCaseInsensitiveContains(query)
     }
 
     /// Sends a contact request to a discoverable user found via remote search.

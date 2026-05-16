@@ -37,7 +37,7 @@ struct SecurityView: View {
                 backAction: { dismiss() }
             )
             ScrollView {
-            VStack(spacing: 0) {
+            LazyVStack(spacing: 0) {
 
                 // MARK: - PIN Code
                 Button { showingPinSetup = true } label: {
@@ -469,6 +469,12 @@ struct SecurityView: View {
 /// Displays the current Key Transparency aggregate status in SecurityView.
 /// Reads from `KTStore` — updated automatically each time a bundle is fetched.
 private struct KTStatusSection: View {
+    private static let relativeFormatter: RelativeDateTimeFormatter = {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .full
+        return formatter
+    }()
+
     @State private var verifiedCount = 0
     @State private var failureCount = 0
     @State private var lastFailedAt: Date? = nil
@@ -508,7 +514,7 @@ private struct KTStatusSection: View {
 
         if failureCount > 0, let failedAt = lastFailedAt {
             Text(String(format: NSLocalizedString("kt_last_failure_at", comment: ""),
-                        RelativeDateTimeFormatter().localizedString(for: failedAt, relativeTo: Date())))
+                        Self.relativeFormatter.localizedString(for: failedAt, relativeTo: Date())))
                 .font(CTFont.regular(10))
                 .foregroundStyle(Color.CT.danger.opacity(0.8))
                 .frame(maxWidth: .infinity, alignment: .leading)

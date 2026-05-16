@@ -29,7 +29,7 @@ struct SettingsView: View {
                 
 
                 ScrollView {
-                    VStack(spacing: 30) {
+                    LazyVStack(spacing: 30) {
 
                         // MARK: Recovery warning
                         if recoveryVM.statusLoaded && !recoveryVM.isSetup && !recoveryBannerDismissed {
@@ -143,7 +143,9 @@ struct SettingsView: View {
             .toolbar(.hidden, for: .navigationBar)
             .onAppear {
                 viewModel.setContext(viewContext)
-                viewModel.loadUserInfo(from: authViewModel)
+                if viewModel.needsUserInfoRefresh(from: authViewModel) {
+                    viewModel.loadUserInfo(from: authViewModel)
+                }
             }
             .task { await recoveryVM.loadStatus() }
             .sheet(isPresented: $showingRecoverySetup) {

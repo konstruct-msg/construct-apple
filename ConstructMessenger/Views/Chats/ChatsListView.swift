@@ -101,14 +101,9 @@ struct ChatsListView: View {
     // MARK: - Chat List
 
     private var filteredChats: [Chat] {
-        guard !searchQuery.isEmpty else { return Array(chats) }
-        let q = searchQuery.lowercased()
-        return chats.filter { chat in
-            let name = (chat.otherUser?.resolvedDisplayName ?? "").lowercased()
-            let username = (chat.otherUser?.username ?? "").lowercased()
-            let preview = (chat.lastMessageText ?? "").lowercased()
-            return name.contains(q) || username.contains(q) || preview.contains(q)
-        }
+        let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return Array(chats) }
+        return chats.filter { chatMatchesQuery($0, query: query) }
     }
 
     private func chatList(chats renderedChats: [Chat]) -> some View {
@@ -185,6 +180,15 @@ struct ChatsListView: View {
             }
         }
         return false
+    }
+
+    private func chatMatchesQuery(_ chat: Chat, query: String) -> Bool {
+        let name = chat.otherUser?.resolvedDisplayName ?? ""
+        let username = chat.otherUser?.username ?? ""
+        let preview = chat.lastMessageText ?? ""
+        return name.localizedCaseInsensitiveContains(query)
+            || username.localizedCaseInsensitiveContains(query)
+            || preview.localizedCaseInsensitiveContains(query)
     }
 
     // MARK: - QR Code Handling

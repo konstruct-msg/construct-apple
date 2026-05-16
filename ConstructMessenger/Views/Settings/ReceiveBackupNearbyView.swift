@@ -24,6 +24,8 @@ struct ReceiveBackupNearbyView: View {
     @State private var isStaging = false
     @State private var stagingError: String?
     @State private var showError = false
+    private var normalizedPin: String { pinInput.filter(\.isNumber) }
+    private var isPinValid: Bool { normalizedPin.count == 6 }
 
     var body: some View {
         ZStack {
@@ -56,7 +58,7 @@ struct ReceiveBackupNearbyView: View {
     @ViewBuilder
     private var content: some View {
         ScrollView {
-            VStack(spacing: 24) {
+            LazyVStack(spacing: 24) {
                 switch service.transferState {
                 case .idle:
                     pinEntryView
@@ -112,14 +114,17 @@ struct ReceiveBackupNearbyView: View {
                             .stroke(Color.CT.noise, lineWidth: 1)
                     )
                     .onChange(of: pinInput) { _, v in
-                        if v.count > 6 { pinInput = String(v.prefix(6)) }
+                        let digitsOnly = v.filter(\.isNumber)
+                        let capped = String(digitsOnly.prefix(6))
+                        if capped != v {
+                            pinInput = capped
+                        }
                     }
             }
 
             Button {
-                let raw = pinInput.filter(\.isNumber)
-                guard raw.count == 6 else { return }
-                service.startReceiving(pin: raw)
+                guard isPinValid else { return }
+                service.startReceiving(pin: normalizedPin)
             } label: {
                 Text(NSLocalizedString("transfer_connect", comment: "").uppercased())
                     .font(CTFont.bold(13))
@@ -128,12 +133,12 @@ struct ReceiveBackupNearbyView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
                     .background(
-                        pinInput.filter(\.isNumber).count == 6
+                        isPinValid
                         ? Color.CT.accent
                         : Color.CT.noise
                     )
             }
-            .disabled(pinInput.filter(\.isNumber).count != 6)
+            .disabled(!isPinValid)
         }
         .padding(.top, 32)
     }

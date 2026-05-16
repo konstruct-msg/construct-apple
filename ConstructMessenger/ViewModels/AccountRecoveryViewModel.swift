@@ -37,6 +37,7 @@ final class AccountRecoveryViewModel {
     var fingerprint: String? = nil
     var lastUsedAt: Int64? = nil
     var statusLoaded: Bool = false
+    private var statusLoadTask: Task<Void, Never>? = nil
 
     private static let udKeyIsSetup = "recovery_is_setup"
 
@@ -123,23 +124,33 @@ final class AccountRecoveryViewModel {
 
     func loadStatus() async {
         guard !statusLoaded else { return }
-        // Apply cached value immediately so the banner doesn't flash on app update
-        if UserDefaults.standard.bool(forKey: Self.udKeyIsSetup) {
-            isSetup = true
+        if let inFlight = statusLoadTask {
+            await inFlight.value
+            return
         }
-        do {
-            let status = try await AuthServiceClient.shared.getRecoveryStatus()
-            isSetup = status.isSetup
-            fingerprint = status.fingerprint
-            lastUsedAt = status.lastUsedAt
-            if status.isSetup {
-                UserDefaults.standard.set(true, forKey: Self.udKeyIsSetup)
+
+        let task = Task { @MainActor in
+            // Apply cached value immediately so the banner doesn't flash on app update
+            if UserDefaults.standard.bool(forKey: Self.udKeyIsSetup) {
+                isSetup = true
             }
-            statusLoaded = true
-        } catch {
-            // Non-fatal — silently skip banner on network error
-            statusLoaded = true
+            do {
+                let status = try await AuthServiceClient.shared.getRecoveryStatus()
+                isSetup = status.isSetup
+                fingerprint = status.fingerprint
+                lastUsedAt = status.lastUsedAt
+                if status.isSetup {
+                    UserDefaults.standard.set(true, forKey: Self.udKeyIsSetup)
+                }
+                statusLoaded = true
+            } catch {
+                // Non-fatal — silently skip banner on network error
+                statusLoaded = true
+            }
         }
+        statusLoadTask = task
+        await task.value
+        statusLoadTask = nil
     }
 
     /// Force-refresh (e.g. after returning from setup sheet)
@@ -150,6 +161,8 @@ final class AccountRecoveryViewModel {
 
     /// Call on logout to clear cached state
     func clearLocalCache() {
+        statusLoadTask?.cancel()
+        statusLoadTask = nil
         UserDefaults.standard.removeObject(forKey: Self.udKeyIsSetup)
         UserDefaults.standard.removeObject(forKey: "recovery_banner_dismissed")
         isSetup = false

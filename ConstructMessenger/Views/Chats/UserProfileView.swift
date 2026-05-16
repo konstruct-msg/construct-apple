@@ -24,6 +24,13 @@ private func cryptoSuiteName(suiteId: Int) -> String {
 }
 
 struct UserProfileView: View {
+    private static let profileDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .none
+        return formatter
+    }()
+
     @ObservedObject var user: User
 
     /// Hide "Message" when the card is already opened from inside the chat.
@@ -42,6 +49,8 @@ struct UserProfileView: View {
     @State private var shareAlertMessage = ""
     @State private var isSharingInProgress = false
     @State private var showingSafetyNumbers = false
+    @State private var hasSession = false
+    @State private var sessionSuiteLabel = NSLocalizedString("session_crypto_no_session", comment: "")
 
     var body: some View {
         VStack(spacing: 0) {
@@ -53,7 +62,7 @@ struct UserProfileView: View {
             flatDivider(thick: true)
 
             ScrollView(showsIndicators: false) {
-                VStack(spacing: 0) {
+                LazyVStack(spacing: 0) {
                     avatarHeader
                     flatDivider(thick: true)
                     identitySection
@@ -76,7 +85,10 @@ struct UserProfileView: View {
             }
         }
         .background(Color.CT.bg.ignoresSafeArea())
-        .onAppear { viewModel.setContext(viewContext) }
+        .onAppear {
+            viewModel.setContext(viewContext)
+            refreshSessionSecurityState()
+        }
         .alert(LocalizedStringKey("block_user_confirmation"), isPresented: $showingBlockConfirmation) {
             Button(LocalizedStringKey("cancel"), role: .cancel) {}
             Button(
@@ -227,13 +239,7 @@ struct UserProfileView: View {
     // MARK: - Security / Crypto section
 
     private var securitySection: some View {
-        let hasSession = CryptoManager.shared.hasSession(for: user.id)
-        let suiteId = Int(KeychainManager.shared.loadSessionSuiteId(userId: user.id) ?? 0)
-        let suiteLabel = hasSession && suiteId > 0
-            ? cryptoSuiteName(suiteId: suiteId)
-            : NSLocalizedString("session_crypto_no_session", comment: "")
-
-        return VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: 0) {
             sectionHeader(NSLocalizedString("security", comment: ""))
             flatRowDivider()
 
@@ -252,7 +258,7 @@ struct UserProfileView: View {
             flatRowDivider()
 
             profileRow(label: "") {
-                Text(suiteLabel)
+                Text(sessionSuiteLabel)
                     .font(CTFont.regular(13))
                     .foregroundStyle(hasSession ? Color.CT.text : Color.CT.textDim)
             }
@@ -381,10 +387,16 @@ struct UserProfileView: View {
     // MARK: - Helpers
 
     private func formatDate(_ date: Date) -> String {
-        let f = DateFormatter()
-        f.dateStyle = .medium
-        f.timeStyle = .none
-        return f.string(from: date)
+        Self.profileDateFormatter.string(from: date)
+    }
+
+    private func refreshSessionSecurityState() {
+        let sessionExists = CryptoManager.shared.hasSession(for: user.id)
+        let suiteId = Int(KeychainManager.shared.loadSessionSuiteId(userId: user.id) ?? 0)
+        hasSession = sessionExists
+        sessionSuiteLabel = sessionExists && suiteId > 0
+            ? cryptoSuiteName(suiteId: suiteId)
+            : NSLocalizedString("session_crypto_no_session", comment: "")
     }
 
     private func handleShareToggle(_ share: Bool) {

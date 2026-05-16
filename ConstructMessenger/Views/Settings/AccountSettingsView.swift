@@ -51,7 +51,7 @@ struct AccountSettingsView: View {
             flatDivider(thick: true)
 
             ScrollView {
-                VStack(spacing: 0) {
+                LazyVStack(spacing: 0) {
                     avatarHeader
                     flatDivider(thick: true)
                     identitySection
@@ -76,7 +76,9 @@ struct AccountSettingsView: View {
         .toolbar(.hidden, for: .navigationBar)
         .onAppear {
             viewModel.setContext(viewContext)
-            viewModel.loadUserInfo(from: authViewModel)
+            if viewModel.needsUserInfoRefresh(from: authViewModel) {
+                viewModel.loadUserInfo(from: authViewModel)
+            }
             originalUsername = viewModel.username
         }
         .onChange(of: viewModel.usernameSaved) { _, saved in
