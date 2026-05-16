@@ -130,8 +130,12 @@ class SessionInitializationService {
     ///
     /// When the peer's SPK is stale (`peerSPKStale`), the peer may have just come
     /// online and rotated their keys. The server may not yet reflect the new
-    /// `spk_uploaded_at` — in this case we wait `staleSPKRetryDelay` seconds and
-    /// retry up to `staleSPKMaxRetries` times before giving up.
+    /// `spk_uploaded_at`. In that case we wait `staleSPKRetryDelay` seconds and retry
+    /// up to `staleSPKMaxRetries` times.
+    ///
+    /// **Fast-fail path**: if `ageDays >= staleSPKFastFailDays` (default 14.25d = 6h
+    /// past the Rust 14d hard limit), the peer has clearly not been online recently —
+    /// retrying is pointless and wastes 2 × 60 s. Fail immediately instead.
     func initializeSessionProactively(
         userId: String,
         onSuccess: @escaping () -> Void,
@@ -141,6 +145,11 @@ class SessionInitializationService {
 
         let staleSPKMaxRetries = 2
         let staleSPKRetryDelay: UInt64 = 60 // seconds
+        /// Grace window above the Rust 14-day hard limit. If the SPK is only ≤ 6 h past
+        /// the limit the peer may have just come online and rotated; the server bundle
+        /// cache may simply not have propagated yet. Beyond this window the peer has been
+        /// offline for a long time and no amount of waiting will help.
+        let staleSPKFastFailDays: Double = 14.25
 
         var lastError: Error?
         for attempt in 0...staleSPKMaxRetries {
@@ -157,12 +166,18 @@ class SessionInitializationService {
                 Log.info("✅ SESSION_STATE[proactive_init_success]: userId=\(userId.prefix(8))...", category: "SessionInit")
                 await MainActor.run { onSuccess() }
                 return
-            } catch SessionError.peerSPKStale(let days) where attempt < staleSPKMaxRetries {
-                // Peer just came online and rotated — server may not have updated yet.
-                // We'll retry after a delay.
+            } catch SessionError.peerSPKStale(let days) where attempt < staleSPKMaxRetries && days < staleSPKFastFailDays {
+                // SPK is barely past the staleness limit — peer may have just come online
+                // and rotated. Wait for server bundle cache to propagate.
                 Log.error("⚠️ Peer SPK stale for \(userId.prefix(8))… (\(String(format: "%.1f", days))d) — will retry in \(staleSPKRetryDelay)s (\(attempt + 1)/\(staleSPKMaxRetries))", category: "SessionInit")
                 lastError = SessionError.peerSPKStale(ageDays: days)
                 continue
+            } catch SessionError.peerSPKStale(let days) {
+                // SPK is well past the staleness limit — peer has been offline for a long
+                // time. Retrying after 60s is pointless; fail immediately.
+                Log.error("⚠️ SESSION_STATE[stale_spk_fast_fail]: peer \(userId.prefix(8))… SPK is \(String(format: "%.1f", days))d old (≥\(staleSPKFastFailDays)d threshold) — skipping retries", category: "SessionInit")
+                lastError = SessionError.peerSPKStale(ageDays: days)
+                break
             } catch {
                 lastError = error
                 break
