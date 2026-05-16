@@ -37,7 +37,7 @@ final class QUICStreamConnection: @unchecked Sendable {
     let queue = DispatchQueue(label: "grpc.http3.stream", qos: .userInitiated)
     self.queue = queue
 
-    var quicOptions = NWProtocolQUIC.Options(alpn: ["h3"])
+    let quicOptions = NWProtocolQUIC.Options(alpn: ["h3"])
     quicOptions.idleTimeout = 30_000  // 30 s in ms
 
     let params = NWParameters(quic: quicOptions)

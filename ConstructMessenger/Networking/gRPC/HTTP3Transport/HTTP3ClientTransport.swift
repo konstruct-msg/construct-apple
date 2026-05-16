@@ -164,7 +164,7 @@ private final class HTTP3Outbound: ClosableRPCWriterProtocol, @unchecked Sendabl
       let cont = inboundContinuation
       Task {
         do {
-          var initialMetadata: Metadata = [:]
+          let initialMetadata: Metadata = [:]
           _ = try await stream.receiveResponse { message in
             if initialMetadata.isEmpty {
               cont.yield(.metadata(initialMetadata))

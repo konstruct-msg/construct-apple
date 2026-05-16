@@ -146,7 +146,7 @@ We have our own terminology. Use it consistently in UI, code, and comments.
 ## Architecture Notes
 
 > **Before making any architectural decision**, search the wiki first:
-> `ls /Users/maximeliseyev/Code/constrcut-docs/wiki/ | grep <topic>`
+> `ls /Users/maximeliseyev/Code/construct-docs/wiki/ | grep <topic>`
 > The wiki has 500+ curated articles covering every component. AGENTS.md is operational rules;
 > the wiki is the authoritative architecture documentation.
 
@@ -199,8 +199,8 @@ invisible tabs during layout. Tab 0 (ChatsListView) is always in the set at init
 
 ### construct-engine and EngineAdapter (CRITICAL for macOS/Desktop work)
 
-**Full spec**: `constrcut-docs/raw/04_Client_Applications/specs/DESKTOP_ENGINE_REFACTORING_SPEC.md`
-**Wiki article**: `constrcut-docs/wiki/EngineAdapter.md`
+**Full spec**: `construct-docs/raw/04_Client_Applications/specs/DESKTOP_ENGINE_REFACTORING_SPEC.md`
+**Wiki article**: `construct-docs/wiki/EngineAdapter.md`
 
 #### Two crypto paths — never confuse them
 
@@ -428,7 +428,7 @@ Just write clear, factual session notes and let the pipeline do the rest.
 
 ### Shared knowledge base
 
-- Vault: `/Users/maximeliseyev/Code/constrcut-docs`
+- Vault: `/Users/maximeliseyev/Code/construct-docs`
 - `raw/` — source corpus. Do **not** rewrite, normalize, or reorganize unless explicitly asked.
 - `wiki/` — canonical curated knowledge base. **Read** from here before architectural work.
 - `wiki/.drafts/` — **reserved for olw**. Never write here manually.

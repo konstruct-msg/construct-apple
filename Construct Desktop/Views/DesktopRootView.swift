@@ -30,6 +30,7 @@ struct DesktopRootView: View {
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var showAddContact = false
     @State private var sidebarMode: SidebarMode = .chats
+    @State private var callManager = CallManager.shared
 
     private enum SidebarMode { case chats, synaps }
 
@@ -128,6 +129,26 @@ struct DesktopRootView: View {
                 columnVisibility = mode == .synaps ? .detailOnly : .all
             }
         }
+        // Incoming call banner — bottom-center
+        .overlay(alignment: .bottom) {
+            if CallsFeature.isEnabled, case .incoming(let session) = callManager.state {
+                DesktopIncomingCallView(session: session)
+                    .zIndex(100)
+                    .animation(.spring(response: 0.35, dampingFraction: 0.85), value: isIncomingState)
+            }
+        }
+        // In-call controls strip — bottom-right
+        .overlay(alignment: .bottomTrailing) {
+            if CallsFeature.isEnabled, isActiveOrConnecting, let session = activeCallSession {
+                DesktopInCallView(
+                    session: session,
+                    isConnecting: isConnectingState,
+                    endReason: callEndReason
+                )
+                .zIndex(100)
+                .animation(.spring(response: 0.35, dampingFraction: 0.85), value: isActiveOrConnecting)
+            }
+        }
         // Add Contact sheet (⌘⌥N)
         .sheet(isPresented: $showAddContact) {
             DesktopAddContactView()
@@ -145,6 +166,40 @@ struct DesktopRootView: View {
         }
         // No custom toolbar items — window title bar is hidden via .windowStyle(.hiddenTitleBar)
         // [QR] button lives in the sidebar mode bar below.
+    }
+
+    // MARK: - Call state helpers
+
+    private var isIncomingState: Bool {
+        if case .incoming = callManager.state { return true }
+        return false
+    }
+
+    private var isActiveOrConnecting: Bool {
+        switch callManager.state {
+        case .dialing, .active, .connecting, .ringing, .ended: return true
+        default: return false
+        }
+    }
+
+    private var isConnectingState: Bool {
+        switch callManager.state {
+        case .dialing, .connecting, .ringing: return true
+        default: return false
+        }
+    }
+
+    private var activeCallSession: CallManager.CallSession? {
+        switch callManager.state {
+        case .dialing(let s), .active(let s), .connecting(let s), .ringing(let s): return s
+        case .ended(let s, _): return s
+        default: return nil
+        }
+    }
+
+    private var callEndReason: CallManager.EndReason? {
+        if case .ended(_, let reason) = callManager.state { return reason }
+        return nil
     }
 
     // MARK: - Sidebar mode toggle bar
