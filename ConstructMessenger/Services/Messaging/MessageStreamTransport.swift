@@ -221,7 +221,7 @@ extension MessageStreamManager {
 
         // Fast ICE failover for stream open: if the RPC isn't accepted quickly, we retry
         // through ICE instead of waiting for long TCP/TLS timeouts on DPI-blocked networks.
-        // Capture the verified flag before entering non-isolated task group tasks.
+        // Capture the quality flag before entering non-isolated task group tasks.
         let relayAlreadyVerified = IceProxyManager.shared.isCurrentRelayVerified
         do {
             try await withThrowingTaskGroup(of: Void.self) { group in

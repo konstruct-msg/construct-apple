@@ -18,6 +18,7 @@ import Foundation
 import Combine
 import Network
 import os
+import SwiftUI
 import CryptoKit
 import GRPCCore
 import GRPCNIOTransportHTTP2
@@ -359,6 +360,12 @@ final class IceProxyManager: ObservableObject {
                 await self.handleNetworkPathChange(changeKind: changeKind)
             }
         }
+
+        // Load persisted relay quality scores from UserDefaults.
+        if let data = UserDefaults.standard.data(forKey: Self.qualityScoresDefaultsKey),
+           let scores = try? JSONDecoder().decode([String: RelayQualityScore].self, from: data) {
+            relayQualityScores = scores
+        }
     }
 
     // MARK: - Published state
@@ -471,62 +478,194 @@ final class IceProxyManager: ObservableObject {
         }
     }
 
-    /// EWMA-smoothed latency cache entry for a relay.
-    private struct RelayLatencyEntry {
-        /// Exponentially weighted moving average of TCP connect latency (seconds).
-        var ewmaLatency: TimeInterval
-        /// When this entry was last updated.
-        var updatedAt: Date
+    // MARK: - Relay Quality Score
 
-        /// True if the entry was updated within the validity window.
-        var isValid: Bool {
-            Date().timeIntervalSince(updatedAt) < NetworkTiming.ICE.latencyCacheValidity
+    /// Four-level quality classification derived from historical success/failure counts.
+    /// Drives timeout policy and blacklist tolerance per relay.
+    enum RelayQuality: Int, Codable, CaseIterable {
+        /// No history yet (< 3 RPCs observed).
+        case unknown   = -1
+        /// < 40 % success rate.
+        case poor      =  0
+        /// 40–69 % success rate.
+        case fair      =  1
+        /// 70–89 % success rate.
+        case good      =  2
+        /// ≥ 90 % success rate.
+        case excellent =  3
+
+        /// Whether to trust the relay with the full RPC timeout (vs short probe timeout).
+        var useFullTimeout: Bool { self == .excellent || self == .good }
+
+        /// Whether to use the short fetch-missed-messages wall-clock cap.
+        var useFastFetchCap: Bool { self == .excellent || self == .good }
+
+        /// Consecutive stream timeouts on the same relay before blacklisting it.
+        /// Trusted relays are rotated quickly on failure; unknown/fair relays get an extra chance.
+        var blacklistThreshold: Int { (self == .excellent || self == .good) ? 1 : 2 }
+
+        var logLabel: String {
+            switch self {
+            case .excellent: return "excellent"
+            case .good:      return "good"
+            case .fair:      return "fair"
+            case .poor:      return "poor"
+            case .unknown:   return "unknown"
+            }
         }
 
-        /// Update EWMA with a new latency sample.
-        mutating func apply(sample: TimeInterval) {
-            let alpha = NetworkTiming.ICE.latencyCacheEWMAAlpha
-            ewmaLatency = alpha * sample + (1 - alpha) * ewmaLatency
-            updatedAt = Date()
+        /// Short badge string shown in Network Settings next to the relay address.
+        var badge: String {
+            switch self {
+            case .excellent: return "★★★★"
+            case .good:      return "★★★☆"
+            case .fair:      return "★★☆☆"
+            case .poor:      return "★☆☆☆"
+            case .unknown:   return "----"
+            }
+        }
+
+        var badgeColor: Color {
+            switch self {
+            case .excellent: return Color.CT.accent
+            case .good:      return Color.CT.accent
+            case .fair:      return Color.CT.accentDim
+            case .poor:      return Color.CT.danger
+            case .unknown:   return Color.CT.textDim
+            }
         }
     }
 
+    /// Persisted quality record for a single relay address.
+    struct RelayQualityScore: Codable {
+        var successfulRPCs: Int      = 0
+        var failedRPCs:     Int      = 0
+        /// EWMA-smoothed TCP connect latency in milliseconds. 0 = never measured.
+        var ewmaLatencyMs:  Double   = 0
+        /// When ewmaLatencyMs was last updated (used for cache-freshness check).
+        var latencyMeasuredAt: Date  = .distantPast
+        var lastUsed:          Date  = .distantPast
+
+        var totalRPCs: Int { successfulRPCs + failedRPCs }
+
+        /// True if the latency measurement is fresh enough to skip TCP probing.
+        var hasRecentLatency: Bool {
+            ewmaLatencyMs > 0
+                && Date().timeIntervalSince(latencyMeasuredAt) < NetworkTiming.ICE.latencyCacheValidity
+        }
+
+        var quality: RelayQuality {
+            guard totalRPCs >= 3 else { return .unknown }
+            let rate = Double(successfulRPCs) / Double(totalRPCs)
+            switch rate {
+            case 0.9...: return .excellent
+            case 0.7...: return .good
+            case 0.4...: return .fair
+            default:     return .poor
+            }
+        }
+
+        mutating func applyLatencySample(_ sample: TimeInterval) {
+            let ms    = sample * 1000
+            let alpha = NetworkTiming.ICE.latencyCacheEWMAAlpha
+            ewmaLatencyMs = ewmaLatencyMs > 0 ? alpha * ms + (1 - alpha) * ewmaLatencyMs : ms
+            latencyMeasuredAt = Date()
+            lastUsed = Date()
+        }
+
+        mutating func recordSuccess() { successfulRPCs += 1; lastUsed = Date() }
+        mutating func recordFailure()  { failedRPCs    += 1; lastUsed = Date() }
+    }
+
+    private static let qualityScoresDefaultsKey = "ice_relay_quality_scores_v1"
+    private static let qualityScoresMaxEntries  = 20
+
+    /// Persisted quality scores for known relays. Loaded from UserDefaults at init;
+    /// updated and saved after every success/failure RPC through ICE.
+    private var relayQualityScores: [String: RelayQualityScore] = [:]
+
+    /// Relay addresses that have completed at least one successful RPC this session.
+    /// In-memory only — resets on app restart. Together with persisted quality, drives
+    /// `isCurrentRelayVerified`: once a relay proves it works this session it uses full
+    /// timeouts even if its historical quality is still `.unknown` (< 3 total RPCs).
+    private var sessionVerifiedRelays: Set<String> = []
+
+    // MARK: - Relay Failure Tracking
+
     /// Maps relay address → blacklist entry. Deprioritised in startWithRelayFallback().
     private var recentlyFailedRelays: [String: RelayBlacklistEntry] = [:]
-
-    /// EWMA latency cache. Populated by sortByLatency() and persisted for
-    /// `NetworkTiming.ICE.latencyCacheValidity` seconds. Cleared when the network
-    /// interface changes (latencies on WiFi vs cellular are incomparable).
-    private var relayLatencyCache: [String: RelayLatencyEntry] = [:]
 
     /// Relay addresses where WebTunnel was blocked by a carrier transparent HTTP proxy this session.
     /// When set, makeRelay() skips wtPath for these addresses, forcing obfs4 mode.
     /// Cleared on network path change — the new network may allow WebTunnel.
     private var webTunnelBlockedRelays: Set<String> = []
 
-    /// Address of the relay that has successfully completed at least one gRPC RPC
-    /// this session. In-memory only — resets on app restart.
-    /// When the active relay matches, performRPC trusts its obfs4 tunnel and uses
-    /// the full RPC timeout. Otherwise a short "probe" timeout detects DPI-blocked
-    /// tunnels quickly and triggers inline relay rotation.
-    private(set) var verifiedRelayAddress: String?
-
-    /// Whether the currently active relay has been verified by a successful RPC.
+    /// Whether the currently active relay has been verified by a successful RPC
+    /// either this session or from persisted quality history.
     var isCurrentRelayVerified: Bool {
         guard let active = activeRelay?.address else { return false }
-        return active == verifiedRelayAddress
+        return sessionVerifiedRelays.contains(active) || qualityForRelay(active).useFullTimeout
+    }
+
+    /// Quality level for the currently active relay (persisted history).
+    @MainActor var currentRelayQuality: RelayQuality {
+        guard let active = activeRelay?.address else { return .unknown }
+        return qualityForRelay(active)
+    }
+
+    /// Quality level for the given relay address from persisted history.
+    func qualityForRelay(_ address: String) -> RelayQuality {
+        relayQualityScores[address]?.quality ?? .unknown
+    }
+
+    /// Record a successful RPC through ICE. Updates the session-verified set and the
+    /// persisted quality score. Triggers side effects on the first success of the session.
+    func recordRelaySuccess(address: String, latency: TimeInterval) {
+        let wasVerified = sessionVerifiedRelays.contains(address)
+        sessionVerifiedRelays.insert(address)
+
+        relayQualityScores[address, default: RelayQualityScore()].recordSuccess()
+        if latency > 0 {
+            relayQualityScores[address, default: RelayQualityScore()].applyLatencySample(latency)
+        }
+        pruneAndSaveQualityScores()
+
+        if !wasVerified {
+            let q = relayQualityScores[address]?.quality ?? .unknown
+            Log.info("🧊 Relay \(address) verified (first successful RPC) — quality: \(q.logLabel)", category: "ICE")
+            Self.lastSuccessfulPath = "ice"
+            scheduleBackgroundDirectProbe()
+        }
+    }
+
+    private func pruneAndSaveQualityScores() {
+        if relayQualityScores.count > Self.qualityScoresMaxEntries {
+            let sorted = relayQualityScores.sorted { $0.value.lastUsed > $1.value.lastUsed }
+            relayQualityScores = Dictionary(sorted.prefix(Self.qualityScoresMaxEntries)
+                .map { ($0.key, $0.value) }, uniquingKeysWith: { first, _ in first })
+        }
+        guard let data = try? JSONEncoder().encode(relayQualityScores) else { return }
+        UserDefaults.standard.set(data, forKey: Self.qualityScoresDefaultsKey)
+    }
+
+    private static func loadPersistedQualityScores() -> [String: RelayQualityScore] {
+        guard let data = UserDefaults.standard.data(forKey: qualityScoresDefaultsKey),
+              let scores = try? JSONDecoder().decode([String: RelayQualityScore].self, from: data)
+        else { return [:] }
+        return scores
     }
 
     /// Mark the active relay as verified after a successful RPC through ICE.
-    func markCurrentRelayVerified() {
-        guard let addr = activeRelay?.address, addr != verifiedRelayAddress else { return }
-        verifiedRelayAddress = addr
-        Log.info("🧊 Relay \(addr) verified (first successful RPC)", category: "ICE")
-        // Remember that ICE was the working path. In `.auto` mode this enables
-        // proactive ICE startup on the next launch (avoids DPI detection delay).
-        Self.lastSuccessfulPath = "ice"
-        scheduleBackgroundDirectProbe()
+    /// Legacy entry point used internally and by `GRPCCallExecutor` — now delegates to
+    /// `recordRelaySuccess(address:latency:)`.
+    @discardableResult
+    func markCurrentRelayVerified(latency: TimeInterval = 0) -> Bool {
+        guard let addr = activeRelay?.address else { return false }
+        recordRelaySuccess(address: addr, latency: latency)
+        return true
     }
+
+    /// Mark the active relay as verified after a successful RPC through ICE.
 
     /// Mark a relay address as recently failed. Called from GRPCChannelManager.recordICEFailure()
     /// before the restart cycle begins.
@@ -538,6 +677,9 @@ final class IceProxyManager: ObservableObject {
         recentlyFailedRelays[address] = RelayBlacklistEntry(type: type, timestamp: Date())
         // Prune expired entries while we have the dict in hand.
         recentlyFailedRelays = recentlyFailedRelays.filter { !$0.value.isExpired }
+        // Persist the failure to quality score history.
+        relayQualityScores[address, default: RelayQualityScore()].recordFailure()
+        pruneAndSaveQualityScores()
         Log.info("🧊 Relay \(address) blacklisted for \(Int(type.ttl))s [\(type)]", category: "ICE")
     }
 
@@ -571,15 +713,17 @@ final class IceProxyManager: ObservableObject {
         return all.allSatisfy { isRelayRecentlyFailed($0) }
     }
 
-    /// Clear all relay failure tracking (e.g. on network path change — new network may work fine).
+    /// Clear session-scoped relay failure tracking (e.g. on network path change).
+    /// Quality scores are NOT cleared — they are persisted historical data.
     private func clearRelayFailures() {
-        guard !recentlyFailedRelays.isEmpty || verifiedRelayAddress != nil
-                || !webTunnelBlockedRelays.isEmpty || !relayLatencyCache.isEmpty else { return }
+        guard !recentlyFailedRelays.isEmpty || !sessionVerifiedRelays.isEmpty
+                || !webTunnelBlockedRelays.isEmpty else { return }
         recentlyFailedRelays.removeAll()
-        verifiedRelayAddress = nil
+        sessionVerifiedRelays.removeAll()   // re-verify on new network
         webTunnelBlockedRelays.removeAll()
-        relayLatencyCache.removeAll()   // latencies on old interface are irrelevant
-        Log.info("🧊 Relay failure blacklist + verification + latency cache cleared", category: "ICE")
+        // Quality scores and latency EWMA are kept: historical data remains valid.
+        // sortByLatency() will re-probe if latencyMeasuredAt is stale.
+        Log.info("🧊 Relay failure blacklist + session verification cleared", category: "ICE")
     }
 
     // MARK: - ICE Mode (tri-state)
@@ -1011,13 +1155,13 @@ final class IceProxyManager: ObservableObject {
     private func sortByLatency(_ addresses: [String], timeout: TimeInterval = NetworkTiming.ICE.relayLatencyProbeTimeout) async -> [String] {
         guard !addresses.isEmpty else { return [] }
 
-        // Split into addresses that have a fresh cache entry and those that need probing.
+        // Split into addresses that have a fresh latency entry and those that need probing.
         var cachedEntries:   [(String, TimeInterval)] = []
         var toProbe:         [String] = []
 
         for address in addresses {
-            if let entry = relayLatencyCache[address], entry.isValid {
-                cachedEntries.append((address, entry.ewmaLatency))
+            if let score = relayQualityScores[address], score.hasRecentLatency {
+                cachedEntries.append((address, score.ewmaLatencyMs / 1000))
             } else {
                 toProbe.append(address)
             }
@@ -1044,16 +1188,12 @@ final class IceProxyManager: ObservableObject {
                 }
             }
 
-            // Update the latency cache with fresh probe results (EWMA).
+            // Update quality scores with fresh probe results (EWMA latency only).
             for (addr, lat) in probeResults {
                 guard let sample = lat else { continue }
-                if var entry = relayLatencyCache[addr] {
-                    entry.apply(sample: sample)
-                    relayLatencyCache[addr] = entry
-                } else {
-                    relayLatencyCache[addr] = RelayLatencyEntry(ewmaLatency: sample, updatedAt: Date())
-                }
+                relayQualityScores[addr, default: RelayQualityScore()].applyLatencySample(sample)
             }
+            if !probeResults.isEmpty { pruneAndSaveQualityScores() }
         }
 
         if !cachedEntries.isEmpty {
@@ -1383,7 +1523,7 @@ final class IceProxyManager: ObservableObject {
 
         case .pathTopology:
             // VPN toggle or IP rotation: same interface, same DPI environment.
-            // Keep relay blacklist and verifiedRelayAddress — relay reachability is unchanged.
+            // Keep relay blacklist and quality scores — relay reachability is unchanged.
             // Just stop the proxy (TCP tunnel is dead) and clear cooldown.
             Log.info("🧊 Network path changed (topology/VPN) — partial ICE reset (blacklist preserved)", category: "ICE")
             ice_proxy_stop()

@@ -343,9 +343,9 @@ final class MessageStreamManager {
             // task.value ignores cooperative cancellation of the caller — the group
             // would block for the full 30 s RPC timeout even after the cap fires.
             //
-            // Use the shorter cap when the relay is already verified: its RPC latency
+            // Use the shorter cap for excellent/good quality relays: their RPC latency
             // is ≤1 RTT (≈100ms for AMS), so 0.5s is more than enough.
-            let fetchCapDuration = IceProxyManager.shared.isCurrentRelayVerified
+            let fetchCapDuration = IceProxyManager.shared.currentRelayQuality.useFastFetchCap
                 ? NetworkTiming.Stream.fetchMissedMessagesWallClockCapVerified
                 : NetworkTiming.Stream.fetchMissedMessagesWallClockCap
             let capSleep = Task<Void, any Error> {
@@ -423,14 +423,11 @@ final class MessageStreamManager {
                     // attempt inside openStream(). "Unchanged" means the relay is reachable
                     // at TCP level but streaming RPCs are silently failing (e.g. relay v0.3.3
                     // obfs4 session corruption bug).
-                    /// Counts consecutive stream-open timeouts where the ICE routing key did NOT change
-                    /// (relay reachable at TCP level but streaming RPCs failing). Threshold differs:
-                    ///   - Verified relay (at least one successful RPC on this relay this session): 1 timeout
-                    ///     is sufficient evidence of regression — fail fast and rotate.
-                    ///   - Unverified relay (fresh start / post-network-change): allow 2 timeouts before
-                    ///     blacklisting. The obfs4 tunnel may still be warming up (handshake + first RTT);
-                    ///     one spurious timeout should not permanently deprioritize a healthy relay.
-                    let blacklistThreshold = IceProxyManager.shared.isCurrentRelayVerified ? 1 : 2
+                    /// Counts consecutive stream-open timeouts where the ICE routing key did NOT change.
+                    /// Threshold driven by persisted relay quality:
+                    ///   - trusted (excellent/good): 1 timeout → rotate fast (we know it works, failure is real)
+                    ///   - unknown/fair/poor: 2 timeouts → give a second chance (tunnel may still be warming up)
+                    let blacklistThreshold = IceProxyManager.shared.currentRelayQuality.blacklistThreshold
                     let routingKeyNow = GRPCChannelManager.shared.currentRoutingKey
                     if routingKeyNow == routingKeyAtLoopStart {
                         consecutiveRoutingUnchangedTimeouts += 1

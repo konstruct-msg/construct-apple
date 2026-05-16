@@ -27,6 +27,7 @@ final class GRPCCallExecutor: Sendable {
         for attempt in 0..<3 {
             let usingICE = cm.iceProxyPort() != nil
             let iceRelayVerified = usingICE ? await IceProxyManager.shared.isCurrentRelayVerified : true
+            let capturedRelayAddr = usingICE ? await IceProxyManager.shared.activeRelay?.address : nil
             let effectiveTimeout: TimeInterval? = {
                 guard let timeout else { return nil }
                 // Unverified ICE relay: use a short timeout so DPI-blocked obfs4 tunnels
@@ -55,6 +56,7 @@ final class GRPCCallExecutor: Sendable {
                 usingPersistent = false
             }
 
+            let rpcStart = Date()
             do {
                 let result = try await executeWithTimeout(
                     client: client,
@@ -63,8 +65,9 @@ final class GRPCCallExecutor: Sendable {
                     operation: operation
                 )
                 PerformanceMetrics.shared.end(.grpcConnectStart, endEvent: .grpcConnectEnd, label: cm.currentRoutingKey)
-                if usingICE, !iceRelayVerified {
-                    await IceProxyManager.shared.markCurrentRelayVerified()
+                if usingICE, let addr = capturedRelayAddr {
+                    let latency = Date().timeIntervalSince(rpcStart)
+                    await IceProxyManager.shared.recordRelaySuccess(address: addr, latency: latency)
                 }
                 return result
             } catch {

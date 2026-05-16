@@ -155,6 +155,12 @@ struct NetworkSettingsView: View {
                                     .foregroundColor(Color.CT.textDim)
                                     .textSelection(.enabled)
                                 Spacer()
+                                let quality = iceManager.qualityForRelay(relay.address)
+                                Text(quality.badge)
+                                    .font(CTFont.regular(10))
+                                    .foregroundColor(quality.badgeColor)
+                                    .padding(.horizontal, 5).padding(.vertical, 2)
+                                    .overlay(Rectangle().stroke(quality.badgeColor.opacity(0.4), lineWidth: 0.5))
                                 if relay.tlsServerName != nil {
                                     Text("TLS")
                                         .font(CTFont.regular(10))
