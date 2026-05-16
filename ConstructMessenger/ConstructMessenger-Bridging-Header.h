@@ -24,6 +24,12 @@ int32_t ice_proxy_start_tls(const char *bridge_line, const char *relay_addr,
 int32_t ice_proxy_start_tls_pinned(const char *bridge_line, const char *relay_addr,
                                    const char *tls_sni, const char *spki_hex,
                                    uint16_t *port_out);
+/// TLS proxy with SPKI pinning + browser TLS fingerprint profile (DPI evasion).
+/// tls_profile: "chrome131" (Chrome 131), "firefox128" (Firefox 128), or "" (rustls defaults).
+/// Use "chrome131" to disguise TLS ClientHello as Chrome traffic and evade fingerprint-based DPI.
+int32_t ice_proxy_start_tls_profiled(const char *bridge_line, const char *relay_addr,
+                                     const char *tls_sni, const char *spki_hex,
+                                     const char *tls_profile, uint16_t *port_out);
 int32_t ice_proxy_stop(void);
 int32_t ice_proxy_is_running(void);
 uint16_t ice_proxy_port(void);

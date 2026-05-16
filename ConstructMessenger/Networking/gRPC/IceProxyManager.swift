@@ -801,14 +801,17 @@ final class IceProxyManager: ObservableObject {
 
         if let sni = relay.tlsServerName {
             if let spki = relay.pinnedSpki {
-                // Pinned mode: fake/empty SNI + SPKI cert verification (no CA chain).
-                // DPI sees: TLS to IP:443 with Yandex Cloud SNI — looks like CDN traffic.
+                // Pinned mode: fake/empty SNI + SPKI cert verification + Chrome131 TLS profile.
+                // DPI sees: TLS ClientHello with Chrome 131 fingerprint — indistinguishable from
+                // real browser traffic. Fake SNI further disguises the destination.
                 Log.info("🧊 ICE TLS+pinned → \(relay.address) (SNI: \(sni.isEmpty ? "<none>" : sni))", category: "ICE")
                 result = relay.bridgeLine.withCString { bridgePtr in
                     relay.address.withCString { addrPtr in
                         sni.withCString { sniPtr in
                             spki.withCString { spkiPtr in
-                                ice_proxy_start_tls_pinned(bridgePtr, addrPtr, sniPtr, spkiPtr, &port)
+                                "chrome131".withCString { profilePtr in
+                                    ice_proxy_start_tls_profiled(bridgePtr, addrPtr, sniPtr, spkiPtr, profilePtr, &port)
+                                }
                             }
                         }
                     }
