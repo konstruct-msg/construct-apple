@@ -557,15 +557,16 @@
 // MARK: - Image Crop
 "crop_use_photo" = "Выбрать фото";
 
-// MARK: - Synaps
-"synaps" = "Синапсы";
+// MARK: - Synapses
+"synapses" = "Синапсы";
 "search_prompt" = "Поиск";
-"synaps_empty_title" = "Пока нет связей";
-"synaps_empty_subtitle" = "Люди с которыми вы общаетесь будут здесь, даже если вы удалили переписку.";
-"synaps_open_chat" = "Открыть чат";
-"synaps_prune_title" = "Отрезать синапс?";
-"synaps_prune_action" = "Отрезать";
-"synaps_prune_message" = "Это навсегда удалит %@ из ваших синапсов и удалит переписку.";
+"synapses_search_prompt" = "Поиск";
+"synapses_empty_title" = "Пока нет связей";
+"synapses_empty_subtitle" = "Люди с которыми вы общаетесь будут здесь, даже если вы удалили переписку.";
+"synapses_open_chat" = "Открыть чат";
+"synapses_prune_title" = "Отрезать синапс?";
+"synapses_prune_action" = "Отрезать";
+"synapses_prune_message" = "Это навсегда удалит %@ из ваших синапсов и удалит переписку.";
 
 // MARK: - Connection Status Indicator
 
@@ -679,9 +680,9 @@
 "username_not_set" = "username не задан";
 "searchable_indicator" = "[⊙] в поиске";
 "searchable_indicator_off" = "[ ] в поиске";
-"synaps_remote_result_header" = "найдено в construct";
-"synaps_searching" = "поиск...";
-"synaps_not_found" = "не найдено";
+"synapses_remote_result_header" = "найдено в construct";
+"synapses_searching" = "поиск...";
+"synapses_not_found" = "не найдено";
 
 // Contact Requests
 "contact_requests_section" = "запросы";
@@ -840,7 +841,7 @@
 
 /* Tab bar labels */
 "tab_chats" = "СОБ";
-"tab_synaps" = "УЗЛ";
+"tab_synapses" = "УЗЛ";
 "tab_settings" = "НСТ";
 
 /* Engine background push notifications */

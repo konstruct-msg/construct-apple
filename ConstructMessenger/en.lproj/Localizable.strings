@@ -556,15 +556,15 @@
 // MARK: - Image Crop
 "crop_use_photo" = "Use Photo";
 
-// MARK: - Synaps
-"synaps" = "Synapses";
-"synaps_search_prompt" = "Search";
-"synaps_empty_title" = "No connections yet";
-"synaps_empty_subtitle" = "People you connect with will appear here, even after you clear a conversation.";
-"synaps_open_chat" = "Open Chat";
-"synaps_prune_title" = "Cut this synapse?";
-"synaps_prune_action" = "Cut";
-"synaps_prune_message" = "This will permanently remove %@ from your Synaps and delete the conversation.";
+// MARK: - Synapses
+"synapses" = "Synapses";
+"synapses_search_prompt" = "Search";
+"synapses_empty_title" = "No connections yet";
+"synapses_empty_subtitle" = "People you connect with will appear here, even after you clear a conversation.";
+"synapses_open_chat" = "Open Chat";
+"synapses_prune_title" = "Cut this synapse?";
+"synapses_prune_action" = "Cut";
+"synapses_prune_message" = "This will permanently remove %@ from your Synapses and delete the conversation.";
 
 // MARK: - Connection Status Indicator
 
@@ -670,9 +670,9 @@
 "username_not_set" = "no username";
 "searchable_indicator" = "[⊙] searchable";
 "searchable_indicator_off" = "[ ] searchable";
-"synaps_remote_result_header" = "found on construct";
-"synaps_searching" = "searching...";
-"synaps_not_found" = "not found";
+"synapses_remote_result_header" = "found on construct";
+"synapses_searching" = "searching...";
+"synapses_not_found" = "not found";
 
 // Contact Requests
 "contact_requests_section" = "requests";
@@ -831,7 +831,7 @@
 
 /* Tab bar labels */
 "tab_chats" = "MSG";
-"tab_synaps" = "SYN";
+"tab_synapses" = "SYN";
 "tab_settings" = "CFG";
 
 /* Engine background push notifications */
