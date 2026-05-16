@@ -460,21 +460,26 @@ final class IceProxyManager: ObservableObject {
         case webTunnelBlocked
         /// Explicit DPI pattern detected (multiple direct-path timeouts in .auto mode).
         case dpiDetected
+        /// TLS alert 40 (handshake_failure) indicating relay fingerprint is blocked by DPI.
+        /// Shorter TTL than `tlsHandshake` — rotating relays sooner is more productive.
+        case fingerprintBlocked
 
         var ttl: TimeInterval {
             switch self {
             case .tlsHandshake, .dpiDetected: return 300  // 5 min — persistent failure
             case .streamTimeout:              return 60   // 1 min — transient, retry soon
             case .webTunnelBlocked:           return 180  // 3 min — network-specific
+            case .fingerprintBlocked:         return 120  // 2 min — relay-specific DPI
             }
         }
 
         var description: String {
             switch self {
-            case .tlsHandshake:    return "tlsHandshake"
-            case .streamTimeout:   return "streamTimeout"
-            case .webTunnelBlocked:return "webTunnelBlocked"
-            case .dpiDetected:     return "dpiDetected"
+            case .tlsHandshake:      return "tlsHandshake"
+            case .streamTimeout:     return "streamTimeout"
+            case .webTunnelBlocked:  return "webTunnelBlocked"
+            case .dpiDetected:       return "dpiDetected"
+            case .fingerprintBlocked:return "fingerprintBlocked"
             }
         }
     }
@@ -739,6 +744,48 @@ final class IceProxyManager: ObservableObject {
         // Quality scores and latency EWMA are kept: historical data remains valid.
         // sortByLatency() will re-probe if latencyMeasuredAt is stale.
         Log.info("🧊 Relay failure blacklist + session verification cleared", category: "ICE")
+    }
+
+    // MARK: - Cert expiry monitoring
+
+    /// Checks TLS certificate expiry for all known relays from the server-pushed config.
+    /// - Expired certs: logs error + triggers an immediate async config refresh.
+    /// - Certs expiring within 30 days: logs warning + schedules background refresh.
+    ///
+    /// Non-blocking: always call as `Task { await checkCertExpiry() }`.
+    private func checkCertExpiry() async {
+        var allAddresses = Set<String>()
+        ICEConfig.hardcodedRelayAddresses.forEach { allAddresses.insert($0) }
+        if let cached = UserDefaults.standard.stringArray(forKey: ICEConfig.cachedRelayListKey) {
+            cached.forEach { allAddresses.insert($0) }
+        }
+
+        let now = Date()
+        let thirtyDaysInterval: TimeInterval = 30 * 24 * 3600
+        var expiredAddresses:  [String] = []
+        var expiringAddresses: [(address: String, daysLeft: Int)] = []
+
+        for address in allAddresses {
+            guard let expiry = IceCertFetcher.certExpiresAtSync(for: address) else { continue }
+            let secondsLeft = expiry.timeIntervalSince(now)
+            if secondsLeft <= 0 {
+                expiredAddresses.append(address)
+            } else if secondsLeft < thirtyDaysInterval {
+                expiringAddresses.append((address, Int(secondsLeft / 86400)))
+            }
+        }
+
+        guard !expiredAddresses.isEmpty || !expiringAddresses.isEmpty else { return }
+
+        for addr in expiredAddresses {
+            Log.error("🧊 TLS cert EXPIRED on relay \(addr) — fetching fresh config", category: "ICE")
+        }
+        for (addr, days) in expiringAddresses {
+            Log.info("🧊 TLS cert expires in \(days) day(s) on relay \(addr) — scheduling refresh", category: "ICE")
+        }
+
+        _ = await IceCertFetcher.shared.fetchAndCacheRelayConfig()
+        Log.info("🧊 Cert expiry refresh completed", category: "ICE")
     }
 
     // MARK: - ICE Mode (tri-state)
@@ -1323,6 +1370,9 @@ final class IceProxyManager: ObservableObject {
         }
 
         Log.info("🧊 Relay probe order: \(ordered.joined(separator: " → "))", category: "ICE")
+
+        // Proactively check relay TLS cert expiry in the background while connection attempts run.
+        Task { await checkCertExpiry() }
 
         for address in ordered {
             let relay = makeRelay(address: address, bridgeCert: cert, forceObfs4: webTunnelBlockedRelays.contains(address))

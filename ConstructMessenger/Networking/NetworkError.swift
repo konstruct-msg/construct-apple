@@ -60,4 +60,10 @@ enum GRPCMessages {
     /// Our own client-side deadline message — kept for legacy log matching only.
     /// Code should use `GRPCClientError.clientSideTimeout` for new checks.
     static let requestTimedOut  = "request timed out"
+    /// TLS certificate error keywords — combined to detect expired / invalid cert.
+    static let tlsCertificate        = "certificate"
+    static let tlsCertVerifyFailed   = "certificate_verify_failed"
+    /// TLS alert 40 (handshake_failure) — relay fingerprint blocked by DPI.
+    static let tlsHandshakeAlert   = "alert"      // combined with "40"
+    static let tlsHandshakeFailure = "handshake_failure"
 }

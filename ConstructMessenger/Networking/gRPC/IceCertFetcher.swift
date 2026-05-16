@@ -42,6 +42,9 @@ struct RelayInfo: Codable {
     /// Allows domain-fronting rotation without a binary update.
     /// nil / empty → no SNI alternatives available.
     let alternativeSNIs: [String]?
+    /// Unix timestamp when this relay's TLS certificate expires.
+    /// nil → expiry unknown (server hasn't pushed this data yet).
+    let certExpiresAt: Double?
 
     var addressWithPort: String { "\(addr):\(port)" }
 
@@ -53,6 +56,7 @@ struct RelayInfo: Codable {
         case wtHostHeader    = "wt_host_header"
         case iatMode         = "iat_mode"
         case alternativeSNIs = "alternative_snis"
+        case certExpiresAt   = "cert_expires_at"
     }
 
     init(from decoder: Decoder) throws {
@@ -67,6 +71,7 @@ struct RelayInfo: Codable {
         wtPath          = try c.decodeIfPresent(String.self, forKey: .wtPath)
         wtHostHeader    = try c.decodeIfPresent(String.self, forKey: .wtHostHeader)
         alternativeSNIs = try c.decodeIfPresent([String].self, forKey: .alternativeSNIs)
+        certExpiresAt   = try c.decodeIfPresent(Double.self, forKey: .certExpiresAt)
         let rawIat  = (try? c.decodeIfPresent(Int.self, forKey: .iatMode)) ?? nil
         iatMode     = rawIat.flatMap { IceIATMode(rawValue: $0) } ?? .enabled
     }
@@ -83,6 +88,7 @@ struct RelayInfo: Codable {
         try c.encodeIfPresent(wtPath,          forKey: .wtPath)
         try c.encodeIfPresent(wtHostHeader,    forKey: .wtHostHeader)
         try c.encodeIfPresent(alternativeSNIs, forKey: .alternativeSNIs)
+        try c.encodeIfPresent(certExpiresAt,   forKey: .certExpiresAt)
         try c.encode(iatMode.rawValue,         forKey: .iatMode)
     }
 }
@@ -355,6 +361,15 @@ actor IceCertFetcher {
             return alts
         }
         return ICEConfig.hardcodedRelayAlternativeSNIs[address] ?? []
+    }
+
+    /// TLS certificate expiry date for a relay, as reported by the server config.
+    /// Returns nil when the relay is not in cache or the server hasn't pushed expiry data.
+    static func certExpiresAtSync(for address: String) -> Date? {
+        guard let ts = cachedRelayInfosSync()?.first(where: { $0.addressWithPort == address })?.certExpiresAt else {
+            return nil
+        }
+        return Date(timeIntervalSince1970: ts)
     }
 
     /// IAT mode pushed by server for this relay. Returns nil when relay is not in cache

@@ -297,6 +297,20 @@ final class GRPCCallExecutor: Sendable {
                     return .retry
                 }
                 if let addr = failedAddr { await IceProxyManager.shared.recordRelayFailure(address: addr, type: .webTunnelBlocked) }
+            } else if isTLSCertExpired(error) {
+                // Expired TLS cert — fetch fresh config + cert from .well-known and restart.
+                Log.info("🧊 TLS cert expired on relay — refreshing cert + config", category: "gRPC")
+                let refreshed = await IceProxyManager.shared.refreshCertAndRestart()
+                if refreshed {
+                    cm.invalidatePersistentClient()
+                    await cm.waitForProxyReady()
+                    return .retry
+                }
+                if let addr = failedAddr { await IceProxyManager.shared.recordRelayFailure(address: addr, type: .tlsHandshake) }
+            } else if isTLSFingerprintBlocked(error) {
+                // TLS alert 40: relay fingerprint detected by DPI — rotate to different relay quickly.
+                Log.info("🧊 TLS fingerprint blocked (alert 40) on relay — rotating", category: "gRPC")
+                if let addr = failedAddr { await IceProxyManager.shared.recordRelayFailure(address: addr, type: .fingerprintBlocked) }
             } else {
                 // General transport failure (TLS, reset, etc.) — use default .streamTimeout TTL.
                 if let addr = failedAddr { await IceProxyManager.shared.recordRelayFailure(address: addr) }
@@ -377,5 +391,27 @@ final class GRPCCallExecutor: Sendable {
         return msg.contains(GRPCMessages.nonHttpUpgrade)
             || msg.contains(GRPCMessages.httpStatusCode)
             || (msg.contains(GRPCMessages.unexpectedHttp) && msg.contains("http"))
+    }
+
+    /// True when the TLS connection failed due to an expired or untrusted certificate.
+    /// Triggers a cert+config refresh rather than relay rotation.
+    private func isTLSCertExpired(_ error: Error) -> Bool {
+        guard let rpc = error as? RPCError,
+              rpc.code == .unavailable || rpc.code == .unknown else { return false }
+        let msg = rpc.message.lowercased()
+        return (msg.contains(GRPCMessages.tlsCertificate)
+                    && (msg.contains("expired") || msg.contains("verify") || msg.contains("invalid")))
+            || msg.contains(GRPCMessages.tlsCertVerifyFailed)
+    }
+
+    /// True when TLS alert 40 (handshake_failure) is returned, indicating the relay's
+    /// TLS fingerprint is blocked by DPI at the network level.
+    /// Triggers relay rotation with a shorter TTL than a generic TLS failure.
+    private func isTLSFingerprintBlocked(_ error: Error) -> Bool {
+        guard let rpc = error as? RPCError,
+              rpc.code == .unavailable || rpc.code == .unknown else { return false }
+        let msg = rpc.message.lowercased()
+        return (msg.contains(GRPCMessages.tlsHandshakeAlert) && msg.contains("40"))
+            || msg.contains(GRPCMessages.tlsHandshakeFailure)
     }
 }
