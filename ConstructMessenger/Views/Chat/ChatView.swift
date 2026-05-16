@@ -494,25 +494,12 @@ struct ChatView: View {
                         scrollManager.shouldScrollToBottom = true
                     }
                 } label: {
-                    HStack(spacing: 6) {
-                        Text("↓")
-                            .font(CTFont.bold(14))
-                        Text(viewModel.chat.unreadCount > 0
-                             ? NSLocalizedString("new_messages", comment: "New messages below")
-                             : NSLocalizedString("scroll_to_bottom", comment: "Scroll back to latest messages"))
-                            .font(CTFont.regular(13))
-                    }
-                    .foregroundColor(Color.CT.accent)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .background(
-                        Rectangle()
-                            .fill(Color.CT.bgMsg)
-                            .overlay(Rectangle().strokeBorder(Color.CT.accent.opacity(0.5), lineWidth: 1))
-                    )
+                    Image(systemName: "chevron.down.circle.fill")
+                        .font(.system(size: CTLayout.navIconSize))
+                        .foregroundColor(Color.CT.accent)
                 }
                 .padding(.trailing, 16)
-                .padding(.bottom, 80) // Above message input
+                .padding(.bottom, 160) // Above message input
                 .transition(.move(edge: .trailing).combined(with: .opacity))
                 .animation(.spring(response: 0.3, dampingFraction: 0.7), value: scrollManager.shouldShowScrollToBottomButton)
             }

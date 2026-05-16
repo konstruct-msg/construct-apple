@@ -1,6 +1,6 @@
 import Foundation
 
 enum CallsFeature {
-    static var isEnabled: Bool { false }
+    static var isEnabled: Bool { true }
 }
 

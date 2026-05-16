@@ -559,7 +559,7 @@
 
 // MARK: - Synaps
 "synaps" = "Синапсы";
-"synaps_search_prompt" = "Поиск";
+"search_prompt" = "Поиск";
 "synaps_empty_title" = "Пока нет связей";
 "synaps_empty_subtitle" = "Люди с которыми вы общаетесь будут здесь, даже если вы удалили переписку.";
 "synaps_open_chat" = "Открыть чат";

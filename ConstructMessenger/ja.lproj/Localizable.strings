@@ -561,7 +561,7 @@
 
 // MARK: - Synaps
 "synaps" = "シナプス";
-"synaps_search_prompt" = "検索";
+"search_prompt" = "検索";
 "synaps_empty_title" = "接続はまだありません";
 "synaps_empty_subtitle" = "会話を消去した後でも、接続した人はここに表示されます。";
 "synaps_open_chat" = "チャットを開く";

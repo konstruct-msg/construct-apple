@@ -289,12 +289,16 @@ class ChatViewModel: NSObject {
             guard let self else { return }
             do {
                 let publicKeyBundle = try await sessionInitService.fetchPublicKeyWithRetry(userId: userId)
-                
                 await MainActor.run { [weak self] in
+                    self?.publicKeyFetchTimer?.invalidate()
+                    self?.publicKeyFetchTimer = nil
                     self?.handlePublicKeyBundle(publicKeyBundle)
                 }
             } catch {
                 await MainActor.run { [weak self] in
+                    // Cancel the timeout timer — we already have a definitive failure.
+                    self?.publicKeyFetchTimer?.invalidate()
+                    self?.publicKeyFetchTimer = nil
                     Log.error("❌ Failed to fetch public key via gRPC after retries: \(error.localizedDescription)", category: "ChatViewModel")
                     ErrorRouter.shared.report(.sessionInitFailed(contactId: userId), recovery: { [weak self] in
                         self?.fetchRecipientPublicKey()
