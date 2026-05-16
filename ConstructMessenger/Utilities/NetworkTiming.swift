@@ -218,4 +218,19 @@ enum NetworkTiming {
         static let audioPreferredSampleRateHz: Double = 48_000
         static let audioPreferredIOBufferDuration: TimeInterval = 0.01
     }
+
+    // MARK: - Jitter utility
+
+    /// Returns a value in `[base * (1 - fraction), base * (1 + fraction)]`.
+    /// Use to spread reconnects across clients and avoid thundering-herd on the server.
+    /// - Parameter fraction: 0.2 = ±20%, 0.3 = ±30%, etc.
+    static func jitter(_ base: TimeInterval, fraction: Double = 0.2) -> TimeInterval {
+        let delta = base * fraction
+        return max(0, base + Double.random(in: -delta...delta))
+    }
+
+    /// Returns a random delay in `[0, maxSeconds]` for staggering concurrent clients.
+    static func randomDelay(max maxSeconds: TimeInterval) -> TimeInterval {
+        Double.random(in: 0...maxSeconds)
+    }
 }

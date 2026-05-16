@@ -1315,6 +1315,16 @@ final class IceProxyManager: ObservableObject {
 
         // Restart ICE if: always-on OR auto mode with a remembered ICE path.
         guard mode == .on || (mode == .auto && Self.lastSuccessfulPath == "ice") else { return }
+
+        // Spread reconnects across clients to avoid thundering-herd when many users
+        // simultaneously switch networks (e.g. office WiFi comes back after outage).
+        let startDelay = NetworkTiming.randomDelay(max: 2.0)
+        if startDelay > 0.05 {
+            Log.debug("🧊 Network-change ICE restart staggered by \(String(format: "%.2f", startDelay))s", category: "ICE")
+            try? await Task.sleep(for: .seconds(startDelay))
+            guard !Task.isCancelled else { return }
+        }
+
         let cert = await getIceBridgeCert()
         if await startWithRelayFallback(cert: cert) {
             Log.info("🧊 ICE proxy restarted after network path change", category: "ICE")

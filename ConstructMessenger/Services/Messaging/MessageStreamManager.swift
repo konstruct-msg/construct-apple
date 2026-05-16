@@ -493,8 +493,7 @@ final class MessageStreamManager {
             retryCount += 1
             let base: TimeInterval = NetworkTiming.Stream.backoffBaseDelay
             let delay = min(base * pow(2, Double(min(retryCount - 1, 5))), maxRetryDelay)
-            let jitter = Double.random(in: -(delay * 0.3)...(delay * 0.3))
-            let totalDelay = max(0.1, delay + jitter)
+            let totalDelay = max(0.1, NetworkTiming.jitter(delay, fraction: 0.3))
             let attemptMs = Int(Date().timeIntervalSince(attemptStart) * 1000)
 
             Log.info("⏳ MessageStream reconnecting in \(String(format: "%.1f", totalDelay))s (attempt #\(retryCount), took \(attemptMs)ms) → \(host):\(port)", category: "MessageStream")
