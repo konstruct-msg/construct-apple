@@ -180,6 +180,13 @@ enum NetworkTiming {
         static let directProbeGRPCDelay: TimeInterval = 30.0
         /// Timeout for the gRPC step of the direct probe.
         static let directProbeGRPCTimeout: TimeInterval = 6.0
+
+        // Relay latency cache
+        /// EWMA smoothing factor for relay latency measurements (0 < alpha ≤ 1).
+        /// alpha=0.3 gives recent samples ~30% weight while retaining 70% of history.
+        static let latencyCacheEWMAAlpha: Double = 0.3
+        /// Latency cache entries older than this are considered stale and re-probed.
+        static let latencyCacheValidity: TimeInterval = 5 * 60  // 5 min
     }
 
     // MARK: - Stream

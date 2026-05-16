@@ -471,8 +471,33 @@ final class IceProxyManager: ObservableObject {
         }
     }
 
+    /// EWMA-smoothed latency cache entry for a relay.
+    private struct RelayLatencyEntry {
+        /// Exponentially weighted moving average of TCP connect latency (seconds).
+        var ewmaLatency: TimeInterval
+        /// When this entry was last updated.
+        var updatedAt: Date
+
+        /// True if the entry was updated within the validity window.
+        var isValid: Bool {
+            Date().timeIntervalSince(updatedAt) < NetworkTiming.ICE.latencyCacheValidity
+        }
+
+        /// Update EWMA with a new latency sample.
+        mutating func apply(sample: TimeInterval) {
+            let alpha = NetworkTiming.ICE.latencyCacheEWMAAlpha
+            ewmaLatency = alpha * sample + (1 - alpha) * ewmaLatency
+            updatedAt = Date()
+        }
+    }
+
     /// Maps relay address → blacklist entry. Deprioritised in startWithRelayFallback().
     private var recentlyFailedRelays: [String: RelayBlacklistEntry] = [:]
+
+    /// EWMA latency cache. Populated by sortByLatency() and persisted for
+    /// `NetworkTiming.ICE.latencyCacheValidity` seconds. Cleared when the network
+    /// interface changes (latencies on WiFi vs cellular are incomparable).
+    private var relayLatencyCache: [String: RelayLatencyEntry] = [:]
 
     /// Relay addresses where WebTunnel was blocked by a carrier transparent HTTP proxy this session.
     /// When set, makeRelay() skips wtPath for these addresses, forcing obfs4 mode.
@@ -548,11 +573,13 @@ final class IceProxyManager: ObservableObject {
 
     /// Clear all relay failure tracking (e.g. on network path change — new network may work fine).
     private func clearRelayFailures() {
-        guard !recentlyFailedRelays.isEmpty || verifiedRelayAddress != nil || !webTunnelBlockedRelays.isEmpty else { return }
+        guard !recentlyFailedRelays.isEmpty || verifiedRelayAddress != nil
+                || !webTunnelBlockedRelays.isEmpty || !relayLatencyCache.isEmpty else { return }
         recentlyFailedRelays.removeAll()
         verifiedRelayAddress = nil
         webTunnelBlockedRelays.removeAll()
-        Log.info("🧊 Relay failure blacklist + verification cleared", category: "ICE")
+        relayLatencyCache.removeAll()   // latencies on old interface are irrelevant
+        Log.info("🧊 Relay failure blacklist + verification + latency cache cleared", category: "ICE")
     }
 
     // MARK: - ICE Mode (tri-state)
@@ -975,41 +1002,78 @@ final class IceProxyManager: ObservableObject {
     /// Probes all `addresses` concurrently and returns them sorted by TCP latency (fastest first).
     /// Unreachable endpoints (probe timed out) are placed at the end so they are still tried.
     ///
+    /// Cache-aware: addresses with a valid EWMA entry (< 5 min old) are not re-probed.
+    /// Only stale or uncached addresses are probed; results are merged with the cache.
+    /// EWMA is updated with alpha=0.3 on every fresh measurement.
+    ///
     /// Early-exit optimisation: once the first reachable result arrives, a grace timer of
     /// `NetworkTiming.ICE.sortByLatencyEarlyExitDelay` starts. Any probes that haven't
     /// responded by the deadline are treated as unreachable and appended at the end —
     /// they are still tried, just last. This prevents waiting the full `relayLatencyProbeTimeout`
     /// for blocked endpoints (e.g. AMS unreachable in RU) when a relay already responded.
-    private static func sortByLatency(_ addresses: [String], timeout: TimeInterval = NetworkTiming.ICE.relayLatencyProbeTimeout) async -> [String] {
+    private func sortByLatency(_ addresses: [String], timeout: TimeInterval = NetworkTiming.ICE.relayLatencyProbeTimeout) async -> [String] {
         guard !addresses.isEmpty else { return [] }
-        var results: [(String, TimeInterval?)] = []
+
+        // Split into addresses that have a fresh cache entry and those that need probing.
+        var cachedEntries:   [(String, TimeInterval)] = []
+        var toProbe:         [String] = []
+
+        for address in addresses {
+            if let entry = relayLatencyCache[address], entry.isValid {
+                cachedEntries.append((address, entry.ewmaLatency))
+            } else {
+                toProbe.append(address)
+            }
+        }
+
+        var probeResults: [(String, TimeInterval?)] = []
         var earlyExitAfter: Date? = nil
 
-        await withTaskGroup(of: (String, TimeInterval?).self) { group in
-            for address in addresses {
-                group.addTask { (address, await probeLatency(address: address, timeout: timeout)) }
-            }
-            for await (addr, lat) in group {
-                results.append((addr, lat))
-                if lat != nil, earlyExitAfter == nil {
-                    earlyExitAfter = Date().addingTimeInterval(NetworkTiming.ICE.sortByLatencyEarlyExitDelay)
+        if !toProbe.isEmpty {
+            await withTaskGroup(of: (String, TimeInterval?).self) { group in
+                for address in toProbe {
+                    group.addTask { (address, await Self.probeLatency(address: address, timeout: timeout)) }
                 }
-                // Once every address has responded, or the early-exit deadline has passed, stop.
-                if results.count == addresses.count { break }
-                if let deadline = earlyExitAfter, Date() >= deadline {
-                    group.cancelAll()
-                    break
+                for await (addr, lat) in group {
+                    probeResults.append((addr, lat))
+                    if lat != nil, earlyExitAfter == nil {
+                        earlyExitAfter = Date().addingTimeInterval(NetworkTiming.ICE.sortByLatencyEarlyExitDelay)
+                    }
+                    if probeResults.count == toProbe.count { break }
+                    if let deadline = earlyExitAfter, Date() >= deadline {
+                        group.cancelAll()
+                        break
+                    }
+                }
+            }
+
+            // Update the latency cache with fresh probe results (EWMA).
+            for (addr, lat) in probeResults {
+                guard let sample = lat else { continue }
+                if var entry = relayLatencyCache[addr] {
+                    entry.apply(sample: sample)
+                    relayLatencyCache[addr] = entry
+                } else {
+                    relayLatencyCache[addr] = RelayLatencyEntry(ewmaLatency: sample, updatedAt: Date())
                 }
             }
         }
 
-        // Addresses whose probes were cancelled (didn't make it into `results`) are treated
-        // as unreachable — appended last so they're still attempted as a final fallback.
-        let probedSet = Set(results.map(\.0))
-        let cancelled = addresses.filter { !probedSet.contains($0) }
-        let reachable  = results.filter { $0.1 != nil }.sorted { $0.1! < $1.1! }.map(\.0)
-        let unreachable = results.filter { $0.1 == nil }.map(\.0) + cancelled
-        return reachable + unreachable
+        if !cachedEntries.isEmpty {
+            let skipped = cachedEntries.map { "\($0.0) (\(Int($0.1 * 1000))ms cached)" }.joined(separator: ", ")
+            Log.debug("🧊 Latency cache hit for: \(skipped)", category: "ICE")
+        }
+
+        // Merge: cached entries + fresh probe results (reachable) + unreachable
+        let freshReachable = probeResults.filter { $0.1 != nil }
+        let allReachable: [(String, TimeInterval)] = (cachedEntries + freshReachable.map { ($0.0, $0.1!) })
+            .sorted { $0.1 < $1.1 }
+
+        let probedSet = Set(probeResults.map(\.0))
+        let cancelled = toProbe.filter { !probedSet.contains($0) }
+        let unreachable = probeResults.filter { $0.1 == nil }.map(\.0) + cancelled
+
+        return allReachable.map(\.0) + unreachable
     }
 
     // MARK: - Multi-endpoint startup
@@ -1050,7 +1114,7 @@ final class IceProxyManager: ObservableObject {
 
         // Probe all endpoints concurrently and sort by TCP latency (fastest first).
         // Region preference is applied first so that region-preferred relays win tie-breaks.
-        var ordered = await Self.sortByLatency(applyRegionPreference(to: candidates))
+        var ordered = await sortByLatency(applyRegionPreference(to: candidates))
         let notFailed = ordered.filter { !isRelayRecentlyFailed($0) }
         let failed    = ordered.filter { isRelayRecentlyFailed($0) }
         if !failed.isEmpty {
@@ -1105,7 +1169,7 @@ final class IceProxyManager: ObservableObject {
             + (UserDefaults.standard.stringArray(forKey: ICEConfig.cachedRelayListKey) ?? [])
         for addr in allAddresses where seen.insert(addr).inserted { candidates.append(addr) }
 
-        var ordered = await Self.sortByLatency(applyRegionPreference(to: candidates))
+        var ordered = await sortByLatency(applyRegionPreference(to: candidates))
         guard !ordered.isEmpty else { return false }
         let notFailed = ordered.filter { !isRelayRecentlyFailed($0) }
         let failed    = ordered.filter { isRelayRecentlyFailed($0) }
