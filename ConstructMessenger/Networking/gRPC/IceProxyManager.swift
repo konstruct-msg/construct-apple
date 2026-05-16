@@ -423,15 +423,52 @@ final class IceProxyManager: ObservableObject {
 
     // MARK: - Failed relay tracking
     //
-    // When a relay fails in production (obfs4 tunnel times out), its address is
-    // blacklisted so the next startWithRelayFallback() picks a different relay
-    // instead of re-selecting the same broken one based on TCP latency alone.
-    // Entries auto-expire after `relayFailureTTL`.
+    // When a relay fails in production, its address is blacklisted so the next
+    // startWithRelayFallback() picks a different relay. TTL is failure-type-aware:
+    // stream timeouts (transient) expire in 60 s; TLS/DPI failures in 300 s.
+    // This prevents over-penalising a relay for a brief connectivity blip while
+    // keeping genuinely broken relays deprioritised long enough to matter.
 
-    /// Maps relay address → failure timestamp. Deprioritized in startWithRelayFallback().
-    private var recentlyFailedRelays: [String: Date] = [:]
-    /// How long a failed relay stays deprioritized before becoming eligible again.
-    private static let relayFailureTTL: TimeInterval = 300  // 5 minutes
+    /// The reason a relay was blacklisted. Determines how long it stays deprioritised.
+    enum RelayFailureType: CustomStringConvertible {
+        /// obfs4 / TLS handshake could not be completed — likely DPI or cert mismatch.
+        case tlsHandshake
+        /// Tunnel was established but an RPC / stream timed out — transient blip.
+        case streamTimeout
+        /// WebTunnel HTTP upgrade was rejected AND the obfs4 companion also failed.
+        case webTunnelBlocked
+        /// Explicit DPI pattern detected (multiple direct-path timeouts in .auto mode).
+        case dpiDetected
+
+        var ttl: TimeInterval {
+            switch self {
+            case .tlsHandshake, .dpiDetected: return 300  // 5 min — persistent failure
+            case .streamTimeout:              return 60   // 1 min — transient, retry soon
+            case .webTunnelBlocked:           return 180  // 3 min — network-specific
+            }
+        }
+
+        var description: String {
+            switch self {
+            case .tlsHandshake:    return "tlsHandshake"
+            case .streamTimeout:   return "streamTimeout"
+            case .webTunnelBlocked:return "webTunnelBlocked"
+            case .dpiDetected:     return "dpiDetected"
+            }
+        }
+    }
+
+    private struct RelayBlacklistEntry {
+        let type: RelayFailureType
+        let timestamp: Date
+
+        var isExpired: Bool {
+            Date().timeIntervalSince(timestamp) >= type.ttl
+        }
+    }
+
+    /// Maps relay address → blacklist entry. Deprioritised in startWithRelayFallback().
+    private var recentlyFailedRelays: [String: RelayBlacklistEntry] = [:]
 
     /// Relay addresses where WebTunnel was blocked by a carrier transparent HTTP proxy this session.
     /// When set, makeRelay() skips wtPath for these addresses, forcing obfs4 mode.
@@ -464,12 +501,15 @@ final class IceProxyManager: ObservableObject {
 
     /// Mark a relay address as recently failed. Called from GRPCChannelManager.recordICEFailure()
     /// before the restart cycle begins.
-    func recordRelayFailure(address: String) {
-        recentlyFailedRelays[address] = Date()
-        // Prune expired entries.
-        let now = Date()
-        recentlyFailedRelays = recentlyFailedRelays.filter { now.timeIntervalSince($0.value) < Self.relayFailureTTL }
-        Log.info("🧊 Relay \(address) blacklisted for \(Int(Self.relayFailureTTL))s", category: "ICE")
+    ///
+    /// - Parameters:
+    ///   - address: Relay address string.
+    ///   - type: Failure reason — determines the blacklist TTL. Defaults to `.streamTimeout` (60 s).
+    func recordRelayFailure(address: String, type: RelayFailureType = .streamTimeout) {
+        recentlyFailedRelays[address] = RelayBlacklistEntry(type: type, timestamp: Date())
+        // Prune expired entries while we have the dict in hand.
+        recentlyFailedRelays = recentlyFailedRelays.filter { !$0.value.isExpired }
+        Log.info("🧊 Relay \(address) blacklisted for \(Int(type.ttl))s [\(type)]", category: "ICE")
     }
 
     /// Remove a relay from the failure blacklist so it can be retried immediately.
@@ -480,10 +520,10 @@ final class IceProxyManager: ObservableObject {
         Log.info("🧊 Relay \(address) removed from blacklist after config refresh", category: "ICE")
     }
 
-    /// Whether a relay has failed recently and should be tried last.
+    /// Whether a relay has failed recently enough that it should be tried last.
     private func isRelayRecentlyFailed(_ address: String) -> Bool {
-        guard let failedAt = recentlyFailedRelays[address] else { return false }
-        return Date().timeIntervalSince(failedAt) < Self.relayFailureTTL
+        guard let entry = recentlyFailedRelays[address] else { return false }
+        return !entry.isExpired
     }
 
     /// True when every known relay is in the recently-failed blacklist.

@@ -294,8 +294,9 @@ final class GRPCCallExecutor: Sendable {
                     Log.info("🧊 ICE obfs4 fallback active — retrying via same relay", category: "gRPC")
                     return .retry
                 }
-                if let addr = failedAddr { await IceProxyManager.shared.recordRelayFailure(address: addr) }
+                if let addr = failedAddr { await IceProxyManager.shared.recordRelayFailure(address: addr, type: .webTunnelBlocked) }
             } else {
+                // General transport failure (TLS, reset, etc.) — use default .streamTimeout TTL.
                 if let addr = failedAddr { await IceProxyManager.shared.recordRelayFailure(address: addr) }
             }
 
