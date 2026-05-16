@@ -64,7 +64,7 @@ final class MessageStreamManager {
     /// Transport protocol of the active stream connection ("H3" = QUIC, "H2" = HTTP/2, "" = not connected).
     var activeTransport: String = ""
     /// Last transport that was successfully used; persists across disconnects for display purposes.
-    private(set) var lastActiveTransport: String = ""
+    var lastActiveTransport: String = ""
 
     /// True when a connection attempt is actively in progress (not sleeping in backoff).
     /// When true, app-foreground force-reconnect should be skipped to avoid interrupting
