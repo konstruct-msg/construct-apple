@@ -1010,7 +1010,17 @@ final class IceProxyManager: ObservableObject {
         let notFailed = ordered.filter { !isRelayRecentlyFailed($0) }
         let failed    = ordered.filter { isRelayRecentlyFailed($0) }
         if !failed.isEmpty {
-            ordered = notFailed + failed
+            if notFailed.isEmpty {
+                // All relays recently failed. Among them, prefer WebTunnel-capable relays first:
+                // CDN-fronted HTTPS WebSocket is immune to TLS fingerprint DPI (obfs4 TLS profile
+                // can be identified over time; WebTunnel uses standard HTTPS and is CDN-fronted).
+                // start() falls through to TLS+obfs4 automatically if WebTunnel itself fails.
+                let failedWT   = failed.filter { IceCertFetcher.wtPathSync(for: $0) != nil && !webTunnelBlockedRelays.contains($0) }
+                let failedNoWT = failed.filter { IceCertFetcher.wtPathSync(for: $0) == nil || webTunnelBlockedRelays.contains($0) }
+                ordered = failedWT + failedNoWT
+            } else {
+                ordered = notFailed + failed
+            }
             Log.info("🧊 Deprioritized recently-failed relay(s): \(failed.joined(separator: ", "))", category: "ICE")
         }
 
@@ -1056,7 +1066,13 @@ final class IceProxyManager: ObservableObject {
         let notFailed = ordered.filter { !isRelayRecentlyFailed($0) }
         let failed    = ordered.filter { isRelayRecentlyFailed($0) }
         if !failed.isEmpty {
-            ordered = notFailed + failed
+            if notFailed.isEmpty {
+                let failedWT   = failed.filter { IceCertFetcher.wtPathSync(for: $0) != nil && !webTunnelBlockedRelays.contains($0) }
+                let failedNoWT = failed.filter { IceCertFetcher.wtPathSync(for: $0) == nil || webTunnelBlockedRelays.contains($0) }
+                ordered = failedWT + failedNoWT
+            } else {
+                ordered = notFailed + failed
+            }
         }
 
         let primaryAddress   = ordered[0]
