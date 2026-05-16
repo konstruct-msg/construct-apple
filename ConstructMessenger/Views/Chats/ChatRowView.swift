@@ -59,22 +59,27 @@ struct ChatRowView: View {
             }
         }
         .padding(.vertical, 8)
+        .contentShape(Rectangle())
+        #if os(iOS)
+        .contentShape(.contextMenuPreview, Rectangle())
+        #endif
         .contextMenu {
             Button {
                 chat.isPinned.toggle()
                 try? chat.managedObjectContext?.save()
             } label: {
-                Label(chat.isPinned ? "Unpin" : "Pin",
+                Label(LocalizedStringKey(chat.isPinned ? "unpin" : "pin"),
                       systemImage: chat.isPinned ? "pin.slash" : "pin")
             }
 
-            if chat.unreadCount > 0 {
-                Button {
-                    chat.unreadCount = 0
-                    try? chat.managedObjectContext?.save()
-                } label: {
-                    Label("Mark as Read", systemImage: "envelope.open")
-                }
+            Button {
+                chat.unreadCount = chat.unreadCount > 0 ? 0 : 1
+                try? chat.managedObjectContext?.save()
+            } label: {
+                Label(
+                    LocalizedStringKey(chat.unreadCount > 0 ? "mark_read" : "mark_unread"),
+                    systemImage: chat.unreadCount > 0 ? "envelope.open" : "envelope.badge"
+                )
             }
 
             Divider()
@@ -82,7 +87,7 @@ struct ChatRowView: View {
             Button(role: .destructive) {
                 NotificationCenter.default.post(name: .deleteChat, object: chat.id)
             } label: {
-                Label("Delete Chat", systemImage: "trash")
+                Label(LocalizedStringKey("delete"), systemImage: "trash")
             }
         }
     }

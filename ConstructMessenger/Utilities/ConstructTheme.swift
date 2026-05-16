@@ -505,6 +505,7 @@ struct CTSearchBar: View {
                 .autocorrectionDisabled()
                 #if os(iOS)
                 .textInputAutocapitalization(.never)
+                .submitLabel(.search)
                 #endif
                 .tint(Color.CT.accent)
 
@@ -563,7 +564,7 @@ struct CTNavBar: View {
                         .font(.system(size: 18))
                         .foregroundColor(Color.CT.accent)
                     #else
-                    Image(systemName: "chevron.backward.circle")
+                    Image(systemName: "chevron.backward.circle.fill")
                         .font(.system(size: 22))
                         .foregroundColor(Color.CT.accent)
                     #endif

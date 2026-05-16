@@ -28,7 +28,7 @@ enum FloodCheckResult {
 /// notifications for senders who are flooding this device.
 ///
 /// Thread-safety: all mutations are protected by a serial queue.
-final class IncomingFloodGuard {
+final class IncomingFloodGuard: ObservableObject {
 
     static let shared = IncomingFloodGuard()
 

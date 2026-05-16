@@ -51,6 +51,7 @@ struct SynapsView: View {
     // MARK: - Contact requests
     @State private var contactRequestsVM: ContactRequestsViewModel? = nil
     @State private var selectedRequest: ContactRequestsViewModel.IncomingRequest? = nil
+    @State private var contactMetricsByUser: [String: ContactMetrics] = [:]
 
     private var filtered: [User] {
         guard !searchText.isEmpty else { return Array(contacts) }
@@ -62,11 +63,12 @@ struct SynapsView: View {
     }
 
     var body: some View {
+        let filteredContacts = filtered
         NavigationStack {
             VStack(spacing: 0) {
                 synapsNavBar
                 synapsSearchBar
-                if !searchText.isEmpty, filtered.isEmpty {
+                if !searchText.isEmpty, filteredContacts.isEmpty {
                     remoteSearchCard
                 }
                 if let vm = contactRequestsVM, !vm.incomingRequests.isEmpty, searchText.isEmpty {
@@ -86,7 +88,8 @@ struct SynapsView: View {
                                 maxScale: 3.0
                             ) {
                                 HoneycombCloud(
-                                    contacts:     filtered,
+                                    contacts:     filteredContacts,
+                                    metricsByUser: contactMetricsByUser,
                                     selected:     $selectedContact,
                                     canvasScale:  canvasScale,
                                     canvasOffset: canvasOffset,
@@ -101,6 +104,9 @@ struct SynapsView: View {
                 }
             }
             .ctBackground()
+            .onAppear {
+                rebuildContactMetrics()
+            }
             .onChange(of: searchText) { _, newValue in
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                     canvasOffset = .zero
@@ -113,6 +119,13 @@ struct SynapsView: View {
                     guard !Task.isCancelled else { return }
                     await performRemoteSearch(username: newValue)
                 }
+            }
+            .onChange(of: contacts.count) { _, _ in
+                rebuildContactMetrics()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .NSManagedObjectContextObjectsDidChange, object: context)) { note in
+                guard notificationContainsSynapsesMetricChanges(note) else { return }
+                rebuildContactMetrics()
             }
             .task {
                 let vm = ContactRequestsViewModel(viewContext: context)
@@ -173,11 +186,11 @@ struct SynapsView: View {
             }
         }
         .confirmationDialog(
-            LocalizedStringKey("synaps_prune_title"),
+            LocalizedStringKey("synapses_prune_title"),
             isPresented: $showPruneConfirm,
             titleVisibility: .visible
         ) {
-            Button(LocalizedStringKey("synaps_prune_action"), role: .destructive) {
+            Button(LocalizedStringKey("synapses_prune_action"), role: .destructive) {
                 if let user = pruneTarget {
                     chatsViewModel.pruneContact(userId: user.id)
                 }
@@ -186,7 +199,7 @@ struct SynapsView: View {
             Button(LocalizedStringKey("cancel"), role: .cancel) { pruneTarget = nil }
         } message: {
             if let name = pruneTarget?.displayName {
-                Text(String(format: NSLocalizedString("synaps_prune_message", comment: ""), name))
+                Text(String(format: NSLocalizedString("synapses_prune_message", comment: ""), name))
             }
         }
     }
@@ -200,11 +213,60 @@ struct SynapsView: View {
         return engine.initialScale
     }
 
+    private func rebuildContactMetrics() {
+        let users = Array(contacts)
+        guard !users.isEmpty else {
+            contactMetricsByUser = [:]
+            return
+        }
+
+        var drafts: [(id: String, count: Int, lastMessage: Date?)] = []
+        var maxCount = 0
+
+        for user in users {
+            let userChats = (user.chats?.allObjects as? [Chat]) ?? []
+            let count = userChats.map { $0.messages?.count ?? 0 }.max() ?? 0
+            maxCount = max(maxCount, count)
+            let lastMessage = userChats.compactMap { $0.lastMessageTime }.max()
+            drafts.append((id: user.id, count: count, lastMessage: lastMessage))
+        }
+
+        let now = Date()
+        var nextMap: [String: ContactMetrics] = [:]
+        for draft in drafts {
+            let score: CGFloat = maxCount > 0 ? CGFloat(draft.count) / CGFloat(maxCount) : 0
+            let recency: ContactMetrics.Recency
+            if let t = draft.lastMessage {
+                let age = now.timeIntervalSince(t)
+                recency = age < 86_400 ? .fresh : age < 604_800 ? .recent : .none
+            } else {
+                recency = .none
+            }
+            nextMap[draft.id] = ContactMetrics(frequencyScore: score, recency: recency)
+        }
+        contactMetricsByUser = nextMap
+    }
+
+    private func notificationContainsSynapsesMetricChanges(_ note: Notification) -> Bool {
+        let relevantEntities: Set<String> = ["User", "Chat", "Message"]
+        let keys = [NSInsertedObjectsKey, NSUpdatedObjectsKey, NSDeletedObjectsKey]
+        for key in keys {
+            guard let objects = note.userInfo?[key] as? Set<NSManagedObject> else { continue }
+            if objects.contains(where: { object in
+                guard let name = object.entity.name else { return false }
+                return relevantEntities.contains(name)
+            }) {
+                return true
+            }
+        }
+        return false
+    }
+
     // MARK: - Nav Bar
 
     private var synapsNavBar: some View {
         HStack(spacing: 10) {
-            Text(NSLocalizedString("synaps", comment: "").uppercased())
+            Text(NSLocalizedString("synapses", comment: "").uppercased())
                 .font(CTFont.bold(13))
                 .foregroundColor(Color.CT.text)
                 .tracking(4)
@@ -232,10 +294,10 @@ struct SynapsView: View {
 
     private var emptyState: some View {
         VStack(spacing: 16) {
-            Text(LocalizedStringKey("synaps_empty_title"))
+            Text(LocalizedStringKey("synapses_empty_title"))
                 .font(CTFont.bold(17))
                 .foregroundStyle(Color.CT.text)
-            Text(LocalizedStringKey("synaps_empty_subtitle"))
+            Text(LocalizedStringKey("synapses_empty_subtitle"))
                 .font(CTFont.regular(14))
                 .foregroundStyle(Color.CT.textDim)
                 .multilineTextAlignment(.center)
@@ -250,7 +312,7 @@ struct SynapsView: View {
     private var remoteSearchCard: some View {
         VStack(spacing: 0) {
             HStack {
-                Text(LocalizedStringKey("synaps_remote_result_header"))
+                Text(LocalizedStringKey("synapses_remote_result_header"))
                     .font(CTFont.bold(10))
                     .foregroundStyle(Color.CT.accent)
                     .tracking(2)
@@ -268,7 +330,7 @@ struct SynapsView: View {
 
             case .searching:
                 HStack {
-                    Text(LocalizedStringKey("synaps_searching"))
+                    Text(LocalizedStringKey("synapses_searching"))
                         .font(CTFont.regular(13))
                         .foregroundStyle(Color.CT.textDim)
                     Spacer()
@@ -318,7 +380,7 @@ struct SynapsView: View {
 
             case .notFound:
                 HStack {
-                    Text(LocalizedStringKey("synaps_not_found"))
+                    Text(LocalizedStringKey("synapses_not_found"))
                         .font(CTFont.regular(13))
                         .foregroundStyle(Color.CT.textDim)
                     Spacer()
@@ -476,51 +538,16 @@ struct SynapsView: View {
 
 private struct HoneycombCloud: View {
     let contacts:     [User]
+    let metricsByUser: [String: ContactMetrics]
     @Binding var selected: User?
     let canvasScale:  CGFloat
     let canvasOffset: CGSize
     let screenSize:   CGSize
 
-    // MARK: Activity metrics
-
-    /// Message count per contact (raw), used for normalisation.
-    private var rawCounts: [String: Int] {
-        var result: [String: Int] = [:]
-        for user in contacts {
-            let chats = (user.chats?.allObjects as? [Chat]) ?? []
-            let count = chats.map { $0.messages?.count ?? 0 }.max() ?? 0
-            result[user.id] = count
-        }
-        return result
-    }
-
-    private var metricsMap: [String: ContactMetrics] {
-        let counts = rawCounts
-        let maxCount = counts.values.max() ?? 0
-        let now = Date()
-        var map: [String: ContactMetrics] = [:]
-        for user in contacts {
-            let count = counts[user.id] ?? 0
-            let score: CGFloat = maxCount > 0 ? CGFloat(count) / CGFloat(maxCount) : 0
-            let lastMsg = ((user.chats?.allObjects as? [Chat]) ?? [])
-                .compactMap { $0.lastMessageTime }
-                .max()
-            let recency: ContactMetrics.Recency
-            if let t = lastMsg {
-                let age = now.timeIntervalSince(t)
-                recency = age < 86_400 ? .fresh : age < 604_800 ? .recent : .none
-            } else {
-                recency = .none
-            }
-            map[user.id] = ContactMetrics(frequencyScore: score, recency: recency)
-        }
-        return map
-    }
-
     var body: some View {
         GeometryReader { geo in
             let engine  = HoneycombLayoutEngine(contacts: contacts, canvasSize: geo.size)
-            let metrics = metricsMap
+            let metrics = metricsByUser
 
             // Canvas is screen-sized; contacts that overflow (large grids when
             // zoomed to 1:1) are clipped by ZoomableCloud and visible when zoomed out.

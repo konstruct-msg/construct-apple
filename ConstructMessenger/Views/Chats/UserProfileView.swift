@@ -176,7 +176,7 @@ struct UserProfileView: View {
             flatRowDivider()
 
             if showMessageButton, let openChat = onOpenChat {
-                actionRow(label: NSLocalizedString("synaps_open_chat", comment: ""), color: Color.CT.accent) {
+                actionRow(label: NSLocalizedString("synapses_open_chat", comment: ""), color: Color.CT.accent) {
                     openChat(); dismiss()
                 }
                 flatRowDivider()
@@ -291,7 +291,7 @@ struct UserProfileView: View {
 
             if let prune = onPrune {
                 flatRowDivider()
-                actionRow(label: NSLocalizedString("synaps_prune_action", comment: ""), color: Color.CT.danger) {
+                actionRow(label: NSLocalizedString("synapses_prune_action", comment: ""), color: Color.CT.danger) {
                     prune(); dismiss()
                 }
             }

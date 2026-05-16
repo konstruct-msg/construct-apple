@@ -37,7 +37,8 @@ struct CallHistoryView: View {
         .background(Color.CT.bg.ignoresSafeArea())
         .onAppear { loadRecords() }
         // Refresh whenever any CoreData save happens (new call logged, record deleted, clear all)
-        .onReceive(NotificationCenter.default.publisher(for: .NSManagedObjectContextDidSave)) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: .NSManagedObjectContextDidSave)) { note in
+            guard notificationContainsCallRecordChanges(note) else { return }
             loadRecords()
         }
         .alert(NSLocalizedString("calls_clear_confirm", comment: ""), isPresented: $showClearConfirm) {
@@ -57,6 +58,18 @@ struct CallHistoryView: View {
         req.fetchLimit = 200
         let objects = (try? viewContext.fetch(req)) ?? []
         records = objects.compactMap { $0 as? CTCallRecord }
+    }
+
+    /// Ignore unrelated Core Data saves from other screens/tabs.
+    private func notificationContainsCallRecordChanges(_ note: Notification) -> Bool {
+        let keys = [NSInsertedObjectsKey, NSUpdatedObjectsKey, NSDeletedObjectsKey]
+        for key in keys {
+            guard let objects = note.userInfo?[key] as? Set<NSManagedObject> else { continue }
+            if objects.contains(where: { $0.entity.name == "CallRecord" }) {
+                return true
+            }
+        }
+        return false
     }
 
     // MARK: - List

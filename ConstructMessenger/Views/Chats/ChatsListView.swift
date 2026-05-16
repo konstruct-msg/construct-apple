@@ -29,11 +29,12 @@ struct ChatsListView: View {
     }
 
     var body: some View {
+        let renderedChats = filteredChats
         NavigationStack(path: $navigationPath) {
             VStack(spacing: 0) {
                     navBar
                     searchBar
-                    chatList
+                    chatList(chats: renderedChats)
             }
             .ctBackground()
             .toolbar(.hidden, for: .navigationBar)
@@ -48,6 +49,7 @@ struct ChatsListView: View {
             .onAppear {
                     chatsViewModel.setContext(viewContext)
                     LocalNotificationManager.shared.clearBadge()
+                    updateTotalUnreadCount()
             }
             .onChange(of: navigationPath) { _, path in
                     chatsViewModel.isInChat = !path.isEmpty
@@ -66,8 +68,9 @@ struct ChatsListView: View {
                           let chat = chats.first(where: { $0.id == chatId }) else { return }
                     Task { await chatsViewModel.deleteChatWithEndSession(chat: chat) }
             }
-            .onChange(of: chats.reduce(0, { $0 + Int($1.unreadCount) })) { _, total in
-                    chatsViewModel.totalUnreadCount = total
+            .onReceive(NotificationCenter.default.publisher(for: .NSManagedObjectContextDidSave)) { note in
+                    guard notificationContainsChatChanges(note) else { return }
+                    updateTotalUnreadCount()
             }
         }
     }
@@ -108,9 +111,9 @@ struct ChatsListView: View {
         }
     }
 
-    private var chatList: some View {
+    private func chatList(chats renderedChats: [Chat]) -> some View {
         List {
-            ForEach(filteredChats) { chat in
+            ForEach(renderedChats) { chat in
                 Button {
                     navigationPath.append(chat.id)
                 } label: {
@@ -119,7 +122,7 @@ struct ChatsListView: View {
                 .buttonStyle(.plain)
                 .listRowBackground(Color.CT.bg)
                 .listRowSeparatorTint(Color.CT.noise)
-                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                     Button(role: .destructive) {
                         Task { await chatsViewModel.deleteChatWithEndSession(chat: chat) }
                     } label: {
@@ -151,6 +154,7 @@ struct ChatsListView: View {
         .refreshable {
             await BackgroundFetchManager.shared.fetchPendingMessages()
         }
+        .scrollDismissesKeyboard(.immediately)
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .background(Color.CT.bg)
@@ -166,6 +170,21 @@ struct ChatsListView: View {
     private func toggleMarkUnread(_ chat: Chat) {
         chat.unreadCount = chat.unreadCount > 0 ? 0 : 1
         try? viewContext.save()
+    }
+
+    private func updateTotalUnreadCount() {
+        chatsViewModel.totalUnreadCount = chats.reduce(0) { $0 + Int($1.unreadCount) }
+    }
+
+    private func notificationContainsChatChanges(_ note: Notification) -> Bool {
+        let keys = [NSInsertedObjectsKey, NSUpdatedObjectsKey, NSDeletedObjectsKey]
+        for key in keys {
+            guard let objects = note.userInfo?[key] as? Set<NSManagedObject> else { continue }
+            if objects.contains(where: { $0.entity.name == "Chat" }) {
+                return true
+            }
+        }
+        return false
     }
 
     // MARK: - QR Code Handling

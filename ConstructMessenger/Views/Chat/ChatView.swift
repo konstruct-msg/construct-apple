@@ -35,7 +35,7 @@ struct ChatView: View {
     @State private var isChatDropTargeted = false
 
     // Flood guard observer — updates when IncomingFloodGuard suppresses this chat's sender
-    @State private var floodGuard = IncomingFloodGuard.shared
+    @ObservedObject private var floodGuard = IncomingFloodGuard.shared
 
     // Key Transparency status for the contact in this chat
     @State private var contactKTStatus: KTStatus = .unverified
@@ -56,6 +56,8 @@ struct ChatView: View {
     }
 
     var body: some View {
+        // Compute once per body pass to avoid repeated full-array filtering in render path.
+        let renderedMessages = filteredMessages
         VStack(spacing: 0) {
             chatNavBar
 
@@ -66,7 +68,7 @@ struct ChatView: View {
                 ScrollView {
                     LazyVStack(spacing: 0) {
                         // Load more indicator at TOP of list (oldest messages)
-                        if viewModel.hasMoreMessages && !filteredMessages.isEmpty {
+                        if viewModel.hasMoreMessages && !renderedMessages.isEmpty {
                             HStack {
                                 Spacer()
                                 if viewModel.isLoadingMore {
@@ -93,11 +95,11 @@ struct ChatView: View {
                         }
 
                         // Messages in oldest-first order (ScrollView anchored to bottom via .defaultScrollAnchor)
-                        ForEach(Array(filteredMessages.enumerated()), id: \.element.id) { index, message in
+                        ForEach(Array(renderedMessages.enumerated()), id: \.element.id) { index, message in
                             VStack(spacing: 0) {
                                 MessageBubble(
                                     message: message,
-                                    isLastInGroup: message.isLastInGroup(at: index, in: filteredMessages),
+                                    isLastInGroup: message.isLastInGroup(at: index, in: renderedMessages),
                                     isSelected: selectedMessages.contains(message.id),
                                     isEditMode: isEditMode,
                                     onRetry: { msg in
@@ -134,9 +136,9 @@ struct ChatView: View {
                                 .id(message.id)
 
                                 // Add spacing after each message
-                                if index < filteredMessages.count - 1 {
+                                if index < renderedMessages.count - 1 {
                                     Spacer()
-                                        .frame(height: message.spacingAfterMessage(at: index, in: filteredMessages))
+                                        .frame(height: message.spacingAfterMessage(at: index, in: renderedMessages))
                                 }
                             }
                         }
@@ -288,7 +290,7 @@ struct ChatView: View {
                     .padding(8)
             }
         }
-        .overlay(alignment: .top, content: searchOverlay)
+        .overlay(alignment: .top) { searchOverlay(resultCount: renderedMessages.count) }
         .sheet(isPresented: $showingUserProfile) {
             if let user = viewModel.chat.otherUser {
                 UserProfileView(
@@ -338,10 +340,10 @@ struct ChatView: View {
         }
         #if os(iOS)
         .fullScreenCover(item: $galleryStartItem) { item in
-            MediaGalleryViewer(
-                messages: mediaMessages,
-                initialMessageId: item.id,
-                isPresented: Binding(
+                MediaGalleryViewer(
+                    messages: mediaMessages(in: renderedMessages),
+                    initialMessageId: item.id,
+                    isPresented: Binding(
                     get: { galleryStartItem != nil },
                     set: { if !$0 { galleryStartItem = nil } }
                 )
@@ -511,7 +513,7 @@ struct ChatView: View {
     private var chatNavBar: some View {
         HStack(spacing: 10) {
             Button { dismiss() } label: {
-                Image(systemName: "chevron.backward.circle")
+                Image(systemName: "chevron.backward.circle.fill")
                     .font(.system(size: 22))
                     .foregroundColor(Color.CT.accent)
             }
@@ -617,7 +619,7 @@ struct ChatView: View {
     }
     
     @ViewBuilder
-    private func searchOverlay() -> some View {
+    private func searchOverlay(resultCount: Int) -> some View {
         if isSearchActive {
             VStack(spacing: 0) {
                 HStack(spacing: 8) {
@@ -656,7 +658,7 @@ struct ChatView: View {
 
                 if !searchText.isEmpty {
                     HStack {
-                        Text("[\(filteredMessages.count) results]")
+                        Text("[\(resultCount) results]")
                             .font(CTFont.regular(12))
                             .foregroundStyle(Color.CT.textDim)
                         Spacer()
@@ -689,15 +691,11 @@ struct ChatView: View {
         }
     }
 
-    /// All media messages in this chat, in display order. Used by the gallery viewer.
-    /// Upload placeholders (with `_placeholder: true`) are excluded — they have no real URL.
-    private var mediaMessages: [Message] {
-        viewModel.messages.filter {
-            guard !$0.isDeleted, $0.managedObjectContext != nil else { return false }
-            if let mc = parseMediaContent(from: $0.displayText) {
-                return (mc.media["_placeholder"] as? Bool) != true
-            }
-            return false
+    /// All media messages in display order. Upload placeholders are excluded.
+    private func mediaMessages(in messages: [Message]) -> [Message] {
+        messages.filter {
+            guard let mc = parseMediaContent(from: $0.displayText) else { return false }
+            return (mc.media["_placeholder"] as? Bool) != true
         }
     }
 
