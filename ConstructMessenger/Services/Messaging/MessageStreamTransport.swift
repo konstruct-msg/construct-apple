@@ -318,6 +318,7 @@ extension MessageStreamManager {
                         ConnectionStatusManager.shared.markStreamConnected()
                         self.isConnected = true
                         self.activeTransport = transportLabel
+                        self.lastActiveTransport = transportLabel
                         self.lastHeartbeatDate = Date()
                         // The background fetch was a best-effort catch-up for messages missed
                         // while disconnected. Now that the stream is live the server will push

@@ -52,14 +52,24 @@ struct NetworkSettingsView: View {
                                 .foregroundStyle(Color.CT.textDim)
                                 .textSelection(.enabled)
                         }
+                        
                         Spacer()
-                        if !streamManager.activeTransport.isEmpty {
-                            let isQUIC = streamManager.activeTransport == "H3"
+                        
+                        let displayTransport = streamManager.activeTransport.isEmpty
+                            ? streamManager.lastActiveTransport
+                            : streamManager.activeTransport
+                        let isLive = !streamManager.activeTransport.isEmpty
+                        if !displayTransport.isEmpty {
+                            let isQUIC = displayTransport == "H3"
                             Text(isQUIC ? "QUIC" : "H2")
                                 .font(CTFont.regular(13))
-                                .foregroundColor(isQUIC ? Color.CT.accent : Color.CT.accentDim)
+                                .foregroundColor(isLive
+                                    ? (isQUIC ? Color.CT.accent : Color.CT.accentDim)
+                                    : Color.CT.textDim)
                                 .padding(.horizontal, 5).padding(.vertical, 2)
-                                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.CT.accent.opacity(0.4), lineWidth: 0.5))
+                                .overlay(RoundedRectangle(cornerRadius: 4).stroke(
+                                    (isLive ? Color.CT.accent : Color.CT.textDim).opacity(0.4),
+                                    lineWidth: 0.5))
                         }
                     }
                     .padding(.horizontal, 12)
