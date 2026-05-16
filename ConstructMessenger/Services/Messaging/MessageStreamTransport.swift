@@ -185,7 +185,8 @@ extension MessageStreamManager {
                     client: msgClient,
                     request: request,
                     incomingContinuation: incomingContinuation,
-                    metricsLabel: metricsLabel
+                    metricsLabel: metricsLabel,
+                    transportLabel: "H3"
                 )
             } else {
                 let grpcClient = try GRPCChannelManager.shared.acquireChannel()
@@ -194,7 +195,8 @@ extension MessageStreamManager {
                     client: msgClient,
                     request: request,
                     incomingContinuation: incomingContinuation,
-                    metricsLabel: metricsLabel
+                    metricsLabel: metricsLabel,
+                    transportLabel: "H2"
                 )
             }
 #else
@@ -204,7 +206,8 @@ extension MessageStreamManager {
                 client: msgClient,
                 request: request,
                 incomingContinuation: incomingContinuation,
-                metricsLabel: metricsLabel
+                metricsLabel: metricsLabel,
+                transportLabel: "H2"
             )
 #endif
         }
@@ -301,7 +304,8 @@ extension MessageStreamManager {
         client: Shared_Proto_Services_V1_MessagingService.Client<Transport>,
         request: StreamingClientRequest<Shared_Proto_Services_V1_MessageStreamRequest>,
         incomingContinuation: AsyncStream<StreamEvent>.Continuation,
-        metricsLabel: String
+        metricsLabel: String,
+        transportLabel: String = "H2"
     ) async throws {
         try await client.messageStream(
             request: request,
@@ -313,6 +317,7 @@ extension MessageStreamManager {
                         let streamMs = PerformanceMetrics.shared.end(.streamOpenStart, endEvent: .streamOpenEnd, label: metricsLabel)
                         ConnectionStatusManager.shared.markStreamConnected()
                         self.isConnected = true
+                        self.activeTransport = transportLabel
                         self.lastHeartbeatDate = Date()
                         // The background fetch was a best-effort catch-up for messages missed
                         // while disconnected. Now that the stream is live the server will push

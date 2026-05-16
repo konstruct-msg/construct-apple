@@ -53,6 +53,14 @@ struct NetworkSettingsView: View {
                                 .textSelection(.enabled)
                         }
                         Spacer()
+                        if !streamManager.activeTransport.isEmpty {
+                            let isQUIC = streamManager.activeTransport == "H3"
+                            Text(isQUIC ? "QUIC" : "H2")
+                                .font(CTFont.regular(10))
+                                .foregroundColor(isQUIC ? Color.CT.accent : Color.CT.accentDim)
+                                .padding(.horizontal, 5).padding(.vertical, 2)
+                                .overlay(Rectangle().stroke(Color.CT.accent.opacity(0.4), lineWidth: 0.5))
+                        }
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 12)

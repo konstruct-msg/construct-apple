@@ -197,6 +197,12 @@ class ChatViewModel: NSObject {
                 if self.connectionStatusManager.connectionStatus == .connected {
                     Log.info("✅ Network connected - processing queued messages", category: "ChatViewModel")
                     self.sendQueuedMessages()
+                    // If the session was never established (e.g. network was down during
+                    // QR exchange), auto-retry session init now that we have connectivity.
+                    if !self.isSessionReady {
+                        Log.info("🔄 Network recovered — retrying session init", category: "ChatViewModel")
+                        self.fetchRecipientPublicKey()
+                    }
                 }
             }
         }

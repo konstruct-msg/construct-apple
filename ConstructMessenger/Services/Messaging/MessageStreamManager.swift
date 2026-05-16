@@ -61,6 +61,8 @@ final class MessageStreamManager {
     var isConnected = false
     /// Set to the current time whenever a heartbeat ack is received from the server.
     var lastHeartbeatDate: Date?
+    /// Transport protocol of the active stream connection ("H3" = QUIC, "H2" = HTTP/2, "" = not connected).
+    var activeTransport: String = ""
 
     /// True when a connection attempt is actively in progress (not sleeping in backoff).
     /// When true, app-foreground force-reconnect should be skipped to avoid interrupting
@@ -196,6 +198,7 @@ final class MessageStreamManager {
         // Finishing the continuation first lets the producer's `for await` drain naturally;
         // task cancellation then only aborts a sleeping backoff or an idle await point.
         isConnected = false
+        activeTransport = ""
         outboundContinuation?.finish()
         outboundContinuation = nil
         streamTask?.cancel()
@@ -221,6 +224,7 @@ final class MessageStreamManager {
     /// Disconnect without removing the server-change observer (used for reconnects).
     private func forceDisconnect() {
         isConnected = false
+        activeTransport = ""
         outboundContinuation?.finish()
         outboundContinuation = nil
         heartbeatTask?.cancel()
