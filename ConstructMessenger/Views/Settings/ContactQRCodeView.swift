@@ -16,6 +16,7 @@ struct ContactQRCodeView: View {
     let username: String
     
     @State private var qrPayload: String?
+    @State private var qrImage: UIImage?
     @State private var timeRemaining: TimeInterval = InviteConfig.ttlSeconds
     @State private var generationError: String?
     @State private var generatedAt: Date?
@@ -87,6 +88,8 @@ struct ContactQRCodeView: View {
         .onAppear {
             if let preview = previewPayload {
                 qrPayload = preview
+                qrImage = generateQRCode(from: preview)
+                timeRemaining = InviteConfig.ttlSeconds
                 generatedAt = Date()
             } else {
                 generateInitialQRCode()
@@ -101,7 +104,7 @@ struct ContactQRCodeView: View {
     private var qrBlock: some View {
         let size = QRCodeSize.standard(in: containerWidth)
 
-        if let payload = qrPayload, let qrImage = generateQRCode(from: payload) {
+        if qrPayload != nil, let qrImage {
             // White bg required for camera readability; bordered with CT noise
             Image(uiImage: qrImage)
                 .interpolation(.none)
@@ -205,6 +208,7 @@ struct ContactQRCodeView: View {
                 useHTTPS: false
             )
             qrPayload = deepLink
+            qrImage = generateQRCode(from: deepLink)
             generatedAt = Date()
             timeRemaining = InviteConfig.ttlSeconds
             generationError = nil
@@ -215,6 +219,7 @@ struct ContactQRCodeView: View {
 
     private func regenerateQRCode() {
         qrPayload = nil
+        qrImage = nil
         generationError = nil
         generatedAt = nil
         generateInitialQRCode()

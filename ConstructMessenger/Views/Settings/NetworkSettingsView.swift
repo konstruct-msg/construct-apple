@@ -33,7 +33,7 @@ struct NetworkSettingsView: View {
                 )
             }
             ScrollView {
-            VStack(spacing: 0) {
+            LazyVStack(spacing: 0) {
 
                 // MARK: - Connection Status
                 CTSettingsSectionHeader(title: NSLocalizedString("status", comment: "").uppercased())
@@ -216,7 +216,7 @@ struct NetworkSettingsView: View {
             #if os(iOS)
             .toolbar(.hidden, for: .navigationBar)
             #endif
-        }
+            }
         .alert("server_applied_title", isPresented: $showingAppliedAlert) {
             Button("ok") { }
         } message: {

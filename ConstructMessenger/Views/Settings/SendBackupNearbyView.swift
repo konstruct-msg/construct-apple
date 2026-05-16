@@ -23,6 +23,7 @@ struct SendBackupNearbyView: View {
     @State private var service = NearbyTransferService()
     @State private var errorMessage: String?
     @State private var showError = false
+    @State private var hasPreparedTransfer = false
 
     var body: some View {
         ZStack {
@@ -36,7 +37,11 @@ struct SendBackupNearbyView: View {
                 content
             }
         }
-        .task { await prepare() }
+        .task {
+            guard !hasPreparedTransfer else { return }
+            hasPreparedTransfer = true
+            await prepare()
+        }
         .onDisappear { service.cancel() }
         .alert(NSLocalizedString("transfer_error_title", comment: ""), isPresented: $showError) {
             Button(NSLocalizedString("ok", comment: ""), role: .cancel) {}
@@ -48,7 +53,7 @@ struct SendBackupNearbyView: View {
     @ViewBuilder
     private var content: some View {
         ScrollView {
-            VStack(spacing: 24) {
+            LazyVStack(spacing: 24) {
                 switch service.transferState {
                 case .idle, .preparing:
                     preparingView

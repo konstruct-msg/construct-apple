@@ -412,6 +412,16 @@ final class IceProxyManager: ObservableObject {
     private var directProbeTask: Task<Void, Never>?
     /// Pre-warm background task: starts ICE while direct is being attempted.
     private var standbyPrewarmTask: Task<Void, Never>?
+    /// Monotonically incrementing epoch for proxy-start sequences.
+    /// Every reset-and-restart bumps this; callers capture it before their first `await`
+    /// and abort if it has changed by the time they would call `start()`.
+    private var proxyStartGeneration: Int = 0
+
+    @discardableResult
+    private func bumpStartGeneration() -> Int {
+        proxyStartGeneration += 1
+        return proxyStartGeneration
+    }
 
     /// ICE is running in standby pre-warm mode: proxy is up but `iceProxyPort()` returns nil.
     /// Routing stays direct until DPI is confirmed (`activateDPIAutoMode`), mode is promoted to
@@ -919,6 +929,7 @@ final class IceProxyManager: ObservableObject {
     func refreshCertAndRestart() async -> Bool {
         Log.info("🧊 ICE recovery — refreshing cert + relay config via .well-known", category: "ICE")
         KeychainManager.shared.deleteIceBridgeCert()
+        let gen = bumpStartGeneration()
 
         // Fetch both obfs4 cert AND relay TLS config (SPKI pins) concurrently.
         async let certTask = IceCertFetcher.shared.fetchFromHTTPS()
@@ -941,8 +952,12 @@ final class IceProxyManager: ObservableObject {
             return false
         }
         KeychainManager.shared.saveIceBridgeCert(freshCert)
+        guard proxyStartGeneration == gen else {
+            Log.info("🧊 Cert refresh superseded — skipping restart", category: "ICE")
+            return false
+        }
         if isEnabled {
-            return await startWithRelayFallback(cert: freshCert)
+            return await startWithRelayFallback(cert: freshCert, generation: gen)
         }
         return false
     }
@@ -956,8 +971,13 @@ final class IceProxyManager: ObservableObject {
         // Don't call stop() — we want to bypass the `isRunning` guard and reset directly.
         ice_proxy_stop()
         resetAllProxyState()
+        let gen = bumpStartGeneration()
         let cert = await getIceBridgeCert()
-        return await startWithRelayFallback(cert: cert)
+        guard proxyStartGeneration == gen else {
+            Log.info("🧊 Rotation superseded by a newer start sequence — aborting", category: "ICE")
+            return false
+        }
+        return await startWithRelayFallback(cert: cert, generation: gen)
     }
 
     /// Called when WebTunnel returns a non-200 HTTP status code (carrier transparent proxy
@@ -1323,7 +1343,7 @@ final class IceProxyManager: ObservableObject {
     ///
     /// Returns `true` if any endpoint started successfully.
     @discardableResult
-    private func startWithRelayFallback(cert: String) async -> Bool {
+    private func startWithRelayFallback(cert: String, generation: Int? = nil) async -> Bool {
         let host    = GRPCChannelManager.shared.currentHost
         let iceHost = "ice.\(host)"
 
@@ -1352,6 +1372,12 @@ final class IceProxyManager: ObservableObject {
         // Probe all endpoints concurrently and sort by TCP latency (fastest first).
         // Region preference is applied first so that region-preferred relays win tie-breaks.
         var ordered = await sortByLatency(applyRegionPreference(to: candidates))
+
+        // Abort if a newer start sequence (network change, rotation) superseded us while probing.
+        if let gen = generation, proxyStartGeneration != gen {
+            Log.info("🧊 Startup superseded during latency probe (gen \(gen)→\(proxyStartGeneration)) — aborting", category: "ICE")
+            return false
+        }
         let notFailed = ordered.filter { !isRelayRecentlyFailed($0) }
         let failed    = ordered.filter { isRelayRecentlyFailed($0) }
         if !failed.isEmpty {
@@ -1601,8 +1627,13 @@ final class IceProxyManager: ObservableObject {
         resetAllProxyState()
         // Clear any cooldown that was set due to this crash; we want to retry immediately.
         clearCooldown()
+        let gen = bumpStartGeneration()
         let cert = await getIceBridgeCert()
-        if await startWithRelayFallback(cert: cert) {
+        guard proxyStartGeneration == gen else {
+            Log.info("🧊 Crash restart superseded by a newer start sequence — aborting", category: "ICE")
+            return
+        }
+        if await startWithRelayFallback(cert: cert, generation: gen) {
             Task { await IceCertFetcher.shared.fetchAndCacheRelayList() }
             Log.info("🧊 ICE proxy restarted after crash", category: "ICE")
         } else {
@@ -1636,6 +1667,7 @@ final class IceProxyManager: ObservableObject {
 
         // Restart ICE if: always-on OR auto mode with a remembered ICE path.
         guard mode == .on || (mode == .auto && Self.lastSuccessfulPath == "ice") else { return }
+        let gen = bumpStartGeneration()
 
         // Spread reconnects across clients to avoid thundering-herd.
         // New interface → wider window (0-2s); topology change → tighter window (0-0.5s).
@@ -1645,10 +1677,18 @@ final class IceProxyManager: ObservableObject {
             Log.debug("🧊 Network-change ICE restart staggered by \(String(format: "%.2f", startDelay))s", category: "ICE")
             try? await Task.sleep(for: .seconds(startDelay))
             guard !Task.isCancelled else { return }
+            guard proxyStartGeneration == gen else {
+                Log.info("🧊 Network-change restart superseded during jitter delay — aborting", category: "ICE")
+                return
+            }
         }
 
         let cert = await getIceBridgeCert()
-        if await startWithRelayFallback(cert: cert) {
+        guard proxyStartGeneration == gen else {
+            Log.info("🧊 Network-change restart superseded during cert fetch — aborting", category: "ICE")
+            return
+        }
+        if await startWithRelayFallback(cert: cert, generation: gen) {
             Log.info("🧊 ICE proxy restarted after network path change", category: "ICE")
             Task { await IceCertFetcher.shared.fetchAndCacheRelayList() }
         } else {
@@ -1904,10 +1944,19 @@ final class IceProxyManager: ObservableObject {
             ice_proxy_stop()
             resetAllProxyState()
             clearCooldown()
+            let gen = bumpStartGeneration()
             // Brief pause to let the OS release the socket before we re-bind.
             try? await Task.sleep(nanoseconds: 200_000_000) // 200 ms
+            guard proxyStartGeneration == gen else {
+                Log.info("🧊 Foreground restart superseded during socket pause — aborting", category: "ICE")
+                return
+            }
             let cert = await getIceBridgeCert()
-            await startWithRelayFallback(cert: cert)
+            guard proxyStartGeneration == gen else {
+                Log.info("🧊 Foreground restart superseded during cert fetch — aborting", category: "ICE")
+                return
+            }
+            await startWithRelayFallback(cert: cert, generation: gen)
         }
     }
 

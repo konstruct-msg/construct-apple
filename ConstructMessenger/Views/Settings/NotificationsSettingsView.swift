@@ -37,7 +37,7 @@ struct NotificationsSettingsView: View {
                 )
             }
             ScrollView {
-            VStack(spacing: 0) {
+            LazyVStack(spacing: 0) {
 
                 // MARK: - General Notifications
                 CTSettingsSectionHeader(title: NSLocalizedString("notifications", comment: "").uppercased())
@@ -229,10 +229,10 @@ struct NotificationsSettingsView: View {
             .toolbar(.hidden, for: .navigationBar)
             #endif
         }
-        .onAppear {
-            checkNotificationAuthorization()
-        }
-        }
+            .onAppear {
+                checkNotificationAuthorization()
+            }
+            }
         .background(Color.CT.bg.ignoresSafeArea())
     }
 

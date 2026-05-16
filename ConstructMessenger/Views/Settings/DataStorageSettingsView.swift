@@ -8,6 +8,14 @@
 import SwiftUI
 
 struct DataStorageSettingsView: View {
+    private static let byteCountFormatter: ByteCountFormatter = {
+        let formatter = ByteCountFormatter()
+        formatter.allowedUnits = [.useMB, .useGB]
+        formatter.countStyle = .file
+        formatter.includesUnit = true
+        formatter.isAdaptive = true
+        return formatter
+    }()
 
     var showNavBar: Bool = true
 
@@ -25,6 +33,7 @@ struct DataStorageSettingsView: View {
     @State private var isClearing = false
     @State private var showClearConfirm = false
     @State private var quotaSliderIndex: Double = 0
+    @State private var hasLoadedInitialCacheState = false
 
     @Environment(\.dismiss) private var dismiss
 
@@ -47,7 +56,10 @@ struct DataStorageSettingsView: View {
     ]
 
     private var currentQuotaLabel: String {
-        quotaOptions[Int(quotaSliderIndex.rounded())].label
+        quotaOptions[selectedQuotaIndex].label
+    }
+    private var selectedQuotaIndex: Int {
+        Int(quotaSliderIndex.rounded())
     }
 
     // MARK: - Body
@@ -161,7 +173,7 @@ struct DataStorageSettingsView: View {
                                     Text(quotaOptions[i].label)
                                         .font(CTFont.regular(9))
                                         .foregroundStyle(
-                                            Int(quotaSliderIndex.rounded()) == i
+                                            selectedQuotaIndex == i
                                                 ? Color.CT.accent : Color.CT.textDim
                                         )
                                         .frame(maxWidth: .infinity)
@@ -217,6 +229,8 @@ struct DataStorageSettingsView: View {
         .toolbar(.hidden, for: .navigationBar)
         #endif
         .task {
+            guard !hasLoadedInitialCacheState else { return }
+            hasLoadedInitialCacheState = true
             cacheSize = MediaManager.shared.diskCacheSize()
             quotaSliderIndex = Double(
                 quotaOptions.firstIndex(where: { $0.bytes == maxDiskCacheBytesRaw })
@@ -255,12 +269,7 @@ struct DataStorageSettingsView: View {
     }
 
     private func formatBytes(_ bytes: Int64) -> String {
-        let formatter = ByteCountFormatter()
-        formatter.allowedUnits = [.useMB, .useGB]
-        formatter.countStyle = .file
-        formatter.includesUnit = true
-        formatter.isAdaptive = true
-        return formatter.string(fromByteCount: bytes)
+        Self.byteCountFormatter.string(fromByteCount: bytes)
     }
 }
 

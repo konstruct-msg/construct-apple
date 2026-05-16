@@ -14,8 +14,15 @@ struct DraftsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var draftText: String = ""
     @State private var drafts: [DraftItem] = []
+    @State private var hasLoadedDrafts = false
 
     private let storageKey = "local_drafts"
+    private var trimmedDraftText: String {
+        draftText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    private var canSaveDraft: Bool {
+        !trimmedDraftText.isEmpty
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -47,7 +54,7 @@ struct DraftsView: View {
                             .background(Color.CT.bgMsg)
                             .overlay(Rectangle().stroke(Color.CT.accent, lineWidth: 1))
                     }
-                    .disabled(draftText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(!canSaveDraft)
                 }
 
                 if drafts.isEmpty {
@@ -76,7 +83,9 @@ struct DraftsView: View {
             }
             .padding()
             .onAppear {
+                guard !hasLoadedDrafts else { return }
                 loadDrafts()
+                hasLoadedDrafts = true
             }
         }
         .background(Color.CT.bg.ignoresSafeArea())
@@ -86,10 +95,9 @@ struct DraftsView: View {
     }
 
     private func addDraft() {
-        let trimmed = draftText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
+        guard canSaveDraft else { return }
 
-        let draft = DraftItem(id: UUID(), text: trimmed, createdAt: Date())
+        let draft = DraftItem(id: UUID(), text: trimmedDraftText, createdAt: Date())
         drafts.insert(draft, at: 0)
         draftText = ""
         saveDrafts()
