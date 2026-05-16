@@ -1225,13 +1225,13 @@ final class IceProxyManager: ObservableObject {
         }
 
         // Standby pre-warm: .auto mode + direct/unknown history.
-        // Start ICE in the background with a 1 s delay so it doesn't compete with
-        // the direct connection attempt. iceProxyPort() is suppressed while in standby,
-        // so gRPC continues routing direct until DPI is confirmed.
+        // Start ICE in the background immediately — iceProxyPort() is suppressed while
+        // isStandbyPrewarm is true, so gRPC continues routing direct until DPI is confirmed.
+        // No artificial delay: the direct connection already starts first (Happy Eyeballs
+        // 250ms stagger in the connect path), and standby ICE runs without blocking it.
         guard mode == .auto, !isRunning else { return }
         standbyPrewarmTask?.cancel()
         standbyPrewarmTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 s
             guard let self, !Task.isCancelled, mode == .auto, !isRunning else { return }
             Log.info("🧊 Starting ICE standby pre-warm (auto mode, direct history)", category: "ICE")
             isStandbyPrewarm = true
