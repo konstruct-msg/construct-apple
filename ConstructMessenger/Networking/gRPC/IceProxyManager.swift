@@ -610,7 +610,7 @@ final class IceProxyManager: ObservableObject {
             // No restart needed; just clear standby flag so iceProxyPort() starts returning a port.
             if oldValue == .auto, mode == .on, isRunning {
                 if isStandbyPrewarm {
-                    isStandbyPrewarm = false
+                    applyState(.active(port: proxyPort, webTunnel: isWebTunnelActive))
                     Log.info("🧊 Mode .auto → .on — standby ICE promoted to active", category: "ICE")
                     GRPCChannelManager.shared.invalidatePersistentClient()
                 } else {
@@ -656,13 +656,13 @@ final class IceProxyManager: ObservableObject {
     /// Called by GRPCChannelManager when a relay failure is detected.
     func enterCooldown(duration: TimeInterval) {
         guard !isOnCooldown else { return }
-        isOnCooldown = true
+        applyState(.cooldown)
         Log.info("🧊 ICE cooldown started (\(Int(duration))s) — routing via direct gRPC", category: "ICE")
         cooldownTask?.cancel()
         cooldownTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(duration))
             guard !Task.isCancelled else { return }
-            self?.isOnCooldown = false
+            self?.applyState(.off)
             Log.info("🧊 ICE cooldown expired — ICE routing resumes on next connection", category: "ICE")
         }
     }
@@ -671,7 +671,7 @@ final class IceProxyManager: ObservableObject {
     func clearCooldown() {
         cooldownTask?.cancel()
         cooldownTask = nil
-        isOnCooldown = false
+        applyState(.off)
         GRPCChannelManager.shared.clearICECooldownState()
         Log.info("🧊 ICE cooldown cleared by user", category: "ICE")
     }
@@ -859,16 +859,14 @@ final class IceProxyManager: ObservableObject {
             }
             if result == 0 {
                 PerformanceMetrics.shared.end(.iceProxyStartBegin, endEvent: .iceProxyStartEnd, label: relay.address)
-                isRunning        = true
-                isWebTunnelActive = true
-                proxyPort        = port
-                activeRelay      = relay
+                applyState(.active(port: port, webTunnel: true))
+                activeRelay = relay
                 return port
             }
             Log.error("🧊 ICE WebTunnel failed (\(result)), falling back to obfs4", category: "ICE")
         }
 
-        isWebTunnelActive = false
+        isWebTunnelActive = false  // transient reset before obfs4/TLS attempt
 
         if let sni = relay.tlsServerName {
             if let spki = relay.pinnedSpki {
@@ -909,8 +907,7 @@ final class IceProxyManager: ObservableObject {
 
         if result == 0 {
             PerformanceMetrics.shared.end(.iceProxyStartBegin, endEvent: .iceProxyStartEnd, label: relay.address)
-            isRunning   = true
-            proxyPort   = port
+            applyState(.active(port: port, webTunnel: false))
             activeRelay = relay
             return port
         } else {
@@ -1189,13 +1186,10 @@ final class IceProxyManager: ObservableObject {
         let primaryRelay = makeRelay(address: primaryAddress, bridgeCert: cert, forceObfs4: webTunnelBlockedRelays.contains(primaryAddress))
 
         // Start primary (this maps to PROXY_TLS when address has tlsServerName, else PROXY).
-        let primaryPort = start(relay: primaryRelay)
-        if let p = primaryPort {
-            isRunning  = true
-            proxyPort  = p
-            activeRelay = primaryRelay
+        let primaryPort = start(relay: primaryRelay)  // sets isRunning, proxyPort, activeRelay via applyState()
+        if let _ = primaryPort {
             saveRelay(primaryRelay)
-            Log.info("🧊 HE primary started on :\(p) via \(primaryAddress)", category: "ICE")
+            Log.info("🧊 HE primary started on :\(proxyPort) via \(primaryAddress)", category: "ICE")
         } else {
             Log.error("🧊 HE primary failed (\(primaryAddress))", category: "ICE")
         }
@@ -1300,14 +1294,20 @@ final class IceProxyManager: ObservableObject {
         standbyPrewarmTask = Task { [weak self] in
             guard let self, !Task.isCancelled, mode == .auto, !isRunning else { return }
             Log.info("🧊 Starting ICE standby pre-warm (auto mode, direct history)", category: "ICE")
+            // Pre-warm flag is set here; applyState(.standby) needs a port which isn't
+            // known yet. Set isStandbyPrewarm directly — applyState() will set it again
+            // once the port is allocated by startWithRelayFallback().
             isStandbyPrewarm = true
             let cert = await getIceBridgeCert()
             let started = await startWithRelayFallback(cert: cert)
             if started {
+                // startWithRelayFallback → start(relay:) called applyState(.active(…)).
+                // Elevate back to standby to suppress iceProxyPort() until DPI confirmed.
+                applyState(.standby(port: proxyPort))
                 Log.info("🧊 ICE standby pre-warm ready — waiting for DPI confirmation", category: "ICE")
                 Task { await IceCertFetcher.shared.fetchAndCacheRelayList() }
             } else {
-                isStandbyPrewarm = false
+                applyState(.off)
                 Log.info("🧊 ICE standby pre-warm failed — will start on demand if DPI detected", category: "ICE")
             }
         }
@@ -1323,7 +1323,7 @@ final class IceProxyManager: ObservableObject {
         if isRunning, isStandbyPrewarm {
             standbyPrewarmTask?.cancel()
             standbyPrewarmTask = nil
-            isStandbyPrewarm = false
+            applyState(.active(port: proxyPort, webTunnel: isWebTunnelActive))
             Self.lastSuccessfulPath = "ice"
             GRPCChannelManager.shared.invalidatePersistentClient()
             Log.info("🧊 DPI confirmed — standby ICE promoted to active (instant failover)", category: "ICE")
@@ -1428,7 +1428,7 @@ final class IceProxyManager: ObservableObject {
         if isRunning, isStandbyPrewarm {
             standbyPrewarmTask?.cancel()
             standbyPrewarmTask = nil
-            isStandbyPrewarm = false
+            // applyState(.off) via stop() → resetAllProxyState()
             stop()
             Log.info("🧊 Direct stream confirmed — standby ICE stopped (saving resources)", category: "ICE")
         } else {
@@ -1572,18 +1572,80 @@ final class IceProxyManager: ObservableObject {
         }
     }
 
+    // MARK: - State machine
+
+    /// Explicit connection states replacing the 5 implicit boolean flags.
+    ///
+    /// Valid transitions:
+    ///   off  ──────────────────────► active(...)
+    ///   off  ──────────────────────► standby(...)
+    ///   off  ──────────────────────► cooldown
+    ///   standby ──────────────────► active(...)
+    ///   standby ──────────────────► off
+    ///   active  ──────────────────► off
+    ///   active  ──────────────────► cooldown
+    ///   cooldown ─────────────────► off
+    enum ConnectionState: Equatable {
+        /// No proxy running; gRPC routes direct or ICE is not available.
+        case off
+        /// ICE proxy pre-warming in standby (`isStandbyPrewarm = true`).
+        /// The proxy is running but gRPC is NOT routed through it yet.
+        case standby(port: UInt16)
+        /// ICE proxy is active and gRPC routes through it.
+        case active(port: UInt16, webTunnel: Bool)
+        /// Exponential-backoff cooldown after consecutive failures.
+        case cooldown
+    }
+
+    /// Current stable state, derived from the four source-of-truth `@Published` flags.
+    /// Use this for logic; set state via `applyState(_:)` only.
+    var connectionState: ConnectionState {
+        if isOnCooldown { return .cooldown }
+        guard isRunning else { return .off }
+        if isStandbyPrewarm { return .standby(port: proxyPort) }
+        return .active(port: proxyPort, webTunnel: isWebTunnelActive)
+    }
+
+    /// The single point where published connection flags are mutated.
+    /// Calling this ensures all flags are always set consistently.
+    private func applyState(_ state: ConnectionState) {
+        switch state {
+        case .off:
+            isRunning        = false
+            proxyPort        = 0
+            isOnCooldown     = false
+            isStandbyPrewarm = false
+            isWebTunnelActive = false
+        case .standby(let port):
+            isRunning        = true
+            proxyPort        = port
+            isOnCooldown     = false
+            isStandbyPrewarm = true
+            isWebTunnelActive = false
+        case .active(let port, let webTunnel):
+            isRunning        = true
+            proxyPort        = port
+            isOnCooldown     = false
+            isStandbyPrewarm = false
+            isWebTunnelActive = webTunnel
+        case .cooldown:
+            isRunning        = false
+            proxyPort        = 0
+            isOnCooldown     = true
+            isStandbyPrewarm = false
+            isWebTunnelActive = false
+        }
+    }
+
     /// Resets all proxy state fields to idle for both primary and secondary proxies.
     /// Call before any restart path (crash, network switch, manual stop).
     @MainActor
     private func resetAllProxyState() {
-        isRunning           = false
-        proxyPort           = 0
+        applyState(.off)
         activeRelay         = nil
-        isWebTunnelActive   = false
         isSecondaryRunning  = false
         secondaryProxyPort  = 0
         secondaryRelay      = nil
-        isStandbyPrewarm    = false
         standbyPrewarmTask?.cancel()
         standbyPrewarmTask  = nil
     }
