@@ -107,6 +107,9 @@ class ChatViewModel: NSObject {
 
     /// Unique per-instance ID used to guard InAppNotificationService ownership.
     private let instanceID = UUID()
+    /// Guard: ensures subscribers and notification registration run only once
+    /// (on first view appearance), not in init — which is called on every parent re-render.
+    private var isSetupCalled = false
 
     init(chat: Chat, context: NSManagedObjectContext) {
         self.chat = chat
@@ -117,20 +120,14 @@ class ChatViewModel: NSObject {
         Log.debug("🔧 ChatViewModel init: chat.id=\(chat.id), chat.otherUser?.id=\(chat.otherUser?.id ?? "nil"), chat.otherUser?.username=\(chat.otherUser?.username ?? "nil")", category: "ChatViewModel")
 
         setupFetchedResultsController()  // ✅ Setup FRC - loads initial messages automatically
-        setupSubscribers()
         checkExistingSession()  // ✅ FIXED: Check if session already exists
-        // fetchRecipientPublicKey() is intentionally NOT called here.
-        // ChatView.init (and therefore this init) is invoked on every SwiftUI parent re-render
-        // due to the @State(wrappedValue:) pattern — hundreds of times per session.
-        // The gRPC bundle fetch is deferred to onViewAppear() which fires only once per
-        // actual view appearance, eliminating spurious gRPC channel creation.
+        // Subscribers and notification registration are deferred to onViewAppear() —
+        // ChatView.init (and therefore this init) is called on every parent re-render
+        // due to @State(wrappedValue:), so we avoid creating Tasks and registering
+        // services for the transient discarded copies.
 
         // ❌ REMOVED: loadMessages() - FRC already loaded messages in setupFetchedResultsController()
         Log.debug("🔧 ChatViewModel initialized with viewContext", category: "ChatViewModel")
-        
-        // Suppress in-app banners while this chat is open.
-        // Uses instanceID so a discarded SwiftUI-diffing copy's deinit can't clear it.
-        InAppNotificationService.shared.registerActiveChat(chat.id, ownerID: instanceID)
     }
 
     isolated deinit {
@@ -245,6 +242,14 @@ class ChatViewModel: NSObject {
 
     // Called by ChatView.onAppear — deferred from init to avoid hundreds of gRPC calls.
     func onViewAppear() {
+        if !isSetupCalled {
+            isSetupCalled = true
+            // First appearance: wire up subscribers and register notification suppression.
+            // Doing this here (not in init) avoids creating Tasks for the transient discarded
+            // copies that SwiftUI constructs on every parent re-render.
+            setupSubscribers()
+            InAppNotificationService.shared.registerActiveChat(chat.id, ownerID: instanceID)
+        }
         fetchRecipientPublicKey()
     }
 

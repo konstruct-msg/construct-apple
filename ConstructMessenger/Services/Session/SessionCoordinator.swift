@@ -290,6 +290,19 @@ final class SessionCoordinator {
                 } catch {
                     Log.error("⚠️ Failed to send END_SESSION to \(userId.prefix(8))...: \(error)", category: "SessionCoordinator")
                 }
+                // After DR divergence: auto-reinit without waiting for user action.
+                // Mirror the onEndSessionReceived logic: INITIATOR prewarms immediately,
+                // RESPONDER starts the 60s fallback timer (peer should send msgNum=0 first).
+                let myId = SessionManager.shared.currentUserId ?? ""
+                guard !myId.isEmpty else { return }
+                try? await Task.sleep(nanoseconds: 300_000_000) // 300ms — let peer process END_SESSION
+                if DeviceIdOrdering.isNaturalInitiator(myId: myId, peerId: userId) {
+                    Log.info("🔥 DR diverge: auto-reinit as natural INITIATOR for \(userId.prefix(8))…", category: "SessionInit")
+                    self.prewarmSessions(for: [userId], skipEndSessionNotification: true)
+                } else {
+                    Log.info("🔇 DR diverge: starting RESPONDER fallback for \(userId.prefix(8))…", category: "SessionInit")
+                    self.startResponderFallback(for: userId)
+                }
             }
         }
 

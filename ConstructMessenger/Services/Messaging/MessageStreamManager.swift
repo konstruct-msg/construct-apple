@@ -90,6 +90,11 @@ final class MessageStreamManager {
     /// Counts consecutive stream-open timeouts where the ICE routing key did NOT change.
     /// See inline `blacklistThreshold` logic in `connectLoop` for the per-relay threshold.
     private var consecutiveRoutingUnchangedTimeouts = 0
+    /// Counts consecutive ICE fast-failover iterations (routing-change retries) without a
+    /// successful stream. When all relays are exhausted and we keep cycling, this grows fast.
+    /// After 5+ rotations we add progressive delay (2 s, 4 s, … max 20 s) to reduce
+    /// battery drain and give the server/network time to recover.
+    private var consecutiveIceRotations = 0
     private(set) var isPaused = false
     private(set) var subscriptionUserIds: [String] = []
     private var lastPendingCursor: String = UserDefaults.standard.string(forKey: "construct.pendingCursor") ?? "" {
@@ -210,6 +215,7 @@ final class MessageStreamManager {
         backgroundFetchTask?.cancel()
         backgroundFetchTask = nil
         retryCount = 0
+        consecutiveIceRotations = 0
         connect(contactUserIds: contactUserIds, onMessageReceived: onMessageReceived)
     }
 
@@ -237,6 +243,7 @@ final class MessageStreamManager {
         streamTask?.cancel()
         streamTask = nil
         retryCount = 0
+        consecutiveIceRotations = 0
         ConnectionStatusManager.shared.markStreamDisconnected()
         Log.info("📡 MessageStream disconnected", category: "MessageStream")
     }
@@ -378,6 +385,7 @@ final class MessageStreamManager {
                 Log.info("📡 MessageStream ended cleanly, reconnecting in \(Int(NetworkTiming.Stream.cleanEndReconnectDelay))s", category: "MessageStream")
                 retryCount = 0
                 consecutiveRoutingUnchangedTimeouts = 0
+                consecutiveIceRotations = 0
                 try await Task.sleep(for: .seconds(NetworkTiming.Stream.cleanEndReconnectDelay))
             } catch is CancellationError {
                 Log.info("🛑 MessageStream cancelled — connectLoop exiting", category: "MessageStream")
@@ -470,6 +478,17 @@ final class MessageStreamManager {
                     // the new connection when it times out (gen-mismatch guard catches it,
                     // but early cancellation avoids the wasted network traffic entirely).
                     backgroundFetchTask?.cancel()
+                    // Progressive backoff when all relays are exhausted and we keep cycling.
+                    // Rotations 1-4: immediate (fast failover, normal behavior).
+                    // Rotations 5+: add 2s×(n-4) up to 20s to limit battery drain and
+                    // allow the server/network a chance to recover before the next attempt.
+                    consecutiveIceRotations += 1
+                    if consecutiveIceRotations >= 5, !Task.isCancelled {
+                        let n = consecutiveIceRotations - 4
+                        let iceDelay = min(Double(n) * 2.0, 20.0)
+                        Log.info("⏳ ICE exhaustion cooldown: \(String(format: "%.0f", iceDelay))s after \(consecutiveIceRotations) rotations", category: "MessageStream")
+                        try? await Task.sleep(for: .seconds(iceDelay))
+                    }
                     retryCount = 0
                     continue
                 }
