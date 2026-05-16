@@ -27,9 +27,9 @@ from datetime import datetime
 # ──────────────────────────────────────────────────────────────────────────────
 # Конфиг релея (зеркало ICEConfig.swift)
 # ──────────────────────────────────────────────────────────────────────────────
-RELAY_IP = "45.135.233.5"
-RELAY_SNI = "s3.vkcs.cloud"
-EXPECTED_SPKI = "bd2da0c781a0fc98d85640bd87d2d4709c709a50b6bee06f90282ca6237f3410"
+RELAY_IP = "PENDING"          # SPB relay deleted 2026-05-16 — new VPS to be provisioned
+RELAY_SNI = "PENDING"         # will be set when new relay domain is configured
+EXPECTED_SPKI = "PENDING"     # will be updated after new TLS cert is issued
 
 # Токен из последнего docker logs (обновляй после каждого рестарта контейнера)
 WT_TOKEN_LAST_KNOWN = "88f6344fe0beea2f"
