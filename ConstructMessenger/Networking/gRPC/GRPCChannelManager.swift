@@ -12,11 +12,10 @@ final class GRPCChannelManager: Sendable {
     static let customPortKey = "grpcCustomPort"
 
     // ICE relay health tracking: avoid routing through a dead relay.
-    // Stores the Date.timeIntervalSinceReferenceDate of the last relay failure.
+    // iceFailedAtKey is kept only for one-time removal of legacy UserDefaults values on startup.
     static let iceFailedAtKey = "iceRelayLastFailedAt"
+    // Base cooldown for exponential backoff (first failure). See recordICEFailure().
     private static let iceCooldown: TimeInterval = NetworkTiming.ICE.relayCooldown
-    /// Exposed for IceProxyManager to restore cooldown on app launch.
-    static let iceCooldownDuration: TimeInterval = iceCooldown
 
     private static let defaultHost: String = {
         Bundle.main.object(forInfoDictionaryKey: "GRPC_HOST") as? String ?? "ams.konstruct.cc"
@@ -52,21 +51,27 @@ final class GRPCChannelManager: Sendable {
         NotificationCenter.default.post(name: .grpcServerChanged, object: nil)
     }
 
-    /// Record that the ICE relay just failed. Subsequent calls will bypass ICE for `iceCooldown` seconds.
-    /// Also triggers a background reconnect attempt: fresh cert fetch → primary → relay fallback.
+    /// Record that the ICE relay just failed. Subsequent calls will bypass ICE using an
+    /// exponential backoff: 30s → 60s → 120s → 240s → 300s (capped).
+    /// Resets to 30s on `clearICECooldownState()` (successful connection).
     ///
     /// - Parameter failedAddress: The relay address that failed, captured by the caller before any
     ///   `await` suspension points. Avoids a race where `activeRelay` is cleared on MainActor by a
     ///   concurrent `networkPathChanged` before this Task runs.
     func recordICEFailure(failedAddress: String? = nil) {
-        let until = Date().addingTimeInterval(Self.iceCooldown)
-        _iceLock.withLock { _iceCooldownUntil = until }
+        let duration = _iceLock.withLock { () -> TimeInterval in
+            _consecutiveICEFailures += 1
+            // 30s × 2^(n-1), capped at 300s. Sequence: 30, 60, 120, 240, 300, 300, …
+            let d = min(30.0 * pow(2.0, Double(_consecutiveICEFailures - 1)), 300.0)
+            _iceCooldownUntil = Date().addingTimeInterval(d)
+            return d
+        }
         // Cooldown is intentionally NOT persisted to UserDefaults.
         // If the app is killed and relaunched, the network state may have changed
         // (different WiFi, cellular handoff), so a fresh ICE attempt is preferred
         // over carrying over a stale cooldown from a previous session.
         invalidatePersistentClient()  // routing will change (ICE → direct)
-        Log.info("⚠️ ICE relay failure recorded — bypassing ICE for \(Int(Self.iceCooldown))s", category: "gRPC")
+        Log.info("⚠️ ICE relay failure recorded — bypassing ICE for \(Int(duration))s (failure #\(_iceLock.withLock { _consecutiveICEFailures }))", category: "gRPC")
         Task { @MainActor [weak self] in
             guard self != nil else { return }
             // Use the pre-captured address when available; fall back to the current relay only if
@@ -76,7 +81,7 @@ final class GRPCChannelManager: Sendable {
                 IceProxyManager.shared.recordRelayFailure(address: addr)
             }
             // Notify IceProxyManager so the UI reflects cooldown state immediately.
-            IceProxyManager.shared.enterCooldown(duration: Self.iceCooldown)
+            IceProxyManager.shared.enterCooldown(duration: duration)
             // Try to recover by switching endpoints (cert refresh + relay fallback).
             let recovered = await IceProxyManager.shared.refreshCertAndRestart()
             if recovered {
@@ -103,10 +108,13 @@ final class GRPCChannelManager: Sendable {
         return Date() < until
     }
 
-    /// Clears the ICE cooldown in-memory state.
+    /// Clears the ICE cooldown and resets the exponential backoff counter.
     /// Called from `IceProxyManager.clearCooldown()` so both systems stay in sync.
     func clearICECooldownState() {
-        _iceLock.withLock { _iceCooldownUntil = nil }
+        _iceLock.withLock {
+            _iceCooldownUntil = nil
+            _consecutiveICEFailures = 0
+        }
         // Also remove any legacy persisted value from older builds.
         UserDefaults.standard.removeObject(forKey: Self.iceFailedAtKey)
     }
@@ -241,8 +249,10 @@ final class GRPCChannelManager: Sendable {
 
     // In-memory ICE cooldown state.
     // Written by recordICEFailure/clearICECooldownState; read by isICEOnCooldownInternal.
-    // UserDefaults is still written for cross-launch persistence but never read on hot path.
     private nonisolated(unsafe) var _iceCooldownUntil: Date?
+    // Consecutive ICE failure count for exponential backoff. Resets on successful connection
+    // (clearICECooldownState). Protected by _iceLock.
+    private nonisolated(unsafe) var _consecutiveICEFailures: Int = 0
     private let _iceLock = NSLock()
 
     // In-memory cache of the current ICE operation mode.
