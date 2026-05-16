@@ -201,8 +201,26 @@ class ChatsViewModel {
     /// Used to detect the transition from unauthenticated → authenticated and
     /// cancel any in-progress backoff so the stream connects immediately.
     private var pollingStateHadToken = false
+    /// Tracks the last observed connection status to detect transitions.
+    private var lastPolledStatus: ConnectionStatusManager.ConnectionStatus = .unknown
 
     private func handlePollingState(_ state: PollingState) {
+        let didJustConnect = lastPolledStatus != .connected && state.status == .connected
+        lastPolledStatus = state.status
+
+        // When the stream transitions to connected, retry any SPK rotation that
+        // previously failed because the stream was down. The rotation service
+        // throttles retries to once per 120s so this is safe to call on every
+        // connect event (e.g. brief drops during ICE relay cycling).
+        if didJustConnect && PreKeyRotationService.shared.hasPendingRetry {
+            Task {
+                let deviceId = KeychainManager.shared.loadDeviceID() ?? ""
+                guard !deviceId.isEmpty else { return }
+                Log.info("🔑 Stream reconnected — retrying pending SPK rotation", category: "SPKRotation")
+                await PreKeyRotationService.shared.rotateIfNeeded(deviceId: deviceId)
+            }
+        }
+
         if state.hasToken && state.status != ConnectionStatusManager.ConnectionStatus.disconnected {
             if state.pushEnabled {
                 Log.info("📱 Push active — stream connected", category: "ChatsViewModel")
