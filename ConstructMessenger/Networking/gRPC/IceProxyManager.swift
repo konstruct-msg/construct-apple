@@ -423,6 +423,56 @@ final class IceProxyManager: ObservableObject {
         return proxyStartGeneration
     }
 
+    // MARK: - Bayesian DPI detector
+
+    /// Running posterior P(DPI present), updated after each direct-connection outcome in
+    /// `.auto` mode. Uses sequential Bayesian updating with a Bernoulli likelihood model:
+    ///
+    ///   P(DPI | timeout) = P(timeout | DPI) × P(DPI) / P(timeout)
+    ///   P(DPI | ok)      = P(ok | DPI)      × P(DPI) / P(ok)
+    ///
+    /// Reset to the prior on new-interface network change (new environment = new DPI profile).
+    private var dpiPosterior: Double = 0.10
+
+    /// Prior: 10 % of networks have DPI.
+    private static let dpiPrior: Double = 0.10
+    /// P(stream timeout | DPI present) — DPI blocks ~90 % of connection attempts.
+    private static let pFailGivenDPI: Double = 0.90
+    /// P(stream timeout | no DPI) — ambient ~5 % failure rate on clean networks.
+    private static let pFailGivenNoDPI: Double = 0.05
+    /// Posterior threshold to trigger ICE activation (≥ 80 % confident DPI is present).
+    private static let dpiActivateThreshold: Double = 0.80
+
+    /// Current posterior estimate P(DPI present). Exposed for logging in connectLoop.
+    var dpiDetectionProbability: Double { dpiPosterior }
+
+    /// Whether the posterior has reached the ICE activation threshold.
+    var shouldActivateDPIICE: Bool { dpiPosterior >= Self.dpiActivateThreshold }
+
+    /// Record a direct-stream timeout as evidence of DPI presence.
+    func recordDirectFailure() {
+        guard mode == .auto else { return }
+        let p = dpiPosterior
+        let pFail = p * Self.pFailGivenDPI + (1.0 - p) * Self.pFailGivenNoDPI
+        dpiPosterior = min(0.9999, (Self.pFailGivenDPI * p) / pFail)
+        Log.debug("🧊 DPI posterior after failure: \(String(format: "%.1f", dpiPosterior * 100))%", category: "ICE")
+    }
+
+    /// Record a successful direct-stream open as evidence against DPI.
+    func recordDirectSuccess() {
+        guard mode == .auto else { return }
+        let p = dpiPosterior
+        let pOk = p * (1.0 - Self.pFailGivenDPI) + (1.0 - p) * (1.0 - Self.pFailGivenNoDPI)
+        dpiPosterior = max(0.0001, ((1.0 - Self.pFailGivenDPI) * p) / pOk)
+        Log.debug("🧊 DPI posterior after success: \(String(format: "%.1f", dpiPosterior * 100))%", category: "ICE")
+    }
+
+    /// Reset posterior to the prior (call on new-interface network change).
+    func resetDPIDetector() {
+        dpiPosterior = Self.dpiPrior
+        Log.debug("🧊 DPI posterior reset to prior (\(Int(Self.dpiPrior * 100))%)", category: "ICE")
+    }
+
     /// ICE is running in standby pre-warm mode: proxy is up but `iceProxyPort()` returns nil.
     /// Routing stays direct until DPI is confirmed (`activateDPIAutoMode`), mode is promoted to
     /// `.on`, or a network switch occurs. Suppresses the "direct path hijack" that would happen
@@ -1654,6 +1704,7 @@ final class IceProxyManager: ObservableObject {
             resetAllProxyState()
             clearCooldown()
             clearRelayFailures()   // relay DPI profile may differ on new interface
+            resetDPIDetector()     // new network = unknown DPI environment; restart from prior
 
         case .pathTopology:
             // VPN toggle or IP rotation: same interface, same DPI environment.
@@ -1707,6 +1758,7 @@ final class IceProxyManager: ObservableObject {
         Self.lastSuccessfulPath = "direct"
         directProbeTask?.cancel()
         directProbeTask = nil
+        recordDirectSuccess()
         // If ICE was pre-warming in standby, stop it — direct path is confirmed working.
         if isRunning, isStandbyPrewarm {
             standbyPrewarmTask?.cancel()

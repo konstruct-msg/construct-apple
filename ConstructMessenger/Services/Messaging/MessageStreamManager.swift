@@ -443,16 +443,23 @@ final class MessageStreamManager {
                             }
                             consecutiveRoutingUnchangedTimeouts = 0
                         } else if IceProxyManager.shared.mode == .auto,
-                                  routingKeyAtLoopStart.hasPrefix("direct:"),
-                                  consecutiveRoutingUnchangedTimeouts >= 2 {
-                            // Direct path + .auto mode: consecutive failures suggest DPI blocking.
-                            // Threshold = 2: each cycle ~4s, so 2 cycles ≈ 8s total before ICE.
-                            Log.info("🧊 \(consecutiveRoutingUnchangedTimeouts) direct stream timeouts in .auto mode — DPI suspected, activating ICE", category: "MessageStream")
-                            await IceProxyManager.shared.activateDPIAutoMode()
-                            if GRPCChannelManager.shared.iceProxyPort() != nil {
-                                GRPCChannelManager.shared.invalidatePersistentClient()
+                                  routingKeyAtLoopStart.hasPrefix("direct:") {
+                            // Direct path + .auto mode: feed the Bayesian DPI detector.
+                            // Each timeout updates the posterior P(DPI present); ICE is
+                            // activated once it crosses 80%.  Two consecutive failures ≈ 97%
+                            // (same trigger point as the old ≥2 heuristic, but a single success
+                            // interspersed keeps the posterior low — no false positive).
+                            IceProxyManager.shared.recordDirectFailure()
+                            let p = IceProxyManager.shared.dpiDetectionProbability
+                            if IceProxyManager.shared.shouldActivateDPIICE {
+                                Log.info("🧊 DPI confirmed (\(String(format: "%.0f", p * 100))% posterior) — activating ICE (auto mode)", category: "MessageStream")
+                                await IceProxyManager.shared.activateDPIAutoMode()
+                                if GRPCChannelManager.shared.iceProxyPort() != nil {
+                                    GRPCChannelManager.shared.invalidatePersistentClient()
+                                }
+                            } else {
+                                Log.info("🧊 Direct stream timeout in .auto — DPI posterior: \(String(format: "%.1f", p * 100))% (threshold 80%)", category: "MessageStream")
                             }
-                            consecutiveRoutingUnchangedTimeouts = 0
                         }
                     } else {
                         consecutiveRoutingUnchangedTimeouts = 0
