@@ -105,7 +105,7 @@ final class CallManager {
             Task { @MainActor in self?.answer(callUUID: uuid) }
         }
         CallKitProvider.shared.onEnd = { [weak self] uuid in
-            Task { @MainActor in self?.end(callUUID: uuid) }
+            Task { @MainActor in self?.end(callUUID: uuid, fromCallKit: true) }
         }
         CallKitProvider.shared.onAudioActivated = { [weak self] in
             Task { @MainActor in
@@ -363,7 +363,14 @@ final class CallManager {
         active?.webrtc?.setSpeaker(enabled)
     }
 
-    func end(callUUID: UUID) {
+    /// End the call identified by `callUUID`.
+    ///
+    /// - Parameter fromCallKit: Pass `true` when called from the `CXEndCallAction`
+    ///   delegate (`onEnd` callback) — CallKit already knows the call is ending, so
+    ///   no `requestEndCall` is needed. Pass `false` (default) when called from in-app
+    ///   UI (End/Decline buttons), which requires us to tell CallKit via
+    ///   `requestEndCall` so the lock-screen call UI is dismissed.
+    func end(callUUID: UUID, fromCallKit: Bool = false) {
         guard let active, active.session.uuid == callUUID else {
             Log.info("📞 End for unknown call uuid=\(callUUID.uuidString.prefix(8))…", category: "Calls")
             return
@@ -376,6 +383,8 @@ final class CallManager {
             reason = .normal
         }
 
+        let wasRegisteredWithCallKit = active.callKitRegistered
+
         Task {
             do {
                 try openStreamIfNeeded()
@@ -384,6 +393,15 @@ final class CallManager {
                 Log.error("📞 Failed to send hangup: \(error)", category: "Calls")
             }
             endActiveCall(reason: .hangup(reason), reportToCallKit: false)
+            #if os(iOS)
+            // When the user ends the call from within the app, CallKit still thinks the
+            // call is active. Requesting CXEndCallAction via the call controller causes
+            // CallKit to dismiss the lock-screen call UI. The resulting onEnd callback
+            // will call end() again, but active will be nil by then, so it's a no-op.
+            if !fromCallKit && wasRegisteredWithCallKit {
+                await CallKitProvider.shared.requestEndCall(uuid: callUUID)
+            }
+            #endif
         }
     }
 

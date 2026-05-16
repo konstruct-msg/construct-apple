@@ -94,12 +94,16 @@ final class CallKitProvider: NSObject, CXProviderDelegate {
         let action = CXStartCallAction(call: uuid, handle: handle)
         action.isVideo = hasVideo
         action.contactIdentifier = calleeId
-        // Callee display name is set via app UI; CallKit uses the handle value.
 
         let transaction = CXTransaction(action: action)
         do {
             try await callController.request(transaction)
             provider.reportOutgoingCall(with: uuid, startedConnectingAt: nil)
+            // Set the callee's display name so the lock screen shows a human-readable name
+            // instead of the raw server UUID that CallKit falls back to for the handle value.
+            let update = CXCallUpdate()
+            update.localizedCallerName = calleeName
+            provider.reportCall(with: uuid, updated: update)
             Log.info("📞 CallKit start-call transaction ok (uuid=\(uuid.uuidString.prefix(8))…)", category: "Calls")
         } catch {
             Log.error("📞 CallKit start-call transaction failed: \(error)", category: "Calls")
