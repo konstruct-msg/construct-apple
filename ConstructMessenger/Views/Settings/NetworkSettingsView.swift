@@ -47,6 +47,14 @@ struct NetworkSettingsView: View {
                             Text(connectionManager.connectionStatus.displayText)
                                 .font(CTFont.regular(13))
                                 .foregroundStyle(Color.CT.text)
+                            if connectionManager.connectionStatus != .connected,
+                               let phase = connectionManager.connectingPhase {
+                                Text(phase)
+                                    .font(CTFont.regular(11))
+                                    .foregroundStyle(.orange)
+                                    .textSelection(.enabled)
+                                    .transition(.opacity)
+                            }
                             Text(path.displayDetail)
                                 .font(CTFont.regular(11))
                                 .foregroundStyle(Color.CT.textDim)

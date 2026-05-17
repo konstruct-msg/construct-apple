@@ -20,6 +20,10 @@ class ConnectionStatusManager {
     /// Current connection status
     var connectionStatus: ConnectionStatus = .unknown
 
+    /// Short diagnostic string for the "Connecting…" phase, e.g. "H3 → H2 fallback (attempt 2)".
+    /// Cleared when `connected` or `disconnected`.
+    private(set) var connectingPhase: String?
+
     /// Convenience property for checking if connected
     var isConnected: Bool {
         connectionStatus == .connected
@@ -119,6 +123,7 @@ class ConnectionStatusManager {
         let oldStatus = connectionStatus
         lastSuccessfulRequest = Date()
         lastError = nil
+        connectingPhase = nil
         connectionStatus = .connected
         if oldStatus != .connected {
             Log.info("🟢 Connection status changed: \(oldStatus.displayText) -> Connected", category: "ConnectionStatus")
@@ -155,10 +160,11 @@ class ConnectionStatusManager {
         }
     }
 
-    func markConnecting() {
+    func markConnecting(phase: String? = nil) {
         if connectionStatus != .connected && connectionStatus != .connecting {
             connectionStatus = .connecting
         }
+        if let phase { connectingPhase = phase }
     }
 
     // MARK: - gRPC Stream Integration
@@ -167,6 +173,7 @@ class ConnectionStatusManager {
         let old = connectionStatus
         lastSuccessfulRequest = Date()
         lastError = nil
+        connectingPhase = nil
         connectionStatus = .connected
         if old != .connected {
             Log.info("🟢 Stream connected → status: Connected", category: "ConnectionStatus")
@@ -175,14 +182,16 @@ class ConnectionStatusManager {
         }
     }
 
-    func markStreamDisconnected(error: String? = nil) {
+    func markStreamDisconnected(error: String? = nil, phase: String? = nil) {
         lastError = error
         if reachabilityManager.isReachable {
             if connectionStatus == .connected {
                 connectionStatus = .connecting
                 Log.info("🟡 Stream disconnected → status: Connecting", category: "ConnectionStatus")
             }
+            if let phase { connectingPhase = phase }
         } else {
+            connectingPhase = nil
             connectionStatus = .disconnected
         }
     }

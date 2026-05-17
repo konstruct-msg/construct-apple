@@ -41,6 +41,9 @@ struct ConnectionStatusIndicator: View {
         case .connected:
             return "> \(trafficLabel) · [✓]"
         case .connecting, .unknown:
+            if let phase = connectionManager.connectingPhase {
+                return "> \(phase) · ···"
+            }
             return "> \(trafficLabel) · ···"
         case .disconnected:
             return "> OFFLINE"

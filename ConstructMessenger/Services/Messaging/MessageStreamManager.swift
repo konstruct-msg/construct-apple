@@ -390,7 +390,15 @@ final class MessageStreamManager {
             guard !Task.isCancelled else { break }
 
             Log.info("🔄 connectLoop: fetchMissedMessages done, isCancelled=\(Task.isCancelled) — opening stream", category: "MessageStream")
-            ConnectionStatusManager.shared.markConnecting()
+            let phaseLabel: String
+            if lastStreamTransportWasH3 && shouldFallbackToH2Direct {
+                phaseLabel = "H2 direct (H3 fallback)"
+            } else if IceProxyManager.shared.isRunning {
+                phaseLabel = "ICE relay"
+            } else {
+                phaseLabel = retryCount == 0 ? "Connecting…" : "Reconnecting (attempt \(retryCount + 1))"
+            }
+            ConnectionStatusManager.shared.markConnecting(phase: phaseLabel)
             do {
                 try await openStream()
                 // Stream ended cleanly — brief pause before reconnecting to avoid tight loop
@@ -527,7 +535,10 @@ final class MessageStreamManager {
                 } else {
                     Log.error("❌ MessageStream error (attempt #\(retryCount + 1)): \(error)", category: "MessageStream")
                 }
-                ConnectionStatusManager.shared.markStreamDisconnected(error: error.localizedDescription)
+                ConnectionStatusManager.shared.markStreamDisconnected(
+                    error: error.localizedDescription,
+                    phase: "Error: \(error.localizedDescription)"
+                )
             }
 
             guard !Task.isCancelled else { break }

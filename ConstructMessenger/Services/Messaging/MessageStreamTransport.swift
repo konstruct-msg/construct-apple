@@ -229,8 +229,9 @@ extension MessageStreamManager {
 
         // Fast ICE failover for stream open: if the RPC isn't accepted quickly, we retry
         // through ICE instead of waiting for long TCP/TLS timeouts on DPI-blocked networks.
-        // Capture the quality flag before entering non-isolated task group tasks.
+        // Capture flags before entering non-isolated task group tasks.
         let relayAlreadyVerified = IceProxyManager.shared.isCurrentRelayVerified
+        let isH3Transport = lastStreamTransportWasH3
         do {
             try await withThrowingTaskGroup(of: Void.self) { group in
                 // 1) Accepted watcher
@@ -243,12 +244,19 @@ extension MessageStreamManager {
                         try await Task.sleep(for: .seconds(NetworkTiming.GRPC.streamOpenAcceptPollInterval))
                     }
                 }
-                // 2) Timeout — use a shorter deadline when the relay is already verified
-                // (warm connections respond in one RTT; 1 s is sufficient vs 2.5 s cold).
+                // 2) Timeout — three tiers:
+                //   · verified relay → 0.8s  (already warm; anything longer = broken tunnel)
+                //   · H3 direct     → 1.5s  (QUIC fails fast when not supported; tighter window)
+                //   · H2 direct/ICE → 2.0s  (TCP+TLS needs one extra round-trip)
                 group.addTask {
-                    let timeout = relayAlreadyVerified
-                        ? NetworkTiming.GRPC.streamOpenAcceptTimeoutVerified
-                        : NetworkTiming.GRPC.streamOpenAcceptTimeout
+                    let timeout: TimeInterval
+                    if relayAlreadyVerified {
+                        timeout = NetworkTiming.GRPC.streamOpenAcceptTimeoutVerified
+                    } else if isH3Transport {
+                        timeout = NetworkTiming.GRPC.streamOpenAcceptTimeoutH3
+                    } else {
+                        timeout = NetworkTiming.GRPC.streamOpenAcceptTimeout
+                    }
                     try await Task.sleep(for: .seconds(timeout))
                     throw StreamAcceptTimeout()
                 }

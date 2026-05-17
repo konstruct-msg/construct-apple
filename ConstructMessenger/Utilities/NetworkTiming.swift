@@ -49,11 +49,18 @@ enum NetworkTiming {
     enum GRPC {
         // Routing failover ("happy eyeballs")
         static let fastFallbackDirectTimeout: TimeInterval = 4.0
-        static let streamOpenAcceptTimeout: TimeInterval = 2.5
+        /// Timeout waiting for the stream RPC to be accepted (H2 direct or ICE relay).
+        /// After this duration without `isConnected = true`, fast-failover to ICE is triggered.
+        static let streamOpenAcceptTimeout: TimeInterval = 2.0
+        /// Separate, shorter timeout for H3/QUIC streams on the direct path.
+        /// QUIC either connects in <500ms (0-RTT) or fails within 1–1.5s (UDP blocked, no H3
+        /// support). Using a tighter window here avoids waiting 2s per H3 attempt on servers
+        /// that only speak H2, while still giving QUIC enough room on high-latency paths.
+        static let streamOpenAcceptTimeoutH3: TimeInterval = 1.5
         /// Faster timeout used when the relay is already verified (TCP/TLS/obfs4/HTTP2 are
         /// all warm). A verified relay should respond to any new RPC within one RTT (≤200ms
-        /// for AMS). 1.0s is a comfortable upper bound; anything longer signals a broken tunnel.
-        static let streamOpenAcceptTimeoutVerified: TimeInterval = 1.0
+        /// for AMS). 0.8s is a comfortable upper bound; anything longer signals a broken tunnel.
+        static let streamOpenAcceptTimeoutVerified: TimeInterval = 0.8
         static let streamOpenAcceptPollInterval: TimeInterval = 0.05
 
         // Transport keepalive (HTTP/2)
@@ -144,7 +151,7 @@ enum NetworkTiming {
         static let proxyReadyWaitTimeout: TimeInterval = 15.0
         /// Shorter timeout used on WiFi where the proxy starts in <1s typically.
         /// Avoids blocking the retry loop for 15s when ICE simply fails on a fast network.
-        static let proxyReadyWaitTimeoutWiFi: TimeInterval = 5.0
+        static let proxyReadyWaitTimeoutWiFi: TimeInterval = 3.0
         static let onDemandStartJoinTimeout: TimeInterval = 5.0
         static let onDemandStartJoinPollInterval: TimeInterval = 0.1
         static let relayLatencyProbeTimeout: TimeInterval = 2.0
@@ -197,11 +204,14 @@ enum NetworkTiming {
         static let maxRetryDelay: TimeInterval = 60
         static let cleanEndReconnectDelay: TimeInterval = 3
         static let backoffBaseDelay: TimeInterval = 2
-        static let fetchMissedMessagesWallClockCap: TimeInterval = 1.5
-        /// Faster fetch cap used when the relay is already verified. On a warm relay the
-        /// fetchMissedMessages RPC should complete in <100ms; 0.5s gives ample headroom while
-        /// keeping the overall broken-relay detection window at ≤1.5s (0.5 + 1.0 stream timeout).
-        static let fetchMissedMessagesWallClockCapVerified: TimeInterval = 0.5
+        /// Wall-clock cap for fetchMissedMessages before the stream opens.
+        /// Reduced from 1.5s: if the server is reachable the fetch completes in <200ms;
+        /// if it isn't, waiting longer only delays stream open on every retry cycle.
+        static let fetchMissedMessagesWallClockCap: TimeInterval = 1.0
+        /// Faster cap used when the relay is already verified. On a warm relay the
+        /// fetchMissedMessages RPC should complete in <100ms; 0.3s gives ample headroom while
+        /// keeping the overall broken-relay detection window at ≤1.3s (0.3 + 1.0 stream timeout).
+        static let fetchMissedMessagesWallClockCapVerified: TimeInterval = 0.3
     }
 
     // MARK: - Media
