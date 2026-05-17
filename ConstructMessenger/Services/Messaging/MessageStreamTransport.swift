@@ -19,6 +19,12 @@ extension MessageStreamManager {
         let generation = streamGeneration
         activeStreamGeneration = generation
 
+        // Consume the one-shot H2 fallback flag (set when the previous H3 attempt timed out
+        // on a direct path). Resetting before transport selection ensures subsequent iterations
+        // restart with H3 regardless of what happens in this openStream() call.
+        let useH2Fallback = shouldFallbackToH2Direct
+        shouldFallbackToH2Direct = false
+
         let metricsLabel = GRPCChannelManager.shared.currentRoutingKey
         PerformanceMetrics.shared.start(.streamOpenStart, label: metricsLabel)
 
@@ -30,10 +36,11 @@ extension MessageStreamManager {
         // On iOS 16+ with a direct (non-ICE) path, prefer HTTP/3 (QUIC) for connection
         // migration across WiFi↔cellular switches and head-of-line blocking elimination.
         // H3 is never used over ICE — obfs4 tunnels terminate at an H2 proxy.
-        // Fall back to the H2 persistent channel on older OS or when ICE is active.
+        // Fall back to H2 when ICE is active, on older OS, or when useH2Fallback is set
+        // (previous H3 attempt timed out — trying H2 direct before escalating to ICE).
         let transportLabel: String
 #if canImport(Network)
-        if #available(iOS 16.0, macOS 13.0, *), GRPCChannelManager.shared.iceProxyPort() == nil {
+        if #available(iOS 16.0, macOS 13.0, *), !useH2Fallback, GRPCChannelManager.shared.iceProxyPort() == nil {
             transportLabel = "H3"
         } else {
             transportLabel = "H2"
@@ -41,6 +48,7 @@ extension MessageStreamManager {
 #else
         transportLabel = "H2"
 #endif
+        lastStreamTransportWasH3 = (transportLabel == "H3")
         Log.debug("🔌 openStream transport=\(transportLabel) → \(host):\(port)", category: "MessageStream")
 
         // Create outbound stream
@@ -178,7 +186,7 @@ extension MessageStreamManager {
             // Acquire the appropriate persistent channel inside the Task.
             // Both branches call the generic `runMessageStream<Transport>` — Swift specialises it.
 #if canImport(Network)
-            if #available(iOS 16.0, macOS 13.0, *), GRPCChannelManager.shared.iceProxyPort() == nil {
+            if #available(iOS 16.0, macOS 13.0, *), !useH2Fallback, GRPCChannelManager.shared.iceProxyPort() == nil {
                 let h3Client = GRPCChannelManager.shared.acquireH3Channel()
                 let msgClient = Shared_Proto_Services_V1_MessagingService.Client(wrapping: h3Client)
                 try await runMessageStream(

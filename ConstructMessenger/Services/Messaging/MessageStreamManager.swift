@@ -97,6 +97,13 @@ final class MessageStreamManager {
     /// After 5+ rotations we add progressive delay (2 s, 4 s, … max 20 s) to reduce
     /// battery drain and give the server/network time to recover.
     private var consecutiveIceRotations = 0
+    /// When `true`, the next `openStream()` call uses H2 direct instead of H3.
+    /// Set in connectLoop when H3 direct times out — gives H2 a chance on the same host
+    /// before escalating to ICE relay (H3 may be blocked/unsupported while H2 works fine).
+    var shouldFallbackToH2Direct = false
+    /// Records whether the most recent `openStream()` call attempted H3 transport.
+    /// Used by connectLoop to decide whether to try H2 direct before activating ICE.
+    var lastStreamTransportWasH3 = false
     private(set) var isPaused = false
     private(set) var subscriptionUserIds: [String] = []
     private var lastPendingCursor: String = UserDefaults.standard.string(forKey: "construct.pendingCursor") ?? "" {
@@ -218,6 +225,8 @@ final class MessageStreamManager {
         backgroundFetchTask = nil
         retryCount = 0
         consecutiveIceRotations = 0
+        shouldFallbackToH2Direct = false
+        lastStreamTransportWasH3 = false
         connect(contactUserIds: contactUserIds, onMessageReceived: onMessageReceived)
     }
 
@@ -246,6 +255,8 @@ final class MessageStreamManager {
         streamTask = nil
         retryCount = 0
         consecutiveIceRotations = 0
+        shouldFallbackToH2Direct = false
+        lastStreamTransportWasH3 = false
         ConnectionStatusManager.shared.markStreamDisconnected()
         Log.info("📡 MessageStream disconnected", category: "MessageStream")
     }
@@ -388,6 +399,8 @@ final class MessageStreamManager {
                 retryCount = 0
                 consecutiveRoutingUnchangedTimeouts = 0
                 consecutiveIceRotations = 0
+                shouldFallbackToH2Direct = false
+                lastStreamTransportWasH3 = false
                 try await Task.sleep(for: .seconds(NetworkTiming.Stream.cleanEndReconnectDelay))
             } catch is CancellationError {
                 Log.info("🛑 MessageStream cancelled — connectLoop exiting", category: "MessageStream")
@@ -454,25 +467,33 @@ final class MessageStreamManager {
                             consecutiveRoutingUnchangedTimeouts = 0
                         } else if IceProxyManager.shared.mode == .auto,
                                   routingKeyAtLoopStart.hasPrefix("direct:") {
-                            // Direct path + .auto mode: feed the Bayesian DPI detector.
-                            // Each timeout updates the posterior P(DPI present); ICE is
-                            // activated once it crosses 80%.  Two consecutive failures ≈ 97%
-                            // (same trigger point as the old ≥2 heuristic, but a single success
-                            // interspersed keeps the posterior low — no false positive).
-                            IceProxyManager.shared.recordDirectFailure()
-                            let p = IceProxyManager.shared.dpiDetectionProbability
-                            if IceProxyManager.shared.shouldActivateDPIICE {
-                                Log.info("🧊 DPI confirmed (\(String(format: "%.0f", p * 100))% posterior) — activating ICE (auto mode)", category: "MessageStream")
-                                await IceProxyManager.shared.activateDPIAutoMode()
-                                if GRPCChannelManager.shared.iceProxyPort() != nil {
-                                    GRPCChannelManager.shared.invalidatePersistentClient()
-                                }
+                            // Direct path + .auto mode: H3 may simply be unsupported on this
+                            // server/network (HTTP/3 is newer; H2 often works when H3 doesn't).
+                            // Try H2 direct ONCE before feeding the Bayesian DPI detector.
+                            // Only when H2 direct also times out do we have real evidence of
+                            // DPI censorship rather than a plain protocol mismatch.
+                            if lastStreamTransportWasH3 {
+                                shouldFallbackToH2Direct = true
+                                Log.info("🧊 H3 direct stream timeout — retrying with H2 direct before DPI detection", category: "MessageStream")
                             } else {
-                                Log.info("🧊 Direct stream timeout in .auto — DPI posterior: \(String(format: "%.1f", p * 100))% (threshold 80%)", category: "MessageStream")
+                                // H2 direct timed out as well — now run Bayesian DPI detector.
+                                IceProxyManager.shared.recordDirectFailure()
+                                let p = IceProxyManager.shared.dpiDetectionProbability
+                                if IceProxyManager.shared.shouldActivateDPIICE {
+                                    Log.info("🧊 DPI confirmed (\(String(format: "%.0f", p * 100))% posterior) — activating ICE (auto mode)", category: "MessageStream")
+                                    await IceProxyManager.shared.activateDPIAutoMode()
+                                    if GRPCChannelManager.shared.iceProxyPort() != nil {
+                                        GRPCChannelManager.shared.invalidatePersistentClient()
+                                    }
+                                } else {
+                                    Log.info("🧊 Direct stream timeout in .auto — DPI posterior: \(String(format: "%.1f", p * 100))% (threshold 80%)", category: "MessageStream")
+                                }
                             }
                         }
                     } else {
                         consecutiveRoutingUnchangedTimeouts = 0
+                        shouldFallbackToH2Direct = false
+                        lastStreamTransportWasH3 = false
                     }
                     Log.info("🧊 MessageStream switching routing — reconnecting immediately", category: "MessageStream")
                     // Cancel the background fetch started on the previous routing path.
