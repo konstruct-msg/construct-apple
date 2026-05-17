@@ -9,6 +9,10 @@ enum SessionError: Error, LocalizedError {
     /// Peer's SPK is older than the Rust core's staleness limit.
     /// The peer must open their app to trigger SPK rotation before a session can be established.
     case peerSPKStale(ageDays: Double)
+    /// Peer is a PQ device but their bundle has `kyberSpkRotationEpoch == 0`,
+    /// meaning they never uploaded a Kyber SPK. Session init must be refused to
+    /// avoid silently downgrading to classical-only key agreement.
+    case kyberEpochRequired
 
     var errorDescription: String? {
         switch self {
@@ -16,6 +20,8 @@ enum SessionError: Error, LocalizedError {
             return "SPK bundle replay: received epoch \(epoch) ≤ known epoch \(knownEpoch)"
         case .peerSPKStale(let days):
             return "Contact's encryption keys are \(String(format: "%.0f", days)) days old and need to be refreshed — ask them to open the app"
+        case .kyberEpochRequired:
+            return "Contact's post-quantum keys are incomplete — ask them to update the app"
         }
     }
 }
@@ -89,6 +95,14 @@ class SessionInitializationService {
             KeychainManager.shared.saveSpkEpoch(bundle.spkRotationEpoch, for: userId)
         }
 
+        // PQ_HYBRID bundles (suiteId == 2) must have a non-zero Kyber SPK epoch.
+        // epoch == 0 means the peer never uploaded a Kyber SPK; refuse to proceed
+        // rather than silently falling back to classical-only key agreement.
+        if bundle.suiteId == 2 && bundle.kyberSpkRotationEpoch == 0 {
+            Log.error("⚠️ SESSION_STATE[kyber_epoch_missing]: suiteId=2 but kyberSpkRotationEpoch==0 for \(userId.prefix(8))… — refusing PQ session init", category: "SessionInit")
+            throw SessionError.kyberEpochRequired
+        }
+
         let bundleWithSuite = (
             identityPublic: bundle.identityPublic,
             signedPrekeyPublic: bundle.signedPrekeyPublic,
@@ -145,11 +159,11 @@ class SessionInitializationService {
 
         let staleSPKMaxRetries = 2
         let staleSPKRetryDelay: UInt64 = 60 // seconds
-        /// Grace window above the Rust 14-day hard limit. If the SPK is only ≤ 6 h past
+        /// Grace window above the Rust 10-day hard limit. If the SPK is only ≤ 6 h past
         /// the limit the peer may have just come online and rotated; the server bundle
         /// cache may simply not have propagated yet. Beyond this window the peer has been
         /// offline for a long time and no amount of waiting will help.
-        let staleSPKFastFailDays: Double = 14.25
+        let staleSPKFastFailDays: Double = 10.25
 
         var lastError: Error?
         for attempt in 0...staleSPKMaxRetries {
