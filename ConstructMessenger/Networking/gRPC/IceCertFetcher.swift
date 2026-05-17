@@ -110,10 +110,14 @@ private struct ConstructServerWellKnown: Decodable {
         let primary: String?
         let relays: [RelayInfo]?
         let relayRegions: [ICERelayRegion]?
+        /// Relay IDs that have been retired. Clients with any of these as their
+        /// active relay should rotate immediately after fetching a fresh config.
+        let deprecatedIds: [String]?
 
         enum CodingKeys: String, CodingKey {
             case primary, relays
-            case relayRegions = "relay_regions"
+            case relayRegions   = "relay_regions"
+            case deprecatedIds  = "deprecated_ids"
         }
     }
     let version: String?
@@ -173,8 +177,18 @@ actor IceCertFetcher {
 
     // UserDefaults key for cached relay infos (JSON-encoded [RelayInfo])
     private static let cachedRelayInfosKey = "construct.ice_relay_infos"
+    /// UserDefaults key for deprecated relay IDs pushed by the server (JSON-encoded [String]).
+    private static let cachedDeprecatedIdsKey = "construct.ice_deprecated_relay_ids"
     /// UserDefaults key for cached server Ed25519 bundle-signing public key (raw Data, 32 bytes).
     static let cachedBundleSigningKeyKey = "construct.bundle_signing_key"
+
+    /// Returns the set of relay IDs the server has marked as deprecated.
+    /// Clients whose active relay's manifest ID appears in this set should rotate immediately.
+    static func cachedDeprecatedIdsSync() -> Set<String> {
+        guard let data = UserDefaults.standard.data(forKey: cachedDeprecatedIdsKey),
+              let ids = try? JSONDecoder().decode([String].self, from: data) else { return [] }
+        return Set(ids)
+    }
 
     // MARK: - Bridge cert
 
@@ -263,8 +277,15 @@ actor IceCertFetcher {
                            let regionsData = try? JSONEncoder().encode(regions) {
                             UserDefaults.standard.set(regionsData, forKey: ICEConfig.cachedRelayRegionsKey)
                         }
+                        // Persist deprecated relay IDs so loadStoredRelay() can evict stale cache.
+                        let deprecatedIds = parsed.ice?.deprecatedIds ?? []
+                        if let encodedDeprecated = try? JSONEncoder().encode(deprecatedIds) {
+                            UserDefaults.standard.set(encodedDeprecated, forKey: Self.cachedDeprecatedIdsKey)
+                        }
 
-                        Log.info("🧊 Relay config via \(url.host ?? "?"): \(relays.count) relay(s)", category: "ICE")
+                        let deprecatedNote = deprecatedIds.isEmpty ? "" : " (deprecated: \(deprecatedIds.joined(separator: ", ")))"
+                        Log.info("🧊 Relay config via \(url.host ?? "?"): \(relays.count) relay(s)\(deprecatedNote)", category: "ICE")
+                        return relays
                         return relays
                     } catch {
                         Log.debug("🧊 \(url.host ?? "") fetch error: \(error)", category: "ICE")

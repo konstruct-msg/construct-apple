@@ -166,6 +166,10 @@ enum IceIATMode: Int, CaseIterable, Identifiable {
 /// Relay configuration — a single obfs4 bridge endpoint.
 struct IceRelay: Codable, Identifiable {
     let id: UUID
+    /// Stable relay ID from the server manifest (e.g. "ams-het-1", "ru-div-1").
+    /// nil for relays constructed from hardcoded addresses or legacy cache entries
+    /// that predate manifest ID tracking.
+    let manifestId: String?
     let address: String     // "158.160.140.67:443" (TLS mode) or ":9443" (legacy)
     let bridgeCert: String  // base64 cert received from server
     let iatMode: IceIATMode
@@ -212,8 +216,9 @@ struct IceRelay: Codable, Identifiable {
     init(address: String, bridgeCert: String, iatMode: IceIATMode = .none,
          tlsServerName: String? = nil, pinnedSpki: String? = nil,
          wtPath: String? = nil, wtHostHeader: String? = nil,
-         alternativeSNIs: [String] = []) {
+         alternativeSNIs: [String] = [], manifestId: String? = nil) {
         self.id             = UUID()
+        self.manifestId     = manifestId
         self.address        = address
         self.bridgeCert     = bridgeCert
         self.iatMode        = iatMode
@@ -228,10 +233,12 @@ struct IceRelay: Codable, Identifiable {
     enum CodingKeys: String, CodingKey {
         case id, address, bridgeCert, iatMode, tlsServerName, pinnedSpki, wtPath, wtHostHeader
         case alternativeSNIs = "alternativeSNIs"
+        case manifestId
     }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id              = try c.decode(UUID.self, forKey: .id)
+        manifestId      = try? c.decode(String.self, forKey: .manifestId)
         address         = try c.decode(String.self, forKey: .address)
         bridgeCert      = try c.decode(String.self, forKey: .bridgeCert)
         let raw         = (try? c.decode(Int.self, forKey: .iatMode)) ?? 1
@@ -245,6 +252,7 @@ struct IceRelay: Codable, Identifiable {
     func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(id, forKey: .id)
+        try? c.encode(manifestId, forKey: .manifestId)
         try c.encode(address, forKey: .address)
         try c.encode(bridgeCert, forKey: .bridgeCert)
         try c.encode(iatMode.rawValue, forKey: .iatMode)
@@ -270,7 +278,7 @@ struct IceRelay: Codable, Identifiable {
 /// 1. `IceCertFetcher` cached relay config (fetched from signed construct-server) → preferred.
 /// 2. `ICEConfig.hardcodedRelaySNIs[address]` + `ICEConfig.hardcodedRelaySPKIs` → hardcoded fallback.
 /// 3. Hostname extracted from address → domain-based relay, no pinning (`:443` only).
-private func makeRelay(address: String, bridgeCert: String, forceObfs4: Bool = false) -> IceRelay {
+private func makeRelay(address: String, bridgeCert: String, forceObfs4: Bool = false, manifestId: String? = nil) -> IceRelay {
     // Priority: server-pushed per-relay cert → hardcoded cert → AMS cert passed by caller.
     // bridgeCertSync returns hardcodedRelayCerts[address] if no server-pushed cert exists.
     let resolvedCert = IceCertFetcher.bridgeCertSync(for: address) ?? bridgeCert
@@ -321,7 +329,7 @@ private func makeRelay(address: String, bridgeCert: String, forceObfs4: Bool = f
     return IceRelay(address: address, bridgeCert: resolvedCert, iatMode: iatMode,
                     tlsServerName: sni, pinnedSpki: pin,
                     wtPath: wtPath, wtHostHeader: wtHostHeader,
-                    alternativeSNIs: altSNIs)
+                    alternativeSNIs: altSNIs, manifestId: manifestId)
 }
 
 /// Compute a WebTunnel path auth token for a given time period.
@@ -1397,13 +1405,22 @@ final class IceProxyManager: ObservableObject {
         let host    = GRPCChannelManager.shared.currentHost
         let iceHost = "ice.\(host)"
 
+        // Build address→manifestId reverse map from the cached relay config.
+        // Used to carry stable relay IDs into IceRelay instances so that
+        // fetchConfigAndEvictIfRemoved() can detect retired relays by ID, not address.
+        let manifestIdMap: [String: String] = {
+            let infos = IceCertFetcher.cachedRelayInfosSync() ?? []
+            return Dictionary(uniqueKeysWithValues: infos.map { ($0.addressWithPort, $0.id) })
+        }()
+
         // Fast path: if there's a stored relay from the last successful start and it's
         // not on the recent-failure list, try it immediately without probing all endpoints.
         // This eliminates the 300-400ms sortByLatency pass on every repeat ICE start
         // (network switch, crash recovery, relay rotation).
         if let stored = loadStoredRelay(), !isRelayRecentlyFailed(stored.address) {
             let relay = makeRelay(address: stored.address, bridgeCert: cert,
-                                  forceObfs4: webTunnelBlockedRelays.contains(stored.address))
+                                  forceObfs4: webTunnelBlockedRelays.contains(stored.address),
+                                  manifestId: stored.manifestId ?? manifestIdMap[stored.address])
             if start(relay: relay) != nil {
                 saveRelay(relay)
                 Log.info("🧊 ICE fast-started via cached relay \(relay.address)", category: "ICE")
@@ -1451,7 +1468,9 @@ final class IceProxyManager: ObservableObject {
         Task { await checkCertExpiry() }
 
         for address in ordered {
-            let relay = makeRelay(address: address, bridgeCert: cert, forceObfs4: webTunnelBlockedRelays.contains(address))
+            let relay = makeRelay(address: address, bridgeCert: cert,
+                                  forceObfs4: webTunnelBlockedRelays.contains(address),
+                                  manifestId: manifestIdMap[address])
             if start(relay: relay) != nil {
                 saveRelay(relay)
                 Log.info("🧊 ICE started via \(address)", category: "ICE")
@@ -1479,6 +1498,11 @@ final class IceProxyManager: ObservableObject {
         let host    = GRPCChannelManager.shared.currentHost
         let iceHost = "ice.\(host)"
 
+        let manifestIdMap: [String: String] = {
+            let infos = IceCertFetcher.cachedRelayInfosSync() ?? []
+            return Dictionary(uniqueKeysWithValues: infos.map { ($0.addressWithPort, $0.id) })
+        }()
+
         var seen = Set<String>()
         var candidates: [String] = []
         let allAddresses = ["\(iceHost):443"] + ICEConfig.hardcodedRelayAddresses
@@ -1502,7 +1526,9 @@ final class IceProxyManager: ObservableObject {
         let primaryAddress   = ordered[0]
         let secondaryAddress = ordered.count > 1 ? ordered[1] : nil
 
-        let primaryRelay = makeRelay(address: primaryAddress, bridgeCert: cert, forceObfs4: webTunnelBlockedRelays.contains(primaryAddress))
+        let primaryRelay = makeRelay(address: primaryAddress, bridgeCert: cert,
+                                     forceObfs4: webTunnelBlockedRelays.contains(primaryAddress),
+                                     manifestId: manifestIdMap[primaryAddress])
 
         // Start primary (this maps to PROXY_TLS when address has tlsServerName, else PROXY).
         let primaryPort = start(relay: primaryRelay)  // sets isRunning, proxyPort, activeRelay via applyState()
@@ -1515,7 +1541,9 @@ final class IceProxyManager: ObservableObject {
 
         // Start secondary without calling stop() first (we own two separate Rust statics).
         if let secondaryAddress {
-            let secondaryRelay = makeRelay(address: secondaryAddress, bridgeCert: cert, forceObfs4: webTunnelBlockedRelays.contains(secondaryAddress))
+            let secondaryRelay = makeRelay(address: secondaryAddress, bridgeCert: cert,
+                                           forceObfs4: webTunnelBlockedRelays.contains(secondaryAddress),
+                                           manifestId: manifestIdMap[secondaryAddress])
             let secondaryPort = startSecondary(relay: secondaryRelay)
             if let sp = secondaryPort {
                 isSecondaryRunning = true
@@ -1590,7 +1618,7 @@ final class IceProxyManager: ObservableObject {
         if shouldStartFull {
             let cert = await getIceBridgeCert()
             if await startWithRelayFallback(cert: cert) {
-                Task { await IceCertFetcher.shared.fetchAndCacheRelayList() }
+                Task { await self.fetchConfigAndEvictIfRemoved() }
                 return
             }
             Log.info("🧊 All ICE endpoints failed — fetching fresh cert and retrying", category: "ICE")
@@ -1624,7 +1652,7 @@ final class IceProxyManager: ObservableObject {
                 // Elevate back to standby to suppress iceProxyPort() until DPI confirmed.
                 applyState(.standby(port: proxyPort))
                 Log.info("🧊 ICE standby pre-warm ready — waiting for DPI confirmation", category: "ICE")
-                Task { await IceCertFetcher.shared.fetchAndCacheRelayList() }
+                Task { await self.fetchConfigAndEvictIfRemoved() }
             } else {
                 applyState(.off)
                 Log.info("🧊 ICE standby pre-warm failed — will start on demand if DPI detected", category: "ICE")
@@ -1654,7 +1682,7 @@ final class IceProxyManager: ObservableObject {
 
         let cert = await getIceBridgeCert()
         if await startWithRelayFallback(cert: cert) {
-            Task { await IceCertFetcher.shared.fetchAndCacheRelayList() }
+            Task { await self.fetchConfigAndEvictIfRemoved() }
             return
         }
         // Cert may be stale — try fetching a fresh one before giving up.
@@ -1684,7 +1712,7 @@ final class IceProxyManager: ObservableObject {
             return
         }
         if await startWithRelayFallback(cert: cert, generation: gen) {
-            Task { await IceCertFetcher.shared.fetchAndCacheRelayList() }
+            Task { await self.fetchConfigAndEvictIfRemoved() }
             Log.info("🧊 ICE proxy restarted after crash", category: "ICE")
         } else {
             Log.error("🧊 ICE proxy restart failed after crash", category: "ICE")
@@ -1741,7 +1769,7 @@ final class IceProxyManager: ObservableObject {
         }
         if await startWithRelayFallback(cert: cert, generation: gen) {
             Log.info("🧊 ICE proxy restarted after network path change", category: "ICE")
-            Task { await IceCertFetcher.shared.fetchAndCacheRelayList() }
+            Task { await self.fetchConfigAndEvictIfRemoved() }
         } else {
             Log.error("🧊 ICE proxy restart failed after network path change", category: "ICE")
         }
@@ -2031,7 +2059,23 @@ final class IceProxyManager: ObservableObject {
         if isEnabled { Task { await self.startWithRelayFallback(cert: cert) } }
 
         // Background: refresh relay list now that we're authenticated and can reach AMS.
-        Task { await IceCertFetcher.shared.fetchAndCacheRelayList() }
+        Task { await self.fetchConfigAndEvictIfRemoved() }
+    }
+
+    /// Fetches the latest relay config from the server and, if the currently active relay
+    /// has been deprecated or removed from the manifest, rotates to a live relay immediately.
+    ///
+    /// This is the replacement for bare `IceCertFetcher.shared.fetchAndCacheRelayList()` calls.
+    /// All six post-start background fetches use this so that relay retirement is always handled.
+    private func fetchConfigAndEvictIfRemoved() async {
+        guard let freshList = await IceCertFetcher.shared.fetchAndCacheRelayConfig() else { return }
+        guard let active = activeRelay, let mid = active.manifestId else { return }
+        let freshIds   = Set(freshList.map(\.id))
+        let deprecated = IceCertFetcher.cachedDeprecatedIdsSync()
+        let isRetired  = deprecated.contains(mid) || (!freshIds.isEmpty && !freshIds.contains(mid))
+        guard isRetired else { return }
+        Log.info("🧊 Active relay \(active.address) [\(mid)] retired by server — rotating", category: "ICE")
+        await rotateToNextRelay()
     }
 
     func saveRelay(_ relay: IceRelay) {
@@ -2055,6 +2099,22 @@ final class IceProxyManager: ObservableObject {
             saveRelay(upgraded)
             Log.info("🧊 Migrated stored relay to TLS mode: \(upgraded.address)", category: "ICE")
             return upgraded
+        }
+        // Evict if the relay's manifest ID has been deprecated or removed from the server config.
+        // This catches the case where a relay is decommissioned between app launches.
+        if let mid = relay.manifestId {
+            let deprecated = IceCertFetcher.cachedDeprecatedIdsSync()
+            let activeIds  = Set((IceCertFetcher.cachedRelayInfosSync() ?? []).map(\.id))
+            if deprecated.contains(mid) {
+                Log.info("🧊 Cached relay \(relay.address) [\(mid)] is deprecated — evicting", category: "ICE")
+                UserDefaults.standard.removeObject(forKey: relayKey)
+                return nil
+            }
+            if !activeIds.isEmpty && !activeIds.contains(mid) {
+                Log.info("🧊 Cached relay \(relay.address) [\(mid)] removed from server config — evicting", category: "ICE")
+                UserDefaults.standard.removeObject(forKey: relayKey)
+                return nil
+            }
         }
         return relay
     }
