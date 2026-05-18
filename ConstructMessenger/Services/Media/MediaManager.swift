@@ -173,7 +173,17 @@ class MediaManager {
     }
 
     /// Uploads data with up to 2 automatic retries on transient gRPC/ICE stream failures.
+    /// Checks MediaSendCache first — identical plaintext within the 30-minute TTL window
+    /// skips re-encryption and re-upload entirely.
     static func uploadWithRetry(data: Data, mimeType: String) async throws -> MediaServiceClient.UploadedMedia {
+        // Cache hit: same plaintext already uploaded recently → reuse mediaId + AES key.
+        // Safe: the key is carried inside the DR-encrypted message payload, so each
+        // recipient still gets an independent encrypted envelope.
+        if let cached = await MediaSendCache.shared.cachedUpload(for: data) {
+            Log.info("📦 Media send cache hit — reusing \(cached.mediaId)", category: "MediaManager")
+            return cached
+        }
+
         // .cancelled       → in-flight RPC killed when the persistent connection was torn down
         // .unavailable     → server/transport unreachable
         // .deadlineExceeded → upload timed out (large file on slow link)
@@ -189,7 +199,9 @@ class MediaManager {
                 if let ns = delay {
                     try await Task.sleep(nanoseconds: ns)
                 }
-                return try await MediaServiceClient.shared.uploadData(data, mimeType: mimeType)
+                let result = try await MediaServiceClient.shared.uploadData(data, mimeType: mimeType)
+                await MediaSendCache.shared.storeUpload(result, for: data)
+                return result
             } catch let error as GRPCCore.RPCError where retryableCodes.contains(error.code) {
                 lastError = error
                 Log.info("🔄 Upload dropped (code=\(error.code)) — will retry", category: "MediaManager")

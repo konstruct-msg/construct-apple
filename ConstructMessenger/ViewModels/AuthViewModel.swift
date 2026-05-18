@@ -546,6 +546,7 @@ class AuthViewModel {
                 self.currentUserId = nil
                 self.currentUser = nil  // ✅ REFACTOR Phase 1.2
             }
+            await MediaSendCache.shared.clear()
         }
     }
 
