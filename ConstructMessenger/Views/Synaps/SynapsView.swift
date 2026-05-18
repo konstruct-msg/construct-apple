@@ -131,21 +131,37 @@ struct SynapsView: View {
                 let vm = ContactRequestsViewModel(viewContext: context)
                 contactRequestsVM = vm
                 await vm.load()
-                // User A side: detect any newly-accepted sent requests and create contacts.
+
+                // Contacts created by a background push (before this view loaded) are stored
+                // as user IDs in UserDefaults. Consume them first for navigation.
+                let pendingIds = ContactRequestService.shared.consumePendingNavigationUserIds()
+                let pendingUser: User? = pendingIds.first.flatMap { userId in
+                    guard let uuid = UUID(uuidString: userId) else { return nil }
+                    let req = NSFetchRequest<User>(entityName: "User")
+                    req.predicate = NSPredicate(format: "id == %@", uuid as CVarArg)
+                    req.fetchLimit = 1
+                    return try? context.fetch(req).first
+                }
+
+                // Also check for acceptances that haven't been processed yet (e.g. no push).
                 let accepted = await vm.checkAcceptedRequests(context: context)
-                if let first = accepted.first {
+
+                if let first = accepted.first ?? pendingUser {
                     chatsViewModel.openOrCreateChat(with: first)
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .contactRequestAccepted)) { _ in
-                // Background push: User B accepted our contact request. Re-run polling
-                // so User A gets the contact immediately without opening the Synaps tab.
+                // The service already ran (from AppDelegate) and stored pending user IDs.
+                // Consume them and navigate to the first newly-accepted contact.
                 Task {
-                    let vm = contactRequestsVM ?? ContactRequestsViewModel(viewContext: context)
-                    if contactRequestsVM == nil { contactRequestsVM = vm }
-                    let accepted = await vm.checkAcceptedRequests(context: context)
-                    if let first = accepted.first {
-                        await MainActor.run { chatsViewModel.openOrCreateChat(with: first) }
+                    let pendingIds = ContactRequestService.shared.consumePendingNavigationUserIds()
+                    guard let userId = pendingIds.first,
+                          let uuid = UUID(uuidString: userId) else { return }
+                    let req = NSFetchRequest<User>(entityName: "User")
+                    req.predicate = NSPredicate(format: "id == %@", uuid as CVarArg)
+                    req.fetchLimit = 1
+                    if let user = try? context.fetch(req).first {
+                        await MainActor.run { chatsViewModel.openOrCreateChat(with: user) }
                     }
                 }
             }

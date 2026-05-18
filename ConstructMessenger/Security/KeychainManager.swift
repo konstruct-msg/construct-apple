@@ -456,6 +456,50 @@ class KeychainManager {
         delete(forKey: spkEpochKey(for: userId))
     }
 
+    // MARK: - Contact Request Mappings
+    //
+    // Stores requestId → toUserId so User A can create a contact after acceptance.
+    // Lives in Keychain (not UserDefaults) to survive app reinstall.
+    // All entries stored as a single JSON-encoded [String: String] dict for easy bulk delete.
+
+    private static let contactRequestMappingsKey = "cr_request_mappings"
+
+    func saveContactRequestMapping(requestId: String, toUserId: String) {
+        var mappings = loadAllContactRequestMappings()
+        mappings[requestId] = toUserId
+        persistContactRequestMappings(mappings)
+    }
+
+    func loadContactRequestMapping(requestId: String) -> String? {
+        loadAllContactRequestMappings()[requestId]
+    }
+
+    func deleteContactRequestMapping(requestId: String) {
+        var mappings = loadAllContactRequestMappings()
+        mappings.removeValue(forKey: requestId)
+        persistContactRequestMappings(mappings)
+    }
+
+    func deleteAllContactRequestMappings() {
+        delete(forKey: Self.contactRequestMappingsKey)
+    }
+
+    private func loadAllContactRequestMappings() -> [String: String] {
+        guard let data = loadRawData(forKey: Self.contactRequestMappingsKey),
+              let dict = try? JSONDecoder().decode([String: String].self, from: data)
+        else { return [:] }
+        return dict
+    }
+
+    private func persistContactRequestMappings(_ mappings: [String: String]) {
+        if mappings.isEmpty {
+            delete(forKey: Self.contactRequestMappingsKey)
+            return
+        }
+        guard let data = try? JSONEncoder().encode(mappings) else { return }
+        saveRawData(data, forKey: Self.contactRequestMappingsKey)
+    }
+
     // MARK: - Generic Data Storage (for non-crypto app data that needs Keychain protection)
 
     @discardableResult

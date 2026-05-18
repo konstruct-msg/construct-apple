@@ -87,9 +87,10 @@ final class ContactRequestsViewModel {
     }
 
     func markSentRequest(toUserId: String, requestId: String) {
+        // cr_sent_* is a UI-only hint (no-duplicate guard in the UI); UserDefaults is fine.
         UserDefaults.standard.set(true, forKey: "cr_sent_\(toUserId)")
-        // Store request_id → to_user_id so we can look up who accepted on User A's side.
-        UserDefaults.standard.set(toUserId, forKey: "cr_reqid_\(requestId)")
+        // requestId→toUserId mapping goes to Keychain so it survives reinstall.
+        KeychainManager.shared.saveContactRequestMapping(requestId: requestId, toUserId: toUserId)
     }
 
     // MARK: - Respond
@@ -155,57 +156,19 @@ final class ContactRequestsViewModel {
 extension ContactRequestsViewModel {
 
     /// Checks whether any previously sent contact requests have been accepted.
-    /// For each newly-accepted request, creates the contact in CoreData and returns
-    /// the list of newly-linked users so the caller can navigate to the new chat.
+    /// Delegates contact creation to `ContactRequestService` (background-safe, Keychain-backed).
+    /// Also refreshes the local `sentRequests` list for UI display.
     ///
-    /// Username/displayName resolution: the server never stores plaintext usernames.
-    /// User A searched for User B before sending the request, so their data is already
-    /// in the local CoreData cache. ContactLinkService will find and preserve it.
-    /// If CoreData has no entry yet (e.g. after reinstall), a generated name is used
-    /// and updated later via session profile sharing.
-    ///
-    /// Call this on `SynapsView.task` and whenever the app comes to the foreground.
-    ///
-    /// - Parameter context: CoreData context to write new contacts into.
-    /// - Returns: Array of newly-created `User` entities (one per accepted request).
+    /// - Returns: Newly-created `User` entities. Empty if all acceptances were already
+    ///   processed by a background push handler.
     @discardableResult
     func checkAcceptedRequests(context: NSManagedObjectContext) async -> [User] {
-        do {
-            let result = try await userServiceClient.getContactRequests()
-            var newContacts: [User] = []
+        // Contact creation: handled by service (idempotent, Keychain-backed).
+        let newContacts = await ContactRequestService.shared.checkAndCreateContacts()
 
-            for sent in result.sent where sent.status == .accepted {
-                let requestId = sent.requestID
-                let udKey = "cr_reqid_\(requestId)"
-                guard let toUserId = UserDefaults.standard.string(forKey: udKey),
-                      !toUserId.isEmpty else { continue }
-
-                // Remove the key first to prevent duplicate runs on concurrent calls.
-                UserDefaults.standard.removeObject(forKey: udKey)
-                UserDefaults.standard.removeObject(forKey: "cr_sent_\(toUserId)")
-
-                do {
-                    // No getUserProfile call — server never returns plaintext username.
-                    // ContactLinkService will reuse the existing CoreData entry for this
-                    // user (populated when User A searched for them) or create a new one
-                    // with a generated name that gets resolved via session profile sharing.
-                    let user = try ContactLinkService.shared.createOrUpdateContact(
-                        userId: toUserId,
-                        username: nil,
-                        displayName: nil,
-                        context: context
-                    )
-                    newContacts.append(user)
-                    Log.info("✅ Contact request accepted by \(toUserId) — contact created", category: "ContactRequests")
-                } catch {
-                    Log.error("⚠️ Failed to create contact for accepted request \(requestId): \(error)", category: "ContactRequests")
-                    // Restore the key so it retries next time.
-                    UserDefaults.standard.set(toUserId, forKey: udKey)
-                    UserDefaults.standard.set(true, forKey: "cr_sent_\(toUserId)")
-                }
-            }
-
-            // Refresh our local sentRequests list with the latest server state.
+        // Refresh our local sentRequests list for UI (separate call; the service already
+        // made one, but we need the result here to update observable state).
+        if let result = try? await userServiceClient.getContactRequests() {
             sentRequests = result.sent.map { proto in
                 SentRequest(
                     id: proto.requestID,
@@ -213,11 +176,8 @@ extension ContactRequestsViewModel {
                     createdAt: Date(timeIntervalSince1970: TimeInterval(proto.createdAt))
                 )
             }
-
-            return newContacts
-        } catch {
-            Log.error("⚠️ checkAcceptedRequests failed: \(error)", category: "ContactRequests")
-            return []
         }
+
+        return newContacts
     }
 }

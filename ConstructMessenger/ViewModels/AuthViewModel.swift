@@ -537,11 +537,13 @@ class AuthViewModel {
                 SessionManager.shared.clearSession()
                 UserDefaults.standard.removeObject(forKey: "recovery_is_setup")
                 UserDefaults.standard.removeObject(forKey: "recovery_banner_dismissed")
-                
+                KeychainManager.shared.deleteAllContactRequestMappings()
+                UserDefaults.standard.removeObject(forKey: "cr_pending_nav_user_ids")
+
                 // Note: We keep the username in Keychain for convenience on next login
                 // If you want to clear it, uncomment the line below:
                 // KeychainManager.shared.deleteLastUsername()
-                
+
                 self.isAuthenticated = false
                 self.currentUserId = nil
                 self.currentUser = nil  // ✅ REFACTOR Phase 1.2

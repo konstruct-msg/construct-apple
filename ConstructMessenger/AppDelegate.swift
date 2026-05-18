@@ -121,12 +121,19 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         if activityType == "contact_request_accepted" {
             let requestId = construct?["conversation_id"] as? String
             Log.info("📱 contact_request_accepted push — requestId: \(requestId ?? "nil")", category: "Push")
-            NotificationCenter.default.post(
-                name: .contactRequestAccepted,
-                object: nil,
-                userInfo: requestId.map { ["requestId": $0] } ?? [:]
-            )
-            completionHandler(.newData)
+            Task {
+                await withTaskGroup(of: Void.self) { group in
+                    group.addTask {
+                        // Creates CoreData contact and appends to pendingNavigationUserIds.
+                        // SynapsView picks up navigation on next foreground appearance.
+                        await ContactRequestService.shared.checkAndCreateContacts()
+                    }
+                    group.addTask { try? await Task.sleep(nanoseconds: 27_000_000_000) }
+                    await group.next()
+                    group.cancelAll()
+                }
+                completionHandler(.newData)
+            }
             return
         }
 
