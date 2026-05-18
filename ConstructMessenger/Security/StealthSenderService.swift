@@ -194,7 +194,7 @@ final class StealthSenderService {
         certBytes: Data,
         recipientIdentityKey: Data,
         encryptedPayload: Data
-    ) throws -> Data {
+    ) async throws -> Data {
         let sealedCert = try sealSenderCert(certBytes, recipientIdentityKey: recipientIdentityKey)
         var inner = Shared_Proto_Core_V1_SealedInner()
         inner.recipientUserID = recipientUserId
@@ -207,7 +207,9 @@ final class StealthSenderService {
         // until Privacy Pass enforcement is enabled.
         if let token = TokenWalletService.shared.consumeToken() {
             inner.tokenNonce = token.nonce
-            inner.tokenBytes = token.token
+            // Encrypt token_bytes to the server's X25519 key so relay operators cannot
+            // read the spent token. Falls back to plaintext if key is not yet cached.
+            inner.tokenBytes = await ServerKeyManager.shared.sealTokenBytes(token.token)
         }
 
         return try inner.serializedData()
@@ -222,14 +224,12 @@ final class StealthSenderService {
     ) async throws -> Data {
         // getSenderCertificate is @MainActor async — call it directly (will hop automatically)
         let certBytes = try await StealthSenderService.shared.getSenderCertificate()
-        return try await MainActor.run {
-            try StealthSenderService.shared.buildSealedInner(
-                recipientUserId: recipientUserId,
-                certBytes: certBytes,
-                recipientIdentityKey: recipientIdentityKey,
-                encryptedPayload: encryptedPayload
-            )
-        }
+        return try await StealthSenderService.shared.buildSealedInner(
+            recipientUserId: recipientUserId,
+            certBytes: certBytes,
+            recipientIdentityKey: recipientIdentityKey,
+            encryptedPayload: encryptedPayload
+        )
     }
 }
 

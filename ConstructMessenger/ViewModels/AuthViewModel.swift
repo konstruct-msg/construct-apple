@@ -206,6 +206,7 @@ class AuthViewModel {
                 let deviceId = KeychainManager.shared.loadDeviceID() ?? ""
                 await PreKeyRotationService.shared.rotateIfNeeded(deviceId: deviceId)
             }
+            Task { await ServerKeyManager.shared.prefetch() }
         }
 
         if let _ = SessionManager.shared.sessionToken,

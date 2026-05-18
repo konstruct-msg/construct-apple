@@ -27,10 +27,10 @@ struct AccountSettingsView: View {
     @State private var showingReceiveNearby = false
     @State private var imageToCrop: UIImage?
     @State private var showingCropView = false
-    @State private var isEditingDisplayName = false
-    @State private var isEditingUsername = false
-
-    @State private var originalUsername: String = ""
+    @State private var isEditingProfile = false
+    @State private var draftUsername: String = ""
+    @State private var draftDisplayName: String = ""
+    @State private var showingDiscardProfileChangesConfirm = false
 
     // Logout flow
     @State private var showingLogoutConfirm = false
@@ -41,12 +41,13 @@ struct AccountSettingsView: View {
     @State private var pendingLogoutAll = false  // which logout action was requested before backup check
 
     var body: some View {
-        @Bindable var viewModel = viewModel
         VStack(spacing: 0) {
             CTNavBar(
                 title: NSLocalizedString("account", comment: ""),
                 showBack: true,
-                backAction: { dismiss() }
+                trailingSystemImage: isEditingProfile ? "checkmark.circle.fill" : "square.and.pencil",
+                backAction: { handleBackTap() },
+                trailingAction: { handleProfileEditActionTap() }
             )
             flatDivider(thick: true)
 
@@ -57,10 +58,16 @@ struct AccountSettingsView: View {
                     identitySection
                     flatDivider(thick: true)
                     accountSection
+                        .opacity(isEditingProfile ? 0.5 : 1)
+                        .disabled(isEditingProfile)
                     flatDivider(thick: true)
                     backupSection
+                        .opacity(isEditingProfile ? 0.5 : 1)
+                        .disabled(isEditingProfile)
                     flatDivider(thick: true)
                     dangerSection
+                        .opacity(isEditingProfile ? 0.5 : 1)
+                        .disabled(isEditingProfile)
                     flatDivider(thick: true)
 
                     Text(NSLocalizedString("changes_encrypted_footer", comment: ""))
@@ -79,10 +86,13 @@ struct AccountSettingsView: View {
             if viewModel.needsUserInfoRefresh(from: authViewModel) {
                 viewModel.loadUserInfo(from: authViewModel)
             }
-            originalUsername = viewModel.username
+            syncDraftProfileFields()
         }
-        .onChange(of: viewModel.usernameSaved) { _, saved in
-            if saved { originalUsername = viewModel.username }
+        .onChange(of: viewModel.username) { _, _ in
+            if !isEditingProfile { syncDraftProfileFields() }
+        }
+        .onChange(of: viewModel.displayName) { _, _ in
+            if !isEditingProfile { syncDraftProfileFields() }
         }
         .sheet(isPresented: $showingExportBackup) {
             ExportBackupView()
@@ -172,6 +182,15 @@ struct AccountSettingsView: View {
             SocialRecoverySetupView()
                 .environment(socialRecoveryService)
         }
+        .alert("account_discard_changes_title", isPresented: $showingDiscardProfileChangesConfirm) {
+            Button("account_discard_changes_discard", role: .destructive) {
+                discardProfileEditingChanges()
+                dismiss()
+            }
+            Button("account_discard_changes_keep_editing", role: .cancel) {}
+        } message: {
+            Text("account_discard_changes_message")
+        }
     }
 
     // MARK: - Avatar Header
@@ -206,23 +225,19 @@ struct AccountSettingsView: View {
     // MARK: - Identity Section
 
     private var identitySection: some View {
-        @Bindable var viewModel = viewModel
         return VStack(alignment: .leading, spacing: 0) {
             sectionHeader(NSLocalizedString("identity_section", comment: ""))
             flatRowDivider()
 
-            // username — editable, server-validated
-            profileEditRow(
+            profileEditableRow(
                 label: NSLocalizedString("username", comment: ""),
-                isEditing: $isEditingUsername,
-                value: $viewModel.username,
+                value: $draftUsername,
                 hint: NSLocalizedString("username_hint", comment: ""),
-                maxLength: MessageSizeLimits.maxUsernameCharacters,
+                isEditing: isEditingProfile,
                 isSaving: viewModel.isSavingUsername,
                 errorMessage: viewModel.usernameSaveError,
-                onCommit: {
-                    Task { await viewModel.saveUsername(viewModel.username, authViewModel: authViewModel) }
-                }
+                maxLength: MessageSizeLimits.maxUsernameCharacters,
+                lowercased: true
             )
             flatRowDivider()
             HStack(spacing: 8) {
@@ -236,14 +251,12 @@ struct AccountSettingsView: View {
             .padding(.vertical, 8)
             flatRowDivider()
 
-            // display name — local, shown to contacts
-            profileEditRow(
+            profileEditableRow(
                 label: NSLocalizedString("display_name", comment: ""),
-                isEditing: $isEditingDisplayName,
-                value: $viewModel.displayName,
+                value: $draftDisplayName,
                 hint: NSLocalizedString("display_name_hint", comment: ""),
-                maxLength: MessageSizeLimits.maxDisplayNameCharacters,
-                onCommit: { viewModel.saveDisplayName(viewModel.displayName, authViewModel: authViewModel) }
+                isEditing: isEditingProfile,
+                maxLength: MessageSizeLimits.maxDisplayNameCharacters
             )
             flatRowDivider()
 
@@ -520,83 +533,65 @@ struct AccountSettingsView: View {
         .padding(.vertical, 14)
     }
 
-    private func profileEditRow(
+    private func profileEditableRow(
         label: String,
-        isEditing: Binding<Bool>,
         value: Binding<String>,
         hint: String? = nil,
-        maxLength: Int? = nil,
+        isEditing: Bool,
         isSaving: Bool = false,
         errorMessage: String? = nil,
-        onCommit: @escaping () -> Void
+        maxLength: Int? = nil,
+        lowercased: Bool = false
     ) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Main row — entire row is a tap target
-            Button {
-                if !isEditing.wrappedValue { isEditing.wrappedValue = true }
-            } label: {
-                HStack {
-                    Text(label.lowercased())
-                        .font(CTFont.regular(14))
-                        .foregroundStyle(Color.CT.textDim)
-                    Spacer()
-                    if isEditing.wrappedValue {
-                        TextField("", text: value)
-                            .font(CTFont.regular(14))
-                            .foregroundStyle(Color.CT.text)
-                            .multilineTextAlignment(.trailing)
-                            .autocorrectionDisabled()
-                            .textInputAutocapitalization(.never)
-                            .onSubmit {
-                                onCommit()
-                                isEditing.wrappedValue = false
-                            }
-                            .onChange(of: value.wrappedValue) { _, newValue in
-                                if let max = maxLength, newValue.count > max {
-                                    value.wrappedValue = String(newValue.prefix(max))
-                                }
-                            }
-                            .frame(maxWidth: 180)
-                        Button {
-                            onCommit()
-                            isEditing.wrappedValue = false
-                        } label: {
-                            if isSaving {
-                                ProgressView()
-                                    .tint(Color.CT.accent)
-                                    .scaleEffect(0.8)
-                            } else {
-                                Text("[→]")
-                                    .font(CTFont.bold(13))
-                                    .foregroundStyle(Color.CT.accent)
-                            }
-                        }
-                        .buttonStyle(.plain)
-                    } else {
-                        HStack(spacing: 8) {
-                            Text(value.wrappedValue.isEmpty ? "—" : value.wrappedValue)
-                                .font(CTFont.regular(14))
-                                .foregroundStyle(Color.CT.text)
-                            Text("[edit]")
-                                .font(CTFont.regular(12))
-                                .foregroundStyle(Color.CT.accent.opacity(0.7))
-                        }
-                    }
-                }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 14)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
+            HStack {
+                Text(label.lowercased())
+                    .font(CTFont.regular(14))
+                    .foregroundStyle(Color.CT.textDim)
+                Spacer()
 
-            // Error or hint line
+                if isEditing {
+                    TextField("", text: value)
+                        .font(CTFont.regular(14))
+                        .foregroundStyle(Color.CT.text)
+                        .multilineTextAlignment(.trailing)
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(lowercased ? .never : .words)
+                        .onChange(of: value.wrappedValue) { _, newValue in
+                            var updated = newValue
+                            if lowercased {
+                                updated = updated.lowercased()
+                            }
+                            if let max = maxLength, updated.count > max {
+                                updated = String(updated.prefix(max))
+                            }
+                            if updated != value.wrappedValue {
+                                value.wrappedValue = updated
+                            }
+                        }
+                        .frame(maxWidth: 190)
+
+                    if isSaving {
+                        ProgressView()
+                            .tint(Color.CT.accent)
+                            .scaleEffect(0.8)
+                    }
+                } else {
+                    Text(value.wrappedValue.isEmpty ? "—" : value.wrappedValue)
+                        .font(CTFont.regular(14))
+                        .foregroundStyle(Color.CT.text)
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 14)
+
             if let err = errorMessage, !err.isEmpty {
                 Text("> [!] \(err)")
                     .font(CTFont.regular(11))
                     .foregroundStyle(Color.CT.danger)
                     .padding(.horizontal, 20)
                     .padding(.bottom, 8)
-            } else if !isEditing.wrappedValue, let hint {
+            } else if !isEditing, let hint {
                 Text("> \(hint)")
                     .font(CTFont.regular(11))
                     .foregroundStyle(Color.CT.textDim)
@@ -605,6 +600,78 @@ struct AccountSettingsView: View {
             }
         }
     }
+
+    private func syncDraftProfileFields() {
+        draftUsername = viewModel.username
+        draftDisplayName = viewModel.displayName
+    }
+
+    private func discardProfileEditingChanges() {
+        syncDraftProfileFields()
+        viewModel.usernameSaveError = nil
+        isEditingProfile = false
+    }
+
+    private var hasUnsavedProfileChanges: Bool {
+        let usernameChanged = draftUsername.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            != viewModel.username
+        let displayNameChanged = draftDisplayName.trimmingCharacters(in: .whitespacesAndNewlines)
+            != viewModel.displayName
+        return usernameChanged || displayNameChanged
+    }
+
+    private func handleBackTap() {
+        if isEditingProfile && hasUnsavedProfileChanges {
+            showingDiscardProfileChangesConfirm = true
+            return
+        }
+
+        if isEditingProfile {
+            discardProfileEditingChanges()
+        }
+        dismiss()
+    }
+
+    private func handleProfileEditActionTap() {
+        if isEditingProfile {
+            Task { await saveProfileEdits() }
+        } else {
+            syncDraftProfileFields()
+            viewModel.usernameSaveError = nil
+            isEditingProfile = true
+        }
+    }
+
+    private func saveProfileEdits() async {
+        guard !viewModel.isSavingUsername else { return }
+
+        let trimmedDisplayName = draftDisplayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedDisplayName.count > MessageSizeLimits.maxDisplayNameCharacters {
+            draftDisplayName = String(trimmedDisplayName.prefix(MessageSizeLimits.maxDisplayNameCharacters))
+        } else {
+            draftDisplayName = trimmedDisplayName
+        }
+
+        draftUsername = draftUsername.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+
+        let didChangeDisplayName = draftDisplayName != viewModel.displayName
+        let didChangeUsername = draftUsername != viewModel.username
+
+        if didChangeDisplayName {
+            viewModel.saveDisplayName(draftDisplayName, authViewModel: authViewModel)
+            draftDisplayName = viewModel.displayName
+        }
+
+        if didChangeUsername {
+            await viewModel.saveUsername(draftUsername, authViewModel: authViewModel)
+            draftUsername = viewModel.username
+        }
+
+        if viewModel.usernameSaveError == nil && !hasUnsavedProfileChanges {
+            isEditingProfile = false
+        }
+    }
+
 }
 
 
