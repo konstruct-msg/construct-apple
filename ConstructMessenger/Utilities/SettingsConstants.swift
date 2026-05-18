@@ -26,6 +26,12 @@ enum AppearanceSettingsConfig {
     static let availabilityBadgeStrokeWidth: CGFloat = 1
 }
 
+enum AppearanceSettingsLayout {
+    static let themeRowContentSpacing: CGFloat = SettingsLayout.rowContentSpacing
+    static let themeRowHorizontalPadding: CGFloat = SettingsLayout.rowHorizontalPadding
+    static let themeRowVerticalPadding: CGFloat = SettingsLayout.rowVerticalPadding
+}
+
 enum DataStorageSettingsLayout {
     static let rowContentSpacing: CGFloat = 12
     static let rowHorizontalPadding: CGFloat = 16
@@ -54,6 +60,14 @@ enum DiagnosticsConfig {
     static let recentLogLineLimit: Int = 200
     static let recentLogContainerHeight: CGFloat = 340
     static let clearLogsRefreshDelay: TimeInterval = 0.3
+}
+
+enum DiagnosticsLayout {
+    static let sectionHintSpacing: CGFloat = SettingsLayout.sectionHeaderSpacing
+    static let disabledActionOpacity: Double = 0.4
+    static let statusDotSize: CGFloat = 8
+    static let recentLogFontSize: CGFloat = 10
+    static let recentLogPadding: CGFloat = 8
 }
 
 enum NotificationsSettingsLayout {
@@ -150,4 +164,68 @@ enum DevicesSettingsLayout {
     static let currentStatusSpacing: CGFloat = 4
     static let currentStatusDotSize: CGFloat = 7
     static let dividerIndent: CGFloat = 52
+}
+
+enum SettingsRootLayout {
+    static let rootSpacing: CGFloat = 20
+    static let listSpacing: CGFloat = 30
+    static let listBottomPadding: CGFloat = 32
+    static let profileRowSpacing: CGFloat = 12
+    static let profileMetaSpacing: CGFloat = 3
+    static let profileRowHorizontalPadding: CGFloat = 12
+    static let profileRowVerticalPadding: CGFloat = 12
+    static let recoveryBannerContentSpacing: CGFloat = 10
+    static let recoveryBannerTextSpacing: CGFloat = 4
+    static let recoveryBannerActionSpacing: CGFloat = 3
+    static let recoveryBannerPadding: CGFloat = 12
+    static let recoveryBannerCornerRadius: CGFloat = 10
+    static let recoveryBannerStrokeWidth: CGFloat = 0.5
+    static let recoveryBannerHorizontalPadding: CGFloat = 12
+    static let recoveryBannerVerticalPadding: CGFloat = 8
+    static let recoveryBannerIconSize: CGFloat = 15
+    static let recoveryBannerChevronSize: CGFloat = 9
+    static let recoveryBannerDismissIconSize: CGFloat = 11
+}
+
+enum ContactQRCodeLayout {
+    static let contentSpacing: CGFloat = 0
+    static let identityHeaderSpacing: CGFloat = 6
+    static let identityVerticalPadding: CGFloat = 20
+    static let qrBlockSpacing: CGFloat = 20
+    static let qrBlockVerticalPadding: CGFloat = 28
+    static let footerHorizontalPadding: CGFloat = 20
+    static let footerVerticalPadding: CGFloat = 14
+    static let qrCodeBorderWidth: CGFloat = 1
+    static let qrCodeErrorSpacing: CGFloat = 10
+    static let qrCodeErrorHorizontalPadding: CGFloat = 16
+    static let timerRowSpacing: CGFloat = 6
+    static let expiredBlockSpacing: CGFloat = 14
+    static let refreshButtonHorizontalPadding: CGFloat = 20
+    static let refreshButtonVerticalPadding: CGFloat = 10
+    static let refreshButtonStrokeOpacity: Double = 0.4
+    static let refreshButtonStrokeWidth: CGFloat = 1
+    static let idealWidth: CGFloat = 400
+    static let idealHeight: CGFloat = 520
+}
+
+enum DeviceLinkQRLayout {
+    static let rootSpacing: CGFloat = 0
+    static let loadingSpacing: CGFloat = 12
+    static let loadingIndicatorScale: CGFloat = 1.4
+    static let contentSpacing: CGFloat = 24
+    static let sectionHeaderSpacing: CGFloat = 6
+    static let sectionHeaderHorizontalPadding: CGFloat = 20
+    static let sectionHeaderTopPadding: CGFloat = 20
+    static let instructionsHorizontalPadding: CGFloat = 24
+    static let scanHintHorizontalPadding: CGFloat = 24
+    static let scanHintBottomPadding: CGFloat = 32
+    static let qrSize: CGFloat = 220
+    static let qrPadding: CGFloat = 16
+    static let qrBorderWidth: CGFloat = 1
+    static let expiredStateSpacing: CGFloat = 16
+    static let statusIconSize: CGFloat = 36
+    static let actionButtonHorizontalPadding: CGFloat = 16
+    static let actionButtonVerticalPadding: CGFloat = 10
+    static let actionButtonStrokeWidth: CGFloat = 0.5
+    static let errorMessageHorizontalPadding: CGFloat = 24
 }

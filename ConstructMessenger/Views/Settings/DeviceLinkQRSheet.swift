@@ -18,7 +18,7 @@ struct DeviceLinkQRSheet: View {
     @State private var countdownTimer: Timer? = nil
 
     var body: some View {
-        VStack(spacing: 0) {
+        VStack(spacing: DeviceLinkQRLayout.rootSpacing) {
             CTNavBar(
                 title: NSLocalizedString("device_link_qr_title", comment: ""),
                 showBack: true,
@@ -46,10 +46,10 @@ struct DeviceLinkQRSheet: View {
     // MARK: - Loading
 
     private var loadingState: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: DeviceLinkQRLayout.loadingSpacing) {
             ProgressView()
                 .tint(Color.CT.textDim)
-                .scaleEffect(1.4)
+                .scaleEffect(DeviceLinkQRLayout.loadingIndicatorScale)
             Text(NSLocalizedString("generating", comment: ""))
                 .font(CTFont.regular(13))
                 .foregroundColor(Color.CT.textDim)
@@ -61,9 +61,9 @@ struct DeviceLinkQRSheet: View {
 
     private func qrContent(content: String) -> some View {
         ScrollView {
-            VStack(spacing: 24) {
+            VStack(spacing: DeviceLinkQRLayout.contentSpacing) {
                 // Sub-header
-                HStack(spacing: 6) {
+                HStack(spacing: DeviceLinkQRLayout.sectionHeaderSpacing) {
                     Text(">")
                         .font(CTFont.bold(11))
                         .foregroundColor(Color.CT.accentDim)
@@ -73,14 +73,14 @@ struct DeviceLinkQRSheet: View {
                         .tracking(2)
                     Spacer()
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 20)
+                .padding(.horizontal, DeviceLinkQRLayout.sectionHeaderHorizontalPadding)
+                .padding(.top, DeviceLinkQRLayout.sectionHeaderTopPadding)
 
                 Text(NSLocalizedString("device_link_qr_instructions", comment: ""))
                     .font(CTFont.regular(13))
                     .foregroundColor(Color.CT.textDim)
                     .multilineTextAlignment(.center)
-                    .padding(.horizontal, 24)
+                    .padding(.horizontal, DeviceLinkQRLayout.instructionsHorizontalPadding)
 
                 if let image = generateQRCode(from: content) {
                     qrImageView(image)
@@ -97,8 +97,8 @@ struct DeviceLinkQRSheet: View {
                     .font(CTFont.regular(11))
                     .foregroundColor(Color.CT.textDim)
                     .multilineTextAlignment(.center)
-                    .padding(.horizontal, 24)
-                    .padding(.bottom, 32)
+                    .padding(.horizontal, DeviceLinkQRLayout.scanHintHorizontalPadding)
+                    .padding(.bottom, DeviceLinkQRLayout.scanHintBottomPadding)
             }
         }
     }
@@ -110,28 +110,28 @@ struct DeviceLinkQRSheet: View {
             .interpolation(.none)
             .resizable()
             .scaledToFit()
-            .frame(width: 220, height: 220)
-            .padding(16)
+            .frame(width: DeviceLinkQRLayout.qrSize, height: DeviceLinkQRLayout.qrSize)
+            .padding(DeviceLinkQRLayout.qrPadding)
             .background(Color.white)
-            .overlay(Rectangle().stroke(Color.CT.noise, lineWidth: 1))
+            .overlay(Rectangle().stroke(Color.CT.noise, lineWidth: DeviceLinkQRLayout.qrBorderWidth))
         #else
         Image(nsImage: image)
             .interpolation(.none)
             .resizable()
             .scaledToFit()
-            .frame(width: 220, height: 220)
-            .padding(16)
+            .frame(width: DeviceLinkQRLayout.qrSize, height: DeviceLinkQRLayout.qrSize)
+            .padding(DeviceLinkQRLayout.qrPadding)
             .background(Color.white)
-            .overlay(Rectangle().stroke(Color.CT.noise, lineWidth: 1))
+            .overlay(Rectangle().stroke(Color.CT.noise, lineWidth: DeviceLinkQRLayout.qrBorderWidth))
         #endif
     }
 
     // MARK: - Expired state
 
     private var expiredView: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: DeviceLinkQRLayout.expiredStateSpacing) {
             Text("[!]")
-                .font(CTFont.bold(36))
+                .font(CTFont.bold(DeviceLinkQRLayout.statusIconSize))
                 .foregroundColor(Color.CT.danger)
             Text(NSLocalizedString("device_link_expired", comment: ""))
                 .font(CTFont.regular(13))
@@ -142,9 +142,9 @@ struct DeviceLinkQRSheet: View {
                 Text("[\(NSLocalizedString("device_link_refresh", comment: "")) →]")
                     .font(CTFont.regular(13))
                     .foregroundColor(Color.CT.accent)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                    .overlay(Rectangle().stroke(Color.CT.accent, lineWidth: 0.5))
+                    .padding(.horizontal, DeviceLinkQRLayout.actionButtonHorizontalPadding)
+                    .padding(.vertical, DeviceLinkQRLayout.actionButtonVerticalPadding)
+                    .overlay(Rectangle().stroke(Color.CT.accent, lineWidth: DeviceLinkQRLayout.actionButtonStrokeWidth))
             }
             .buttonStyle(.plain)
         }
@@ -154,15 +154,15 @@ struct DeviceLinkQRSheet: View {
     // MARK: - Error state
 
     private func errorView(message: String) -> some View {
-        VStack(spacing: 16) {
+        VStack(spacing: DeviceLinkQRLayout.expiredStateSpacing) {
             Text("[!]")
-                .font(CTFont.bold(36))
+                .font(CTFont.bold(DeviceLinkQRLayout.statusIconSize))
                 .foregroundColor(.orange)
             Text(message)
                 .font(CTFont.regular(13))
                 .foregroundColor(Color.CT.textDim)
                 .multilineTextAlignment(.center)
-                .padding(.horizontal, 24)
+                .padding(.horizontal, DeviceLinkQRLayout.errorMessageHorizontalPadding)
             Button {
                 vm.errorMessage = nil
                 Task { await vm.generateLinkCode() }
@@ -170,9 +170,9 @@ struct DeviceLinkQRSheet: View {
                 Text("[\(NSLocalizedString("device_link_refresh", comment: "")) →]")
                     .font(CTFont.regular(13))
                     .foregroundColor(Color.CT.accent)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                    .overlay(Rectangle().stroke(Color.CT.accent, lineWidth: 0.5))
+                    .padding(.horizontal, DeviceLinkQRLayout.actionButtonHorizontalPadding)
+                    .padding(.vertical, DeviceLinkQRLayout.actionButtonVerticalPadding)
+                    .overlay(Rectangle().stroke(Color.CT.accent, lineWidth: DeviceLinkQRLayout.actionButtonStrokeWidth))
             }
             .buttonStyle(.plain)
         }

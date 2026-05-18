@@ -22,7 +22,7 @@ struct DiagnosticsView: View {
     
     @State private var logText: String = ""
     @State private var logSize: String = ""
-    private var push = PushNotificationManager.shared
+    @State private var push = PushNotificationManager.shared
     private var isPushPermissionGranted: Bool {
         push.authorizationStatus == .authorized || push.authorizationStatus == .provisional
     }
@@ -58,7 +58,7 @@ struct DiagnosticsView: View {
                 }
 
                 // MARK: - Push Notifications
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: DiagnosticsLayout.sectionHintSpacing) {
                     ConstructSection(header: NSLocalizedString("PUSH_NOTIFICATIONS", comment: "")) {
                         diagRow(
                             label: NSLocalizedString("diagnostics_permission", comment: ""),
@@ -89,12 +89,12 @@ struct DiagnosticsView: View {
                 // MARK: - Status
                 ConstructSection {
                     HStack(spacing: SettingsLayout.rowContentSpacing) {
-                            Text(CTSymbol.log)
-                                .font(CTFont.bold(14))
-                                .foregroundStyle(isLogCollectionEnabled ? Color.CT.accent : Color.CT.textDim)
-                                .lineLimit(1)
-                                .fixedSize()
-                                .frame(minWidth: SettingsLayout.rowIconMinWidth, alignment: .center)
+                        Text(CTSymbol.log)
+                            .font(CTFont.bold(14))
+                            .foregroundStyle(isLogCollectionEnabled ? Color.CT.accent : Color.CT.textDim)
+                            .lineLimit(1)
+                            .fixedSize()
+                            .frame(minWidth: SettingsLayout.rowIconMinWidth, alignment: .center)
                         Text(LocalizedStringKey("diagnostics_log_collection"))
                             .font(CTFont.bold(16))
                             .foregroundStyle(Color.CT.text)
@@ -153,7 +153,7 @@ struct DiagnosticsView: View {
                     }
                     .buttonStyle(.plain)
                     .disabled(!isLogCollectionEnabled)
-                    .opacity(isLogCollectionEnabled ? 1.0 : 0.4)
+                    .opacity(isLogCollectionEnabled ? 1 : DiagnosticsLayout.disabledActionOpacity)
 
                     ConstructRowDivider(indent: SettingsLayout.rowDividerIndent)
 
@@ -161,12 +161,12 @@ struct DiagnosticsView: View {
                         clearLogs()
                     }
                     .disabled(!isLogCollectionEnabled)
-                    .opacity(isLogCollectionEnabled ? 1.0 : 0.4)
+                    .opacity(isLogCollectionEnabled ? 1 : DiagnosticsLayout.disabledActionOpacity)
                 }
 
                 #if DEBUG
                 // MARK: - Dev Tools (Debug only)
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: DiagnosticsLayout.sectionHintSpacing) {
                     ConstructSection(header: NSLocalizedString("DEVELOPER", comment: "")) {
                         ConstructActionRow(icon: "[↻]", title: LocalizedStringKey("diagnostics_force_spk_rotation"), role: .secondary) {
                             Task {
@@ -189,10 +189,10 @@ struct DiagnosticsView: View {
                     ConstructSection(header: NSLocalizedString("diagnostics_recent_logs", comment: "")) {
                         ScrollView {
                             Text(logText)
-                                .font(.system(size: 10, design: .monospaced))
+                                .font(CTFont.regular(DiagnosticsLayout.recentLogFontSize))
                                 .foregroundStyle(Color.white)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(8)
+                                .padding(DiagnosticsLayout.recentLogPadding)
                                 .textSelection(.enabled)
                         }
                         .frame(height: DiagnosticsConfig.recentLogContainerHeight)
@@ -265,7 +265,7 @@ struct DiagnosticsView: View {
         HStack(spacing: SettingsLayout.rowContentSpacing) {
             Circle()
                 .fill(ok ? Color.CT.accent : Color.CT.danger)
-                .frame(width: 8, height: 8)
+                .frame(width: DiagnosticsLayout.statusDotSize, height: DiagnosticsLayout.statusDotSize)
                 .frame(width: SettingsLayout.rowIconMinWidth, alignment: .center)
             Text(label)
                 .font(CTFont.bold(16))

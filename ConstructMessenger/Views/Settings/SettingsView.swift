@@ -23,13 +23,13 @@ struct SettingsView: View {
 
     var body: some View {
         NavigationStack(path: $navigationPath) {
-            VStack(spacing: 20) {
+            VStack(spacing: SettingsRootLayout.rootSpacing) {
                 
                 CTNavBar(title: NSLocalizedString("settings", comment: ""))
                 
 
                 ScrollView {
-                    LazyVStack(spacing: 30) {
+                    LazyVStack(spacing: SettingsRootLayout.listSpacing) {
 
                         // MARK: Recovery warning
                         if recoveryVM.statusLoaded && !recoveryVM.isSetup && !recoveryBannerDismissed {
@@ -136,7 +136,7 @@ struct SettingsView: View {
                             .buttonStyle(.plain)
                         }
                     }
-                    .padding(.bottom, 32)
+                    .padding(.bottom, SettingsRootLayout.listBottomPadding)
                 }
             }
             .ctBackground()
@@ -166,14 +166,14 @@ struct SettingsView: View {
     // MARK: - Profile Row
 
     private var profileRow: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: SettingsRootLayout.profileRowSpacing) {
             let img: Image? = {
                 guard let ui = viewModel.profileImage else { return nil }
                 return Image(uiImage: ui)
             }()
             CTHexAvatar(initials: profileInitials, image: img, size: .large)
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: SettingsRootLayout.profileMetaSpacing) {
                 Text(profileDisplayName.uppercased())
                     .font(CTFont.bold(13))
                     .foregroundColor(Color.CT.text)
@@ -191,18 +191,18 @@ struct SettingsView: View {
                 .font(CTFont.bold(14))
                 .foregroundColor(Color.CT.accent)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 12)
+        .padding(.horizontal, SettingsRootLayout.profileRowHorizontalPadding)
+        .padding(.vertical, SettingsRootLayout.profileRowVerticalPadding)
     }
 
     // MARK: - Recovery Banner
 
     private var recoveryBanner: some View {
-        HStack(alignment: .top, spacing: 10) {
+        HStack(alignment: .top, spacing: SettingsRootLayout.recoveryBannerContentSpacing) {
             Image(systemName: "exclamationmark.circle.fill")
-                .font(.system(size: 15, weight: .semibold))
+                .font(.system(size: SettingsRootLayout.recoveryBannerIconSize, weight: .semibold))
                 .foregroundColor(Color.CT.danger)
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: SettingsRootLayout.recoveryBannerTextSpacing) {
                 Text(NSLocalizedString("recovery_not_configured_title", comment: "").uppercased())
                     .font(CTFont.bold(11))
                     .foregroundColor(Color.CT.danger)
@@ -212,11 +212,11 @@ struct SettingsView: View {
                 Button {
                     showingRecoverySetup = true
                 } label: {
-                    HStack(spacing: 3) {
+                    HStack(spacing: SettingsRootLayout.recoveryBannerActionSpacing) {
                         Text(NSLocalizedString("recovery_setup_action", comment: ""))
                             .font(CTFont.bold(11))
                         Image(systemName: "chevron.right")
-                            .font(.system(size: 9, weight: .semibold))
+                            .font(.system(size: SettingsRootLayout.recoveryBannerChevronSize, weight: .semibold))
                     }
                     .foregroundColor(Color.CT.accent)
                 }
@@ -227,17 +227,19 @@ struct SettingsView: View {
                 UserDefaults.standard.set(true, forKey: "recovery_banner_dismissed")
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 11))
+                    .font(.system(size: SettingsRootLayout.recoveryBannerDismissIconSize))
                     .foregroundColor(Color.CT.textDim)
             }
         }
-        .padding(12)
+        .padding(SettingsRootLayout.recoveryBannerPadding)
         .background(Color.CT.danger.opacity(0.06))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10)
-            .stroke(Color.CT.danger.opacity(0.4), lineWidth: 0.5))
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .clipShape(RoundedRectangle(cornerRadius: SettingsRootLayout.recoveryBannerCornerRadius))
+        .overlay(
+            RoundedRectangle(cornerRadius: SettingsRootLayout.recoveryBannerCornerRadius)
+                .stroke(Color.CT.danger.opacity(0.4), lineWidth: SettingsRootLayout.recoveryBannerStrokeWidth)
+        )
+        .padding(.horizontal, SettingsRootLayout.recoveryBannerHorizontalPadding)
+        .padding(.vertical, SettingsRootLayout.recoveryBannerVerticalPadding)
     }
 
     // MARK: - Helpers

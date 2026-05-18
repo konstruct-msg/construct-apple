@@ -23,15 +23,18 @@ struct AppearanceSettingsView: View {
                 
                 VStack(alignment: .leading, spacing: SettingsLayout.sectionHeaderSpacing) {
                     ConstructSection(header: NSLocalizedString("theme", comment: "")) {
-                        ForEach(Array(allThemes.enumerated()), id: \.element) { index, theme in
+                        ForEach(allThemes.indices, id: \.self) { index in
+                            let theme = allThemes[index]
                             if index > 0 { ConstructRowDivider(indent: SettingsLayout.rowDividerIndent) }
                             Button {
                                 guard theme.isAvailable else { return }
                                 appTheme = theme
                             } label: {
-                                HStack(spacing: 14) {
-                            CTRowIcon(sf: theme.iconName,
-                                      color: theme.isAvailable ? theme.color : Color.CT.textDim)
+                                HStack(spacing: AppearanceSettingsLayout.themeRowContentSpacing) {
+                                    CTRowIcon(
+                                        sf: theme.iconName,
+                                        color: theme.isAvailable ? theme.color : Color.CT.textDim
+                                    )
                                     Text(theme.displayName)
                                         .font(CTFont.bold(16))
                                         .foregroundStyle(theme.isAvailable ? Color.CT.text : Color.CT.textDim)
@@ -52,8 +55,8 @@ struct AppearanceSettingsView: View {
                                             .foregroundStyle(Color.CT.accent)
                                     }
                                 }
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 14)
+                                .padding(.horizontal, AppearanceSettingsLayout.themeRowHorizontalPadding)
+                                .padding(.vertical, AppearanceSettingsLayout.themeRowVerticalPadding)
                                 .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
