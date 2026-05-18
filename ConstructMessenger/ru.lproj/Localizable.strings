@@ -492,6 +492,29 @@
 "tls" = "TLS";
 "interval" = "Интервал";
 "preview" = "Предпросмотр";
+"settings_coming_soon" = "скоро";
+"diagnostics_permission" = "Разрешение";
+"diagnostics_apns_token" = "APNs-токен";
+"diagnostics_apns_token_missing" = "отсутствует";
+"diagnostics_apns_token_received_format" = "получен (%@…)";
+"diagnostics_registered_with_server" = "Зарегистрирован в Construct";
+"diagnostics_yes" = "да";
+"diagnostics_not_registered_with_server" = "нет — уведомления не будут приходить";
+"diagnostics_server_token_warning" = "Токен не зарегистрирован в Construct. Вернитесь в чаты — повторная регистрация выполнится автоматически при возврате приложения на передний план.";
+"diagnostics_log_collection" = "Сбор логов";
+"diagnostics_status_active" = "Активен";
+"diagnostics_status_off" = "Выкл";
+"diagnostics_size" = "Размер";
+"diagnostics_share_logs" = "Поделиться логами";
+"diagnostics_clear_logs" = "Очистить логи";
+"diagnostics_force_spk_rotation" = "Принудительно обновить SPK";
+"diagnostics_reset_local_data_keychain" = "Сбросить локальные данные и Keychain";
+"diagnostics_dev_tools_footer" = "Удаляет все ключи из Keychain, сессии и UserDefaults. Используйте для теста чистой инициализации без переустановки.";
+"diagnostics_recent_logs" = "Последние логи";
+"diagnostics_empty" = "пусто";
+"preview_desc_name_and_message" = "Показывать имя отправителя и текст сообщения";
+"preview_desc_name_only" = "Показывать только имя отправителя";
+"preview_desc_none" = "Показывать только «Новое сообщение»";
 
 // MARK: - Device Linking
 "onboarding_link_device" = "Привязать существующий аккаунт";
@@ -887,3 +910,8 @@
 "stt_delete_confirm_title" = "Удалить эту модель?";
 "stt_transcribe_button" = "Транскрибировать";
 "stt_transcribing" = "Транскрипция…";
+"account_discard_changes_title" = "Отменить изменения?";
+"account_discard_changes_message" = "Есть несохранённые изменения профиля. Выйти без сохранения?";
+"account_discard_changes_discard" = "Не сохранять";
+"account_discard_changes_keep_editing" = "Продолжить редактирование";
+"account_editing_profile" = "> Режим редактирования профиля. Нажмите ✓ для сохранения или x для отмены.";

@@ -10,20 +10,21 @@ import SwiftUI
 struct AppearanceSettingsView: View {
     @AppStorage("appTheme") private var appTheme: AppTheme = .dark
     @Environment(\.dismiss) private var dismiss
+    private let allThemes = AppTheme.allCases
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 20) {
+            LazyVStack(spacing: SettingsLayout.sectionSpacing) {
                 CTNavBar(
                     title: NSLocalizedString("appearance", comment: ""),
                     showBack: true,
                     backAction: { dismiss() }
                 )
                 
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: SettingsLayout.sectionHeaderSpacing) {
                     ConstructSection(header: NSLocalizedString("theme", comment: "")) {
-                        ForEach(Array(AppTheme.allCases.enumerated()), id: \.element) { index, theme in
-                            if index > 0 { ConstructRowDivider(indent: 52) }
+                        ForEach(Array(allThemes.enumerated()), id: \.element) { index, theme in
+                            if index > 0 { ConstructRowDivider(indent: SettingsLayout.rowDividerIndent) }
                             Button {
                                 guard theme.isAvailable else { return }
                                 appTheme = theme
@@ -36,14 +37,14 @@ struct AppearanceSettingsView: View {
                                         .foregroundStyle(theme.isAvailable ? Color.CT.text : Color.CT.textDim)
                                     Spacer()
                                     if !theme.isAvailable {
-                                        Text("soon")
+                                        Text(LocalizedStringKey("settings_coming_soon"))
                                             .font(CTFont.regular(10))
                                             .foregroundStyle(Color.CT.textDim)
-                                            .padding(.horizontal, 6)
-                                            .padding(.vertical, 2)
+                                            .padding(.horizontal, AppearanceSettingsConfig.availabilityBadgeHorizontalPadding)
+                                            .padding(.vertical, AppearanceSettingsConfig.availabilityBadgeVerticalPadding)
                                             .overlay(
                                                 Rectangle()
-                                                    .strokeBorder(Color.CT.noise, lineWidth: 1)
+                                                    .strokeBorder(Color.CT.noise, lineWidth: AppearanceSettingsConfig.availabilityBadgeStrokeWidth)
                                             )
                                     } else if appTheme == theme {
                                         Text("[✓]")
@@ -62,10 +63,10 @@ struct AppearanceSettingsView: View {
                     Text(LocalizedStringKey("theme_footer"))
                         .font(CTFont.regular(11))
                         .foregroundStyle(Color.CT.textDim)
-                        .padding(.horizontal, 20)
+                        .padding(.horizontal, SettingsLayout.footerHorizontalPadding)
                 }
             }
-            .padding(.vertical, 20)
+            .padding(.vertical, SettingsLayout.screenVerticalPadding)
         }
         .background(Color.CT.bg.ignoresSafeArea())
         #if os(iOS)

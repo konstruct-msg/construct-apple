@@ -551,9 +551,12 @@ struct CTNavBar: View {
     /// On macOS sheet/modal contexts pass true — renders xmark.circle (close) instead of chevron (back).
     var isModal: Bool       = false
     var trailingSymbol: String? = nil
+    var trailingSystemImage: String? = nil
+    var trailingSecondarySystemImage: String? = nil
     var trailingColor: Color    = Color.CT.accent
     var backAction: (() -> Void)?     = nil
     var trailingAction: (() -> Void)? = nil
+    var trailingSecondaryAction: (() -> Void)? = nil
 
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
@@ -576,12 +579,32 @@ struct CTNavBar: View {
                 .foregroundColor(Color.CT.text)
                 .tracking(4)
             Spacer()
-            if let sym = trailingSymbol {
+            if trailingSystemImage != nil || trailingSecondarySystemImage != nil {
+                HStack(spacing: 10) {
+                    if let secondaryImageName = trailingSecondarySystemImage {
+                        Button(action: { trailingSecondaryAction?() }) {
+                            Image(systemName: secondaryImageName)
+                                .font(.system(size: 18))
+                                .foregroundColor(trailingColor)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    if let imageName = trailingSystemImage {
+                        Button(action: { trailingAction?() }) {
+                            Image(systemName: imageName)
+                                .font(.system(size: 18))
+                                .foregroundColor(trailingColor)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            } else if let sym = trailingSymbol {
                 Button(action: { trailingAction?() }) {
                     Text(sym)
                         .font(CTFont.regular(13))
                         .foregroundColor(trailingColor)
                 }
+                .buttonStyle(.plain)
             }
         }
         .padding(.horizontal, CTLayout.edgePad)

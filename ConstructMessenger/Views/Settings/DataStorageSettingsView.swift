@@ -42,9 +42,9 @@ struct DataStorageSettingsView: View {
     private let quotaOptions: [(label: String, bytes: Int)] = [
         ("256 MB",  256 * 1024 * 1024),
         ("512 MB",  512 * 1024 * 1024),
-        ("1 GB",    1_073_741_824),
-        ("2 GB",    2_147_483_648),
-        ("5 GB",    5_368_709_120),
+        ("1 GB",    DataStorageSettingsConfig.oneGBInBytes),
+        ("2 GB",    DataStorageSettingsConfig.twoGBInBytes),
+        ("5 GB",    DataStorageSettingsConfig.fiveGBInBytes),
         (NSLocalizedString("storage_no_limit", comment: ""), 0),
     ]
 
@@ -81,11 +81,11 @@ struct DataStorageSettingsView: View {
                     CTSettingsSectionHeader(title: NSLocalizedString("storage_media_cache", comment: ""))
                     CTSectionGroup {
                         // Usage row
-                        HStack(spacing: 12) {
+                        HStack(spacing: DataStorageSettingsLayout.rowContentSpacing) {
                             Image(systemName: "internaldrive")
                                 .font(.system(size: 16))
                                 .foregroundStyle(Color.CT.textDim)
-                                .frame(width: 22)
+                                .frame(width: SettingsLayout.rowIconMinWidth)
                             Text(NSLocalizedString("storage_media_cache", comment: "").uppercased())
                                 .font(CTFont.regular(13))
                                 .foregroundStyle(Color.CT.text)
@@ -96,33 +96,45 @@ struct DataStorageSettingsView: View {
                                 .foregroundStyle(cacheSize > 0 ? Color.CT.accent : Color.CT.textDim)
                                 .monospacedDigit()
                         }
-                        .padding(.horizontal, 16)
-                        .padding(.top, 13)
-                        .padding(.bottom, maxDiskCacheBytesRaw > 0 ? 10 : 13)
+                        .padding(.horizontal, DataStorageSettingsLayout.rowHorizontalPadding)
+                        .padding(.top, DataStorageSettingsLayout.usageRowTopPadding)
+                        .padding(
+                            .bottom,
+                            maxDiskCacheBytesRaw > 0
+                            ? DataStorageSettingsLayout.usageRowBottomPaddingWithQuota
+                            : DataStorageSettingsLayout.usageRowBottomPaddingWithoutQuota
+                        )
 
                         // Storage bar (only when quota is set)
                         if maxDiskCacheBytesRaw > 0 {
                             let fraction = min(Double(cacheSize) / Double(maxDiskCacheBytesRaw), 1.0)
-                            VStack(alignment: .leading, spacing: 5) {
+                            VStack(alignment: .leading, spacing: DataStorageSettingsLayout.usageBarSpacing) {
                                 GeometryReader { geo in
                                     ZStack(alignment: .leading) {
                                         Rectangle()
                                             .fill(Color.CT.noise)
-                                            .frame(height: 5)
+                                            .frame(height: DataStorageSettingsLayout.usageBarHeight)
                                         Rectangle()
-                                            .fill(fraction > 0.85 ? Color.orange : Color.CT.accent)
-                                            .frame(width: geo.size.width * fraction, height: 5)
+                                            .fill(
+                                                fraction > DataStorageSettingsConfig.usageWarningThreshold
+                                                ? Color.orange
+                                                : Color.CT.accent
+                                            )
+                                            .frame(
+                                                width: geo.size.width * fraction,
+                                                height: DataStorageSettingsLayout.usageBarHeight
+                                            )
                                             .animation(.easeInOut(duration: 0.4), value: fraction)
                                     }
                                 }
-                                .frame(height: 5)
+                                .frame(height: DataStorageSettingsLayout.usageBarHeight)
                                 Text(String(format: NSLocalizedString("storage_of_quota", comment: ""),
                                             formatBytes(cacheSize), formatBytes(Int64(maxDiskCacheBytesRaw))))
                                     .font(CTFont.regular(10))
                                     .foregroundStyle(Color.CT.textDim)
                             }
-                            .padding(.horizontal, 16)
-                            .padding(.bottom, 13)
+                            .padding(.horizontal, DataStorageSettingsLayout.rowHorizontalPadding)
+                            .padding(.bottom, DataStorageSettingsLayout.usageRowBottomPaddingWithoutQuota)
                         }
 
                         CTSep(style: .thin)
@@ -145,7 +157,7 @@ struct DataStorageSettingsView: View {
                     // MARK: Storage Limit
                     CTSettingsSectionHeader(title: NSLocalizedString("storage_limit", comment: ""))
                     CTSectionGroup {
-                        VStack(alignment: .leading, spacing: 12) {
+                        VStack(alignment: .leading, spacing: DataStorageSettingsLayout.quotaSectionSpacing) {
                             HStack {
                                 Text(NSLocalizedString("storage_limit", comment: "").uppercased())
                                     .font(CTFont.regular(13))
@@ -171,7 +183,7 @@ struct DataStorageSettingsView: View {
                             HStack(spacing: 0) {
                                 ForEach(quotaOptions.indices, id: \.self) { i in
                                     Text(quotaOptions[i].label)
-                                        .font(CTFont.regular(9))
+                                        .font(CTFont.regular(DataStorageSettingsLayout.quotaTickFontSize))
                                         .foregroundStyle(
                                             selectedQuotaIndex == i
                                                 ? Color.CT.accent : Color.CT.textDim
@@ -179,12 +191,12 @@ struct DataStorageSettingsView: View {
                                         .frame(maxWidth: .infinity)
                                         .multilineTextAlignment(.center)
                                         .lineLimit(1)
-                                        .minimumScaleFactor(0.7)
+                                        .minimumScaleFactor(DataStorageSettingsLayout.quotaTickMinimumScale)
                                 }
                             }
                         }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 14)
+                        .padding(.horizontal, DataStorageSettingsLayout.rowHorizontalPadding)
+                        .padding(.vertical, SettingsLayout.rowVerticalPadding)
                     }
                     sectionFooter(maxDiskCacheBytesRaw == 0 ? "storage_no_limit_footer" : "storage_limit_footer")
 
@@ -196,30 +208,30 @@ struct DataStorageSettingsView: View {
                             Button {
                                 evictAfterDays = evictOptions[i].days
                             } label: {
-                                HStack(spacing: 12) {
+                                HStack(spacing: DataStorageSettingsLayout.rowContentSpacing) {
                                     Image(systemName: evictAfterDays == evictOptions[i].days
                                           ? "checkmark.circle.fill" : "circle")
-                                        .font(.system(size: 17))
+                                        .font(.system(size: DataStorageSettingsLayout.autoEvictionCheckIconSize))
                                         .foregroundStyle(
                                             evictAfterDays == evictOptions[i].days
                                                 ? Color.CT.accent : Color.CT.textDim
                                         )
-                                        .frame(width: 22)
+                                        .frame(width: SettingsLayout.rowIconMinWidth)
                                     Text(evictOptions[i].label.uppercased())
                                         .font(CTFont.regular(13))
                                         .foregroundStyle(Color.CT.text)
                                         .tracking(1)
                                     Spacer()
                                 }
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 13)
+                                .padding(.horizontal, DataStorageSettingsLayout.rowHorizontalPadding)
+                                .padding(.vertical, DataStorageSettingsLayout.usageRowTopPadding)
                             }
                             .buttonStyle(.plain)
                         }
                     }
                     sectionFooter("storage_auto_clear_footer")
                 }
-                .padding(.bottom, 32)
+                .padding(.bottom, DataStorageSettingsLayout.screenBottomPadding)
             }
         }
         .background(Color.CT.bg.ignoresSafeArea())
@@ -256,8 +268,8 @@ struct DataStorageSettingsView: View {
         Text(LocalizedStringKey(key))
             .font(CTFont.regular(11))
             .foregroundStyle(Color.CT.textDim)
-            .padding(.horizontal, 20)
-            .padding(.top, 6)
+            .padding(.horizontal, SettingsLayout.footerHorizontalPadding)
+            .padding(.top, DataStorageSettingsLayout.footerTopPadding)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 

@@ -20,7 +20,7 @@ struct BackgroundFetchSettingsView: View {
     @State private var intervalMinutes: Int = BackgroundFetchConfig.defaultIntervalMinutes
     @State private var isLowPowerModeEnabled: Bool = false
     @State private var showingLowPowerModeAlert = false
-    private var fetchManager = BackgroundFetchManager.shared
+    private let fetchManager = BackgroundFetchManager.shared
 
     // MARK: - Body
     var body: some View {
@@ -43,10 +43,14 @@ struct BackgroundFetchSettingsView: View {
                             }
                         } label: {
                             HStack {
-                                VStack(alignment: .leading, spacing: 4) {
+                                VStack(alignment: .leading, spacing: BackgroundFetchSettingsLayout.warningSpacing) {
                                     Text(LocalizedStringKey("enable_background_fetch"))
                                         .font(CTFont.regular(13))
-                                        .foregroundColor(isLowPowerModeEnabled ? Color.CT.textDim.opacity(0.5) : Color.CT.text)
+                                        .foregroundColor(
+                                            isLowPowerModeEnabled
+                                            ? Color.CT.textDim.opacity(BackgroundFetchSettingsLayout.disabledRowOpacity)
+                                            : Color.CT.text
+                                        )
                                     if isLowPowerModeEnabled {
                                         Text(LocalizedStringKey("background_fetch_low_power_mode_warning"))
                                             .font(CTFont.regular(11))
@@ -58,36 +62,26 @@ struct BackgroundFetchSettingsView: View {
                                     .font(CTFont.bold(12))
                                     .foregroundColor(isEnabled && !isLowPowerModeEnabled ? Color.CT.accent : Color.CT.textDim)
                             }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 12)
+                            .padding(.horizontal, BackgroundFetchSettingsLayout.rowHorizontalPadding)
+                            .padding(.vertical, BackgroundFetchSettingsLayout.rowVerticalPadding)
                         }
                         .buttonStyle(.plain)
                     }
 
-                    Text(LocalizedStringKey("background_fetch_footer"))
-                        .font(CTFont.regular(11))
-                        .foregroundStyle(Color.CT.textDim)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 12)
-                        .padding(.bottom, 8)
+                    sectionFooter("background_fetch_footer")
 
                     // MARK: - Interval Settings section
                     if isEnabled && !isLowPowerModeEnabled {
                         CTSettingsSectionHeader(title: NSLocalizedString("background_fetch_interval_settings", comment: "").uppercased())
                         CTSectionGroup {
-                            VStack(alignment: .leading, spacing: 12) {
+                            VStack(alignment: .leading, spacing: BackgroundFetchSettingsLayout.intervalSectionSpacing) {
                                 intervalHeader
                                 intervalStepper
                             }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 12)
+                            .padding(.horizontal, BackgroundFetchSettingsLayout.rowHorizontalPadding)
+                            .padding(.vertical, BackgroundFetchSettingsLayout.rowVerticalPadding)
                         }
-                        Text(LocalizedStringKey("background_fetch_interval_footer"))
-                            .font(CTFont.regular(11))
-                            .foregroundStyle(Color.CT.textDim)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 12)
-                            .padding(.bottom, 8)
+                        sectionFooter("background_fetch_interval_footer")
                     }
 
                     // MARK: - Status section
@@ -105,8 +99,8 @@ struct BackgroundFetchSettingsView: View {
                                 .font(CTFont.regular(13))
                                 .foregroundColor(Color.CT.textDim)
                         }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 12)
+                        .padding(.horizontal, BackgroundFetchSettingsLayout.rowHorizontalPadding)
+                        .padding(.vertical, BackgroundFetchSettingsLayout.rowVerticalPadding)
 
                         if let lastFetch = fetchManager.lastFetchDate {
                             CTSep(style: .thin)
@@ -119,8 +113,8 @@ struct BackgroundFetchSettingsView: View {
                                     .font(CTFont.regular(13))
                                     .foregroundColor(Color.CT.textDim)
                             }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 12)
+                            .padding(.horizontal, BackgroundFetchSettingsLayout.rowHorizontalPadding)
+                            .padding(.vertical, BackgroundFetchSettingsLayout.rowVerticalPadding)
                         }
                     }
 
@@ -128,7 +122,7 @@ struct BackgroundFetchSettingsView: View {
                     if isLowPowerModeEnabled {
                         CTSettingsSectionHeader(title: NSLocalizedString("background_fetch_energy_saving", comment: "").uppercased())
                         CTSectionGroup {
-                            VStack(alignment: .leading, spacing: 4) {
+                            VStack(alignment: .leading, spacing: BackgroundFetchSettingsLayout.warningSpacing) {
                                 Text(LocalizedStringKey("background_fetch_low_power_mode_title"))
                                     .font(CTFont.regular(13))
                                     .foregroundColor(Color.CT.textDim)
@@ -137,12 +131,12 @@ struct BackgroundFetchSettingsView: View {
                                     .foregroundColor(Color.CT.textDim)
                                     .fixedSize(horizontal: false, vertical: true)
                             }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 12)
+                            .padding(.horizontal, BackgroundFetchSettingsLayout.rowHorizontalPadding)
+                            .padding(.vertical, BackgroundFetchSettingsLayout.rowVerticalPadding)
                         }
                     }
                 }
-                .padding(.vertical, 20)
+                .padding(.vertical, BackgroundFetchSettingsLayout.sectionVerticalPadding)
             }
         }
         .background(Color.CT.bg.ignoresSafeArea())
@@ -179,29 +173,38 @@ struct BackgroundFetchSettingsView: View {
     private var intervalStepper: some View {
         HStack(spacing: 0) {
             Button {
-                let newVal = max(BackgroundFetchConfig.minIntervalMinutes, intervalMinutes - 5)
+                let newVal = max(
+                    BackgroundFetchConfig.minIntervalMinutes,
+                    intervalMinutes - BackgroundFetchSettingsConfig.intervalStepMinutes
+                )
                 if newVal != intervalMinutes {
                     intervalMinutes = newVal
                     handleIntervalChange(newVal)
                 }
             } label: {
                 Image(systemName: "minus")
-                    .font(.system(size: 13, weight: .bold))
+                    .font(.system(size: BackgroundFetchSettingsLayout.stepperButtonFontSize, weight: .bold))
                     .foregroundColor(intervalMinutes > BackgroundFetchConfig.minIntervalMinutes ? Color.CT.accent : Color.CT.textDim)
-                    .frame(width: 44, height: 32)
+                    .frame(
+                        width: BackgroundFetchSettingsLayout.stepperButtonWidth,
+                        height: BackgroundFetchSettingsLayout.stepperButtonHeight
+                    )
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
 
             Rectangle()
                 .fill(Color.CT.noise)
-                .frame(width: 1, height: 24)
+                .frame(
+                    width: BackgroundFetchSettingsLayout.stepperDividerWidth,
+                    height: BackgroundFetchSettingsLayout.stepperDividerHeight
+                )
 
             Spacer()
 
             // Preset chips: 5 · 15 · 30 · 60
-            HStack(spacing: 8) {
-                ForEach([5, 15, 30, 60], id: \.self) { preset in
+            HStack(spacing: BackgroundFetchSettingsLayout.presetSpacing) {
+                ForEach(BackgroundFetchSettingsConfig.intervalPresets, id: \.self) { preset in
                     Button {
                         intervalMinutes = preset
                         handleIntervalChange(preset)
@@ -209,11 +212,14 @@ struct BackgroundFetchSettingsView: View {
                         Text("\(preset)")
                             .font(CTFont.regular(11))
                             .foregroundColor(intervalMinutes == preset ? Color.CT.accent : Color.CT.textDim)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 3)
+                            .padding(.horizontal, BackgroundFetchSettingsLayout.presetHorizontalPadding)
+                            .padding(.vertical, BackgroundFetchSettingsLayout.presetVerticalPadding)
                             .overlay(
                                 Rectangle()
-                                    .stroke(intervalMinutes == preset ? Color.CT.accent : Color.CT.noise, lineWidth: 1)
+                                    .stroke(
+                                        intervalMinutes == preset ? Color.CT.accent : Color.CT.noise,
+                                        lineWidth: BackgroundFetchSettingsLayout.presetStrokeWidth
+                                    )
                             )
                     }
                     .buttonStyle(.plain)
@@ -224,19 +230,28 @@ struct BackgroundFetchSettingsView: View {
 
             Rectangle()
                 .fill(Color.CT.noise)
-                .frame(width: 1, height: 24)
+                .frame(
+                    width: BackgroundFetchSettingsLayout.stepperDividerWidth,
+                    height: BackgroundFetchSettingsLayout.stepperDividerHeight
+                )
 
             Button {
-                let newVal = min(BackgroundFetchConfig.maxIntervalMinutes, intervalMinutes + 5)
+                let newVal = min(
+                    BackgroundFetchConfig.maxIntervalMinutes,
+                    intervalMinutes + BackgroundFetchSettingsConfig.intervalStepMinutes
+                )
                 if newVal != intervalMinutes {
                     intervalMinutes = newVal
                     handleIntervalChange(newVal)
                 }
             } label: {
                 Image(systemName: "plus")
-                    .font(.system(size: 13, weight: .bold))
+                    .font(.system(size: BackgroundFetchSettingsLayout.stepperButtonFontSize, weight: .bold))
                     .foregroundColor(intervalMinutes < BackgroundFetchConfig.maxIntervalMinutes ? Color.CT.accent : Color.CT.textDim)
-                    .frame(width: 44, height: 32)
+                    .frame(
+                        width: BackgroundFetchSettingsLayout.stepperButtonWidth,
+                        height: BackgroundFetchSettingsLayout.stepperButtonHeight
+                    )
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -296,6 +311,16 @@ struct BackgroundFetchSettingsView: View {
 
     private func formatLastCheckDate(_ date: Date) -> String {
         Self.lastCheckFormatter.localizedString(for: date, relativeTo: Date())
+    }
+
+    @ViewBuilder
+    private func sectionFooter(_ key: String) -> some View {
+        Text(LocalizedStringKey(key))
+            .font(CTFont.regular(11))
+            .foregroundStyle(Color.CT.textDim)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, BackgroundFetchSettingsLayout.rowHorizontalPadding)
+            .padding(.bottom, BackgroundFetchSettingsLayout.footerBottomPadding)
     }
 }
 

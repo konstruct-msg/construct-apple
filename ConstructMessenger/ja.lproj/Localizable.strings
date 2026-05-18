@@ -493,6 +493,29 @@
 "tls" = "TLS";
 "interval" = "間隔";
 "preview" = "プレビュー";
+"settings_coming_soon" = "近日対応";
+"diagnostics_permission" = "許可";
+"diagnostics_apns_token" = "APNsトークン";
+"diagnostics_apns_token_missing" = "未取得";
+"diagnostics_apns_token_received_format" = "取得済み (%@…)";
+"diagnostics_registered_with_server" = "Constructへの登録";
+"diagnostics_yes" = "はい";
+"diagnostics_not_registered_with_server" = "いいえ — 通知は届きません";
+"diagnostics_server_token_warning" = "トークンがConstructに登録されていません。チャット画面に戻ると、アプリがアクティブになったタイミングで自動再登録します。";
+"diagnostics_log_collection" = "ログ収集";
+"diagnostics_status_active" = "有効";
+"diagnostics_status_off" = "無効";
+"diagnostics_size" = "サイズ";
+"diagnostics_share_logs" = "ログを共有";
+"diagnostics_clear_logs" = "ログを消去";
+"diagnostics_force_spk_rotation" = "SPKローテーションを強制実行";
+"diagnostics_reset_local_data_keychain" = "ローカルデータとKeychainをリセット";
+"diagnostics_dev_tools_footer" = "Keychain内の全キー、セッション、UserDefaultsを削除します。再インストールせずに初期化フローをテストするために使用します。";
+"diagnostics_recent_logs" = "最近のログ";
+"diagnostics_empty" = "空";
+"preview_desc_name_and_message" = "送信者名とメッセージ内容を表示";
+"preview_desc_name_only" = "送信者名のみ表示";
+"preview_desc_none" = "「新着メッセージ」のみ表示";
 
 // MARK: - Device Linking
 "onboarding_link_device" = "既存のアイデンティティを連携";
@@ -876,3 +899,8 @@
 "stt_delete_confirm_title" = "このモデルを削除しますか？";
 "stt_transcribe_button" = "文字起こし";
 "stt_transcribing" = "文字起こし中…";
+"account_discard_changes_title" = "変更を破棄しますか？";
+"account_discard_changes_message" = "プロフィールに未保存の変更があります。保存せずに戻りますか？";
+"account_discard_changes_discard" = "破棄";
+"account_discard_changes_keep_editing" = "編集を続ける";
+"account_editing_profile" = "> プロフィール編集中です。✓ で保存、x でキャンセルします。";

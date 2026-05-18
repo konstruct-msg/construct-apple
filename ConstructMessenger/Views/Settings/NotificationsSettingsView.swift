@@ -25,7 +25,6 @@ struct NotificationsSettingsView: View {
 
     // MARK: - State
     @State private var authorizationStatus: UNAuthorizationStatus = .notDetermined
-    @State private var showingSystemSettings = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -37,7 +36,7 @@ struct NotificationsSettingsView: View {
                 )
             }
             ScrollView {
-            LazyVStack(spacing: 0) {
+            LazyVStack(spacing: NotificationsSettingsLayout.compactSectionSpacing) {
 
                 // MARK: - General Notifications
                 CTSettingsSectionHeader(title: NSLocalizedString("notifications", comment: "").uppercased())
@@ -51,14 +50,14 @@ struct NotificationsSettingsView: View {
                             .labelsHidden()
                             .tint(Color.CT.accent)
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 12)
+                    .padding(.horizontal, NotificationsSettingsLayout.rowHorizontalPadding)
+                    .padding(.vertical, NotificationsSettingsLayout.rowVerticalPadding)
                 }
                 Text(LocalizedStringKey("notifications_footer"))
                     .font(CTFont.regular(11))
                     .foregroundStyle(Color.CT.textDim)
-                    .padding(.horizontal, 12)
-                    .padding(.bottom, 8)
+                    .padding(.horizontal, NotificationsSettingsLayout.rowHorizontalPadding)
+                    .padding(.bottom, NotificationsSettingsLayout.footerBottomPadding)
 
                 // MARK: - System Permission Status
                 CTSettingsSectionHeader(title: NSLocalizedString("system_notification_settings", comment: "").uppercased())
@@ -75,8 +74,8 @@ struct NotificationsSettingsView: View {
                             .font(CTFont.regular(13))
                             .foregroundColor(statusColor)
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 12)
+                    .padding(.horizontal, NotificationsSettingsLayout.rowHorizontalPadding)
+                    .padding(.vertical, NotificationsSettingsLayout.rowVerticalPadding)
 
                     if authorizationStatus == .denied {
                         CTSep(style: .thin)
@@ -90,8 +89,8 @@ struct NotificationsSettingsView: View {
                                     .font(CTFont.regular(13))
                                     .foregroundColor(Color.CT.accent)
                             }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 12)
+                            .padding(.horizontal, NotificationsSettingsLayout.rowHorizontalPadding)
+                            .padding(.vertical, NotificationsSettingsLayout.rowVerticalPadding)
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
@@ -107,8 +106,8 @@ struct NotificationsSettingsView: View {
                                     .font(CTFont.regular(13))
                                     .foregroundColor(Color.CT.accent)
                             }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 12)
+                            .padding(.horizontal, NotificationsSettingsLayout.rowHorizontalPadding)
+                            .padding(.vertical, NotificationsSettingsLayout.rowVerticalPadding)
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
@@ -119,14 +118,14 @@ struct NotificationsSettingsView: View {
                     Text(LocalizedStringKey("notification_permissions_required"))
                         .font(CTFont.regular(11))
                         .foregroundStyle(.orange)
-                        .padding(.horizontal, 12)
-                        .padding(.bottom, 8)
+                        .padding(.horizontal, NotificationsSettingsLayout.rowHorizontalPadding)
+                        .padding(.bottom, NotificationsSettingsLayout.footerBottomPadding)
                 } else {
                     Text(LocalizedStringKey("system_settings_footer"))
                         .font(CTFont.regular(11))
                         .foregroundStyle(Color.CT.textDim)
-                        .padding(.horizontal, 12)
-                        .padding(.bottom, 8)
+                        .padding(.horizontal, NotificationsSettingsLayout.rowHorizontalPadding)
+                        .padding(.bottom, NotificationsSettingsLayout.footerBottomPadding)
                 }
 
                 // MARK: - Message Notifications
@@ -142,8 +141,8 @@ struct NotificationsSettingsView: View {
                                 .labelsHidden()
                                 .tint(Color.CT.accent)
                         }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 12)
+                        .padding(.horizontal, NotificationsSettingsLayout.rowHorizontalPadding)
+                        .padding(.vertical, NotificationsSettingsLayout.rowVerticalPadding)
 
                         CTSep(style: .thin)
 
@@ -156,8 +155,8 @@ struct NotificationsSettingsView: View {
                                 .labelsHidden()
                                 .tint(Color.CT.accent)
                         }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 12)
+                        .padding(.horizontal, NotificationsSettingsLayout.rowHorizontalPadding)
+                        .padding(.vertical, NotificationsSettingsLayout.rowVerticalPadding)
 
                         CTSep(style: .thin)
 
@@ -170,15 +169,15 @@ struct NotificationsSettingsView: View {
                                 .labelsHidden()
                                 .tint(Color.CT.accent)
                         }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 12)
+                        .padding(.horizontal, NotificationsSettingsLayout.rowHorizontalPadding)
+                        .padding(.vertical, NotificationsSettingsLayout.rowVerticalPadding)
                     }
 
                     // MARK: - Push Notifications
                     CTSettingsSectionHeader(title: NSLocalizedString("PUSH_NOTIFICATIONS", comment: "").uppercased())
                     CTSectionGroup {
                         #if targetEnvironment(macCatalyst)
-                        VStack(alignment: .leading, spacing: 4) {
+                        VStack(alignment: .leading, spacing: NotificationsSettingsLayout.pushDetailSpacing) {
                             Text(NSLocalizedString("push_not_available_mac", comment: ""))
                                 .font(CTFont.regular(13))
                                 .foregroundColor(Color.CT.textDim)
@@ -186,11 +185,11 @@ struct NotificationsSettingsView: View {
                                 .font(CTFont.regular(11))
                                 .foregroundColor(Color.CT.textDim)
                         }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 12)
+                        .padding(.horizontal, NotificationsSettingsLayout.rowHorizontalPadding)
+                        .padding(.vertical, NotificationsSettingsLayout.rowVerticalPadding)
                         #else
                         HStack {
-                            VStack(alignment: .leading, spacing: 4) {
+                            VStack(alignment: .leading, spacing: NotificationsSettingsLayout.pushDetailSpacing) {
                                 Text(LocalizedStringKey("enable_push_notifications"))
                                     .font(CTFont.regular(13))
                                     .foregroundColor(Color.CT.textDim)
@@ -204,12 +203,12 @@ struct NotificationsSettingsView: View {
                                 .tint(Color.CT.accent)
                                 .disabled(authorizationStatus != .authorized)
                         }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 12)
+                        .padding(.horizontal, NotificationsSettingsLayout.rowHorizontalPadding)
+                        .padding(.vertical, NotificationsSettingsLayout.rowVerticalPadding)
 
                         CTSep(style: .thin)
 
-                        VStack(alignment: .leading, spacing: 4) {
+                        VStack(alignment: .leading, spacing: NotificationsSettingsLayout.pushDetailSpacing) {
                             Text(LocalizedStringKey("push_privacy_notice"))
                                 .font(CTFont.regular(13))
                                 .foregroundColor(Color.CT.textDim)
@@ -218,13 +217,13 @@ struct NotificationsSettingsView: View {
                                 .foregroundColor(Color.CT.textDim)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 12)
+                        .padding(.horizontal, NotificationsSettingsLayout.rowHorizontalPadding)
+                        .padding(.vertical, NotificationsSettingsLayout.rowVerticalPadding)
                         #endif
                     }
                 }
             }
-            .padding(.vertical, 20)
+            .padding(.vertical, NotificationsSettingsLayout.sectionVerticalPadding)
             #if os(iOS)
             .toolbar(.hidden, for: .navigationBar)
             #endif
@@ -298,7 +297,7 @@ struct NotificationsSettingsView: View {
     }
 
     private func requestNotificationPermission() {
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, _ in
             DispatchQueue.main.async {
                 checkNotificationAuthorization()
                 if granted {
@@ -335,9 +334,9 @@ enum NotificationPreviewType: String, CaseIterable {
 
     var description: String {
         switch self {
-        case .nameAndMessage: return "Show sender name and message content"
-        case .nameOnly: return "Show only sender name"
-        case .none: return "Show only 'New Message'"
+        case .nameAndMessage: return NSLocalizedString("preview_desc_name_and_message", comment: "")
+        case .nameOnly: return NSLocalizedString("preview_desc_name_only", comment: "")
+        case .none: return NSLocalizedString("preview_desc_none", comment: "")
         }
     }
 

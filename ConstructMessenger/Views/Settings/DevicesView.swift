@@ -38,7 +38,7 @@ struct DevicesView: View {
             )
 
             ScrollView {
-            LazyVStack(spacing: 20) {
+            LazyVStack(spacing: DevicesSettingsLayout.listSpacing) {
                 if isLoading && devices.isEmpty {
                     ConstructSection {
                         HStack { Spacer(); ProgressView(); Spacer() }.padding()
@@ -48,42 +48,40 @@ struct DevicesView: View {
                     if let current = devices.first(where: { $0.isCurrent }) {
                         ConstructSection(header: NSLocalizedString("this_device", comment: "")) {
                             DeviceRow(device: current, isCurrent: true, onRevoke: {})
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 14)
+                                .deviceRowInsets()
                         }
                     }
 
                     // MARK: - Other Devices
                     if !otherDevices.isEmpty {
-                        VStack(alignment: .leading, spacing: 6) {
+                        VStack(alignment: .leading, spacing: DevicesSettingsLayout.sectionSpacing) {
                             ConstructSection(header: NSLocalizedString("other_devices", comment: "")) {
                                 ForEach(Array(otherDevices.enumerated()), id: \.element.id) { index, device in
-                                    if index > 0 { ConstructRowDivider(indent: 52) }
+                                    if index > 0 { ConstructRowDivider(indent: DevicesSettingsLayout.dividerIndent) }
                                     DeviceRow(device: device, isCurrent: false) {
                                         deviceToRevoke = device
                                         showRevokeConfirm = true
                                     }
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 14)
+                                    .deviceRowInsets()
                                 }
                             }
                             if otherDevices.count > 1 {
                                 Text(LocalizedStringKey("other_devices_hint"))
                                     .font(CTFont.regular(11))
                                     .foregroundStyle(Color.CT.textDim)
-                                    .padding(.horizontal, 20)
+                                    .settingsSectionHintInsets()
                             }
                         }
                     }
 
                     // MARK: - Link / Approve
-                    VStack(alignment: .leading, spacing: 6) {
+                    VStack(alignment: .leading, spacing: DevicesSettingsLayout.sectionSpacing) {
                         ConstructSection {
                             ConstructButtonRow(icon: "[+]", title: LocalizedStringKey("link_new_device")) {
                                 showingQRSheet = true
                             }
                             #if os(iOS)
-                            ConstructRowDivider(indent: 52)
+                            ConstructRowDivider(indent: DevicesSettingsLayout.dividerIndent)
                             ConstructButtonRow(icon: "[scan]", title: LocalizedStringKey("device_scan_to_approve")) {
                                 showingScanner = true
                             }
@@ -92,11 +90,11 @@ struct DevicesView: View {
                         Text(LocalizedStringKey("linked_devices_hint"))
                             .font(CTFont.regular(11))
                             .foregroundStyle(Color.CT.textDim)
-                            .padding(.horizontal, 20)
+                            .settingsSectionHintInsets()
                     }
 
                     // MARK: - History Transfer
-                    VStack(alignment: .leading, spacing: 6) {
+                    VStack(alignment: .leading, spacing: DevicesSettingsLayout.sectionSpacing) {
                         ConstructSection {
                             ConstructButtonRow(icon: "[→]", title: LocalizedStringKey("transfer_history_row")) {
                                 showSendHistorySync = true
@@ -105,22 +103,22 @@ struct DevicesView: View {
                         Text(LocalizedStringKey("transfer_history_hint"))
                             .font(CTFont.regular(11))
                             .foregroundStyle(Color.CT.textDim)
-                            .padding(.horizontal, 20)
+                            .settingsSectionHintInsets()
                     }
 
                     // MARK: - Session management
-                    VStack(alignment: .leading, spacing: 6) {
+                    VStack(alignment: .leading, spacing: DevicesSettingsLayout.sectionSpacing) {
                         ConstructSection(header: NSLocalizedString("session_management", comment: "")) {
                             ConstructActionRow(icon: "[→]", title: LocalizedStringKey("sign_out_this_device"), role: .destructive) {
                                 showSignOutConfirm = true
                             }
                             if !otherDevices.isEmpty {
-                                ConstructRowDivider(indent: 52)
+                                ConstructRowDivider(indent: DevicesSettingsLayout.dividerIndent)
                                 ConstructActionRow(icon: "[x]", title: LocalizedStringKey("sign_out_other_devices"), role: .destructive) {
                                     showSignOutOthersConfirm = true
                                 }
                             }
-                            ConstructRowDivider(indent: 52)
+                            ConstructRowDivider(indent: DevicesSettingsLayout.dividerIndent)
                             ConstructActionRow(icon: "[x]", title: LocalizedStringKey("sign_out_all_devices"), role: .destructive) {
                                 showSignOutAllConfirm = true
                             }
@@ -128,11 +126,11 @@ struct DevicesView: View {
                         Text(LocalizedStringKey("sign_out_all_hint"))
                             .font(CTFont.regular(11))
                             .foregroundStyle(Color.CT.textDim)
-                            .padding(.horizontal, 20)
+                            .settingsSectionHintInsets()
                     }
                 }
             }
-            .padding(.vertical, 20)
+            .padding(.vertical, DevicesSettingsLayout.listVerticalPadding)
         } // ScrollView
         } // VStack
         .background(Color.CT.bg.ignoresSafeArea())
@@ -277,18 +275,18 @@ private struct DeviceRow: View {
     let onRevoke: () -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: DevicesSettingsLayout.rowContentSpacing) {
             CTRowIcon(asciiPlatformIcon,
                       color: isCurrent ? Color.CT.accent : Color.CT.textDim)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: DevicesSettingsLayout.deviceMetaSpacing) {
                 Text(device.name)
                     .font(CTFont.bold(16))
 
                 if isCurrent {
-                    HStack(spacing: 4) {
+                    HStack(spacing: DevicesSettingsLayout.currentStatusSpacing) {
                         Text("●")
-                            .font(.system(size: 7))
+                            .font(.system(size: DevicesSettingsLayout.currentStatusDotSize))
                             .foregroundStyle(Color.CT.accent)
                         Text(LocalizedStringKey("device_active_now"))
                             .font(CTFont.regular(12))
@@ -331,6 +329,17 @@ private struct DeviceRow: View {
             )
         }
         return Self.relativeLastSeenFormatter.localizedString(for: device.lastSeen, relativeTo: Date())
+    }
+}
+
+private extension View {
+    func settingsSectionHintInsets() -> some View {
+        padding(.horizontal, DevicesSettingsLayout.hintHorizontalPadding)
+    }
+
+    func deviceRowInsets() -> some View {
+        padding(.horizontal, DevicesSettingsLayout.rowHorizontalPadding)
+            .padding(.vertical, DevicesSettingsLayout.rowVerticalPadding)
     }
 }
 

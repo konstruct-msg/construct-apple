@@ -23,10 +23,10 @@ struct SecurityView: View {
     @State private var showingDiscoverableConfirm = false
     @State private var showingLockDelayPicker = false
     @State private var lockdown = LockdownManager.shared
+    @State private var tokenWallet = TokenWalletService.shared
 
     @AppStorage("stealth_mode_enabled") private var stealthEnabled = false
     @AppStorage("stealth_per_message") private var stealthPerMessage = false
-    private var tokenWallet = TokenWalletService.shared
 
     var body: some View {
         @Bindable var securityViewModel = securityViewModel
@@ -41,7 +41,7 @@ struct SecurityView: View {
 
                 // MARK: - PIN Code
                 Button { showingPinSetup = true } label: {
-                    HStack(spacing: 10) {
+                    HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
                         Text(securityViewModel.isPinEnabled
                              ? LocalizedStringKey("change_pin_code")
                              : LocalizedStringKey("enable_pin_code"))
@@ -50,14 +50,14 @@ struct SecurityView: View {
                         Spacer()
                         Text("[→]").font(CTFont.regular(12)).foregroundStyle(Color.CT.textDim)
                     }
-                    .padding(.horizontal, 12).padding(.vertical, 12)
+                    .securityRowInsets()
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
 
                 if securityViewModel.isPinEnabled {
                     CTSep(style: .thin)
-                    HStack(spacing: 10) {
+                    HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
                         CTRowIcon(sf: securityViewModel.biometricIconName,
                                   color: securityViewModel.isBiometricEnabled ? Color.CT.accent : Color.CT.textDim)
                         Text(String(format: NSLocalizedString("use_biometric", comment: ""),
@@ -69,7 +69,7 @@ struct SecurityView: View {
                             .labelsHidden()
                             .tint(Color.CT.accent)
                     }
-                    .padding(.horizontal, 12).padding(.vertical, 10)
+                    .securityRowInsets(vertical: SecuritySettingsLayout.compactRowVerticalPadding)
                     .disabled(!securityViewModel.isBiometricAvailable)
 
                     CTSep(style: .thin)
@@ -77,14 +77,14 @@ struct SecurityView: View {
 
                     CTSep(style: .thin)
                     Button { showingDisablePinSheet = true } label: {
-                        HStack(spacing: 10) {
+                        HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
                             CTRowIcon("[x]", color: Color.CT.danger)
                             Text(LocalizedStringKey("disable_pin_code"))
                                 .font(CTFont.regular(13))
                                 .foregroundStyle(Color.CT.danger)
                             Spacer()
                         }
-                        .padding(.horizontal, 12).padding(.vertical, 12)
+                        .securityRowInsets()
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
@@ -94,8 +94,8 @@ struct SecurityView: View {
 
                 // MARK: - Account Recovery
                 Button { showingRecoverySetup = true } label: {
-                    HStack(spacing: 10) {
-                        VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
+                        VStack(alignment: .leading, spacing: SecuritySettingsLayout.recoveryStatusSpacing) {
                             Text(LocalizedStringKey("account_recovery_seed"))
                                 .font(CTFont.regular(13))
                                 .foregroundStyle(Color.CT.text)
@@ -114,23 +114,22 @@ struct SecurityView: View {
                         Spacer()
                         Text("[→]").font(CTFont.regular(12)).foregroundStyle(Color.CT.textDim)
                     }
-                    .padding(.horizontal, 12).padding(.vertical, 12)
+                    .securityRowInsets()
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
 
-                Text(LocalizedStringKey("account_recovery_seed_hint"))
-                    .font(CTFont.regular(11))
-                    .foregroundStyle(Color.CT.textDim)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 12).padding(.top, 6).padding(.bottom, 10)
+                securityHintText(
+                    LocalizedStringKey("account_recovery_seed_hint"),
+                    color: Color.CT.textDim
+                )
 
                 CTSep()
 
                 // MARK: - Duress PIN
                 if securityViewModel.isDuresspinEnabled {
                     Button { showingDuressPinSetup = true } label: {
-                        HStack(spacing: 10) {
+                        HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
                             CTRowIcon("[]", color: Color.CT.danger)
                             Text(LocalizedStringKey("duress_pin_change"))
                                 .font(CTFont.regular(13))
@@ -138,27 +137,27 @@ struct SecurityView: View {
                             Spacer()
                             Text("[→]").font(CTFont.regular(12)).foregroundStyle(Color.CT.textDim)
                         }
-                        .padding(.horizontal, 12).padding(.vertical, 12)
+                        .securityRowInsets()
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
 
                     CTSep(style: .thin)
                     Button { showingDisableDuressAlert = true } label: {
-                        HStack(spacing: 10) {
+                        HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
                             CTRowIcon("[x]", color: Color.CT.danger)
                             Text(LocalizedStringKey("disable_duress_pin"))
                                 .font(CTFont.regular(13))
                                 .foregroundStyle(Color.CT.danger)
                             Spacer()
                         }
-                        .padding(.horizontal, 12).padding(.vertical, 12)
+                        .securityRowInsets()
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                 } else {
                     Button { showingDuressPinSetup = true } label: {
-                        HStack(spacing: 10) {
+                        HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
                             CTRowIcon("[]", color: securityViewModel.isPinEnabled
                                       ? Color.CT.textDim : Color.CT.textDim.opacity(0.4))
                             Text(LocalizedStringKey("enable_duress_pin"))
@@ -168,26 +167,25 @@ struct SecurityView: View {
                             Spacer()
                             Text("[→]").font(CTFont.regular(12)).foregroundStyle(Color.CT.textDim)
                         }
-                        .padding(.horizontal, 12).padding(.vertical, 12)
+                        .securityRowInsets()
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .disabled(!securityViewModel.isPinEnabled)
                 }
 
-                Text(LocalizedStringKey(securityViewModel.isPinEnabled ? "duress_pin_hint" : "duress_pin_requires_main_pin"))
-                    .font(CTFont.regular(11))
-                    .foregroundStyle(Color.CT.textDim)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 12).padding(.top, 6).padding(.bottom, 10)
+                securityHintText(
+                    LocalizedStringKey(securityViewModel.isPinEnabled ? "duress_pin_hint" : "duress_pin_requires_main_pin"),
+                    color: Color.CT.textDim
+                )
 
                 CTSep()
 
                 // MARK: - Lockdown
-                HStack(spacing: 10) {
+                HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
                     CTRowIcon(sf: lockdown.isActive ? "lock.slash.fill" : "lock.fill",
                               color: lockdown.isActive ? .orange : Color.CT.textDim)
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: SecuritySettingsLayout.lockStatusSpacing) {
                         Text(LocalizedStringKey("lockdown_mode"))
                             .font(CTFont.regular(13))
                             .foregroundStyle(Color.CT.text)
@@ -213,20 +211,19 @@ struct SecurityView: View {
                     .labelsHidden()
                     .tint(.orange)
                 }
-                .padding(.horizontal, 12).padding(.vertical, 10)
+                .securityRowInsets(vertical: SecuritySettingsLayout.compactRowVerticalPadding)
 
-                Text(LocalizedStringKey("lockdown_mode_hint"))
-                    .font(CTFont.regular(11))
-                    .foregroundStyle(Color.CT.textDim)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 12).padding(.top, 6).padding(.bottom, 10)
+                securityHintText(
+                    LocalizedStringKey("lockdown_mode_hint"),
+                    color: Color.CT.textDim
+                )
 
                 CTSep()
 
                 // MARK: - Stealth
-                HStack(spacing: 10) {
+                HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
                     CTRowIcon(sf: stealthEnabled ? "eye.slash.fill" : "lock.fill", color: stealthEnabled ? Color.CT.accent : Color.CT.textDim)
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: SecuritySettingsLayout.lockStatusSpacing) {
                         Text(LocalizedStringKey("stealth_toggle_title"))
                             .font(CTFont.regular(13))
                             .foregroundStyle(Color.CT.text)
@@ -241,27 +238,27 @@ struct SecurityView: View {
                         .labelsHidden()
                         .tint(Color.CT.accent)
                 }
-                .padding(.horizontal, 12).padding(.vertical, 10)
+                .securityRowInsets(vertical: SecuritySettingsLayout.compactRowVerticalPadding)
 
-                Text(LocalizedStringKey("stealth_hint"))
-                    .font(CTFont.regular(11))
-                    .foregroundStyle(Color.CT.textDim)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 12).padding(.top, 2).padding(.bottom, 10)
+                securityHintText(
+                    LocalizedStringKey("stealth_hint"),
+                    color: Color.CT.textDim,
+                    top: SecuritySettingsLayout.hintCompactTopPadding
+                )
 
                 if stealthEnabled {
                     Rectangle()
-                        .fill(Color.CT.noise.opacity(0.4))
+                        .fill(Color.CT.noise.opacity(SecuritySettingsLayout.separatorOpacity))
                         .frame(height: 1)
-                        .padding(.horizontal, 12)
+                        .padding(.horizontal, SecuritySettingsLayout.rowHorizontalPadding)
 
                     // Per-stream (default) vs per-message
                     Button {
                         stealthPerMessage = false
                     } label: {
-                        HStack(spacing: 10) {
+                        HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
                             CTRowIcon(stealthPerMessage ? "[ ]" : "[•]", color: stealthPerMessage ? Color.CT.textDim : Color.CT.accent)
-                            VStack(alignment: .leading, spacing: 2) {
+                            VStack(alignment: .leading, spacing: SecuritySettingsLayout.lockStatusSpacing) {
                                 Text(LocalizedStringKey("stealth_scope_stream"))
                                     .font(CTFont.regular(13))
                                     .foregroundStyle(Color.CT.text)
@@ -271,21 +268,21 @@ struct SecurityView: View {
                             }
                             Spacer()
                         }
-                        .padding(.horizontal, 12).padding(.vertical, 10)
+                        .securityRowInsets(vertical: SecuritySettingsLayout.compactRowVerticalPadding)
                     }
                     .buttonStyle(.plain)
 
                     Rectangle()
-                        .fill(Color.CT.noise.opacity(0.4))
+                        .fill(Color.CT.noise.opacity(SecuritySettingsLayout.separatorOpacity))
                         .frame(height: 1)
-                        .padding(.horizontal, 12)
+                        .padding(.horizontal, SecuritySettingsLayout.rowHorizontalPadding)
 
                     Button {
                         stealthPerMessage = true
                     } label: {
-                        HStack(spacing: 10) {
+                        HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
                             CTRowIcon(stealthPerMessage ? "[•]" : "[ ]", color: stealthPerMessage ? Color.CT.accent : Color.CT.textDim)
-                            VStack(alignment: .leading, spacing: 2) {
+                            VStack(alignment: .leading, spacing: SecuritySettingsLayout.lockStatusSpacing) {
                                 Text(LocalizedStringKey("stealth_scope_message"))
                                     .font(CTFont.regular(13))
                                     .foregroundStyle(Color.CT.text)
@@ -295,17 +292,17 @@ struct SecurityView: View {
                             }
                             Spacer()
                         }
-                        .padding(.horizontal, 12).padding(.vertical, 10)
+                        .securityRowInsets(vertical: SecuritySettingsLayout.compactRowVerticalPadding)
                     }
                     .buttonStyle(.plain)
 
                     Rectangle()
-                        .fill(Color.CT.noise.opacity(0.4))
+                        .fill(Color.CT.noise.opacity(SecuritySettingsLayout.separatorOpacity))
                         .frame(height: 1)
-                        .padding(.horizontal, 12)
+                        .padding(.horizontal, SecuritySettingsLayout.rowHorizontalPadding)
 
                     // Token wallet balance
-                    HStack(spacing: 10) {
+                    HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
                         CTRowIcon("[T]", color: tokenWallet.balance > 0 ? Color.CT.accent : Color.CT.textDim)
                         Text(LocalizedStringKey("stealth_token_wallet"))
                             .font(CTFont.regular(13))
@@ -315,13 +312,13 @@ struct SecurityView: View {
                             .font(CTFont.regular(12))
                             .foregroundStyle(tokenWallet.balance > 0 ? Color.CT.accent : Color.CT.textDim.opacity(0.6))
                     }
-                    .padding(.horizontal, 12).padding(.vertical, 10)
+                    .securityRowInsets(vertical: SecuritySettingsLayout.compactRowVerticalPadding)
 
-                    Text(LocalizedStringKey("stealth_token_wallet_hint"))
-                        .font(CTFont.regular(11))
-                        .foregroundStyle(Color.CT.textDim.opacity(0.6))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 12).padding(.top, 2).padding(.bottom, 10)
+                    securityHintText(
+                        LocalizedStringKey("stealth_token_wallet_hint"),
+                        color: Color.CT.textDim.opacity(SecuritySettingsLayout.hintDisabledOpacity),
+                        top: SecuritySettingsLayout.hintCompactTopPadding
+                    )
                 }
 
                 CTSep()
@@ -333,7 +330,7 @@ struct SecurityView: View {
 
                 // MARK: - Discovery
                 let hasUsername = !authVM.currentUsername.isEmpty
-                HStack(spacing: 10) {
+                HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
                     CTRowIcon("[⊙]", color: settingsViewModel.isDiscoverable ? Color.CT.accent : Color.CT.textDim)
                     Text(LocalizedStringKey("searchable_toggle_title"))
                         .font(CTFont.regular(13))
@@ -359,25 +356,23 @@ struct SecurityView: View {
                         .disabled(!hasUsername)
                     }
                 }
-                .padding(.horizontal, 12).padding(.vertical, 10)
+                .securityRowInsets(vertical: SecuritySettingsLayout.compactRowVerticalPadding)
 
                 if !authVM.currentUsername.isEmpty {
-                    Text(LocalizedStringKey("searchable_toggle_footer"))
-                        .font(CTFont.regular(11))
-                        .foregroundStyle(Color.CT.textDim)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 12).padding(.top, 6).padding(.bottom, 10)
+                    securityHintText(
+                        LocalizedStringKey("searchable_toggle_footer"),
+                        color: Color.CT.textDim
+                    )
                 } else {
-                    Text(LocalizedStringKey("searchable_no_username_hint"))
-                        .font(CTFont.regular(11))
-                        .foregroundStyle(Color.CT.textDim.opacity(0.6))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 12).padding(.top, 6).padding(.bottom, 10)
+                    securityHintText(
+                        LocalizedStringKey("searchable_no_username_hint"),
+                        color: Color.CT.textDim.opacity(SecuritySettingsLayout.hintDisabledOpacity)
+                    )
                 }
 
                 CTSep()
             }
-            .padding(.vertical, 8)
+            .padding(.vertical, SecuritySettingsLayout.sectionVerticalPadding)
         }
         .alert("searchable_confirm_title", isPresented: $showingDiscoverableConfirm) {
             Button(LocalizedStringKey("searchable_confirm_action")) {
@@ -427,7 +422,7 @@ struct SecurityView: View {
     private var lockDelayRow: some View {
         @Bindable var securityViewModel = securityViewModel
         return Button { showingLockDelayPicker = true } label: {
-            HStack(spacing: 10) {
+            HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
                 CTRowIcon("[t]")
                 Text(LocalizedStringKey("lock_delay"))
                     .font(CTFont.regular(13))
@@ -438,7 +433,7 @@ struct SecurityView: View {
                     .foregroundStyle(Color.CT.textDim)
                 Text("[→]").font(CTFont.regular(12)).foregroundStyle(Color.CT.textDim)
             }
-            .padding(.horizontal, 12).padding(.vertical, 12)
+            .securityRowInsets()
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -461,6 +456,20 @@ struct SecurityView: View {
         let req = Chat.fetchRequest()
         let chats = (try? viewContext.fetch(req)) ?? []
         return Set(chats.compactMap { $0.otherUser?.id })
+    }
+
+    private func securityHintText(
+        _ key: LocalizedStringKey,
+        color: Color,
+        top: CGFloat = SecuritySettingsLayout.hintTopPadding
+    ) -> some View {
+        Text(key)
+            .font(CTFont.regular(11))
+            .foregroundStyle(color)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, SecuritySettingsLayout.rowHorizontalPadding)
+            .padding(.top, top)
+            .padding(.bottom, SecuritySettingsLayout.hintBottomPadding)
     }
 }
 
@@ -494,7 +503,7 @@ private struct KTStatusSection: View {
     var body: some View {
         CTSettingsSectionHeader(title: NSLocalizedString("kt_section", comment: ""))
 
-        HStack(spacing: 10) {
+        HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
             CTRowIcon("[#]", color: statusColor)
             Text(LocalizedStringKey("kt_status"))
                 .font(CTFont.regular(13))
@@ -503,9 +512,10 @@ private struct KTStatusSection: View {
             Text(statusText)
                 .font(CTFont.regular(11))
                 .foregroundStyle(statusColor)
-                .padding(.trailing, 4)
+                .padding(.trailing, KeyTransparencySettingsLayout.statusTrailingPadding)
         }
-        .padding(.horizontal, 16).padding(.vertical, 10)
+        .padding(.horizontal, KeyTransparencySettingsLayout.rowHorizontalPadding)
+        .padding(.vertical, KeyTransparencySettingsLayout.rowVerticalPadding)
         .onAppear {
             verifiedCount = KTStore.shared.verifiedCount
             failureCount  = KTStore.shared.failureCount
@@ -513,12 +523,13 @@ private struct KTStatusSection: View {
         }
 
         if failureCount > 0, let failedAt = lastFailedAt {
-            Text(String(format: NSLocalizedString("kt_last_failure_at", comment: ""),
+                Text(String(format: NSLocalizedString("kt_last_failure_at", comment: ""),
                         Self.relativeFormatter.localizedString(for: failedAt, relativeTo: Date())))
                 .font(CTFont.regular(10))
                 .foregroundStyle(Color.CT.danger.opacity(0.8))
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 12).padding(.top, 2)
+                .padding(.horizontal, KeyTransparencySettingsLayout.hintHorizontalPadding)
+                .padding(.top, KeyTransparencySettingsLayout.hintTopPadding)
         }
 
         Text(failureCount > 0
@@ -529,7 +540,18 @@ private struct KTStatusSection: View {
                              ? Color.CT.danger
                              : Color.CT.textDim.opacity(0.6))
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 12).padding(.top, 2).padding(.bottom, 10)
+            .padding(.horizontal, KeyTransparencySettingsLayout.hintHorizontalPadding)
+            .padding(.top, KeyTransparencySettingsLayout.hintTopPadding)
+            .padding(.bottom, KeyTransparencySettingsLayout.hintBottomPadding)
+    }
+}
+
+private extension View {
+    func securityRowInsets(
+        vertical: CGFloat = SecuritySettingsLayout.rowVerticalPadding
+    ) -> some View {
+        padding(.horizontal, SecuritySettingsLayout.rowHorizontalPadding)
+            .padding(.vertical, vertical)
     }
 }
 

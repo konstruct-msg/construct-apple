@@ -33,17 +33,17 @@ struct NetworkSettingsView: View {
                 )
             }
             ScrollView {
-            LazyVStack(spacing: 0) {
+            LazyVStack(spacing: NetworkSettingsLayout.compactSectionSpacing) {
 
                 // MARK: - Connection Status
                 CTSettingsSectionHeader(title: NSLocalizedString("status", comment: "").uppercased())
                 let path = iceManager.currentTrafficPath
                 CTSectionGroup {
-                    HStack(spacing: 12) {
+                    HStack(spacing: NetworkSettingsLayout.statusRowSpacing) {
                         Text(connectionStatusASCII)
                             .font(CTFont.regular(13))
                             .foregroundColor(statusColor)
-                        VStack(alignment: .leading, spacing: 2) {
+                        VStack(alignment: .leading, spacing: NetworkSettingsLayout.statusDetailSpacing) {
                             Text(connectionManager.connectionStatus.displayText)
                                 .font(CTFont.regular(13))
                                 .foregroundStyle(Color.CT.text)
@@ -69,19 +69,20 @@ struct NetworkSettingsView: View {
                         let isLive = !streamManager.activeTransport.isEmpty
                         if !displayTransport.isEmpty {
                             let isQUIC = displayTransport == "H3"
-                            Text(isQUIC ? "QUIC" : "H2")
+                            Text(isQUIC ? NetworkSettingsLabels.quic : NetworkSettingsLabels.h2)
                                 .font(CTFont.regular(13))
                                 .foregroundColor(isLive
                                     ? (isQUIC ? Color.CT.accent : Color.CT.accentDim)
                                     : Color.CT.textDim)
-                                .padding(.horizontal, 5).padding(.vertical, 2)
-                                .overlay(RoundedRectangle(cornerRadius: 4).stroke(
-                                    (isLive ? Color.CT.accent : Color.CT.textDim).opacity(0.4),
-                                    lineWidth: 0.5))
+                                .padding(.horizontal, NetworkSettingsLayout.transportBadgeHorizontalPadding)
+                                .padding(.vertical, NetworkSettingsLayout.transportBadgeVerticalPadding)
+                                .overlay(RoundedRectangle(cornerRadius: NetworkSettingsLayout.transportBadgeCornerRadius).stroke(
+                                    (isLive ? Color.CT.accent : Color.CT.textDim).opacity(NetworkSettingsLayout.transportBadgeStrokeOpacity),
+                                    lineWidth: NetworkSettingsLayout.transportBadgeStrokeWidth))
                         }
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 12)
+                    .padding(.horizontal, NetworkSettingsLayout.rowHorizontalPadding)
+                    .padding(.vertical, NetworkSettingsLayout.rowVerticalPadding)
 
                     if let heartbeat = streamManager.lastHeartbeatDate {
                         CTSep(style: .thin)
@@ -95,8 +96,8 @@ struct NetworkSettingsView: View {
                                 .foregroundStyle(Color.CT.textDim)
                                 .monospacedDigit()
                         }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 10)
+                        .padding(.horizontal, NetworkSettingsLayout.rowHorizontalPadding)
+                        .padding(.vertical, NetworkSettingsLayout.compactRowVerticalPadding)
                     }
 
                     if let error = connectionManager.lastError {
@@ -105,8 +106,8 @@ struct NetworkSettingsView: View {
                             .font(.system(size: 11, design: .monospaced))
                             .foregroundStyle(Color.CT.danger)
                             .textSelection(.enabled)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 10)
+                            .padding(.horizontal, NetworkSettingsLayout.rowHorizontalPadding)
+                            .padding(.vertical, NetworkSettingsLayout.compactRowVerticalPadding)
                     }
                 }
 
@@ -145,8 +146,8 @@ struct NetworkSettingsView: View {
                         )
                         .disabled(!iceManager.hasCert)
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 12)
+                    .padding(.horizontal, NetworkSettingsLayout.rowHorizontalPadding)
+                    .padding(.vertical, NetworkSettingsLayout.rowVerticalPadding)
 
                     if (iceManager.mode != .off || iceManager.isRunning) && iceManager.hasCert {
                         if iceManager.isOnCooldown {
@@ -160,8 +161,8 @@ struct NetworkSettingsView: View {
                                     .font(CTFont.regular(13))
                                     .foregroundColor(Color.CT.textDim)
                             }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 12)
+                            .padding(.horizontal, NetworkSettingsLayout.rowHorizontalPadding)
+                            .padding(.vertical, NetworkSettingsLayout.rowVerticalPadding)
                         } else if iceManager.isRunning, let relay = iceManager.activeRelay {
                             CTSep(style: .thin)
                             HStack {
@@ -175,31 +176,35 @@ struct NetworkSettingsView: View {
                                 Spacer()
                                 let quality = iceManager.qualityForRelay(relay.address)
                                 Text(quality.badge)
-                                    .font(CTFont.regular(10))
+                                    .font(CTFont.regular(NetworkSettingsLayout.relayBadgeFontSize))
                                     .foregroundColor(quality.badgeColor)
-                                    .padding(.horizontal, 5).padding(.vertical, 2)
-                                    .overlay(Rectangle().stroke(quality.badgeColor.opacity(0.4), lineWidth: 0.5))
+                                    .padding(.horizontal, NetworkSettingsLayout.transportBadgeHorizontalPadding)
+                                    .padding(.vertical, NetworkSettingsLayout.transportBadgeVerticalPadding)
+                                    .overlay(Rectangle().stroke(quality.badgeColor.opacity(NetworkSettingsLayout.transportBadgeStrokeOpacity), lineWidth: NetworkSettingsLayout.transportBadgeStrokeWidth))
                                 if relay.tlsServerName != nil {
-                                    Text("TLS")
-                                        .font(CTFont.regular(10))
+                                    Text(NetworkSettingsLabels.tls)
+                                        .font(CTFont.regular(NetworkSettingsLayout.relayBadgeFontSize))
                                         .foregroundColor(Color.CT.accentDim)
-                                        .padding(.horizontal, 5).padding(.vertical, 2)
-                                        .overlay(Rectangle().stroke(Color.CT.accent.opacity(0.4), lineWidth: 0.5))
-                                    Text("obfs4")
-                                        .font(CTFont.regular(10))
+                                        .padding(.horizontal, NetworkSettingsLayout.transportBadgeHorizontalPadding)
+                                        .padding(.vertical, NetworkSettingsLayout.transportBadgeVerticalPadding)
+                                        .overlay(Rectangle().stroke(Color.CT.accent.opacity(NetworkSettingsLayout.transportBadgeStrokeOpacity), lineWidth: NetworkSettingsLayout.transportBadgeStrokeWidth))
+                                    Text(NetworkSettingsLabels.obfs4)
+                                        .font(CTFont.regular(NetworkSettingsLayout.relayBadgeFontSize))
                                         .foregroundColor(Color.CT.accentDim)
-                                        .padding(.horizontal, 5).padding(.vertical, 2)
-                                        .overlay(Rectangle().stroke(Color.CT.accent.opacity(0.4), lineWidth: 0.5))
+                                        .padding(.horizontal, NetworkSettingsLayout.transportBadgeHorizontalPadding)
+                                        .padding(.vertical, NetworkSettingsLayout.transportBadgeVerticalPadding)
+                                        .overlay(Rectangle().stroke(Color.CT.accent.opacity(NetworkSettingsLayout.transportBadgeStrokeOpacity), lineWidth: NetworkSettingsLayout.transportBadgeStrokeWidth))
                                 } else {
-                                    Text("obfs4")
-                                        .font(CTFont.regular(10))
+                                    Text(NetworkSettingsLabels.obfs4)
+                                        .font(CTFont.regular(NetworkSettingsLayout.relayBadgeFontSize))
                                         .foregroundColor(Color.CT.accentDim)
-                                        .padding(.horizontal, 5).padding(.vertical, 2)
-                                        .overlay(Rectangle().stroke(Color.CT.accent.opacity(0.4), lineWidth: 0.5))
+                                        .padding(.horizontal, NetworkSettingsLayout.transportBadgeHorizontalPadding)
+                                        .padding(.vertical, NetworkSettingsLayout.transportBadgeVerticalPadding)
+                                        .overlay(Rectangle().stroke(Color.CT.accent.opacity(NetworkSettingsLayout.transportBadgeStrokeOpacity), lineWidth: NetworkSettingsLayout.transportBadgeStrokeWidth))
                                 }
                             }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
+                            .padding(.horizontal, NetworkSettingsLayout.rowHorizontalPadding)
+                            .padding(.vertical, NetworkSettingsLayout.relayRowVerticalPadding)
 
                         } else if iceManager.mode != .off && !iceManager.isRunning {
                             CTSep(style: .thin)
@@ -207,8 +212,8 @@ struct NetworkSettingsView: View {
                                 .font(CTFont.regular(11))
                                 .foregroundStyle(Color.CT.textDim)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 10)
+                                .padding(.horizontal, NetworkSettingsLayout.rowHorizontalPadding)
+                                .padding(.vertical, NetworkSettingsLayout.compactRowVerticalPadding)
                         }
                     }
                 }
@@ -219,18 +224,18 @@ struct NetworkSettingsView: View {
                         .font(CTFont.regular(11))
                         .foregroundStyle(Color.CT.textDim)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 12)
-                        .padding(.bottom, 8)
+                        .padding(.horizontal, NetworkSettingsLayout.rowHorizontalPadding)
+                        .padding(.bottom, NetworkSettingsLayout.footerBottomPadding)
                 } else {
                     Text(LocalizedStringKey(iceFooterKey))
                         .font(CTFont.regular(11))
                         .foregroundStyle(Color.CT.textDim)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 12)
-                        .padding(.bottom, 8)
+                        .padding(.horizontal, NetworkSettingsLayout.rowHorizontalPadding)
+                        .padding(.bottom, NetworkSettingsLayout.footerBottomPadding)
                 }
             }
-            .padding(.vertical, 20)
+            .padding(.vertical, NetworkSettingsLayout.sectionVerticalPadding)
             #if os(iOS)
             .toolbar(.hidden, for: .navigationBar)
             #endif

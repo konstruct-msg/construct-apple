@@ -31,6 +31,7 @@ struct AccountSettingsView: View {
     @State private var draftUsername: String = ""
     @State private var draftDisplayName: String = ""
     @State private var showingDiscardProfileChangesConfirm = false
+    @State private var shouldDismissAfterDiscard = false
 
     // Logout flow
     @State private var showingLogoutConfirm = false
@@ -46,8 +47,10 @@ struct AccountSettingsView: View {
                 title: NSLocalizedString("account", comment: ""),
                 showBack: true,
                 trailingSystemImage: isEditingProfile ? "checkmark.circle.fill" : "square.and.pencil",
+                trailingSecondarySystemImage: isEditingProfile ? "xmark.circle" : nil,
                 backAction: { handleBackTap() },
-                trailingAction: { handleProfileEditActionTap() }
+                trailingAction: { handleProfileEditActionTap() },
+                trailingSecondaryAction: { handleProfileEditCancelTap() }
             )
             flatDivider(thick: true)
 
@@ -185,7 +188,9 @@ struct AccountSettingsView: View {
         .alert("account_discard_changes_title", isPresented: $showingDiscardProfileChangesConfirm) {
             Button("account_discard_changes_discard", role: .destructive) {
                 discardProfileEditingChanges()
-                dismiss()
+                if shouldDismissAfterDiscard {
+                    dismiss()
+                }
             }
             Button("account_discard_changes_keep_editing", role: .cancel) {}
         } message: {
@@ -205,18 +210,22 @@ struct AccountSettingsView: View {
                 isActive: false
             )
             .onTapGesture {
+                guard !isEditingProfile else { return }
                 if viewModel.profileImage != nil { showingAvatarViewer = true }
                 else { showingImagePicker = true }
             }
+            .opacity(isEditingProfile ? 0.55 : 1.0)
 
             Button {
+                guard !isEditingProfile else { return }
                 showingImagePicker = true
             } label: {
                 Text("[\(NSLocalizedString("change_photo", comment: ""))]")
                     .font(CTFont.regular(13))
-                    .foregroundStyle(Color.CT.accent)
+                    .foregroundStyle(isEditingProfile ? Color.CT.textDim : Color.CT.accent)
             }
             .buttonStyle(.plain)
+            .disabled(isEditingProfile)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 28)
@@ -227,6 +236,13 @@ struct AccountSettingsView: View {
     private var identitySection: some View {
         return VStack(alignment: .leading, spacing: 0) {
             sectionHeader(NSLocalizedString("identity_section", comment: ""))
+            if isEditingProfile {
+                Text(NSLocalizedString("account_editing_profile", comment: ""))
+                    .font(CTFont.regular(11))
+                    .foregroundStyle(Color.CT.accent)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 8)
+            }
             flatRowDivider()
 
             profileEditableRow(
@@ -609,6 +625,7 @@ struct AccountSettingsView: View {
     private func discardProfileEditingChanges() {
         syncDraftProfileFields()
         viewModel.usernameSaveError = nil
+        shouldDismissAfterDiscard = false
         isEditingProfile = false
     }
 
@@ -621,12 +638,11 @@ struct AccountSettingsView: View {
     }
 
     private func handleBackTap() {
-        if isEditingProfile && hasUnsavedProfileChanges {
-            showingDiscardProfileChangesConfirm = true
-            return
-        }
-
         if isEditingProfile {
+            if hasUnsavedProfileChanges {
+                promptDiscardProfileChanges(dismissAfterDiscard: true)
+                return
+            }
             discardProfileEditingChanges()
         }
         dismiss()
@@ -640,6 +656,20 @@ struct AccountSettingsView: View {
             viewModel.usernameSaveError = nil
             isEditingProfile = true
         }
+    }
+
+    private func handleProfileEditCancelTap() {
+        guard isEditingProfile else { return }
+        if hasUnsavedProfileChanges {
+            promptDiscardProfileChanges(dismissAfterDiscard: false)
+        } else {
+            discardProfileEditingChanges()
+        }
+    }
+
+    private func promptDiscardProfileChanges(dismissAfterDiscard: Bool) {
+        shouldDismissAfterDiscard = dismissAfterDiscard
+        showingDiscardProfileChangesConfirm = true
     }
 
     private func saveProfileEdits() async {

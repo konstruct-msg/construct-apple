@@ -491,6 +491,29 @@
 "tls" = "TLS";
 "interval" = "Interval";
 "preview" = "Preview";
+"settings_coming_soon" = "soon";
+"diagnostics_permission" = "Permission";
+"diagnostics_apns_token" = "APNs Token";
+"diagnostics_apns_token_missing" = "missing";
+"diagnostics_apns_token_received_format" = "received (%@…)";
+"diagnostics_registered_with_server" = "Registered with Construct";
+"diagnostics_yes" = "yes";
+"diagnostics_not_registered_with_server" = "no — notifications won't arrive";
+"diagnostics_server_token_warning" = "Token is not registered on Construct. Return to chats — registration will retry automatically when the app becomes active.";
+"diagnostics_log_collection" = "Log collection";
+"diagnostics_status_active" = "Active";
+"diagnostics_status_off" = "Off";
+"diagnostics_size" = "Size";
+"diagnostics_share_logs" = "Share logs";
+"diagnostics_clear_logs" = "Clear logs";
+"diagnostics_force_spk_rotation" = "Force SPK Rotation";
+"diagnostics_reset_local_data_keychain" = "Reset local data & Keychain";
+"diagnostics_dev_tools_footer" = "Clears all Keychain keys, sessions, and UserDefaults. Use to test fresh initialization without reinstalling.";
+"diagnostics_recent_logs" = "Recent Logs";
+"diagnostics_empty" = "empty";
+"preview_desc_name_and_message" = "Show sender name and message content";
+"preview_desc_name_only" = "Show only sender name";
+"preview_desc_none" = "Show only 'New Message'";
 
 // MARK: - Device Linking
 "onboarding_link_device" = "Link Existing Account";
@@ -877,3 +900,8 @@
 "stt_delete_confirm_title" = "Delete this model?";
 "stt_transcribe_button" = "Transcribe";
 "stt_transcribing" = "Transcribing…";
+"account_discard_changes_title" = "Discard changes?";
+"account_discard_changes_message" = "You have unsaved profile changes. Leave without saving?";
+"account_discard_changes_discard" = "Discard";
+"account_discard_changes_keep_editing" = "Keep Editing";
+"account_editing_profile" = "> Editing profile fields. Tap ✓ to save or x to cancel.";
