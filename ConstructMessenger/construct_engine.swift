@@ -932,6 +932,79 @@ public func FfiConverterTypeICECandidate_lower(_ value: IceCandidate) -> RustBuf
 
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * Controls how the engine routes an outbound message.
+ *
+ * - `Normal` — standard authenticated stream with sender identity in the envelope.
+ * - `Ghost`  — sealed-sender envelope: server cannot determine the sender from
+ *              message content. JWT connection is still authenticated; full
+ *              anonymous transport (anonymous stream) is a future phase.
+ */
+
+public enum AnonymityLevel: Equatable, Hashable {
+    
+    case normal
+    case ghost
+
+
+
+}
+
+#if compiler(>=6)
+extension AnonymityLevel: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeAnonymityLevel: FfiConverterRustBuffer {
+    typealias SwiftType = AnonymityLevel
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> AnonymityLevel {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .normal
+        
+        case 2: return .ghost
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: AnonymityLevel, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .normal:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .ghost:
+            writeInt(&buf, Int32(2))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAnonymityLevel_lift(_ buf: RustBuffer) throws -> AnonymityLevel {
+    return try FfiConverterTypeAnonymityLevel.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAnonymityLevel_lower(_ value: AnonymityLevel) -> RustBuffer {
+    return FfiConverterTypeAnonymityLevel.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 
 public enum CandidateType: Equatable, Hashable {
     
@@ -1552,7 +1625,7 @@ public enum UiEvent: Equatable, Hashable {
     case openMessageStream(conversationIds: [String], sinceCursor: String?
     )
     case closeMessageStream
-    case sendMessage(contactId: String, plaintext: Data, localId: String, conversationId: String
+    case sendMessage(contactId: String, plaintext: Data, localId: String, conversationId: String, anonymityLevel: AnonymityLevel
     )
     case ackMessage(messageId: String, messageNumber: UInt64
     )
@@ -1622,7 +1695,7 @@ public struct FfiConverterTypeUiEvent: FfiConverterRustBuffer {
         
         case 10: return .closeMessageStream
         
-        case 11: return .sendMessage(contactId: try FfiConverterString.read(from: &buf), plaintext: try FfiConverterData.read(from: &buf), localId: try FfiConverterString.read(from: &buf), conversationId: try FfiConverterString.read(from: &buf)
+        case 11: return .sendMessage(contactId: try FfiConverterString.read(from: &buf), plaintext: try FfiConverterData.read(from: &buf), localId: try FfiConverterString.read(from: &buf), conversationId: try FfiConverterString.read(from: &buf), anonymityLevel: try FfiConverterTypeAnonymityLevel.read(from: &buf)
         )
         
         case 12: return .ackMessage(messageId: try FfiConverterString.read(from: &buf), messageNumber: try FfiConverterUInt64.read(from: &buf)
@@ -1719,12 +1792,13 @@ public struct FfiConverterTypeUiEvent: FfiConverterRustBuffer {
             writeInt(&buf, Int32(10))
         
         
-        case let .sendMessage(contactId,plaintext,localId,conversationId):
+        case let .sendMessage(contactId,plaintext,localId,conversationId,anonymityLevel):
             writeInt(&buf, Int32(11))
             FfiConverterString.write(contactId, into: &buf)
             FfiConverterData.write(plaintext, into: &buf)
             FfiConverterString.write(localId, into: &buf)
             FfiConverterString.write(conversationId, into: &buf)
+            FfiConverterTypeAnonymityLevel.write(anonymityLevel, into: &buf)
             
         
         case let .ackMessage(messageId,messageNumber):

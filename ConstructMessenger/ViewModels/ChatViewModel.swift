@@ -1078,11 +1078,15 @@ class ChatViewModel: NSObject {
             // has a working HTTP/2 transport and stores the wire payload for safe retry.
             if FeatureFlags.useEngineForSend && EngineAdapter.shared.isConnected {
                 Log.info("📮 Sending message via ConstructEngine: \(messageId)", category: "ChatViewModel")
+                let anonymityLevel: AnonymityLevel = UserDefaults.standard.bool(forKey: "stealth_mode_enabled")
+                    ? .ghost
+                    : .normal
                 EngineAdapter.shared.dispatch(.sendMessage(
                     contactId: recipientId,
                     plaintext: plaintextData,
                     localId: messageId,
-                    conversationId: recipientId
+                    conversationId: recipientId,
+                    anonymityLevel: anonymityLevel
                 ))
                 // Register with the stuck-message watchdog so that if the engine never calls
                 // back (e.g. it is in networkError backoff), the message transitions to .queued
