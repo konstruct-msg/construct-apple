@@ -204,6 +204,16 @@ final class MessageStreamManager {
     /// Cancel any in-progress backoff/connection and start fresh immediately.
     /// Use when returning from background or recovering from a known-bad state.
     func forceReconnect(contactUserIds: [String], onMessageReceived: @escaping (ChatMessage) -> Void) {
+        // Don't downgrade an active subscription list to empty.
+        // This happens when forceReconnect fires while CoreData hasn't settled yet (context
+        // returns [] transiently). Tearing down the live stream and reconnecting with 0
+        // subscriptions sends an empty subscribe request — the server never sends a heartbeat
+        // for it, so the connectLoop times out and retries forever with subscriptions=[].
+        // Mirrors the identical guard in ChatsViewModel.startMessageStream().
+        guard !contactUserIds.isEmpty || subscriptionUserIds.isEmpty else {
+            Log.debug("🔁 forceReconnect skipped — empty ids would clear \(subscriptionUserIds.count) active subscriptions", category: "MessageStream")
+            return
+        }
         Log.info("🔁 Force reconnecting stream", category: "MessageStream")
         // Finish the outbound stream BEFORE cancelling the task.
         // Cancelling the Task first while the producer is mid-write triggers an
