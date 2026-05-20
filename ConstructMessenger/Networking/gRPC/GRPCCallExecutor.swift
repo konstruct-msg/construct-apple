@@ -255,7 +255,7 @@ final class GRPCCallExecutor: Sendable {
         }
         if serverRejected {
             Log.info("🔑 Refresh rejected by server — triggering device re-auth", category: "GRPCChannel")
-            SessionManager.shared.invalidateTokensForReauth()
+            await MainActor.run { SessionManager.shared.invalidateTokensForReauth() }
         } else {
             Log.info("🔑 Refresh failed (network error) — keeping tokens for retry when online", category: "GRPCChannel")
         }

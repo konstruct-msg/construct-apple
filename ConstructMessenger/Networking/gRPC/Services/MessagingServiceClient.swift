@@ -146,13 +146,14 @@ final class MessagingServiceClient: Sendable {
     // MARK: - Send End Session (replaces MessagingAPI.sendEndSession)
 
     func sendEndSession(to recipientId: String, reason: String? = nil) async throws -> EndSessionResponse {
-        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.endSession) { grpcClient in
+        let myUserId = await MainActor.run { SessionManager.shared.currentUserId } ?? ""
+        return try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.endSession) { grpcClient in
             let msgClient = Shared_Proto_Services_V1_MessagingService.Client(wrapping: grpcClient)
 
             let messageId = UUID().uuidString
 
             var sender = Shared_Proto_Core_V1_UserId()
-            sender.userID = SessionManager.shared.currentUserId ?? ""
+            sender.userID = myUserId
 
             var recipient = Shared_Proto_Core_V1_UserId()
             recipient.userID = recipientId

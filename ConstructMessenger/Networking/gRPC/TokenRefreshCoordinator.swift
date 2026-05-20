@@ -33,16 +33,17 @@ actor TokenRefreshCoordinator {
     func refreshIfPossible() async throws -> Bool {
         if let inFlight {
             try await inFlight.value
-            return SessionManager.shared.sessionToken != nil && SessionManager.shared.isSessionValid
+            return await MainActor.run { SessionManager.shared.sessionToken != nil && SessionManager.shared.isSessionValid }
         }
 
-        guard let refreshToken = SessionManager.shared.refreshToken, !refreshToken.isEmpty else {
+        let storedRefreshToken = await MainActor.run { SessionManager.shared.refreshToken }
+        guard let storedRefreshToken, !storedRefreshToken.isEmpty else {
             return false
         }
 
         let task = Task {
             let response = try await AuthServiceClient.shared.refreshToken(
-                refreshToken: refreshToken,
+                refreshToken: storedRefreshToken,
                 allowAuthRetry: false
             )
 
@@ -53,17 +54,19 @@ actor TokenRefreshCoordinator {
                 expiresIn = response.expiresIn ?? 3600
             }
 
-            SessionManager.shared.saveTokens(
-                accessToken: response.accessToken,
-                refreshToken: response.refreshToken,
-                expiresIn: expiresIn
-            )
+            await MainActor.run {
+                SessionManager.shared.saveTokens(
+                    accessToken: response.accessToken,
+                    refreshToken: response.refreshToken,
+                    expiresIn: expiresIn
+                )
+            }
         }
 
         inFlight = task
         defer { inFlight = nil }
         try await task.value
-        return SessionManager.shared.sessionToken != nil && SessionManager.shared.isSessionValid
+        return await MainActor.run { SessionManager.shared.sessionToken != nil && SessionManager.shared.isSessionValid }
     }
 }
 

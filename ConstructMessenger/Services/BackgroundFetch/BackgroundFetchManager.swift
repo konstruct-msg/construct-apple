@@ -222,7 +222,7 @@ class BackgroundFetchManager: NSObject {
         Log.info("🚀 Starting quick message fetch", category: "BackgroundFetch")
         
         // Check authentication
-        guard SessionManager.shared.sessionToken != nil else {
+        guard GRPCAuthCache.shared.snapshot.token != nil else {
             Log.error("❌ No session token available", category: "BackgroundFetch")
             completion(.failure(BackgroundFetchError.notAuthenticated))
             return
@@ -279,7 +279,7 @@ class BackgroundFetchManager: NSObject {
             var messagesByChat: [String: [ChatMessage]] = [:]
             var chatUserIds: [String: String] = [:] // chatId -> userId
             
-            guard let currentUserId = SessionManager.shared.currentUserId else {
+            guard let currentUserId = GRPCAuthCache.shared.snapshot.userId else {
                 DispatchQueue.main.async {
                     completion(.failure(BackgroundFetchError.notAuthenticated))
                 }
