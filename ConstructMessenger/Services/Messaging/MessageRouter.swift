@@ -1701,12 +1701,16 @@ class MessageRouter {
                 signedPrekeyPublic: bundle.signedPrekeyPublic,
                 signature: bundle.signature,
                 verifyingKey: bundle.verifyingKey,
-                suiteId: "1"
+                suiteId: String(bundle.suiteId)
             )
             let decrypted = try CryptoManager.shared.initReceivingSession(
                 for: contactId,
                 recipientBundle: bundleWithSuite,
-                firstMessage: message
+                firstMessage: message,
+                spkUploadedAt: bundle.spkUploadedAt,
+                spkRotationEpoch: bundle.spkRotationEpoch,
+                kyberSpkUploadedAt: bundle.kyberSpkUploadedAt,
+                kyberSpkRotationEpoch: bundle.kyberSpkRotationEpoch
             )
             saveSenderSyncMessage(decrypted, original: message, partnerUserId: partnerUserId, in: context)
 

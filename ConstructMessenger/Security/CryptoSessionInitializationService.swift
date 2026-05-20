@@ -85,6 +85,10 @@ final class CryptoSessionInitializationService {
         for userId: String,
         recipientBundle: (identityPublic: Data, signedPrekeyPublic: Data, signature: Data, verifyingKey: Data, suiteId: String),
         firstMessage: ChatMessage,
+        spkUploadedAt: UInt64 = 0,
+        spkRotationEpoch: UInt32 = 0,
+        kyberSpkUploadedAt: UInt64 = 0,
+        kyberSpkRotationEpoch: UInt32 = 0,
         core: OrchestratorCore?,
         archiveSession: (String, ArchiveReason) -> Void,
         saveSession: (String) -> Void
@@ -115,6 +119,17 @@ final class CryptoSessionInitializationService {
         Log.debug("   msgNum: \(firstMessage.messageNumber) sealedBox: \(sealedBox.count)B oneTimePrekeyId: \(firstMessage.oneTimePreKeyId) kemCiphertext: \(firstMessage.kemCiphertext.count)B kyberOtpkId: \(firstMessage.kyberOtpkId)", category: "CryptoManager")
         #endif
 
+        // Epoch replay-attack check for RESPONDER: same logic as INITIATOR path.
+        // We are fetching the SENDER's bundle — reject it if epoch has not advanced.
+        if spkRotationEpoch > 0 {
+            let knownEpoch = KeychainManager.shared.loadSpkEpoch(for: userId)
+            if spkRotationEpoch < knownEpoch {
+                Log.error("⚠️ SESSION_STATE[spk_replay_rejected_responder]: epoch=\(spkRotationEpoch) < known=\(knownEpoch) for \(userId.prefix(8))… — possible SPK replay attack", category: "SessionInit")
+                throw SessionError.staleSPKBundle(epoch: spkRotationEpoch, knownEpoch: knownEpoch)
+            }
+            KeychainManager.shared.saveSpkEpoch(spkRotationEpoch, for: userId)
+        }
+
         let bundle = BinaryKeyBundle(
             identityPublic: [UInt8](recipientBundle.identityPublic),
             signedPrekeyPublic: [UInt8](recipientBundle.signedPrekeyPublic),
@@ -123,10 +138,10 @@ final class CryptoSessionInitializationService {
             suiteId: suiteID,
             oneTimePrekeyPublic: nil,
             oneTimePrekeyId: nil,
-            spkUploadedAt: 0,
-            spkRotationEpoch: 0,
-            kyberSpkUploadedAt: 0,
-            kyberSpkRotationEpoch: 0,
+            spkUploadedAt: spkUploadedAt,
+            spkRotationEpoch: spkRotationEpoch,
+            kyberSpkUploadedAt: kyberSpkUploadedAt,
+            kyberSpkRotationEpoch: kyberSpkRotationEpoch,
             kyberPreKeyPublic: nil,
             kyberOneTimePrekeyPublic: nil,
             kyberOneTimePrekeyId: nil
@@ -177,7 +192,7 @@ final class CryptoSessionInitializationService {
                     }
                 } catch {
                     Log.error("🚨 PQC: PQXDH decapsulation FAILED for \(userId.prefix(8))...: \(error)", category: "CryptoManager")
-                    UserDefaults.standard.set(true, forKey: "construct.pqxdh.downgraded.\(userId)")
+                    KeychainManager.shared.savePQXDHDowngradeFlag(for: userId)
                 }
             }
 

@@ -134,7 +134,11 @@ class PublicKeyBundleHandler {
             let decryptedBytes = try CryptoManager.shared.initReceivingSession(
                 for: data.userId,
                 recipientBundle: bundleWithSuite,
-                firstMessage: message
+                firstMessage: message,
+                spkUploadedAt: data.spkUploadedAt,
+                spkRotationEpoch: data.spkRotationEpoch,
+                kyberSpkUploadedAt: data.kyberSpkUploadedAt,
+                kyberSpkRotationEpoch: data.kyberSpkRotationEpoch
             )
             
             let initDuration = Date().timeIntervalSince(initStartTime)

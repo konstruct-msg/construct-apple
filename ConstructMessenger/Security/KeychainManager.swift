@@ -456,6 +456,32 @@ class KeychainManager {
         delete(forKey: spkEpochKey(for: userId))
     }
 
+    // MARK: - PQXDH Downgrade Flag (per-peer)
+    // Tracks whether PQXDH key agreement was degraded to classical-only for a contact.
+    // Security-relevant: stored in Keychain (not UserDefaults) so it survives reinstall.
+    // An attacker who can clear UserDefaults before app launch could otherwise force
+    // a re-attempt of PQ strengthening that already failed, leaking that it failed.
+
+    private func pqxdhDowngradedKey(for userId: String) -> String {
+        "construct.pqxdh.downgraded.\(userId)"
+    }
+
+    func savePQXDHDowngradeFlag(for userId: String) {
+        var value: UInt8 = 1
+        let data = Data(bytes: &value, count: 1)
+        _ = save(data, forKey: pqxdhDowngradedKey(for: userId), accessible: kSecAttrAccessibleAfterFirstUnlock)
+    }
+
+    func loadPQXDHDowngradeFlag(for userId: String) -> Bool {
+        guard let data = load(forKey: pqxdhDowngradedKey(for: userId)),
+              data.count == 1 else { return false }
+        return data[0] != 0
+    }
+
+    func deletePQXDHDowngradeFlag(for userId: String) {
+        delete(forKey: pqxdhDowngradedKey(for: userId))
+    }
+
     // MARK: - Contact Request Mappings
     //
     // Stores requestId → toUserId so User A can create a contact after acceptance.

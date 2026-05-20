@@ -991,12 +991,24 @@ class CryptoManager {
     /// Initialize a receiving session (for responder/Bob) using sender's bundle + first message.
     /// Returns the raw decrypted bytes of the first message (KNST frame, protobuf, or UTF-8 control string).
     /// Callers must decode via `ChunkedMessageReassembler.process(data:)` — do NOT convert to String here.
-    func initReceivingSession(for userId: String, recipientBundle: (identityPublic: Data, signedPrekeyPublic: Data, signature: Data, verifyingKey: Data, suiteId: String), firstMessage: ChatMessage) throws -> Data {
+    func initReceivingSession(
+        for userId: String,
+        recipientBundle: (identityPublic: Data, signedPrekeyPublic: Data, signature: Data, verifyingKey: Data, suiteId: String),
+        firstMessage: ChatMessage,
+        spkUploadedAt: UInt64 = 0,
+        spkRotationEpoch: UInt32 = 0,
+        kyberSpkUploadedAt: UInt64 = 0,
+        kyberSpkRotationEpoch: UInt32 = 0
+    ) throws -> Data {
         do {
             let plaintext = try sessionInitService.initReceivingSession(
                 for: userId,
                 recipientBundle: recipientBundle,
                 firstMessage: firstMessage,
+                spkUploadedAt: spkUploadedAt,
+                spkRotationEpoch: spkRotationEpoch,
+                kyberSpkUploadedAt: kyberSpkUploadedAt,
+                kyberSpkRotationEpoch: kyberSpkRotationEpoch,
                 core: orchestratorCore,
                 archiveSession: { [weak self] userId, reason in
                     Log.info("⚠️ Existing session found for \(userId) - archiving before receiving session init to prevent desync", category: "CryptoManager")

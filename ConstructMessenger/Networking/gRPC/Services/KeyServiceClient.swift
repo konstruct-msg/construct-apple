@@ -125,10 +125,10 @@ final class KeyServiceClient: Sendable {
                     kyberPreKeySignature: kyberSig,
                     kyberOneTimePreKeyPublic: kyberOtpkPK,
                     kyberOneTimePreKeyId: kyberOtpkId,
-                    spkUploadedAt: b.generatedAt > 0 ? UInt64(b.generatedAt) : 0,
-                    spkRotationEpoch: 0,
-                    kyberSpkUploadedAt: 0,
-                    kyberSpkRotationEpoch: 0
+                    spkUploadedAt: b.spkUploadedAt > 0 ? UInt64(b.spkUploadedAt) : (b.generatedAt > 0 ? UInt64(b.generatedAt) : 0),
+                    spkRotationEpoch: b.spkRotationEpoch,
+                    kyberSpkUploadedAt: b.hasKyberSpkUploadedAt ? UInt64(b.kyberSpkUploadedAt) : 0,
+                    kyberSpkRotationEpoch: b.hasKyberSpkRotationEpoch ? b.kyberSpkRotationEpoch : 0
                 )
                 return DeviceBundleData(deviceId: deviceBundle.deviceID, bundle: bundle, platform: deviceBundle.platform)
             }
@@ -221,10 +221,10 @@ final class KeyServiceClient: Sendable {
                 kyberPreKeySignature: kyberSig,
                 kyberOneTimePreKeyPublic: kyberOtpkPK,
                 kyberOneTimePreKeyId: kyberOtpkId,
-                spkUploadedAt: bundle.generatedAt > 0 ? UInt64(bundle.generatedAt) : 0,
-                spkRotationEpoch: 0,
-                kyberSpkUploadedAt: 0,
-                kyberSpkRotationEpoch: 0
+                spkUploadedAt: bundle.spkUploadedAt > 0 ? UInt64(bundle.spkUploadedAt) : (bundle.generatedAt > 0 ? UInt64(bundle.generatedAt) : 0),
+                spkRotationEpoch: bundle.spkRotationEpoch,
+                kyberSpkUploadedAt: bundle.hasKyberSpkUploadedAt ? UInt64(bundle.kyberSpkUploadedAt) : 0,
+                kyberSpkRotationEpoch: bundle.hasKyberSpkRotationEpoch ? bundle.kyberSpkRotationEpoch : 0
             )
         }
     }
