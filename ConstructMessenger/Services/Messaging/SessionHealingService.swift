@@ -48,7 +48,25 @@ final class SessionHealingService {
     /// Rust-backed attempt tracker. Keyed by senderId (one healing slot per contact).
     private let rustQueue = RustHealingQueue()
 
+    private static let queueStateKey = "construct.healing_queue_state"
+
     private init() {}
+
+    // MARK: - Persistence
+
+    /// Serialise the Rust healing queue to Keychain. Call after every mutation.
+    private func saveQueueState() {
+        let blob = rustQueue.exportState()
+        guard !blob.isEmpty else { return }
+        _ = KeychainManager.shared.saveRawData(Data(blob), forKey: Self.queueStateKey)
+    }
+
+    /// Restore the Rust healing queue from Keychain. Call on app startup.
+    func restoreQueueState() {
+        guard let data = KeychainManager.shared.loadRawData(forKey: Self.queueStateKey) else { return }
+        rustQueue.importState(data: [UInt8](data))
+        Log.info("🩹 SessionHealingService: restored queue state (\(data.count) bytes)", category: "SessionHealing")
+    }
 
     // MARK: - Canary
 
@@ -68,6 +86,7 @@ final class SessionHealingService {
         }
 
         rustQueue.enqueue(contactId: message.from, messageJson: messageJson)
+        saveQueueState()
 
         // CoreData persistence (survives app restart until PlatformBridge migration)
         let fetch = HealingMessage.fetchRequest()
@@ -121,6 +140,7 @@ final class SessionHealingService {
 
             let result = rustQueue.recordAttempt(contactId: record.senderId)
             shouldContinue = result.decision == "retry_allowed"
+            saveQueueState()
 
             record.healAttempts += 1
             record.lastAttemptAt = Date()
@@ -139,6 +159,7 @@ final class SessionHealingService {
     func removeRecord(for messageId: String, in context: NSManagedObjectContext) {
         if let record = healingRecord(for: messageId, in: context) {
             _ = rustQueue.removeRecord(contactId: record.senderId)
+            saveQueueState()
             context.delete(record)
         }
         context.saveAndLog()
@@ -147,6 +168,7 @@ final class SessionHealingService {
     /// Removes ALL healing records for `senderId`.
     func clearQueue(for senderId: String, in context: NSManagedObjectContext) {
         _ = rustQueue.removeRecord(contactId: senderId)
+        saveQueueState()
 
         let fetch = HealingMessage.fetchRequest()
         fetch.predicate = NSPredicate(format: "senderId == %@", senderId)

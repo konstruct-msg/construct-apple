@@ -1785,6 +1785,18 @@ public protocol RustHealingQueueProtocol: AnyObject, Sendable {
     func enqueue(contactId: String, messageJson: String) 
     
     /**
+     * Serialise the queue state to a CFE blob for Keychain persistence.
+     * Returns an empty sequence on serialisation failure.
+     */
+    func exportState()  -> [UInt8]
+    
+    /**
+     * Restore queue state from a CFE blob produced by `export_state`.
+     * Silently no-ops on decode failure.
+     */
+    func importState(data: [UInt8]) 
+    
+    /**
      * Number of pending healing records.
      */
     func len()  -> UInt64
@@ -1886,6 +1898,30 @@ open func enqueue(contactId: String, messageJson: String)  {try! rustCall() {
             self.uniffiCloneHandle(),
         FfiConverterString.lower(contactId),
         FfiConverterString.lower(messageJson),$0
+    )
+}
+}
+    
+    /**
+     * Serialise the queue state to a CFE blob for Keychain persistence.
+     * Returns an empty sequence on serialisation failure.
+     */
+open func exportState() -> [UInt8]  {
+    return try!  FfiConverterSequenceUInt8.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_rusthealingqueue_export_state(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * Restore queue state from a CFE blob produced by `export_state`.
+     * Silently no-ops on decode failure.
+     */
+open func importState(data: [UInt8])  {try! rustCall() {
+    uniffi_construct_core_fn_method_rusthealingqueue_import_state(
+            self.uniffiCloneHandle(),
+        FfiConverterSequenceUInt8.lower(data),$0
     )
 }
 }
@@ -6155,6 +6191,12 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_rusthealingqueue_enqueue() != 5619) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_rusthealingqueue_export_state() != 8133) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_rusthealingqueue_import_state() != 52469) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_rusthealingqueue_len() != 8116) {

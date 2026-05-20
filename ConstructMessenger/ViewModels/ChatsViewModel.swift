@@ -144,6 +144,7 @@ class ChatsViewModel {
             forceReconnectStream()
         }
         // Prune expired ACK and healing records once per app session
+        SessionHealingService.shared.restoreQueueState()
         PersistentACKStore.shared.pruneExpired(in: context)
         SessionHealingService.shared.pruneExpired(in: context)
     }

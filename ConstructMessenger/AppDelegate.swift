@@ -237,6 +237,10 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     func applicationDidEnterBackground(_ application: UIApplication) {
         Log.debug("Application did enter background")
 
+        // Persist orchestrator coordination state (ACK cache, session archive index, etc.)
+        // so it survives memory eviction. No-op if the crypto core hasn't been loaded yet.
+        CryptoManager.shared.saveOrchestratorStateCFE()
+
         // Ensure background fetch is scheduled if enabled
         if BackgroundFetchConfig.shouldBeEnabled {
             BackgroundFetchManager.shared.scheduleBackgroundFetch()
