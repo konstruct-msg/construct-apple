@@ -17,8 +17,6 @@
 import Foundation
 import Combine
 import Network
-import os
-import SwiftUI
 import CryptoKit
 import GRPCCore
 import GRPCNIOTransportHTTP2
@@ -36,231 +34,6 @@ private final class OnceResumeFlag: @unchecked Sendable {
             _triggered = true
             return true
         }
-    }
-}
-
-/// Describes the current effective traffic routing path.
-/// Used for the Network Settings "Connection Route" indicator.
-enum TrafficPath: Equatable {
-    /// Direct TLS gRPC — no ICE obfuscation.
-    case direct
-    /// ICE primary: TLS 1.3 → obfs4 → Amsterdam (via Traefik).
-    case icePrimary(host: String)
-    /// ICE relay: plain obfs4 → Moscow TCP relay → Amsterdam.
-    case iceRelay(address: String)
-    /// ICE v2 WebTunnel: TLS → WebSocket → relay → server.
-    case iceWebTunnel(relay: String)
-    /// ICE is enabled but proxy is temporarily bypassed (cooldown after failure).
-    case iceCooldown
-    /// ICE is enabled but the proxy has not started yet / is starting.
-    case iceConnecting
-
-    var displayTitle: String {
-        switch self {
-        case .direct:           return "Direct gRPC"
-        case .icePrimary:       return "ICE (Primary)"
-        case .iceRelay:         return "ICE (Relay)"
-        case .iceWebTunnel:     return "ICE v2 (WebTunnel)"
-        case .iceCooldown:      return "Direct gRPC (ICE recovering)"
-        case .iceConnecting:    return "ICE (Connecting…)"
-        }
-    }
-
-    var displayDetail: String {
-        switch self {
-        case .direct:                  return "TLS 1.3 · ams.konstruct.cc:443"
-        case .icePrimary(let host):    return "TLS + obfs4 · \(host)"
-        case .iceRelay(let address):   return "obfs4 relay · \(address)"
-        case .iceWebTunnel(let relay): return "wss:// · \(relay)"
-        case .iceCooldown:             return "Reconnecting via ICE…"
-        case .iceConnecting:           return "Starting obfs4 proxy…"
-        }
-    }
-
-    var symbolName: String {
-        switch self {
-        case .direct:        return "network"
-        case .icePrimary:    return "lock.shield.fill"
-        case .iceRelay:      return "arrow.triangle.2.circlepath.circle.fill"
-        case .iceWebTunnel:  return "lock.shield.fill"
-        case .iceCooldown:   return "exclamationmark.arrow.circlepath"
-        case .iceConnecting: return "clock.arrow.circlepath"
-        }
-    }
-
-    var color: String {   // colour name for SwiftUI, avoid Color dependency here
-        switch self {
-        case .direct:        return "blue"
-        case .icePrimary:    return "green"
-        case .iceRelay:      return "purple"
-        case .iceWebTunnel:  return "teal"
-        case .iceCooldown:   return "orange"
-        case .iceConnecting: return "orange"
-        }
-    }
-}
-
-/// ICE operation mode — controls when and how the obfs4 proxy is used.
-///
-/// - `off`:  ICE completely disabled. No pre-warm, no auto-detection, no DPI fallback.
-///           Use when direct connection works reliably (EU, US, etc.)
-/// - `auto`: Direct connection preferred. ICE activates automatically when DPI blocking
-///           is detected (session-scoped, not persisted). Periodically probes direct and
-///           switches back when blocking lifts. Default on iOS.
-/// - `on`:   All traffic always routed through ICE relay. No direct connection attempts.
-///           Use behind confirmed censorship (Russia, Iran). Default on macOS.
-enum IceMode: String, CaseIterable, Identifiable {
-    case off
-    case auto
-    case on
-
-    var id: String { rawValue }
-
-    /// UserDefaults key for storing the mode.
-    static let defaultsKey = "ice_mode"
-
-    /// Platform default: macOS → .on (no battery penalty), iOS → .auto
-    static var platformDefault: IceMode {
-        #if os(macOS)
-        return .on
-        #else
-        return .auto
-        #endif
-    }
-
-    /// Migrate from the old boolean `ice_enabled` + `ice_auto_detected_dpi` to `IceMode`.
-    /// Called once per migration version. Returns the migrated mode.
-    static func migrateFromLegacy() -> IceMode {
-        let wasEnabled = UserDefaults.standard.bool(forKey: "ice_enabled")
-        let wasAutoDetected = UserDefaults.standard.bool(forKey: "ice_auto_detected_dpi")
-
-        #if os(macOS)
-        // macOS previously defaulted to enabled — keep as .on
-        return wasEnabled ? .on : .auto
-        #else
-        if wasEnabled && !wasAutoDetected {
-            return .on   // User explicitly enabled ICE
-        }
-        return .auto     // Default: auto-detect (covers both !enabled and auto-detected)
-        #endif
-    }
-}
-
-/// Higher modes resist timing analysis at the cost of latency.
-enum IceIATMode: Int, CaseIterable, Identifiable {
-    case none     = 0  // No timing obfuscation (fastest)
-    case enabled  = 1  // 0–10 ms jitter between chunks
-    case paranoid = 2  // Random chunk sizing + jitter (recommended for China/Iran)
-
-    var id: Int { rawValue }
-
-    var label: String {
-        switch self {
-        case .none:     return "Off"
-        case .enabled:  return "Enabled (jitter)"
-        case .paranoid: return "Paranoid (recommended)"
-        }
-    }
-}
-
-/// Relay configuration — a single obfs4 bridge endpoint.
-struct IceRelay: Codable, Identifiable {
-    let id: UUID
-    /// Stable relay ID from the server manifest (e.g. "ams-het-1", "ru-div-1").
-    /// nil for relays constructed from hardcoded addresses or legacy cache entries
-    /// that predate manifest ID tracking.
-    let manifestId: String?
-    let address: String     // "158.160.140.67:443" (TLS mode) or ":9443" (legacy)
-    let bridgeCert: String  // base64 cert received from server
-    let iatMode: IceIATMode
-    /// When set: outer TLS connection is established first using this SNI before
-    /// the obfs4 handshake. nil = legacy plain-TCP obfs4 (no outer TLS).
-    /// Empty string = TLS but no SNI extension (IP-based ServerName).
-    /// Non-empty = SNI sent in ClientHello (use fake domain for REALITY-style evasion).
-    let tlsServerName: String?
-    /// SHA-256 of DER SubjectPublicKeyInfo (hex). When set, cert is verified by pin
-    /// instead of CA chain. Enables use of fake SNI without chain validation errors.
-    let pinnedSpki: String?
-    /// WebTunnel (ICE v2) WebSocket resource path, e.g. `"/construct-ice"`.
-    /// When non-nil, this relay supports the WebTunnel wss:// transport.
-    let wtPath: String?
-    /// HTTP Host header for the WebTunnel WebSocket upgrade request.
-    /// May differ from `tlsServerName` for domain fronting.
-    /// Defaults to the relay's hostname when nil.
-    let wtHostHeader: String?
-    /// Alternative TLS SNI values to try for WebTunnel before falling back to obfs4.
-    /// OTA-configurable via relay config. Empty when not applicable.
-    let alternativeSNIs: [String]
-
-    /// Full bridge line string passed to Rust: "cert=<cert> iat-mode=<n>"
-    var bridgeLine: String {
-        "cert=\(bridgeCert) iat-mode=\(iatMode.rawValue)"
-    }
-
-    /// Returns true when this relay supports WebTunnel transport (ICE v2).
-    var supportsWebTunnel: Bool { wtPath != nil }
-
-    /// True when this relay uses CDN domain fronting: the TLS SNI points to a CDN host
-    /// that is different from the relay's own hostname (e.g., MSK behind Yandex CDN).
-    ///
-    /// Raw obfs4 is **not viable** on CDN-fronted relays because the CDN terminates TLS
-    /// at the CDN edge — the inner obfs4 bytes never reach the relay process.
-    /// When WebTunnel is blocked on a CDN-fronted relay, the correct action is to rotate
-    /// to a direct relay instead of attempting obfs4.
-    var isCDNFronted: Bool {
-        guard let sni = tlsServerName, !sni.isEmpty else { return false }
-        let hostname = address.components(separatedBy: ":").first ?? address
-        return sni != hostname
-    }
-
-    init(address: String, bridgeCert: String, iatMode: IceIATMode = .none,
-         tlsServerName: String? = nil, pinnedSpki: String? = nil,
-         wtPath: String? = nil, wtHostHeader: String? = nil,
-         alternativeSNIs: [String] = [], manifestId: String? = nil) {
-        self.id             = UUID()
-        self.manifestId     = manifestId
-        self.address        = address
-        self.bridgeCert     = bridgeCert
-        self.iatMode        = iatMode
-        self.tlsServerName  = tlsServerName
-        self.pinnedSpki     = pinnedSpki
-        self.wtPath         = wtPath
-        self.wtHostHeader   = wtHostHeader
-        self.alternativeSNIs = alternativeSNIs
-    }
-
-    // Codable conformance for IceIATMode (stored as rawValue Int)
-    enum CodingKeys: String, CodingKey {
-        case id, address, bridgeCert, iatMode, tlsServerName, pinnedSpki, wtPath, wtHostHeader
-        case alternativeSNIs = "alternativeSNIs"
-        case manifestId
-    }
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        id              = try c.decode(UUID.self, forKey: .id)
-        manifestId      = try? c.decode(String.self, forKey: .manifestId)
-        address         = try c.decode(String.self, forKey: .address)
-        bridgeCert      = try c.decode(String.self, forKey: .bridgeCert)
-        let raw         = (try? c.decode(Int.self, forKey: .iatMode)) ?? 1
-        iatMode         = IceIATMode(rawValue: raw) ?? .enabled
-        tlsServerName   = try? c.decode(String.self, forKey: .tlsServerName)
-        pinnedSpki      = try? c.decode(String.self, forKey: .pinnedSpki)
-        wtPath          = try? c.decode(String.self, forKey: .wtPath)
-        wtHostHeader    = try? c.decode(String.self, forKey: .wtHostHeader)
-        alternativeSNIs = (try? c.decode([String].self, forKey: .alternativeSNIs)) ?? []
-    }
-    func encode(to encoder: Encoder) throws {
-        var c = encoder.container(keyedBy: CodingKeys.self)
-        try c.encode(id, forKey: .id)
-        try? c.encode(manifestId, forKey: .manifestId)
-        try c.encode(address, forKey: .address)
-        try c.encode(bridgeCert, forKey: .bridgeCert)
-        try c.encode(iatMode.rawValue, forKey: .iatMode)
-        try? c.encode(tlsServerName, forKey: .tlsServerName)
-        try? c.encode(pinnedSpki, forKey: .pinnedSpki)
-        try? c.encode(wtPath, forKey: .wtPath)
-        try? c.encode(wtHostHeader, forKey: .wtHostHeader)
-        if !alternativeSNIs.isEmpty { try? c.encode(alternativeSNIs, forKey: .alternativeSNIs) }
     }
 }
 
@@ -355,12 +128,7 @@ final class IceProxyManager: ObservableObject {
     static let shared = IceProxyManager()
     private init() {
         // Load persisted mode (or platform default if never set).
-        if let raw = UserDefaults.standard.string(forKey: IceMode.defaultsKey),
-           let stored = IceMode(rawValue: raw) {
-            self.mode = stored
-        } else {
-            self.mode = IceMode.platformDefault
-        }
+        self.mode = IceProxyStore.loadMode()
 
         // Restart the ICE proxy whenever the network interface changes.
         // After a cellular ↔ WiFi switch the old TCP tunnel to the relay is dead;
@@ -379,11 +147,7 @@ final class IceProxyManager: ObservableObject {
             }
         }
 
-        // Load persisted relay quality scores from UserDefaults.
-        if let data = UserDefaults.standard.data(forKey: Self.qualityScoresDefaultsKey),
-           let scores = try? JSONDecoder().decode([String: RelayQualityScore].self, from: data) {
-            relayQualityScores = scores
-        }
+        relayQualityScores = IceProxyStore.loadRelayQualityScores()
     }
 
     // MARK: - Published state
@@ -492,176 +256,14 @@ final class IceProxyManager: ObservableObject {
         }
     }
 
-    // MARK: - Persistence keys
-
-    private let enabledKey = "ice_enabled"
-    private let relayKey   = "iceActiveRelay"
-    /// Bump to trigger migration from old boolean ice_enabled → IceMode tri-state.
-    private static let modesMigrationVersion = 1
+    // MARK: - Persisted path memory
 
     /// Persists which path successfully handled gRPC traffic last session.
-    /// Used in `.auto` mode to decide the initial routing strategy on launch:
-    ///   "ice"    → start ICE proxy proactively (DPI was present last time)
-    ///   "direct" → try direct first; ICE starts on demand if DPI detected
-    ///   nil      → no history; default to direct-first
-    private static let lastSuccessfulPathKey = "ice_last_successful_path"
+    /// Used in `.auto` mode to choose initial routing on launch.
     static var lastSuccessfulPath: String? {
-        get { UserDefaults.standard.string(forKey: lastSuccessfulPathKey) }
-        set { UserDefaults.standard.set(newValue, forKey: lastSuccessfulPathKey) }
+        get { IceProxyStore.lastSuccessfulPath }
+        set { IceProxyStore.lastSuccessfulPath = newValue }
     }
-
-    // MARK: - Failed relay tracking
-    //
-    // When a relay fails in production, its address is blacklisted so the next
-    // startWithRelayFallback() picks a different relay. TTL is failure-type-aware:
-    // stream timeouts (transient) expire in 60 s; TLS/DPI failures in 300 s.
-    // This prevents over-penalising a relay for a brief connectivity blip while
-    // keeping genuinely broken relays deprioritised long enough to matter.
-
-    /// The reason a relay was blacklisted. Determines how long it stays deprioritised.
-    enum RelayFailureType: CustomStringConvertible {
-        /// obfs4 / TLS handshake could not be completed — likely DPI or cert mismatch.
-        case tlsHandshake
-        /// Tunnel was established but an RPC / stream timed out — transient blip.
-        case streamTimeout
-        /// WebTunnel HTTP upgrade was rejected AND the obfs4 companion also failed.
-        case webTunnelBlocked
-        /// Explicit DPI pattern detected (multiple direct-path timeouts in .auto mode).
-        case dpiDetected
-        /// TLS alert 40 (handshake_failure) indicating relay fingerprint is blocked by DPI.
-        /// Shorter TTL than `tlsHandshake` — rotating relays sooner is more productive.
-        case fingerprintBlocked
-
-        var ttl: TimeInterval {
-            switch self {
-            case .tlsHandshake, .dpiDetected: return 300  // 5 min — persistent failure
-            case .streamTimeout:              return 60   // 1 min — transient, retry soon
-            case .webTunnelBlocked:           return 180  // 3 min — network-specific
-            case .fingerprintBlocked:         return 120  // 2 min — relay-specific DPI
-            }
-        }
-
-        var description: String {
-            switch self {
-            case .tlsHandshake:      return "tlsHandshake"
-            case .streamTimeout:     return "streamTimeout"
-            case .webTunnelBlocked:  return "webTunnelBlocked"
-            case .dpiDetected:       return "dpiDetected"
-            case .fingerprintBlocked:return "fingerprintBlocked"
-            }
-        }
-    }
-
-    private struct RelayBlacklistEntry {
-        let type: RelayFailureType
-        let timestamp: Date
-
-        var isExpired: Bool {
-            Date().timeIntervalSince(timestamp) >= type.ttl
-        }
-    }
-
-    // MARK: - Relay Quality Score
-
-    /// Four-level quality classification derived from historical success/failure counts.
-    /// Drives timeout policy and blacklist tolerance per relay.
-    enum RelayQuality: Int, Codable, CaseIterable {
-        /// No history yet (< 3 RPCs observed).
-        case unknown   = -1
-        /// < 40 % success rate.
-        case poor      =  0
-        /// 40–69 % success rate.
-        case fair      =  1
-        /// 70–89 % success rate.
-        case good      =  2
-        /// ≥ 90 % success rate.
-        case excellent =  3
-
-        /// Whether to trust the relay with the full RPC timeout (vs short probe timeout).
-        var useFullTimeout: Bool { self == .excellent || self == .good }
-
-        /// Whether to use the short fetch-missed-messages wall-clock cap.
-        var useFastFetchCap: Bool { self == .excellent || self == .good }
-
-        /// Consecutive stream timeouts on the same relay before blacklisting it.
-        /// Trusted relays are rotated quickly on failure; unknown/fair relays get an extra chance.
-        var blacklistThreshold: Int { (self == .excellent || self == .good) ? 1 : 2 }
-
-        var logLabel: String {
-            switch self {
-            case .excellent: return "excellent"
-            case .good:      return "good"
-            case .fair:      return "fair"
-            case .poor:      return "poor"
-            case .unknown:   return "unknown"
-            }
-        }
-
-        /// Short badge string shown in Network Settings next to the relay address.
-        var badge: String {
-            switch self {
-            case .excellent: return "★★★★"
-            case .good:      return "★★★☆"
-            case .fair:      return "★★☆☆"
-            case .poor:      return "★☆☆☆"
-            case .unknown:   return "----"
-            }
-        }
-
-        var badgeColor: Color {
-            switch self {
-            case .excellent: return Color.CT.accent
-            case .good:      return Color.CT.accent
-            case .fair:      return Color.CT.accentDim
-            case .poor:      return Color.CT.danger
-            case .unknown:   return Color.CT.textDim
-            }
-        }
-    }
-
-    /// Persisted quality record for a single relay address.
-    struct RelayQualityScore: Codable {
-        var successfulRPCs: Int      = 0
-        var failedRPCs:     Int      = 0
-        /// EWMA-smoothed TCP connect latency in milliseconds. 0 = never measured.
-        var ewmaLatencyMs:  Double   = 0
-        /// When ewmaLatencyMs was last updated (used for cache-freshness check).
-        var latencyMeasuredAt: Date  = .distantPast
-        var lastUsed:          Date  = .distantPast
-
-        var totalRPCs: Int { successfulRPCs + failedRPCs }
-
-        /// True if the latency measurement is fresh enough to skip TCP probing.
-        var hasRecentLatency: Bool {
-            ewmaLatencyMs > 0
-                && Date().timeIntervalSince(latencyMeasuredAt) < NetworkTiming.ICE.latencyCacheValidity
-        }
-
-        var quality: RelayQuality {
-            guard totalRPCs >= 3 else { return .unknown }
-            let rate = Double(successfulRPCs) / Double(totalRPCs)
-            switch rate {
-            case 0.9...: return .excellent
-            case 0.7...: return .good
-            case 0.4...: return .fair
-            default:     return .poor
-            }
-        }
-
-        mutating func applyLatencySample(_ sample: TimeInterval) {
-            let ms    = sample * 1000
-            let alpha = NetworkTiming.ICE.latencyCacheEWMAAlpha
-            ewmaLatencyMs = ewmaLatencyMs > 0 ? alpha * ms + (1 - alpha) * ewmaLatencyMs : ms
-            latencyMeasuredAt = Date()
-            lastUsed = Date()
-        }
-
-        mutating func recordSuccess() { successfulRPCs += 1; lastUsed = Date() }
-        mutating func recordFailure()  { failedRPCs    += 1; lastUsed = Date() }
-    }
-
-    private static let qualityScoresDefaultsKey = "ice_relay_quality_scores_v1"
-    private static let qualityScoresMaxEntries  = 20
 
     /// Persisted quality scores for known relays. Loaded from UserDefaults at init;
     /// updated and saved after every success/failure RPC through ICE.
@@ -726,20 +328,8 @@ final class IceProxyManager: ObservableObject {
     }
 
     private func pruneAndSaveQualityScores() {
-        if relayQualityScores.count > Self.qualityScoresMaxEntries {
-            let sorted = relayQualityScores.sorted { $0.value.lastUsed > $1.value.lastUsed }
-            relayQualityScores = Dictionary(sorted.prefix(Self.qualityScoresMaxEntries)
-                .map { ($0.key, $0.value) }, uniquingKeysWith: { first, _ in first })
-        }
-        guard let data = try? JSONEncoder().encode(relayQualityScores) else { return }
-        UserDefaults.standard.set(data, forKey: Self.qualityScoresDefaultsKey)
-    }
-
-    private static func loadPersistedQualityScores() -> [String: RelayQualityScore] {
-        guard let data = UserDefaults.standard.data(forKey: qualityScoresDefaultsKey),
-              let scores = try? JSONDecoder().decode([String: RelayQualityScore].self, from: data)
-        else { return [:] }
-        return scores
+        relayQualityScores = IceProxyStore.pruneRelayQualityScores(relayQualityScores)
+        IceProxyStore.saveRelayQualityScores(relayQualityScores)
     }
 
     /// Mark the active relay as verified after a successful RPC through ICE.
@@ -751,8 +341,6 @@ final class IceProxyManager: ObservableObject {
         recordRelaySuccess(address: addr, latency: latency)
         return true
     }
-
-    /// Mark the active relay as verified after a successful RPC through ICE.
 
     /// Mark a relay address as recently failed. Called from GRPCChannelManager.recordICEFailure()
     /// before the restart cycle begins.
@@ -789,13 +377,7 @@ final class IceProxyManager: ObservableObject {
     /// a cooldown before the next rotation attempt — without this guard, rapid cycling
     /// fills the relay's per-IP connection limit (8), making all subsequent attempts fail.
     var allRelaysRecentlyFailed: Bool {
-        let host = GRPCChannelManager.shared.currentHost
-        let iceHost = "ice.\(host)"
-        var seen = Set<String>()
-        var all: [String] = []
-        for addr in ["\(iceHost):443"] + ICEConfig.hardcodedRelayAddresses
-            + (UserDefaults.standard.stringArray(forKey: ICEConfig.cachedRelayListKey) ?? [])
-        where seen.insert(addr).inserted { all.append(addr) }
+        let all = IceRelaySelector.candidateAddresses(currentHost: GRPCChannelManager.shared.currentHost)
         guard !all.isEmpty else { return false }
         return all.allSatisfy { isRelayRecentlyFailed($0) }
     }
@@ -822,12 +404,7 @@ final class IceProxyManager: ObservableObject {
     ///
     /// Non-blocking: always call as `Task { await checkCertExpiry() }`.
     private func checkCertExpiry() async {
-        var allAddresses = Set<String>()
-        ICEConfig.hardcodedRelayAddresses.forEach { allAddresses.insert($0) }
-        if let cached = UserDefaults.standard.stringArray(forKey: ICEConfig.cachedRelayListKey) {
-            cached.forEach { allAddresses.insert($0) }
-        }
-
+        let allAddresses = IceRelaySelector.certificateExpiryAddresses()
         let now = Date()
         let thirtyDaysInterval: TimeInterval = 30 * 24 * 3600
         var expiredAddresses:  [String] = []
@@ -862,9 +439,7 @@ final class IceProxyManager: ObservableObject {
     /// `.off` = no ICE, `.auto` = DPI auto-detect (default iOS), `.on` = always ICE (default macOS).
     @Published var mode: IceMode {
         didSet {
-            UserDefaults.standard.set(mode.rawValue, forKey: IceMode.defaultsKey)
-            // Also keep legacy key in sync for iceProxyPort() fast-path reads.
-            UserDefaults.standard.set(mode == .on, forKey: enabledKey)
+            IceProxyStore.saveMode(mode)
             // Push new mode into GRPCChannelManager's in-memory cache immediately
             // so iceProxyPort() never needs a UserDefaults read on the hot path.
             GRPCChannelManager.shared.updateCachedIceMode(mode)
@@ -1251,144 +826,7 @@ final class IceProxyManager: ObservableObject {
     /// Deduplicates while preserving order (server list takes priority).
     /// The list is then reordered to prefer relays closer to the user's timezone.
     func cachedRelayAddresses() -> [String] {
-        let server   = UserDefaults.standard.stringArray(forKey: ICEConfig.cachedRelayListKey) ?? []
-        let fallback = ICEConfig.hardcodedRelayAddresses
-        var seen = Set<String>()
-        return (server + fallback).filter { seen.insert($0).inserted }
-    }
-
-    /// Returns the OTA-cached relay-region rules, falling back to hardcoded defaults.
-    private func effectiveRelayRegions() -> [ICERelayRegion] {
-        if let data = UserDefaults.standard.data(forKey: ICEConfig.cachedRelayRegionsKey),
-           let regions = try? JSONDecoder().decode([ICERelayRegion].self, from: data) {
-            return regions
-        }
-        return ICEConfig.hardcodedRelayRegions
-    }
-
-    /// Reorders `candidates` so that region-preferred relay addresses appear first.
-    /// Matches the device's current UTC offset against the first applicable rule.
-    /// Candidates not listed in `preferredRelays` keep their relative order at the end.
-    private func applyRegionPreference(to candidates: [String]) -> [String] {
-        let tzOffset = TimeZone.current.secondsFromGMT() / 3600
-        guard let rule = effectiveRelayRegions().first(where: {
-            tzOffset >= $0.tzOffsetMin && tzOffset <= $0.tzOffsetMax
-        }) else { return candidates }
-        let preferred = rule.preferredRelays
-        let front = preferred.filter { candidates.contains($0) }
-        let back  = candidates.filter { !preferred.contains($0) }
-        return front + back
-    }
-
-    // MARK: - Latency probing
-
-    /// Opens a TCP connection to `host:port` and returns the time-to-ready, or nil if unreachable
-    /// within `timeout` seconds. Used to order relay candidates before starting the proxy.
-    private static func probeLatency(address: String, timeout: TimeInterval = NetworkTiming.ICE.relayLatencyProbeTimeout) async -> TimeInterval? {
-        let parts = address.split(separator: ":")
-        guard parts.count >= 2, let port = NWEndpoint.Port(String(parts.last!)) else { return nil }
-        let hostname = String(parts.dropLast().joined(separator: ":"))
-
-        return await withCheckedContinuation { continuation in
-            let conn = NWConnection(host: .init(hostname), port: port, using: .tcp)
-            // Protect the one-shot resume flag against concurrent access from the
-            // stateUpdateHandler (NW queue) and the timeout (utility queue).
-            let flag = OnceResumeFlag()
-            let start = CFAbsoluteTimeGetCurrent()
-
-            conn.stateUpdateHandler = { state in
-                switch state {
-                case .ready:
-                    guard flag.trigger() else { return }
-                    conn.cancel()
-                    continuation.resume(returning: CFAbsoluteTimeGetCurrent() - start)
-                case .failed, .cancelled:
-                    guard flag.trigger() else { return }
-                    continuation.resume(returning: nil)
-                default: break
-                }
-            }
-            conn.start(queue: .global(qos: .utility))
-
-            DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + timeout) {
-                guard flag.trigger() else { return }
-                conn.cancel()
-                continuation.resume(returning: nil)
-            }
-        }
-    }
-
-    /// Probes all `addresses` concurrently and returns them sorted by TCP latency (fastest first).
-    /// Unreachable endpoints (probe timed out) are placed at the end so they are still tried.
-    ///
-    /// Cache-aware: addresses with a valid EWMA entry (< 5 min old) are not re-probed.
-    /// Only stale or uncached addresses are probed; results are merged with the cache.
-    /// EWMA is updated with alpha=0.3 on every fresh measurement.
-    ///
-    /// Early-exit optimisation: once the first reachable result arrives, a grace timer of
-    /// `NetworkTiming.ICE.sortByLatencyEarlyExitDelay` starts. Any probes that haven't
-    /// responded by the deadline are treated as unreachable and appended at the end —
-    /// they are still tried, just last. This prevents waiting the full `relayLatencyProbeTimeout`
-    /// for blocked endpoints (e.g. AMS unreachable in RU) when a relay already responded.
-    private func sortByLatency(_ addresses: [String], timeout: TimeInterval = NetworkTiming.ICE.relayLatencyProbeTimeout) async -> [String] {
-        guard !addresses.isEmpty else { return [] }
-
-        // Split into addresses that have a fresh latency entry and those that need probing.
-        var cachedEntries:   [(String, TimeInterval)] = []
-        var toProbe:         [String] = []
-
-        for address in addresses {
-            if let score = relayQualityScores[address], score.hasRecentLatency {
-                cachedEntries.append((address, score.ewmaLatencyMs / 1000))
-            } else {
-                toProbe.append(address)
-            }
-        }
-
-        var probeResults: [(String, TimeInterval?)] = []
-        var earlyExitAfter: Date? = nil
-
-        if !toProbe.isEmpty {
-            await withTaskGroup(of: (String, TimeInterval?).self) { group in
-                for address in toProbe {
-                    group.addTask { (address, await Self.probeLatency(address: address, timeout: timeout)) }
-                }
-                for await (addr, lat) in group {
-                    probeResults.append((addr, lat))
-                    if lat != nil, earlyExitAfter == nil {
-                        earlyExitAfter = Date().addingTimeInterval(NetworkTiming.ICE.sortByLatencyEarlyExitDelay)
-                    }
-                    if probeResults.count == toProbe.count { break }
-                    if let deadline = earlyExitAfter, Date() >= deadline {
-                        group.cancelAll()
-                        break
-                    }
-                }
-            }
-
-            // Update quality scores with fresh probe results (EWMA latency only).
-            for (addr, lat) in probeResults {
-                guard let sample = lat else { continue }
-                relayQualityScores[addr, default: RelayQualityScore()].applyLatencySample(sample)
-            }
-            if !probeResults.isEmpty { pruneAndSaveQualityScores() }
-        }
-
-        if !cachedEntries.isEmpty {
-            let skipped = cachedEntries.map { "\($0.0) (\(Int($0.1 * 1000))ms cached)" }.joined(separator: ", ")
-            Log.debug("🧊 Latency cache hit for: \(skipped)", category: "ICE")
-        }
-
-        // Merge: cached entries + fresh probe results (reachable) + unreachable
-        let freshReachable = probeResults.filter { $0.1 != nil }
-        let allReachable: [(String, TimeInterval)] = (cachedEntries + freshReachable.map { ($0.0, $0.1!) })
-            .sorted { $0.1 < $1.1 }
-
-        let probedSet = Set(probeResults.map(\.0))
-        let cancelled = toProbe.filter { !probedSet.contains($0) }
-        let unreachable = probeResults.filter { $0.1 == nil }.map(\.0) + cancelled
-
-        return allReachable.map(\.0) + unreachable
+        IceRelaySelector.cachedRelayAddresses()
     }
 
     // MARK: - Multi-endpoint startup
@@ -1402,16 +840,10 @@ final class IceProxyManager: ObservableObject {
     /// Returns `true` if any endpoint started successfully.
     @discardableResult
     private func startWithRelayFallback(cert: String, generation: Int? = nil) async -> Bool {
-        let host    = GRPCChannelManager.shared.currentHost
-        let iceHost = "ice.\(host)"
-
         // Build address→manifestId reverse map from the cached relay config.
         // Used to carry stable relay IDs into IceRelay instances so that
         // fetchConfigAndEvictIfRemoved() can detect retired relays by ID, not address.
-        let manifestIdMap: [String: String] = {
-            let infos = IceCertFetcher.cachedRelayInfosSync() ?? []
-            return Dictionary(uniqueKeysWithValues: infos.map { ($0.addressWithPort, $0.id) })
-        }()
+        let manifestIdMap = IceRelaySelector.manifestIdMap()
 
         // Fast path: if there's a stored relay from the last successful start and it's
         // not on the recent-failure list, try it immediately without probing all endpoints.
@@ -1429,37 +861,35 @@ final class IceProxyManager: ObservableObject {
             Log.info("🧊 Cached relay \(stored.address) failed — probing all endpoints", category: "ICE")
         }
 
-        // Deduplicated candidate list: primary (AMS) + hardcoded + server-fetched relays.
-        var seen = Set<String>()
-        var candidates: [String] = []
-        let allAddresses = ["\(iceHost):443"] + ICEConfig.hardcodedRelayAddresses
-            + (UserDefaults.standard.stringArray(forKey: ICEConfig.cachedRelayListKey) ?? [])
-        for addr in allAddresses where seen.insert(addr).inserted { candidates.append(addr) }
-
         // Probe all endpoints concurrently and sort by TCP latency (fastest first).
         // Region preference is applied first so that region-preferred relays win tie-breaks.
-        var ordered = await sortByLatency(applyRegionPreference(to: candidates))
+        let candidates = IceRelaySelector.candidateAddresses(currentHost: GRPCChannelManager.shared.currentHost)
+        let latencySelection = await IceRelaySelector.sortByLatency(
+            IceRelaySelector.applyRegionPreference(to: candidates),
+            relayQualityScores: relayQualityScores
+        )
+        relayQualityScores = latencySelection.relayQualityScores
+        if latencySelection.measuredLatency { pruneAndSaveQualityScores() }
+        var ordered = latencySelection.orderedAddresses
 
         // Abort if a newer start sequence (network change, rotation) superseded us while probing.
         if let gen = generation, proxyStartGeneration != gen {
             Log.info("🧊 Startup superseded during latency probe (gen \(gen)→\(proxyStartGeneration)) — aborting", category: "ICE")
             return false
         }
-        let notFailed = ordered.filter { !isRelayRecentlyFailed($0) }
-        let failed    = ordered.filter { isRelayRecentlyFailed($0) }
-        if !failed.isEmpty {
-            if notFailed.isEmpty {
-                // All relays recently failed. Among them, prefer WebTunnel-capable relays first:
-                // CDN-fronted HTTPS WebSocket is immune to TLS fingerprint DPI (obfs4 TLS profile
-                // can be identified over time; WebTunnel uses standard HTTPS and is CDN-fronted).
-                // start() falls through to TLS+obfs4 automatically if WebTunnel itself fails.
-                let failedWT   = failed.filter { IceCertFetcher.wtPathSync(for: $0) != nil && !webTunnelBlockedRelays.contains($0) }
-                let failedNoWT = failed.filter { IceCertFetcher.wtPathSync(for: $0) == nil || webTunnelBlockedRelays.contains($0) }
-                ordered = failedWT + failedNoWT
-            } else {
-                ordered = notFailed + failed
-            }
-            Log.info("🧊 Deprioritized recently-failed relay(s): \(failed.joined(separator: ", "))", category: "ICE")
+        let failedRelaySnapshot = recentlyFailedRelays
+        let blockedWebTunnelSnapshot = webTunnelBlockedRelays
+        let failureSelection = IceRelaySelector.deprioritizeFailed(
+            ordered,
+            isRecentlyFailed: { address in
+                guard let entry = failedRelaySnapshot[address] else { return false }
+                return !entry.isExpired
+            },
+            isWebTunnelBlocked: { blockedWebTunnelSnapshot.contains($0) }
+        )
+        ordered = failureSelection.orderedAddresses
+        if !failureSelection.failedAddresses.isEmpty {
+            Log.info("🧊 Deprioritized recently-failed relay(s): \(failureSelection.failedAddresses.joined(separator: ", "))", category: "ICE")
         }
 
         Log.info("🧊 Relay probe order: \(ordered.joined(separator: " → "))", category: "ICE")
@@ -1495,33 +925,27 @@ final class IceProxyManager: ObservableObject {
     @MainActor
     @discardableResult
     func startBothRelaysForHappyEyeballs(cert: String) async -> Bool {
-        let host    = GRPCChannelManager.shared.currentHost
-        let iceHost = "ice.\(host)"
+        let manifestIdMap = IceRelaySelector.manifestIdMap()
+        let candidates = IceRelaySelector.candidateAddresses(currentHost: GRPCChannelManager.shared.currentHost)
+        let latencySelection = await IceRelaySelector.sortByLatency(
+            IceRelaySelector.applyRegionPreference(to: candidates),
+            relayQualityScores: relayQualityScores
+        )
+        relayQualityScores = latencySelection.relayQualityScores
+        if latencySelection.measuredLatency { pruneAndSaveQualityScores() }
 
-        let manifestIdMap: [String: String] = {
-            let infos = IceCertFetcher.cachedRelayInfosSync() ?? []
-            return Dictionary(uniqueKeysWithValues: infos.map { ($0.addressWithPort, $0.id) })
-        }()
-
-        var seen = Set<String>()
-        var candidates: [String] = []
-        let allAddresses = ["\(iceHost):443"] + ICEConfig.hardcodedRelayAddresses
-            + (UserDefaults.standard.stringArray(forKey: ICEConfig.cachedRelayListKey) ?? [])
-        for addr in allAddresses where seen.insert(addr).inserted { candidates.append(addr) }
-
-        var ordered = await sortByLatency(applyRegionPreference(to: candidates))
+        let failedRelaySnapshot = recentlyFailedRelays
+        let blockedWebTunnelSnapshot = webTunnelBlockedRelays
+        let failureSelection = IceRelaySelector.deprioritizeFailed(
+            latencySelection.orderedAddresses,
+            isRecentlyFailed: { address in
+                guard let entry = failedRelaySnapshot[address] else { return false }
+                return !entry.isExpired
+            },
+            isWebTunnelBlocked: { blockedWebTunnelSnapshot.contains($0) }
+        )
+        let ordered = failureSelection.orderedAddresses
         guard !ordered.isEmpty else { return false }
-        let notFailed = ordered.filter { !isRelayRecentlyFailed($0) }
-        let failed    = ordered.filter { isRelayRecentlyFailed($0) }
-        if !failed.isEmpty {
-            if notFailed.isEmpty {
-                let failedWT   = failed.filter { IceCertFetcher.wtPathSync(for: $0) != nil && !webTunnelBlockedRelays.contains($0) }
-                let failedNoWT = failed.filter { IceCertFetcher.wtPathSync(for: $0) == nil || webTunnelBlockedRelays.contains($0) }
-                ordered = failedWT + failedNoWT
-            } else {
-                ordered = notFailed + failed
-            }
-        }
 
         let primaryAddress   = ordered[0]
         let secondaryAddress = ordered.count > 1 ? ordered[1] : nil
@@ -1584,10 +1008,9 @@ final class IceProxyManager: ObservableObject {
     /// to the new `IceMode` tri-state. Also clears stale DPI auto-detection from the
     /// "connection preface" false-positive era.
     private func migrateToModeIfNeeded() {
-        let modeKey = "ice_mode_migration_v\(Self.modesMigrationVersion)"
-        if !UserDefaults.standard.bool(forKey: modeKey) {
-            UserDefaults.standard.set(true, forKey: modeKey)
-            if UserDefaults.standard.string(forKey: IceMode.defaultsKey) == nil {
+        if IceProxyStore.needsModeMigration {
+            IceProxyStore.markModeMigrationDone()
+            if !IceProxyStore.hasStoredMode {
                 let migrated = IceMode.migrateFromLegacy()
                 mode = migrated
                 Log.info("🧊 Migrated to IceMode: \(migrated.rawValue)", category: "ICE")
@@ -1937,32 +1360,9 @@ final class IceProxyManager: ObservableObject {
 
     // MARK: - State machine
 
-    /// Explicit connection states replacing the 5 implicit boolean flags.
-    ///
-    /// Valid transitions:
-    ///   off  ──────────────────────► active(...)
-    ///   off  ──────────────────────► standby(...)
-    ///   off  ──────────────────────► cooldown
-    ///   standby ──────────────────► active(...)
-    ///   standby ──────────────────► off
-    ///   active  ──────────────────► off
-    ///   active  ──────────────────► cooldown
-    ///   cooldown ─────────────────► off
-    enum ConnectionState: Equatable {
-        /// No proxy running; gRPC routes direct or ICE is not available.
-        case off
-        /// ICE proxy pre-warming in standby (`isStandbyPrewarm = true`).
-        /// The proxy is running but gRPC is NOT routed through it yet.
-        case standby(port: UInt16)
-        /// ICE proxy is active and gRPC routes through it.
-        case active(port: UInt16, webTunnel: Bool)
-        /// Exponential-backoff cooldown after consecutive failures.
-        case cooldown
-    }
-
     /// Current stable state, derived from the four source-of-truth `@Published` flags.
     /// Use this for logic; set state via `applyState(_:)` only.
-    var connectionState: ConnectionState {
+    var connectionState: IceConnectionState {
         if isOnCooldown { return .cooldown }
         guard isRunning else { return .off }
         if isStandbyPrewarm { return .standby(port: proxyPort) }
@@ -1971,7 +1371,7 @@ final class IceProxyManager: ObservableObject {
 
     /// The single point where published connection flags are mutated.
     /// Calling this ensures all flags are always set consistently.
-    private func applyState(_ state: ConnectionState) {
+    private func applyState(_ state: IceConnectionState) {
         switch state {
         case .off:
             isRunning        = false
@@ -2079,14 +1479,11 @@ final class IceProxyManager: ObservableObject {
     }
 
     func saveRelay(_ relay: IceRelay) {
-        if let data = try? JSONEncoder().encode(relay) {
-            UserDefaults.standard.set(data, forKey: relayKey)
-        }
+        IceProxyStore.saveStoredRelay(relay)
     }
 
     func loadStoredRelay() -> IceRelay? {
-        guard let data = UserDefaults.standard.data(forKey: relayKey),
-              let relay = try? JSONDecoder().decode(IceRelay.self, from: data) else { return nil }
+        guard let relay = IceProxyStore.loadStoredRelay() else { return nil }
         // Migrate stored relays that still use legacy port 9443 (plain obfs4, no TLS wrapper).
         // Upgrade to port 443 with TLS SNI — all relays now run TLS-over-obfs4 via Traefik.
         // Exception: known companion obfs4 addresses (e.g. mskRelayObfs4Address = "IP:9443")
@@ -2107,12 +1504,12 @@ final class IceProxyManager: ObservableObject {
             let activeIds  = Set((IceCertFetcher.cachedRelayInfosSync() ?? []).map(\.id))
             if deprecated.contains(mid) {
                 Log.info("🧊 Cached relay \(relay.address) [\(mid)] is deprecated — evicting", category: "ICE")
-                UserDefaults.standard.removeObject(forKey: relayKey)
+                IceProxyStore.clearStoredRelay()
                 return nil
             }
             if !activeIds.isEmpty && !activeIds.contains(mid) {
                 Log.info("🧊 Cached relay \(relay.address) [\(mid)] removed from server config — evicting", category: "ICE")
-                UserDefaults.standard.removeObject(forKey: relayKey)
+                IceProxyStore.clearStoredRelay()
                 return nil
             }
         }

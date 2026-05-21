@@ -25,6 +25,7 @@ struct NotificationsSettingsView: View {
 
     // MARK: - State
     @State private var authorizationStatus: UNAuthorizationStatus = .notDetermined
+    private let notificationCenter = UNUserNotificationCenter.current()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -289,16 +290,16 @@ struct NotificationsSettingsView: View {
 
     // MARK: - Methods
     private func checkNotificationAuthorization() {
-        UNUserNotificationCenter.current().getNotificationSettings { settings in
-            DispatchQueue.main.async {
+        notificationCenter.getNotificationSettings { settings in
+            Task { @MainActor in
                 authorizationStatus = settings.authorizationStatus
             }
         }
     }
 
     private func requestNotificationPermission() {
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, _ in
-            DispatchQueue.main.async {
+        notificationCenter.requestAuthorization(options: [.alert, .badge, .sound]) { granted, _ in
+            Task { @MainActor in
                 checkNotificationAuthorization()
                 if granted {
                     notificationsEnabled = true

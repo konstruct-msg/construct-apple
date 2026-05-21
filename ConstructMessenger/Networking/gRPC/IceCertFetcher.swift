@@ -286,7 +286,6 @@ actor IceCertFetcher {
                         let deprecatedNote = deprecatedIds.isEmpty ? "" : " (deprecated: \(deprecatedIds.joined(separator: ", ")))"
                         Log.info("🧊 Relay config via \(url.host ?? "?"): \(relays.count) relay(s)\(deprecatedNote)", category: "ICE")
                         return relays
-                        return relays
                     } catch {
                         Log.debug("🧊 \(url.host ?? "") fetch error: \(error)", category: "ICE")
                         return nil

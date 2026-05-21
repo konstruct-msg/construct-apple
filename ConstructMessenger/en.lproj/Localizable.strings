@@ -7,6 +7,12 @@
 "constrcut_titlte" = "KONSTRUCT";
 "search_prompt" = "Search";
 
+// MARK: - Loading Screen
+"app_loading_state" = "Initializing secure state";
+"app_loading_stage_transport" = "warming transport envelope";
+"app_loading_stage_identity" = "restoring identity envelope";
+"app_loading_stage_streams" = "preparing encrypted streams";
+
 // MARK: - Main Tabs
 "chats" = "Chats";
 "settings" = "Settings";

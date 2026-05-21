@@ -20,7 +20,7 @@ struct BackgroundFetchSettingsView: View {
     @State private var intervalMinutes: Int = BackgroundFetchConfig.defaultIntervalMinutes
     @State private var isLowPowerModeEnabled: Bool = false
     @State private var showingLowPowerModeAlert = false
-    private let fetchManager = BackgroundFetchManager.shared
+    @State private var fetchManager = BackgroundFetchManager.shared
 
     // MARK: - Body
     var body: some View {
@@ -183,7 +183,7 @@ struct BackgroundFetchSettingsView: View {
                 }
             } label: {
                 Image(systemName: "minus")
-                    .font(.system(size: BackgroundFetchSettingsLayout.stepperButtonFontSize, weight: .bold))
+                    .font(CTFont.bold(BackgroundFetchSettingsLayout.stepperButtonFontSize))
                     .foregroundColor(intervalMinutes > BackgroundFetchConfig.minIntervalMinutes ? Color.CT.accent : Color.CT.textDim)
                     .frame(
                         width: BackgroundFetchSettingsLayout.stepperButtonWidth,
@@ -246,7 +246,7 @@ struct BackgroundFetchSettingsView: View {
                 }
             } label: {
                 Image(systemName: "plus")
-                    .font(.system(size: BackgroundFetchSettingsLayout.stepperButtonFontSize, weight: .bold))
+                    .font(CTFont.bold(BackgroundFetchSettingsLayout.stepperButtonFontSize))
                     .foregroundColor(intervalMinutes < BackgroundFetchConfig.maxIntervalMinutes ? Color.CT.accent : Color.CT.textDim)
                     .frame(
                         width: BackgroundFetchSettingsLayout.stepperButtonWidth,
@@ -258,7 +258,7 @@ struct BackgroundFetchSettingsView: View {
         }
         .overlay(
             Rectangle()
-                .stroke(Color.CT.noise, lineWidth: 1)
+                .stroke(Color.CT.noise, lineWidth: BackgroundFetchSettingsLayout.stepperBorderStrokeWidth)
         )
     }
 

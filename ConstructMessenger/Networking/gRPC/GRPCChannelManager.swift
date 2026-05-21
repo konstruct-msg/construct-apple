@@ -383,13 +383,18 @@ final class GRPCChannelManager: Sendable {
     /// Creates a new `GRPCClient` with TLS transport.
     /// Caller is responsible for running the client via `runConnections()` in a Task.
     func makeClient() throws -> GRPCClient<HTTP2ClientTransport.TransportServices> {
-        // ICE mode: connect to local proxy with plaintext, proxy handles obfs4 to relay
+        // ICE mode: connect to local proxy with plaintext, proxy handles obfs4 to relay.
+        // The :authority pseudo-header MUST be the logical server hostname (currentHost) —
+        // upstream HTTP routers (e.g. Traefik Host(...) rule) match on :authority and would
+        // 404 if it was the transport address (127.0.0.1).
         if let icePort = iceProxyPort() {
             Log.info("🧊 gRPC via ICE proxy → 127.0.0.1:\(icePort)", category: "gRPC")
+            let logicalAuthority = currentHost
             let transport = try HTTP2ClientTransport.TransportServices(
                 target: .ipv4(address: "127.0.0.1", port: Int(icePort)),
                 transportSecurity: .plaintext,
                 config: .defaults {
+                    $0.http2.authority = logicalAuthority
                     // Keepalive is essential on cellular: carrier NAT drops idle TCP connections
                     // after ~30-60s. Without keepalive pings the tunnel dies silently.
                     $0.connection = .init(
@@ -462,11 +467,18 @@ final class GRPCChannelManager: Sendable {
     }
 
     /// Used for the ICE legs of a happy-eyeballs 3-way race.
+    ///
+    /// The transport target is the local ICE proxy (127.0.0.1:port), but the gRPC
+    /// `:authority` pseudo-header MUST be the logical server hostname — otherwise
+    /// upstream HTTP routers (Traefik `Host(...)` rule) won't match the request
+    /// and reply 404 even though the byte-pipe is healthy.
     func makeICEClient(port: UInt16) throws -> GRPCClient<HTTP2ClientTransport.TransportServices> {
+        let logicalAuthority = currentHost
         let transport = try HTTP2ClientTransport.TransportServices(
             target: .ipv4(address: "127.0.0.1", port: Int(port)),
             transportSecurity: .plaintext,
             config: .defaults {
+                $0.http2.authority = logicalAuthority
                 $0.connection = .init(
                     maxIdleTime: .seconds(NetworkTiming.GRPC.maxIdleTimeSeconds),
                     keepalive: .init(

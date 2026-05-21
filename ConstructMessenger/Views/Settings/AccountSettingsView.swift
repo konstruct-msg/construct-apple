@@ -61,24 +61,24 @@ struct AccountSettingsView: View {
                     identitySection
                     flatDivider(thick: true)
                     accountSection
-                        .opacity(isEditingProfile ? 0.5 : 1)
+                        .opacity(isEditingProfile ? AccountSettingsLayout.sectionDisabledOpacity : 1)
                         .disabled(isEditingProfile)
                     flatDivider(thick: true)
                     backupSection
-                        .opacity(isEditingProfile ? 0.5 : 1)
+                        .opacity(isEditingProfile ? AccountSettingsLayout.sectionDisabledOpacity : 1)
                         .disabled(isEditingProfile)
                     flatDivider(thick: true)
                     dangerSection
-                        .opacity(isEditingProfile ? 0.5 : 1)
+                        .opacity(isEditingProfile ? AccountSettingsLayout.sectionDisabledOpacity : 1)
                         .disabled(isEditingProfile)
                     flatDivider(thick: true)
 
                     Text(NSLocalizedString("changes_encrypted_footer", comment: ""))
                         .font(CTFont.regular(11))
-                        .foregroundStyle(Color.CT.accent.opacity(0.6))
+                        .foregroundStyle(Color.CT.accent.opacity(AccountSettingsLayout.footerTextOpacity))
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 12)
+                        .padding(.horizontal, AccountSettingsLayout.footerHorizontalPadding)
+                        .padding(.vertical, AccountSettingsLayout.footerVerticalPadding)
                 }
             }
         }
@@ -119,7 +119,9 @@ struct AccountSettingsView: View {
         .sheet(isPresented: $showingAvatarViewer) {
             AvatarViewerSheet(image: viewModel.profileImage, onChangeAvatar: {
                 showingAvatarViewer = false
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { showingImagePicker = true }
+                DispatchQueue.main.asyncAfter(deadline: .now() + AccountSettingsLayout.postAvatarPickerDelay) {
+                    showingImagePicker = true
+                }
             })
         }
         .photosPicker(isPresented: $showingImagePicker, selection: $selectedPhotoItem, matching: .images)
@@ -201,7 +203,7 @@ struct AccountSettingsView: View {
     // MARK: - Avatar Header
 
     private var avatarHeader: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: AccountSettingsLayout.avatarSectionSpacing) {
             HexagonAvatarView(
                 userId: viewModel.userId,
                 displayName: viewModel.displayName,
@@ -214,7 +216,7 @@ struct AccountSettingsView: View {
                 if viewModel.profileImage != nil { showingAvatarViewer = true }
                 else { showingImagePicker = true }
             }
-            .opacity(isEditingProfile ? 0.55 : 1.0)
+            .opacity(isEditingProfile ? AccountSettingsLayout.avatarSectionEditingOpacity : 1)
 
             Button {
                 guard !isEditingProfile else { return }
@@ -228,7 +230,7 @@ struct AccountSettingsView: View {
             .disabled(isEditingProfile)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 28)
+        .padding(.vertical, AccountSettingsLayout.avatarSectionVerticalPadding)
     }
 
     // MARK: - Identity Section
@@ -240,8 +242,8 @@ struct AccountSettingsView: View {
                 Text(NSLocalizedString("account_editing_profile", comment: ""))
                     .font(CTFont.regular(11))
                     .foregroundStyle(Color.CT.accent)
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 8)
+                    .padding(.horizontal, AccountSettingsLayout.sectionHintHorizontalPadding)
+                    .padding(.bottom, AccountSettingsLayout.sectionHintBottomPadding)
             }
             flatRowDivider()
 
@@ -256,15 +258,15 @@ struct AccountSettingsView: View {
                 lowercased: true
             )
             flatRowDivider()
-            HStack(spacing: 8) {
+            HStack(spacing: AccountSettingsLayout.discoverableRowSpacing) {
                 Text(viewModel.isDiscoverable
                     ? NSLocalizedString("searchable_indicator", comment: "")
                     : NSLocalizedString("searchable_indicator_off", comment: ""))
                     .font(CTFont.regular(12))
                     .foregroundStyle(viewModel.isDiscoverable ? Color.CT.accent : Color.CT.noise)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
+            .padding(.horizontal, AccountSettingsLayout.discoverableRowHorizontalPadding)
+            .padding(.vertical, AccountSettingsLayout.discoverableRowVerticalPadding)
             flatRowDivider()
 
             profileEditableRow(
@@ -278,13 +280,13 @@ struct AccountSettingsView: View {
 
             // status — placeholder, not yet implemented
             profileRow(label: NSLocalizedString("status", comment: "")) {
-                HStack(spacing: 8) {
+                HStack(spacing: AccountSettingsLayout.inlineStatusSpacing) {
                     Text("[[ONLINE]]")
                         .font(CTFont.regular(14))
                         .foregroundStyle(Color.CT.accent)
                     Text("[→]")
                         .font(CTFont.regular(13))
-                        .foregroundStyle(Color.CT.accent.opacity(0.6))
+                        .foregroundStyle(Color.CT.accent.opacity(AccountSettingsLayout.inlineStatusAccentOpacity))
                 }
             }
         }
@@ -320,8 +322,8 @@ struct AccountSettingsView: View {
                         .font(CTFont.regular(13))
                         .foregroundStyle(Color.CT.accent)
                 }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 14)
+                .padding(.horizontal, AccountSettingsLayout.rowHorizontalPadding)
+                .padding(.vertical, AccountSettingsLayout.rowVerticalPadding)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -342,8 +344,8 @@ struct AccountSettingsView: View {
                         .font(CTFont.regular(13))
                         .foregroundStyle(Color.CT.accent)
                 }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 14)
+                .padding(.horizontal, AccountSettingsLayout.rowHorizontalPadding)
+                .padding(.vertical, AccountSettingsLayout.rowVerticalPadding)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -362,8 +364,8 @@ struct AccountSettingsView: View {
                         .font(CTFont.regular(13))
                         .foregroundStyle(Color.CT.accent)
                 }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 14)
+                .padding(.horizontal, AccountSettingsLayout.rowHorizontalPadding)
+                .padding(.vertical, AccountSettingsLayout.rowVerticalPadding)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -387,8 +389,8 @@ struct AccountSettingsView: View {
                         .font(CTFont.regular(13))
                         .foregroundStyle(Color.CT.accent)
                 }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 14)
+                .padding(.horizontal, AccountSettingsLayout.rowHorizontalPadding)
+                .padding(.vertical, AccountSettingsLayout.rowVerticalPadding)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -404,8 +406,8 @@ struct AccountSettingsView: View {
                         .font(CTFont.regular(13))
                         .foregroundStyle(Color.CT.accent)
                 }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 14)
+                .padding(.horizontal, AccountSettingsLayout.rowHorizontalPadding)
+                .padding(.vertical, AccountSettingsLayout.rowVerticalPadding)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -421,8 +423,8 @@ struct AccountSettingsView: View {
                         .font(CTFont.regular(13))
                         .foregroundStyle(Color.CT.accent)
                 }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 14)
+                .padding(.horizontal, AccountSettingsLayout.rowHorizontalPadding)
+                .padding(.vertical, AccountSettingsLayout.rowVerticalPadding)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -438,8 +440,8 @@ struct AccountSettingsView: View {
                         .font(CTFont.regular(13))
                         .foregroundStyle(Color.CT.accent)
                 }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 14)
+                .padding(.horizontal, AccountSettingsLayout.rowHorizontalPadding)
+                .padding(.vertical, AccountSettingsLayout.rowVerticalPadding)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -460,14 +462,14 @@ struct AccountSettingsView: View {
                 HStack {
                     Text(NSLocalizedString("logout_all_row", comment: "").lowercased())
                         .font(CTFont.regular(14))
-                        .foregroundStyle(Color.CT.danger.opacity(0.85))
+                        .foregroundStyle(Color.CT.danger.opacity(AccountSettingsLayout.dangerPrimaryOpacity))
                     Spacer()
                     Text("[→]")
                         .font(CTFont.regular(13))
-                        .foregroundStyle(Color.CT.danger.opacity(0.7))
+                        .foregroundStyle(Color.CT.danger.opacity(AccountSettingsLayout.dangerSecondaryOpacity))
                 }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 14)
+                .padding(.horizontal, AccountSettingsLayout.rowHorizontalPadding)
+                .padding(.vertical, AccountSettingsLayout.rowVerticalPadding)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -484,10 +486,10 @@ struct AccountSettingsView: View {
                     Spacer()
                     Text("[\(NSLocalizedString("delete_action", comment: "")) →]")
                         .font(CTFont.regular(13))
-                        .foregroundStyle(Color.CT.danger.opacity(0.7))
+                        .foregroundStyle(Color.CT.danger.opacity(AccountSettingsLayout.dangerSecondaryOpacity))
                 }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 14)
+                .padding(.horizontal, AccountSettingsLayout.rowHorizontalPadding)
+                .padding(.vertical, AccountSettingsLayout.rowVerticalPadding)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -512,29 +514,29 @@ struct AccountSettingsView: View {
 
     private func flatDivider(thick: Bool = false) -> some View {
         Rectangle()
-            .fill(thick ? Color.CT.noise : Color.CT.noise.opacity(0.5))
-            .frame(height: 1)
+            .fill(thick ? Color.CT.noise : Color.CT.noise.opacity(AccountSettingsLayout.dividerRegularOpacity))
+            .frame(height: AccountSettingsLayout.dividerHeight)
     }
 
     private func flatRowDivider() -> some View {
         Rectangle()
-            .fill(Color.CT.noise.opacity(0.35))
-            .frame(height: 1)
-            .padding(.horizontal, 20)
+            .fill(Color.CT.noise.opacity(AccountSettingsLayout.dividerRowOpacity))
+            .frame(height: AccountSettingsLayout.dividerHeight)
+            .padding(.horizontal, AccountSettingsLayout.dividerHorizontalPadding)
     }
 
     private func sectionHeader(_ title: String, color: Color = Color.CT.accent) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: AccountSettingsLayout.sectionHeaderSpacing) {
             Text(">")
                 .font(CTFont.bold(12))
                 .foregroundStyle(color)
             Text(title.uppercased())
                 .font(CTFont.bold(12))
                 .foregroundStyle(color)
-                .tracking(2)
+                .tracking(AccountSettingsLayout.sectionHeaderTracking)
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 10)
+        .padding(.horizontal, AccountSettingsLayout.sectionHeaderHorizontalPadding)
+        .padding(.vertical, AccountSettingsLayout.sectionHeaderVerticalPadding)
     }
 
     private func profileRow<V: View>(label: String, @ViewBuilder value: () -> V) -> some View {
@@ -545,8 +547,8 @@ struct AccountSettingsView: View {
             Spacer()
             value()
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 14)
+        .padding(.horizontal, AccountSettingsLayout.rowHorizontalPadding)
+        .padding(.vertical, AccountSettingsLayout.rowVerticalPadding)
     }
 
     private func profileEditableRow(
@@ -585,12 +587,12 @@ struct AccountSettingsView: View {
                                 value.wrappedValue = updated
                             }
                         }
-                        .frame(maxWidth: 190)
+                        .frame(maxWidth: AccountSettingsLayout.editableFieldMaxWidth)
 
                     if isSaving {
                         ProgressView()
                             .tint(Color.CT.accent)
-                            .scaleEffect(0.8)
+                            .scaleEffect(AccountSettingsLayout.editableSavingIndicatorScale)
                     }
                 } else {
                     Text(value.wrappedValue.isEmpty ? "—" : value.wrappedValue)
@@ -598,21 +600,21 @@ struct AccountSettingsView: View {
                         .foregroundStyle(Color.CT.text)
                 }
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 14)
+            .padding(.horizontal, AccountSettingsLayout.rowHorizontalPadding)
+            .padding(.vertical, AccountSettingsLayout.rowVerticalPadding)
 
             if let err = errorMessage, !err.isEmpty {
                 Text("> [!] \(err)")
                     .font(CTFont.regular(11))
                     .foregroundStyle(Color.CT.danger)
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 8)
+                    .padding(.horizontal, AccountSettingsLayout.sectionHintHorizontalPadding)
+                    .padding(.bottom, AccountSettingsLayout.sectionHintBottomPadding)
             } else if !isEditing, let hint {
                 Text("> \(hint)")
                     .font(CTFont.regular(11))
                     .foregroundStyle(Color.CT.textDim)
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 8)
+                    .padding(.horizontal, AccountSettingsLayout.sectionHintHorizontalPadding)
+                    .padding(.bottom, AccountSettingsLayout.sectionHintBottomPadding)
             }
         }
     }
@@ -713,36 +715,39 @@ struct DeleteAccountConfirmationView: View {
     let onDelete: () -> Void
     let onCancel: () -> Void
 
-    @State private var countdown = 7
+    @State private var countdown = DeleteAccountSheetLayout.countdownStartValue
     @State private var showLocalDeleteConfirm = false
 
     var body: some View {
-        VStack(spacing: 0) {
+        VStack(spacing: DeleteAccountSheetLayout.rootSpacing) {
             // Drag indicator
             Capsule()
                 .fill(Color.CT.noise)
-                .frame(width: 36, height: 4)
-                .padding(.top, 12)
-                .padding(.bottom, 24)
+                .frame(
+                    width: DeleteAccountSheetLayout.dragIndicatorWidth,
+                    height: DeleteAccountSheetLayout.dragIndicatorHeight
+                )
+                .padding(.top, DeleteAccountSheetLayout.dragIndicatorTopPadding)
+                .padding(.bottom, DeleteAccountSheetLayout.dragIndicatorBottomPadding)
 
             Spacer()
 
             Text(LocalizedStringKey("delete_my_account"))
                 .font(CTFont.bold(20))
                 .foregroundStyle(Color.CT.text)
-                .padding(.bottom, 8)
+                .padding(.bottom, DeleteAccountSheetLayout.titleBottomPadding)
 
             Text(LocalizedStringKey("delete_account_confirmation_message"))
                 .font(CTFont.regular(14))
                 .foregroundStyle(Color.CT.textDim)
                 .multilineTextAlignment(.center)
-                .padding(.horizontal, 32)
-                .padding(.bottom, 32)
+                .padding(.horizontal, DeleteAccountSheetLayout.messageHorizontalPadding)
+                .padding(.bottom, DeleteAccountSheetLayout.messageBottomPadding)
 
             // Retro digital countdown
             if countdown > 0 && !authViewModel.isLoading {
                 CTDigitalCountdown(value: countdown)
-                    .padding(.bottom, 28)
+                    .padding(.bottom, DeleteAccountSheetLayout.countdownBottomPadding)
             }
 
             // Local-delete fallback — shown after a server-side deletion failure
@@ -753,20 +758,20 @@ struct DeleteAccountConfirmationView: View {
                     Text(LocalizedStringKey("delete_account_local_only"))
                         .font(CTFont.regular(12))
                         .underline()
-                        .foregroundStyle(Color.CT.danger.opacity(0.75))
+                        .foregroundStyle(Color.CT.danger.opacity(DeleteAccountSheetLayout.localDeleteWarningOpacity))
                 }
-                .padding(.bottom, 16)
+                .padding(.bottom, DeleteAccountSheetLayout.localDeleteActionBottomPadding)
             }
 
             Spacer()
 
             // Delete button (full-width, appears after countdown)
-            VStack(spacing: 12) {
+            VStack(spacing: DeleteAccountSheetLayout.actionsSpacing) {
                 if authViewModel.isLoading {
                     ProgressView()
                         .tint(Color.CT.danger)
                         .frame(maxWidth: .infinity)
-                        .frame(height: 50)
+                        .frame(height: DeleteAccountSheetLayout.actionButtonHeight)
                 } else {
                     Button {
                         onDelete()
@@ -774,19 +779,35 @@ struct DeleteAccountConfirmationView: View {
                         Text(LocalizedStringKey("delete_account"))
                             .font(CTFont.bold(16))
                             .frame(maxWidth: .infinity)
-                            .frame(height: 50)
+                            .frame(height: DeleteAccountSheetLayout.actionButtonHeight)
                             .background(
                                 Rectangle()
-                                    .fill(countdown > 0 ? Color.CT.danger.opacity(0.08) : Color.CT.danger.opacity(0.15))
+                                    .fill(
+                                        countdown > 0
+                                        ? Color.CT.danger.opacity(DeleteAccountSheetLayout.deleteButtonIdleFillOpacity)
+                                        : Color.CT.danger.opacity(DeleteAccountSheetLayout.deleteButtonActiveFillOpacity)
+                                    )
                                     .overlay(
                                         Rectangle()
-                                            .strokeBorder(countdown > 0 ? Color.CT.danger.opacity(0.2) : Color.CT.danger.opacity(0.5), lineWidth: 1)
+                                            .strokeBorder(
+                                                countdown > 0
+                                                ? Color.CT.danger.opacity(DeleteAccountSheetLayout.deleteButtonIdleStrokeOpacity)
+                                                : Color.CT.danger.opacity(DeleteAccountSheetLayout.deleteButtonActiveStrokeOpacity),
+                                                lineWidth: DeleteAccountSheetLayout.deleteButtonStrokeWidth
+                                            )
                                     )
                             )
-                            .foregroundStyle(countdown > 0 ? Color.CT.danger.opacity(0.4) : Color.CT.danger)
+                            .foregroundStyle(
+                                countdown > 0
+                                ? Color.CT.danger.opacity(DeleteAccountSheetLayout.deleteButtonDisabledOpacity)
+                                : Color.CT.danger
+                            )
                     }
                     .disabled(countdown > 0)
-                    .animation(.easeInOut(duration: 0.25), value: countdown)
+                    .animation(
+                        .easeInOut(duration: DeleteAccountSheetLayout.deleteButtonAnimationDuration),
+                        value: countdown
+                    )
                 }
 
                 Button {
@@ -799,8 +820,8 @@ struct DeleteAccountConfirmationView: View {
                 }
                 .disabled(authViewModel.isLoading)
             }
-            .padding(.horizontal, 24)
-            .padding(.bottom, 36)
+            .padding(.horizontal, DeleteAccountSheetLayout.actionsHorizontalPadding)
+            .padding(.bottom, DeleteAccountSheetLayout.actionsBottomPadding)
         }
         .background(Color.CT.bg)
         .presentationDetents([.medium])
@@ -814,9 +835,9 @@ struct DeleteAccountConfirmationView: View {
             Text("delete_account_local_only_warning")
         }
         .task {
-            // Count down from 7 to 0 using structured concurrency — avoids RunLoop blocking on macOS.
+            // Count down from initial value to 0 using structured concurrency — avoids RunLoop blocking on macOS.
             while countdown > 0 {
-                try? await Task.sleep(for: .seconds(1))
+                try? await Task.sleep(for: .seconds(DeleteAccountSheetLayout.countdownStepSeconds))
                 guard countdown > 0 else { break }
                 countdown -= 1
             }

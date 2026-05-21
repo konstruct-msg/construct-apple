@@ -13,8 +13,8 @@ struct NetworkSettingsView: View {
     }
 
     @Environment(\.dismiss) private var dismiss
-    private var connectionManager = ConnectionStatusManager.shared
-    private var streamManager = MessageStreamManager.shared
+    @State private var connectionManager = ConnectionStatusManager.shared
+    @State private var streamManager = MessageStreamManager.shared
 
     // Custom server (Debug only)
     @State private var customHost = GRPCChannelManager.shared.currentHost
@@ -103,7 +103,7 @@ struct NetworkSettingsView: View {
                     if let error = connectionManager.lastError {
                         CTSep(style: .thin)
                         Text(error)
-                            .font(.system(size: 11, design: .monospaced))
+                            .font(CTFont.regular(NetworkSettingsLayout.errorMonospacedFontSize))
                             .foregroundStyle(Color.CT.danger)
                             .textSelection(.enabled)
                             .padding(.horizontal, NetworkSettingsLayout.rowHorizontalPadding)
@@ -118,7 +118,11 @@ struct NetworkSettingsView: View {
                     HStack {
                         Text(LocalizedStringKey("ice_title"))
                             .font(CTFont.regular(13))
-                            .foregroundColor(iceManager.hasCert ? Color.CT.textDim : Color.CT.textDim.opacity(0.5))
+                            .foregroundColor(
+                                iceManager.hasCert
+                                ? Color.CT.textDim
+                                : Color.CT.textDim.opacity(NetworkSettingsLayout.statusDisabledOpacity)
+                            )
                         Spacer()
                         CTModeSelector(
                             selection: Binding(
@@ -170,37 +174,17 @@ struct NetworkSettingsView: View {
                                     .font(CTFont.regular(13))
                                     .foregroundColor(pathColor(iceManager.currentTrafficPath))
                                 Text(relay.address)
-                                    .font(.system(size: 13, design: .monospaced))
+                                    .font(CTFont.regular(NetworkSettingsLayout.relayAddressFontSize))
                                     .foregroundColor(Color.CT.textDim)
                                     .textSelection(.enabled)
                                 Spacer()
                                 let quality = iceManager.qualityForRelay(relay.address)
-                                Text(quality.badge)
-                                    .font(CTFont.regular(NetworkSettingsLayout.relayBadgeFontSize))
-                                    .foregroundColor(quality.badgeColor)
-                                    .padding(.horizontal, NetworkSettingsLayout.transportBadgeHorizontalPadding)
-                                    .padding(.vertical, NetworkSettingsLayout.transportBadgeVerticalPadding)
-                                    .overlay(Rectangle().stroke(quality.badgeColor.opacity(NetworkSettingsLayout.transportBadgeStrokeOpacity), lineWidth: NetworkSettingsLayout.transportBadgeStrokeWidth))
+                                relayBadge(label: quality.badge, color: quality.badgeColor)
                                 if relay.tlsServerName != nil {
-                                    Text(NetworkSettingsLabels.tls)
-                                        .font(CTFont.regular(NetworkSettingsLayout.relayBadgeFontSize))
-                                        .foregroundColor(Color.CT.accentDim)
-                                        .padding(.horizontal, NetworkSettingsLayout.transportBadgeHorizontalPadding)
-                                        .padding(.vertical, NetworkSettingsLayout.transportBadgeVerticalPadding)
-                                        .overlay(Rectangle().stroke(Color.CT.accent.opacity(NetworkSettingsLayout.transportBadgeStrokeOpacity), lineWidth: NetworkSettingsLayout.transportBadgeStrokeWidth))
-                                    Text(NetworkSettingsLabels.obfs4)
-                                        .font(CTFont.regular(NetworkSettingsLayout.relayBadgeFontSize))
-                                        .foregroundColor(Color.CT.accentDim)
-                                        .padding(.horizontal, NetworkSettingsLayout.transportBadgeHorizontalPadding)
-                                        .padding(.vertical, NetworkSettingsLayout.transportBadgeVerticalPadding)
-                                        .overlay(Rectangle().stroke(Color.CT.accent.opacity(NetworkSettingsLayout.transportBadgeStrokeOpacity), lineWidth: NetworkSettingsLayout.transportBadgeStrokeWidth))
+                                    relayBadge(label: NetworkSettingsLabels.tls, color: Color.CT.accentDim)
+                                    relayBadge(label: NetworkSettingsLabels.obfs4, color: Color.CT.accentDim)
                                 } else {
-                                    Text(NetworkSettingsLabels.obfs4)
-                                        .font(CTFont.regular(NetworkSettingsLayout.relayBadgeFontSize))
-                                        .foregroundColor(Color.CT.accentDim)
-                                        .padding(.horizontal, NetworkSettingsLayout.transportBadgeHorizontalPadding)
-                                        .padding(.vertical, NetworkSettingsLayout.transportBadgeVerticalPadding)
-                                        .overlay(Rectangle().stroke(Color.CT.accent.opacity(NetworkSettingsLayout.transportBadgeStrokeOpacity), lineWidth: NetworkSettingsLayout.transportBadgeStrokeWidth))
+                                    relayBadge(label: NetworkSettingsLabels.obfs4, color: Color.CT.accentDim)
                                 }
                             }
                             .padding(.horizontal, NetworkSettingsLayout.rowHorizontalPadding)
@@ -225,14 +209,14 @@ struct NetworkSettingsView: View {
                         .foregroundStyle(Color.CT.textDim)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, NetworkSettingsLayout.rowHorizontalPadding)
-                        .padding(.bottom, NetworkSettingsLayout.footerBottomPadding)
+                        .padding(.bottom, NetworkSettingsLayout.footerVerticalPadding)
                 } else {
                     Text(LocalizedStringKey(iceFooterKey))
                         .font(CTFont.regular(11))
                         .foregroundStyle(Color.CT.textDim)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, NetworkSettingsLayout.rowHorizontalPadding)
-                        .padding(.bottom, NetworkSettingsLayout.footerBottomPadding)
+                        .padding(.vertical, NetworkSettingsLayout.footerVerticalPadding)
                 }
             }
             .padding(.vertical, NetworkSettingsLayout.sectionVerticalPadding)
@@ -256,6 +240,21 @@ struct NetworkSettingsView: View {
         let port = Int(customPort.trimmingCharacters(in: .whitespaces)) ?? 443
         GRPCChannelManager.shared.setCustomServer(host: host, port: port)
         showingAppliedAlert = true
+    }
+
+    @ViewBuilder
+    private func relayBadge(label: String, color: Color) -> some View {
+        Text(label)
+            .font(CTFont.regular(NetworkSettingsLayout.relayBadgeFontSize))
+            .foregroundColor(color)
+            .padding(.horizontal, NetworkSettingsLayout.transportBadgeHorizontalPadding)
+            .padding(.vertical, NetworkSettingsLayout.transportBadgeVerticalPadding)
+            .overlay(
+                Rectangle().stroke(
+                    color.opacity(NetworkSettingsLayout.transportBadgeStrokeOpacity),
+                    lineWidth: NetworkSettingsLayout.transportBadgeStrokeWidth
+                )
+            )
     }
 
     // MARK: - Helpers

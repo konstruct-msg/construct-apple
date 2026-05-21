@@ -46,13 +46,22 @@ enum DataStorageSettingsLayout {
     static let autoEvictionCheckIconSize: CGFloat = 17
     static let footerTopPadding: CGFloat = 6
     static let screenBottomPadding: CGFloat = 32
+    static let usageIconFontSize: CGFloat = 16
+    static let sectionTitleTracking: CGFloat = 1
+    static let usageFractionAnimationDuration: TimeInterval = 0.4
+    static let clearActionDisabledOpacity: Double = 0.5
 }
 
 enum DataStorageSettingsConfig {
+    static let quarterGBInBytes = 268_435_456
+    static let halfGBInBytes = 536_870_912
     static let usageWarningThreshold: Double = 0.85
     static let oneGBInBytes = 1_073_741_824
     static let twoGBInBytes = 2_147_483_648
     static let fiveGBInBytes = 5_368_709_120
+    static let evictAfterOneWeekDays: Int = 7
+    static let evictAfterOneMonthDays: Int = 30
+    static let evictAfterThreeMonthsDays: Int = 90
 }
 
 enum DiagnosticsConfig {
@@ -86,7 +95,7 @@ enum NetworkSettingsLayout {
     static let relayRowVerticalPadding: CGFloat = 8
     static let compactSectionSpacing: CGFloat = 0
     static let sectionVerticalPadding: CGFloat = 20
-    static let footerBottomPadding: CGFloat = 8
+    static let footerVerticalPadding: CGFloat = 12
     static let statusRowSpacing: CGFloat = 12
     static let statusDetailSpacing: CGFloat = 2
     static let transportBadgeHorizontalPadding: CGFloat = 5
@@ -95,6 +104,9 @@ enum NetworkSettingsLayout {
     static let transportBadgeStrokeWidth: CGFloat = 0.5
     static let transportBadgeStrokeOpacity: Double = 0.4
     static let relayBadgeFontSize: CGFloat = 10
+    static let statusDisabledOpacity: Double = 0.5
+    static let errorMonospacedFontSize: CGFloat = 11
+    static let relayAddressFontSize: CGFloat = 13
 }
 
 enum NetworkSettingsLabels {
@@ -121,6 +133,7 @@ enum BackgroundFetchSettingsLayout {
     static let presetStrokeWidth: CGFloat = 1
     static let disabledRowOpacity: Double = 0.5
     static let stepperButtonFontSize: CGFloat = 13
+    static let stepperBorderStrokeWidth: CGFloat = 1
 }
 
 enum BackgroundFetchSettingsConfig {
@@ -228,4 +241,71 @@ enum DeviceLinkQRLayout {
     static let actionButtonVerticalPadding: CGFloat = 10
     static let actionButtonStrokeWidth: CGFloat = 0.5
     static let errorMessageHorizontalPadding: CGFloat = 24
+}
+
+enum AccountSettingsLayout {
+    static let sectionDisabledOpacity: Double = 0.5
+    static let footerHorizontalPadding: CGFloat = 20
+    static let footerVerticalPadding: CGFloat = 12
+    static let footerTextOpacity: Double = 0.6
+    static let postAvatarPickerDelay: TimeInterval = 0.35
+
+    static let avatarSectionSpacing: CGFloat = 14
+    static let avatarSectionVerticalPadding: CGFloat = 28
+    static let avatarSectionEditingOpacity: Double = 0.55
+
+    static let sectionHintHorizontalPadding: CGFloat = 20
+    static let sectionHintBottomPadding: CGFloat = 8
+
+    static let discoverableRowSpacing: CGFloat = 8
+    static let discoverableRowHorizontalPadding: CGFloat = 16
+    static let discoverableRowVerticalPadding: CGFloat = 8
+
+    static let dividerHeight: CGFloat = 1
+    static let dividerRegularOpacity: Double = 0.5
+    static let dividerRowOpacity: Double = 0.35
+    static let dividerHorizontalPadding: CGFloat = 20
+
+    static let sectionHeaderSpacing: CGFloat = 6
+    static let sectionHeaderHorizontalPadding: CGFloat = 20
+    static let sectionHeaderVerticalPadding: CGFloat = 10
+    static let sectionHeaderTracking: CGFloat = 2
+
+    static let rowHorizontalPadding: CGFloat = 20
+    static let rowVerticalPadding: CGFloat = 14
+
+    static let inlineStatusSpacing: CGFloat = 8
+    static let inlineStatusAccentOpacity: Double = 0.6
+    static let dangerPrimaryOpacity: Double = 0.85
+    static let dangerSecondaryOpacity: Double = 0.7
+
+    static let editableFieldMaxWidth: CGFloat = 190
+    static let editableSavingIndicatorScale: CGFloat = 0.8
+}
+
+enum DeleteAccountSheetLayout {
+    static let countdownStartValue: Int = 7
+    static let rootSpacing: CGFloat = 0
+    static let dragIndicatorWidth: CGFloat = 36
+    static let dragIndicatorHeight: CGFloat = 4
+    static let dragIndicatorTopPadding: CGFloat = 12
+    static let dragIndicatorBottomPadding: CGFloat = 24
+    static let titleBottomPadding: CGFloat = 8
+    static let messageHorizontalPadding: CGFloat = 32
+    static let messageBottomPadding: CGFloat = 32
+    static let countdownBottomPadding: CGFloat = 28
+    static let localDeleteActionBottomPadding: CGFloat = 16
+    static let actionsSpacing: CGFloat = 12
+    static let actionButtonHeight: CGFloat = 50
+    static let actionsHorizontalPadding: CGFloat = 24
+    static let actionsBottomPadding: CGFloat = 36
+    static let deleteButtonDisabledOpacity: Double = 0.4
+    static let deleteButtonIdleFillOpacity: Double = 0.08
+    static let deleteButtonActiveFillOpacity: Double = 0.15
+    static let deleteButtonIdleStrokeOpacity: Double = 0.2
+    static let deleteButtonActiveStrokeOpacity: Double = 0.5
+    static let deleteButtonStrokeWidth: CGFloat = 1
+    static let deleteButtonAnimationDuration: TimeInterval = 0.25
+    static let localDeleteWarningOpacity: Double = 0.75
+    static let countdownStepSeconds: TimeInterval = 1
 }
