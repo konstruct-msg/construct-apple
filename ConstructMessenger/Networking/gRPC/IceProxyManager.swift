@@ -9,8 +9,9 @@
 //        → [Rust proxy] → Obfs4Stream → relay:443 (obfuscated)
 //        → [relay VPS] → main Construct server
 //
-//  The proxy lives entirely inside libconstruct_core.a (C FFI symbols:
-//  ice_proxy_start / ice_proxy_stop / ice_proxy_is_running / ice_proxy_port).
+//  The proxy lives entirely inside libconstruct_core.a. All C FFI calls
+//  (`ice_proxy_start*`, `ice_proxy_stop`, `ice_proxy_is_running`) are routed
+//  through the `IceProxyRuntime` protocol — see `NativeIceProxyRuntime.swift`.
 //  GRPCChannelManager checks isRunning and switches targets automatically.
 //
 
@@ -105,28 +106,33 @@ private func makeRelay(address: String, bridgeCert: String, forceObfs4: Bool = f
                     alternativeSNIs: altSNIs, manifestId: manifestId)
 }
 
-/// Compute a WebTunnel path auth token for a given time period.
-///
-/// Mirrors the relay-side computation (`webtunnel_token` in construct-relay):
-///   SHA-256( bridge_cert_base64_string || "webtunnel-v1" || period_u64_be )[:8]
-/// encoded as 16 lowercase hex characters. Period = unix_seconds / 300 (5 min windows).
-///
-/// Using the obfs4 bridge cert as seed means no additional shared secret is needed —
-/// the cert is already distributed to clients and is relay-specific.
-private func webtunnelAuthToken(bridgeCert: String, period: UInt64) -> String {
-    var data = Data(bridgeCert.utf8)
-    data.append(contentsOf: "webtunnel-v1".utf8)
-    withUnsafeBytes(of: period.bigEndian) { data.append(contentsOf: $0) }
-    return SHA256.hash(data: data).prefix(8)
-        .map { String(format: "%02x", $0) }.joined()
-}
+
 
 /// Manages the construct-ice local TCP proxy for gRPC obfuscation.
 @MainActor
 final class IceProxyManager: ObservableObject {
 
     static let shared = IceProxyManager()
-    private init() {
+
+    // MARK: - Runtime
+
+    /// Narrow C FFI boundary. Inject a mock at init for testing; default is the real Rust backend.
+    private let runtime: any IceProxyRuntime
+
+    /// Compute a WebTunnel path auth token for a given time period.
+    ///
+    /// Mirrors the relay-side computation (`webtunnel_token` in construct-relay):
+    ///   SHA-256( bridge_cert_base64_string || "webtunnel-v1" || period_u64_be )[:8]
+    /// encoded as 16 lowercase hex characters. Period = unix_seconds / 300 (5 min windows).
+    private static func webtunnelAuthToken(bridgeCert: String, period: UInt64) -> String {
+        var data = Data(bridgeCert.utf8)
+        data.append(contentsOf: "webtunnel-v1".utf8)
+        withUnsafeBytes(of: period.bigEndian) { data.append(contentsOf: $0) }
+        return SHA256.hash(data: data).prefix(8)
+            .map { String(format: "%02x", $0) }.joined()
+    }
+    private init(runtime: any IceProxyRuntime = NativeIceProxyRuntime()) {
+        self.runtime = runtime
         // Load persisted mode (or platform default if never set).
         self.mode = IceProxyStore.loadMode()
 
@@ -602,7 +608,7 @@ final class IceProxyManager: ObservableObject {
     @discardableResult
     func rotateToNextRelay() async -> Bool {
         // Don't call stop() — we want to bypass the `isRunning` guard and reset directly.
-        ice_proxy_stop()
+        runtime.stop()
         resetAllProxyState()
         let gen = bumpStartGeneration()
         let cert = await getIceBridgeCert()
@@ -655,7 +661,7 @@ final class IceProxyManager: ObservableObject {
         // without abandoning the more covert WebTunnel transport entirely.
         if let altSNI = nextAlternativeSNI(for: relay) {
             Log.info("🧊 WebTunnel blocked — trying alternate SNI \(altSNI) on \(relay.address)", category: "ICE")
-            ice_proxy_stop()
+            runtime.stop()
             resetAllProxyState()
             let altRelay = IceRelay(address: relay.address, bridgeCert: relay.bridgeCert,
                                     iatMode: relay.iatMode, tlsServerName: altSNI,
@@ -676,7 +682,7 @@ final class IceProxyManager: ObservableObject {
         if relay.isCDNFronted {
             if let companionAddr = ICEConfig.hardcodedRelayObfs4Companions[relay.address] {
                 Log.info("🧊 CDN-fronted relay \(relay.address) — switching to companion obfs4 port \(companionAddr)", category: "ICE")
-                ice_proxy_stop()
+                runtime.stop()
                 resetAllProxyState()
                 let obfs4Relay = makeRelay(address: companionAddr, bridgeCert: relay.bridgeCert)
                 if start(relay: obfs4Relay) != nil {
@@ -693,7 +699,7 @@ final class IceProxyManager: ObservableObject {
 
         // ── obfs4 fallback ────────────────────────────────────────────────────────────────
         Log.info("🧊 WebTunnel blocked (all SNIs exhausted) — retrying \(relay.address) via obfs4", category: "ICE")
-        ice_proxy_stop()
+        runtime.stop()
         resetAllProxyState()
         let obfs4Relay = makeRelay(address: relay.address, bridgeCert: relay.bridgeCert, forceObfs4: true)
         if start(relay: obfs4Relay) != nil {
@@ -724,91 +730,59 @@ final class IceProxyManager: ObservableObject {
     func start(relay: IceRelay) -> UInt16? {
         if isRunning { stop() }
         lastError = nil
-
-        var port: UInt16 = 0
-        var result: Int32 = 0
         PerformanceMetrics.shared.start(.iceProxyStartBegin, label: relay.address)
 
         // WebTunnel (ICE v2) — try first when available. Requires TLS config.
-        // Falls through to obfs4 when wt_path is absent or WebTunnel fails.
+        // Falls through to obfs4/TLS when wt_path is absent or WebTunnel fails.
         if let wtPath = relay.wtPath, relay.tlsServerName != nil {
             let sni        = relay.tlsServerName ?? ""
             let spki       = relay.pinnedSpki ?? ""
             let hostHeader = relay.wtHostHeader ?? ""
-
             // Append time-based auth token derived from the relay's obfs4 bridge cert.
             // The relay verifies it with the same HMAC — stops bots and scanners.
-            let period = UInt64(Date().timeIntervalSince1970) / 300
-            let token = webtunnelAuthToken(bridgeCert: relay.bridgeCert, period: period)
-            let authPath = wtPath + "/" + token
+            let period   = UInt64(Date().timeIntervalSince1970) / 300
+            let authPath = wtPath + "/" + Self.webtunnelAuthToken(bridgeCert: relay.bridgeCert, period: period)
 
             Log.info("🧊 ICE WebTunnel → \(relay.address) (SNI: \(sni.isEmpty ? "<none>" : sni), path: \(authPath))", category: "ICE")
-            result = relay.address.withCString { addrPtr in
-                sni.withCString { sniPtr in
-                    spki.withCString { spkiPtr in
-                        hostHeader.withCString { hostPtr in
-                            authPath.withCString { pathPtr in
-                                ice_proxy_start_webtunnel(addrPtr, sniPtr, spkiPtr, hostPtr, pathPtr, &port)
-                            }
-                        }
-                    }
-                }
-            }
-            if result == 0 {
+            let request = IceTransportRequest.webTunnel(address: relay.address, sni: sni,
+                                                        spki: spki, hostHeader: hostHeader,
+                                                        authPath: authPath)
+            if case .success(let port) = runtime.start(request) {
                 PerformanceMetrics.shared.end(.iceProxyStartBegin, endEvent: .iceProxyStartEnd, label: relay.address)
                 applyState(.active(port: port, webTunnel: true))
                 activeRelay = relay
                 return port
             }
-            Log.error("🧊 ICE WebTunnel failed (\(result)), falling back to obfs4", category: "ICE")
+            Log.error("🧊 ICE WebTunnel failed, falling back to obfs4", category: "ICE")
         }
 
-        isWebTunnelActive = false  // transient reset before obfs4/TLS attempt
-
+        let request: IceTransportRequest
         if let sni = relay.tlsServerName {
             if let spki = relay.pinnedSpki {
                 // Pinned mode: fake/empty SNI + SPKI cert verification + Chrome131 TLS profile.
                 // DPI sees: TLS ClientHello with Chrome 131 fingerprint — indistinguishable from
                 // real browser traffic. Fake SNI further disguises the destination.
                 Log.info("🧊 ICE TLS+pinned → \(relay.address) (SNI: \(sni.isEmpty ? "<none>" : sni))", category: "ICE")
-                result = relay.bridgeLine.withCString { bridgePtr in
-                    relay.address.withCString { addrPtr in
-                        sni.withCString { sniPtr in
-                            spki.withCString { spkiPtr in
-                                "chrome131".withCString { profilePtr in
-                                    ice_proxy_start_tls_profiled(bridgePtr, addrPtr, sniPtr, spkiPtr, profilePtr, &port)
-                                }
-                            }
-                        }
-                    }
-                }
+                request = .tlsPinned(bridgeLine: relay.bridgeLine, address: relay.address,
+                                     sni: sni, spki: spki, profile: "chrome131")
             } else {
                 // Unpinned TLS mode (server-pushed domain relays): CA-chain validation.
                 Log.info("🧊 ICE TLS mode → \(relay.address) (SNI: \(sni))", category: "ICE")
-                result = relay.bridgeLine.withCString { bridgePtr in
-                    relay.address.withCString { addrPtr in
-                        sni.withCString { sniPtr in
-                            ice_proxy_start_tls(bridgePtr, addrPtr, sniPtr, &port)
-                        }
-                    }
-                }
+                request = .tlsUnpinned(bridgeLine: relay.bridgeLine, address: relay.address, sni: sni)
             }
         } else {
             Log.info("🧊 ICE plain-obfs4 mode → \(relay.address)", category: "ICE")
-            result = relay.bridgeLine.withCString { bridgePtr in
-                relay.address.withCString { addrPtr in
-                    ice_proxy_start(bridgePtr, addrPtr, &port)
-                }
-            }
+            request = .plainObfs4(bridgeLine: relay.bridgeLine, address: relay.address)
         }
 
-        if result == 0 {
+        switch runtime.start(request) {
+        case .success(let port):
             PerformanceMetrics.shared.end(.iceProxyStartBegin, endEvent: .iceProxyStartEnd, label: relay.address)
             applyState(.active(port: port, webTunnel: false))
             activeRelay = relay
             return port
-        } else {
-            lastError = result == 2 ? "Failed to start proxy (network unreachable)" : "Failed to start proxy (check bridge cert)"
+        case .failure(let error):
+            lastError = error.userFacingMessage
             return nil
         }
     }
@@ -816,7 +790,7 @@ final class IceProxyManager: ObservableObject {
     /// Stop the running proxy.
     func stop() {
         guard isRunning else { return }
-        ice_proxy_stop()
+        runtime.stop()
         resetAllProxyState()
     }
 
@@ -989,17 +963,10 @@ final class IceProxyManager: ObservableObject {
     /// If a plain proxy is already running its port is returned immediately (idempotent).
     @MainActor
     private func startSecondary(relay: IceRelay) -> UInt16? {
-        // ice_proxy_start(bridge_line, relay_addr, port_out)
-        // bridge_line = "cert=<base64> iat-mode=<N>" (relay.bridgeLine)
-        // relay_addr  = "host:port"                  (relay.address)
-        var outPort: UInt16 = 0
-        let result = relay.bridgeLine.withCString { bridgeLinePtr in
-            relay.address.withCString { addrPtr in
-                ice_proxy_start(bridgeLinePtr, addrPtr, &outPort)
-            }
+        switch runtime.startSecondary(bridgeLine: relay.bridgeLine, address: relay.address) {
+        case .success(let port): return port
+        case .failure:           return nil
         }
-        guard result == 0, outPort > 0 else { return nil }
-        return outPort
     }
 
     // MARK: - App-lifecycle entry points
@@ -1124,7 +1091,7 @@ final class IceProxyManager: ObservableObject {
     func restartAfterCrash() async {
         Log.info("🧊 ICE proxy crashed (ECONNREFUSED on local port) — force-restarting", category: "ICE")
         // Force-stop both primary and secondary; the Rust side is dead.
-        ice_proxy_stop()
+        runtime.stop()
         resetAllProxyState()
         // Clear any cooldown that was set due to this crash; we want to retry immediately.
         clearCooldown()
@@ -1151,7 +1118,7 @@ final class IceProxyManager: ObservableObject {
         switch changeKind {
         case .newInterface:
             Log.info("🧊 Network path changed (new interface) — full ICE reset", category: "ICE")
-            ice_proxy_stop()
+            runtime.stop()
             resetAllProxyState()
             clearCooldown()
             clearRelayFailures()   // relay DPI profile may differ on new interface
@@ -1162,7 +1129,7 @@ final class IceProxyManager: ObservableObject {
             // Keep relay blacklist and quality scores — relay reachability is unchanged.
             // Just stop the proxy (TCP tunnel is dead) and clear cooldown.
             Log.info("🧊 Network path changed (topology/VPN) — partial ICE reset (blacklist preserved)", category: "ICE")
-            ice_proxy_stop()
+            runtime.stop()
             resetAllProxyState()
             clearCooldown()
         }
@@ -1418,10 +1385,10 @@ final class IceProxyManager: ObservableObject {
     func verifyAliveOrRestart() async {
         guard isRunning else { return }
         // Ask the Rust side — if it disagrees with our Swift state, the process died in background.
-        if ice_proxy_is_running() == 0 {
+        if !runtime.isAlive() {
             Log.info("🧊 ICE proxy found dead on foreground — restarting", category: "ICE")
             // Always call stop() to flush any leftover Rust state even when the proxy died.
-            ice_proxy_stop()
+            runtime.stop()
             resetAllProxyState()
             clearCooldown()
             let gen = bumpStartGeneration()
