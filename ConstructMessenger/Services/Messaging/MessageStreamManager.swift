@@ -89,14 +89,6 @@ final class MessageStreamManager {
     private var serverChangedObserver: NSObjectProtocol?
     private var retryCount = 0
     private let maxRetryDelay: TimeInterval = NetworkTiming.Stream.maxRetryDelay
-    /// Counts consecutive stream-open timeouts where the ICE routing key did NOT change.
-    /// See inline `blacklistThreshold` logic in `connectLoop` for the per-relay threshold.
-    private var consecutiveRoutingUnchangedTimeouts = 0
-    /// Counts consecutive ICE fast-failover iterations (routing-change retries) without a
-    /// successful stream. When all relays are exhausted and we keep cycling, this grows fast.
-    /// After 5+ rotations we add progressive delay (2 s, 4 s, … max 20 s) to reduce
-    /// battery drain and give the server/network time to recover.
-    private var consecutiveIceRotations = 0
     /// When `true`, the next `openStream()` call uses H2 direct instead of H3.
     /// Set in connectLoop when H3 direct times out — gives H2 a chance on the same host
     /// before escalating to ICE relay (H3 may be blocked/unsupported while H2 works fine).
@@ -234,7 +226,7 @@ final class MessageStreamManager {
         backgroundFetchTask?.cancel()
         backgroundFetchTask = nil
         retryCount = 0
-        consecutiveIceRotations = 0
+
         shouldFallbackToH2Direct = false
         lastStreamTransportWasH3 = false
         connect(contactUserIds: contactUserIds, onMessageReceived: onMessageReceived)
@@ -264,7 +256,7 @@ final class MessageStreamManager {
         streamTask?.cancel()
         streamTask = nil
         retryCount = 0
-        consecutiveIceRotations = 0
+
         shouldFallbackToH2Direct = false
         lastStreamTransportWasH3 = false
         ConnectionStatusManager.shared.markStreamDisconnected()
@@ -349,8 +341,6 @@ final class MessageStreamManager {
         let host = GRPCChannelManager.shared.currentHost
         let port = GRPCChannelManager.shared.currentPort
         Log.info("🔄 MessageStream connectLoop started → \(host):\(port)", category: "MessageStream")
-        // Reset per-task state so stale counts from a previous stream session don't bleed in.
-        consecutiveRoutingUnchangedTimeouts = 0
 
         while !Task.isCancelled {
             let attemptStart = Date()
@@ -372,12 +362,7 @@ final class MessageStreamManager {
             // IMPORTANT: do NOT use withTaskGroup { await fetchTask.value } here.
             // task.value ignores cooperative cancellation of the caller — the group
             // would block for the full 30 s RPC timeout even after the cap fires.
-            //
-            // Use the shorter cap for excellent/good quality relays: their RPC latency
-            // is ≤1 RTT (≈100ms for AMS), so 0.5s is more than enough.
-            let fetchCapDuration = IceProxyManager.shared.currentRelayQuality.useFastFetchCap
-                ? NetworkTiming.Stream.fetchMissedMessagesWallClockCapVerified
-                : NetworkTiming.Stream.fetchMissedMessagesWallClockCap
+            let fetchCapDuration = NetworkTiming.Stream.fetchMissedMessagesWallClockCap
             let capSleep = Task<Void, any Error> {
                 try await Task.sleep(for: .seconds(fetchCapDuration))
             }
@@ -400,10 +385,17 @@ final class MessageStreamManager {
             guard !Task.isCancelled else { break }
 
             Log.info("🔄 connectLoop: fetchMissedMessages done, isCancelled=\(Task.isCancelled) — opening stream", category: "MessageStream")
+
+            // Prepare ICE routing: starts proxy if directFails ≥ threshold, clears it otherwise.
+            do { try await ConnectionLoop.shared.prepare() } catch {
+                Log.error("🧊 ConnectionLoop prepare failed: \(error)", category: "MessageStream")
+            }
+
+            let usingICE = await ConnectionLoop.shared.shouldUseICE
             let phaseLabel: String
             if lastStreamTransportWasH3 && shouldFallbackToH2Direct {
                 phaseLabel = "H2 direct (H3 fallback)"
-            } else if IceProxyManager.shared.isRunning {
+            } else if usingICE {
                 phaseLabel = "ICE relay"
             } else {
                 phaseLabel = retryCount == 0 ? "Connecting…" : "Reconnecting (attempt \(retryCount + 1))"
@@ -414,9 +406,8 @@ final class MessageStreamManager {
                 // Stream ended cleanly — brief pause before reconnecting to avoid tight loop
                 // (e.g. server closes stream when 0 topics are subscribed)
                 Log.info("📡 MessageStream ended cleanly, reconnecting in \(Int(NetworkTiming.Stream.cleanEndReconnectDelay))s", category: "MessageStream")
+                await ConnectionLoop.shared.recordSuccess()
                 retryCount = 0
-                consecutiveRoutingUnchangedTimeouts = 0
-                consecutiveIceRotations = 0
                 shouldFallbackToH2Direct = false
                 lastStreamTransportWasH3 = false
                 try await Task.sleep(for: .seconds(NetworkTiming.Stream.cleanEndReconnectDelay))
@@ -455,81 +446,29 @@ final class MessageStreamManager {
                         Log.info("🔑 MessageStream refresh failed (network error) — keeping tokens, will retry later", category: "MessageStream")
                     }
                 }
-                // Fast ICE failover path: openStream() intentionally throws this sentinel
-                // error to force an immediate reconnect without exponential backoff.
+                // Fast failover path: openStream() throws this sentinel to force an immediate
+                // reconnect without exponential backoff.
                 if let rpcError = error as? RPCError,
                    rpcError.code == .unavailable,
                    rpcError.message.contains("retrying with ICE") {
-                    // Check whether the routing key actually changed during the failover
-                    // attempt inside openStream(). "Unchanged" means the relay is reachable
-                    // at TCP level but streaming RPCs are silently failing (e.g. relay v0.3.3
-                    // obfs4 session corruption bug).
-                    /// Counts consecutive stream-open timeouts where the ICE routing key did NOT change.
-                    /// Threshold driven by persisted relay quality:
-                    ///   - trusted (excellent/good): 1 timeout → rotate fast (we know it works, failure is real)
-                    ///   - unknown/fair/poor: 2 timeouts → give a second chance (tunnel may still be warming up)
-                    let blacklistThreshold = IceProxyManager.shared.currentRelayQuality.blacklistThreshold
+                    // Record the failure in ConnectionLoop so it can decide routing for the next attempt.
+                    // On the direct path, recordFailure increments directFails; once it reaches the
+                    // threshold, prepare() will start the ICE proxy on the next iteration.
+                    await ConnectionLoop.shared.recordFailure(rpcError)
+                    // H3→H2 fallback: if H3 failed on the direct path and ICE isn't active yet,
+                    // try H2 once before activating ICE (H3 may be unsupported, not blocked).
                     let routingKeyNow = GRPCChannelManager.shared.currentRoutingKey
-                    if routingKeyNow == routingKeyAtLoopStart {
-                        consecutiveRoutingUnchangedTimeouts += 1
-                        if consecutiveRoutingUnchangedTimeouts >= blacklistThreshold,
-                           routingKeyAtLoopStart.hasPrefix("ice:"),
-                           let failedAddr = IceProxyManager.shared.activeRelay?.address {
-                            // ICE path: streaming keeps failing on this relay → blacklist + rotate.
-                            Log.error("🧊 \(consecutiveRoutingUnchangedTimeouts) consecutive stream timeouts on same relay \(failedAddr) — blacklisting and forcing rotation", category: "MessageStream")
-                            IceProxyManager.shared.recordRelayFailure(address: failedAddr)
-                            let rotated = await IceProxyManager.shared.rotateToNextRelay()
-                            if rotated {
-                                GRPCChannelManager.shared.invalidatePersistentClient()
-                            }
-                            consecutiveRoutingUnchangedTimeouts = 0
-                        } else if IceProxyManager.shared.mode == .auto,
-                                  routingKeyAtLoopStart.hasPrefix("direct:") {
-                            // Direct path + .auto mode: H3 may simply be unsupported on this
-                            // server/network (HTTP/3 is newer; H2 often works when H3 doesn't).
-                            // Try H2 direct ONCE before feeding the Bayesian DPI detector.
-                            // Only when H2 direct also times out do we have real evidence of
-                            // DPI censorship rather than a plain protocol mismatch.
-                            if lastStreamTransportWasH3 {
-                                shouldFallbackToH2Direct = true
-                                Log.info("🧊 H3 direct stream timeout — retrying with H2 direct before DPI detection", category: "MessageStream")
-                            } else {
-                                // H2 direct timed out as well — now run Bayesian DPI detector.
-                                IceProxyManager.shared.recordDirectFailure()
-                                let p = IceProxyManager.shared.dpiDetectionProbability
-                                if IceProxyManager.shared.shouldActivateDPIICE {
-                                    Log.info("🧊 DPI confirmed (\(String(format: "%.0f", p * 100))% posterior) — activating ICE (auto mode)", category: "MessageStream")
-                                    await IceProxyManager.shared.activateDPIAutoMode()
-                                    if GRPCChannelManager.shared.iceProxyPort() != nil {
-                                        GRPCChannelManager.shared.invalidatePersistentClient()
-                                    }
-                                } else {
-                                    Log.info("🧊 Direct stream timeout in .auto — DPI posterior: \(String(format: "%.1f", p * 100))% (threshold 80%)", category: "MessageStream")
-                                }
-                            }
-                        }
+                    let nowUsingICE = await ConnectionLoop.shared.shouldUseICE
+                    if !nowUsingICE, routingKeyNow == routingKeyAtLoopStart,
+                       routingKeyAtLoopStart.hasPrefix("direct:"), lastStreamTransportWasH3 {
+                        shouldFallbackToH2Direct = true
+                        Log.info("🧊 H3 direct timeout — trying H2 direct next", category: "MessageStream")
                     } else {
-                        consecutiveRoutingUnchangedTimeouts = 0
                         shouldFallbackToH2Direct = false
                         lastStreamTransportWasH3 = false
                     }
-                    Log.info("🧊 MessageStream switching routing — reconnecting immediately", category: "MessageStream")
-                    // Cancel the background fetch started on the previous routing path.
-                    // It would otherwise outlive the routing change and eventually kill
-                    // the new connection when it times out (gen-mismatch guard catches it,
-                    // but early cancellation avoids the wasted network traffic entirely).
+                    Log.info("🧊 MessageStream reconnecting immediately (ICE=\(nowUsingICE))", category: "MessageStream")
                     backgroundFetchTask?.cancel()
-                    // Progressive backoff when all relays are exhausted and we keep cycling.
-                    // Rotations 1-4: immediate (fast failover, normal behavior).
-                    // Rotations 5+: add 2s×(n-4) up to 20s to limit battery drain and
-                    // allow the server/network a chance to recover before the next attempt.
-                    consecutiveIceRotations += 1
-                    if consecutiveIceRotations >= 5, !Task.isCancelled {
-                        let n = consecutiveIceRotations - 4
-                        let iceDelay = min(Double(n) * 2.0, 20.0)
-                        Log.info("⏳ ICE exhaustion cooldown: \(String(format: "%.0f", iceDelay))s after \(consecutiveIceRotations) rotations", category: "MessageStream")
-                        try? await Task.sleep(for: .seconds(iceDelay))
-                    }
                     retryCount = 0
                     continue
                 }

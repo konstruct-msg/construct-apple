@@ -229,14 +229,7 @@ extension MessageStreamManager {
 
         // Fast ICE failover for stream open: if the RPC isn't accepted quickly, we retry
         // through ICE instead of waiting for long TCP/TLS timeouts on DPI-blocked networks.
-        // Capture flags before entering non-isolated task group tasks.
-        let relayAlreadyVerified = IceProxyManager.shared.isCurrentRelayVerified
-        let relayQuality = IceProxyManager.shared.currentRelayQuality
         let isH3Transport = lastStreamTransportWasH3
-        // Happy-eyeballs: detect ICE standby before stream attempt. When the ICE proxy is
-        // pre-warmed in standby mode we use a shorter timeout and promote ICE to active routing
-        // on timeout — skipping the H3→H2→Bayesian-DPI waterfall (~3.5s total wait time).
-        let iceInStandby = IceProxyManager.shared.isRunning && IceProxyManager.shared.isStandbyPrewarm
         do {
             try await withThrowingTaskGroup(of: Void.self) { group in
                 // 1) Accepted watcher
@@ -249,25 +242,13 @@ extension MessageStreamManager {
                         try await Task.sleep(for: .seconds(NetworkTiming.GRPC.streamOpenAcceptPollInterval))
                     }
                 }
-                // 2) Timeout — three tiers:
-                //   · verified relay, good/excellent quality → 0.8s  (warm; RTT ≤200ms expected)
-                //   · verified relay, poor/fair/unknown quality → 2.0s  (high-latency relay path)
-                //   · H3 direct     → 1.5s  (QUIC fails fast when not supported; tighter window)
-                //   · H2 direct/ICE → 2.0s  (TCP+TLS needs one extra round-trip)
+                // 2) Timeout — two tiers:
+                //   · H3 direct → 1.5s  (QUIC fails fast when not supported; tighter window)
+                //   · H2 / ICE  → 2.0s  (TCP+TLS needs one extra round-trip; relay may be high-latency)
                 group.addTask {
-                    let timeout: TimeInterval
-                    if relayAlreadyVerified && relayQuality.useFullTimeout {
-                        timeout = NetworkTiming.GRPC.streamOpenAcceptTimeoutVerified
-                    } else if iceInStandby {
-                        // ICE is pre-warmed: short probe window so we race direct vs standby ICE
-                        // without a long wait. Open networks connect in <300ms; anything beyond
-                        // 0.8s strongly indicates DPI is blocking the direct path.
-                        timeout = NetworkTiming.GRPC.streamOpenAcceptTimeoutStandby
-                    } else if isH3Transport {
-                        timeout = NetworkTiming.GRPC.streamOpenAcceptTimeoutH3
-                    } else {
-                        timeout = NetworkTiming.GRPC.streamOpenAcceptTimeout
-                    }
+                    let timeout: TimeInterval = isH3Transport
+                        ? NetworkTiming.GRPC.streamOpenAcceptTimeoutH3
+                        : NetworkTiming.GRPC.streamOpenAcceptTimeout
                     try await Task.sleep(for: .seconds(timeout))
                     throw StreamAcceptTimeout()
                 }
@@ -280,63 +261,22 @@ extension MessageStreamManager {
                 group.cancelAll()
             }
         } catch is StreamAcceptTimeout {
-            // If already accepted, ignore the timeout (race).
+            // If already accepted, ignore the timeout (race) — fall through to await stream end.
             if isConnected, activeStreamGeneration == generation {
-                // Continue below to await the stream until it ends.
-            } else if iceInStandby {
-                // Happy-eyeballs: ICE was pre-warmed in standby and the direct path timed out.
-                // Promote standby ICE to active routing immediately without waiting for the full
-                // H3→H2→Bayesian-DPI waterfall. activateDPIAutoMode() fast-paths for standby
-                // (no network I/O — just flips isStandbyPrewarm to false and updates routing key).
-                // False-positive cost: one extra ICE retry that fails quickly on clean networks
-                // and returns ICE to standby/cooldown — far cheaper than 3.5s wasted on DPI networks.
-                Log.info("🧊 Direct stream timed out with ICE pre-warmed — promoting standby ICE (happy-eyeballs)", category: "MessageStream")
-                PerformanceMetrics.shared.record(.streamOpenFastFailover, label: metricsLabel)
-                PerformanceMetrics.shared.cancelStart(.streamOpenStart, label: metricsLabel)
-                streamTask.cancel()
-                incomingContinuation.finish()
-                await IceProxyManager.shared.activateDPIAutoMode()
-                // activateDPIAutoMode() already calls invalidatePersistentClient() on the
-                // standby fast-path; calling it again here ensures the connection is evicted
-                // even if the call above took a different branch (idempotent).
-                GRPCChannelManager.shared.invalidatePersistentClient()
-                throw RPCError(code: .unavailable, message: "Stream open timed out — retrying with ICE")
+                // Stream was accepted while the timeout fired; continue below to await it.
             } else {
-                Log.info("🧊 MessageStream open timed out — attempting ICE fast-failover", category: "MessageStream")
+                Log.info("🧊 MessageStream open timed out — reconnecting", category: "MessageStream")
                 PerformanceMetrics.shared.record(.streamOpenFastFailover, label: metricsLabel)
                 PerformanceMetrics.shared.cancelStart(.streamOpenStart, label: metricsLabel)
                 streamTask.cancel()
                 incomingContinuation.finish()
-                // Capture routing key before any ICE state change.
-                let routingKeyBefore = GRPCChannelManager.shared.currentRoutingKey
-
-                // If ICE is running but on cooldown, clear cooldown: direct path is likely blocked.
-                if IceProxyManager.shared.isRunning, IceProxyManager.shared.isOnCooldown {
-                    IceProxyManager.shared.clearCooldown()
-                }
-
                 // Always invalidate the persistent client on stream timeout.
-                // When routing is unchanged this costs one extra TLS handshake per retry cycle
-                // (~200–500 ms), but it is necessary to prevent a fatalError:
-                //
-                //   If the underlying TCP connection was RST'd (server keepalive timeout, NAT
-                //   expiry, etc.) the gRPC runConnections() error handler fires *asynchronously*.
-                //   The immediate ICE retry (no backoff) calls acquireChannel() before that async
-                //   cleanup completes, gets the dead connection back, and then
-                //   GRPCStreamStateMachine asserts "Client is closed: can't send metadata" —
-                //   a fatalError that kills the app.
-                //
-                // DPI detection is unaffected: after 2 consecutive routing-unchanged timeouts
-                // (direct path, .auto mode) the connectLoop activates ICE, changing the routing
-                // key and resetting the counter — the same threshold as before.
-                let routingKeyAfter = GRPCChannelManager.shared.currentRoutingKey
+                // If the underlying TCP connection was RST'd (server keepalive timeout, NAT expiry,
+                // etc.) the gRPC runConnections() error handler fires asynchronously. Without this
+                // invalidation the immediate retry calls acquireChannel() before that async cleanup
+                // completes, gets the dead connection back, and GRPCStreamStateMachine asserts
+                // "Client is closed: can't send metadata" — a fatalError that kills the app.
                 GRPCChannelManager.shared.invalidatePersistentClient()
-                if routingKeyAfter != routingKeyBefore {
-                    Log.info("🧊 Routing changed \(routingKeyBefore) → \(routingKeyAfter) — persistent client invalidated", category: "MessageStream")
-                } else {
-                    Log.info("🧊 Routing unchanged (\(routingKeyAfter)) — persistent client invalidated (TCP may be dead)", category: "MessageStream")
-                }
-                // Immediate retry: propagate an error to exit openStream() and let connectLoop retry.
                 throw RPCError(code: .unavailable, message: "Stream open timed out — retrying with ICE")
             }
         }
@@ -379,10 +319,6 @@ extension MessageStreamManager {
                             self.connectStartTime = nil
                         } else {
                             Log.info("✅ MessageStream connected — stream: \(streamMsStr)ms via \(metricsLabel)", category: "MessageStream")
-                        }
-                        // Record direct path success for ICE auto-mode probe memory.
-                        if metricsLabel.hasPrefix("direct:") {
-                            IceProxyManager.shared.recordDirectStreamConnected()
                         }
                     }
                     contents = c

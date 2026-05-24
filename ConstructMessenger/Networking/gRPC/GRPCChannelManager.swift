@@ -224,6 +224,7 @@ final class GRPCChannelManager: Sendable {
             guard let self else { return }
             Log.info("🔌 Network path changed — invalidating persistent gRPC connection", category: "gRPC")
             self.invalidatePersistentClient()
+            Task { await ConnectionLoop.shared.reset() }
         }
     }
 
