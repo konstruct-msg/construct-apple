@@ -21,7 +21,7 @@ struct NetworkSettingsView: View {
     @State private var customPort = "\(GRPCChannelManager.shared.currentPort)"
     @State private var showingAppliedAlert = false
 
-    @StateObject private var iceManager = IceProxyManager.shared
+    @StateObject private var iceManager = ConnectionManager.shared
 
     var body: some View {
         VStack(spacing: 0) {

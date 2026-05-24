@@ -12,7 +12,7 @@ import SwiftUI
 /// Pulses when connecting; auto-hides after 4 s when connected.
 struct ConnectionStatusIndicator: View {
     var connectionManager = ConnectionStatusManager.shared
-    @ObservedObject var iceProxy = IceProxyManager.shared
+    @ObservedObject var iceManager = ConnectionManager.shared
 
     @State private var textOpacity: Double = 1
     @State private var visible: Bool = true
@@ -51,7 +51,7 @@ struct ConnectionStatusIndicator: View {
     }
 
     private var trafficLabel: String {
-        switch iceProxy.currentTrafficPath {
+        switch iceManager.currentTrafficPath {
         case .direct:
             return "DIRECT"
         case .icePrimary(let host):
@@ -74,7 +74,7 @@ struct ConnectionStatusIndicator: View {
     private var labelColor: Color {
         switch connectionManager.connectionStatus {
         case .connected:
-            switch iceProxy.currentTrafficPath {
+            switch iceManager.currentTrafficPath {
             case .direct:     return Color.CT.textDim
             case .icePrimary: return Color.CT.accent
             case .iceRelay:   return Color.CT.accentDim

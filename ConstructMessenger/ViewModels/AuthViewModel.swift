@@ -331,7 +331,7 @@ class AuthViewModel {
                 userId: response.userId
             )
             
-            IceProxyManager.shared.configureFromServer(cert: response.iceBridgeCert ?? "")
+            ConnectionManager.shared.configureFromServer(cert: response.iceBridgeCert ?? "")
             print("✅ Device-based authentication successful")
             finishAuth(userId: response.userId)
             

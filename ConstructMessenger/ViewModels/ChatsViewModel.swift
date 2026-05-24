@@ -316,8 +316,8 @@ class ChatsViewModel {
 
                 // Verify ICE proxy is still alive — it may have been killed during suspension.
                 // Also pre-warms it when DPI was previously detected (network may have changed).
-                await IceProxyManager.shared.verifyAliveOrRestart()
-                await IceProxyManager.shared.startIfEnabled()
+                await ConnectionManager.shared.verifyAliveOrRestart()
+                await ConnectionManager.shared.startIfEnabled()
 
                 if self.streamManager.isConnected {
                     // Stream survived the switch — no work needed.
@@ -362,8 +362,8 @@ class ChatsViewModel {
                 // Restart ICE proxy: its relay connection was bound to the old interface.
                 Task { @MainActor in
                     // First verify (and stop) any stale proxy, then start fresh on the new interface.
-                    await IceProxyManager.shared.verifyAliveOrRestart()
-                    await IceProxyManager.shared.startIfEnabled()
+                    await ConnectionManager.shared.verifyAliveOrRestart()
+                    await ConnectionManager.shared.startIfEnabled()
                 }
                 self.forceReconnectStream()
             }

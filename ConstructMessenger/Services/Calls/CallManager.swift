@@ -449,8 +449,8 @@ final class CallManager {
                 Log.info("🧊 Signaling stream open timed out — attempting ICE fast-failover (call_id=\(metricsLabel)…)", category: "Calls")
 
                 // If ICE is running but on cooldown, clear cooldown: direct path is likely blocked.
-                if IceProxyManager.shared.isRunning, IceProxyManager.shared.isOnCooldown {
-                    IceProxyManager.shared.clearCooldown()
+                if ConnectionManager.shared.isRunning, ConnectionManager.shared.isOnCooldown {
+                    ConnectionManager.shared.clearCooldown()
                 }
 
                 // Only restart if this stream is still the active one.
