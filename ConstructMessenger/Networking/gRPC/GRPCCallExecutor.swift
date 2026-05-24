@@ -329,7 +329,10 @@ final class GRPCCallExecutor: Sendable {
                     Log.info("🧊 ICE obfs4 fallback active — retrying via same relay", category: "gRPC")
                     return .retry
                 }
-                if let addr = failedAddr { await IceProxyManager.shared.recordRelayFailure(address: addr, type: .webTunnelBlocked) }
+                if let addr = failedAddr {
+                    let type = IceFailurePolicy.relayFailureType(for: reason)
+                    await IceProxyManager.shared.recordRelayFailure(address: addr, type: type)
+                }
             } else if reason == .tlsCertExpired {
                 // Expired TLS cert — fetch fresh config + cert from .well-known and restart.
                 Log.info("🧊 TLS cert expired on relay — refreshing cert + config", category: "gRPC")
@@ -339,14 +342,23 @@ final class GRPCCallExecutor: Sendable {
                     await cm.waitForProxyReady()
                     return .retry
                 }
-                if let addr = failedAddr { await IceProxyManager.shared.recordRelayFailure(address: addr, type: .tlsHandshake) }
+                if let addr = failedAddr {
+                    let type = IceFailurePolicy.relayFailureType(for: reason)
+                    await IceProxyManager.shared.recordRelayFailure(address: addr, type: type)
+                }
             } else if reason == .tlsFingerprintBlocked {
                 // TLS alert 40: relay fingerprint detected by DPI — rotate to different relay quickly.
                 Log.info("🧊 TLS fingerprint blocked (alert 40) on relay — rotating", category: "gRPC")
-                if let addr = failedAddr { await IceProxyManager.shared.recordRelayFailure(address: addr, type: .fingerprintBlocked) }
+                if let addr = failedAddr {
+                    let type = IceFailurePolicy.relayFailureType(for: reason)
+                    await IceProxyManager.shared.recordRelayFailure(address: addr, type: type)
+                }
             } else {
-                // General transport failure (TLS, reset, etc.) — use default .streamTimeout TTL.
-                if let addr = failedAddr { await IceProxyManager.shared.recordRelayFailure(address: addr) }
+                // General transport failure — map reason to TTL.
+                if let addr = failedAddr {
+                    let type = IceFailurePolicy.relayFailureType(for: reason)
+                    await IceProxyManager.shared.recordRelayFailure(address: addr, type: type)
+                }
             }
 
             let rotated = await IceProxyManager.shared.rotateToNextRelay()
@@ -367,7 +379,10 @@ final class GRPCCallExecutor: Sendable {
         } else {
             // Background RPC: record relay failure so future connections avoid it,
             // but do NOT rotate or invalidate — that would kill any live stream.
-            if let addr = failedAddr { await IceProxyManager.shared.recordRelayFailure(address: addr) }
+            if let addr = failedAddr {
+                let type = IceFailurePolicy.relayFailureType(for: reason)
+                await IceProxyManager.shared.recordRelayFailure(address: addr, type: type)
+            }
             
             // EXCEPTION: WebTunnel-blocked and TLS-fingerprint-blocked are definitive
             // transport failures — the tunnel is dead even if the stream doesn't know yet.

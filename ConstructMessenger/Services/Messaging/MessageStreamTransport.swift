@@ -231,6 +231,7 @@ extension MessageStreamManager {
         // through ICE instead of waiting for long TCP/TLS timeouts on DPI-blocked networks.
         // Capture flags before entering non-isolated task group tasks.
         let relayAlreadyVerified = IceProxyManager.shared.isCurrentRelayVerified
+        let relayQuality = IceProxyManager.shared.currentRelayQuality
         let isH3Transport = lastStreamTransportWasH3
         // Happy-eyeballs: detect ICE standby before stream attempt. When the ICE proxy is
         // pre-warmed in standby mode we use a shorter timeout and promote ICE to active routing
@@ -249,12 +250,13 @@ extension MessageStreamManager {
                     }
                 }
                 // 2) Timeout — three tiers:
-                //   · verified relay → 0.8s  (already warm; anything longer = broken tunnel)
+                //   · verified relay, good/excellent quality → 0.8s  (warm; RTT ≤200ms expected)
+                //   · verified relay, poor/fair/unknown quality → 2.0s  (high-latency relay path)
                 //   · H3 direct     → 1.5s  (QUIC fails fast when not supported; tighter window)
                 //   · H2 direct/ICE → 2.0s  (TCP+TLS needs one extra round-trip)
                 group.addTask {
                     let timeout: TimeInterval
-                    if relayAlreadyVerified {
+                    if relayAlreadyVerified && relayQuality.useFullTimeout {
                         timeout = NetworkTiming.GRPC.streamOpenAcceptTimeoutVerified
                     } else if iceInStandby {
                         // ICE is pre-warmed: short probe window so we race direct vs standby ICE

@@ -209,54 +209,27 @@ final class IceProxyManager: ObservableObject {
         applyState(state)
     }
 
-    // MARK: - Bayesian DPI detector
-
-    /// Running posterior P(DPI present), updated after each direct-connection outcome in
-    /// `.auto` mode. Uses sequential Bayesian updating with a Bernoulli likelihood model:
-    ///
-    ///   P(DPI | timeout) = P(timeout | DPI) × P(DPI) / P(timeout)
-    ///   P(DPI | ok)      = P(ok | DPI)      × P(DPI) / P(ok)
-    ///
-    /// Reset to the prior on new-interface network change (new environment = new DPI profile).
-    private var dpiPosterior: Double = 0.10
-
-    /// Prior: 10 % of networks have DPI.
-    private static let dpiPrior: Double = 0.10
-    /// P(stream timeout | DPI present) — DPI blocks ~90 % of connection attempts.
-    private static let pFailGivenDPI: Double = 0.90
-    /// P(stream timeout | no DPI) — ambient ~5 % failure rate on clean networks.
-    private static let pFailGivenNoDPI: Double = 0.05
-    /// Posterior threshold to trigger ICE activation (≥ 80 % confident DPI is present).
-    private static let dpiActivateThreshold: Double = 0.80
-
-    /// Current posterior estimate P(DPI present). Exposed for logging in connectLoop.
-    var dpiDetectionProbability: Double { dpiPosterior }
-
+    // MARK: - Auto-Mode Coordinator (P6)
+    
+    /// Coordinator for DPI detection and standby pre-warm decisions.
+    private let autoModeCoordinator = IceAutoModeCoordinator.shared
+    
+    /// Current posterior P(DPI present). Exposed for logging in connectLoop.
+    var dpiDetectionProbability: Double { autoModeCoordinator.dpiDetectionProbability }
+    
     /// Whether the posterior has reached the ICE activation threshold.
-    var shouldActivateDPIICE: Bool { dpiPosterior >= Self.dpiActivateThreshold }
-
-    /// Record a direct-stream timeout as evidence of DPI presence.
+    var shouldActivateDPIICE: Bool { autoModeCoordinator.shouldActivateICE }
+    
+    /// Record a direct-stream timeout as evidence of DPI presence (called by MessageStreamManager).
     func recordDirectFailure() {
         guard mode == .auto else { return }
-        let p = dpiPosterior
-        let pFail = p * Self.pFailGivenDPI + (1.0 - p) * Self.pFailGivenNoDPI
-        dpiPosterior = min(0.9999, (Self.pFailGivenDPI * p) / pFail)
-        Log.debug("🧊 DPI posterior after failure: \(String(format: "%.1f", dpiPosterior * 100))%", category: "ICE")
+        autoModeCoordinator.recordDirectFailure()
     }
-
-    /// Record a successful direct-stream open as evidence against DPI.
+    
+    /// Record a successful direct-stream open as evidence against DPI (called by MessageStreamManager).
     func recordDirectSuccess() {
         guard mode == .auto else { return }
-        let p = dpiPosterior
-        let pOk = p * (1.0 - Self.pFailGivenDPI) + (1.0 - p) * (1.0 - Self.pFailGivenNoDPI)
-        dpiPosterior = max(0.0001, ((1.0 - Self.pFailGivenDPI) * p) / pOk)
-        Log.debug("🧊 DPI posterior after success: \(String(format: "%.1f", dpiPosterior * 100))%", category: "ICE")
-    }
-
-    /// Reset posterior to the prior (call on new-interface network change).
-    func resetDPIDetector() {
-        dpiPosterior = Self.dpiPrior
-        Log.debug("🧊 DPI posterior reset to prior (\(Int(Self.dpiPrior * 100))%)", category: "ICE")
+        autoModeCoordinator.recordDirectSuccess()
     }
 
     /// ICE is running in standby pre-warm mode: proxy is up but `iceProxyPort()` returns nil.
@@ -298,6 +271,12 @@ final class IceProxyManager: ObservableObject {
     /// When set, makeRelay() skips wtPath for these addresses, forcing obfs4 mode.
     /// Cleared on network path change — the new network may allow WebTunnel.
     private var webTunnelBlockedRelays: Set<String> = []
+
+    /// Guards against concurrent restartAfterCrash() calls.
+    /// Multiple RPCs can fail with ECONNREFUSED simultaneously (e.g. 3× streamTimeout on one
+    /// dead port), each triggering a restart. Without this flag every caller bumps
+    /// proxyStartGeneration, causing all restarts to see "Startup superseded" and return false.
+    private var isCrashRestartInProgress = false
 
     /// Per-relay index into `IceRelay.alternativeSNIs` for the next SNI rotation attempt.
     /// Incremented each time an alternate SNI is tried. Reset on network change or relay rotation.
@@ -473,7 +452,7 @@ final class IceProxyManager: ObservableObject {
             // No restart needed; just clear standby flag so iceProxyPort() starts returning a port.
             if oldValue == .auto, mode == .on, isRunning {
                 if isStandbyPrewarm {
-                    applyState(.active(port: proxyPort, webTunnel: isWebTunnelActive))
+                    applyEvent(.dpiConfirmed)
                     Log.info("🧊 Mode .auto → .on — standby ICE promoted to active", category: "ICE")
                     GRPCChannelManager.shared.invalidatePersistentClient()
                 } else {
@@ -1094,6 +1073,7 @@ final class IceProxyManager: ObservableObject {
         if isRunning, isStandbyPrewarm {
             standbyPrewarmTask?.cancel()
             standbyPrewarmTask = nil
+            autoModeCoordinator.activateDPI()
             applyEvent(.dpiConfirmed)
             Self.lastSuccessfulPath = "ice"
             GRPCChannelManager.shared.invalidatePersistentClient()
@@ -1106,6 +1086,7 @@ final class IceProxyManager: ObservableObject {
 
         let cert = await getIceBridgeCert()
         if await startWithRelayFallback(cert: cert) {
+            autoModeCoordinator.activateDPI()
             Task { await self.fetchConfigAndEvictIfRemoved() }
             return
         }
@@ -1123,6 +1104,16 @@ final class IceProxyManager: ObservableObject {
     /// while the Swift side still thinks it's running. Force-resets all state and restarts.
     /// Does NOT enter cooldown (cooldown is for relay/cert failures, not local process death).
     func restartAfterCrash() async {
+        // Multiple RPCs can fail with ECONNREFUSED simultaneously (e.g. 3× streamTimeout on
+        // one dead port). Only the first caller does the actual restart; the others return
+        // immediately and then wait in waitForProxyReady() for the restart to complete.
+        guard !isCrashRestartInProgress else {
+            Log.info("🧊 ICE proxy crash restart already in progress — skipping duplicate", category: "ICE")
+            return
+        }
+        isCrashRestartInProgress = true
+        defer { isCrashRestartInProgress = false }
+
         Log.info("🧊 ICE proxy crashed (ECONNREFUSED on local port) — force-restarting", category: "ICE")
         // Force-stop both primary and secondary; the Rust side is dead.
         runtime.stop()
@@ -1159,7 +1150,7 @@ final class IceProxyManager: ObservableObject {
             resetAllProxyState()
             clearCooldown()
             clearRelayFailures()   // relay DPI profile may differ on new interface
-            resetDPIDetector()     // new network = unknown DPI environment; restart from prior
+            autoModeCoordinator.resetForNetworkChange()
 
         case .pathTopology:
             // VPN toggle or IP rotation: same interface, same DPI environment.
@@ -1213,7 +1204,7 @@ final class IceProxyManager: ObservableObject {
         Self.lastSuccessfulPath = "direct"
         directProbeTask?.cancel()
         directProbeTask = nil
-        recordDirectSuccess()
+        autoModeCoordinator.recordDirectSuccess()
         // If ICE was pre-warming in standby, stop it — direct path is confirmed working.
         if isRunning, isStandbyPrewarm {
             standbyPrewarmTask?.cancel()

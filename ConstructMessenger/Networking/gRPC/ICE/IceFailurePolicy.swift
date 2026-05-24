@@ -50,6 +50,28 @@ enum IceFailurePolicy {
         }
     }
     
+    /// Map a failure reason to the corresponding relay blacklist TTL.
+    ///
+    /// - Parameter reason: The classified failure reason.
+    /// - Returns: RelayFailureType with appropriate TTL for blacklist.
+    static func relayFailureType(for reason: IceFailureReason) -> RelayFailureType {
+        switch reason {
+        case .staleLocalProxy:
+            // Local proxy crash — no blacklist needed (coordinator handles restart).
+            return .streamTimeout  // fallback
+        case .webTunnelBlocked:
+            return .webTunnelBlocked
+        case .tlsCertExpired:
+            return .tlsHandshake
+        case .tlsFingerprintBlocked:
+            return .fingerprintBlocked
+        case .streamTimeout:
+            return .streamTimeout
+        case .transportUnknown:
+            return .streamTimeout  // default
+        }
+    }
+    
     // MARK: - Classification predicates (moved from GRPCCallExecutor)
     
     /// True when the error is ECONNREFUSED on the local ICE proxy port (127.0.0.1).
