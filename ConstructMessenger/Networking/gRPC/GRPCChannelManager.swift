@@ -136,6 +136,19 @@ final class GRPCChannelManager: Sendable {
         _iceStandbyLock.withLock { _cachedICEStandby = isStandby }
     }
 
+    /// Sets (or clears) the ICE proxy port managed by `ConnectionLoop`.
+    /// When non-nil, `iceProxyPort()` returns this value directly, bypassing the legacy
+    /// C FFI / mode / standby / cooldown checks. Pass `nil` to return to legacy routing.
+    func setDirectProxyPort(_ port: UInt16?) {
+        let changed = _overrideProxyPortLock.withLock { () -> Bool in
+            let old = _overrideProxyPort
+            _overrideProxyPort = port
+            return old != port
+        }
+        guard changed else { return }
+        invalidatePersistentClientIfRoutingChanged()
+    }
+
     /// Returns the local proxy port if ICE is running AND should be used for routing, nil otherwise.
     /// Routing rule: use ICE whenever the Rust proxy is alive, unless mode is `.off`.
     ///   `.off`        → always nil (user explicitly disabled ICE)
@@ -145,6 +158,11 @@ final class GRPCChannelManager: Sendable {
     /// `IceProxyManager.activateDPIAutoMode()`). Once started it stays running for the
     /// session — mode changes do NOT tear down an active tunnel.
     func iceProxyPort() -> UInt16? {
+        // ConnectionLoop override takes priority — it manages proxy lifecycle directly.
+        if let override = _overrideProxyPortLock.withLock({ _overrideProxyPort }) {
+            return override
+        }
+        // Legacy path: read from C FFI with mode/standby/cooldown guards.
         guard ice_proxy_is_running() != 0 else { return nil }
         guard _iceModeLock.withLock({ _cachedIceMode }) != .off else { return nil }
         // Standby pre-warm: proxy is running but routing suppressed — use direct until DPI confirmed.
@@ -250,6 +268,12 @@ final class GRPCChannelManager: Sendable {
         let key:    String   // always "direct:<host>:<port>" — H3 never used over ICE
     }
 #endif
+
+    // ConnectionLoop override: when set, iceProxyPort() returns this value directly,
+    // bypassing the legacy C FFI / mode / standby / cooldown checks.
+    // nil means "use legacy IceProxyManager logic".
+    private nonisolated(unsafe) var _overrideProxyPort: UInt16? = nil
+    private let _overrideProxyPortLock = NSLock()
 
     // In-memory ICE cooldown state.
     // Written by recordICEFailure/clearICECooldownState; read by isICEOnCooldownInternal.
