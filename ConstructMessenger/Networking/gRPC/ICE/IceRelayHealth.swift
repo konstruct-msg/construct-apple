@@ -7,7 +7,7 @@ import Foundation
 import SwiftUI
 
 /// The reason a relay was blacklisted. Determines how long it stays deprioritized.
-enum RelayFailureType: CustomStringConvertible {
+enum RelayFailureType: CustomStringConvertible, Equatable {
     /// obfs4 / TLS handshake could not be completed, likely DPI or cert mismatch.
     case tlsHandshake
     /// Tunnel was established but an RPC / stream timed out.

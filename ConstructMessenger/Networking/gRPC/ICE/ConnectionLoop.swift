@@ -27,7 +27,7 @@ actor ConnectionLoop {
 
     // MARK: - State
 
-    private let proxy = IceProxy()
+    private let proxy: IceProxy
     private var pool: RelayPool
 
     /// Consecutive direct-path failures. Reaching `directFailThreshold` activates ICE.
@@ -40,8 +40,13 @@ actor ConnectionLoop {
 
     // MARK: - Init
 
-    init(relays: [IceRelay]) {
+    init(relays: [IceRelay], proxy: IceProxy = IceProxy()) {
         self.pool = RelayPool(relays: relays)
+        self.proxy = proxy
+        if CensoredNetworkDetector.isCensored {
+            directFails = Self.directFailThreshold
+            Log.info("🧊 ConnectionLoop: censored carrier detected — ICE pre-activated", category: "ICE")
+        }
     }
 
     // MARK: - Prepare
@@ -97,8 +102,12 @@ actor ConnectionLoop {
 
         if shouldUseICE {
             if let relay = await proxy.currentRelay {
-                pool.recordFailure(relay)
-                Log.info("🧊 ConnectionLoop: relay failure (\(reason)) on \(relay.address)", category: "ICE")
+                if NetworkReachabilityManager.shared.isReachable {
+                    pool.recordFailure(relay)
+                    Log.info("🧊 ConnectionLoop: relay failure (\(reason)) on \(relay.address)", category: "ICE")
+                } else {
+                    Log.info("🧊 ConnectionLoop: relay failure (\(reason)) ignored — network offline", category: "ICE")
+                }
             }
             if reason == .staleLocalProxy {
                 await proxy.stop()
@@ -115,7 +124,7 @@ actor ConnectionLoop {
     /// Resets all state on a network path change (cellular↔WiFi, VPN on/off).
     /// The new network may or may not need ICE — restart from scratch.
     func reset() async {
-        directFails = 0
+        directFails = CensoredNetworkDetector.isCensored ? Self.directFailThreshold : 0
         pool.resetFailures()
         await proxy.stop()
         GRPCChannelManager.shared.setDirectProxyPort(nil)
@@ -126,7 +135,7 @@ actor ConnectionLoop {
 
     /// Replaces the relay list (e.g., after a manifest fetch from the server).
     /// Preserves per-relay failure counts for addresses that appear in both lists.
-    func updateRelays(_ relays: [IceRelay]) {
+    func updateRelays(_ relays: [IceRelay]) async {
         pool = RelayPool(relays: relays)
     }
 

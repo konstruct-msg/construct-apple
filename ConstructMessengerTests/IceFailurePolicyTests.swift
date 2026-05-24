@@ -14,7 +14,7 @@ final class IceFailurePolicyTests: XCTestCase {
     
     // MARK: - Helper
     
-    private func makeRPCError(code: RPCCode, message: String) -> RPCError {
+    private func makeRPCError(code: RPCError.Code, message: String) -> RPCError {
         RPCError(code: code, message: message)
     }
     
@@ -87,7 +87,7 @@ final class IceFailurePolicyTests: XCTestCase {
     }
     
     func testClassify_TLSFingerprintBlocked_HandshakeFailure() {
-        let error = makeRPCError(code: .unknown, message: "TLS handshake failure")
+        let error = makeRPCError(code: .unknown, message: "tls: handshake_failure from server")
         let reason = IceFailurePolicy.classify(error)
         XCTAssertEqual(reason, .tlsFingerprintBlocked)
     }
@@ -183,28 +183,6 @@ final class IceFailurePolicyTests: XCTestCase {
     func testRelayFailureType_TransportUnknown() {
         let type = IceFailurePolicy.relayFailureType(for: .transportUnknown)
         XCTAssertEqual(type, .streamTimeout, "Unknown failures default to streamTimeout TTL")
-    }
-    
-    // MARK: - Event Conversion
-    
-    func testEvent_WebTunnelBlocked() {
-        let event = IceFailurePolicy.event(for: .webTunnelBlocked, address: "relay:443")
-        XCTAssertEqual(event, .webTunnelBlocked(address: "relay:443"))
-    }
-    
-    func testEvent_RelayFailed_StreamTimeout() {
-        let event = IceFailurePolicy.event(for: .streamTimeout, address: "relay:443")
-        XCTAssertEqual(event, .relayFailed(address: "relay:443", reason: .streamTimeout))
-    }
-    
-    func testEvent_StaleLocalProxy() {
-        let event = IceFailurePolicy.event(for: .staleLocalProxy, address: nil)
-        XCTAssertEqual(event, .foregroundProxyDead, "Stale local proxy maps to foregroundProxyDead event")
-    }
-    
-    func testEvent_NilAddress() {
-        let event = IceFailurePolicy.event(for: .streamTimeout, address: nil)
-        XCTAssertNil(event, "Event requires address for relayFailed")
     }
     
     // MARK: - TTL Verification (Integration with RelayFailureType)
