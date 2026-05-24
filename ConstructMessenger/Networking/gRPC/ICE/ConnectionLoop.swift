@@ -43,9 +43,9 @@ actor ConnectionLoop {
     init(relays: [IceRelay], proxy: IceProxy = IceProxy()) {
         self.pool = RelayPool(relays: relays)
         self.proxy = proxy
-        if CensoredNetworkDetector.isCensored {
+        if CensoredNetworkDetector.isCensored || IceProxyStore.loadMode() == .on {
             directFails = Self.directFailThreshold
-            Log.info("🧊 ConnectionLoop: censored carrier detected — ICE pre-activated", category: "ICE")
+            Log.info("🧊 ConnectionLoop: ICE pre-activated (censored=\(CensoredNetworkDetector.isCensored) mode=\(IceProxyStore.loadMode()))", category: "ICE")
         }
     }
 
@@ -124,7 +124,7 @@ actor ConnectionLoop {
     /// Resets all state on a network path change (cellular↔WiFi, VPN on/off).
     /// The new network may or may not need ICE — restart from scratch.
     func reset() async {
-        directFails = CensoredNetworkDetector.isCensored ? Self.directFailThreshold : 0
+        directFails = (CensoredNetworkDetector.isCensored || IceProxyStore.loadMode() == .on) ? Self.directFailThreshold : 0
         pool.resetFailures()
         await proxy.stop()
         GRPCChannelManager.shared.setDirectProxyPort(nil)

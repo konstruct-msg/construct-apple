@@ -136,6 +136,12 @@ final class GRPCChannelManager: Sendable {
         _iceStandbyLock.withLock { _cachedICEStandby = isStandby }
     }
 
+    /// True when `ConnectionLoop` has set an override proxy port and owns the proxy lifecycle.
+    /// When false, the legacy `IceProxyManager` C-FFI path is used instead.
+    var isConnectionLoopActive: Bool {
+        _overrideProxyPortLock.withLock { _overrideProxyPort != nil }
+    }
+
     /// Sets (or clears) the ICE proxy port managed by `ConnectionLoop`.
     /// When non-nil, `iceProxyPort()` returns this value directly, bypassing the legacy
     /// C FFI / mode / standby / cooldown checks. Pass `nil` to return to legacy routing.

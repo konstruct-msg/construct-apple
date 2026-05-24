@@ -472,6 +472,10 @@ final class MessageStreamManager {
                     retryCount = 0
                     continue
                 }
+                // Record transport failures for ICE activation.
+                // IceFailurePolicy.classify() returns nil for auth/app-layer errors, so this
+                // is safe to call unconditionally — it's a no-op for unauthenticated failures.
+                await ConnectionLoop.shared.recordFailure(error)
                 // Log full error details for diagnosis
                 if let rpcError = error as? RPCError {
                     Log.error("""

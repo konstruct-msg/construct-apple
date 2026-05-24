@@ -299,21 +299,47 @@ final class GRPCCallExecutor: Sendable {
     
     // MARK: - ICE Failover
 
-    private enum ICEAction { case retry, propagate }
+    enum ICEAction: Equatable { case retry, propagate }
 
-    private func handleICEFailure(reason: IceFailureReason, error: Error, invalidatesConnectionOnFailure: Bool) async -> ICEAction {
+    func handleICEFailure(reason: IceFailureReason, error: Error, invalidatesConnectionOnFailure: Bool) async -> ICEAction {
         let cm = GRPCChannelManager.shared
+        let connectionLoopActive = cm.isConnectionLoopActive
 
         if reason == .staleLocalProxy {
             // ECONNREFUSED on 127.0.0.1 — local proxy died.
             // Restart immediately; do NOT enter cooldown (process crash, not relay failure).
             Log.info("🧊 ICE proxy port dead (ECONNREFUSED) — restarting proxy", category: "gRPC")
-            await IceProxyManager.shared.restartAfterCrash()
-            await cm.waitForProxyReady()
+            if connectionLoopActive {
+                // IceProxy.ensure() detects isAlive()==false and restarts cleanly.
+                // Do NOT call recordFailure() here — staleLocalProxy is a local crash,
+                // not a relay quality issue, so the relay must not be penalised.
+                _ = try? await ConnectionLoop.shared.prepare()
+            } else {
+                await IceProxyManager.shared.restartAfterCrash()
+                await cm.waitForProxyReady()
+            }
             if cm.iceProxyPort() != nil { return .retry }
             return .propagate
         }
 
+        // ── ConnectionLoop path ───────────────────────────────────────────────────────────
+        // When ConnectionLoop owns the proxy, delegate all relay lifecycle decisions to it.
+        // Calling IceProxyManager.rotateToNextRelay() / scheduleRotation() would invoke
+        // runtime.stop() on the same Rust globals that ConnectionLoop.IceProxy manages,
+        // causing proxy ownership conflicts and ping-pong restarts.
+        if connectionLoopActive {
+            await ConnectionLoop.shared.recordFailure(error)
+            if invalidatesConnectionOnFailure {
+                if (try? await ConnectionLoop.shared.prepare()) != nil {
+                    cm.invalidatePersistentClient()
+                    return .retry
+                }
+            }
+            // Background RPC: RelayPool updated, proxy untouched — live stream may be healthy.
+            return .propagate
+        }
+
+        // ── Legacy path: IceProxyManager owns the proxy ───────────────────────────────────
         let failedAddr = await IceProxyManager.shared.activeRelay?.address
 
         if invalidatesConnectionOnFailure {
@@ -383,7 +409,7 @@ final class GRPCCallExecutor: Sendable {
                 let type = IceFailurePolicy.relayFailureType(for: reason)
                 await IceProxyManager.shared.recordRelayFailure(address: addr, type: type)
             }
-            
+
             // EXCEPTION: WebTunnel-blocked and TLS-fingerprint-blocked are definitive
             // transport failures — the tunnel is dead even if the stream doesn't know yet.
             // Trigger coalesced rotation so the next RPC sees a fresh relay.
