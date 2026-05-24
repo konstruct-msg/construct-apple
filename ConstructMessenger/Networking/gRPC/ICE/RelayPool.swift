@@ -67,4 +67,8 @@ struct RelayPool {
     func failureCount(for relay: IceRelay) -> Int {
         failures[relay.address, default: 0]
     }
+
+    func failureCount(for address: String) -> Int {
+        failures[address, default: 0]
+    }
 }
