@@ -232,6 +232,10 @@ extension MessageStreamManager {
         // Capture flags before entering non-isolated task group tasks.
         let relayAlreadyVerified = IceProxyManager.shared.isCurrentRelayVerified
         let isH3Transport = lastStreamTransportWasH3
+        // Happy-eyeballs: detect ICE standby before stream attempt. When the ICE proxy is
+        // pre-warmed in standby mode we use a shorter timeout and promote ICE to active routing
+        // on timeout — skipping the H3→H2→Bayesian-DPI waterfall (~3.5s total wait time).
+        let iceInStandby = IceProxyManager.shared.isRunning && IceProxyManager.shared.isStandbyPrewarm
         do {
             try await withThrowingTaskGroup(of: Void.self) { group in
                 // 1) Accepted watcher
@@ -252,6 +256,11 @@ extension MessageStreamManager {
                     let timeout: TimeInterval
                     if relayAlreadyVerified {
                         timeout = NetworkTiming.GRPC.streamOpenAcceptTimeoutVerified
+                    } else if iceInStandby {
+                        // ICE is pre-warmed: short probe window so we race direct vs standby ICE
+                        // without a long wait. Open networks connect in <300ms; anything beyond
+                        // 0.8s strongly indicates DPI is blocking the direct path.
+                        timeout = NetworkTiming.GRPC.streamOpenAcceptTimeoutStandby
                     } else if isH3Transport {
                         timeout = NetworkTiming.GRPC.streamOpenAcceptTimeoutH3
                     } else {
@@ -272,6 +281,24 @@ extension MessageStreamManager {
             // If already accepted, ignore the timeout (race).
             if isConnected, activeStreamGeneration == generation {
                 // Continue below to await the stream until it ends.
+            } else if iceInStandby {
+                // Happy-eyeballs: ICE was pre-warmed in standby and the direct path timed out.
+                // Promote standby ICE to active routing immediately without waiting for the full
+                // H3→H2→Bayesian-DPI waterfall. activateDPIAutoMode() fast-paths for standby
+                // (no network I/O — just flips isStandbyPrewarm to false and updates routing key).
+                // False-positive cost: one extra ICE retry that fails quickly on clean networks
+                // and returns ICE to standby/cooldown — far cheaper than 3.5s wasted on DPI networks.
+                Log.info("🧊 Direct stream timed out with ICE pre-warmed — promoting standby ICE (happy-eyeballs)", category: "MessageStream")
+                PerformanceMetrics.shared.record(.streamOpenFastFailover, label: metricsLabel)
+                PerformanceMetrics.shared.cancelStart(.streamOpenStart, label: metricsLabel)
+                streamTask.cancel()
+                incomingContinuation.finish()
+                await IceProxyManager.shared.activateDPIAutoMode()
+                // activateDPIAutoMode() already calls invalidatePersistentClient() on the
+                // standby fast-path; calling it again here ensures the connection is evicted
+                // even if the call above took a different branch (idempotent).
+                GRPCChannelManager.shared.invalidatePersistentClient()
+                throw RPCError(code: .unavailable, message: "Stream open timed out — retrying with ICE")
             } else {
                 Log.info("🧊 MessageStream open timed out — attempting ICE fast-failover", category: "MessageStream")
                 PerformanceMetrics.shared.record(.streamOpenFastFailover, label: metricsLabel)

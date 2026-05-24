@@ -12,8 +12,8 @@ import Foundation
 /// Transport configuration for one proxy start attempt.
 enum IceTransportRequest: Sendable {
     /// WebTunnel (ICE v2): HTTP CONNECT-style upgrade over TLS.
-    /// `authPath` = `wtPath` + "/" + HMAC token (computed by the manager).
-    case webTunnel(address: String, sni: String, spki: String, hostHeader: String, authPath: String)
+    /// The auth token is computed per-connection inside Rust from `bridgeCert`.
+    case webTunnel(address: String, sni: String, spki: String, hostHeader: String, bridgeCert: String, wtBasePath: String)
 
     /// obfs4 tunnelled inside TLS with SPKI certificate pinning and a Chrome 131 TLS fingerprint.
     case tlsPinned(bridgeLine: String, address: String, sni: String, spki: String, profile: String)

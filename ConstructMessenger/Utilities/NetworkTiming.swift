@@ -61,6 +61,12 @@ enum NetworkTiming {
         /// all warm). A verified relay should respond to any new RPC within one RTT (≤200ms
         /// for AMS). 0.8s is a comfortable upper bound; anything longer signals a broken tunnel.
         static let streamOpenAcceptTimeoutVerified: TimeInterval = 0.8
+        /// Happy-eyeballs standby timeout: used when ICE is pre-warmed in standby mode.
+        /// If the direct stream (H3 or H2) doesn't accept within this window, the standby
+        /// ICE proxy is promoted to active routing immediately — no H3→H2→Bayesian waterfall.
+        /// Matches the verified-relay window: open networks connect in <300ms, so 0.8s is
+        /// a reliable signal that the direct path is DPI-blocked on this attempt.
+        static let streamOpenAcceptTimeoutStandby: TimeInterval = 0.8
         static let streamOpenAcceptPollInterval: TimeInterval = 0.05
 
         // Transport keepalive (HTTP/2)

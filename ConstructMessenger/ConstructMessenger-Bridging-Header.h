@@ -41,17 +41,20 @@ uint16_t ice_proxy_port_plain(void);
 /// WebTunnel (WebSocket-over-TLS) proxy for DPI evasion (construct-ice v2).
 ///
 /// Traffic appears as standard wss:// connections to bypass DPI.
+/// The auth token is derived per-connection from bridge_cert and the current
+/// time period (SHA-256(bridge_cert || "webtunnel-v1" || period_u64_be)[:8]).
 ///
-/// relay_addr:  IP:port of the relay ("158.160.140.67:443").
-/// tls_sni:     TLS SNI — set to CDN domain for fronting, or empty for IP-mode.
-/// spki_hex:    lowercase hex SHA-256 of relay DER SPKI — empty = no pinning.
-/// host_header: HTTP Host header for WebSocket upgrade (for domain fronting).
-/// path:        WebSocket resource path (e.g. "/construct-ice"). Empty → "/".
-/// port_out:    local TCP port the proxy listens on.
+/// relay_addr:   IP:port of the relay ("158.160.140.67:443").
+/// tls_sni:      TLS SNI — set to CDN domain for fronting, or empty for IP-mode.
+/// spki_hex:     lowercase hex SHA-256 of relay DER SPKI — empty = no pinning.
+/// host_header:  HTTP Host header for WebSocket upgrade (for domain fronting).
+/// bridge_cert:  base64-encoded obfs4 bridge cert from relay manifest.
+/// wt_base_path: WebSocket resource base path (e.g. "/api/stream"), without token.
+/// port_out:     local TCP port the proxy listens on.
 int32_t ice_proxy_start_webtunnel(const char *relay_addr,
                                    const char *tls_sni, const char *spki_hex,
-                                   const char *host_header, const char *path,
-                                   uint16_t *port_out);
+                                   const char *host_header, const char *bridge_cert,
+                                   const char *wt_base_path, uint16_t *port_out);
 /// WebTunnel proxy port (0 = not running).
 uint16_t ice_proxy_port_webtunnel(void);
 

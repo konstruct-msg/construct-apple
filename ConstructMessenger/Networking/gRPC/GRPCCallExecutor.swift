@@ -80,27 +80,43 @@ final class GRPCCallExecutor: Sendable {
                     client: client
                 )
 
-                // Auth retry on first attempt.
+                // ICE failover FIRST — transport errors classified before auth retry.
+                if usingICE {
+                    if let reason = IceFailurePolicy.classify(error) {
+                        let action = await handleICEFailure(
+                            reason: reason,
+                            error: error,
+                            invalidatesConnectionOnFailure: invalidatesConnectionOnFailure
+                        )
+                        switch action {
+                        case .retry:
+                            continue
+                        case .propagate:
+                            break
+                        }
+                    }
+                }
+
+                // Auth retry on first attempt — only if no transport failure was already handled.
+                var authRetryResult: AuthRetryResult = .networkOffline
                 if let rpc = error as? RPCError,
                    rpc.code == .unauthenticated,
                    allowAuthRetry,
                    attempt == 0 {
-                    let shouldContinue = await handleAuthRetry(rpcError: rpc)
-                    if shouldContinue { continue }
+                    authRetryResult = await handleAuthRetry(rpcError: rpc)
+                    if case .retry = authRetryResult { continue }
                 }
 
-                // ICE failover.
-                if usingICE {
+                // If the auth retry's own refresh RPC hit a transport failure, handle ICE now.
+                // This catches the case where the original error was unauthenticated (masked),
+                // but the refresh over the same broken tunnel also failed for a transport reason.
+                if usingICE, case .transportFailure(let reason) = authRetryResult {
                     let action = await handleICEFailure(
+                        reason: reason,
                         error: error,
                         invalidatesConnectionOnFailure: invalidatesConnectionOnFailure
                     )
-                    switch action {
-                    case .retry:
-                        continue
-                    case .propagate:
-                        break
-                    }
+                    if case .retry = action { continue }
                 }
 
                 throw error
@@ -234,16 +250,34 @@ final class GRPCCallExecutor: Sendable {
 
     // MARK: - Auth Retry
 
-    /// Returns `true` if the RPC should be retried after a token refresh.
-    private func handleAuthRetry(rpcError: RPCError) async -> Bool {
+    /// Result of an auth retry attempt.
+    enum AuthRetryResult: Sendable {
+        /// Refresh succeeded — caller should retry the original RPC.
+        case retry
+        /// Server rejected the refresh token — trigger re-auth.
+        case serverRejected
+        /// Refresh RPC failed due to transport failure — caller should handle ICE first.
+        case transportFailure(IceFailureReason)
+        /// Network offline (unavailable, deadline) — keep tokens for retry when online.
+        case networkOffline
+    }
+
+    /// Returns whether the RPC should be retried after a token refresh.
+    private func handleAuthRetry(rpcError: RPCError) async -> AuthRetryResult {
         var refreshError: Error?
         do {
             let refreshed = try await TokenRefreshCoordinator.shared.refreshIfPossible()
-            if refreshed { return true }
+            if refreshed { return .retry }
         } catch {
             refreshError = error
             Log.error("⚠️ Token refresh failed during RPC retry: \(error)", category: "GRPCChannel")
         }
+        
+        // Classify the refresh error — transport failures must bubble up.
+        if let refreshErr = refreshError, let reason = IceFailurePolicy.classify(refreshErr) {
+            return .transportFailure(reason)
+        }
+        
         // Wipe tokens only when the server explicitly rejected them.
         // Network errors (unavailable, deadline) mean the endpoint was unreachable —
         // keep the existing token so the user can retry when connectivity returns.
@@ -256,20 +290,21 @@ final class GRPCCallExecutor: Sendable {
         if serverRejected {
             Log.info("🔑 Refresh rejected by server — triggering device re-auth", category: "GRPCChannel")
             await MainActor.run { SessionManager.shared.invalidateTokensForReauth() }
+            return .serverRejected
         } else {
             Log.info("🔑 Refresh failed (network error) — keeping tokens for retry when online", category: "GRPCChannel")
+            return .networkOffline
         }
-        return false
     }
-
+    
     // MARK: - ICE Failover
 
     private enum ICEAction { case retry, propagate }
 
-    private func handleICEFailure(error: Error, invalidatesConnectionOnFailure: Bool) async -> ICEAction {
+    private func handleICEFailure(reason: IceFailureReason, error: Error, invalidatesConnectionOnFailure: Bool) async -> ICEAction {
         let cm = GRPCChannelManager.shared
 
-        if isStaleLocalProxy(error) {
+        if reason == .staleLocalProxy {
             // ECONNREFUSED on 127.0.0.1 — local proxy died.
             // Restart immediately; do NOT enter cooldown (process crash, not relay failure).
             Log.info("🧊 ICE proxy port dead (ECONNREFUSED) — restarting proxy", category: "gRPC")
@@ -279,15 +314,13 @@ final class GRPCCallExecutor: Sendable {
             return .propagate
         }
 
-        guard shouldRecordIceFailure(error) else { return .propagate }
-
         let failedAddr = await IceProxyManager.shared.activeRelay?.address
 
         if invalidatesConnectionOnFailure {
             // Relay tunnel broken. Check for WebTunnel-specific failure first:
             // try alternate SNIs then obfs4 before rotating to a new relay.
             let webTunnelActive = await IceProxyManager.shared.isWebTunnelActive
-            if isWebTunnelBlocked(error), webTunnelActive {
+            if reason == .webTunnelBlocked, webTunnelActive {
                 Log.info("🧊 WebTunnel blocked (non-200) — retrying relay via alternate SNI or obfs4", category: "gRPC")
                 let obfs4OK = await IceProxyManager.shared.retryCurrentRelayAsObfs4(hintAddress: failedAddr)
                 if obfs4OK {
@@ -297,7 +330,7 @@ final class GRPCCallExecutor: Sendable {
                     return .retry
                 }
                 if let addr = failedAddr { await IceProxyManager.shared.recordRelayFailure(address: addr, type: .webTunnelBlocked) }
-            } else if isTLSCertExpired(error) {
+            } else if reason == .tlsCertExpired {
                 // Expired TLS cert — fetch fresh config + cert from .well-known and restart.
                 Log.info("🧊 TLS cert expired on relay — refreshing cert + config", category: "gRPC")
                 let refreshed = await IceProxyManager.shared.refreshCertAndRestart()
@@ -307,7 +340,7 @@ final class GRPCCallExecutor: Sendable {
                     return .retry
                 }
                 if let addr = failedAddr { await IceProxyManager.shared.recordRelayFailure(address: addr, type: .tlsHandshake) }
-            } else if isTLSFingerprintBlocked(error) {
+            } else if reason == .tlsFingerprintBlocked {
                 // TLS alert 40: relay fingerprint detected by DPI — rotate to different relay quickly.
                 Log.info("🧊 TLS fingerprint blocked (alert 40) on relay — rotating", category: "gRPC")
                 if let addr = failedAddr { await IceProxyManager.shared.recordRelayFailure(address: addr, type: .fingerprintBlocked) }
@@ -335,6 +368,13 @@ final class GRPCCallExecutor: Sendable {
             // Background RPC: record relay failure so future connections avoid it,
             // but do NOT rotate or invalidate — that would kill any live stream.
             if let addr = failedAddr { await IceProxyManager.shared.recordRelayFailure(address: addr) }
+            
+            // EXCEPTION: WebTunnel-blocked and TLS-fingerprint-blocked are definitive
+            // transport failures — the tunnel is dead even if the stream doesn't know yet.
+            // Trigger coalesced rotation so the next RPC sees a fresh relay.
+            if reason == .webTunnelBlocked || reason == .tlsFingerprintBlocked {
+                await IceProxyManager.shared.scheduleRotation(reason: reason)
+            }
         }
         return .propagate
     }
@@ -348,70 +388,5 @@ final class GRPCCallExecutor: Sendable {
         if error is GRPCClientError   { return true }
         if let rpc = error as? RPCError, rpc.code == .cancelled { return true }
         return false
-    }
-
-    /// True for errors that represent a relay or transport failure worth recording.
-    /// Application-level errors (auth, validation, not found) return false — the relay
-    /// delivered the response correctly and should not be penalised.
-    private func shouldRecordIceFailure(_ error: Error) -> Bool {
-        if error is CancellationError { return false }
-        if error is GRPCClientError   { return false }
-        guard let rpc = error as? RPCError else { return true }
-        switch rpc.code {
-        case .unauthenticated, .permissionDenied, .invalidArgument, .notFound,
-             .alreadyExists, .resourceExhausted, .cancelled, .internalError:
-            return false
-        case .unimplemented:
-            // "Unexpected non-200 HTTP Status Code" → relay→upstream HTTP path broken.
-            return isWebTunnelBlocked(error)
-        case .unavailable, .deadlineExceeded, .unknown:
-            let msg = rpc.message.lowercased()
-            if msg.contains(GRPCMessages.streamClosed) && msg.contains("closed") { return false }
-            if msg.contains(GRPCMessages.channelClosed)                          { return false }
-            if msg.contains("cancellation") || msg.contains("cancelled")         { return false }
-            if msg.contains(GRPCMessages.requestTimedOut)                        { return false }
-            return true
-        default:
-            return true
-        }
-    }
-
-    /// True when the error is ECONNREFUSED on the local ICE proxy port (127.0.0.1).
-    /// Distinct from a relay failure — no cooldown needed, just restart the process.
-    private func isStaleLocalProxy(_ error: Error) -> Bool {
-        guard let rpc = error as? RPCError, rpc.code == .unavailable else { return false }
-        return rpc.message.contains(GRPCMessages.localProxyAddr)
-    }
-
-    /// True when a transparent HTTP proxy intercepted the WebSocket UPGRADE and returned
-    /// a non-101/non-200 response instead of forwarding it to the relay.
-    private func isWebTunnelBlocked(_ error: Error) -> Bool {
-        guard let rpc = error as? RPCError, rpc.code == .unimplemented else { return false }
-        let msg = rpc.message.lowercased()
-        return msg.contains(GRPCMessages.nonHttpUpgrade)
-            || msg.contains(GRPCMessages.httpStatusCode)
-            || (msg.contains(GRPCMessages.unexpectedHttp) && msg.contains("http"))
-    }
-
-    /// True when the TLS connection failed due to an expired or untrusted certificate.
-    /// Triggers a cert+config refresh rather than relay rotation.
-    private func isTLSCertExpired(_ error: Error) -> Bool {
-        guard let rpc = error as? RPCError,
-              rpc.code == .unavailable || rpc.code == .unknown else { return false }
-        let msg = rpc.message.lowercased()
-        return (msg.contains(GRPCMessages.tlsCertificate)
-                    && (msg.contains("expired") || msg.contains("verify") || msg.contains("invalid")))
-            || msg.contains(GRPCMessages.tlsCertVerifyFailed)
-    }
-
-    /// True when TLS alert 40 (handshake_failure) is returned, indicating the relay's
-    /// TLS fingerprint is blocked by DPI at the network level.
-    /// Triggers relay rotation with a shorter TTL than a generic TLS failure.
-    private func isTLSFingerprintBlocked(_ error: Error) -> Bool {
-        guard let rpc = error as? RPCError,
-              rpc.code == .unavailable || rpc.code == .unknown else { return false }
-        let msg = rpc.message.lowercased()
-        return (msg.contains(GRPCMessages.tlsHandshakeAlert) && msg.contains("40"))
-            || msg.contains(GRPCMessages.tlsHandshakeFailure)
     }
 }

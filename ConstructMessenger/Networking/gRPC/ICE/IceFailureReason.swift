@@ -1,0 +1,32 @@
+//
+//  IceFailureReason.swift
+//  Construct Messenger
+//
+//  Typed classification of ICE/relay transport failures.
+//
+
+import Foundation
+
+/// Categorized reason for an ICE relay failure.
+///
+/// Used by `IceFailurePolicy.classify` to distinguish transport-layer failures
+/// (which require ICE failover) from application-layer errors (auth, validation, etc.).
+enum IceFailureReason: Sendable, Equatable {
+    /// WebTunnel blocked by a transparent HTTP proxy (non-200/404 on WebSocket upgrade).
+    case webTunnelBlocked
+    
+    /// TLS certificate expired or invalid.
+    case tlsCertExpired
+    
+    /// TLS fingerprint blocked by DPI (alert 40 / handshake_failure).
+    case tlsFingerprintBlocked
+    
+    /// Local ICE proxy process died (ECONNREFUSED on 127.0.0.1).
+    case staleLocalProxy
+    
+    /// Stream timeout on unverified relay (DPI block, congestion, etc.).
+    case streamTimeout
+    
+    /// Unknown transport failure not matching other cases.
+    case transportUnknown
+}

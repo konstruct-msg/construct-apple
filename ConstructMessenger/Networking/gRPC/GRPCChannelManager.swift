@@ -70,7 +70,11 @@ final class GRPCChannelManager: Sendable {
         // If the app is killed and relaunched, the network state may have changed
         // (different WiFi, cellular handoff), so a fresh ICE attempt is preferred
         // over carrying over a stale cooldown from a previous session.
-        invalidatePersistentClient()  // routing will change (ICE → direct)
+        //
+        // Use the routing-aware variant: if the connection was already on the direct path
+        // (e.g. ICE was in standby or cooldown when this RPC ran), there is no routing
+        // change and invalidating would kill a working direct connection for no reason.
+        invalidatePersistentClientIfRoutingChanged()
         Log.info("⚠️ ICE relay failure recorded — bypassing ICE for \(Int(duration))s (failure #\(_iceLock.withLock { _consecutiveICEFailures }))", category: "gRPC")
         Task { @MainActor [weak self] in
             guard self != nil else { return }
@@ -319,6 +323,40 @@ final class GRPCChannelManager: Sendable {
         _conn = PersistentConn(client: client, task: task, key: key)
         Log.debug("🔌 Persistent gRPC connection created (key=\(key) gen=\(gen))", category: "GRPCChannel")
         return client
+    }
+
+    /// Invalidates the persistent connection only if the routing key has actually changed.
+    ///
+    /// Use this instead of `invalidatePersistentClient()` for ICE lifecycle events (proxy restart,
+    /// relay rotation, cooldown entry) that do not affect the direct path. If the connection is
+    /// already on the direct path and ICE reports a background failure, routing hasn't changed —
+    /// there is nothing to invalidate and calling this is a no-op.
+    ///
+    /// Only tears down the connection when the new routing key differs from the key the connection
+    /// was created with (e.g. "ice:1234" → "direct:host:443"). Avoids the cascade where an ICE
+    /// failure disrupts a working direct connection.
+    func invalidatePersistentClientIfRoutingChanged() {
+        // Compute routing key outside the lock — routingKey() acquires _iceModeLock and
+        // _iceStandbyLock but never _connLock, so this ordering is safe.
+        let newKey = routingKey()
+        var didInvalidate = false
+        var oldKey = ""
+        _connLock.lock()
+        if let conn = _conn, conn.key != newKey {
+            conn.client.beginGracefulShutdown()
+            oldKey = conn.key
+            _conn = nil
+            _connGeneration &+= 1
+            didInvalidate = true
+        }
+        _connLock.unlock()
+        guard didInvalidate else { return }
+        Log.debug("🔌 Persistent gRPC connection invalidated (routing: \(oldKey) → \(newKey), gen=\(_connLock.withLock { _connGeneration }))", category: "GRPCChannel")
+#if canImport(Network)
+        if #available(iOS 16.0, macOS 13.0, *) {
+            invalidateH3Connection()
+        }
+#endif
     }
 
     /// Invalidates the persistent connection so the next RPC gets a fresh one.

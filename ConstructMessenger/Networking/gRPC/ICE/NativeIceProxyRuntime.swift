@@ -20,13 +20,15 @@ final class NativeIceProxyRuntime: IceProxyRuntime {
         let result: Int32
 
         switch request {
-        case .webTunnel(let address, let sni, let spki, let hostHeader, let authPath):
+        case .webTunnel(let address, let sni, let spki, let hostHeader, let bridgeCert, let wtBasePath):
             result = address.withCString { addrPtr in
                 sni.withCString { sniPtr in
                     spki.withCString { spkiPtr in
                         hostHeader.withCString { hostPtr in
-                            authPath.withCString { pathPtr in
-                                ice_proxy_start_webtunnel(addrPtr, sniPtr, spkiPtr, hostPtr, pathPtr, &port)
+                            bridgeCert.withCString { bridgeCertPtr in
+                                wtBasePath.withCString { basePathPtr in
+                                    ice_proxy_start_webtunnel(addrPtr, sniPtr, spkiPtr, hostPtr, bridgeCertPtr, basePathPtr, &port)
+                                }
                             }
                         }
                     }

@@ -155,7 +155,11 @@ enum IceRelaySelector {
             }
             reordered = failedWebTunnel + failedNoWebTunnel
         } else {
-            reordered = notFailed + failed
+            // NotFailed first, then failed — but within failed, demote "definitively bad" relays
+            // (repeat WebTunnel blocks) below transient failures.
+            let definitivelyBad = failed.filter { isWebTunnelBlocked($0) }
+            let transientFailed = failed.filter { !isWebTunnelBlocked($0) }
+            reordered = notFailed + transientFailed + definitivelyBad
         }
 
         return IceRelayFailureSelection(orderedAddresses: reordered, failedAddresses: failed)

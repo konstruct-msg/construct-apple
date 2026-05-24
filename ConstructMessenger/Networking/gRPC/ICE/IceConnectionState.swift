@@ -18,6 +18,7 @@ import Foundation
 /// active   -> off
 /// active   -> cooldown
 /// cooldown -> off
+/// cooldown -> active (after expiry)
 /// ```
 ///
 /// Today `IceProxyManager` still exposes legacy published flags for UI compatibility.
@@ -26,7 +27,8 @@ enum IceConnectionState: Equatable {
     /// No proxy running; gRPC routes direct or ICE is not available.
     case off
     /// ICE proxy pre-warming in standby. The proxy is running, but gRPC is not routed through it yet.
-    case standby(port: UInt16)
+    /// `webTunnel` mirrors the transport that was started — needed to preserve it on `dpiConfirmed`.
+    case standby(port: UInt16, webTunnel: Bool)
     /// ICE proxy is active and gRPC routes through it.
     case active(port: UInt16, webTunnel: Bool)
     /// Exponential-backoff cooldown after consecutive failures.

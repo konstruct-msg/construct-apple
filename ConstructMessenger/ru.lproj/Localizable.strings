@@ -4,7 +4,7 @@
 "cancel" = "Отмена";
 "done" = "Готово";
 "unknown" = "Неизвестно";
-"constrcut_titlte" = "КОНСТРУКТ";
+"construct_titlte" = "КОНСТРУКТ";
 
 // MARK: - Loading Screen
 "app_loading_state" = "Инициализация защищённого состояния";
