@@ -25,32 +25,77 @@ construct-messenger/
 │   ├── Networking/gRPC/         # gRPC channel + generated protobuf Swift files
 │   ├── en.lproj/                # English strings
 │   └── ru.lproj/                # Russian strings
-├── ConstructCore.xcframework/   # Pre-built Rust xcframework (arm64 iOS + Simulator + macOS)
-├── libconstruct_core.a          # Rust static lib (arm64 iOS)
-├── libconstruct_core_sim.a      # Rust static lib (Simulator)
-├── build_crypto_lib.sh          # Script to rebuild Rust library
-├── construct_core.swift         # UniFFI auto-generated bindings — DO NOT EDIT
+├── ConstructCore.xcframework/   # Built Rust crypto core (NOT in git — see Build Commands)
+├── ConstructEngine.xcframework/ # Built Rust transport engine (NOT in git — see Build Commands)
+├── build_crypto_lib.sh          # Script to rebuild construct-core
+├── construct_engine.swift       # UniFFI auto-generated bindings — DO NOT EDIT
 └── AGENTS.md                    # This file
 ```
 
-The Rust core lives at: `/Users/maximeliseyev/Code/construct-core`
+The Rust core lives at: `~/Code/construct-core`
+The Rust engine lives at: `~/Code/construct-engine`
+The Rust ICE proxy lives at: `~/Code/construct-ice`
 
 ---
 
 ## Build Commands
 
+### Prerequisites
+
+All three Rust crates must be cloned alongside this repo:
+```
+~/Code/
+├── construct-core/        # Cryptographic core (X3DH, Double Ratchet, Kyber, etc.)
+├── construct-engine/      # QUIC/H3/gRPC transport engine
+├── construct-ice/         # obfs4/WebTunnel ICE proxy (DPI evasion)
+└── construct-messenger/   # This repo — iOS/macOS SwiftUI app
+```
+
+### First build
+
+After a fresh clone, the `*.xcframework` directories are empty stubs.
+You MUST build the Rust libraries before Xcode can compile the app.
+
 ```bash
-# Build iOS app (simulator)
+# 1. Build construct-core (crypto) — produces ConstructCore.xcframework
+cd ~/Code/construct-messenger
+./build_crypto_lib.sh --ios --sim --mac
+
+# 2. Build construct-engine (transport) — produces ConstructEngine.xcframework
+cd ~/Code/construct-engine
+./build_engine.sh
+
+# 3. Build the iOS app (simulator)
+cd ~/Code/construct-messenger
 xcodebuild -scheme ConstructMessenger \
   -destination 'platform=iOS Simulator,name=iPhone 16,OS=18.6' build
-
-# Build Rust crypto library (run from project root)
-./build_crypto_lib.sh --ios       # iOS device (arm64)
-./build_crypto_lib.sh --sim       # Simulator
-./build_crypto_lib.sh --ios --sim # Both
-
-# After rebuilding Rust lib: always Clean Build Folder in Xcode (⌘⇧K)
 ```
+
+### Rebuilding after Rust changes
+
+```bash
+# Rebuild crypto (iOS device only — fastest iteration)
+./build_crypto_lib.sh --ios
+
+# Rebuild engine (all platforms)
+cd ~/Code/construct-engine && ./build_engine.sh
+
+# Clean Xcode build folder before next build
+# Xcode: ⌘⇧K  or  Product → Clean Build Folder
+```
+
+### Rebuilding individual platforms
+
+```bash
+./build_crypto_lib.sh --ios        # iOS device only (arm64)
+./build_crypto_lib.sh --sim        # Simulator only (arm64 + x86_64 fat)
+./build_crypto_lib.sh --mac        # macOS native (arm64)
+./build_crypto_lib.sh --clean      # cargo clean before build
+```
+
+> **Note**: The xcframework binaries are NOT tracked in git.
+> They must be rebuilt locally after cloning.
+> In the future, they will be built in CI (GitHub Actions) and attached to releases.
 
 ---
 
@@ -146,7 +191,7 @@ We have our own terminology. Use it consistently in UI, code, and comments.
 ## Architecture Notes
 
 > **Before making any architectural decision**, search the wiki first:
-> `ls /Users/maximeliseyev/Code/construct-docs/wiki/ | grep <topic>`
+> `ls ~/Code/construct-docs/wiki/ | grep <topic>`
 > The wiki has 500+ curated articles covering every component. AGENTS.md is operational rules;
 > the wiki is the authoritative architecture documentation.
 
@@ -428,7 +473,7 @@ Just write clear, factual session notes and let the pipeline do the rest.
 
 ### Shared knowledge base
 
-- Vault: `/Users/maximeliseyev/Code/construct-docs`
+- Vault: `~/Code/construct-docs`
 - `raw/` — source corpus. Do **not** rewrite, normalize, or reorganize unless explicitly asked.
 - `wiki/` — canonical curated knowledge base. **Read** from here before architectural work.
 - `wiki/.drafts/` — **reserved for olw**. Never write here manually.
