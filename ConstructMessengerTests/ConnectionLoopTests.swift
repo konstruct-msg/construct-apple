@@ -34,6 +34,22 @@ final class MockIceProxyRuntime: IceProxyRuntime, @unchecked Sendable {
 
 final class ConnectionLoopTests: XCTestCase {
 
+    // MARK: - Setup
+
+    override func setUp() async throws {
+        // Isolate tests from simulator UserDefaults state:
+        // IceMode=.on (set by the app) causes ConnectionLoop.init to pre-activate ICE
+        // via the P2 mode=.on check, breaking tests that expect directFails=0 initially.
+        IceProxyStore.saveMode(.auto)
+        CensoredNetworkDetector._testOverride = false
+    }
+
+    override func tearDown() async throws {
+        IceProxyStore.saveMode(.auto)
+        CensoredNetworkDetector._testOverride = nil
+        await ConnectionLoop.shared.reset()
+    }
+
     // MARK: - Helpers
 
     private func makeLoop(

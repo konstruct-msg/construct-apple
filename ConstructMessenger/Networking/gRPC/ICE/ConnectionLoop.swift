@@ -59,7 +59,11 @@ actor ConnectionLoop {
     /// Returns the ICE proxy port, or `nil` for direct routing.
     @discardableResult
     func prepare() async throws -> UInt16? {
-        guard shouldUseICE, !pool.isEmpty else {
+        // In mode=.on ICE is mandatory regardless of directFails. This ensures that after
+        // a clean stream end (recordSuccess resets directFails=0), the next attempt still
+        // routes through ICE rather than briefly falling through to the direct path.
+        let iceRequired = shouldUseICE || IceProxyStore.loadMode() == .on
+        guard iceRequired, !pool.isEmpty else {
             GRPCChannelManager.shared.setDirectProxyPort(nil)
             return nil
         }

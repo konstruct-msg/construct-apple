@@ -563,6 +563,13 @@ final class IceProxyManager: ObservableObject {
     /// Returns true if a different relay was started successfully.
     @discardableResult
     func rotateToNextRelay() async -> Bool {
+        // When ConnectionLoop owns the proxy, skip — it manages the relay lifecycle.
+        // This gate must run before runtime.stop() so in-flight rotation tasks scheduled
+        // before ConnectionLoop took ownership are also short-circuited on resume.
+        guard !GRPCChannelManager.shared.isConnectionLoopActive else {
+            Log.debug("🧊 IceProxyManager: rotation skipped — ConnectionLoop owns proxy", category: "ICE")
+            return false
+        }
         // Don't call stop() — we want to bypass the `isRunning` guard and reset directly.
         runtime.stop()
         resetAllProxyState()
@@ -1065,6 +1072,11 @@ final class IceProxyManager: ObservableObject {
     /// while the Swift side still thinks it's running. Force-resets all state and restarts.
     /// Does NOT enter cooldown (cooldown is for relay/cert failures, not local process death).
     func restartAfterCrash() async {
+        // When ConnectionLoop owns the proxy, skip — it handles crash recovery via prepare().
+        guard !GRPCChannelManager.shared.isConnectionLoopActive else {
+            Log.debug("🧊 IceProxyManager: crash restart skipped — ConnectionLoop owns proxy", category: "ICE")
+            return
+        }
         // Multiple RPCs can fail with ECONNREFUSED simultaneously (e.g. 3× streamTimeout on
         // one dead port). Only the first caller does the actual restart; the others return
         // immediately and then wait in waitForProxyReady() for the restart to complete.

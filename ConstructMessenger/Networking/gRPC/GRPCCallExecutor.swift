@@ -327,15 +327,13 @@ final class GRPCCallExecutor: Sendable {
         // Calling IceProxyManager.rotateToNextRelay() / scheduleRotation() would invoke
         // runtime.stop() on the same Rust globals that ConnectionLoop.IceProxy manages,
         // causing proxy ownership conflicts and ping-pong restarts.
+        //
+        // IMPORTANT: never call prepare() here, even when invalidatesConnectionOnFailure=true.
+        // prepare() calls IceProxy.ensure() which stops the running proxy — killing the live
+        // stream. Relay rotation is the responsibility of connectLoop(), which calls prepare()
+        // between stream attempts, not during them.
         if connectionLoopActive {
             await ConnectionLoop.shared.recordFailure(error)
-            if invalidatesConnectionOnFailure {
-                if (try? await ConnectionLoop.shared.prepare()) != nil {
-                    cm.invalidatePersistentClient()
-                    return .retry
-                }
-            }
-            // Background RPC: RelayPool updated, proxy untouched — live stream may be healthy.
             return .propagate
         }
 
