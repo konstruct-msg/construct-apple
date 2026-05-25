@@ -26,8 +26,8 @@ final class GRPCCallExecutor: Sendable {
 
         for attempt in 0..<3 {
             let usingICE = cm.iceProxyPort() != nil
-            let iceRelayVerified = usingICE ? await IceProxyManager.shared.isCurrentRelayVerified : true
-            let capturedRelayAddr = usingICE ? await IceProxyManager.shared.activeRelay?.address : nil
+            let iceRelayVerified = usingICE ? await ConnectionLoop.shared.isCurrentRelayVerified : true
+            let capturedRelayAddr = usingICE ? await ConnectionLoop.shared.activeRelayAddress : nil
             let effectiveTimeout: TimeInterval? = {
                 guard let timeout else { return nil }
                 // Unverified ICE relay: use a short timeout so DPI-blocked obfs4 tunnels
@@ -67,7 +67,7 @@ final class GRPCCallExecutor: Sendable {
                 PerformanceMetrics.shared.end(.grpcConnectStart, endEvent: .grpcConnectEnd, label: cm.currentRoutingKey)
                 if usingICE, let addr = capturedRelayAddr {
                     let latency = Date().timeIntervalSince(rpcStart)
-                    await IceProxyManager.shared.recordRelaySuccess(address: addr, latency: latency)
+                    await ConnectionLoop.shared.recordRelaySuccess(address: addr, latency: latency)
                 }
                 return result
             } catch {
@@ -301,120 +301,20 @@ final class GRPCCallExecutor: Sendable {
 
     enum ICEAction: Equatable { case retry, propagate }
 
+    /// Handles an ICE transport failure. All relay lifecycle decisions are delegated
+    /// to ConnectionLoop — the single owner of proxy state and relay quality tracking.
     func handleICEFailure(reason: IceFailureReason, error: Error, invalidatesConnectionOnFailure: Bool) async -> ICEAction {
         let cm = GRPCChannelManager.shared
-        let connectionLoopActive = cm.isConnectionLoopActive
 
         if reason == .staleLocalProxy {
-            // ECONNREFUSED on 127.0.0.1 — local proxy died.
-            // Restart immediately; do NOT enter cooldown (process crash, not relay failure).
             Log.info("🧊 ICE proxy port dead (ECONNREFUSED) — restarting proxy", category: "gRPC")
-            if connectionLoopActive {
-                // IceProxy.ensure() detects isAlive()==false and restarts cleanly.
-                // Do NOT call recordFailure() here — staleLocalProxy is a local crash,
-                // not a relay quality issue, so the relay must not be penalised.
-                _ = try? await ConnectionLoop.shared.prepare()
-            } else {
-                await IceProxyManager.shared.restartAfterCrash()
-                await cm.waitForProxyReady()
-            }
+            _ = try? await ConnectionLoop.shared.prepare()
             if cm.iceProxyPort() != nil { return .retry }
             return .propagate
         }
 
-        // ── ConnectionLoop path ───────────────────────────────────────────────────────────
-        // When ConnectionLoop owns the proxy, delegate all relay lifecycle decisions to it.
-        // Calling IceProxyManager.rotateToNextRelay() / scheduleRotation() would invoke
-        // runtime.stop() on the same Rust globals that ConnectionLoop.IceProxy manages,
-        // causing proxy ownership conflicts and ping-pong restarts.
-        //
-        // IMPORTANT: never call prepare() here, even when invalidatesConnectionOnFailure=true.
-        // prepare() calls IceProxy.ensure() which stops the running proxy — killing the live
-        // stream. Relay rotation is the responsibility of connectLoop(), which calls prepare()
-        // between stream attempts, not during them.
-        if connectionLoopActive {
-            await ConnectionLoop.shared.recordFailure(error, invalidatesConnection: invalidatesConnectionOnFailure)
-            return .propagate
-        }
-
-        // ── Legacy path: IceProxyManager owns the proxy ───────────────────────────────────
-        let failedAddr = await IceProxyManager.shared.activeRelay?.address
-
-        if invalidatesConnectionOnFailure {
-            // Relay tunnel broken. Check for WebTunnel-specific failure first:
-            // try alternate SNIs then obfs4 before rotating to a new relay.
-            let webTunnelActive = await IceProxyManager.shared.isWebTunnelActive
-            if reason == .webTunnelBlocked, webTunnelActive {
-                Log.info("🧊 WebTunnel blocked (non-200) — retrying relay via alternate SNI or obfs4", category: "gRPC")
-                let obfs4OK = await IceProxyManager.shared.retryCurrentRelayAsObfs4(hintAddress: failedAddr)
-                if obfs4OK {
-                    cm.invalidatePersistentClient()
-                    await cm.waitForProxyReady()
-                    Log.info("🧊 ICE obfs4 fallback active — retrying via same relay", category: "gRPC")
-                    return .retry
-                }
-                if let addr = failedAddr {
-                    let type = IceFailurePolicy.relayFailureType(for: reason)
-                    await IceProxyManager.shared.recordRelayFailure(address: addr, type: type)
-                }
-            } else if reason == .tlsCertExpired {
-                // Expired TLS cert — fetch fresh config + cert from .well-known and restart.
-                Log.info("🧊 TLS cert expired on relay — refreshing cert + config", category: "gRPC")
-                let refreshed = await IceProxyManager.shared.refreshCertAndRestart()
-                if refreshed {
-                    cm.invalidatePersistentClient()
-                    await cm.waitForProxyReady()
-                    return .retry
-                }
-                if let addr = failedAddr {
-                    let type = IceFailurePolicy.relayFailureType(for: reason)
-                    await IceProxyManager.shared.recordRelayFailure(address: addr, type: type)
-                }
-            } else if reason == .tlsFingerprintBlocked {
-                // TLS alert 40: relay fingerprint detected by DPI — rotate to different relay quickly.
-                Log.info("🧊 TLS fingerprint blocked (alert 40) on relay — rotating", category: "gRPC")
-                if let addr = failedAddr {
-                    let type = IceFailurePolicy.relayFailureType(for: reason)
-                    await IceProxyManager.shared.recordRelayFailure(address: addr, type: type)
-                }
-            } else {
-                // General transport failure — map reason to TTL.
-                if let addr = failedAddr {
-                    let type = IceFailurePolicy.relayFailureType(for: reason)
-                    await IceProxyManager.shared.recordRelayFailure(address: addr, type: type)
-                }
-            }
-
-            let rotated = await IceProxyManager.shared.rotateToNextRelay()
-            if rotated {
-                // If all relays were recently blacklisted, we just restarted the least-bad one.
-                // Wait 30 s so old TCP connections drain before we create new ones.
-                if await IceProxyManager.shared.allRelaysRecentlyFailed {
-                    Log.info("🧊 All relays blacklisted — waiting 30s to let connections drain", category: "gRPC")
-                    try? await Task.sleep(for: .seconds(30))
-                }
-                cm.invalidatePersistentClient()
-                await cm.waitForProxyReady()
-                Log.info("🧊 Relay rotated inline — retrying via new relay", category: "gRPC")
-                return .retry
-            }
-            // All relays exhausted — enter cooldown for direct fallback.
-            cm.recordICEFailure(failedAddress: failedAddr)
-        } else {
-            // Background RPC: record relay failure so future connections avoid it,
-            // but do NOT rotate or invalidate — that would kill any live stream.
-            if let addr = failedAddr {
-                let type = IceFailurePolicy.relayFailureType(for: reason)
-                await IceProxyManager.shared.recordRelayFailure(address: addr, type: type)
-            }
-
-            // EXCEPTION: WebTunnel-blocked and TLS-fingerprint-blocked are definitive
-            // transport failures — the tunnel is dead even if the stream doesn't know yet.
-            // Trigger coalesced rotation so the next RPC sees a fresh relay.
-            if reason == .webTunnelBlocked || reason == .tlsFingerprintBlocked {
-                await IceProxyManager.shared.scheduleRotation(reason: reason)
-            }
-        }
+        // Delegate all quality tracking and rotation decisions to ConnectionLoop.
+        await ConnectionLoop.shared.recordFailure(error, invalidatesConnection: invalidatesConnectionOnFailure)
         return .propagate
     }
 

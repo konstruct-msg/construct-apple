@@ -249,8 +249,7 @@ final class IceProxyManager: ObservableObject {
     /// Whether the currently active relay has been verified by a successful RPC
     /// either this session or from persisted quality history.
     var isCurrentRelayVerified: Bool {
-        guard let active = activeRelay?.address else { return false }
-        return sessionVerifiedRelays.contains(active) || qualityForRelay(active).useFullTimeout
+        get async { await ConnectionLoop.shared.isCurrentRelayVerified }
     }
 
     /// Quality level for the currently active relay (persisted history).
@@ -261,27 +260,13 @@ final class IceProxyManager: ObservableObject {
 
     /// Quality level for the given relay address from persisted history.
     func qualityForRelay(_ address: String) -> RelayQuality {
-        relayQualityScores[address]?.quality ?? .unknown
+        .unknown  // ConnectionLoop uses simple failure counting
     }
 
     /// Record a successful RPC through ICE. Updates the session-verified set and the
     /// persisted quality score. Triggers side effects on the first success of the session.
     func recordRelaySuccess(address: String, latency: TimeInterval) {
-        let wasVerified = sessionVerifiedRelays.contains(address)
-        sessionVerifiedRelays.insert(address)
-
-        relayQualityScores[address, default: RelayQualityScore()].recordSuccess()
-        if latency > 0 {
-            relayQualityScores[address, default: RelayQualityScore()].applyLatencySample(latency)
-        }
-        pruneAndSaveQualityScores()
-
-        if !wasVerified {
-            let q = relayQualityScores[address]?.quality ?? .unknown
-            Log.info("🧊 Relay \(address) verified (first successful RPC) — quality: \(q.logLabel)", category: "ICE")
-            Self.lastSuccessfulPath = "ice"
-            scheduleBackgroundDirectProbe()
-        }
+        Task { await ConnectionLoop.shared.recordRelaySuccess(address: address, latency: latency) }
     }
 
     private func pruneAndSaveQualityScores() {
@@ -306,13 +291,7 @@ final class IceProxyManager: ObservableObject {
     ///   - address: Relay address string.
     ///   - type: Failure reason — determines the blacklist TTL. Defaults to `.streamTimeout` (60 s).
     func recordRelayFailure(address: String, type: RelayFailureType = .streamTimeout) {
-        recentlyFailedRelays[address] = RelayBlacklistEntry(type: type, timestamp: Date())
-        // Prune expired entries while we have the dict in hand.
-        recentlyFailedRelays = recentlyFailedRelays.filter { !$0.value.isExpired }
-        // Persist the failure to quality score history.
-        relayQualityScores[address, default: RelayQualityScore()].recordFailure()
-        pruneAndSaveQualityScores()
-        Log.info("🧊 Relay \(address) blacklisted for \(Int(type.ttl))s [\(type)]", category: "ICE")
+        Task { await ConnectionLoop.shared.recordRelayFailure(address: address, type: type) }
     }
 
     /// Remove a relay from the failure blacklist so it can be retried immediately.

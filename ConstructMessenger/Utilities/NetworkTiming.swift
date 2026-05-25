@@ -103,7 +103,7 @@ enum NetworkTiming {
             static let endSession: TimeInterval = 20
 
             // Messaging (background/service)
-            static let getPendingMessages: TimeInterval = 8
+            static let getPendingMessages: TimeInterval = 5
 
             // Key service (session init / rotations)
             static let getPreKeyBundle: TimeInterval = 20

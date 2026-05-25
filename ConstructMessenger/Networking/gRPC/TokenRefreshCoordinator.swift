@@ -26,11 +26,21 @@ actor TokenRefreshCoordinator {
     }
 
     private var inFlight: Task<Void, Error>?
+    // Set when the server permanently rejects the token (revoked / already used).
+    // Prevents redundant network requests from concurrent callers after the first rejection.
+    // Cleared by resetInvalidation() when new tokens are saved via device re-auth.
+    private var permanentlyInvalid = false
+
+    func resetInvalidation() {
+        permanentlyInvalid = false
+    }
 
     /// Refreshes access token using the stored refresh token.
     /// - Returns: `true` if refresh succeeded and tokens were updated.
     @discardableResult
     func refreshIfPossible() async throws -> Bool {
+        if permanentlyInvalid { return false }
+
         if let inFlight {
             try await inFlight.value
             return await MainActor.run { SessionManager.shared.sessionToken != nil && SessionManager.shared.isSessionValid }
@@ -65,7 +75,14 @@ actor TokenRefreshCoordinator {
 
         inFlight = task
         defer { inFlight = nil }
-        try await task.value
+        do {
+            try await task.value
+        } catch {
+            if TokenRefreshCoordinator.isRefreshTokenPermanentlyInvalid(error) {
+                permanentlyInvalid = true
+            }
+            throw error
+        }
         return await MainActor.run { SessionManager.shared.sessionToken != nil && SessionManager.shared.isSessionValid }
     }
 }

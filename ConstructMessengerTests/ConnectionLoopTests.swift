@@ -262,6 +262,30 @@ final class ConnectionLoopTests: XCTestCase {
 
     // MARK: - Multiple relays
 
+    func test_updateRelays_preservesPenalty() async throws {
+        let runtime = MockIceProxyRuntime()
+        runtime.startResult = .success(54321)
+        let relayA = relay(address: "a.test:443")
+        let relayB = relay(address: "b.test:443")
+        let loop = makeLoop(relays: [relayA, relayB], runtime: runtime)
+
+        // Activate ICE and give relayA a WebTunnel-blocked persistent penalty
+        await loop.recordFailure(transportError)
+        await loop.recordFailure(transportError)
+        _ = try await loop.prepare()           // starts on relayA
+        await loop.recordFailure(webTunnelBlockedError)   // relayA gets penalty
+
+        // OTA relay update arrives — same relays, different order
+        await loop.updateRelays([relayB, relayA])
+
+        // Re-activate and prepare — relayA's penalty must survive updateRelays
+        await loop.recordFailure(transportError)
+        await loop.recordFailure(transportError)
+        _ = try await loop.prepare()
+        XCTAssertEqual(runtime.startedAddresses.last, "b.test:443",
+            "updateRelays must preserve webTunnelBlockedPenalty — penalised relay must not regain priority")
+    }
+
     func test_onlinePenalisation_switchesRelay() async throws {
         let runtime = MockIceProxyRuntime()
         runtime.startResult = .success(54321)
@@ -479,14 +503,13 @@ final class ConnectionLoopTests: XCTestCase {
         await loop.recordFailure(transportError)
         _ = try await loop.prepare()  // start proxy — startCallCount=1
 
-        // 3 consecutive stream failures on the ICE path (proxyRestartThreshold)
-        await loop.recordFailure(transportError)
+        // 2 consecutive stream failures on the ICE path (proxyRestartThreshold)
         await loop.recordFailure(transportError)
         await loop.recordFailure(transportError)
 
         // Proxy must have been force-stopped at threshold
         XCTAssertGreaterThanOrEqual(runtime.stopCallCount, 1,
-            "3 consecutive ICE stream failures must force-stop the stale proxy")
+            "2 consecutive ICE stream failures must force-stop the stale proxy")
     }
 
     func test_consecutiveIceFails_resetOnSuccess() async throws {
@@ -498,20 +521,18 @@ final class ConnectionLoopTests: XCTestCase {
         await loop.recordFailure(transportError)
         _ = try await loop.prepare()
 
-        // 2 failures — below threshold, no restart yet
-        await loop.recordFailure(transportError)
+        // 1 failure — below threshold, no restart yet
         await loop.recordFailure(transportError)
         let stopCountBefore = runtime.stopCallCount
 
         // Stream succeeds — counter must reset
         await loop.recordSuccess()
 
-        // 2 more failures — should not trigger restart (counter reset to 0 by success)
-        await loop.recordFailure(transportError)
+        // 1 more failure — should not trigger restart (counter reset to 0 by success)
         await loop.recordFailure(transportError)
 
         XCTAssertEqual(runtime.stopCallCount, stopCountBefore,
-            "recordSuccess() must reset consecutive fail counter — 2 failures after success must not restart proxy")
+            "recordSuccess() must reset consecutive fail counter — 1 failure after success must not restart proxy")
     }
 
     func test_backgroundRPCFailure_doesNotCountTowardProxyRestart() async throws {

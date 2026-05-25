@@ -78,15 +78,7 @@ final class GRPCChannelManager: Sendable {
         Log.info("⚠️ ICE relay failure recorded — bypassing ICE for \(Int(duration))s (failure #\(_iceLock.withLock { _consecutiveICEFailures }))", category: "gRPC")
         Task { @MainActor [weak self] in
             guard self != nil else { return }
-            // Use the pre-captured address when available; fall back to the current relay only if
-            // the caller didn't supply one (old call sites without a captured address).
-            let addr = failedAddress ?? IceProxyManager.shared.activeRelay?.address
-            if let addr {
-                IceProxyManager.shared.recordRelayFailure(address: addr)
-            }
-            // Notify IceProxyManager so the UI reflects cooldown state immediately.
             IceProxyManager.shared.enterCooldown(duration: duration)
-            // Try to recover by switching endpoints (cert refresh + relay fallback).
             let recovered = await IceProxyManager.shared.refreshCertAndRestart()
             if recovered {
                 // Successfully switched to a different relay (e.g. MSK after AMS failure).

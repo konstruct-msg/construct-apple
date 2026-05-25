@@ -42,7 +42,7 @@ actor ConnectionLoop {
     private var consecutiveIceFails = 0
 
     /// Force-restart the ICE proxy after this many consecutive stream failures.
-    private static let proxyRestartThreshold = 3
+    private static let proxyRestartThreshold = 2
 
     var shouldUseICE: Bool { directFails >= Self.directFailThreshold }
 
@@ -154,6 +154,32 @@ actor ConnectionLoop {
         } else {
             directFails += 1
             Log.info("🧊 ConnectionLoop: direct fail \(directFails)/\(Self.directFailThreshold) (\(reason))", category: "ICE")
+        }
+    }
+
+    /// Record a successful RPC through a specific relay address.
+    /// Called from GRPCCallExecutor via IceProxyManager delegation.
+    func recordRelaySuccess(address: String, latency: TimeInterval) async {
+        pool.recordSuccess(address: address)
+        Log.info("🧊 ConnectionLoop: relay success \(address) latency=\(Int(latency * 1000))ms", category: "ICE")
+    }
+
+    /// Record a relay failure by address + failure reason.
+    /// Called from GRPCCallExecutor via IceProxyManager delegation.
+    func recordRelayFailure(address: String, type: RelayFailureType) async {
+        pool.recordFailure(address: address)
+        Log.info("🧊 ConnectionLoop: relay failure \(address) [\(type)]", category: "ICE")
+    }
+
+    /// Address of the currently active relay, or nil when on direct path.
+    var activeRelayAddress: String? {
+        get async { await proxy.currentRelay?.address }
+    }
+    /// True when the active relay has zero failures in the current session.
+    var isCurrentRelayVerified: Bool {
+        get async {
+            guard let relay = await proxy.currentRelay else { return false }
+            return pool.failureCount(for: relay.address) == 0
         }
     }
 

@@ -232,7 +232,7 @@ actor IceCertFetcher {
     func fetchAndCacheRelayConfig() async -> [RelayInfo]? {
         let mirrorURLs: [String] = [
             "https://\(ServerConfig.inviteHost)/.well-known/construct-server",
-            "https://raw.githubusercontent.com/maximeliseyev/construct-relay/main/.well-known/construct-server",
+            "https://raw.githubusercontent.com/konstruct-msg/construct-relay/main/.well-known/construct-server",
         ]
 
         if let relays = await fetchVerifiedRelayConfig(from: mirrorURLs) {

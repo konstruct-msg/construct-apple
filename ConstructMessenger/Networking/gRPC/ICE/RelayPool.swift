@@ -65,8 +65,17 @@ struct RelayPool {
         webTunnelBlockedPenalty[relay.address] = 0
     }
 
+    mutating func recordSuccess(address: String) {
+        failures[address] = 0
+        webTunnelBlockedPenalty[address] = 0
+    }
+
     mutating func recordFailure(_ relay: IceRelay) {
         failures[relay.address, default: 0] += 1
+    }
+
+    mutating func recordFailure(address: String) {
+        failures[address, default: 0] += 1
     }
 
     /// Records a carrier-level WebTunnel block. The penalty accumulates across `resetFailures()`

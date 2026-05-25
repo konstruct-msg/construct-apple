@@ -43,6 +43,7 @@ class SessionManager {
     /// Clears stored tokens so restoreOrAuthenticateDevice() will fall through to device
     /// signing-key auth. Does NOT remove device keys, userId, or deviceId — identity is preserved.
     func invalidateTokensForReauth() {
+        guard !isSessionInvalidated else { return }
         KeychainManager.shared.deleteSessionToken()
         KeychainManager.shared.deleteRefreshToken()
         UserDefaults.standard.removeObject(forKey: UserDefaultsKey.sessionExpires.key)
@@ -136,6 +137,8 @@ class SessionManager {
         self.refreshToken = refreshToken
         
         Log.info("✅ Tokens saved - expires in: \(expiresIn / 60) minutes", category: "SessionManager")
+        isSessionInvalidated = false
+        Task { await TokenRefreshCoordinator.shared.resetInvalidation() }
         syncAuthCache()
     }
 

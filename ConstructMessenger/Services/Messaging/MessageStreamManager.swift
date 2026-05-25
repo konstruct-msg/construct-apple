@@ -532,6 +532,8 @@ final class MessageStreamManager {
             }
 
             let startCursor = lastPendingCursor
+            // INVARIANT: invalidatesConnectionOnFailure must remain false (default).
+            // A fetch failure must not kill the live stream or penalise the current relay.
             let fetchResult: FetchResult = try await GRPCChannelManager.shared.performRPC(
                 timeout: GRPCTimeouts.getPendingMessages
             ) { grpcClient in
