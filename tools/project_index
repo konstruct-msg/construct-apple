@@ -1,0 +1,87 @@
+#!/usr/bin/env python3
+"""
+project_index — Generate a compact project file index for LLM context.
+Maps every source file to its purpose in one line. Outputs sorted by directory.
+
+Usage:
+    ./project_index              # index current directory
+    ./project_index ~/Code/construct-messenger
+
+Output format:
+    Services/Messaging/MessageStreamManager.swift   gRPC stream connect loop, reconnect, heartbeat
+    Networking/gRPC/ICE/ConnectionLoop.swift         ICE proxy lifecycle, relay selection, failover
+    Networking/gRPC/GRPCCallExecutor.swift           RPC executor: retry, auth refresh, ICE failover
+
+The purpose line is extracted from the file's first doc-comment or header comment.
+Falls back to filename-based heuristic when no comment is found.
+"""
+
+import os
+import re
+import sys
+
+EXTS = {'.swift', '.rs', '.kt', '.java', '.py', '.go', '.ts', '.js'}
+
+def extract_purpose(path):
+    """Extract a one-line purpose from a source file."""
+    try:
+        with open(path) as f:
+            lines = [f.readline() for _ in range(20)]
+    except:
+        return ''
+
+    # Swift/Rust: look for /// doc comment or // header block
+    for line in lines:
+        s = line.strip()
+        # Swift doc comment
+        if s.startswith('/// ') or s.startswith('//! '):
+            return s.lstrip('/! ')
+        # Rust doc comment
+        if s.startswith('//! '):
+            return s[4:]
+        # File header: // filename.swift — purpose
+        m = re.match(r'//\s+\S+\.swift\s+[—–-]\s+(.+)', s)
+        if m:
+            return m.group(1)
+
+    # Heuristic from filename
+    name = os.path.basename(path).replace('.swift', '').replace('.rs', '').replace('.kt', '')
+    # Split camelCase
+    words = re.sub(r'([A-Z])', r' \1', name).strip().lower()
+    return f'({words})'
+
+def index_dir(root):
+    """Walk directory and index all source files."""
+    files = []
+    for dirpath, _, filenames in os.walk(root):
+        # Skip build dirs, caches, generated
+        if any(skip in dirpath for skip in ['/DerivedData', '/Pods', '/.build', '/target',
+                                              '/node_modules', '/.git', '/Generated',
+                                              '/xcuserdata', '/app/build']):
+            continue
+        for f in sorted(filenames):
+            if os.path.splitext(f)[1] in EXTS:
+                full = os.path.join(dirpath, f)
+                rel = os.path.relpath(full, root)
+                purpose = extract_purpose(full)
+                files.append((rel, purpose))
+
+    files.sort(key=lambda x: x[0])
+    return files
+
+if __name__ == '__main__':
+    if '--help' in sys.argv or '-h' in sys.argv:
+        print(__doc__)
+        sys.exit(0)
+
+    root = sys.argv[1] if len(sys.argv) > 1 else '.'
+    files = index_dir(root)
+
+    # Group by top-level dir
+    prev_dir = ''
+    for rel, purpose in files:
+        d = rel.split('/')[0] if '/' in rel else '.'
+        if d != prev_dir:
+            print()
+            prev_dir = d
+        print(f'  {rel:<65} {purpose}')

@@ -1,0 +1,75 @@
+#!/usr/bin/env python3
+"""
+squash_build — Strip Xcode build output to errors + first warning per file.
+Reads from stdin (pipe xcodebuild output), writes compact result to stdout.
+
+Usage:
+    xcodebuild ... 2>&1 | ./squash_build
+    ./squash_build build.log
+
+Keeps:
+    - All errors
+    - First warning per file
+    - BUILD SUCCEEDED / BUILD FAILED
+    - Compile timing for slow files (>1s)
+Drops:
+    - All note: lines
+    - Duplicate warnings
+    - Code-signing noise
+    - Linking/copying phase output
+    - DerivedData path noise
+"""
+
+import re
+import sys
+
+def squash():
+    warnings_seen = set()
+    errors = []
+    summary = []
+
+    for line in sys.stdin:
+        s = line.strip()
+        if not s:
+            continue
+
+        # Errors — always keep
+        if 'error:' in s:
+            errors.append(s)
+            continue
+
+        # Warning — keep first per file
+        m = re.search(r'(/[^ ]+\.swift):\d+:\d+: warning:', s)
+        if m:
+            f = m.group(1)
+            if f not in warnings_seen:
+                warnings_seen.add(f)
+                errors.append(s)
+            continue
+
+        # Build summary
+        if 'BUILD SUCCEEDED' in s or 'BUILD FAILED' in s:
+            summary.append(s)
+            continue
+
+        # Slow compilation
+        if 'seconds' in s.lower() and 'Compiling' in s:
+            m = re.search(r'(\d+\.\d+) seconds', s)
+            if m and float(m.group(1)) > 1.0:
+                errors.append(s)
+
+    for e in errors:
+        print(e)
+    for s in summary:
+        print(s)
+
+if __name__ == '__main__':
+    if '--help' in sys.argv or '-h' in sys.argv:
+        print(__doc__)
+        sys.exit(0)
+    if len(sys.argv) > 1:
+        with open(sys.argv[1]) as f:
+            sys.stdin = f
+            squash()
+    else:
+        squash()

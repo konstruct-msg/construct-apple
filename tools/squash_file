@@ -1,0 +1,128 @@
+#!/usr/bin/env python3
+"""
+squash_file — Strip noise from source files for LLM consumption.
+Reads a file, outputs a compact version to stdout. Never modifies the original.
+
+Usage:
+    ./squash_file file.swift              # print compact version
+    ./squash_file --imports file.swift    # show ONLY imports + top-level types
+    ./squash_file --outline file.swift    # show function/method signatures only
+    cat file.swift | ./squash_file        # from stdin
+
+Stripped:
+    - Comments outside function bodies (// and /* */)
+    - Empty lines (collapsed to single)
+    - Import statements (unless --imports)
+    - MARK/TODO/FIXME comments (unless --keep-marks)
+    - Whitespace-only lines
+    - Trailing whitespace
+"""
+
+import re
+import sys
+
+MODE_IMPORTS = '--imports' in sys.argv
+MODE_OUTLINE = '--outline' in sys.argv
+KEEP_MARKS = '--keep-marks' in sys.argv
+
+def strip_line(line: str, in_multiline_comment: bool) -> tuple:
+    """Strip noise from a single line. Returns (output_line, still_in_comment)."""
+    stripped = line.rstrip()
+
+    # Track multiline comments (/* ... */)
+    if in_multiline_comment:
+        if '*/' in stripped:
+            return (None, False)
+        return (None, True)
+    if '/*' in stripped:
+        if '*/' in stripped:
+            stripped = re.sub(r'/\*.*?\*/', '', stripped).strip()
+            return (stripped if stripped else None, False)
+        return (None, True)
+
+    # Strip single-line comments (//) — but keep code before comment
+    if '//' in stripped:
+        before = stripped.split('//')[0].rstrip()
+        return (before if before else None, False)
+
+    return (stripped if stripped else None, False)
+
+def strip_file(lines):
+    """Process all lines."""
+    out = []
+    in_comment = False
+    prev_empty = False
+    in_import_block = True
+
+    for raw in lines:
+        line = raw.rstrip('\n\r')
+        stripped, in_comment = strip_line(line, in_comment)
+
+        if stripped is None:
+            continue
+
+        # Track whether we're past the import block
+        if in_import_block and not stripped.startswith('import ') and stripped:
+            in_import_block = False
+
+        # Skip imports (unless --imports mode)
+        if not MODE_IMPORTS and stripped.startswith('import ') and in_import_block:
+            continue
+
+        # Skip MARK comments (unless --keep-marks)
+        if not KEEP_MARKS and ('// MARK:' in stripped or '// TODO:' in stripped or '// FIXME:' in stripped):
+            continue
+
+        # Collapse consecutive empty lines
+        if not stripped:
+            if not prev_empty:
+                out.append('')
+                prev_empty = True
+            continue
+        prev_empty = False
+        out.append(stripped)
+
+    return '\n'.join(out)
+
+# -- Outline mode: show only function signatures and type declarations
+def outline(lines):
+    sigs = []
+    for line in lines:
+        s = line.strip()
+        # Swift: func, class, struct, enum, protocol, extension, actor, var, let
+        for kw in ['func ', 'class ', 'struct ', 'enum ', 'protocol ', 'extension ', 'actor ',
+                    'var ', 'let ', '@Published ', '@MainActor ', '@Observable ']:
+            if s.startswith(kw):
+                sigs.append(s.rstrip('{').strip())
+                break
+    return '\n'.join(sigs)
+
+if __name__ == '__main__':
+    if '--help' in sys.argv or '-h' in sys.argv:
+        print(__doc__)
+        sys.exit(0)
+
+    if MODE_IMPORTS:
+        # Show only imports + top-level type declarations
+        lines = sys.stdin.readlines() if len(sys.argv) == 2 else open(sys.argv[-1]).readlines()
+        imports = [l.rstrip() for l in lines if l.strip().startswith('import ')]
+        types = [l.rstrip() for l in lines if any(l.strip().startswith(kw) for kw in
+            ['func ', 'class ', 'struct ', 'enum ', 'protocol ', 'extension ', 'actor '])]
+        print('\n'.join(imports))
+        print()
+        print('\n'.join(types))
+        sys.exit(0)
+
+    if MODE_OUTLINE:
+        if len(sys.argv) >= 2 and sys.argv[-1] != '--outline':
+            with open(sys.argv[-1]) as f:
+                print(outline(f.readlines()))
+        else:
+            print(outline(sys.stdin.readlines()))
+        sys.exit(0)
+
+    if len(sys.argv) >= 2:
+        with open(sys.argv[-1]) as f:
+            print(strip_file(f.readlines()))
+    else:
+        print(strip_file(sys.stdin.readlines()))

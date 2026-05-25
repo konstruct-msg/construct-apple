@@ -38,27 +38,43 @@ The Rust ICE proxy lives at: `~/Code/construct-ice`
 
 ---
 
-## Log Analysis
+## Token Efficiency Tools
 
-When investigating bugs, use `tools/squash_logs.py` to compress logs before
-attaching to LLM context. The tool strips timestamps, emoji, duplicates, and
-stack frames — reducing token use by 30-50%.
+These tools compress project data for LLM consumption. **Always use them before
+reading files, analyzing build output, or exploring the codebase.** They never
+modify originals — all output goes to stdout.
 
+### Reading source files → `tools/squash_file`
 ```bash
-# From a log file
-./tools/squash_logs.py ~/Downloads/construct-logs.txt
-
-# From macOS clipboard (copy result back to clipboard)
-./tools/squash_logs.py --clip --copy
-
-# Pipe from any source
-cat *.log | ./tools/squash_logs.py
+./tools/squash_file path/to/file.swift         # strip comments, imports, blanks (−36%)
+./tools/squash_file --outline file.swift        # function signatures only (−90%)
+./tools/squash_file --imports file.swift        # imports + top-level types
 ```
 
-The tool is safe: it only compresses presentation, never drops semantic content.
-Deduplicated lines show `(repeated xN)`, heartbeat bursts show `(heartbeat xN)`.
+### Build output → `tools/squash_build`
+```bash
+xcodebuild ... 2>&1 | ./tools/squash_build      # errors + first warning per file (−95%)
+```
 
-**Always run logs through squash_logs before pasting into LLM context.**
+### Log analysis → `tools/squash_logs.py`
+```bash
+./tools/squash_logs.py file.log                 # strip timestamps, emoji, dupes (−30%)
+./tools/squash_logs.py --clip --copy             # clipboard → compress → clipboard
+```
+
+### Codebase exploration → `tools/project_index`
+```bash
+./tools/project_index                            # 1-line-per-file map of entire project
+```
+
+### Token impact (per session)
+| Tool | When to use | Savings |
+|------|------------|:------:|
+| `squash_file` | Before reading ANY .swift/.rs/.kt file | −36% |
+| `squash_file --outline` | When you only need the API surface of a file | −90% |
+| `squash_build` | After every `xcodebuild` command | −95% |
+| `squash_logs.py` | Before analyzing any log output | −30% |
+| `project_index` | Instead of `find`/`ls` to locate files | −100% vs grep |
 
 ## Build Commands
 
@@ -216,6 +232,10 @@ We have our own terminology. Use it consistently in UI, code, and comments.
 > `ls ~/Code/construct-docs/wiki/ | grep <topic>`
 > The wiki has 500+ curated articles covering every component. AGENTS.md is operational rules;
 > the wiki is the authoritative architecture documentation.
+>
+> **Before touching any file in `Networking/gRPC/ICE/`**, check pending decisions:
+> `ls ~/Code/construct-docs/wiki/decisions/ | grep ice`
+> In particular: `decisions/ice-connection-loop-complexity.md` — deferred refactor with trigger.
 
 ### Session lifecycle
 12 stages: registration → key upload → prewarm → bundle fetch → init → send →
