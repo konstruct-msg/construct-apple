@@ -136,7 +136,7 @@ final class IceProxyManager: ObservableObject {
                 as? NetworkReachabilityManager.NetworkChangeKind ?? .newInterface
             Task { @MainActor in
                 guard let self, self.isRunning else { return }
-                await self.stop()
+                self.stop()
                 await ConnectionLoop.shared.reset()
             }
         }
@@ -374,7 +374,6 @@ final class IceProxyManager: ObservableObject {
     /// Used for inline relay rotation in performRPC when a relay's obfs4 tunnel
     /// is DPI-blocked but the cert itself is still valid.
     /// Returns true if a different relay was started successfully.
-    @discardableResult
     private func migrateToModeIfNeeded() {
         if IceProxyStore.needsModeMigration {
             IceProxyStore.markModeMigrationDone()
@@ -448,7 +447,7 @@ final class IceProxyManager: ObservableObject {
         let isRetired  = deprecated.contains(mid) || (!freshIds.isEmpty && !freshIds.contains(mid))
         guard isRetired else { return }
         Log.info("🧊 Active relay \(active.address) [\(mid)] retired by server — rotating", category: "ICE")
-        try? await ConnectionLoop.shared.prepare()
+        _ = try? await ConnectionLoop.shared.prepare()
     }
 
     func saveRelay(_ relay: IceRelay) {
