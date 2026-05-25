@@ -1,6 +1,4 @@
 #!/bin/bash
-# commit-msg hook: strips "Co-authored-by:" lines from commit messages.
-# Install: git config core.hooksPath .githooks
 
 MSG_FILE="$1"
 TMP_FILE="${MSG_FILE}.tmp"
