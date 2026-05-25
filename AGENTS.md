@@ -44,37 +44,78 @@ These tools compress project data for LLM consumption. **Always use them before
 reading files, analyzing build output, or exploring the codebase.** They never
 modify originals — all output goes to stdout.
 
-### Reading source files → `tools/squash_file`
-```bash
-./tools/squash_file path/to/file.swift         # strip comments, imports, blanks (−36%)
-./tools/squash_file --outline file.swift        # function signatures only (−90%)
-./tools/squash_file --imports file.swift        # imports + top-level types
+### Decision flow: which tool when?
+
+```
+Need to read a source file?
+  ├─ Full understanding needed  → ./tools/squash_file file.swift
+  ├─ Just the API surface        → ./tools/squash_file --outline file.swift
+  └─ Only imports + top types    → ./tools/squash_file --imports file.swift
+
+Ran a build and got output?
+  └─ Always filter first:        xcodebuild ... 2>&1 | ./tools/squash_build
+
+Have logs to analyze?
+  ├─ From a file:                ./tools/squash_logs.py app.log
+  └─ From clipboard:             ./tools/squash_logs.py --clip --copy
+
+Exploring an unfamiliar area?
+  └─ Start here:                 ./tools/project_index
 ```
 
-### Build output → `tools/squash_build`
+### Tool reference
+
+**squash_file** — strip comments, imports, blanks, MARK annotations from source.
 ```bash
-xcodebuild ... 2>&1 | ./tools/squash_build      # errors + first warning per file (−95%)
+./tools/squash_file ConstructMessenger/Networking/gRPC/ICE/ConnectionLoop.swift
+./tools/squash_file --outline ConstructMessenger/Security/CryptoManager.swift
+./tools/squash_file --imports ConstructMessenger/ViewModels/ChatViewModel.swift
+# Also works from stdin:
+cat file.swift | ./tools/squash_file
 ```
 
-### Log analysis → `tools/squash_logs.py`
+**squash_build** — keep only errors + first warning per file from xcodebuild.
 ```bash
-./tools/squash_logs.py file.log                 # strip timestamps, emoji, dupes (−30%)
-./tools/squash_logs.py --clip --copy             # clipboard → compress → clipboard
+xcodebuild -scheme ConstructMessenger -destination 'platform=iOS Simulator,name=iPhone 16,OS=18.6' build 2>&1 | ./tools/squash_build
 ```
 
-### Codebase exploration → `tools/project_index`
+**squash_logs.py** — compress logs: relative timestamps, emoji→markers, dedup, bucket heartbeats.
 ```bash
-./tools/project_index                            # 1-line-per-file map of entire project
+./tools/squash_logs.py ~/Downloads/construct-logs.txt
+./tools/squash_logs.py --clip --copy
+cat *.log | ./tools/squash_logs.py
 ```
 
-### Token impact (per session)
+**project_index** — one-line-per-file map of the entire project.
+```bash
+./tools/project_index
+./tools/project_index ~/Code/construct-server   # index another repo
+```
+
+### Expected workflow
+
+```bash
+# Before reading ANY file — strip noise
+./tools/squash_file path/to/File.swift
+
+# Before exploring a new directory — get the map
+./tools/project_index
+
+# After every build attempt — filter output
+xcodebuild ... 2>&1 | ./tools/squash_build
+
+# Before pasting logs into context
+./tools/squash_logs.py app.log
+```
+
+### Token impact
 | Tool | When to use | Savings |
 |------|------------|:------:|
 | `squash_file` | Before reading ANY .swift/.rs/.kt file | −36% |
-| `squash_file --outline` | When you only need the API surface of a file | −90% |
+| `squash_file --outline` | When you only need the API surface | −90% |
 | `squash_build` | After every `xcodebuild` command | −95% |
 | `squash_logs.py` | Before analyzing any log output | −30% |
-| `project_index` | Instead of `find`/`ls` to locate files | −100% vs grep |
+| `project_index` | First step when exploring unfamiliar code | −100% vs grep |
 
 ## Build Commands
 
