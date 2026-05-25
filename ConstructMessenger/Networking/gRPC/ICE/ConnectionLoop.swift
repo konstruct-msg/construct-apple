@@ -36,6 +36,14 @@ actor ConnectionLoop {
     /// ICE activates after this many consecutive direct-path failures.
     private static let directFailThreshold = 2
 
+    /// Consecutive ICE-path stream failures through the current proxy process.
+    /// When this reaches `proxyRestartThreshold`, the proxy is force-stopped so the
+    /// next `prepare()` starts a fresh process — prevents stale-proxy gen storms.
+    private var consecutiveIceFails = 0
+
+    /// Force-restart the ICE proxy after this many consecutive stream failures.
+    private static let proxyRestartThreshold = 3
+
     var shouldUseICE: Bool { directFails >= Self.directFailThreshold }
 
     // MARK: - Init
@@ -93,6 +101,7 @@ actor ConnectionLoop {
             pool.recordSuccess(relay)
         }
         directFails = 0
+        consecutiveIceFails = 0
     }
 
     /// Stream failed — classify and update state accordingly.
@@ -112,14 +121,23 @@ actor ConnectionLoop {
         if shouldUseICE {
             if let relay = await proxy.currentRelay {
                 if !invalidatesConnection {
+                    consecutiveIceFails = 0
                     Log.info("🧊 ConnectionLoop: relay failure (\(reason)) on \(relay.address) — skipped (background RPC)", category: "ICE")
                 } else if NetworkReachabilityManager.shared.isReachable {
                     if reason == .webTunnelBlocked {
                         // Carrier-level block — add a persistent penalty that survives pool resets
                         // so the relay is deprioritised even after a network path change.
                         pool.recordWebTunnelBlocked(relay)
+                        consecutiveIceFails = 0
                     } else {
                         pool.recordFailure(relay)
+                        consecutiveIceFails += 1
+                        if consecutiveIceFails >= Self.proxyRestartThreshold {
+                            Log.info("🧊 ConnectionLoop: \(consecutiveIceFails) consecutive ICE fails — force-restarting proxy", category: "ICE")
+                            await proxy.stop()
+                            GRPCChannelManager.shared.setDirectProxyPort(nil)
+                            consecutiveIceFails = 0
+                        }
                     }
                     Log.info("🧊 ConnectionLoop: relay failure (\(reason)) on \(relay.address)", category: "ICE")
                 } else {
@@ -129,6 +147,7 @@ actor ConnectionLoop {
             if reason == .staleLocalProxy {
                 await proxy.stop()
                 GRPCChannelManager.shared.setDirectProxyPort(nil)
+                consecutiveIceFails = 0
             }
         } else {
             directFails += 1
@@ -142,6 +161,7 @@ actor ConnectionLoop {
     /// The new network may or may not need ICE — restart from scratch.
     func reset() async {
         directFails = (CensoredNetworkDetector.isCensored || IceProxyStore.loadMode() == .on) ? Self.directFailThreshold : 0
+        consecutiveIceFails = 0
         pool.resetFailures()
         await proxy.stop()
         GRPCChannelManager.shared.setDirectProxyPort(nil)

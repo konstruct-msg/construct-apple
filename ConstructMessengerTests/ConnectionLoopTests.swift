@@ -463,4 +463,69 @@ final class ConnectionLoopTests: XCTestCase {
         let afterResetIceActive = await loop.shouldUseICE
         XCTAssertFalse(afterResetIceActive, "reset() must re-evaluate censored status — ICE off on uncensored network")
     }
+
+    // MARK: - P7: Stale-proxy force restart
+
+    func test_consecutiveIceFails_forceRestartsProxy() async throws {
+        let runtime = MockIceProxyRuntime()
+        runtime.startResult = .success(54321)
+        let loop = makeLoop(relays: [relay()], runtime: runtime)
+
+        // Activate ICE
+        await loop.recordFailure(transportError)
+        await loop.recordFailure(transportError)
+        _ = try await loop.prepare()  // start proxy — startCallCount=1
+
+        // 3 consecutive stream failures on the ICE path (proxyRestartThreshold)
+        await loop.recordFailure(transportError)
+        await loop.recordFailure(transportError)
+        await loop.recordFailure(transportError)
+
+        // Proxy must have been force-stopped at threshold
+        XCTAssertGreaterThanOrEqual(runtime.stopCallCount, 1,
+            "3 consecutive ICE stream failures must force-stop the stale proxy")
+    }
+
+    func test_consecutiveIceFails_resetOnSuccess() async throws {
+        let runtime = MockIceProxyRuntime()
+        runtime.startResult = .success(54321)
+        let loop = makeLoop(relays: [relay()], runtime: runtime)
+
+        await loop.recordFailure(transportError)
+        await loop.recordFailure(transportError)
+        _ = try await loop.prepare()
+
+        // 2 failures — below threshold, no restart yet
+        await loop.recordFailure(transportError)
+        await loop.recordFailure(transportError)
+        let stopCountBefore = runtime.stopCallCount
+
+        // Stream succeeds — counter must reset
+        await loop.recordSuccess()
+
+        // 2 more failures — should not trigger restart (counter reset to 0 by success)
+        await loop.recordFailure(transportError)
+        await loop.recordFailure(transportError)
+
+        XCTAssertEqual(runtime.stopCallCount, stopCountBefore,
+            "recordSuccess() must reset consecutive fail counter — 2 failures after success must not restart proxy")
+    }
+
+    func test_backgroundRPCFailure_doesNotCountTowardProxyRestart() async throws {
+        let runtime = MockIceProxyRuntime()
+        runtime.startResult = .success(54321)
+        let loop = makeLoop(relays: [relay()], runtime: runtime)
+
+        await loop.recordFailure(transportError)
+        await loop.recordFailure(transportError)
+        _ = try await loop.prepare()
+
+        // 10 background-RPC failures — should not accumulate toward restart threshold
+        for _ in 0..<10 {
+            await loop.recordFailure(transportError, invalidatesConnection: false)
+        }
+
+        XCTAssertEqual(runtime.stopCallCount, 0,
+            "Background RPC failures must not count toward stale-proxy restart threshold")
+    }
 }
