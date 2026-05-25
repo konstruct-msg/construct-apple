@@ -113,10 +113,30 @@ NOISE_PATTERNS = [
     r'ObservationRegistrar',
 ]
 
+# Xcode/system noise — lines that carry no diagnostic value for app bugs
+SYSTEM_NOISE = [
+    'nw_socket', 'nw_endpoint', 'nw_protocol', 'nw_read_request',
+    'nw_connection', 'tcp_input', 'tcp_output',
+    'quic_conn_keepalive',
+    'RTIInputSystem', 'Snapshotting a view',
+    'The variant selector cell',
+    '<OnScrollGeometryChange', 'Update NavigationRequestObserver',
+    'Gesture: System gesture gate timed out',
+    'Message from debugger',
+    'Reading from public effective user settings',
+    'Can.t get TCP_INFO', 'Can.t get TCP_CONNECTION_INFO',
+    'setsockopt SO_CONNECTION_IDLE',
+    'Not calling remove_input_handler',
+]
+
 def is_noise(line: str) -> bool:
     # Skip header/metadata lines
     if line.startswith('==') or line.startswith('App ') or line.startswith('Build') or line.startswith('Device') or line.startswith('iOS ') or line.startswith('Identifier') or line.startswith('Started') or line.startswith('Exported'):
         return True
+    # Skip Xcode/system noise lines
+    for pattern in SYSTEM_NOISE:
+        if pattern in line:
+            return True
     # Debug-only categories that are rarely useful in LLM context
     if '[EnergyMonitor]' in line or '[BackgroundFetch]' in line or '[DeepLink]' in line:
         return True
