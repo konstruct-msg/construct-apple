@@ -57,11 +57,13 @@ final class ConnectionLoopTests: XCTestCase {
         // via the P2 mode=.on check, breaking tests that expect directFails=0 initially.
         IceProxyStore.saveMode(.auto)
         CensoredNetworkDetector._testOverride = false
+        WebTunnelPenaltyStore.save([:])
     }
 
     override func tearDown() async throws {
         IceProxyStore.saveMode(.auto)
         CensoredNetworkDetector._testOverride = nil
+        WebTunnelPenaltyStore.save([:])
         await ConnectionLoop.shared.reset()
     }
 
@@ -69,10 +71,11 @@ final class ConnectionLoopTests: XCTestCase {
 
     private func makeLoop(
         relays: [IceRelay] = [],
-        runtime: MockIceProxyRuntime = MockIceProxyRuntime()
+        runtime: MockIceProxyRuntime = MockIceProxyRuntime(),
+        blockedPenalty: [String: Int] = [:]
     ) -> ConnectionLoop {
         let proxy = IceProxy(runtime: runtime)
-        return ConnectionLoop(relays: relays, proxy: proxy)
+        return ConnectionLoop(relays: relays, proxy: proxy, blockedPenalty: blockedPenalty)
     }
 
     private func relay(address: String = "relay.test:443") -> IceRelay {
@@ -527,5 +530,67 @@ final class ConnectionLoopTests: XCTestCase {
 
         XCTAssertEqual(runtime.stopCallCount, 0,
             "Background RPC failures must not count toward stale-proxy restart threshold")
+    }
+
+    // MARK: - P6 persistence: WebTunnel penalty survives app restart
+
+    func test_webTunnelBlocked_savesToDisk() async throws {
+        let runtime = MockIceProxyRuntime()
+        runtime.startResult = .success(54321)
+        let relayA = relay(address: "a.test:443")
+        let loop = makeLoop(relays: [relayA], runtime: runtime)
+
+        // Activate ICE and trigger a WebTunnel block
+        await loop.recordFailure(transportError)
+        await loop.recordFailure(transportError)
+        _ = try await loop.prepare()
+        await loop.recordFailure(webTunnelBlockedError)
+
+        let saved = WebTunnelPenaltyStore.load()
+        XCTAssertGreaterThan(saved["a.test:443", default: 0], 0,
+            "WebTunnel block must be immediately written to UserDefaults")
+    }
+
+    func test_persistedPenalty_loadsOnInit() async throws {
+        let runtime = MockIceProxyRuntime()
+        runtime.startResult = .success(54321)
+        let relayA = relay(address: "a.test:443")
+        let relayB = relay(address: "b.test:443")
+
+        // Simulate a penalty that was persisted in a previous session
+        WebTunnelPenaltyStore.save(["a.test:443": 50])
+
+        let loop = makeLoop(
+            relays: [relayA, relayB],
+            runtime: runtime,
+            blockedPenalty: WebTunnelPenaltyStore.load()
+        )
+
+        // Activate ICE — pool must prefer relayB because relayA has a loaded penalty
+        await loop.recordFailure(transportError)
+        await loop.recordFailure(transportError)
+        _ = try await loop.prepare()
+
+        XCTAssertEqual(runtime.startedAddresses.last, "b.test:443",
+            "Penalty loaded from disk must deprioritise relayA on fresh init")
+    }
+
+    func test_recordSuccess_clearsPenaltyOnDisk() async throws {
+        let runtime = MockIceProxyRuntime()
+        runtime.startResult = .success(54321)
+        let relayA = relay(address: "a.test:443")
+        let loop = makeLoop(relays: [relayA], runtime: runtime)
+
+        // Activate ICE, record a block, then succeed
+        await loop.recordFailure(transportError)
+        await loop.recordFailure(transportError)
+        _ = try await loop.prepare()
+        await loop.recordFailure(webTunnelBlockedError)
+        _ = try await loop.prepare()
+        await loop.recordSuccess()
+
+        let saved = WebTunnelPenaltyStore.load()
+        XCTAssertEqual(saved["a.test:443", default: -1], 0,
+            "recordSuccess must clear the persisted penalty so a recovered relay starts clean")
     }
 }

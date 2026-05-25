@@ -33,8 +33,9 @@ struct RelayPool {
 
     // MARK: - Init
 
-    init(relays: [IceRelay]) {
+    init(relays: [IceRelay], blockedPenalty: [String: Int] = [:]) {
         self.relays = relays
+        self.webTunnelBlockedPenalty = blockedPenalty
     }
 
     // MARK: - Selection
@@ -85,6 +86,9 @@ struct RelayPool {
 
     var isEmpty: Bool { relays.isEmpty }
     var count: Int { relays.count }
+
+    /// Current WebTunnel block penalties — read by `ConnectionLoop` to persist across launches.
+    var blockedPenalty: [String: Int] { webTunnelBlockedPenalty }
 
     func failureCount(for relay: IceRelay) -> Int {
         failures[relay.address, default: 0]

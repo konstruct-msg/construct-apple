@@ -22,7 +22,7 @@ actor ConnectionLoop {
     static let shared: ConnectionLoop = {
         let addresses = IceRelaySelector.cachedRelayAddresses()
         let relays = addresses.map { buildRelay(address: $0, bridgeCert: ICEConfig.hardcodedBridgeCert) }
-        return ConnectionLoop(relays: relays)
+        return ConnectionLoop(relays: relays, blockedPenalty: WebTunnelPenaltyStore.load())
     }()
 
     // MARK: - State
@@ -48,8 +48,8 @@ actor ConnectionLoop {
 
     // MARK: - Init
 
-    init(relays: [IceRelay], proxy: IceProxy = IceProxy()) {
-        self.pool = RelayPool(relays: relays)
+    init(relays: [IceRelay], proxy: IceProxy = IceProxy(), blockedPenalty: [String: Int] = [:]) {
+        self.pool = RelayPool(relays: relays, blockedPenalty: blockedPenalty)
         self.proxy = proxy
         if CensoredNetworkDetector.isCensored || IceProxyStore.loadMode() == .on {
             directFails = Self.directFailThreshold
@@ -99,6 +99,7 @@ actor ConnectionLoop {
     func recordSuccess() async {
         if let relay = await proxy.currentRelay {
             pool.recordSuccess(relay)
+            WebTunnelPenaltyStore.save(pool.blockedPenalty)
         }
         directFails = 0
         consecutiveIceFails = 0
@@ -128,6 +129,7 @@ actor ConnectionLoop {
                         // Carrier-level block — add a persistent penalty that survives pool resets
                         // so the relay is deprioritised even after a network path change.
                         pool.recordWebTunnelBlocked(relay)
+                        WebTunnelPenaltyStore.save(pool.blockedPenalty)
                         consecutiveIceFails = 0
                     } else {
                         pool.recordFailure(relay)
@@ -171,9 +173,9 @@ actor ConnectionLoop {
     // MARK: - Relay refresh
 
     /// Replaces the relay list (e.g., after a manifest fetch from the server).
-    /// Preserves per-relay failure counts for addresses that appear in both lists.
+    /// Preserves WebTunnel block penalties across the relay list refresh.
     func updateRelays(_ relays: [IceRelay]) async {
-        pool = RelayPool(relays: relays)
+        pool = RelayPool(relays: relays, blockedPenalty: pool.blockedPenalty)
     }
 
     // MARK: - Relay building
