@@ -34,7 +34,7 @@ final class ChunkedMessageSender {
 
             // All encryption goes through the Rust orchestrator — PQXDH, DR state,
             // and wire-payload packing are handled inside handleEvent(.outgoingMessage).
-            let encryptedPayload = try await MessageRouter.shared.encryptOutgoing(
+            let encryptedPayload = try await OutboundSessionService.shared.encryptOutgoing(
                 plaintext: payload,
                 messageId: chunkMessageId,
                 recipientId: recipientId

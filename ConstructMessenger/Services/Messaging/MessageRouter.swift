@@ -72,62 +72,6 @@ class MessageRouter {
 
     private let chunkReassembler = ChunkedMessageReassembler.shared
 
-    // MARK: - Rust Timer Support (R-C2)
-    // When Rust emits scheduleTimer, Swift must fire timerFired after the given delay.
-    // Keys are timerId strings; values are in-flight Task handles for cancellation.
-    private var rustTimers: [String: Task<Void, Never>] = [:]
-    private let rustTimersLock = NSLock()
-
-    /// Schedule (or reschedule) a Rust-requested timer. Fires `timerFired` to the orchestrator after `delayMs`.
-    func scheduleRustTimer(timerId: String, delayMs: UInt64) {
-        cancelRustTimer(timerId: timerId)
-        let task = Task { @MainActor [weak self] in
-            let ns = UInt64(delayMs) * 1_000_000
-            try? await Task.sleep(nanoseconds: ns)
-            guard !Task.isCancelled, let self else { return }
-            let event = CfeIncomingEvent.timerFired(timerId: timerId)
-            if let actions = try? CryptoManager.shared.handleOrchestratorEvent(event, tag: "rust_timer"), !actions.isEmpty {
-                self.executeRustTimerActions(actions)
-            }
-            _ = self.rustTimersLock.withLock { self.rustTimers.removeValue(forKey: timerId) }
-        }
-        rustTimersLock.withLock { rustTimers[timerId] = task }
-        Log.debug("⏲ Rust timer scheduled: \(timerId) in \(delayMs)ms", category: "MessageRouter")
-    }
-
-    /// Cancel a pending Rust-requested timer.
-    func cancelRustTimer(timerId: String) {
-        rustTimersLock.withLock {
-            if let existing = rustTimers.removeValue(forKey: timerId) {
-                existing.cancel()
-                Log.debug("⏲ Rust timer cancelled: \(timerId)", category: "MessageRouter")
-            }
-        }
-    }
-
-    /// Execute actions returned after a timerFired event (heal retries etc.).
-    private func executeRustTimerActions(_ actions: [CfeAction]) {
-        for action in actions {
-            switch action {
-            case .scheduleTimer(let id, let delay):
-                scheduleRustTimer(timerId: id, delayMs: delay)
-            case .cancelTimer(let id):
-                cancelRustTimer(timerId: id)
-            case .notifyError(let code, let msg):
-                Log.error("❌ Rust timer action error [\(code)]: \(msg)", category: "MessageRouter")
-            default:
-                // Route storage/session-lifecycle actions through the storage pipeline; log others.
-                if case .saveSessionToSecureStore = action {
-                    executeStorageActions([action])
-                } else if case .sessionTerminated = action {
-                    executeStorageActions([action])
-                } else {
-                    Log.debug("🔷 Unhandled Rust timer action: \(action)", category: "MessageRouter")
-                }
-            }
-        }
-    }
-
     // MARK: - Message Routing
     
     /// Route incoming message to appropriate handler
@@ -530,8 +474,8 @@ class MessageRouter {
                     onReceiptNeeded?([message.id], otherUserId, .delivered)
                 }
 
-            case .saveSessionToSecureStore(let key, let data):
-                handleStorageAction(key: key, data: [UInt8](data))
+            case .saveSessionToSecureStore:
+                OutboundSessionService.shared.executeStorageActions([action])
 
             case .notifyNewMessage:
                 break // Notification triggered by saveMessage inside handleResolvedMessage
@@ -577,7 +521,7 @@ class MessageRouter {
             case .sendHeartbeat(let contactId):
                 // Изъян 7: heartbeat requested — send encrypted heartbeat payload to contact.
                 Log.debug("💓 Sending heartbeat to \(contactId.prefix(8))…", category: "MessageRouter")
-                Task { await MessageRouter.shared.sendSessionHeartbeat(to: contactId) }
+                Task { await OutboundSessionService.shared.sendSessionHeartbeat(to: contactId) }
 
             case .notifyLinkedDevicesOfSessionReset(let contactId):
                 // Изъян 8: notify own linked devices that session with contactId was reset.
@@ -592,10 +536,10 @@ class MessageRouter {
                 Log.error("❌ Rust orchestrator error [\(code)]: \(msg)", category: "MessageRouter")
 
             case .scheduleTimer(let timerId, let delayMs):
-                scheduleRustTimer(timerId: timerId, delayMs: delayMs)
+                OutboundSessionService.shared.scheduleRustTimer(timerId: timerId, delayMs: delayMs)
 
             case .cancelTimer(let timerId):
-                cancelRustTimer(timerId: timerId)
+                OutboundSessionService.shared.cancelRustTimer(timerId: timerId)
 
             default:
                 Log.debug("🔷 Unhandled Rust action in M5 path: \(action)", category: "MessageRouter")
@@ -603,158 +547,6 @@ class MessageRouter {
         }
     }
 
-    /// Execute only storage actions from a typed Rust action list (no ChatMessage context needed).
-    // MARK: - Outgoing Message Encryption via Rust Orchestrator
-
-    /// Encrypt a plaintext message through the Rust orchestrator (single source of truth for DR).
-    ///
-    /// Returns binary WirePayload ready to pass as `encryptedPayload` in the gRPC `SendMessage` call.
-    /// Persists updated DR session state as a side-effect.
-    ///
-    /// - Parameters:
-    ///   - plaintext: Serialised plaintext bytes (protobuf MessageContent, binary KNST frame, or UTF-8).
-    ///   - messageId: Unique message UUID (used for ACK tracking).
-    ///   - recipientId: Contact user ID.
-    ///   - contentType: Proto ContentType (0 = regular message, default).
-    func encryptOutgoing(
-        plaintext: Data,
-        messageId: String,
-        recipientId: String,
-        contentType: UInt8 = 0
-    ) throws -> Data {
-        let event = CfeIncomingEvent.outgoingMessage(
-            contactId: recipientId,
-            messageId: messageId,
-            plaintext: plaintext,
-            contentType: contentType
-        )
-        let actions = try CryptoManager.shared.handleOrchestratorEvent(event, tag: "outgoing_message")
-        executeStorageActions(actions)
-        for action in actions {
-            if case .sendEncryptedMessage(let to, let payload, _, _) = action, to == recipientId {
-                return Data(payload)
-            }
-        }
-        throw NSError(
-            domain: "MessageRouter",
-            code: 1001,
-            userInfo: [NSLocalizedDescriptionKey: "Orchestrator returned no SendEncryptedMessage for \(recipientId.prefix(8))…"]
-        )
-    }
-
-    /// Encrypt a session control message (e.g. session ping, END_SESSION) through the orchestrator.
-    ///
-    /// Identical to `encryptOutgoing` but marked separately for clarity in call sites.
-    func encryptSessionControl(
-        plaintext: String,
-        messageId: String,
-        recipientId: String
-    ) throws -> Data {
-        try encryptOutgoing(
-            plaintext: Data(plaintext.utf8),
-            messageId: messageId,
-            recipientId: recipientId,
-            contentType: 0
-        )
-    }
-
-    /// Изъян 7 — session health heartbeat.
-    ///
-    /// Encrypts and sends a small heartbeat payload to `contactId` using content_type=13 (HEARTBEAT).
-    /// The peer will attempt to decrypt it; a decrypt failure triggers proactive heal before
-    /// the user sends their next real message.
-    func sendSessionHeartbeat(to contactId: String) async {
-        guard let myId = SessionManager.shared.currentUserId, !myId.isEmpty else { return }
-        guard CryptoManager.shared.hasSession(for: contactId) else {
-            Log.debug("💓 Heartbeat skip for \(contactId.prefix(8))… — no active session", category: "MessageRouter")
-            return
-        }
-        let heartbeatId = UUID().uuidString.lowercased()
-        do {
-            let payload = try encryptOutgoing(
-                plaintext: Data("__heartbeat__".utf8),
-                messageId: heartbeatId,
-                recipientId: contactId,
-                contentType: 13
-            )
-            _ = try await MessagingServiceClient.shared.sendMessage(
-                messageId: heartbeatId,
-                recipientId: contactId,
-                senderId: myId,
-                conversationId: ConversationId.direct(myUserId: myId, theirUserId: contactId),
-                encryptedPayload: payload,
-                timestamp: UInt64(Date().timeIntervalSince1970),
-                contentType: .heartbeat
-            )
-            Log.debug("💓 Heartbeat sent to \(contactId.prefix(8))…", category: "MessageRouter")
-        } catch {
-            Log.error("❌ Heartbeat failed to \(contactId.prefix(8))…: \(error.localizedDescription)", category: "MessageRouter")
-        }
-    }
-
-    private func executeStorageActions(_ actions: [CfeAction]) {
-        for action in actions {
-            switch action {
-            case .saveSessionToSecureStore(let key, let data):
-                handleStorageAction(key: key, data: [UInt8](data))
-            case .sessionTerminated(let contactId, let archiveBytes):
-                CryptoManager.shared.acceptSessionTerminated(contactId: contactId, archiveBytes: archiveBytes)
-                CryptoManager.shared.saveOrchestratorStateCFE()
-            default:
-                break
-            }
-        }
-    }
-
-    /// Unified handler for a `SaveSessionToSecureStore` action.
-    ///
-    /// Key conventions (established by `session_lifecycle.rs`):
-    /// - `"session_<contactId>"` + non-empty bytes → save hot session to Keychain
-    /// - `"session_<contactId>"` + empty bytes    → delete sentinel: clear Keychain + UserDefaults
-    /// - `"archive_<contactId>"` + bytes          → accept pre-archived session from Rust
-    /// - `"pq_deferred_<contactId>"` + bytes      → persist deferred PQ contribution
-    /// - `"pq_deferred_<contactId>"` + empty      → delete stored PQ contribution
-    private func handleStorageAction(key: String, data rawBytes: [UInt8]) {
-        if key.hasPrefix("session_") {
-            let contactId = String(key.dropFirst("session_".count))
-            if rawBytes.isEmpty {
-                // Delete sentinel: Rust archived the session and removed it from memory.
-                KeychainManager.shared.deleteSession(for: contactId)
-                KeychainManager.shared.deleteSessionSuiteId(userId: contactId)
-                Log.debug("🗑️ Deleted hot session for \(contactId.prefix(8))… (Rust archive_session)", category: "MessageRouter")
-                CryptoManager.shared.saveOrchestratorStateCFE()
-            } else {
-                // Rust already exported the session as CFE binary — use bytes directly.
-                _ = KeychainManager.shared.saveSessionData(Data(rawBytes), for: contactId)
-                CryptoManager.shared.saveOrchestratorStateCFE()
-            }
-        } else if key.hasPrefix("archive_") {
-            let contactId = String(key.dropFirst("archive_".count))
-            CryptoManager.shared.acceptRustSessionArchive(contactId: contactId, archiveBytes: rawBytes)
-            CryptoManager.shared.saveOrchestratorStateCFE()
-        } else if key.hasPrefix("pq_deferred_") {
-            let storageKey = "construct.pq_deferred.\(String(key.dropFirst("pq_deferred_".count)))"
-            if rawBytes.isEmpty {
-                KeychainManager.shared.deleteData(forKey: storageKey)
-                Log.debug("🗑️ Deleted PQ deferred for key \(storageKey)", category: "MessageRouter")
-            } else {
-                _ = KeychainManager.shared.saveData(Data(rawBytes), forKey: storageKey)
-                Log.debug("💾 Persisted PQ deferred for key \(storageKey)", category: "MessageRouter")
-            }
-        } else if key == "construct.orchestrator_state" {
-            // Rust emits this after SessionHealNeeded / NeedSessionInit / EndSessionNeeded
-            // to ensure the healing queue and pending queue survive app crashes.
-            // Save the bytes directly rather than re-exporting (avoids a second FFI call).
-            if rawBytes.isEmpty {
-                Log.debug("⚠️ Orchestrator state save with empty data — ignoring", category: "MessageRouter")
-            } else {
-                _ = KeychainManager.shared.saveData(Data(rawBytes), forKey: "construct.orchestrator_state")
-                Log.debug("💾 Orchestrator state persisted (\(rawBytes.count) bytes) via Rust action", category: "MessageRouter")
-            }
-        } else {
-            Log.debug("🔷 Unhandled storage key: \(key)", category: "MessageRouter")
-        }
-    }
 
     private func handleResolvedMessage(
         _ decryptedContent: String,
@@ -866,7 +658,7 @@ class MessageRouter {
             return (try? context.fetch(req))?.first?.knownIdentityKey
         }()
         Task {
-            await sendEncryptedDeliveryReceipt(
+            await OutboundSessionService.shared.sendEncryptedDeliveryReceipt(
                 messageIds: [msgIdForReceipt],
                 to: otherUserId,
                 recipientIdentityKey: identityKeyForReceipt
@@ -1113,62 +905,6 @@ class MessageRouter {
         onE2EDeliveryReceiptDecrypted?(ids)
     }
 
-    /// Send an E2E-encrypted delivery receipt (content_type=14) to `contactId`.
-    ///
-    /// The receipt is encrypted via Double Ratchet — server sees only an opaque sealed
-    /// envelope addressed to `contactId`. If stealth mode is enabled and `recipientIdentityKey`
-    /// is available, sealed-sender is applied so the server cannot learn who sent the receipt.
-    ///
-    /// Non-fatal: errors are logged but not propagated. The legacy stream relay receipt
-    /// remains the fallback delivery confirmation mechanism.
-    func sendEncryptedDeliveryReceipt(
-        messageIds: [String],
-        to contactId: String,
-        recipientIdentityKey: Data? = nil
-    ) async {
-        guard let myId = SessionManager.shared.currentUserId, !myId.isEmpty else { return }
-        guard CryptoManager.shared.hasSession(for: contactId) else {
-            Log.debug("📨 E2E receipt skip — no session for \(contactId.prefix(8))…", category: "MessageRouter")
-            return
-        }
-        let receiptId = UUID().uuidString.lowercased()
-        let payloadJSON: [String: Any] = ["type": "delivery_receipt", "message_ids": messageIds]
-        guard let payloadData = try? JSONSerialization.data(withJSONObject: payloadJSON) else { return }
-        do {
-            let wirePayload = try encryptOutgoing(
-                plaintext: payloadData,
-                messageId: receiptId,
-                recipientId: contactId,
-                contentType: 14
-            )
-            var sealedInner: Data? = nil
-            if let identityKey = recipientIdentityKey {
-                do {
-                    sealedInner = try await StealthSenderService.buildSealedInner(
-                        recipientUserId: contactId,
-                        recipientIdentityKey: identityKey,
-                        encryptedPayload: wirePayload
-                    )
-                } catch {
-                    Log.error("⚠️ E2E receipt: seal failed, sending without stealth: \(error)", category: "MessageRouter")
-                }
-            }
-            _ = try await MessagingServiceClient.shared.sendMessage(
-                messageId: receiptId,
-                recipientId: contactId,
-                senderId: myId,
-                conversationId: ConversationId.direct(myUserId: myId, theirUserId: contactId),
-                encryptedPayload: wirePayload,
-                timestamp: UInt64(Date().timeIntervalSince1970),
-                contentType: .deliveryReceipt,
-                sealedInnerBytes: sealedInner
-            )
-            Log.info("📨 E2E receipt sent: \(messageIds.count) msg(s) → \(contactId.prefix(8))…", category: "MessageRouter")
-        } catch {
-            Log.error("❌ E2E receipt failed to \(contactId.prefix(8))…: \(error.localizedDescription)", category: "MessageRouter")
-        }
-    }
-
     /// Handle special message types (profile, etc.)
     /// - Returns: true if special message was handled
     private func handleSpecialMessage(
@@ -1237,7 +973,7 @@ class MessageRouter {
                 contentType: 0
             )
             if let actions = try? CryptoManager.shared.handleOrchestratorEvent(event, tag: "sri_archive") {
-                executeStorageActions(actions)
+                OutboundSessionService.shared.executeStorageActions(actions)
                 rustHandled = true
             }
         }
@@ -1304,7 +1040,7 @@ class MessageRouter {
                 contentType: 0
             )
             if let actions = try? CryptoManager.shared.handleOrchestratorEvent(event, tag: "end_session_archive") {
-                executeStorageActions(actions)
+                OutboundSessionService.shared.executeStorageActions(actions)
                 rustHandled = true
                 Log.debug("✅ END_SESSION: session archived via Rust orchestrator for \(userId.prefix(8))…", category: "MessageRouter")
             } else {

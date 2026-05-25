@@ -191,7 +191,7 @@ final class MultiDeviceSendCoordinator {
                 )
             }
 
-            let encPayload = try MessageRouter.shared.encryptOutgoing(
+            let encPayload = try OutboundSessionService.shared.encryptOutgoing(
                 plaintext: plaintext,
                 messageId: messageId,
                 recipientId: contactId
@@ -248,7 +248,7 @@ final class MultiDeviceSendCoordinator {
             let syncContactId = "\(myId):\(device.deviceId)"
             do {
                 guard CryptoManager.shared.hasSession(for: syncContactId) else { continue }
-                let payload = try MessageRouter.shared.encryptSessionControl(
+                let payload = try OutboundSessionService.shared.encryptSessionControl(
                     plaintext: resetPayload,
                     messageId: msgId,
                     recipientId: syncContactId

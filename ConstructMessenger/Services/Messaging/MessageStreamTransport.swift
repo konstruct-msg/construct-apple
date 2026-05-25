@@ -2,13 +2,120 @@
 //  MessageStreamTransport.swift
 //  Construct Messenger
 //
-//  gRPC stream transport layer: opens the bidirectional MessageStream RPC,
-//  drives the producer/consumer loop, and bridges responses to MainActor.
+//  Defines the gRPC transport layer for the message stream.
+//  GRPCStreamTransport is injectable so tests can replace it with a mock
+//  without touching real networking code.
 //
 
 import Foundation
 import GRPCCore
 import GRPCNIOTransportHTTP2
+
+// MARK: - Protocol
+
+/// Abstracts gRPC channel acquisition and stream execution from lifecycle management.
+///
+/// Inject `MockStreamTransport` in tests; use `GRPCStreamTransport` in production.
+protocol StreamTransport: AnyObject, Sendable {
+    /// Opens a bidirectional gRPC stream.
+    ///
+    /// - `outbound`: async sequence of request messages produced by the caller.
+    /// - `metricsLabel`: routing key used for performance metric tagging.
+    /// - `useH2Fallback`: when true, skip H3 and go straight to H2 (previous H3 timed out).
+    /// - `onAccepted`: called with transport label ("H2"/"H3") when the server accepts the stream.
+    /// - `events`: continuation to yield parsed `StreamEvent`s; finished on completion or error.
+    func open(
+        outbound: AsyncStream<Shared_Proto_Services_V1_MessageStreamRequest>,
+        metricsLabel: String,
+        useH2Fallback: Bool,
+        onAccepted: @Sendable @escaping (String) -> Void,
+        events: AsyncStream<StreamEvent>.Continuation
+    ) async throws
+}
+
+// MARK: - Production implementation
+
+/// Production `StreamTransport` backed by `GRPCChannelManager`.
+/// Selects H3 (QUIC) vs H2 based on OS version, ICE proxy state, and `useH2Fallback`.
+final class GRPCStreamTransport: StreamTransport {
+
+    func open(
+        outbound: AsyncStream<Shared_Proto_Services_V1_MessageStreamRequest>,
+        metricsLabel: String,
+        useH2Fallback: Bool,
+        onAccepted: @Sendable @escaping (String) -> Void,
+        events: AsyncStream<StreamEvent>.Continuation
+    ) async throws {
+        // Wrap the outbound AsyncStream into a gRPC producer.
+        // The producer task cancellation check mirrors the original: prevents writing to a
+        // stream that is being torn down, which would assertionFailure in GRPCStreamStateMachine.
+        let request = StreamingClientRequest<Shared_Proto_Services_V1_MessageStreamRequest>(
+            metadata: [],
+            producer: { writer in
+                for await msg in outbound {
+                    guard !Task.isCancelled else { return }
+                    do { try await writer.write(msg) } catch { return }
+                }
+            }
+        )
+
+#if canImport(Network)
+        if #available(iOS 16.0, macOS 13.0, *),
+           !useH2Fallback,
+           GRPCChannelManager.shared.iceProxyPort() == nil {
+            let h3 = GRPCChannelManager.shared.acquireH3Channel()
+            let client = Shared_Proto_Services_V1_MessagingService.Client(wrapping: h3)
+            try await runStream(client: client, request: request, events: events,
+                                metricsLabel: metricsLabel, label: "H3", onAccepted: onAccepted)
+        } else {
+            let h2 = try GRPCChannelManager.shared.acquireChannel()
+            let client = Shared_Proto_Services_V1_MessagingService.Client(wrapping: h2)
+            try await runStream(client: client, request: request, events: events,
+                                metricsLabel: metricsLabel, label: "H2", onAccepted: onAccepted)
+        }
+#else
+        let h2 = try GRPCChannelManager.shared.acquireChannel()
+        let client = Shared_Proto_Services_V1_MessagingService.Client(wrapping: h2)
+        try await runStream(client: client, request: request, events: events,
+                            metricsLabel: metricsLabel, label: "H2", onAccepted: onAccepted)
+#endif
+    }
+
+    private func runStream<T: ClientTransport & Sendable>(
+        client: Shared_Proto_Services_V1_MessagingService.Client<T>,
+        request: StreamingClientRequest<Shared_Proto_Services_V1_MessageStreamRequest>,
+        events: AsyncStream<StreamEvent>.Continuation,
+        metricsLabel: String,
+        label: String,
+        onAccepted: @Sendable @escaping (String) -> Void
+    ) async throws {
+        try await client.messageStream(
+            request: request,
+            onResponse: { response async throws -> Void in
+                switch response.accepted {
+                case .success(let contents):
+                    onAccepted(label)
+                    for try await part in contents.bodyParts {
+                        switch part {
+                        case .message(let resp):
+                            if resp.hasStreamCursor { StreamCursorStore.save(resp.streamCursor) }
+                            if let event = MessageStreamParser.parse(resp) { events.yield(event) }
+                        case .trailingMetadata:
+                            break
+                        }
+                    }
+                    events.finish()
+                case .failure(let error):
+                    events.finish()
+                    PerformanceMetrics.shared.cancelStart(.streamOpenStart, label: metricsLabel)
+                    throw error
+                }
+            }
+        )
+    }
+}
+
+// MARK: - openStream (stream lifecycle coordinator)
 
 extension MessageStreamManager {
 
@@ -32,6 +139,8 @@ extension MessageStreamManager {
         let port = GRPCChannelManager.shared.currentPort
         Log.info("📡 openStream → \(host):\(port) subscriptions=[\(subscriptionUserIds.joined(separator: ", "))]", category: "MessageStream")
 
+        // Determine transport label early for logging and accept-timeout calculation.
+        // Actual channel selection happens inside GRPCStreamTransport.open().
         // Use the shared persistent channel for the stream transport.
         // On iOS 16+ with a direct (non-ICE) path, prefer HTTP/3 (QUIC) for connection
         // migration across WiFi↔cellular switches and head-of-line blocking elimination.
@@ -52,8 +161,8 @@ extension MessageStreamManager {
         Log.debug("🔌 openStream transport=\(transportLabel) → \(host):\(port)", category: "MessageStream")
 
         // Create outbound stream
-        let (outboundStream, continuation) = AsyncStream<Shared_Proto_Services_V1_MessageStreamRequest>.makeStream()
-        self.outboundContinuation = continuation
+        let (outboundStream, outboundCont) = AsyncStream<Shared_Proto_Services_V1_MessageStreamRequest>.makeStream()
+        self.outboundContinuation = outboundCont
         Log.info("⏳ MessageStream opening to \(host):\(port)", category: "MessageStream")
 
         // Send initial subscribe — include last-known Redis stream cursor so the server
@@ -67,7 +176,7 @@ extension MessageStreamManager {
             Log.debug("📤 MessageStream subscribe with cursor=\(cursor.prefix(16))…", category: "MessageStream")
         }
         subscribeReq.request = .subscribe(subscribe)
-        continuation.yield(subscribeReq)
+        outboundCont.yield(subscribeReq)
         Log.debug("📤 MessageStream subscribe sent: \(subscriptionUserIds.count) conversation(s)", category: "MessageStream")
 
         // Flush any ACKs for messages that failed decoding before the stream was open
@@ -91,7 +200,7 @@ extension MessageStreamManager {
             Log.info("📤 Flushed \(toFlush.count) pending delivered receipt(s)", category: "MessageStream")
         }
 
-        // Start heartbeat
+        // Start heartbeat sender
         let hbInterval = self.heartbeatInterval
         let hbTask = Task { [weak self] () -> Void in
             while !Task.isCancelled {
@@ -101,42 +210,14 @@ extension MessageStreamManager {
         }
         self.heartbeatTask = hbTask
 
-        // Heartbeat watchdog: reconnect if we stop receiving heartbeat acks.
+        // Heartbeat watchdog: reconnect if we stop receiving heartbeat acks
         let watchdogTask = Task { [weak self] () -> Void in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(hbInterval))
-                await MainActor.run {
-                    self?.checkHeartbeatAndReconnectIfStale()
-                }
+                await MainActor.run { self?.checkHeartbeatAndReconnectIfStale() }
             }
         }
         self.heartbeatWatchdogTask = watchdogTask
-
-        let request = StreamingClientRequest<Shared_Proto_Services_V1_MessageStreamRequest>(
-            metadata: [],
-            producer: { writer in
-                for await msg in outboundStream {
-                    // Guard against writing to a stream that's being torn down. Task
-                    // cancellation propagates into this producer task; checking it before
-                    // write prevents the assertionFailure in GRPCStreamStateMachine when
-                    // the underlying NIO client is already in a closed state.
-                    guard !Task.isCancelled else { return }
-                    do {
-                        try await writer.write(msg)
-                    } catch {
-                        // Stream was closed mid-write (release builds throw instead of
-                        // assertionFailure). Exit producer cleanly.
-                        return
-                    }
-                }
-            }
-        )
-
-        // NOTE: No local runConnections() task — the shared channel's runConnections() loop is
-        // already running in GRPCChannelManager. Cancelling the outer streamTask propagates
-        // cancellation into runMessageStream() (via its await point), which closes the stream RPC.
-        // The shared channel itself stays alive so the next openStream() reuses it without a
-        // TLS handshake.
 
         defer {
             hbTask.cancel()
@@ -144,8 +225,8 @@ extension MessageStreamManager {
             // Close the outbound AsyncStream so the producer closure exits cleanly.
             // Do NOT call grpcClient.beginGracefulShutdown() — the shared channel must stay alive
             // for subsequent streams and unary RPCs. Task cancellation (via streamTask.cancel())
-            // propagates into runMessageStream() and closes the streaming RPC naturally.
-            continuation.finish()
+            // propagates into the transport and closes the streaming RPC naturally.
+            outboundCont.finish()
             // Only tear down shared state if this is still the active stream.
             if self.activeStreamGeneration == generation {
                 self.isConnected = false
@@ -159,9 +240,9 @@ extension MessageStreamManager {
         }
 
         // Use an async stream to bridge responses back to MainActor
-        let (incomingStream, incomingContinuation) = AsyncStream<StreamEvent>.makeStream()
+        let (incomingStream, incomingCont) = AsyncStream<StreamEvent>.makeStream()
 
-        // Process incoming events on MainActor
+        // Process incoming events — callbacks are invoked on the task's actor context (main)
         let processingTask = Task { [weak self] in
             for await event in incomingStream {
                 switch event {
@@ -179,52 +260,59 @@ extension MessageStreamManager {
                 }
             }
         }
-
         defer { processingTask.cancel() }
 
-        let streamTask = Task {
-            // Acquire the appropriate persistent channel inside the Task.
-            // Both branches call the generic `runMessageStream<Transport>` — Swift specialises it.
-#if canImport(Network)
-            if #available(iOS 16.0, macOS 13.0, *), !useH2Fallback, GRPCChannelManager.shared.iceProxyPort() == nil {
-                let h3Client = GRPCChannelManager.shared.acquireH3Channel()
-                let msgClient = Shared_Proto_Services_V1_MessagingService.Client(wrapping: h3Client)
-                try await runMessageStream(
-                    client: msgClient,
-                    request: request,
-                    incomingContinuation: incomingContinuation,
-                    metricsLabel: metricsLabel,
-                    transportLabel: "H3"
-                )
-            } else {
-                let grpcClient = try GRPCChannelManager.shared.acquireChannel()
-                let msgClient = Shared_Proto_Services_V1_MessagingService.Client(wrapping: grpcClient)
-                try await runMessageStream(
-                    client: msgClient,
-                    request: request,
-                    incomingContinuation: incomingContinuation,
-                    metricsLabel: metricsLabel,
-                    transportLabel: "H2"
-                )
+        // Capture connect start time before the async boundary so it's available in the
+        // onAccepted closure without crossing actor isolation on a mutable property.
+        let capturedConnectStart = connectStartTime
+
+        // Called by the transport when the server accepts the stream.
+        // All @MainActor state updates go here, keeping GRPCStreamTransport free of
+        // knowledge about MessageStreamManager internals.
+        let onAccepted: @Sendable (String) -> Void = { [weak self] label in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                let streamMs = PerformanceMetrics.shared.end(.streamOpenStart, endEvent: .streamOpenEnd, label: metricsLabel)
+                ConnectionStatusManager.shared.markStreamConnected()
+                self.isConnected = true
+                self.activeTransport = label
+                self.lastActiveTransport = label
+                self.lastHeartbeatDate = Date()
+                // The background fetch was a best-effort catch-up for messages missed
+                // while disconnected. Now that the stream is live the server will push
+                // everything from the cursor, so the in-flight fetch is no longer needed.
+                // Cancelling it prevents a stale fetch failure from later killing the
+                // persistent connection (same-gen invalidation race).
+                self.backgroundFetchTask?.cancel()
+                self.backgroundFetchTask = nil
+                let streamMsStr = streamMs.map { String(format: "%.0f", $0) } ?? "?"
+                if let start = capturedConnectStart {
+                    let totalMs = Int(Date().timeIntervalSince(start) * 1000)
+                    Log.info("✅ MessageStream connected — stream: \(streamMsStr)ms, total: \(totalMs)ms via \(metricsLabel)", category: "MessageStream")
+                    self.connectStartTime = nil
+                } else {
+                    Log.info("✅ MessageStream connected — stream: \(streamMsStr)ms via \(metricsLabel)", category: "MessageStream")
+                }
             }
-#else
-            let grpcClient = try GRPCChannelManager.shared.acquireChannel()
-            let msgClient = Shared_Proto_Services_V1_MessagingService.Client(wrapping: grpcClient)
-            try await runMessageStream(
-                client: msgClient,
-                request: request,
-                incomingContinuation: incomingContinuation,
-                metricsLabel: metricsLabel,
-                transportLabel: "H2"
-            )
-#endif
         }
-        // Ensure the inner (unstructured) runMessageStream task is always cancelled
-        // when openStream() exits — whether cleanly, via error, or via outer task
-        // cancellation.  Without this, a stale stream outlives the connectLoop
-        // iteration and can still hold a gRPC writer open; rapid forceReconnect()
-        // calls then race against it, producing the "Client is closed, cannot send
-        // a message" assertionFailure in GRPCStreamStateMachine.
+
+        // NOTE: No local runConnections() task — the shared channel's runConnections() loop is
+        // already running in GRPCChannelManager. Cancelling the outer streamTask propagates
+        // cancellation into the transport, which closes the stream RPC. The shared channel itself
+        // stays alive so the next openStream() reuses it without a TLS handshake.
+        let streamTask = Task {
+            try await transport.open(
+                outbound: outboundStream,
+                metricsLabel: metricsLabel,
+                useH2Fallback: useH2Fallback,
+                onAccepted: onAccepted,
+                events: incomingCont
+            )
+        }
+        // Ensure the transport task is always cancelled when openStream() exits — whether
+        // cleanly, via error, or via outer task cancellation. Without this, a stale stream
+        // outlives the connectLoop iteration and can still hold a gRPC writer open; rapid
+        // forceReconnect() calls then race against it, producing "Client is closed" panics.
         defer { streamTask.cancel() }
 
         // Fast ICE failover for stream open: if the RPC isn't accepted quickly, we retry
@@ -269,7 +357,7 @@ extension MessageStreamManager {
                 PerformanceMetrics.shared.record(.streamOpenFastFailover, label: metricsLabel)
                 PerformanceMetrics.shared.cancelStart(.streamOpenStart, label: metricsLabel)
                 streamTask.cancel()
-                incomingContinuation.finish()
+                incomingCont.finish()
                 // Always invalidate the persistent client on stream timeout.
                 // If the underlying TCP connection was RST'd (server keepalive timeout, NAT expiry,
                 // etc.) the gRPC runConnections() error handler fires asynchronously. Without this
@@ -281,69 +369,7 @@ extension MessageStreamManager {
             }
         }
 
-        // Wait until the stream ends (disconnect, server close, etc.).
+        // Wait until the stream ends (disconnect, server close, etc.)
         try await streamTask.value
-    }
-
-    nonisolated func runMessageStream<Transport: ClientTransport & Sendable>(
-        client: Shared_Proto_Services_V1_MessagingService.Client<Transport>,
-        request: StreamingClientRequest<Shared_Proto_Services_V1_MessageStreamRequest>,
-        incomingContinuation: AsyncStream<StreamEvent>.Continuation,
-        metricsLabel: String,
-        transportLabel: String = "H2"
-    ) async throws {
-        try await client.messageStream(
-            request: request,
-            onResponse: { (response: StreamingClientResponse<Shared_Proto_Services_V1_MessageStreamResponse>) async throws -> Void in
-                let contents: StreamingClientResponse<Shared_Proto_Services_V1_MessageStreamResponse>.Contents
-                switch response.accepted {
-                case .success(let c):
-                    Task { @MainActor in
-                        let streamMs = PerformanceMetrics.shared.end(.streamOpenStart, endEvent: .streamOpenEnd, label: metricsLabel)
-                        ConnectionStatusManager.shared.markStreamConnected()
-                        self.isConnected = true
-                        self.activeTransport = transportLabel
-                        self.lastActiveTransport = transportLabel
-                        self.lastHeartbeatDate = Date()
-                        // The background fetch was a best-effort catch-up for messages missed
-                        // while disconnected. Now that the stream is live the server will push
-                        // everything from the cursor, so the in-flight fetch is no longer needed.
-                        // Cancelling it prevents a stale fetch failure from later killing the
-                        // persistent connection (same-gen invalidation race).
-                        self.backgroundFetchTask?.cancel()
-                        self.backgroundFetchTask = nil
-                        let streamMsStr = streamMs.map { String(format: "%.0f", $0) } ?? "?"
-                        if let start = self.connectStartTime {
-                            let totalMs = Int(Date().timeIntervalSince(start) * 1000)
-                            Log.info("✅ MessageStream connected — stream: \(streamMsStr)ms, total: \(totalMs)ms via \(metricsLabel)", category: "MessageStream")
-                            self.connectStartTime = nil
-                        } else {
-                            Log.info("✅ MessageStream connected — stream: \(streamMsStr)ms via \(metricsLabel)", category: "MessageStream")
-                        }
-                    }
-                    contents = c
-                case .failure(let error):
-                    incomingContinuation.finish()
-                    PerformanceMetrics.shared.cancelStart(.streamOpenStart, label: metricsLabel)
-                    throw error
-                }
-
-                for try await part in contents.bodyParts {
-                    switch part {
-                    case .message(let streamResponse):
-                        // Persist the cursor on every response so reconnects resume cleanly.
-                        if streamResponse.hasStreamCursor {
-                            StreamCursorStore.save(streamResponse.streamCursor)
-                        }
-                        if let msg = MessageStreamParser.parse(streamResponse) {
-                            incomingContinuation.yield(msg)
-                        }
-                    case .trailingMetadata:
-                        break
-                    }
-                }
-                incomingContinuation.finish()
-            }
-        )
     }
 }

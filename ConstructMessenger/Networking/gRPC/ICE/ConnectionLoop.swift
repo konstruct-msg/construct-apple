@@ -73,21 +73,26 @@ actor ConnectionLoop {
         let iceRequired = shouldUseICE || IceProxyStore.loadMode() == .on
         guard iceRequired, !pool.isEmpty else {
             GRPCChannelManager.shared.setDirectProxyPort(nil)
+            await MainActor.run { IceProxyManager.shared.updateICEProxyState(isRunning: false, port: 0, relay: nil, isWebTunnel: false) }
             return nil
         }
         guard let relay = pool.best() else {
             GRPCChannelManager.shared.setDirectProxyPort(nil)
+            await MainActor.run { IceProxyManager.shared.updateICEProxyState(isRunning: false, port: 0, relay: nil, isWebTunnel: false) }
             return nil
         }
         do {
             let port = try await proxy.ensure(relay: relay)
+            let isWebTunnel = await proxy.isWebTunnel
             GRPCChannelManager.shared.setDirectProxyPort(port)
+            await MainActor.run { IceProxyManager.shared.updateICEProxyState(isRunning: true, port: port, relay: relay, isWebTunnel: isWebTunnel) }
             Log.info("🧊 ConnectionLoop: ICE active via \(relay.address) port=\(port)", category: "ICE")
             return port
         } catch {
             pool.recordFailure(relay)
             await proxy.stop()
             GRPCChannelManager.shared.setDirectProxyPort(nil)
+            await MainActor.run { IceProxyManager.shared.updateICEProxyState(isRunning: false, port: 0, relay: nil, isWebTunnel: false) }
             Log.error("🧊 ConnectionLoop: proxy start failed (\(error)) — falling back to direct", category: "ICE")
             throw error
         }
@@ -138,6 +143,7 @@ actor ConnectionLoop {
                             Log.info("🧊 ConnectionLoop: \(consecutiveIceFails) consecutive ICE fails — force-restarting proxy", category: "ICE")
                             await proxy.stop()
                             GRPCChannelManager.shared.setDirectProxyPort(nil)
+                            await MainActor.run { IceProxyManager.shared.updateICEProxyState(isRunning: false, port: 0, relay: nil, isWebTunnel: false) }
                             consecutiveIceFails = 0
                         }
                     }
@@ -149,6 +155,7 @@ actor ConnectionLoop {
             if reason == .staleLocalProxy {
                 await proxy.stop()
                 GRPCChannelManager.shared.setDirectProxyPort(nil)
+                await MainActor.run { IceProxyManager.shared.updateICEProxyState(isRunning: false, port: 0, relay: nil, isWebTunnel: false) }
                 consecutiveIceFails = 0
             }
         } else {
@@ -193,6 +200,7 @@ actor ConnectionLoop {
         pool.resetFailures()
         await proxy.stop()
         GRPCChannelManager.shared.setDirectProxyPort(nil)
+        await MainActor.run { IceProxyManager.shared.updateICEProxyState(isRunning: false, port: 0, relay: nil, isWebTunnel: false) }
         Log.info("🧊 ConnectionLoop: reset (network change)", category: "ICE")
     }
 

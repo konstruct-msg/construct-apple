@@ -95,7 +95,7 @@ final class SessionActivityTracker {
                 "💓 Auto-heartbeat: \(contactId.prefix(8))… silent for \(Int(age / 3600))h",
                 category: "SessionActivityTracker"
             )
-            await MessageRouter.shared.sendSessionHeartbeat(to: contactId)
+            await OutboundSessionService.shared.sendSessionHeartbeat(to: contactId)
             // Record the heartbeat as activity so we don't spam.
             recordActivity(for: contactId)
         }

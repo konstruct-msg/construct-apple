@@ -386,7 +386,7 @@ struct RegistrationFlowView: View {
                 expiresIn: Int(registerData.expires - Int64(Date().timeIntervalSince1970)),
                 userId: registerData.userId
             )
-            ConnectionManager.shared.configureFromServer(cert: registerData.iceBridgeCert ?? "")
+            IceProxyManager.shared.configureFromServer(cert: registerData.iceBridgeCert ?? "")
             
             // 4. Verify session tokens
             Log.info("4️⃣ Verifying session tokens...", category: "Registration")

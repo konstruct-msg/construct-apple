@@ -48,6 +48,14 @@ final class MessageStreamManager {
 
     static let shared = MessageStreamManager()
 
+    // MARK: - Transport (injectable for testing)
+
+    let transport: any StreamTransport
+
+    private init(transport: any StreamTransport = GRPCStreamTransport()) {
+        self.transport = transport
+    }
+
     deinit {
         MainActor.assumeIsolated {
             if let obs = serverChangedObserver {

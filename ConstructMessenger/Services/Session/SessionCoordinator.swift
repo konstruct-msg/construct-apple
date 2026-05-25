@@ -656,7 +656,7 @@ final class SessionCoordinator {
                     recipientId: userId,
                     senderId: myId,
                     conversationId: ConversationId.direct(myUserId: myId, theirUserId: userId),
-                    encryptedPayload: try MessageRouter.shared.encryptSessionControl(
+                    encryptedPayload: try OutboundSessionService.shared.encryptSessionControl(
                         plaintext: sriContent,
                         messageId: sriId,
                         recipientId: userId
@@ -697,7 +697,7 @@ final class SessionCoordinator {
                     recipientId: userId,
                     senderId: myId,
                     conversationId: ConversationId.direct(myUserId: myId, theirUserId: userId),
-                    encryptedPayload: try MessageRouter.shared.encryptSessionControl(
+                    encryptedPayload: try OutboundSessionService.shared.encryptSessionControl(
                         plaintext: pingContent,
                         messageId: pingMessageId,
                         recipientId: userId
@@ -738,7 +738,7 @@ final class SessionCoordinator {
                 recipientId: userId,
                 senderId: myId,
                 conversationId: ConversationId.direct(myUserId: myId, theirUserId: userId),
-                encryptedPayload: try MessageRouter.shared.encryptSessionControl(
+                encryptedPayload: try OutboundSessionService.shared.encryptSessionControl(
                     plaintext: readyContent,
                     messageId: readyMessageId,
                     recipientId: userId

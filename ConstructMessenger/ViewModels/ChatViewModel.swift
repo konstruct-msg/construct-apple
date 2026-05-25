@@ -559,7 +559,7 @@ class ChatViewModel: NSObject {
         let pingContent = "__session_ping_\(UUID().uuidString)__"
 
         do {
-            let payload = try MessageRouter.shared.encryptSessionControl(
+            let payload = try OutboundSessionService.shared.encryptSessionControl(
                 plaintext: pingContent,
                 messageId: pingId,
                 recipientId: userId
@@ -1274,7 +1274,7 @@ class ChatViewModel: NSObject {
 
         Task {
             do {
-                let wirePayload = try MessageRouter.shared.encryptOutgoing(
+                let wirePayload = try OutboundSessionService.shared.encryptOutgoing(
                     plaintext: Data(newText.utf8),
                     messageId: message.id,
                     recipientId: recipientId
