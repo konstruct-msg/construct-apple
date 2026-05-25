@@ -533,11 +533,7 @@ final class MessageStreamManager {
 
             let startCursor = lastPendingCursor
             let fetchResult: FetchResult = try await GRPCChannelManager.shared.performRPC(
-                timeout: GRPCTimeouts.getPendingMessages,
-                // fetchMissedMessages only runs while the stream is not open (inside connectLoop,
-                // before openStream). Allowing ICE rotation here is safe — there is no live stream
-                // channel to kill, and it lets us escape a dead relay before openStream is called.
-                invalidatesConnectionOnFailure: true
+                timeout: GRPCTimeouts.getPendingMessages
             ) { grpcClient in
                 var cursor: String? = startCursor.isEmpty ? nil : startCursor
                 var cursorToPersist: String = startCursor

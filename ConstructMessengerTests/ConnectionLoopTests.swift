@@ -10,14 +10,29 @@ import XCTest
 import GRPCCore
 @testable import Construct_Messenger
 
+// MARK: - Test helpers
+
+private extension IceTransportRequest {
+    var address: String {
+        switch self {
+        case .webTunnel(let address, _, _, _, _, _): return address
+        case .tlsPinned(_, let address, _, _, _):    return address
+        case .tlsUnpinned(_, let address, _):        return address
+        case .plainObfs4(_, let address):            return address
+        }
+    }
+}
+
 // MARK: - Mock Runtime
 
 final class MockIceProxyRuntime: IceProxyRuntime, @unchecked Sendable {
     var startResult: Result<UInt16, IceProxyRuntimeError> = .success(54321)
     var stopCallCount = 0
+    var startedAddresses: [String] = []
     private var _alive = false
 
     func start(_ request: IceTransportRequest) -> Result<UInt16, IceProxyRuntimeError> {
+        startedAddresses.append(request.address)
         if case .success = startResult { _alive = true }
         return startResult
     }
@@ -66,6 +81,10 @@ final class ConnectionLoopTests: XCTestCase {
 
     private var transportError: Error {
         RPCError(code: .unavailable, message: "connection lost")
+    }
+
+    private var webTunnelBlockedError: Error {
+        RPCError(code: .unimplemented, message: "Unexpected non-200 HTTP Status Code (404 Not Found).")
     }
 
     private var authError: Error {
@@ -308,6 +327,63 @@ final class ConnectionLoopTests: XCTestCase {
         // relayB now preferred → proxy switches
         _ = try await loop.prepare()
         XCTAssertEqual(runtime.stopCallCount, 1, "Connection-invalidating failure must penalise relay — proxy must switch to relayB")
+    }
+
+    // MARK: - WebTunnel-blocked persistence (P6)
+
+    func test_webTunnelBlocked_persistsAcrossReset() async throws {
+        let runtime = MockIceProxyRuntime()
+        runtime.startResult = .success(54321)
+        let relayA = relay(address: "a.test:443")
+        let relayB = relay(address: "b.test:443")
+        // relayA is first in array — would be chosen on tie
+        let loop = makeLoop(relays: [relayA, relayB], runtime: runtime)
+
+        // Activate ICE
+        await loop.recordFailure(transportError)
+        await loop.recordFailure(transportError)
+        _ = try await loop.prepare()  // starts on relayA (tie → first in array)
+
+        // relayA gets a WebTunnel-blocked failure — persistent penalty
+        await loop.recordFailure(webTunnelBlockedError)
+
+        // Reset simulates a network path change (clears transient failures, stops proxy)
+        await loop.reset()
+        // stopCallCount = 1 from reset()'s proxy.stop()
+
+        // Re-activate ICE (simulates reconnect attempt after network change)
+        await loop.recordFailure(transportError)
+        await loop.recordFailure(transportError)
+
+        // Pool failures cleared, but WebTunnel penalty on relayA survived the reset.
+        // relayA has effective score = 5 (penalty), relayB has 0 → relayB should be chosen.
+        _ = try await loop.prepare()
+        XCTAssertEqual(runtime.startedAddresses.last, "b.test:443",
+            "WebTunnel-blocked penalty must survive reset — pool must prefer relayB after network change")
+    }
+
+    func test_webTunnelBlocked_clearedBySuccess() async throws {
+        let runtime = MockIceProxyRuntime()
+        runtime.startResult = .success(54321)
+        let relayA = relay(address: "a.test:443")
+        let relayB = relay(address: "b.test:443")
+        let loop = makeLoop(relays: [relayA, relayB], runtime: runtime)
+
+        await loop.recordFailure(transportError)
+        await loop.recordFailure(transportError)
+        _ = try await loop.prepare()  // starts on relayA
+
+        // relayA gets WebTunnel-blocked
+        await loop.recordFailure(webTunnelBlockedError)
+
+        // Next prepare() picks relayB
+        _ = try await loop.prepare()
+
+        // relayB succeeds — clears its own penalty (none) + resets directFails
+        await loop.recordSuccess()
+
+        let iceActive = await loop.shouldUseICE
+        XCTAssertFalse(iceActive, "recordSuccess must clear directFails")
     }
 
     // MARK: - Feature 1: Network-aware relay penalisation

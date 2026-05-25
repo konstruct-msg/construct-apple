@@ -114,7 +114,13 @@ actor ConnectionLoop {
                 if !invalidatesConnection {
                     Log.info("🧊 ConnectionLoop: relay failure (\(reason)) on \(relay.address) — skipped (background RPC)", category: "ICE")
                 } else if NetworkReachabilityManager.shared.isReachable {
-                    pool.recordFailure(relay)
+                    if reason == .webTunnelBlocked {
+                        // Carrier-level block — add a persistent penalty that survives pool resets
+                        // so the relay is deprioritised even after a network path change.
+                        pool.recordWebTunnelBlocked(relay)
+                    } else {
+                        pool.recordFailure(relay)
+                    }
                     Log.info("🧊 ConnectionLoop: relay failure (\(reason)) on \(relay.address)", category: "ICE")
                 } else {
                     Log.info("🧊 ConnectionLoop: relay failure (\(reason)) ignored — network offline", category: "ICE")
