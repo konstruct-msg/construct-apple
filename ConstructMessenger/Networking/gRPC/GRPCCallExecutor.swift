@@ -333,7 +333,7 @@ final class GRPCCallExecutor: Sendable {
         // stream. Relay rotation is the responsibility of connectLoop(), which calls prepare()
         // between stream attempts, not during them.
         if connectionLoopActive {
-            await ConnectionLoop.shared.recordFailure(error)
+            await ConnectionLoop.shared.recordFailure(error, invalidatesConnection: invalidatesConnectionOnFailure)
             return .propagate
         }
 

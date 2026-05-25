@@ -269,6 +269,47 @@ final class ConnectionLoopTests: XCTestCase {
         XCTAssertNotNil(port, "prepare() must succeed after updateRelays()")
     }
 
+    // MARK: - Background RPC non-penalisation (P4)
+
+    func test_backgroundRPCFailure_doesNotPenaliseRelay() async throws {
+        let runtime = MockIceProxyRuntime()
+        runtime.startResult = .success(54321)
+        let relayA = relay(address: "a.test:443")
+        let relayB = relay(address: "b.test:443")
+        let loop = makeLoop(relays: [relayA, relayB], runtime: runtime)
+
+        await loop.recordFailure(transportError)
+        await loop.recordFailure(transportError)
+        _ = try await loop.prepare()  // starts on relayA
+
+        // Background RPC failure (OTPK, bundle fetch) — must NOT penalise relayA
+        await loop.recordFailure(transportError, invalidatesConnection: false)
+        await loop.recordFailure(transportError, invalidatesConnection: false)
+
+        // relayA still at 0 failures → pool.best() returns relayA → no restart
+        _ = try await loop.prepare()
+        XCTAssertEqual(runtime.stopCallCount, 0, "Background RPC failure must not penalise relay — proxy must not switch")
+    }
+
+    func test_connectionInvalidatingFailure_penalisesRelay() async throws {
+        let runtime = MockIceProxyRuntime()
+        runtime.startResult = .success(54321)
+        let relayA = relay(address: "a.test:443")
+        let relayB = relay(address: "b.test:443")
+        let loop = makeLoop(relays: [relayA, relayB], runtime: runtime)
+
+        await loop.recordFailure(transportError)
+        await loop.recordFailure(transportError)
+        _ = try await loop.prepare()  // starts on relayA
+
+        // Stream-level failure (invalidatesConnection=true) — must penalise relayA
+        await loop.recordFailure(transportError, invalidatesConnection: true)
+
+        // relayB now preferred → proxy switches
+        _ = try await loop.prepare()
+        XCTAssertEqual(runtime.stopCallCount, 1, "Connection-invalidating failure must penalise relay — proxy must switch to relayB")
+    }
+
     // MARK: - Feature 1: Network-aware relay penalisation
 
     func test_offlineNetwork_doesNotPenaliseRelay() async throws {

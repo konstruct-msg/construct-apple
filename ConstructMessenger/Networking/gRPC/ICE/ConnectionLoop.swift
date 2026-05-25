@@ -101,12 +101,19 @@ actor ConnectionLoop {
     /// Transport failures on the direct path increment `directFails`.
     /// Transport failures on the ICE path record a relay failure and stop the proxy
     /// when the local proxy itself crashed.
-    func recordFailure(_ error: Error) async {
+    ///
+    /// `invalidatesConnection` should be `false` for background RPCs (OTPK replenishment,
+    /// bundle fetch, etc.) whose failure does not indicate relay quality degradation —
+    /// the main stream may still be healthy. When false, relay failure counts are not
+    /// updated so transient background failures don't cause premature relay rotation.
+    func recordFailure(_ error: Error, invalidatesConnection: Bool = true) async {
         guard let reason = IceFailurePolicy.classify(error) else { return }
 
         if shouldUseICE {
             if let relay = await proxy.currentRelay {
-                if NetworkReachabilityManager.shared.isReachable {
+                if !invalidatesConnection {
+                    Log.info("🧊 ConnectionLoop: relay failure (\(reason)) on \(relay.address) — skipped (background RPC)", category: "ICE")
+                } else if NetworkReachabilityManager.shared.isReachable {
                     pool.recordFailure(relay)
                     Log.info("🧊 ConnectionLoop: relay failure (\(reason)) on \(relay.address)", category: "ICE")
                 } else {
