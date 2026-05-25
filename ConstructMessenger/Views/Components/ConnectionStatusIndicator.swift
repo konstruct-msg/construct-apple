@@ -5,11 +5,11 @@
 
 import SwiftUI
 
-/// Terminal-style connection status badge.
+/// Compact connection status badge for the chat list header.
 ///
-/// Shows the actual transport path (RELAY host · protocol or DIRECT)
-/// derived from IceProxyManager.currentTrafficPath plus gRPC stream state.
-/// Pulses when connecting; auto-hides after 4 s when connected.
+/// Three states: Connected / Connecting... / Disconnected
+/// Shows a snowflake (*) when routed through ICE relay.
+/// Auto-hides after 4 s when connected.
 struct ConnectionStatusIndicator: View {
     var connectionManager = ConnectionStatusManager.shared
     @ObservedObject var iceManager = ConnectionManager.shared
@@ -37,58 +37,33 @@ struct ConnectionStatusIndicator: View {
     // MARK: - Label
 
     private var labelText: String {
+        let status: String
         switch connectionManager.connectionStatus {
         case .connected:
-            return "> \(trafficLabel) · [✓]"
+            status = NSLocalizedString("connected", comment: "")
         case .connecting, .unknown:
-            if let phase = connectionManager.connectingPhase {
-                return "> \(phase) · ···"
-            }
-            return "> \(trafficLabel) · ···"
+            status = NSLocalizedString("status_connecting", comment: "")
         case .disconnected:
-            return "> OFFLINE"
+            status = NSLocalizedString("disconnected", comment: "")
         }
-    }
-
-    private var trafficLabel: String {
-        switch iceManager.currentTrafficPath {
-        case .direct:
-            return "DIRECT"
-        case .icePrimary(let host):
-            // Strip port if present, keep only hostname
-            let hostname = host.components(separatedBy: ":").first ?? host
-            return "RELAY: \(hostname) · TLS+OBFS4"
-        case .iceRelay(let address):
-            let hostname = address.components(separatedBy: ":").first ?? address
-            return "RELAY: \(hostname) · OBFS4"
-        case .iceWebTunnel(let relay):
-            let hostname = relay.components(separatedBy: ":").first ?? relay
-            return "RELAY: \(hostname) · WEBTUNNEL"
-        case .iceCooldown:
-            return "DIRECT · RECOVERING"
-        case .iceConnecting:
-            return "ICE STARTING"
+        if case .connected = connectionManager.connectionStatus, iceManager.isRunning {
+            return "> \(status) \(CTSymbol.star8)"
         }
+        return "> \(status)"
     }
 
     private var labelColor: Color {
         switch connectionManager.connectionStatus {
         case .connected:
-            switch iceManager.currentTrafficPath {
-            case .direct:     return Color.CT.textDim
-            case .icePrimary: return Color.CT.accent
-            case .iceRelay:   return Color.CT.accentDim
-            case .iceWebTunnel: return Color.CT.accent
-            case .iceCooldown, .iceConnecting: return Color.CT.textDim
-            }
+            return iceManager.isRunning ? Color.CT.accent : Color.CT.textDim
         case .connecting, .unknown:
             return Color.CT.textDim
         case .disconnected:
-            return Color(hex: 0xE05555).opacity(0.8)
+            return Color.CT.danger.opacity(0.7)
         }
     }
 
-    // MARK: - Visibility logic
+    // MARK: - Visibility
 
     private func handleStatusChange(_ status: ConnectionStatusManager.ConnectionStatus) {
         hideTask?.cancel()
