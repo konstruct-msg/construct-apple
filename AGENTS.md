@@ -38,6 +38,28 @@ The Rust ICE proxy lives at: `~/Code/construct-ice`
 
 ---
 
+## Log Analysis
+
+When investigating bugs, use `tools/squash_logs.py` to compress logs before
+attaching to LLM context. The tool strips timestamps, emoji, duplicates, and
+stack frames — reducing token use by 30-50%.
+
+```bash
+# From a log file
+./tools/squash_logs.py ~/Downloads/construct-logs.txt
+
+# From macOS clipboard (copy result back to clipboard)
+./tools/squash_logs.py --clip --copy
+
+# Pipe from any source
+cat *.log | ./tools/squash_logs.py
+```
+
+The tool is safe: it only compresses presentation, never drops semantic content.
+Deduplicated lines show `(repeated xN)`, heartbeat bursts show `(heartbeat xN)`.
+
+**Always run logs through squash_logs before pasting into LLM context.**
+
 ## Build Commands
 
 ### Prerequisites
