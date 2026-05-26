@@ -350,6 +350,10 @@ extension MessageStreamManager {
             }
         } catch is StreamAcceptTimeout {
             // If already accepted, ignore the timeout (race) — fall through to await stream end.
+            // onAccepted queues `Task { @MainActor self.isConnected = true }` from a non-isolated
+            // context; that task may be in the MainActor queue but not yet executed when the timeout
+            // fires. Yielding lets any pending MainActor tasks drain before we read isConnected.
+            await Task.yield()
             if isConnected, activeStreamGeneration == generation {
                 // Stream was accepted while the timeout fired; continue below to await it.
             } else {
