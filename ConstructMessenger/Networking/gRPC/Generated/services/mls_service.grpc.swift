@@ -15,229 +15,229 @@ import GRPCProtobuf
 
 /// Namespace containing generated types for the "shared.proto.services.v1.MLSService" service.
 @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
-public enum Shared_Proto_Services_V1_MLSService: Sendable {
+internal enum Shared_Proto_Services_V1_MLSService: Sendable {
     /// Service descriptor for the "shared.proto.services.v1.MLSService" service.
-    public static let descriptor = GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MLSService")
+    internal static let descriptor = GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MLSService")
     /// Namespace for method metadata.
-    public enum Method: Sendable {
+    internal enum Method: Sendable {
         /// Namespace for "CreateGroup" metadata.
-        public enum CreateGroup: Sendable {
+        internal enum CreateGroup: Sendable {
             /// Request type for "CreateGroup".
-            public typealias Input = Shared_Proto_Services_V1_CreateGroupRequest
+            internal typealias Input = Shared_Proto_Services_V1_CreateGroupRequest
             /// Response type for "CreateGroup".
-            public typealias Output = Shared_Proto_Services_V1_CreateGroupResponse
+            internal typealias Output = Shared_Proto_Services_V1_CreateGroupResponse
             /// Descriptor for "CreateGroup".
-            public static let descriptor = GRPCCore.MethodDescriptor(
+            internal static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MLSService"),
                 method: "CreateGroup"
             )
         }
         /// Namespace for "GetGroupState" metadata.
-        public enum GetGroupState: Sendable {
+        internal enum GetGroupState: Sendable {
             /// Request type for "GetGroupState".
-            public typealias Input = Shared_Proto_Services_V1_GetGroupStateRequest
+            internal typealias Input = Shared_Proto_Services_V1_GetGroupStateRequest
             /// Response type for "GetGroupState".
-            public typealias Output = Shared_Proto_Services_V1_GetGroupStateResponse
+            internal typealias Output = Shared_Proto_Services_V1_GetGroupStateResponse
             /// Descriptor for "GetGroupState".
-            public static let descriptor = GRPCCore.MethodDescriptor(
+            internal static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MLSService"),
                 method: "GetGroupState"
             )
         }
         /// Namespace for "DissolveGroup" metadata.
-        public enum DissolveGroup: Sendable {
+        internal enum DissolveGroup: Sendable {
             /// Request type for "DissolveGroup".
-            public typealias Input = Shared_Proto_Services_V1_DissolveGroupRequest
+            internal typealias Input = Shared_Proto_Services_V1_DissolveGroupRequest
             /// Response type for "DissolveGroup".
-            public typealias Output = Shared_Proto_Services_V1_DissolveGroupResponse
+            internal typealias Output = Shared_Proto_Services_V1_DissolveGroupResponse
             /// Descriptor for "DissolveGroup".
-            public static let descriptor = GRPCCore.MethodDescriptor(
+            internal static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MLSService"),
                 method: "DissolveGroup"
             )
         }
         /// Namespace for "InviteToGroup" metadata.
-        public enum InviteToGroup: Sendable {
+        internal enum InviteToGroup: Sendable {
             /// Request type for "InviteToGroup".
-            public typealias Input = Shared_Proto_Services_V1_InviteToGroupRequest
+            internal typealias Input = Shared_Proto_Services_V1_InviteToGroupRequest
             /// Response type for "InviteToGroup".
-            public typealias Output = Shared_Proto_Services_V1_InviteToGroupResponse
+            internal typealias Output = Shared_Proto_Services_V1_InviteToGroupResponse
             /// Descriptor for "InviteToGroup".
-            public static let descriptor = GRPCCore.MethodDescriptor(
+            internal static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MLSService"),
                 method: "InviteToGroup"
             )
         }
         /// Namespace for "AcceptGroupInvite" metadata.
-        public enum AcceptGroupInvite: Sendable {
+        internal enum AcceptGroupInvite: Sendable {
             /// Request type for "AcceptGroupInvite".
-            public typealias Input = Shared_Proto_Services_V1_AcceptGroupInviteRequest
+            internal typealias Input = Shared_Proto_Services_V1_AcceptGroupInviteRequest
             /// Response type for "AcceptGroupInvite".
-            public typealias Output = Shared_Proto_Services_V1_AcceptGroupInviteResponse
+            internal typealias Output = Shared_Proto_Services_V1_AcceptGroupInviteResponse
             /// Descriptor for "AcceptGroupInvite".
-            public static let descriptor = GRPCCore.MethodDescriptor(
+            internal static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MLSService"),
                 method: "AcceptGroupInvite"
             )
         }
         /// Namespace for "DeclineGroupInvite" metadata.
-        public enum DeclineGroupInvite: Sendable {
+        internal enum DeclineGroupInvite: Sendable {
             /// Request type for "DeclineGroupInvite".
-            public typealias Input = Shared_Proto_Services_V1_DeclineGroupInviteRequest
+            internal typealias Input = Shared_Proto_Services_V1_DeclineGroupInviteRequest
             /// Response type for "DeclineGroupInvite".
-            public typealias Output = Shared_Proto_Services_V1_DeclineGroupInviteResponse
+            internal typealias Output = Shared_Proto_Services_V1_DeclineGroupInviteResponse
             /// Descriptor for "DeclineGroupInvite".
-            public static let descriptor = GRPCCore.MethodDescriptor(
+            internal static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MLSService"),
                 method: "DeclineGroupInvite"
             )
         }
         /// Namespace for "GetPendingInvites" metadata.
-        public enum GetPendingInvites: Sendable {
+        internal enum GetPendingInvites: Sendable {
             /// Request type for "GetPendingInvites".
-            public typealias Input = Shared_Proto_Services_V1_GetPendingInvitesRequest
+            internal typealias Input = Shared_Proto_Services_V1_GetPendingInvitesRequest
             /// Response type for "GetPendingInvites".
-            public typealias Output = Shared_Proto_Services_V1_GetPendingInvitesResponse
+            internal typealias Output = Shared_Proto_Services_V1_GetPendingInvitesResponse
             /// Descriptor for "GetPendingInvites".
-            public static let descriptor = GRPCCore.MethodDescriptor(
+            internal static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MLSService"),
                 method: "GetPendingInvites"
             )
         }
         /// Namespace for "LeaveGroup" metadata.
-        public enum LeaveGroup: Sendable {
+        internal enum LeaveGroup: Sendable {
             /// Request type for "LeaveGroup".
-            public typealias Input = Shared_Proto_Services_V1_LeaveGroupRequest
+            internal typealias Input = Shared_Proto_Services_V1_LeaveGroupRequest
             /// Response type for "LeaveGroup".
-            public typealias Output = Shared_Proto_Services_V1_LeaveGroupResponse
+            internal typealias Output = Shared_Proto_Services_V1_LeaveGroupResponse
             /// Descriptor for "LeaveGroup".
-            public static let descriptor = GRPCCore.MethodDescriptor(
+            internal static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MLSService"),
                 method: "LeaveGroup"
             )
         }
         /// Namespace for "RemoveMember" metadata.
-        public enum RemoveMember: Sendable {
+        internal enum RemoveMember: Sendable {
             /// Request type for "RemoveMember".
-            public typealias Input = Shared_Proto_Services_V1_RemoveMemberRequest
+            internal typealias Input = Shared_Proto_Services_V1_RemoveMemberRequest
             /// Response type for "RemoveMember".
-            public typealias Output = Shared_Proto_Services_V1_RemoveMemberResponse
+            internal typealias Output = Shared_Proto_Services_V1_RemoveMemberResponse
             /// Descriptor for "RemoveMember".
-            public static let descriptor = GRPCCore.MethodDescriptor(
+            internal static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MLSService"),
                 method: "RemoveMember"
             )
         }
         /// Namespace for "DelegateAdmin" metadata.
-        public enum DelegateAdmin: Sendable {
+        internal enum DelegateAdmin: Sendable {
             /// Request type for "DelegateAdmin".
-            public typealias Input = Shared_Proto_Services_V1_DelegateAdminRequest
+            internal typealias Input = Shared_Proto_Services_V1_DelegateAdminRequest
             /// Response type for "DelegateAdmin".
-            public typealias Output = Shared_Proto_Services_V1_DelegateAdminResponse
+            internal typealias Output = Shared_Proto_Services_V1_DelegateAdminResponse
             /// Descriptor for "DelegateAdmin".
-            public static let descriptor = GRPCCore.MethodDescriptor(
+            internal static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MLSService"),
                 method: "DelegateAdmin"
             )
         }
         /// Namespace for "SubmitCommit" metadata.
-        public enum SubmitCommit: Sendable {
+        internal enum SubmitCommit: Sendable {
             /// Request type for "SubmitCommit".
-            public typealias Input = Shared_Proto_Services_V1_SubmitCommitRequest
+            internal typealias Input = Shared_Proto_Services_V1_SubmitCommitRequest
             /// Response type for "SubmitCommit".
-            public typealias Output = Shared_Proto_Services_V1_SubmitCommitResponse
+            internal typealias Output = Shared_Proto_Services_V1_SubmitCommitResponse
             /// Descriptor for "SubmitCommit".
-            public static let descriptor = GRPCCore.MethodDescriptor(
+            internal static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MLSService"),
                 method: "SubmitCommit"
             )
         }
         /// Namespace for "FetchCommits" metadata.
-        public enum FetchCommits: Sendable {
+        internal enum FetchCommits: Sendable {
             /// Request type for "FetchCommits".
-            public typealias Input = Shared_Proto_Services_V1_FetchCommitsRequest
+            internal typealias Input = Shared_Proto_Services_V1_FetchCommitsRequest
             /// Response type for "FetchCommits".
-            public typealias Output = Shared_Proto_Services_V1_CommitEnvelope
+            internal typealias Output = Shared_Proto_Services_V1_CommitEnvelope
             /// Descriptor for "FetchCommits".
-            public static let descriptor = GRPCCore.MethodDescriptor(
+            internal static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MLSService"),
                 method: "FetchCommits"
             )
         }
         /// Namespace for "SendGroupMessage" metadata.
-        public enum SendGroupMessage: Sendable {
+        internal enum SendGroupMessage: Sendable {
             /// Request type for "SendGroupMessage".
-            public typealias Input = Shared_Proto_Services_V1_SendGroupMessageRequest
+            internal typealias Input = Shared_Proto_Services_V1_SendGroupMessageRequest
             /// Response type for "SendGroupMessage".
-            public typealias Output = Shared_Proto_Services_V1_SendGroupMessageResponse
+            internal typealias Output = Shared_Proto_Services_V1_SendGroupMessageResponse
             /// Descriptor for "SendGroupMessage".
-            public static let descriptor = GRPCCore.MethodDescriptor(
+            internal static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MLSService"),
                 method: "SendGroupMessage"
             )
         }
         /// Namespace for "FetchGroupMessages" metadata.
-        public enum FetchGroupMessages: Sendable {
+        internal enum FetchGroupMessages: Sendable {
             /// Request type for "FetchGroupMessages".
-            public typealias Input = Shared_Proto_Services_V1_FetchGroupMessagesRequest
+            internal typealias Input = Shared_Proto_Services_V1_FetchGroupMessagesRequest
             /// Response type for "FetchGroupMessages".
-            public typealias Output = Shared_Proto_Services_V1_GroupMessageEnvelope
+            internal typealias Output = Shared_Proto_Services_V1_GroupMessageEnvelope
             /// Descriptor for "FetchGroupMessages".
-            public static let descriptor = GRPCCore.MethodDescriptor(
+            internal static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MLSService"),
                 method: "FetchGroupMessages"
             )
         }
         /// Namespace for "MessageStream" metadata.
-        public enum MessageStream: Sendable {
+        internal enum MessageStream: Sendable {
             /// Request type for "MessageStream".
-            public typealias Input = Shared_Proto_Services_V1_GroupStreamRequest
+            internal typealias Input = Shared_Proto_Services_V1_GroupStreamRequest
             /// Response type for "MessageStream".
-            public typealias Output = Shared_Proto_Services_V1_GroupStreamResponse
+            internal typealias Output = Shared_Proto_Services_V1_GroupStreamResponse
             /// Descriptor for "MessageStream".
-            public static let descriptor = GRPCCore.MethodDescriptor(
+            internal static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MLSService"),
                 method: "MessageStream"
             )
         }
         /// Namespace for "PublishKeyPackage" metadata.
-        public enum PublishKeyPackage: Sendable {
+        internal enum PublishKeyPackage: Sendable {
             /// Request type for "PublishKeyPackage".
-            public typealias Input = Shared_Proto_Services_V1_PublishKeyPackageRequest
+            internal typealias Input = Shared_Proto_Services_V1_PublishKeyPackageRequest
             /// Response type for "PublishKeyPackage".
-            public typealias Output = Shared_Proto_Services_V1_PublishKeyPackageResponse
+            internal typealias Output = Shared_Proto_Services_V1_PublishKeyPackageResponse
             /// Descriptor for "PublishKeyPackage".
-            public static let descriptor = GRPCCore.MethodDescriptor(
+            internal static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MLSService"),
                 method: "PublishKeyPackage"
             )
         }
         /// Namespace for "ConsumeKeyPackage" metadata.
-        public enum ConsumeKeyPackage: Sendable {
+        internal enum ConsumeKeyPackage: Sendable {
             /// Request type for "ConsumeKeyPackage".
-            public typealias Input = Shared_Proto_Services_V1_ConsumeKeyPackageRequest
+            internal typealias Input = Shared_Proto_Services_V1_ConsumeKeyPackageRequest
             /// Response type for "ConsumeKeyPackage".
-            public typealias Output = Shared_Proto_Services_V1_ConsumeKeyPackageResponse
+            internal typealias Output = Shared_Proto_Services_V1_ConsumeKeyPackageResponse
             /// Descriptor for "ConsumeKeyPackage".
-            public static let descriptor = GRPCCore.MethodDescriptor(
+            internal static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MLSService"),
                 method: "ConsumeKeyPackage"
             )
         }
         /// Namespace for "GetKeyPackageCount" metadata.
-        public enum GetKeyPackageCount: Sendable {
+        internal enum GetKeyPackageCount: Sendable {
             /// Request type for "GetKeyPackageCount".
-            public typealias Input = Shared_Proto_Services_V1_GetKeyPackageCountRequest
+            internal typealias Input = Shared_Proto_Services_V1_GetKeyPackageCountRequest
             /// Response type for "GetKeyPackageCount".
-            public typealias Output = Shared_Proto_Services_V1_GetKeyPackageCountResponse
+            internal typealias Output = Shared_Proto_Services_V1_GetKeyPackageCountResponse
             /// Descriptor for "GetKeyPackageCount".
-            public static let descriptor = GRPCCore.MethodDescriptor(
+            internal static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MLSService"),
                 method: "GetKeyPackageCount"
             )
         }
         /// Descriptors for all methods in the "shared.proto.services.v1.MLSService" service.
-        public static let descriptors: [GRPCCore.MethodDescriptor] = [
+        internal static let descriptors: [GRPCCore.MethodDescriptor] = [
             CreateGroup.descriptor,
             GetGroupState.descriptor,
             DissolveGroup.descriptor,
@@ -263,7 +263,1739 @@ public enum Shared_Proto_Services_V1_MLSService: Sendable {
 @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
 extension GRPCCore.ServiceDescriptor {
     /// Service descriptor for the "shared.proto.services.v1.MLSService" service.
-    public static let shared_proto_services_v1_MLSService = GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MLSService")
+    internal static let shared_proto_services_v1_MLSService = GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MLSService")
+}
+
+// MARK: shared.proto.services.v1.MLSService (server)
+
+@available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
+extension Shared_Proto_Services_V1_MLSService {
+    /// Streaming variant of the service protocol for the "shared.proto.services.v1.MLSService" service.
+    ///
+    /// This protocol is the lowest-level of the service protocols generated for this service
+    /// giving you the most flexibility over the implementation of your service. This comes at
+    /// the cost of more verbose and less strict APIs. Each RPC requires you to implement it in
+    /// terms of a request stream and response stream. Where only a single request or response
+    /// message is expected, you are responsible for enforcing this invariant is maintained.
+    ///
+    /// Where possible, prefer using the stricter, less-verbose ``ServiceProtocol``
+    /// or ``SimpleServiceProtocol`` instead.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > =========================================================================
+    /// > Group Lifecycle
+    /// > =========================================================================
+    internal protocol StreamingServiceProtocol: GRPCCore.RegistrableRPCService {
+        /// Handle the "CreateGroup" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > CreateGroup - Initialize new MLS group
+        /// > Creator becomes initial admin. Initial ratchet tree contains only creator.
+        ///
+        /// - Parameters:
+        ///   - request: A streaming request of `Shared_Proto_Services_V1_CreateGroupRequest` messages.
+        ///   - context: Context providing information about the RPC.
+        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
+        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
+        ///     to an internal error.
+        /// - Returns: A streaming response of `Shared_Proto_Services_V1_CreateGroupResponse` messages.
+        func createGroup(
+            request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_CreateGroupRequest>,
+            context: GRPCCore.ServerContext
+        ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_CreateGroupResponse>
+
+        /// Handle the "GetGroupState" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > GetGroupState - Fetch current ratchet tree and epoch
+        /// > Called when: rejoining after offline period, new device sync
+        ///
+        /// - Parameters:
+        ///   - request: A streaming request of `Shared_Proto_Services_V1_GetGroupStateRequest` messages.
+        ///   - context: Context providing information about the RPC.
+        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
+        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
+        ///     to an internal error.
+        /// - Returns: A streaming response of `Shared_Proto_Services_V1_GetGroupStateResponse` messages.
+        func getGroupState(
+            request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_GetGroupStateRequest>,
+            context: GRPCCore.ServerContext
+        ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_GetGroupStateResponse>
+
+        /// Handle the "DissolveGroup" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > DissolveGroup - Permanently delete group and all messages
+        /// > Admin-only. Irreversible. Notifies all members via stream.
+        ///
+        /// - Parameters:
+        ///   - request: A streaming request of `Shared_Proto_Services_V1_DissolveGroupRequest` messages.
+        ///   - context: Context providing information about the RPC.
+        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
+        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
+        ///     to an internal error.
+        /// - Returns: A streaming response of `Shared_Proto_Services_V1_DissolveGroupResponse` messages.
+        func dissolveGroup(
+            request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_DissolveGroupRequest>,
+            context: GRPCCore.ServerContext
+        ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_DissolveGroupResponse>
+
+        /// Handle the "InviteToGroup" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > InviteToGroup - Admin sends encrypted Welcome to invitee
+        /// > Admin must first call ConsumeKeyPackage to get invitee's KeyPackage.
+        /// > Invitee receives invite via GetPendingInvites or stream notification.
+        ///
+        /// - Parameters:
+        ///   - request: A streaming request of `Shared_Proto_Services_V1_InviteToGroupRequest` messages.
+        ///   - context: Context providing information about the RPC.
+        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
+        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
+        ///     to an internal error.
+        /// - Returns: A streaming response of `Shared_Proto_Services_V1_InviteToGroupResponse` messages.
+        func inviteToGroup(
+            request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_InviteToGroupRequest>,
+            context: GRPCCore.ServerContext
+        ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_InviteToGroupResponse>
+
+        /// Handle the "AcceptGroupInvite" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > AcceptGroupInvite - Invitee explicitly accepts invitation with proof
+        /// > Requires Ed25519 signature over acceptance challenge (consent proof).
+        /// > This is the ONLY way to join - no silent adds possible.
+        ///
+        /// - Parameters:
+        ///   - request: A streaming request of `Shared_Proto_Services_V1_AcceptGroupInviteRequest` messages.
+        ///   - context: Context providing information about the RPC.
+        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
+        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
+        ///     to an internal error.
+        /// - Returns: A streaming response of `Shared_Proto_Services_V1_AcceptGroupInviteResponse` messages.
+        func acceptGroupInvite(
+            request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_AcceptGroupInviteRequest>,
+            context: GRPCCore.ServerContext
+        ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_AcceptGroupInviteResponse>
+
+        /// Handle the "DeclineGroupInvite" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > DeclineGroupInvite - Invitee declines. Invite deleted, no trace kept.
+        ///
+        /// - Parameters:
+        ///   - request: A streaming request of `Shared_Proto_Services_V1_DeclineGroupInviteRequest` messages.
+        ///   - context: Context providing information about the RPC.
+        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
+        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
+        ///     to an internal error.
+        /// - Returns: A streaming response of `Shared_Proto_Services_V1_DeclineGroupInviteResponse` messages.
+        func declineGroupInvite(
+            request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_DeclineGroupInviteRequest>,
+            context: GRPCCore.ServerContext
+        ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_DeclineGroupInviteResponse>
+
+        /// Handle the "GetPendingInvites" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > GetPendingInvites - Fetch pending invitations for current device
+        ///
+        /// - Parameters:
+        ///   - request: A streaming request of `Shared_Proto_Services_V1_GetPendingInvitesRequest` messages.
+        ///   - context: Context providing information about the RPC.
+        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
+        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
+        ///     to an internal error.
+        /// - Returns: A streaming response of `Shared_Proto_Services_V1_GetPendingInvitesResponse` messages.
+        func getPendingInvites(
+            request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_GetPendingInvitesRequest>,
+            context: GRPCCore.ServerContext
+        ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_GetPendingInvitesResponse>
+
+        /// Handle the "LeaveGroup" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > LeaveGroup - Member voluntarily leaves
+        /// > Former member is removed from ratchet tree. No membership history kept.
+        /// > Their messages remain until TTL expiry (local copies at other clients).
+        ///
+        /// - Parameters:
+        ///   - request: A streaming request of `Shared_Proto_Services_V1_LeaveGroupRequest` messages.
+        ///   - context: Context providing information about the RPC.
+        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
+        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
+        ///     to an internal error.
+        /// - Returns: A streaming response of `Shared_Proto_Services_V1_LeaveGroupResponse` messages.
+        func leaveGroup(
+            request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_LeaveGroupRequest>,
+            context: GRPCCore.ServerContext
+        ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_LeaveGroupResponse>
+
+        /// Handle the "RemoveMember" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > RemoveMember - Admin removes a member
+        /// > Admin-only. MLS Remove Proposal generated by admin.
+        ///
+        /// - Parameters:
+        ///   - request: A streaming request of `Shared_Proto_Services_V1_RemoveMemberRequest` messages.
+        ///   - context: Context providing information about the RPC.
+        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
+        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
+        ///     to an internal error.
+        /// - Returns: A streaming response of `Shared_Proto_Services_V1_RemoveMemberResponse` messages.
+        func removeMember(
+            request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_RemoveMemberRequest>,
+            context: GRPCCore.ServerContext
+        ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_RemoveMemberResponse>
+
+        /// Handle the "DelegateAdmin" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > DelegateAdmin - Grant admin or moderator rights to a member
+        /// > Creator admin can always resign but cannot be stripped by others.
+        ///
+        /// - Parameters:
+        ///   - request: A streaming request of `Shared_Proto_Services_V1_DelegateAdminRequest` messages.
+        ///   - context: Context providing information about the RPC.
+        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
+        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
+        ///     to an internal error.
+        /// - Returns: A streaming response of `Shared_Proto_Services_V1_DelegateAdminResponse` messages.
+        func delegateAdmin(
+            request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_DelegateAdminRequest>,
+            context: GRPCCore.ServerContext
+        ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_DelegateAdminResponse>
+
+        /// Handle the "SubmitCommit" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > SubmitCommit - Push new MLS Commit after membership/key change
+        /// > Updates the server's copy of the ratchet tree.
+        /// > Server validates epoch continuity (prevents replay).
+        ///
+        /// - Parameters:
+        ///   - request: A streaming request of `Shared_Proto_Services_V1_SubmitCommitRequest` messages.
+        ///   - context: Context providing information about the RPC.
+        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
+        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
+        ///     to an internal error.
+        /// - Returns: A streaming response of `Shared_Proto_Services_V1_SubmitCommitResponse` messages.
+        func submitCommit(
+            request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_SubmitCommitRequest>,
+            context: GRPCCore.ServerContext
+        ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_SubmitCommitResponse>
+
+        /// Handle the "FetchCommits" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > FetchCommits - Pull pending Commits since last known epoch
+        /// > Called when: coming back online, epoch out of sync
+        ///
+        /// - Parameters:
+        ///   - request: A streaming request of `Shared_Proto_Services_V1_FetchCommitsRequest` messages.
+        ///   - context: Context providing information about the RPC.
+        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
+        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
+        ///     to an internal error.
+        /// - Returns: A streaming response of `Shared_Proto_Services_V1_CommitEnvelope` messages.
+        func fetchCommits(
+            request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_FetchCommitsRequest>,
+            context: GRPCCore.ServerContext
+        ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_CommitEnvelope>
+
+        /// Handle the "SendGroupMessage" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > SendGroupMessage - Send encrypted MLS ApplicationMessage
+        /// > Content is fully E2EE. Server stores opaque ciphertext.
+        ///
+        /// - Parameters:
+        ///   - request: A streaming request of `Shared_Proto_Services_V1_SendGroupMessageRequest` messages.
+        ///   - context: Context providing information about the RPC.
+        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
+        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
+        ///     to an internal error.
+        /// - Returns: A streaming response of `Shared_Proto_Services_V1_SendGroupMessageResponse` messages.
+        func sendGroupMessage(
+            request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_SendGroupMessageRequest>,
+            context: GRPCCore.ServerContext
+        ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_SendGroupMessageResponse>
+
+        /// Handle the "FetchGroupMessages" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > FetchGroupMessages - Pull messages since cursor (catch-up after offline)
+        ///
+        /// - Parameters:
+        ///   - request: A streaming request of `Shared_Proto_Services_V1_FetchGroupMessagesRequest` messages.
+        ///   - context: Context providing information about the RPC.
+        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
+        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
+        ///     to an internal error.
+        /// - Returns: A streaming response of `Shared_Proto_Services_V1_GroupMessageEnvelope` messages.
+        func fetchGroupMessages(
+            request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_FetchGroupMessagesRequest>,
+            context: GRPCCore.ServerContext
+        ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_GroupMessageEnvelope>
+
+        /// Handle the "MessageStream" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > MessageStream - Real-time bidirectional stream for active group sessions
+        ///
+        /// - Parameters:
+        ///   - request: A streaming request of `Shared_Proto_Services_V1_GroupStreamRequest` messages.
+        ///   - context: Context providing information about the RPC.
+        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
+        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
+        ///     to an internal error.
+        /// - Returns: A streaming response of `Shared_Proto_Services_V1_GroupStreamResponse` messages.
+        func messageStream(
+            request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_GroupStreamRequest>,
+            context: GRPCCore.ServerContext
+        ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_GroupStreamResponse>
+
+        /// Handle the "PublishKeyPackage" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > PublishKeyPackage - Upload MLS KeyPackages so others can invite you
+        /// > KeyPackages are single-use (consumed on invite, like one-time pre-keys).
+        /// > Publish multiple for availability. Recommended: keep 20+ on server.
+        ///
+        /// - Parameters:
+        ///   - request: A streaming request of `Shared_Proto_Services_V1_PublishKeyPackageRequest` messages.
+        ///   - context: Context providing information about the RPC.
+        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
+        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
+        ///     to an internal error.
+        /// - Returns: A streaming response of `Shared_Proto_Services_V1_PublishKeyPackageResponse` messages.
+        func publishKeyPackage(
+            request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_PublishKeyPackageRequest>,
+            context: GRPCCore.ServerContext
+        ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_PublishKeyPackageResponse>
+
+        /// Handle the "ConsumeKeyPackage" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > ConsumeKeyPackage - Fetch one KeyPackage to invite a user to a group
+        /// > Admin calls this before InviteToGroup to construct the Welcome message.
+        /// > Consumed atomically - cannot be used twice.
+        ///
+        /// - Parameters:
+        ///   - request: A streaming request of `Shared_Proto_Services_V1_ConsumeKeyPackageRequest` messages.
+        ///   - context: Context providing information about the RPC.
+        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
+        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
+        ///     to an internal error.
+        /// - Returns: A streaming response of `Shared_Proto_Services_V1_ConsumeKeyPackageResponse` messages.
+        func consumeKeyPackage(
+            request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_ConsumeKeyPackageRequest>,
+            context: GRPCCore.ServerContext
+        ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_ConsumeKeyPackageResponse>
+
+        /// Handle the "GetKeyPackageCount" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > GetKeyPackageCount - Check how many KeyPackages a user has published
+        /// > Used to determine if user can be invited / needs to refresh packages.
+        ///
+        /// - Parameters:
+        ///   - request: A streaming request of `Shared_Proto_Services_V1_GetKeyPackageCountRequest` messages.
+        ///   - context: Context providing information about the RPC.
+        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
+        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
+        ///     to an internal error.
+        /// - Returns: A streaming response of `Shared_Proto_Services_V1_GetKeyPackageCountResponse` messages.
+        func getKeyPackageCount(
+            request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_GetKeyPackageCountRequest>,
+            context: GRPCCore.ServerContext
+        ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_GetKeyPackageCountResponse>
+    }
+
+    /// Service protocol for the "shared.proto.services.v1.MLSService" service.
+    ///
+    /// This protocol is higher level than ``StreamingServiceProtocol`` but lower level than
+    /// the ``SimpleServiceProtocol``, it provides access to request and response metadata and
+    /// trailing response metadata. If you don't need these then consider using
+    /// the ``SimpleServiceProtocol``. If you need fine grained control over your RPCs then
+    /// use ``StreamingServiceProtocol``.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > =========================================================================
+    /// > Group Lifecycle
+    /// > =========================================================================
+    internal protocol ServiceProtocol: Shared_Proto_Services_V1_MLSService.StreamingServiceProtocol {
+        /// Handle the "CreateGroup" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > CreateGroup - Initialize new MLS group
+        /// > Creator becomes initial admin. Initial ratchet tree contains only creator.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_CreateGroupRequest` message.
+        ///   - context: Context providing information about the RPC.
+        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
+        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
+        ///     to an internal error.
+        /// - Returns: A response containing a single `Shared_Proto_Services_V1_CreateGroupResponse` message.
+        func createGroup(
+            request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_CreateGroupRequest>,
+            context: GRPCCore.ServerContext
+        ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_CreateGroupResponse>
+
+        /// Handle the "GetGroupState" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > GetGroupState - Fetch current ratchet tree and epoch
+        /// > Called when: rejoining after offline period, new device sync
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_GetGroupStateRequest` message.
+        ///   - context: Context providing information about the RPC.
+        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
+        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
+        ///     to an internal error.
+        /// - Returns: A response containing a single `Shared_Proto_Services_V1_GetGroupStateResponse` message.
+        func getGroupState(
+            request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_GetGroupStateRequest>,
+            context: GRPCCore.ServerContext
+        ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_GetGroupStateResponse>
+
+        /// Handle the "DissolveGroup" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > DissolveGroup - Permanently delete group and all messages
+        /// > Admin-only. Irreversible. Notifies all members via stream.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_DissolveGroupRequest` message.
+        ///   - context: Context providing information about the RPC.
+        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
+        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
+        ///     to an internal error.
+        /// - Returns: A response containing a single `Shared_Proto_Services_V1_DissolveGroupResponse` message.
+        func dissolveGroup(
+            request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_DissolveGroupRequest>,
+            context: GRPCCore.ServerContext
+        ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_DissolveGroupResponse>
+
+        /// Handle the "InviteToGroup" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > InviteToGroup - Admin sends encrypted Welcome to invitee
+        /// > Admin must first call ConsumeKeyPackage to get invitee's KeyPackage.
+        /// > Invitee receives invite via GetPendingInvites or stream notification.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_InviteToGroupRequest` message.
+        ///   - context: Context providing information about the RPC.
+        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
+        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
+        ///     to an internal error.
+        /// - Returns: A response containing a single `Shared_Proto_Services_V1_InviteToGroupResponse` message.
+        func inviteToGroup(
+            request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_InviteToGroupRequest>,
+            context: GRPCCore.ServerContext
+        ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_InviteToGroupResponse>
+
+        /// Handle the "AcceptGroupInvite" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > AcceptGroupInvite - Invitee explicitly accepts invitation with proof
+        /// > Requires Ed25519 signature over acceptance challenge (consent proof).
+        /// > This is the ONLY way to join - no silent adds possible.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_AcceptGroupInviteRequest` message.
+        ///   - context: Context providing information about the RPC.
+        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
+        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
+        ///     to an internal error.
+        /// - Returns: A response containing a single `Shared_Proto_Services_V1_AcceptGroupInviteResponse` message.
+        func acceptGroupInvite(
+            request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_AcceptGroupInviteRequest>,
+            context: GRPCCore.ServerContext
+        ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_AcceptGroupInviteResponse>
+
+        /// Handle the "DeclineGroupInvite" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > DeclineGroupInvite - Invitee declines. Invite deleted, no trace kept.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_DeclineGroupInviteRequest` message.
+        ///   - context: Context providing information about the RPC.
+        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
+        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
+        ///     to an internal error.
+        /// - Returns: A response containing a single `Shared_Proto_Services_V1_DeclineGroupInviteResponse` message.
+        func declineGroupInvite(
+            request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_DeclineGroupInviteRequest>,
+            context: GRPCCore.ServerContext
+        ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_DeclineGroupInviteResponse>
+
+        /// Handle the "GetPendingInvites" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > GetPendingInvites - Fetch pending invitations for current device
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_GetPendingInvitesRequest` message.
+        ///   - context: Context providing information about the RPC.
+        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
+        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
+        ///     to an internal error.
+        /// - Returns: A response containing a single `Shared_Proto_Services_V1_GetPendingInvitesResponse` message.
+        func getPendingInvites(
+            request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_GetPendingInvitesRequest>,
+            context: GRPCCore.ServerContext
+        ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_GetPendingInvitesResponse>
+
+        /// Handle the "LeaveGroup" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > LeaveGroup - Member voluntarily leaves
+        /// > Former member is removed from ratchet tree. No membership history kept.
+        /// > Their messages remain until TTL expiry (local copies at other clients).
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_LeaveGroupRequest` message.
+        ///   - context: Context providing information about the RPC.
+        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
+        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
+        ///     to an internal error.
+        /// - Returns: A response containing a single `Shared_Proto_Services_V1_LeaveGroupResponse` message.
+        func leaveGroup(
+            request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_LeaveGroupRequest>,
+            context: GRPCCore.ServerContext
+        ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_LeaveGroupResponse>
+
+        /// Handle the "RemoveMember" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > RemoveMember - Admin removes a member
+        /// > Admin-only. MLS Remove Proposal generated by admin.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_RemoveMemberRequest` message.
+        ///   - context: Context providing information about the RPC.
+        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
+        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
+        ///     to an internal error.
+        /// - Returns: A response containing a single `Shared_Proto_Services_V1_RemoveMemberResponse` message.
+        func removeMember(
+            request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_RemoveMemberRequest>,
+            context: GRPCCore.ServerContext
+        ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_RemoveMemberResponse>
+
+        /// Handle the "DelegateAdmin" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > DelegateAdmin - Grant admin or moderator rights to a member
+        /// > Creator admin can always resign but cannot be stripped by others.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_DelegateAdminRequest` message.
+        ///   - context: Context providing information about the RPC.
+        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
+        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
+        ///     to an internal error.
+        /// - Returns: A response containing a single `Shared_Proto_Services_V1_DelegateAdminResponse` message.
+        func delegateAdmin(
+            request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_DelegateAdminRequest>,
+            context: GRPCCore.ServerContext
+        ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_DelegateAdminResponse>
+
+        /// Handle the "SubmitCommit" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > SubmitCommit - Push new MLS Commit after membership/key change
+        /// > Updates the server's copy of the ratchet tree.
+        /// > Server validates epoch continuity (prevents replay).
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_SubmitCommitRequest` message.
+        ///   - context: Context providing information about the RPC.
+        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
+        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
+        ///     to an internal error.
+        /// - Returns: A response containing a single `Shared_Proto_Services_V1_SubmitCommitResponse` message.
+        func submitCommit(
+            request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_SubmitCommitRequest>,
+            context: GRPCCore.ServerContext
+        ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_SubmitCommitResponse>
+
+        /// Handle the "FetchCommits" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > FetchCommits - Pull pending Commits since last known epoch
+        /// > Called when: coming back online, epoch out of sync
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_FetchCommitsRequest` message.
+        ///   - context: Context providing information about the RPC.
+        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
+        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
+        ///     to an internal error.
+        /// - Returns: A streaming response of `Shared_Proto_Services_V1_CommitEnvelope` messages.
+        func fetchCommits(
+            request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_FetchCommitsRequest>,
+            context: GRPCCore.ServerContext
+        ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_CommitEnvelope>
+
+        /// Handle the "SendGroupMessage" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > SendGroupMessage - Send encrypted MLS ApplicationMessage
+        /// > Content is fully E2EE. Server stores opaque ciphertext.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_SendGroupMessageRequest` message.
+        ///   - context: Context providing information about the RPC.
+        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
+        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
+        ///     to an internal error.
+        /// - Returns: A response containing a single `Shared_Proto_Services_V1_SendGroupMessageResponse` message.
+        func sendGroupMessage(
+            request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_SendGroupMessageRequest>,
+            context: GRPCCore.ServerContext
+        ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_SendGroupMessageResponse>
+
+        /// Handle the "FetchGroupMessages" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > FetchGroupMessages - Pull messages since cursor (catch-up after offline)
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_FetchGroupMessagesRequest` message.
+        ///   - context: Context providing information about the RPC.
+        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
+        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
+        ///     to an internal error.
+        /// - Returns: A streaming response of `Shared_Proto_Services_V1_GroupMessageEnvelope` messages.
+        func fetchGroupMessages(
+            request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_FetchGroupMessagesRequest>,
+            context: GRPCCore.ServerContext
+        ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_GroupMessageEnvelope>
+
+        /// Handle the "MessageStream" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > MessageStream - Real-time bidirectional stream for active group sessions
+        ///
+        /// - Parameters:
+        ///   - request: A streaming request of `Shared_Proto_Services_V1_GroupStreamRequest` messages.
+        ///   - context: Context providing information about the RPC.
+        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
+        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
+        ///     to an internal error.
+        /// - Returns: A streaming response of `Shared_Proto_Services_V1_GroupStreamResponse` messages.
+        func messageStream(
+            request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_GroupStreamRequest>,
+            context: GRPCCore.ServerContext
+        ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_GroupStreamResponse>
+
+        /// Handle the "PublishKeyPackage" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > PublishKeyPackage - Upload MLS KeyPackages so others can invite you
+        /// > KeyPackages are single-use (consumed on invite, like one-time pre-keys).
+        /// > Publish multiple for availability. Recommended: keep 20+ on server.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_PublishKeyPackageRequest` message.
+        ///   - context: Context providing information about the RPC.
+        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
+        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
+        ///     to an internal error.
+        /// - Returns: A response containing a single `Shared_Proto_Services_V1_PublishKeyPackageResponse` message.
+        func publishKeyPackage(
+            request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_PublishKeyPackageRequest>,
+            context: GRPCCore.ServerContext
+        ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_PublishKeyPackageResponse>
+
+        /// Handle the "ConsumeKeyPackage" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > ConsumeKeyPackage - Fetch one KeyPackage to invite a user to a group
+        /// > Admin calls this before InviteToGroup to construct the Welcome message.
+        /// > Consumed atomically - cannot be used twice.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_ConsumeKeyPackageRequest` message.
+        ///   - context: Context providing information about the RPC.
+        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
+        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
+        ///     to an internal error.
+        /// - Returns: A response containing a single `Shared_Proto_Services_V1_ConsumeKeyPackageResponse` message.
+        func consumeKeyPackage(
+            request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_ConsumeKeyPackageRequest>,
+            context: GRPCCore.ServerContext
+        ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_ConsumeKeyPackageResponse>
+
+        /// Handle the "GetKeyPackageCount" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > GetKeyPackageCount - Check how many KeyPackages a user has published
+        /// > Used to determine if user can be invited / needs to refresh packages.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_GetKeyPackageCountRequest` message.
+        ///   - context: Context providing information about the RPC.
+        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
+        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
+        ///     to an internal error.
+        /// - Returns: A response containing a single `Shared_Proto_Services_V1_GetKeyPackageCountResponse` message.
+        func getKeyPackageCount(
+            request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_GetKeyPackageCountRequest>,
+            context: GRPCCore.ServerContext
+        ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_GetKeyPackageCountResponse>
+    }
+
+    /// Simple service protocol for the "shared.proto.services.v1.MLSService" service.
+    ///
+    /// This is the highest level protocol for the service. The API is the easiest to use but
+    /// doesn't provide access to request or response metadata. If you need access to these
+    /// then use ``ServiceProtocol`` instead.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > =========================================================================
+    /// > Group Lifecycle
+    /// > =========================================================================
+    internal protocol SimpleServiceProtocol: Shared_Proto_Services_V1_MLSService.ServiceProtocol {
+        /// Handle the "CreateGroup" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > CreateGroup - Initialize new MLS group
+        /// > Creator becomes initial admin. Initial ratchet tree contains only creator.
+        ///
+        /// - Parameters:
+        ///   - request: A `Shared_Proto_Services_V1_CreateGroupRequest` message.
+        ///   - context: Context providing information about the RPC.
+        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
+        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
+        ///     to an internal error.
+        /// - Returns: A `Shared_Proto_Services_V1_CreateGroupResponse` to respond with.
+        func createGroup(
+            request: Shared_Proto_Services_V1_CreateGroupRequest,
+            context: GRPCCore.ServerContext
+        ) async throws -> Shared_Proto_Services_V1_CreateGroupResponse
+
+        /// Handle the "GetGroupState" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > GetGroupState - Fetch current ratchet tree and epoch
+        /// > Called when: rejoining after offline period, new device sync
+        ///
+        /// - Parameters:
+        ///   - request: A `Shared_Proto_Services_V1_GetGroupStateRequest` message.
+        ///   - context: Context providing information about the RPC.
+        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
+        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
+        ///     to an internal error.
+        /// - Returns: A `Shared_Proto_Services_V1_GetGroupStateResponse` to respond with.
+        func getGroupState(
+            request: Shared_Proto_Services_V1_GetGroupStateRequest,
+            context: GRPCCore.ServerContext
+        ) async throws -> Shared_Proto_Services_V1_GetGroupStateResponse
+
+        /// Handle the "DissolveGroup" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > DissolveGroup - Permanently delete group and all messages
+        /// > Admin-only. Irreversible. Notifies all members via stream.
+        ///
+        /// - Parameters:
+        ///   - request: A `Shared_Proto_Services_V1_DissolveGroupRequest` message.
+        ///   - context: Context providing information about the RPC.
+        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
+        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
+        ///     to an internal error.
+        /// - Returns: A `Shared_Proto_Services_V1_DissolveGroupResponse` to respond with.
+        func dissolveGroup(
+            request: Shared_Proto_Services_V1_DissolveGroupRequest,
+            context: GRPCCore.ServerContext
+        ) async throws -> Shared_Proto_Services_V1_DissolveGroupResponse
+
+        /// Handle the "InviteToGroup" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > InviteToGroup - Admin sends encrypted Welcome to invitee
+        /// > Admin must first call ConsumeKeyPackage to get invitee's KeyPackage.
+        /// > Invitee receives invite via GetPendingInvites or stream notification.
+        ///
+        /// - Parameters:
+        ///   - request: A `Shared_Proto_Services_V1_InviteToGroupRequest` message.
+        ///   - context: Context providing information about the RPC.
+        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
+        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
+        ///     to an internal error.
+        /// - Returns: A `Shared_Proto_Services_V1_InviteToGroupResponse` to respond with.
+        func inviteToGroup(
+            request: Shared_Proto_Services_V1_InviteToGroupRequest,
+            context: GRPCCore.ServerContext
+        ) async throws -> Shared_Proto_Services_V1_InviteToGroupResponse
+
+        /// Handle the "AcceptGroupInvite" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > AcceptGroupInvite - Invitee explicitly accepts invitation with proof
+        /// > Requires Ed25519 signature over acceptance challenge (consent proof).
+        /// > This is the ONLY way to join - no silent adds possible.
+        ///
+        /// - Parameters:
+        ///   - request: A `Shared_Proto_Services_V1_AcceptGroupInviteRequest` message.
+        ///   - context: Context providing information about the RPC.
+        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
+        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
+        ///     to an internal error.
+        /// - Returns: A `Shared_Proto_Services_V1_AcceptGroupInviteResponse` to respond with.
+        func acceptGroupInvite(
+            request: Shared_Proto_Services_V1_AcceptGroupInviteRequest,
+            context: GRPCCore.ServerContext
+        ) async throws -> Shared_Proto_Services_V1_AcceptGroupInviteResponse
+
+        /// Handle the "DeclineGroupInvite" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > DeclineGroupInvite - Invitee declines. Invite deleted, no trace kept.
+        ///
+        /// - Parameters:
+        ///   - request: A `Shared_Proto_Services_V1_DeclineGroupInviteRequest` message.
+        ///   - context: Context providing information about the RPC.
+        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
+        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
+        ///     to an internal error.
+        /// - Returns: A `Shared_Proto_Services_V1_DeclineGroupInviteResponse` to respond with.
+        func declineGroupInvite(
+            request: Shared_Proto_Services_V1_DeclineGroupInviteRequest,
+            context: GRPCCore.ServerContext
+        ) async throws -> Shared_Proto_Services_V1_DeclineGroupInviteResponse
+
+        /// Handle the "GetPendingInvites" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > GetPendingInvites - Fetch pending invitations for current device
+        ///
+        /// - Parameters:
+        ///   - request: A `Shared_Proto_Services_V1_GetPendingInvitesRequest` message.
+        ///   - context: Context providing information about the RPC.
+        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
+        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
+        ///     to an internal error.
+        /// - Returns: A `Shared_Proto_Services_V1_GetPendingInvitesResponse` to respond with.
+        func getPendingInvites(
+            request: Shared_Proto_Services_V1_GetPendingInvitesRequest,
+            context: GRPCCore.ServerContext
+        ) async throws -> Shared_Proto_Services_V1_GetPendingInvitesResponse
+
+        /// Handle the "LeaveGroup" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > LeaveGroup - Member voluntarily leaves
+        /// > Former member is removed from ratchet tree. No membership history kept.
+        /// > Their messages remain until TTL expiry (local copies at other clients).
+        ///
+        /// - Parameters:
+        ///   - request: A `Shared_Proto_Services_V1_LeaveGroupRequest` message.
+        ///   - context: Context providing information about the RPC.
+        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
+        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
+        ///     to an internal error.
+        /// - Returns: A `Shared_Proto_Services_V1_LeaveGroupResponse` to respond with.
+        func leaveGroup(
+            request: Shared_Proto_Services_V1_LeaveGroupRequest,
+            context: GRPCCore.ServerContext
+        ) async throws -> Shared_Proto_Services_V1_LeaveGroupResponse
+
+        /// Handle the "RemoveMember" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > RemoveMember - Admin removes a member
+        /// > Admin-only. MLS Remove Proposal generated by admin.
+        ///
+        /// - Parameters:
+        ///   - request: A `Shared_Proto_Services_V1_RemoveMemberRequest` message.
+        ///   - context: Context providing information about the RPC.
+        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
+        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
+        ///     to an internal error.
+        /// - Returns: A `Shared_Proto_Services_V1_RemoveMemberResponse` to respond with.
+        func removeMember(
+            request: Shared_Proto_Services_V1_RemoveMemberRequest,
+            context: GRPCCore.ServerContext
+        ) async throws -> Shared_Proto_Services_V1_RemoveMemberResponse
+
+        /// Handle the "DelegateAdmin" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > DelegateAdmin - Grant admin or moderator rights to a member
+        /// > Creator admin can always resign but cannot be stripped by others.
+        ///
+        /// - Parameters:
+        ///   - request: A `Shared_Proto_Services_V1_DelegateAdminRequest` message.
+        ///   - context: Context providing information about the RPC.
+        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
+        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
+        ///     to an internal error.
+        /// - Returns: A `Shared_Proto_Services_V1_DelegateAdminResponse` to respond with.
+        func delegateAdmin(
+            request: Shared_Proto_Services_V1_DelegateAdminRequest,
+            context: GRPCCore.ServerContext
+        ) async throws -> Shared_Proto_Services_V1_DelegateAdminResponse
+
+        /// Handle the "SubmitCommit" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > SubmitCommit - Push new MLS Commit after membership/key change
+        /// > Updates the server's copy of the ratchet tree.
+        /// > Server validates epoch continuity (prevents replay).
+        ///
+        /// - Parameters:
+        ///   - request: A `Shared_Proto_Services_V1_SubmitCommitRequest` message.
+        ///   - context: Context providing information about the RPC.
+        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
+        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
+        ///     to an internal error.
+        /// - Returns: A `Shared_Proto_Services_V1_SubmitCommitResponse` to respond with.
+        func submitCommit(
+            request: Shared_Proto_Services_V1_SubmitCommitRequest,
+            context: GRPCCore.ServerContext
+        ) async throws -> Shared_Proto_Services_V1_SubmitCommitResponse
+
+        /// Handle the "FetchCommits" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > FetchCommits - Pull pending Commits since last known epoch
+        /// > Called when: coming back online, epoch out of sync
+        ///
+        /// - Parameters:
+        ///   - request: A `Shared_Proto_Services_V1_FetchCommitsRequest` message.
+        ///   - response: A response stream of `Shared_Proto_Services_V1_CommitEnvelope` messages.
+        ///   - context: Context providing information about the RPC.
+        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
+        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
+        ///     to an internal error.
+        func fetchCommits(
+            request: Shared_Proto_Services_V1_FetchCommitsRequest,
+            response: GRPCCore.RPCWriter<Shared_Proto_Services_V1_CommitEnvelope>,
+            context: GRPCCore.ServerContext
+        ) async throws
+
+        /// Handle the "SendGroupMessage" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > SendGroupMessage - Send encrypted MLS ApplicationMessage
+        /// > Content is fully E2EE. Server stores opaque ciphertext.
+        ///
+        /// - Parameters:
+        ///   - request: A `Shared_Proto_Services_V1_SendGroupMessageRequest` message.
+        ///   - context: Context providing information about the RPC.
+        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
+        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
+        ///     to an internal error.
+        /// - Returns: A `Shared_Proto_Services_V1_SendGroupMessageResponse` to respond with.
+        func sendGroupMessage(
+            request: Shared_Proto_Services_V1_SendGroupMessageRequest,
+            context: GRPCCore.ServerContext
+        ) async throws -> Shared_Proto_Services_V1_SendGroupMessageResponse
+
+        /// Handle the "FetchGroupMessages" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > FetchGroupMessages - Pull messages since cursor (catch-up after offline)
+        ///
+        /// - Parameters:
+        ///   - request: A `Shared_Proto_Services_V1_FetchGroupMessagesRequest` message.
+        ///   - response: A response stream of `Shared_Proto_Services_V1_GroupMessageEnvelope` messages.
+        ///   - context: Context providing information about the RPC.
+        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
+        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
+        ///     to an internal error.
+        func fetchGroupMessages(
+            request: Shared_Proto_Services_V1_FetchGroupMessagesRequest,
+            response: GRPCCore.RPCWriter<Shared_Proto_Services_V1_GroupMessageEnvelope>,
+            context: GRPCCore.ServerContext
+        ) async throws
+
+        /// Handle the "MessageStream" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > MessageStream - Real-time bidirectional stream for active group sessions
+        ///
+        /// - Parameters:
+        ///   - request: A stream of `Shared_Proto_Services_V1_GroupStreamRequest` messages.
+        ///   - response: A response stream of `Shared_Proto_Services_V1_GroupStreamResponse` messages.
+        ///   - context: Context providing information about the RPC.
+        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
+        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
+        ///     to an internal error.
+        func messageStream(
+            request: GRPCCore.RPCAsyncSequence<Shared_Proto_Services_V1_GroupStreamRequest, any Swift.Error>,
+            response: GRPCCore.RPCWriter<Shared_Proto_Services_V1_GroupStreamResponse>,
+            context: GRPCCore.ServerContext
+        ) async throws
+
+        /// Handle the "PublishKeyPackage" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > PublishKeyPackage - Upload MLS KeyPackages so others can invite you
+        /// > KeyPackages are single-use (consumed on invite, like one-time pre-keys).
+        /// > Publish multiple for availability. Recommended: keep 20+ on server.
+        ///
+        /// - Parameters:
+        ///   - request: A `Shared_Proto_Services_V1_PublishKeyPackageRequest` message.
+        ///   - context: Context providing information about the RPC.
+        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
+        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
+        ///     to an internal error.
+        /// - Returns: A `Shared_Proto_Services_V1_PublishKeyPackageResponse` to respond with.
+        func publishKeyPackage(
+            request: Shared_Proto_Services_V1_PublishKeyPackageRequest,
+            context: GRPCCore.ServerContext
+        ) async throws -> Shared_Proto_Services_V1_PublishKeyPackageResponse
+
+        /// Handle the "ConsumeKeyPackage" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > ConsumeKeyPackage - Fetch one KeyPackage to invite a user to a group
+        /// > Admin calls this before InviteToGroup to construct the Welcome message.
+        /// > Consumed atomically - cannot be used twice.
+        ///
+        /// - Parameters:
+        ///   - request: A `Shared_Proto_Services_V1_ConsumeKeyPackageRequest` message.
+        ///   - context: Context providing information about the RPC.
+        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
+        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
+        ///     to an internal error.
+        /// - Returns: A `Shared_Proto_Services_V1_ConsumeKeyPackageResponse` to respond with.
+        func consumeKeyPackage(
+            request: Shared_Proto_Services_V1_ConsumeKeyPackageRequest,
+            context: GRPCCore.ServerContext
+        ) async throws -> Shared_Proto_Services_V1_ConsumeKeyPackageResponse
+
+        /// Handle the "GetKeyPackageCount" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > GetKeyPackageCount - Check how many KeyPackages a user has published
+        /// > Used to determine if user can be invited / needs to refresh packages.
+        ///
+        /// - Parameters:
+        ///   - request: A `Shared_Proto_Services_V1_GetKeyPackageCountRequest` message.
+        ///   - context: Context providing information about the RPC.
+        /// - Throws: Any error which occurred during the processing of the request. Thrown errors
+        ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
+        ///     to an internal error.
+        /// - Returns: A `Shared_Proto_Services_V1_GetKeyPackageCountResponse` to respond with.
+        func getKeyPackageCount(
+            request: Shared_Proto_Services_V1_GetKeyPackageCountRequest,
+            context: GRPCCore.ServerContext
+        ) async throws -> Shared_Proto_Services_V1_GetKeyPackageCountResponse
+    }
+}
+
+// Default implementation of 'registerMethods(with:)'.
+@available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
+extension Shared_Proto_Services_V1_MLSService.StreamingServiceProtocol {
+    internal func registerMethods<Transport>(with router: inout GRPCCore.RPCRouter<Transport>) where Transport: GRPCCore.ServerTransport {
+        router.registerHandler(
+            forMethod: Shared_Proto_Services_V1_MLSService.Method.CreateGroup.descriptor,
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_CreateGroupRequest>(),
+            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_CreateGroupResponse>(),
+            handler: { request, context in
+                try await self.createGroup(
+                    request: request,
+                    context: context
+                )
+            }
+        )
+        router.registerHandler(
+            forMethod: Shared_Proto_Services_V1_MLSService.Method.GetGroupState.descriptor,
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_GetGroupStateRequest>(),
+            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_GetGroupStateResponse>(),
+            handler: { request, context in
+                try await self.getGroupState(
+                    request: request,
+                    context: context
+                )
+            }
+        )
+        router.registerHandler(
+            forMethod: Shared_Proto_Services_V1_MLSService.Method.DissolveGroup.descriptor,
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_DissolveGroupRequest>(),
+            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_DissolveGroupResponse>(),
+            handler: { request, context in
+                try await self.dissolveGroup(
+                    request: request,
+                    context: context
+                )
+            }
+        )
+        router.registerHandler(
+            forMethod: Shared_Proto_Services_V1_MLSService.Method.InviteToGroup.descriptor,
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_InviteToGroupRequest>(),
+            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_InviteToGroupResponse>(),
+            handler: { request, context in
+                try await self.inviteToGroup(
+                    request: request,
+                    context: context
+                )
+            }
+        )
+        router.registerHandler(
+            forMethod: Shared_Proto_Services_V1_MLSService.Method.AcceptGroupInvite.descriptor,
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_AcceptGroupInviteRequest>(),
+            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_AcceptGroupInviteResponse>(),
+            handler: { request, context in
+                try await self.acceptGroupInvite(
+                    request: request,
+                    context: context
+                )
+            }
+        )
+        router.registerHandler(
+            forMethod: Shared_Proto_Services_V1_MLSService.Method.DeclineGroupInvite.descriptor,
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_DeclineGroupInviteRequest>(),
+            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_DeclineGroupInviteResponse>(),
+            handler: { request, context in
+                try await self.declineGroupInvite(
+                    request: request,
+                    context: context
+                )
+            }
+        )
+        router.registerHandler(
+            forMethod: Shared_Proto_Services_V1_MLSService.Method.GetPendingInvites.descriptor,
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_GetPendingInvitesRequest>(),
+            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_GetPendingInvitesResponse>(),
+            handler: { request, context in
+                try await self.getPendingInvites(
+                    request: request,
+                    context: context
+                )
+            }
+        )
+        router.registerHandler(
+            forMethod: Shared_Proto_Services_V1_MLSService.Method.LeaveGroup.descriptor,
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_LeaveGroupRequest>(),
+            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_LeaveGroupResponse>(),
+            handler: { request, context in
+                try await self.leaveGroup(
+                    request: request,
+                    context: context
+                )
+            }
+        )
+        router.registerHandler(
+            forMethod: Shared_Proto_Services_V1_MLSService.Method.RemoveMember.descriptor,
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_RemoveMemberRequest>(),
+            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_RemoveMemberResponse>(),
+            handler: { request, context in
+                try await self.removeMember(
+                    request: request,
+                    context: context
+                )
+            }
+        )
+        router.registerHandler(
+            forMethod: Shared_Proto_Services_V1_MLSService.Method.DelegateAdmin.descriptor,
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_DelegateAdminRequest>(),
+            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_DelegateAdminResponse>(),
+            handler: { request, context in
+                try await self.delegateAdmin(
+                    request: request,
+                    context: context
+                )
+            }
+        )
+        router.registerHandler(
+            forMethod: Shared_Proto_Services_V1_MLSService.Method.SubmitCommit.descriptor,
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_SubmitCommitRequest>(),
+            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_SubmitCommitResponse>(),
+            handler: { request, context in
+                try await self.submitCommit(
+                    request: request,
+                    context: context
+                )
+            }
+        )
+        router.registerHandler(
+            forMethod: Shared_Proto_Services_V1_MLSService.Method.FetchCommits.descriptor,
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_FetchCommitsRequest>(),
+            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_CommitEnvelope>(),
+            handler: { request, context in
+                try await self.fetchCommits(
+                    request: request,
+                    context: context
+                )
+            }
+        )
+        router.registerHandler(
+            forMethod: Shared_Proto_Services_V1_MLSService.Method.SendGroupMessage.descriptor,
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_SendGroupMessageRequest>(),
+            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_SendGroupMessageResponse>(),
+            handler: { request, context in
+                try await self.sendGroupMessage(
+                    request: request,
+                    context: context
+                )
+            }
+        )
+        router.registerHandler(
+            forMethod: Shared_Proto_Services_V1_MLSService.Method.FetchGroupMessages.descriptor,
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_FetchGroupMessagesRequest>(),
+            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_GroupMessageEnvelope>(),
+            handler: { request, context in
+                try await self.fetchGroupMessages(
+                    request: request,
+                    context: context
+                )
+            }
+        )
+        router.registerHandler(
+            forMethod: Shared_Proto_Services_V1_MLSService.Method.MessageStream.descriptor,
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_GroupStreamRequest>(),
+            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_GroupStreamResponse>(),
+            handler: { request, context in
+                try await self.messageStream(
+                    request: request,
+                    context: context
+                )
+            }
+        )
+        router.registerHandler(
+            forMethod: Shared_Proto_Services_V1_MLSService.Method.PublishKeyPackage.descriptor,
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_PublishKeyPackageRequest>(),
+            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_PublishKeyPackageResponse>(),
+            handler: { request, context in
+                try await self.publishKeyPackage(
+                    request: request,
+                    context: context
+                )
+            }
+        )
+        router.registerHandler(
+            forMethod: Shared_Proto_Services_V1_MLSService.Method.ConsumeKeyPackage.descriptor,
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_ConsumeKeyPackageRequest>(),
+            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_ConsumeKeyPackageResponse>(),
+            handler: { request, context in
+                try await self.consumeKeyPackage(
+                    request: request,
+                    context: context
+                )
+            }
+        )
+        router.registerHandler(
+            forMethod: Shared_Proto_Services_V1_MLSService.Method.GetKeyPackageCount.descriptor,
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_GetKeyPackageCountRequest>(),
+            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_GetKeyPackageCountResponse>(),
+            handler: { request, context in
+                try await self.getKeyPackageCount(
+                    request: request,
+                    context: context
+                )
+            }
+        )
+    }
+}
+
+// Default implementation of streaming methods from 'StreamingServiceProtocol'.
+@available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
+extension Shared_Proto_Services_V1_MLSService.ServiceProtocol {
+    internal func createGroup(
+        request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_CreateGroupRequest>,
+        context: GRPCCore.ServerContext
+    ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_CreateGroupResponse> {
+        let response = try await self.createGroup(
+            request: GRPCCore.ServerRequest(stream: request),
+            context: context
+        )
+        return GRPCCore.StreamingServerResponse(single: response)
+    }
+
+    internal func getGroupState(
+        request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_GetGroupStateRequest>,
+        context: GRPCCore.ServerContext
+    ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_GetGroupStateResponse> {
+        let response = try await self.getGroupState(
+            request: GRPCCore.ServerRequest(stream: request),
+            context: context
+        )
+        return GRPCCore.StreamingServerResponse(single: response)
+    }
+
+    internal func dissolveGroup(
+        request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_DissolveGroupRequest>,
+        context: GRPCCore.ServerContext
+    ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_DissolveGroupResponse> {
+        let response = try await self.dissolveGroup(
+            request: GRPCCore.ServerRequest(stream: request),
+            context: context
+        )
+        return GRPCCore.StreamingServerResponse(single: response)
+    }
+
+    internal func inviteToGroup(
+        request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_InviteToGroupRequest>,
+        context: GRPCCore.ServerContext
+    ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_InviteToGroupResponse> {
+        let response = try await self.inviteToGroup(
+            request: GRPCCore.ServerRequest(stream: request),
+            context: context
+        )
+        return GRPCCore.StreamingServerResponse(single: response)
+    }
+
+    internal func acceptGroupInvite(
+        request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_AcceptGroupInviteRequest>,
+        context: GRPCCore.ServerContext
+    ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_AcceptGroupInviteResponse> {
+        let response = try await self.acceptGroupInvite(
+            request: GRPCCore.ServerRequest(stream: request),
+            context: context
+        )
+        return GRPCCore.StreamingServerResponse(single: response)
+    }
+
+    internal func declineGroupInvite(
+        request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_DeclineGroupInviteRequest>,
+        context: GRPCCore.ServerContext
+    ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_DeclineGroupInviteResponse> {
+        let response = try await self.declineGroupInvite(
+            request: GRPCCore.ServerRequest(stream: request),
+            context: context
+        )
+        return GRPCCore.StreamingServerResponse(single: response)
+    }
+
+    internal func getPendingInvites(
+        request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_GetPendingInvitesRequest>,
+        context: GRPCCore.ServerContext
+    ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_GetPendingInvitesResponse> {
+        let response = try await self.getPendingInvites(
+            request: GRPCCore.ServerRequest(stream: request),
+            context: context
+        )
+        return GRPCCore.StreamingServerResponse(single: response)
+    }
+
+    internal func leaveGroup(
+        request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_LeaveGroupRequest>,
+        context: GRPCCore.ServerContext
+    ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_LeaveGroupResponse> {
+        let response = try await self.leaveGroup(
+            request: GRPCCore.ServerRequest(stream: request),
+            context: context
+        )
+        return GRPCCore.StreamingServerResponse(single: response)
+    }
+
+    internal func removeMember(
+        request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_RemoveMemberRequest>,
+        context: GRPCCore.ServerContext
+    ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_RemoveMemberResponse> {
+        let response = try await self.removeMember(
+            request: GRPCCore.ServerRequest(stream: request),
+            context: context
+        )
+        return GRPCCore.StreamingServerResponse(single: response)
+    }
+
+    internal func delegateAdmin(
+        request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_DelegateAdminRequest>,
+        context: GRPCCore.ServerContext
+    ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_DelegateAdminResponse> {
+        let response = try await self.delegateAdmin(
+            request: GRPCCore.ServerRequest(stream: request),
+            context: context
+        )
+        return GRPCCore.StreamingServerResponse(single: response)
+    }
+
+    internal func submitCommit(
+        request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_SubmitCommitRequest>,
+        context: GRPCCore.ServerContext
+    ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_SubmitCommitResponse> {
+        let response = try await self.submitCommit(
+            request: GRPCCore.ServerRequest(stream: request),
+            context: context
+        )
+        return GRPCCore.StreamingServerResponse(single: response)
+    }
+
+    internal func fetchCommits(
+        request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_FetchCommitsRequest>,
+        context: GRPCCore.ServerContext
+    ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_CommitEnvelope> {
+        let response = try await self.fetchCommits(
+            request: GRPCCore.ServerRequest(stream: request),
+            context: context
+        )
+        return response
+    }
+
+    internal func sendGroupMessage(
+        request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_SendGroupMessageRequest>,
+        context: GRPCCore.ServerContext
+    ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_SendGroupMessageResponse> {
+        let response = try await self.sendGroupMessage(
+            request: GRPCCore.ServerRequest(stream: request),
+            context: context
+        )
+        return GRPCCore.StreamingServerResponse(single: response)
+    }
+
+    internal func fetchGroupMessages(
+        request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_FetchGroupMessagesRequest>,
+        context: GRPCCore.ServerContext
+    ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_GroupMessageEnvelope> {
+        let response = try await self.fetchGroupMessages(
+            request: GRPCCore.ServerRequest(stream: request),
+            context: context
+        )
+        return response
+    }
+
+    internal func publishKeyPackage(
+        request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_PublishKeyPackageRequest>,
+        context: GRPCCore.ServerContext
+    ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_PublishKeyPackageResponse> {
+        let response = try await self.publishKeyPackage(
+            request: GRPCCore.ServerRequest(stream: request),
+            context: context
+        )
+        return GRPCCore.StreamingServerResponse(single: response)
+    }
+
+    internal func consumeKeyPackage(
+        request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_ConsumeKeyPackageRequest>,
+        context: GRPCCore.ServerContext
+    ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_ConsumeKeyPackageResponse> {
+        let response = try await self.consumeKeyPackage(
+            request: GRPCCore.ServerRequest(stream: request),
+            context: context
+        )
+        return GRPCCore.StreamingServerResponse(single: response)
+    }
+
+    internal func getKeyPackageCount(
+        request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_GetKeyPackageCountRequest>,
+        context: GRPCCore.ServerContext
+    ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_GetKeyPackageCountResponse> {
+        let response = try await self.getKeyPackageCount(
+            request: GRPCCore.ServerRequest(stream: request),
+            context: context
+        )
+        return GRPCCore.StreamingServerResponse(single: response)
+    }
+}
+
+// Default implementation of methods from 'ServiceProtocol'.
+@available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
+extension Shared_Proto_Services_V1_MLSService.SimpleServiceProtocol {
+    internal func createGroup(
+        request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_CreateGroupRequest>,
+        context: GRPCCore.ServerContext
+    ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_CreateGroupResponse> {
+        return GRPCCore.ServerResponse<Shared_Proto_Services_V1_CreateGroupResponse>(
+            message: try await self.createGroup(
+                request: request.message,
+                context: context
+            ),
+            metadata: [:]
+        )
+    }
+
+    internal func getGroupState(
+        request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_GetGroupStateRequest>,
+        context: GRPCCore.ServerContext
+    ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_GetGroupStateResponse> {
+        return GRPCCore.ServerResponse<Shared_Proto_Services_V1_GetGroupStateResponse>(
+            message: try await self.getGroupState(
+                request: request.message,
+                context: context
+            ),
+            metadata: [:]
+        )
+    }
+
+    internal func dissolveGroup(
+        request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_DissolveGroupRequest>,
+        context: GRPCCore.ServerContext
+    ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_DissolveGroupResponse> {
+        return GRPCCore.ServerResponse<Shared_Proto_Services_V1_DissolveGroupResponse>(
+            message: try await self.dissolveGroup(
+                request: request.message,
+                context: context
+            ),
+            metadata: [:]
+        )
+    }
+
+    internal func inviteToGroup(
+        request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_InviteToGroupRequest>,
+        context: GRPCCore.ServerContext
+    ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_InviteToGroupResponse> {
+        return GRPCCore.ServerResponse<Shared_Proto_Services_V1_InviteToGroupResponse>(
+            message: try await self.inviteToGroup(
+                request: request.message,
+                context: context
+            ),
+            metadata: [:]
+        )
+    }
+
+    internal func acceptGroupInvite(
+        request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_AcceptGroupInviteRequest>,
+        context: GRPCCore.ServerContext
+    ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_AcceptGroupInviteResponse> {
+        return GRPCCore.ServerResponse<Shared_Proto_Services_V1_AcceptGroupInviteResponse>(
+            message: try await self.acceptGroupInvite(
+                request: request.message,
+                context: context
+            ),
+            metadata: [:]
+        )
+    }
+
+    internal func declineGroupInvite(
+        request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_DeclineGroupInviteRequest>,
+        context: GRPCCore.ServerContext
+    ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_DeclineGroupInviteResponse> {
+        return GRPCCore.ServerResponse<Shared_Proto_Services_V1_DeclineGroupInviteResponse>(
+            message: try await self.declineGroupInvite(
+                request: request.message,
+                context: context
+            ),
+            metadata: [:]
+        )
+    }
+
+    internal func getPendingInvites(
+        request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_GetPendingInvitesRequest>,
+        context: GRPCCore.ServerContext
+    ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_GetPendingInvitesResponse> {
+        return GRPCCore.ServerResponse<Shared_Proto_Services_V1_GetPendingInvitesResponse>(
+            message: try await self.getPendingInvites(
+                request: request.message,
+                context: context
+            ),
+            metadata: [:]
+        )
+    }
+
+    internal func leaveGroup(
+        request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_LeaveGroupRequest>,
+        context: GRPCCore.ServerContext
+    ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_LeaveGroupResponse> {
+        return GRPCCore.ServerResponse<Shared_Proto_Services_V1_LeaveGroupResponse>(
+            message: try await self.leaveGroup(
+                request: request.message,
+                context: context
+            ),
+            metadata: [:]
+        )
+    }
+
+    internal func removeMember(
+        request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_RemoveMemberRequest>,
+        context: GRPCCore.ServerContext
+    ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_RemoveMemberResponse> {
+        return GRPCCore.ServerResponse<Shared_Proto_Services_V1_RemoveMemberResponse>(
+            message: try await self.removeMember(
+                request: request.message,
+                context: context
+            ),
+            metadata: [:]
+        )
+    }
+
+    internal func delegateAdmin(
+        request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_DelegateAdminRequest>,
+        context: GRPCCore.ServerContext
+    ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_DelegateAdminResponse> {
+        return GRPCCore.ServerResponse<Shared_Proto_Services_V1_DelegateAdminResponse>(
+            message: try await self.delegateAdmin(
+                request: request.message,
+                context: context
+            ),
+            metadata: [:]
+        )
+    }
+
+    internal func submitCommit(
+        request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_SubmitCommitRequest>,
+        context: GRPCCore.ServerContext
+    ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_SubmitCommitResponse> {
+        return GRPCCore.ServerResponse<Shared_Proto_Services_V1_SubmitCommitResponse>(
+            message: try await self.submitCommit(
+                request: request.message,
+                context: context
+            ),
+            metadata: [:]
+        )
+    }
+
+    internal func fetchCommits(
+        request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_FetchCommitsRequest>,
+        context: GRPCCore.ServerContext
+    ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_CommitEnvelope> {
+        return GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_CommitEnvelope>(
+            metadata: [:],
+            producer: { writer in
+                try await self.fetchCommits(
+                    request: request.message,
+                    response: writer,
+                    context: context
+                )
+                return [:]
+            }
+        )
+    }
+
+    internal func sendGroupMessage(
+        request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_SendGroupMessageRequest>,
+        context: GRPCCore.ServerContext
+    ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_SendGroupMessageResponse> {
+        return GRPCCore.ServerResponse<Shared_Proto_Services_V1_SendGroupMessageResponse>(
+            message: try await self.sendGroupMessage(
+                request: request.message,
+                context: context
+            ),
+            metadata: [:]
+        )
+    }
+
+    internal func fetchGroupMessages(
+        request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_FetchGroupMessagesRequest>,
+        context: GRPCCore.ServerContext
+    ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_GroupMessageEnvelope> {
+        return GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_GroupMessageEnvelope>(
+            metadata: [:],
+            producer: { writer in
+                try await self.fetchGroupMessages(
+                    request: request.message,
+                    response: writer,
+                    context: context
+                )
+                return [:]
+            }
+        )
+    }
+
+    internal func messageStream(
+        request: GRPCCore.StreamingServerRequest<Shared_Proto_Services_V1_GroupStreamRequest>,
+        context: GRPCCore.ServerContext
+    ) async throws -> GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_GroupStreamResponse> {
+        return GRPCCore.StreamingServerResponse<Shared_Proto_Services_V1_GroupStreamResponse>(
+            metadata: [:],
+            producer: { writer in
+                try await self.messageStream(
+                    request: request.messages,
+                    response: writer,
+                    context: context
+                )
+                return [:]
+            }
+        )
+    }
+
+    internal func publishKeyPackage(
+        request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_PublishKeyPackageRequest>,
+        context: GRPCCore.ServerContext
+    ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_PublishKeyPackageResponse> {
+        return GRPCCore.ServerResponse<Shared_Proto_Services_V1_PublishKeyPackageResponse>(
+            message: try await self.publishKeyPackage(
+                request: request.message,
+                context: context
+            ),
+            metadata: [:]
+        )
+    }
+
+    internal func consumeKeyPackage(
+        request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_ConsumeKeyPackageRequest>,
+        context: GRPCCore.ServerContext
+    ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_ConsumeKeyPackageResponse> {
+        return GRPCCore.ServerResponse<Shared_Proto_Services_V1_ConsumeKeyPackageResponse>(
+            message: try await self.consumeKeyPackage(
+                request: request.message,
+                context: context
+            ),
+            metadata: [:]
+        )
+    }
+
+    internal func getKeyPackageCount(
+        request: GRPCCore.ServerRequest<Shared_Proto_Services_V1_GetKeyPackageCountRequest>,
+        context: GRPCCore.ServerContext
+    ) async throws -> GRPCCore.ServerResponse<Shared_Proto_Services_V1_GetKeyPackageCountResponse> {
+        return GRPCCore.ServerResponse<Shared_Proto_Services_V1_GetKeyPackageCountResponse>(
+            message: try await self.getKeyPackageCount(
+                request: request.message,
+                context: context
+            ),
+            metadata: [:]
+        )
+    }
 }
 
 // MARK: shared.proto.services.v1.MLSService (client)
@@ -280,7 +2012,7 @@ extension Shared_Proto_Services_V1_MLSService {
     /// > =========================================================================
     /// > Group Lifecycle
     /// > =========================================================================
-    public protocol ClientProtocol: Sendable {
+    internal protocol ClientProtocol: Sendable {
         /// Call the "CreateGroup" method.
         ///
         /// > Source IDL Documentation:
@@ -727,14 +2459,14 @@ extension Shared_Proto_Services_V1_MLSService {
     /// > =========================================================================
     /// > Group Lifecycle
     /// > =========================================================================
-    public struct Client<Transport>: ClientProtocol where Transport: GRPCCore.ClientTransport {
+    internal struct Client<Transport>: ClientProtocol where Transport: GRPCCore.ClientTransport {
         private let client: GRPCCore.GRPCClient<Transport>
 
         /// Creates a new client wrapping the provided `GRPCCore.GRPCClient`.
         ///
         /// - Parameters:
         ///   - client: A `GRPCCore.GRPCClient` providing a communication channel to the service.
-        public init(wrapping client: GRPCCore.GRPCClient<Transport>) {
+        internal init(wrapping client: GRPCCore.GRPCClient<Transport>) {
             self.client = client
         }
 
@@ -754,7 +2486,7 @@ extension Shared_Proto_Services_V1_MLSService {
         ///       returned to the caller. Returning from the closure will cancel the RPC if it
         ///       hasn't already finished.
         /// - Returns: The result of `handleResponse`.
-        public func createGroup<Result>(
+        internal func createGroup<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_CreateGroupRequest>,
             serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_CreateGroupRequest>,
             deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_CreateGroupResponse>,
@@ -789,7 +2521,7 @@ extension Shared_Proto_Services_V1_MLSService {
         ///       returned to the caller. Returning from the closure will cancel the RPC if it
         ///       hasn't already finished.
         /// - Returns: The result of `handleResponse`.
-        public func getGroupState<Result>(
+        internal func getGroupState<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_GetGroupStateRequest>,
             serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_GetGroupStateRequest>,
             deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_GetGroupStateResponse>,
@@ -824,7 +2556,7 @@ extension Shared_Proto_Services_V1_MLSService {
         ///       returned to the caller. Returning from the closure will cancel the RPC if it
         ///       hasn't already finished.
         /// - Returns: The result of `handleResponse`.
-        public func dissolveGroup<Result>(
+        internal func dissolveGroup<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_DissolveGroupRequest>,
             serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_DissolveGroupRequest>,
             deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_DissolveGroupResponse>,
@@ -860,7 +2592,7 @@ extension Shared_Proto_Services_V1_MLSService {
         ///       returned to the caller. Returning from the closure will cancel the RPC if it
         ///       hasn't already finished.
         /// - Returns: The result of `handleResponse`.
-        public func inviteToGroup<Result>(
+        internal func inviteToGroup<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_InviteToGroupRequest>,
             serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_InviteToGroupRequest>,
             deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_InviteToGroupResponse>,
@@ -896,7 +2628,7 @@ extension Shared_Proto_Services_V1_MLSService {
         ///       returned to the caller. Returning from the closure will cancel the RPC if it
         ///       hasn't already finished.
         /// - Returns: The result of `handleResponse`.
-        public func acceptGroupInvite<Result>(
+        internal func acceptGroupInvite<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_AcceptGroupInviteRequest>,
             serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_AcceptGroupInviteRequest>,
             deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_AcceptGroupInviteResponse>,
@@ -930,7 +2662,7 @@ extension Shared_Proto_Services_V1_MLSService {
         ///       returned to the caller. Returning from the closure will cancel the RPC if it
         ///       hasn't already finished.
         /// - Returns: The result of `handleResponse`.
-        public func declineGroupInvite<Result>(
+        internal func declineGroupInvite<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_DeclineGroupInviteRequest>,
             serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_DeclineGroupInviteRequest>,
             deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_DeclineGroupInviteResponse>,
@@ -964,7 +2696,7 @@ extension Shared_Proto_Services_V1_MLSService {
         ///       returned to the caller. Returning from the closure will cancel the RPC if it
         ///       hasn't already finished.
         /// - Returns: The result of `handleResponse`.
-        public func getPendingInvites<Result>(
+        internal func getPendingInvites<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_GetPendingInvitesRequest>,
             serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_GetPendingInvitesRequest>,
             deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_GetPendingInvitesResponse>,
@@ -1000,7 +2732,7 @@ extension Shared_Proto_Services_V1_MLSService {
         ///       returned to the caller. Returning from the closure will cancel the RPC if it
         ///       hasn't already finished.
         /// - Returns: The result of `handleResponse`.
-        public func leaveGroup<Result>(
+        internal func leaveGroup<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_LeaveGroupRequest>,
             serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_LeaveGroupRequest>,
             deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_LeaveGroupResponse>,
@@ -1035,7 +2767,7 @@ extension Shared_Proto_Services_V1_MLSService {
         ///       returned to the caller. Returning from the closure will cancel the RPC if it
         ///       hasn't already finished.
         /// - Returns: The result of `handleResponse`.
-        public func removeMember<Result>(
+        internal func removeMember<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_RemoveMemberRequest>,
             serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_RemoveMemberRequest>,
             deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_RemoveMemberResponse>,
@@ -1070,7 +2802,7 @@ extension Shared_Proto_Services_V1_MLSService {
         ///       returned to the caller. Returning from the closure will cancel the RPC if it
         ///       hasn't already finished.
         /// - Returns: The result of `handleResponse`.
-        public func delegateAdmin<Result>(
+        internal func delegateAdmin<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_DelegateAdminRequest>,
             serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_DelegateAdminRequest>,
             deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_DelegateAdminResponse>,
@@ -1106,7 +2838,7 @@ extension Shared_Proto_Services_V1_MLSService {
         ///       returned to the caller. Returning from the closure will cancel the RPC if it
         ///       hasn't already finished.
         /// - Returns: The result of `handleResponse`.
-        public func submitCommit<Result>(
+        internal func submitCommit<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_SubmitCommitRequest>,
             serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_SubmitCommitRequest>,
             deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_SubmitCommitResponse>,
@@ -1141,7 +2873,7 @@ extension Shared_Proto_Services_V1_MLSService {
         ///       returned to the caller. Returning from the closure will cancel the RPC if it
         ///       hasn't already finished.
         /// - Returns: The result of `handleResponse`.
-        public func fetchCommits<Result>(
+        internal func fetchCommits<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_FetchCommitsRequest>,
             serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_FetchCommitsRequest>,
             deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_CommitEnvelope>,
@@ -1174,7 +2906,7 @@ extension Shared_Proto_Services_V1_MLSService {
         ///       returned to the caller. Returning from the closure will cancel the RPC if it
         ///       hasn't already finished.
         /// - Returns: The result of `handleResponse`.
-        public func sendGroupMessage<Result>(
+        internal func sendGroupMessage<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_SendGroupMessageRequest>,
             serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_SendGroupMessageRequest>,
             deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_SendGroupMessageResponse>,
@@ -1208,7 +2940,7 @@ extension Shared_Proto_Services_V1_MLSService {
         ///       returned to the caller. Returning from the closure will cancel the RPC if it
         ///       hasn't already finished.
         /// - Returns: The result of `handleResponse`.
-        public func fetchGroupMessages<Result>(
+        internal func fetchGroupMessages<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_FetchGroupMessagesRequest>,
             serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_FetchGroupMessagesRequest>,
             deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_GroupMessageEnvelope>,
@@ -1240,7 +2972,7 @@ extension Shared_Proto_Services_V1_MLSService {
         ///       returned to the caller. Returning from the closure will cancel the RPC if it
         ///       hasn't already finished.
         /// - Returns: The result of `handleResponse`.
-        public func messageStream<Result>(
+        internal func messageStream<Result>(
             request: GRPCCore.StreamingClientRequest<Shared_Proto_Services_V1_GroupStreamRequest>,
             serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_GroupStreamRequest>,
             deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_GroupStreamResponse>,
@@ -1274,7 +3006,7 @@ extension Shared_Proto_Services_V1_MLSService {
         ///       returned to the caller. Returning from the closure will cancel the RPC if it
         ///       hasn't already finished.
         /// - Returns: The result of `handleResponse`.
-        public func publishKeyPackage<Result>(
+        internal func publishKeyPackage<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_PublishKeyPackageRequest>,
             serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_PublishKeyPackageRequest>,
             deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_PublishKeyPackageResponse>,
@@ -1310,7 +3042,7 @@ extension Shared_Proto_Services_V1_MLSService {
         ///       returned to the caller. Returning from the closure will cancel the RPC if it
         ///       hasn't already finished.
         /// - Returns: The result of `handleResponse`.
-        public func consumeKeyPackage<Result>(
+        internal func consumeKeyPackage<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_ConsumeKeyPackageRequest>,
             serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_ConsumeKeyPackageRequest>,
             deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_ConsumeKeyPackageResponse>,
@@ -1345,7 +3077,7 @@ extension Shared_Proto_Services_V1_MLSService {
         ///       returned to the caller. Returning from the closure will cancel the RPC if it
         ///       hasn't already finished.
         /// - Returns: The result of `handleResponse`.
-        public func getKeyPackageCount<Result>(
+        internal func getKeyPackageCount<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_GetKeyPackageCountRequest>,
             serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_GetKeyPackageCountRequest>,
             deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_GetKeyPackageCountResponse>,
@@ -1383,7 +3115,7 @@ extension Shared_Proto_Services_V1_MLSService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    public func createGroup<Result>(
+    internal func createGroup<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_CreateGroupRequest>,
         options: GRPCCore.CallOptions = .defaults,
         onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_CreateGroupResponse>) async throws -> Result = { response in
@@ -1413,7 +3145,7 @@ extension Shared_Proto_Services_V1_MLSService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    public func getGroupState<Result>(
+    internal func getGroupState<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_GetGroupStateRequest>,
         options: GRPCCore.CallOptions = .defaults,
         onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_GetGroupStateResponse>) async throws -> Result = { response in
@@ -1443,7 +3175,7 @@ extension Shared_Proto_Services_V1_MLSService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    public func dissolveGroup<Result>(
+    internal func dissolveGroup<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_DissolveGroupRequest>,
         options: GRPCCore.CallOptions = .defaults,
         onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_DissolveGroupResponse>) async throws -> Result = { response in
@@ -1474,7 +3206,7 @@ extension Shared_Proto_Services_V1_MLSService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    public func inviteToGroup<Result>(
+    internal func inviteToGroup<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_InviteToGroupRequest>,
         options: GRPCCore.CallOptions = .defaults,
         onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_InviteToGroupResponse>) async throws -> Result = { response in
@@ -1505,7 +3237,7 @@ extension Shared_Proto_Services_V1_MLSService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    public func acceptGroupInvite<Result>(
+    internal func acceptGroupInvite<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_AcceptGroupInviteRequest>,
         options: GRPCCore.CallOptions = .defaults,
         onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_AcceptGroupInviteResponse>) async throws -> Result = { response in
@@ -1534,7 +3266,7 @@ extension Shared_Proto_Services_V1_MLSService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    public func declineGroupInvite<Result>(
+    internal func declineGroupInvite<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_DeclineGroupInviteRequest>,
         options: GRPCCore.CallOptions = .defaults,
         onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_DeclineGroupInviteResponse>) async throws -> Result = { response in
@@ -1563,7 +3295,7 @@ extension Shared_Proto_Services_V1_MLSService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    public func getPendingInvites<Result>(
+    internal func getPendingInvites<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_GetPendingInvitesRequest>,
         options: GRPCCore.CallOptions = .defaults,
         onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_GetPendingInvitesResponse>) async throws -> Result = { response in
@@ -1594,7 +3326,7 @@ extension Shared_Proto_Services_V1_MLSService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    public func leaveGroup<Result>(
+    internal func leaveGroup<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_LeaveGroupRequest>,
         options: GRPCCore.CallOptions = .defaults,
         onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_LeaveGroupResponse>) async throws -> Result = { response in
@@ -1624,7 +3356,7 @@ extension Shared_Proto_Services_V1_MLSService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    public func removeMember<Result>(
+    internal func removeMember<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_RemoveMemberRequest>,
         options: GRPCCore.CallOptions = .defaults,
         onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_RemoveMemberResponse>) async throws -> Result = { response in
@@ -1654,7 +3386,7 @@ extension Shared_Proto_Services_V1_MLSService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    public func delegateAdmin<Result>(
+    internal func delegateAdmin<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_DelegateAdminRequest>,
         options: GRPCCore.CallOptions = .defaults,
         onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_DelegateAdminResponse>) async throws -> Result = { response in
@@ -1685,7 +3417,7 @@ extension Shared_Proto_Services_V1_MLSService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    public func submitCommit<Result>(
+    internal func submitCommit<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_SubmitCommitRequest>,
         options: GRPCCore.CallOptions = .defaults,
         onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_SubmitCommitResponse>) async throws -> Result = { response in
@@ -1715,7 +3447,7 @@ extension Shared_Proto_Services_V1_MLSService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    public func fetchCommits<Result>(
+    internal func fetchCommits<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_FetchCommitsRequest>,
         options: GRPCCore.CallOptions = .defaults,
         onResponse handleResponse: @Sendable @escaping (GRPCCore.StreamingClientResponse<Shared_Proto_Services_V1_CommitEnvelope>) async throws -> Result
@@ -1743,7 +3475,7 @@ extension Shared_Proto_Services_V1_MLSService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    public func sendGroupMessage<Result>(
+    internal func sendGroupMessage<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_SendGroupMessageRequest>,
         options: GRPCCore.CallOptions = .defaults,
         onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_SendGroupMessageResponse>) async throws -> Result = { response in
@@ -1772,7 +3504,7 @@ extension Shared_Proto_Services_V1_MLSService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    public func fetchGroupMessages<Result>(
+    internal func fetchGroupMessages<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_FetchGroupMessagesRequest>,
         options: GRPCCore.CallOptions = .defaults,
         onResponse handleResponse: @Sendable @escaping (GRPCCore.StreamingClientResponse<Shared_Proto_Services_V1_GroupMessageEnvelope>) async throws -> Result
@@ -1799,7 +3531,7 @@ extension Shared_Proto_Services_V1_MLSService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    public func messageStream<Result>(
+    internal func messageStream<Result>(
         request: GRPCCore.StreamingClientRequest<Shared_Proto_Services_V1_GroupStreamRequest>,
         options: GRPCCore.CallOptions = .defaults,
         onResponse handleResponse: @Sendable @escaping (GRPCCore.StreamingClientResponse<Shared_Proto_Services_V1_GroupStreamResponse>) async throws -> Result
@@ -1828,7 +3560,7 @@ extension Shared_Proto_Services_V1_MLSService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    public func publishKeyPackage<Result>(
+    internal func publishKeyPackage<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_PublishKeyPackageRequest>,
         options: GRPCCore.CallOptions = .defaults,
         onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_PublishKeyPackageResponse>) async throws -> Result = { response in
@@ -1859,7 +3591,7 @@ extension Shared_Proto_Services_V1_MLSService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    public func consumeKeyPackage<Result>(
+    internal func consumeKeyPackage<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_ConsumeKeyPackageRequest>,
         options: GRPCCore.CallOptions = .defaults,
         onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_ConsumeKeyPackageResponse>) async throws -> Result = { response in
@@ -1889,7 +3621,7 @@ extension Shared_Proto_Services_V1_MLSService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    public func getKeyPackageCount<Result>(
+    internal func getKeyPackageCount<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_GetKeyPackageCountRequest>,
         options: GRPCCore.CallOptions = .defaults,
         onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_GetKeyPackageCountResponse>) async throws -> Result = { response in
@@ -1924,7 +3656,7 @@ extension Shared_Proto_Services_V1_MLSService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    public func createGroup<Result>(
+    internal func createGroup<Result>(
         _ message: Shared_Proto_Services_V1_CreateGroupRequest,
         metadata: GRPCCore.Metadata = [:],
         options: GRPCCore.CallOptions = .defaults,
@@ -1958,7 +3690,7 @@ extension Shared_Proto_Services_V1_MLSService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    public func getGroupState<Result>(
+    internal func getGroupState<Result>(
         _ message: Shared_Proto_Services_V1_GetGroupStateRequest,
         metadata: GRPCCore.Metadata = [:],
         options: GRPCCore.CallOptions = .defaults,
@@ -1992,7 +3724,7 @@ extension Shared_Proto_Services_V1_MLSService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    public func dissolveGroup<Result>(
+    internal func dissolveGroup<Result>(
         _ message: Shared_Proto_Services_V1_DissolveGroupRequest,
         metadata: GRPCCore.Metadata = [:],
         options: GRPCCore.CallOptions = .defaults,
@@ -2027,7 +3759,7 @@ extension Shared_Proto_Services_V1_MLSService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    public func inviteToGroup<Result>(
+    internal func inviteToGroup<Result>(
         _ message: Shared_Proto_Services_V1_InviteToGroupRequest,
         metadata: GRPCCore.Metadata = [:],
         options: GRPCCore.CallOptions = .defaults,
@@ -2062,7 +3794,7 @@ extension Shared_Proto_Services_V1_MLSService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    public func acceptGroupInvite<Result>(
+    internal func acceptGroupInvite<Result>(
         _ message: Shared_Proto_Services_V1_AcceptGroupInviteRequest,
         metadata: GRPCCore.Metadata = [:],
         options: GRPCCore.CallOptions = .defaults,
@@ -2095,7 +3827,7 @@ extension Shared_Proto_Services_V1_MLSService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    public func declineGroupInvite<Result>(
+    internal func declineGroupInvite<Result>(
         _ message: Shared_Proto_Services_V1_DeclineGroupInviteRequest,
         metadata: GRPCCore.Metadata = [:],
         options: GRPCCore.CallOptions = .defaults,
@@ -2128,7 +3860,7 @@ extension Shared_Proto_Services_V1_MLSService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    public func getPendingInvites<Result>(
+    internal func getPendingInvites<Result>(
         _ message: Shared_Proto_Services_V1_GetPendingInvitesRequest,
         metadata: GRPCCore.Metadata = [:],
         options: GRPCCore.CallOptions = .defaults,
@@ -2163,7 +3895,7 @@ extension Shared_Proto_Services_V1_MLSService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    public func leaveGroup<Result>(
+    internal func leaveGroup<Result>(
         _ message: Shared_Proto_Services_V1_LeaveGroupRequest,
         metadata: GRPCCore.Metadata = [:],
         options: GRPCCore.CallOptions = .defaults,
@@ -2197,7 +3929,7 @@ extension Shared_Proto_Services_V1_MLSService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    public func removeMember<Result>(
+    internal func removeMember<Result>(
         _ message: Shared_Proto_Services_V1_RemoveMemberRequest,
         metadata: GRPCCore.Metadata = [:],
         options: GRPCCore.CallOptions = .defaults,
@@ -2231,7 +3963,7 @@ extension Shared_Proto_Services_V1_MLSService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    public func delegateAdmin<Result>(
+    internal func delegateAdmin<Result>(
         _ message: Shared_Proto_Services_V1_DelegateAdminRequest,
         metadata: GRPCCore.Metadata = [:],
         options: GRPCCore.CallOptions = .defaults,
@@ -2266,7 +3998,7 @@ extension Shared_Proto_Services_V1_MLSService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    public func submitCommit<Result>(
+    internal func submitCommit<Result>(
         _ message: Shared_Proto_Services_V1_SubmitCommitRequest,
         metadata: GRPCCore.Metadata = [:],
         options: GRPCCore.CallOptions = .defaults,
@@ -2300,7 +4032,7 @@ extension Shared_Proto_Services_V1_MLSService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    public func fetchCommits<Result>(
+    internal func fetchCommits<Result>(
         _ message: Shared_Proto_Services_V1_FetchCommitsRequest,
         metadata: GRPCCore.Metadata = [:],
         options: GRPCCore.CallOptions = .defaults,
@@ -2332,7 +4064,7 @@ extension Shared_Proto_Services_V1_MLSService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    public func sendGroupMessage<Result>(
+    internal func sendGroupMessage<Result>(
         _ message: Shared_Proto_Services_V1_SendGroupMessageRequest,
         metadata: GRPCCore.Metadata = [:],
         options: GRPCCore.CallOptions = .defaults,
@@ -2365,7 +4097,7 @@ extension Shared_Proto_Services_V1_MLSService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    public func fetchGroupMessages<Result>(
+    internal func fetchGroupMessages<Result>(
         _ message: Shared_Proto_Services_V1_FetchGroupMessagesRequest,
         metadata: GRPCCore.Metadata = [:],
         options: GRPCCore.CallOptions = .defaults,
@@ -2397,7 +4129,7 @@ extension Shared_Proto_Services_V1_MLSService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    public func messageStream<Result>(
+    internal func messageStream<Result>(
         metadata: GRPCCore.Metadata = [:],
         options: GRPCCore.CallOptions = .defaults,
         requestProducer producer: @Sendable @escaping (GRPCCore.RPCWriter<Shared_Proto_Services_V1_GroupStreamRequest>) async throws -> Void,
@@ -2430,7 +4162,7 @@ extension Shared_Proto_Services_V1_MLSService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    public func publishKeyPackage<Result>(
+    internal func publishKeyPackage<Result>(
         _ message: Shared_Proto_Services_V1_PublishKeyPackageRequest,
         metadata: GRPCCore.Metadata = [:],
         options: GRPCCore.CallOptions = .defaults,
@@ -2465,7 +4197,7 @@ extension Shared_Proto_Services_V1_MLSService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    public func consumeKeyPackage<Result>(
+    internal func consumeKeyPackage<Result>(
         _ message: Shared_Proto_Services_V1_ConsumeKeyPackageRequest,
         metadata: GRPCCore.Metadata = [:],
         options: GRPCCore.CallOptions = .defaults,
@@ -2499,7 +4231,7 @@ extension Shared_Proto_Services_V1_MLSService.ClientProtocol {
     ///       returned to the caller. Returning from the closure will cancel the RPC if it
     ///       hasn't already finished.
     /// - Returns: The result of `handleResponse`.
-    public func getKeyPackageCount<Result>(
+    internal func getKeyPackageCount<Result>(
         _ message: Shared_Proto_Services_V1_GetKeyPackageCountRequest,
         metadata: GRPCCore.Metadata = [:],
         options: GRPCCore.CallOptions = .defaults,
