@@ -553,6 +553,28 @@ final class ConnectionLoopTests: XCTestCase {
             "Background RPC failures must not count toward stale-proxy restart threshold")
     }
 
+    func test_backgroundRPCFailure_doesNotResetConsecutiveStreamFailCount() async throws {
+        let runtime = MockIceProxyRuntime()
+        runtime.startResult = .success(54321)
+        let loop = makeLoop(relays: [relay()], runtime: runtime)
+
+        await loop.recordFailure(transportError)
+        await loop.recordFailure(transportError)
+        _ = try await loop.prepare()
+
+        // 1 stream failure → consecutiveIceFails = 1
+        await loop.recordFailure(transportError, invalidatesConnection: true)
+
+        // Background failure — must NOT reset consecutiveIceFails to 0
+        await loop.recordFailure(transportError, invalidatesConnection: false)
+
+        // 2nd stream failure → consecutiveIceFails = 2 → proxy must restart
+        await loop.recordFailure(transportError, invalidatesConnection: true)
+
+        XCTAssertGreaterThanOrEqual(runtime.stopCallCount, 1,
+            "Background RPC failure must not reset consecutiveIceFails — proxy must restart after 2 stream failures even when interleaved with background failures")
+    }
+
     // MARK: - P6 persistence: WebTunnel penalty survives app restart
 
     func test_webTunnelBlocked_savesToDisk() async throws {
