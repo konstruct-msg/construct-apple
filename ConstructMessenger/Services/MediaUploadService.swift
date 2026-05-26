@@ -35,13 +35,13 @@ enum MediaUploadError: LocalizedError {
 struct MediaMessageData: Codable {
     let mediaId: String
     let mediaUrl: String
-    let mediaKey: String  // Raw AES key base64 — entire message is Double Ratchet encrypted
+    let mediaKey: Data      // Raw AES key — JSONEncoder emits base64 transparently
     let mediaType: String
     let size: Int
     let width: Int?
     let height: Int?
     let duration: TimeInterval?
-    let thumbnail: String?  // Base64 JPEG (optional, generated client-side)
+    let thumbnail: Data?    // JPEG thumbnail — JSONEncoder emits base64 transparently
     let hash: String        // SHA-256 of encrypted file
     let filename: String?   // Original filename for document attachments
     let compressed: Bool?   // true = ZLIB-compressed before AES encryption; decompress after decrypt
@@ -53,14 +53,14 @@ extension CryptoManager {
     /// Format: [12 bytes nonce][ciphertext][16 bytes tag]
     func decryptMediaData(_ encryptedData: Data, with keyData: Data) throws -> Data {
         guard keyData.count == 32 else {
-            Log.error("❌ Invalid key size: \(keyData.count) (expected 32)", category: "MediaUpload")
+            Log.error("Invalid key size: \(keyData.count) (expected 32)", category: "MediaUpload")
             throw MediaUploadError.encryptionFailed
         }
         do {
             let sealedBox = try AES.GCM.SealedBox(combined: encryptedData)
             return try AES.GCM.open(sealedBox, using: SymmetricKey(data: keyData))
         } catch {
-            Log.error("❌ AES-GCM decryption failed: \(error)", category: "MediaUpload")
+            Log.error("AES-GCM decryption failed: \(error)", category: "MediaUpload")
             throw MediaUploadError.encryptionFailed
         }
     }

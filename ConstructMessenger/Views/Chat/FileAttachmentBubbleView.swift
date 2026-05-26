@@ -172,7 +172,7 @@ struct FileAttachmentBubbleView: View {
             } catch {
                 await MainActor.run {
                     downloading.remove(file.mediaId)
-                    Log.error("❌ File download failed: \(error)", category: "FileAttachment")
+                    Log.error("File download failed: \(error)", category: "FileAttachment")
                 }
             }
         }
@@ -201,7 +201,7 @@ struct FileAttachmentBubbleView: View {
             } catch {
                 await MainActor.run {
                     downloading.remove(file.mediaId)
-                    Log.error("❌ Video download failed: \(error)", category: "FileAttachment")
+                    Log.error("Video download failed: \(error)", category: "FileAttachment")
                 }
             }
         }
@@ -212,7 +212,7 @@ struct FileAttachmentBubbleView: View {
         let data = try await MediaManager.shared.downloadAndDecryptFile(
             mediaId: file.mediaId,
             mediaUrl: file.mediaUrl,
-            mediaKeyBase64: file.mediaKey,
+            mediaKey: file.mediaKey,
             compressed: file.compressed
         )
         let tmpURL = FileManager.default.temporaryDirectory
@@ -232,7 +232,7 @@ struct FileAttachmentBubbleView: View {
             let thumb = UIImage(cgImage: cgImage)
             await MainActor.run { videoThumbnails[mediaId] = thumb }
         } catch {
-            Log.debug("⚠️ Video thumbnail failed: \(error)", category: "FileAttachment")
+            Log.debug("Video thumbnail failed: \(error)", category: "FileAttachment")
         }
     }
     #endif

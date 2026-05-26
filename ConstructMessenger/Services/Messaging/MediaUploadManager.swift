@@ -34,19 +34,19 @@ class MediaUploadManager {
         
         // Upload each image using MediaManager
         for (index, image) in images.enumerated() {
-            Log.info("📤 Uploading image \(index + 1)/\(images.count)", category: "MediaUploadManager")
+            Log.info("Uploading image \(index + 1)/\(images.count)", category: "MediaUploadManager")
             
             // Generate thumbnail before upload (for local storage on sender side)
             if let thumbnail = MediaManager.shared.generateThumbnail(from: image) {
                 thumbnails.append(thumbnail)
-                Log.debug("📸 Generated thumbnail: \(thumbnail.count) bytes", category: "MediaUploadManager")
+                Log.debug("Generated thumbnail: \(thumbnail.count) bytes", category: "MediaUploadManager")
             }
             
             // Upload via MediaManager
             let mediaData = try await MediaManager.shared.uploadImage(image, for: recipientId)
             mediaDataList.append(mediaData)
             
-            Log.info("✅ Image \(index + 1) uploaded: \(mediaData.mediaId)", category: "MediaUploadManager")
+            Log.info("Image \(index + 1) uploaded: \(mediaData.mediaId)", category: "MediaUploadManager")
         }
         
         // Build message content with media references
@@ -68,7 +68,7 @@ class MediaUploadManager {
     private func buildMediaMessageContent(caption: String, mediaList: [MediaMessageData]) -> String {
         // Build JSON content for media message
         // Format: {"type":"media","caption":"...","media":[...]}
-        // ✅ FIX: Remove thumbnails from JSON to avoid exceeding 64KB limit
+        // Remove thumbnails from JSON to avoid exceeding 64KB limit
         // Thumbnails can be generated client-side from downloaded media
         struct MediaContent: Codable {
             let type: String
@@ -80,7 +80,7 @@ class MediaUploadManager {
         struct MediaMessageDataWithoutThumbnail: Codable {
             let mediaId: String
             let mediaUrl: String
-            let mediaKey: String
+            let mediaKey: Data
             let mediaType: String
             let size: Int
             let width: Int?
@@ -111,22 +111,22 @@ class MediaUploadManager {
         )
         
         let encoder = JSONEncoder()
-        // ✅ Use camelCase for consistency with messaging-service API
+        // Use camelCase for consistency with messaging-service API
         
         guard let jsonData = try? encoder.encode(content),
               let jsonString = String(data: jsonData, encoding: .utf8) else {
-            Log.error("❌ Failed to encode media message content", category: "MediaUploadManager")
+            Log.error("Failed to encode media message content", category: "MediaUploadManager")
             return caption
         }
         
         // Debug: Log the actual JSON we're creating
-        Log.debug("📋 Created media JSON (\(jsonString.count) chars): \(jsonString.prefix(200))...", category: "MediaUploadManager")
+        Log.debug("Created media JSON (\(jsonString.count) chars): \(jsonString.prefix(200))...", category: "MediaUploadManager")
         
-        // ✅ Check JSON size before sending
+        // Check JSON size before sending
         let jsonSize = jsonString.utf8.count
         let maxSize = 64 * 1024 // 64KB limit
         if jsonSize > maxSize {
-            Log.error("❌ Media message JSON too large: \(jsonSize) bytes (max \(maxSize))", category: "MediaUploadManager")
+            Log.error("Media message JSON too large: \(jsonSize) bytes (max \(maxSize))", category: "MediaUploadManager")
             // Try without some optional fields
             let minimalMedia = mediaWithoutThumbnails.map { media in
                 MediaMessageDataWithoutThumbnail(
@@ -150,7 +150,7 @@ class MediaUploadManager {
             
             if let minimalJsonData = try? encoder.encode(minimalContent),
                let minimalJsonString = String(data: minimalJsonData, encoding: .utf8) {
-                Log.info("✅ Using minimal media JSON: \(minimalJsonString.utf8.count) bytes", category: "MediaUploadManager")
+                Log.info("Using minimal media JSON: \(minimalJsonString.utf8.count) bytes", category: "MediaUploadManager")
                 return minimalJsonString
             }
         }
@@ -170,7 +170,7 @@ class MediaUploadManager {
         var fileDataList: [FileMessageEntry] = []
 
         for url in urls {
-            Log.info("📤 Uploading file: \(url.lastPathComponent)", category: "MediaUploadManager")
+            Log.info("Uploading file: \(url.lastPathComponent)", category: "MediaUploadManager")
             let mediaData = try await MediaManager.shared.uploadFile(url)
             fileDataList.append(FileMessageEntry(
                 mediaId: mediaData.mediaId,
@@ -202,7 +202,7 @@ class MediaUploadManager {
     private struct FileMessageEntry: Codable {
         let mediaId: String
         let mediaUrl: String
-        let mediaKey: String
+        let mediaKey: Data
         let mediaType: String
         let size: Int
         let hash: String

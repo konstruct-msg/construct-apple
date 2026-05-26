@@ -39,7 +39,7 @@ final class AvatarRetryService {
         let usersNeedingAvatar = await fetchUsersWithMissingAvatar(context: context)
 
         guard !usersNeedingAvatar.isEmpty else { return }
-        Log.info("🖼️ AvatarRetry: \(usersNeedingAvatar.count) user(s) missing avatar — scanning profile messages", category: "AvatarRetry")
+        Log.info("AvatarRetry: \(usersNeedingAvatar.count) user(s) missing avatar — scanning profile messages", category: "AvatarRetry")
 
         for userObjectID in usersNeedingAvatar {
             await retryAvatarForUser(objectID: userObjectID, context: context)
@@ -67,7 +67,7 @@ final class AvatarRetryService {
 
         let profileJSON = await fetchLatestProfileMessageContent(userId: userId, context: context)
         guard let json = profileJSON else {
-            Log.debug("🖼️ AvatarRetry: no profile message found for \(userId.prefix(8))…", category: "AvatarRetry")
+            Log.debug("AvatarRetry: no profile message found for \(userId.prefix(8))…", category: "AvatarRetry")
             return
         }
 
@@ -76,26 +76,26 @@ final class AvatarRetryService {
               let mediaId  = profileData.avatarMediaId,
               let mediaUrl = profileData.avatarMediaUrl,
               let mediaKey = profileData.avatarMediaKey else {
-            Log.debug("🖼️ AvatarRetry: profile for \(userId.prefix(8))… has no avatar metadata", category: "AvatarRetry")
+            Log.debug("AvatarRetry: profile for \(userId.prefix(8))… has no avatar metadata", category: "AvatarRetry")
             return
         }
 
-        Log.info("🖼️ AvatarRetry: retrying avatar download for \(userId.prefix(8))… mediaId=\(mediaId.prefix(8))", category: "AvatarRetry")
+        Log.info("AvatarRetry: retrying avatar download for \(userId.prefix(8))… mediaId=\(mediaId.prefix(8))", category: "AvatarRetry")
 
         do {
             let avatarData = try await MediaManager.shared.downloadAndDecryptAvatar(
                 mediaId: mediaId,
                 mediaUrl: mediaUrl,
-                mediaKeyBase64: mediaKey
+                mediaKey: mediaKey
             )
             await MainActor.run {
                 guard let user = context.object(with: objectID) as? User else { return }
                 user.avatarData = avatarData
                 context.saveAndLog()
-                Log.info("✅ AvatarRetry: avatar saved for \(userId.prefix(8))…", category: "AvatarRetry")
+                Log.info("AvatarRetry: avatar saved for \(userId.prefix(8))…", category: "AvatarRetry")
             }
         } catch {
-            Log.debug("🖼️ AvatarRetry: download still failed for \(userId.prefix(8))…: \(error.localizedDescription)", category: "AvatarRetry")
+            Log.debug("AvatarRetry: download still failed for \(userId.prefix(8))…: \(error.localizedDescription)", category: "AvatarRetry")
         }
     }
 

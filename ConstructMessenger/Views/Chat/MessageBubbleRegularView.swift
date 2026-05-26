@@ -100,7 +100,7 @@ struct MessageBubbleRegularView: View {
                                     let data = try await MediaManager.shared.downloadAndDecryptMedia(
                                         mediaId: voiceContent.mediaId,
                                         mediaUrl: voiceContent.mediaUrl,
-                                        mediaKeyBase64: voiceContent.mediaKey
+                                        mediaKey: voiceContent.mediaKey
                                     )
                                     if let ctx = message.managedObjectContext {
                                         try await VoiceTranscriptionService.shared.transcribe(

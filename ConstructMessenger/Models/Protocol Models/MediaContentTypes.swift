@@ -50,7 +50,7 @@ struct FileMessageContent: Codable {
     struct FileEntry: Codable {
         let mediaId: String
         let mediaUrl: String
-        let mediaKey: String
+        let mediaKey: Data
         let mediaType: String
         let size: Int
         let hash: String
@@ -65,7 +65,7 @@ struct VoiceMessageContent: Codable {
     let type: String           // always "voice"
     let mediaId: String
     let mediaUrl: String
-    let mediaKey: String       // base64 AES-256-GCM key (same encryption as image/file media)
+    let mediaKey: Data         // AES-256-GCM key — JSONEncoder emits base64 transparently
     let mediaType: String      // "audio/m4a"
     let size: Int
     let duration: TimeInterval

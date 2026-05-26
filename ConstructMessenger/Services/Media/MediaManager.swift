@@ -104,7 +104,7 @@ class MediaManager {
             try? FileManager.default.removeItem(at: file)
             mediaCache.removeValue(forKey: file.lastPathComponent)
             currentSize -= size
-            Log.debug("🗑️ Evicted \(file.lastPathComponent.prefix(8))… (\(size / 1024)KB) — quota", category: "MediaManager")
+            Log.debug("Evicted \(file.lastPathComponent.prefix(8))… (\(size / 1024)KB) — quota", category: "MediaManager")
         }
     }
 
@@ -129,7 +129,7 @@ class MediaManager {
             }
         }
         if count > 0 {
-            Log.info("🗑️ Evicted \(count) cached file(s) older than \(days) days", category: "MediaManager")
+            Log.info("Evicted \(count) cached file(s) older than \(days) days", category: "MediaManager")
         }
     }
     
@@ -143,29 +143,27 @@ class MediaManager {
     ///   - recipientId: User ID to encrypt media key for
     /// - Returns: Media metadata for message content
     func uploadImage(_ image: PlatformImage, for recipientId: String) async throws -> MediaMessageData {
-        Log.info("📤 Uploading image for recipient: \(recipientId)", category: "MediaManager")
+        Log.info("Uploading image for recipient: \(recipientId)", category: "MediaManager")
         
         let optimized = try MediaOptimizer.optimizeImage(image)
         
         // Upload with 1 automatic retry on stream failure
         let uploadResult = try await Self.uploadWithRetry(data: optimized.data, mimeType: optimized.metadata.mimeType)
-        Log.info("✅ Image uploaded: \(uploadResult.mediaId)", category: "MediaManager")
+        Log.info("Image uploaded: \(uploadResult.mediaId)", category: "MediaManager")
         
-        let mediaKeyBase64 = uploadResult.encryptionKey.base64EncodedString()
         let width = optimized.metadata.width
         let height = optimized.metadata.height
-        let thumbnailBase64 = optimized.thumbnail?.base64EncodedString()
-        
+
         return MediaMessageData(
             mediaId: uploadResult.mediaId,
             mediaUrl: uploadResult.mediaUrl,
-            mediaKey: mediaKeyBase64,
+            mediaKey: uploadResult.encryptionKey,
             mediaType: uploadResult.mimeType,
             size: uploadResult.encryptedSize,
             width: width,
             height: height,
             duration: nil,
-            thumbnail: thumbnailBase64,
+            thumbnail: optimized.thumbnail,
             hash: uploadResult.hash,
             filename: nil,
             compressed: false
@@ -180,7 +178,7 @@ class MediaManager {
         // Safe: the key is carried inside the DR-encrypted message payload, so each
         // recipient still gets an independent encrypted envelope.
         if let cached = await MediaSendCache.shared.cachedUpload(for: data) {
-            Log.info("📦 Media send cache hit — reusing \(cached.mediaId)", category: "MediaManager")
+            Log.info("Media send cache hit — reusing \(cached.mediaId)", category: "MediaManager")
             return cached
         }
 
@@ -204,7 +202,7 @@ class MediaManager {
                 return result
             } catch let error as GRPCCore.RPCError where retryableCodes.contains(error.code) {
                 lastError = error
-                Log.info("🔄 Upload dropped (code=\(error.code)) — will retry", category: "MediaManager")
+                Log.info("Upload dropped (code=\(error.code)) — will retry", category: "MediaManager")
             }
         }
         throw lastError ?? RPCError(code: .unknown, message: "Upload failed: no error captured")
@@ -230,7 +228,7 @@ class MediaManager {
                 return try await MediaServiceClient.shared.downloadEncryptedFile(mediaId: mediaId)
             } catch let error as GRPCCore.RPCError where retryableCodes.contains(error.code) {
                 lastError = error
-                Log.info("🔄 Download dropped (code=\(error.code)) — will retry", category: "MediaManager")
+                Log.info("Download dropped (code=\(error.code)) — will retry", category: "MediaManager")
                 // Start ICE after any transient failure and wait for it to be ready so the
                 // next attempt uses the obfs4 tunnel instead of the blocked direct path.
                 if error.code == .unavailable || error.code == .deadlineExceeded {
@@ -252,7 +250,7 @@ class MediaManager {
     /// - Returns: Media metadata for message content
     func uploadFile(_ url: URL) async throws -> MediaMessageData {
         let filename = url.lastPathComponent
-        Log.info("📤 Uploading file: \(filename)", category: "MediaManager")
+        Log.info("Uploading file: \(filename)", category: "MediaManager")
 
         guard url.startAccessingSecurityScopedResource() else {
             throw MediaUploadError.uploadFailed("Cannot access file")
@@ -267,14 +265,12 @@ class MediaManager {
         let (dataToUpload, compressed) = Self.compressIfBeneficial(originalData, mimeType: detectedMimeType)
 
         let uploadResult = try await Self.uploadWithRetry(data: dataToUpload, mimeType: detectedMimeType)
-        Log.info("✅ File uploaded: \(uploadResult.mediaId) compressed=\(compressed)", category: "MediaManager")
-
-        let mediaKeyBase64 = uploadResult.encryptionKey.base64EncodedString()
+        Log.info("File uploaded: \(uploadResult.mediaId) compressed=\(compressed)", category: "MediaManager")
 
         return MediaMessageData(
             mediaId: uploadResult.mediaId,
             mediaUrl: uploadResult.mediaUrl,
-            mediaKey: mediaKeyBase64,
+            mediaKey: uploadResult.encryptionKey,
             mediaType: detectedMimeType,
             size: originalData.count,         // original size shown to user
             width: nil,
@@ -296,15 +292,15 @@ class MediaManager {
     ///   - waveform: ~100 normalized amplitude samples (0.0–1.0) for waveform display
     /// - Returns: `VoiceMessageContent` ready to be JSON-encoded as the message payload
     func uploadAudio(_ url: URL, duration: TimeInterval, waveform: [Float]) async throws -> VoiceMessageContent {
-        Log.info("📤 Uploading voice message (duration \(Int(duration))s)", category: "MediaManager")
+        Log.info("Uploading voice message (duration \(Int(duration))s)", category: "MediaManager")
         let data = try Data(contentsOf: url)
         let uploadResult = try await Self.uploadWithRetry(data: data, mimeType: "audio/m4a")
-        Log.info("✅ Voice uploaded: \(uploadResult.mediaId)", category: "MediaManager")
+        Log.info("Voice uploaded: \(uploadResult.mediaId)", category: "MediaManager")
         return VoiceMessageContent(
             type: "voice",
             mediaId: uploadResult.mediaId,
             mediaUrl: uploadResult.mediaUrl,
-            mediaKey: uploadResult.encryptionKey.base64EncodedString(),
+            mediaKey: uploadResult.encryptionKey,
             mediaType: "audio/m4a",
             size: data.count,
             duration: duration,
@@ -339,7 +335,7 @@ class MediaManager {
         }
         let ratio = Double(compressed.count) / Double(data.count)
         if ratio < 0.90 {
-            Log.debug("📦 Compressed \(data.count) → \(compressed.count) bytes (\(Int(ratio * 100))%)", category: "MediaManager")
+            Log.debug("Compressed \(data.count) → \(compressed.count) bytes (\(Int(ratio * 100))%)", category: "MediaManager")
             return (compressed, true)
         }
         return (data, false)
@@ -357,7 +353,7 @@ class MediaManager {
     /// - Parameter image: Avatar image to upload
     /// - Returns: Avatar upload result with raw encryption key
     func uploadAvatar(_ image: PlatformImage) async throws -> AvatarUploadResult {
-        Log.info("📤 Uploading avatar", category: "MediaManager")
+        Log.info("Uploading avatar", category: "MediaManager")
         
         // Optimize avatar (resize + compress) using ImageHelper
         guard let avatarData = ImageHelper.prepareAvatarImage(image) else {
@@ -368,15 +364,11 @@ class MediaManager {
                 data: avatarData,
                 mimeType: "image/jpeg"
             )
-        Log.info("✅ Avatar uploaded: \(uploadResult.mediaId)", category: "MediaManager")
-        
-        // For avatars, return raw base64 key (not Double Ratchet encrypted)
-        // The entire profile message will be encrypted with Double Ratchet
-        let keyBase64 = uploadResult.encryptionKey.base64EncodedString()
+        Log.info("Avatar uploaded: \(uploadResult.mediaId)", category: "MediaManager")
         
         return AvatarUploadResult(
             mediaUrl: uploadResult.mediaUrl,
-            encryptionKey: keyBase64,  // Raw base64 key
+            encryptionKey: uploadResult.encryptionKey,
             mediaId: uploadResult.mediaId,
             hash: uploadResult.hash
         )
@@ -387,19 +379,19 @@ class MediaManager {
     /// Download and decrypt media from message
     /// - Parameters:
     ///   - mediaUrl: URL to download encrypted media from
-    ///   - mediaKeyBase64: Raw AES key in base64 (already decrypted as part of message)
+    ///   - mediaKey: Raw 32-byte AES-256-GCM key (already decrypted as part of message)
     /// - Returns: Decrypted media data
-    func downloadAndDecryptMedia(mediaId: String, mediaUrl: String, mediaKeyBase64: String) async throws -> Data {
+    func downloadAndDecryptMedia(mediaId: String, mediaUrl: String, mediaKey: Data) async throws -> Data {
         // 1. In-memory cache
         let cacheKey = mediaId
         if let cachedData = mediaCache[cacheKey] {
-            Log.debug("✅ Media cache hit (memory) for: \(mediaId.prefix(8))...", category: "MediaManager")
+            Log.debug("Media cache hit (memory) for: \(mediaId.prefix(8))...", category: "MediaManager")
             return cachedData
         }
 
         // 2. Persistent disk cache — survives app updates and restarts
         if let diskData = loadFromDiskCache(mediaId: mediaId) {
-            Log.debug("✅ Media cache hit (disk) for: \(mediaId.prefix(8))...", category: "MediaManager")
+            Log.debug("Media cache hit (disk) for: \(mediaId.prefix(8))...", category: "MediaManager")
             if currentCacheSize + diskData.count < maxCacheSize {
                 mediaCache[cacheKey] = diskData
                 currentCacheSize += diskData.count
@@ -407,30 +399,19 @@ class MediaManager {
             return diskData
         }
         
-        Log.info("📥 Downloading media from: \(mediaUrl)", category: "MediaManager")
-        Log.debug("   Media key (base64, first 20 chars): \(mediaKeyBase64.prefix(20))...", category: "MediaManager")
-        
-        // Decode raw AES key from base64
-        guard let keyData = Data(base64Encoded: mediaKeyBase64) else {
-            Log.error("❌ Invalid base64 media key", category: "MediaManager")
+        guard mediaKey.count == 32 else {
+            Log.error("Invalid media key size: \(mediaKey.count) (expected 32)", category: "MediaManager")
             throw MediaManagerError.invalidMediaKey
         }
-        
-        guard keyData.count == 32 else {
-            Log.error("❌ Invalid media key size: \(keyData.count) (expected 32)", category: "MediaManager")
-            throw MediaManagerError.invalidMediaKey
-        }
-        
-        Log.debug("   Decoded media key: \(keyData.count) bytes", category: "MediaManager")
-        
+
+        Log.info("Downloading media from: \(mediaUrl)", category: "MediaManager")
+
         let encryptedData = try await Self.downloadWithRetry(mediaId: mediaId)
         Log.debug("   Downloaded encrypted data: \(encryptedData.count) bytes", category: "MediaManager")
+
+        let decryptedData = try CryptoManager.shared.decryptMediaData(encryptedData, with: mediaKey)
         
-        // Decrypt media using symmetric AES key
-        Log.debug("   Calling CryptoManager.decryptMediaData...", category: "MediaManager")
-        let decryptedData = try CryptoManager.shared.decryptMediaData(encryptedData, with: keyData)
-        
-        Log.info("✅ Media decrypted: \(decryptedData.count) bytes", category: "MediaManager")
+        Log.info("Media decrypted: \(decryptedData.count) bytes", category: "MediaManager")
         
         // Persist to disk cache so media survives app restarts and updates
         saveToDiskcache(decryptedData, mediaId: mediaId)
@@ -440,9 +421,9 @@ class MediaManager {
         if currentCacheSize + decryptedData.count < maxCacheSize {
             mediaCache[cacheKey] = decryptedData
             currentCacheSize += decryptedData.count
-            Log.debug("💾 Cached media (\(currentCacheSize / 1024)KB / \(maxCacheSize / 1024)KB)", category: "MediaManager")
+            Log.debug("Cached media (\(currentCacheSize / 1024)KB / \(maxCacheSize / 1024)KB)", category: "MediaManager")
         } else {
-            Log.debug("⚠️ Cache full, not caching this media", category: "MediaManager")
+            Log.debug("Cache full, not caching this media", category: "MediaManager")
         }
         
         return decryptedData
@@ -452,26 +433,25 @@ class MediaManager {
     /// - Parameters:
     ///   - mediaId: UUID of the media file
     ///   - mediaUrl: Download URL (used for logging)
-    ///   - mediaKeyBase64: Base64-encoded AES-256 key
+    ///   - mediaKey: Raw 32-byte AES-256-GCM key
     ///   - compressed: Whether the payload was ZLIB-compressed before encryption
     /// - Returns: Original (decompressed if needed) file data
     func downloadAndDecryptFile(
         mediaId: String,
         mediaUrl: String,
-        mediaKeyBase64: String,
+        mediaKey: Data,
         compressed: Bool
     ) async throws -> Data {
-        // Reuse the existing download+decrypt path (which also caches)
         let decryptedData = try await downloadAndDecryptMedia(
             mediaId: mediaId,
             mediaUrl: mediaUrl,
-            mediaKeyBase64: mediaKeyBase64
+            mediaKey: mediaKey
         )
         guard compressed else { return decryptedData }
 
-        Log.debug("📦 Decompressing file attachment (\(decryptedData.count) bytes)", category: "MediaManager")
+        Log.debug("Decompressing file attachment (\(decryptedData.count) bytes)", category: "MediaManager")
         let decompressed = try Self.decompress(decryptedData)
-        Log.info("✅ Decompressed: \(decryptedData.count) → \(decompressed.count) bytes", category: "MediaManager")
+        Log.info("Decompressed: \(decryptedData.count) → \(decompressed.count) bytes", category: "MediaManager")
         return decompressed
     }
     func clearCache(includingDisk: Bool = false) {
@@ -480,9 +460,9 @@ class MediaManager {
         if includingDisk {
             try? FileManager.default.removeItem(at: diskCacheDirectory)
             try? FileManager.default.createDirectory(at: diskCacheDirectory, withIntermediateDirectories: true)
-            Log.info("🗑️ Media cache cleared (memory + disk)", category: "MediaManager")
+            Log.info("Media cache cleared (memory + disk)", category: "MediaManager")
         } else {
-            Log.info("🗑️ Media cache cleared (memory only)", category: "MediaManager")
+            Log.info("Media cache cleared (memory only)", category: "MediaManager")
         }
     }
     
@@ -490,19 +470,15 @@ class MediaManager {
     /// - Parameters:
     ///   - mediaId: UUID of the media file
     ///   - mediaUrl: Download URL (used for logging only)
-    ///   - mediaKeyBase64: Base64-encoded encryption key (raw AES key)
+    ///   - mediaKey: Raw 32-byte AES-256-GCM key
     /// - Returns: Decrypted avatar image data
-    func downloadAndDecryptAvatar(mediaId: String, mediaUrl: String, mediaKeyBase64: String) async throws -> Data {
-        Log.info("📥 Downloading avatar from: \(mediaUrl)", category: "MediaManager")
-        
-        guard let keyData = Data(base64Encoded: mediaKeyBase64) else {
-            throw MediaManagerError.invalidMediaKey
-        }
-        
-        let encryptedData = try await Self.downloadWithRetry(mediaId: mediaId)
-        let decryptedData = try CryptoManager.shared.decryptMediaData(encryptedData, with: keyData)
+    func downloadAndDecryptAvatar(mediaId: String, mediaUrl: String, mediaKey: Data) async throws -> Data {
+        Log.info("Downloading avatar from: \(mediaUrl)", category: "MediaManager")
 
-        Log.info("✅ Avatar decrypted: \(decryptedData.count) bytes", category: "MediaManager")
+        let encryptedData = try await Self.downloadWithRetry(mediaId: mediaId)
+        let decryptedData = try CryptoManager.shared.decryptMediaData(encryptedData, with: mediaKey)
+
+        Log.info("Avatar decrypted: \(decryptedData.count) bytes", category: "MediaManager")
         return decryptedData
     }
     
@@ -514,14 +490,14 @@ class MediaManager {
     ///   - maxSize: Maximum dimension (width or height)
     /// - Returns: Thumbnail image data (JPEG)
     func generateThumbnail(from image: PlatformImage, maxSize: CGFloat = 250) -> Data? {
-        Log.debug("🖼️ Generating thumbnail (maxSize: \(maxSize))", category: "MediaManager")
+        Log.debug("Generating thumbnail (maxSize: \(maxSize))", category: "MediaManager")
         
         do {
             let optimized = try MediaOptimizer.generateThumbnail(from: image)
-            Log.debug("✅ Thumbnail generated: \(optimized.count) bytes", category: "MediaManager")
+            Log.debug("Thumbnail generated: \(optimized.count) bytes", category: "MediaManager")
             return optimized
         } catch {
-            Log.error("❌ Failed to generate thumbnail: \(error)", category: "MediaManager")
+            Log.error("Failed to generate thumbnail: \(error)", category: "MediaManager")
             return nil
         }
     }
@@ -533,7 +509,7 @@ class MediaManager {
     /// - Returns: Thumbnail image data (JPEG)
     func generateThumbnail(from data: Data, maxSize: CGFloat = 250) -> Data? {
         guard let image = PlatformImage(data: data) else {
-            Log.error("❌ Failed to create PlatformImage from data", category: "MediaManager")
+            Log.error("Failed to create PlatformImage from data", category: "MediaManager")
             return nil
         }
         
@@ -577,7 +553,7 @@ class MediaManager {
         if index == 0 {
             UserDefaults.standard.set(thumbnailData, forKey: "message_thumbnail_\(messageId)")
         }
-        Log.debug("💾 Stored thumbnail[\(index)] for message: \(messageId)", category: "MediaManager")
+        Log.debug("Stored thumbnail[\(index)] for message: \(messageId)", category: "MediaManager")
     }
     
     /// Retrieve stored thumbnail for message
@@ -615,7 +591,7 @@ class MediaManager {
 /// Result of avatar upload
 struct AvatarUploadResult {
     let mediaUrl: String
-    let encryptionKey: String  // Raw base64 key (not Double Ratchet encrypted)
+    let encryptionKey: Data
     let mediaId: String
     let hash: String
 }

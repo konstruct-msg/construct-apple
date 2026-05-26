@@ -266,7 +266,7 @@ struct VoiceMessageBubbleView: View {
                 let data = try await MediaManager.shared.downloadAndDecryptMedia(
                     mediaId: voiceContent.mediaId,
                     mediaUrl: voiceContent.mediaUrl,
-                    mediaKeyBase64: voiceContent.mediaKey
+                    mediaKey: voiceContent.mediaKey
                 )
                 await MainActor.run {
                     self.audioData = data
@@ -277,7 +277,7 @@ struct VoiceMessageBubbleView: View {
                 await MainActor.run {
                     self.isLoading = false
                     self.loadError  = true
-                    Log.error("❌ Voice download failed: \(error.localizedDescription)", category: "VoiceMessageBubbleView")
+                    Log.error("Voice download failed: \(error.localizedDescription)", category: "VoiceMessageBubbleView")
                 }
             }
         }
@@ -342,15 +342,15 @@ private struct CTWaveformView: View {
 #Preview {
     VStack(spacing: 8) {
         VoiceMessageBubbleView(
-            voiceContent: VoiceMessageContent(type: "voice", mediaId: "t1", mediaUrl: "x", mediaKey: "k", mediaType: "audio/m4a", size: 120_000, duration: 47, waveform: (0..<100).map { _ in Float.random(in: 0.1...1.0) }, hash: ""),
+            voiceContent: VoiceMessageContent(type: "voice", mediaId: "t1", mediaUrl: "x", mediaKey: Data(), mediaType: "audio/m4a", size: 120_000, duration: 47, waveform: (0..<100).map { _ in Float.random(in: 0.1...1.0) }, hash: ""),
             isSentByMe: true, deliveryStatus: .delivered, onRetry: nil
         )
         VoiceMessageBubbleView(
-            voiceContent: VoiceMessageContent(type: "voice", mediaId: "t2", mediaUrl: "x", mediaKey: "k", mediaType: "audio/m4a", size: 80_000, duration: 22, waveform: (0..<100).map { _ in Float.random(in: 0.05...0.8) }, hash: ""),
+            voiceContent: VoiceMessageContent(type: "voice", mediaId: "t2", mediaUrl: "x", mediaKey: Data(), mediaType: "audio/m4a", size: 80_000, duration: 22, waveform: (0..<100).map { _ in Float.random(in: 0.05...0.8) }, hash: ""),
             isSentByMe: false, deliveryStatus: .delivered, onRetry: nil
         )
         VoiceMessageBubbleView(
-            voiceContent: VoiceMessageContent(type: "voice", mediaId: "", mediaUrl: "", mediaKey: "", mediaType: "audio/m4a", size: 0, duration: 8, waveform: (0..<100).map { _ in Float.random(in: 0.1...0.9) }, hash: ""),
+            voiceContent: VoiceMessageContent(type: "voice", mediaId: "", mediaUrl: "", mediaKey: Data(), mediaType: "audio/m4a", size: 0, duration: 8, waveform: (0..<100).map { _ in Float.random(in: 0.1...0.9) }, hash: ""),
             isSentByMe: true, deliveryStatus: .failed, onRetry: { }
         )
     }

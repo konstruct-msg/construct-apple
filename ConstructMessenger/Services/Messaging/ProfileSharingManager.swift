@@ -98,7 +98,7 @@ class ProfileSharingManager {
                     let decryptedData = try await MediaManager.shared.downloadAndDecryptAvatar(
                         mediaId: avatarMediaId,
                         mediaUrl: avatarMediaUrl,
-                        mediaKeyBase64: avatarMediaKey
+                        mediaKey: avatarMediaKey
                     )
 
                     await MainActor.run {

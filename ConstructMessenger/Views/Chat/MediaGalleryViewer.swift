@@ -376,7 +376,8 @@ struct MediaGalleryPage: View {
 
         guard let mediaId = item["mediaId"] as? String,
               let mediaUrl = item["mediaUrl"] as? String,
-              let mediaKeyBase64 = item["mediaKey"] as? String else {
+              let mediaKeyStr = item["mediaKey"] as? String,
+              let mediaKey = Data(base64Encoded: mediaKeyStr) else {
             isLoading = false
             return
         }
@@ -384,7 +385,7 @@ struct MediaGalleryPage: View {
         Task {
             do {
                 let data = try await MediaManager.shared.downloadAndDecryptMedia(
-                    mediaId: mediaId, mediaUrl: mediaUrl, mediaKeyBase64: mediaKeyBase64)
+                    mediaId: mediaId, mediaUrl: mediaUrl, mediaKey: mediaKey)
                 if let img = PlatformImage(data: data) {
                     await MainActor.run {
                         MediaImageCache.shared.store(img, for: message.id, at: itemIndex)

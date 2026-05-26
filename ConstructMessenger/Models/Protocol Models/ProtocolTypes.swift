@@ -185,14 +185,14 @@ struct ProfileShareData: Codable {
     let displayName: String
     let avatarMediaId: String?  // Media ID from Media Upload API
     let avatarMediaUrl: String?  // Media URL for downloading
-    let avatarMediaKey: String?  // Encrypted media key (encrypted with Double Ratchet for recipient)
+    let avatarMediaKey: Data?    // AES media key — JSONEncoder/Decoder handles base64 transparently
     let avatarMediaType: String?  // MIME type (e.g., "image/jpeg")
     let timestamp: Int64  // Unix timestamp when profile was shared
     
     // Backward compatibility: support old format with avatarData (base64)
     let avatarData: String?  // Deprecated: Base64 encoded image data (for backward compatibility)
     
-    init(displayName: String, avatarMediaId: String?, avatarMediaUrl: String?, avatarMediaKey: String?, avatarMediaType: String?, timestamp: Int64) {
+    init(displayName: String, avatarMediaId: String?, avatarMediaUrl: String?, avatarMediaKey: Data?, avatarMediaType: String?, timestamp: Int64) {
         self.type = "profile"
         self.displayName = displayName
         self.avatarMediaId = avatarMediaId
@@ -212,7 +212,7 @@ struct ProfileShareData: Codable {
         // New format: media via Media Upload API
         self.avatarMediaId = try container.decodeIfPresent(String.self, forKey: .avatarMediaId)
         self.avatarMediaUrl = try container.decodeIfPresent(String.self, forKey: .avatarMediaUrl)
-        self.avatarMediaKey = try container.decodeIfPresent(String.self, forKey: .avatarMediaKey)
+        self.avatarMediaKey = try container.decodeIfPresent(Data.self, forKey: .avatarMediaKey)
         self.avatarMediaType = try container.decodeIfPresent(String.self, forKey: .avatarMediaType)
         
         // Old format: base64 data (backward compatibility)

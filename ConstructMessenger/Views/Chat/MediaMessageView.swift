@@ -178,7 +178,8 @@ private struct SingleMediaCell: View {
         }
         guard let mediaId = itemDict["mediaId"] as? String,
               let mediaUrl = itemDict["mediaUrl"] as? String,
-              let mediaKeyBase64 = itemDict["mediaKey"] as? String
+              let mediaKeyStr = itemDict["mediaKey"] as? String,
+              let mediaKey = Data(base64Encoded: mediaKeyStr)
         else {
             loadError = "Missing media info"
             return
@@ -190,7 +191,7 @@ private struct SingleMediaCell: View {
                 let imageData = try await MediaManager.shared.downloadAndDecryptMedia(
                     mediaId: mediaId,
                     mediaUrl: mediaUrl,
-                    mediaKeyBase64: mediaKeyBase64
+                    mediaKey: mediaKey
                 )
                 await MainActor.run { downloadProgress = 0.9 }
                 guard let image = PlatformImage(data: imageData) else {
@@ -312,13 +313,14 @@ private struct GridCell: View {
         }
         guard let mediaId = itemDict["mediaId"] as? String,
               let mediaUrl = itemDict["mediaUrl"] as? String,
-              let mediaKeyBase64 = itemDict["mediaKey"] as? String
+              let mediaKeyStr = itemDict["mediaKey"] as? String,
+              let mediaKey = Data(base64Encoded: mediaKeyStr)
         else { return }
         Task {
             guard let imageData = try? await MediaManager.shared.downloadAndDecryptMedia(
                 mediaId: mediaId,
                 mediaUrl: mediaUrl,
-                mediaKeyBase64: mediaKeyBase64
+                mediaKey: mediaKey
             ),
                 let image = PlatformImage(data: imageData)
             else { return }
