@@ -3,7 +3,7 @@
 //  ConstructMessengerTests
 //
 //  Targeted tests for the P1 dual-proxy-lifecycle fix:
-//  when ConnectionLoop owns the proxy (isConnectionLoopActive=true),
+//  when ConnectionLoop owns the proxy (iceProxyPort() != nil),
 //  handleICEFailure() must route to ConnectionLoop, not IceProxyManager.
 //
 //  Test design note:
@@ -24,23 +24,23 @@ import GRPCCore
 
 final class GRPCCallExecutorTests: XCTestCase {
 
-    // MARK: - isConnectionLoopActive gate
+    // MARK: - iceProxyPort gate
 
-    func test_isConnectionLoopActive_falseWhenNoPortSet() {
+    func test_iceProxyPort_nilWhenNoPortSet() {
         GRPCChannelManager.shared.setDirectProxyPort(nil)
-        XCTAssertFalse(GRPCChannelManager.shared.isConnectionLoopActive)
+        XCTAssertNil(GRPCChannelManager.shared.iceProxyPort())
     }
 
-    func test_isConnectionLoopActive_trueAfterSetDirectProxyPort() {
+    func test_iceProxyPort_nonNilAfterSetDirectProxyPort() {
         GRPCChannelManager.shared.setDirectProxyPort(54321)
-        XCTAssertTrue(GRPCChannelManager.shared.isConnectionLoopActive)
+        XCTAssertNotNil(GRPCChannelManager.shared.iceProxyPort())
         GRPCChannelManager.shared.setDirectProxyPort(nil)
     }
 
-    func test_isConnectionLoopActive_falseAfterPortCleared() {
+    func test_iceProxyPort_nilAfterPortCleared() {
         GRPCChannelManager.shared.setDirectProxyPort(54321)
         GRPCChannelManager.shared.setDirectProxyPort(nil)
-        XCTAssertFalse(GRPCChannelManager.shared.isConnectionLoopActive)
+        XCTAssertNil(GRPCChannelManager.shared.iceProxyPort())
     }
 
     // MARK: - P1: staleLocalProxy routing
@@ -65,7 +65,7 @@ final class GRPCCallExecutorTests: XCTestCase {
 
         XCTAssertEqual(action, .propagate,
             "staleLocalProxy with ConnectionLoop active: prepare() must run (not restartAfterCrash)")
-        XCTAssertFalse(GRPCChannelManager.shared.isConnectionLoopActive,
+        XCTAssertNil(GRPCChannelManager.shared.iceProxyPort(),
             "prepare() must have cleared override port (shouldUseICE=false, no ICE activation yet)")
 
         // Cleanup

@@ -11,12 +11,6 @@ final class GRPCChannelManager: Sendable {
     static let customHostKey = "grpcCustomHost"
     static let customPortKey = "grpcCustomPort"
 
-    // ICE relay health tracking: avoid routing through a dead relay.
-    // iceFailedAtKey is kept only for one-time removal of legacy UserDefaults values on startup.
-    static let iceFailedAtKey = "iceRelayLastFailedAt"
-    // Base cooldown for exponential backoff (first failure). See recordICEFailure().
-    private static let iceCooldown: TimeInterval = NetworkTiming.ICE.relayCooldown
-
     private static let defaultHost: String = {
         Bundle.main.object(forInfoDictionaryKey: "GRPC_HOST") as? String ?? "ams.konstruct.cc"
     }()
@@ -51,92 +45,9 @@ final class GRPCChannelManager: Sendable {
         NotificationCenter.default.post(name: .grpcServerChanged, object: nil)
     }
 
-    /// Record that the ICE relay just failed. Subsequent calls will bypass ICE using an
-    /// exponential backoff: 30s → 60s → 120s → 240s → 300s (capped).
-    /// Resets to 30s on `clearICECooldownState()` (successful connection).
-    ///
-    /// - Parameter failedAddress: The relay address that failed, captured by the caller before any
-    ///   `await` suspension points. Avoids a race where `activeRelay` is cleared on MainActor by a
-    ///   concurrent `networkPathChanged` before this Task runs.
-    func recordICEFailure(failedAddress: String? = nil) {
-        let duration = _iceLock.withLock { () -> TimeInterval in
-            _consecutiveICEFailures += 1
-            // 30s × 2^(n-1), capped at 300s. Sequence: 30, 60, 120, 240, 300, 300, …
-            let d = min(30.0 * pow(2.0, Double(_consecutiveICEFailures - 1)), 300.0)
-            _iceCooldownUntil = Date().addingTimeInterval(d)
-            return d
-        }
-        // Cooldown is intentionally NOT persisted to UserDefaults.
-        // If the app is killed and relaunched, the network state may have changed
-        // (different WiFi, cellular handoff), so a fresh ICE attempt is preferred
-        // over carrying over a stale cooldown from a previous session.
-        //
-        // Use the routing-aware variant: if the connection was already on the direct path
-        // (e.g. ICE was in standby or cooldown when this RPC ran), there is no routing
-        // change and invalidating would kill a working direct connection for no reason.
-        invalidatePersistentClientIfRoutingChanged()
-        Log.info("⚠️ ICE relay failure recorded — bypassing ICE for \(Int(duration))s (failure #\(_iceLock.withLock { _consecutiveICEFailures }))", category: "gRPC")
-        Task { @MainActor [weak self] in
-            guard self != nil else { return }
-            IceProxyManager.shared.enterCooldown(duration: duration)
-            let recovered = await IceProxyManager.shared.refreshCertAndRestart()
-            if recovered {
-                // Successfully switched to a different relay (e.g. MSK after AMS failure).
-                // Clear the cooldown immediately so gRPC routes through the new relay —
-                // without this, iceProxyPort() keeps returning nil for the full 60s cooldown
-                // even though a working relay is now running.
-                IceProxyManager.shared.clearCooldown()
-                // No invalidatePersistentClient() here — acquirePersistentClient() detects the
-                // routing key change (ice:newPort vs direct:host:port) automatically on the
-                // next RPC/stream reconnect. An extra invalidation here would create a third
-                // TLS handshake in rapid succession during failure→recovery cycling.
-                Log.info("🧊 ICE recovered via relay failover — cooldown cleared, routing via new relay", category: "gRPC")
-                NotificationCenter.default.post(name: .iceRelayRecovered, object: nil)
-            }
-        }
-    }
-
-    /// True if the ICE relay failed recently and we should fall back to direct TLS.
-    var isICEOnCooldown: Bool { isICEOnCooldownInternal() }
-
-    private func isICEOnCooldownInternal() -> Bool {
-        guard let until = _iceLock.withLock({ _iceCooldownUntil }) else { return false }
-        return Date() < until
-    }
-
-    /// Clears the ICE cooldown and resets the exponential backoff counter.
-    /// Called from `IceProxyManager.clearCooldown()` so both systems stay in sync.
-    func clearICECooldownState() {
-        _iceLock.withLock {
-            _iceCooldownUntil = nil
-            _consecutiveICEFailures = 0
-        }
-        // Also remove any legacy persisted value from older builds.
-        UserDefaults.standard.removeObject(forKey: Self.iceFailedAtKey)
-    }
-
-    /// Updates the in-memory ICE mode cache. Called from `IceProxyManager.mode.didSet`
-    /// so `iceProxyPort()` never needs to read UserDefaults on the hot path.
-    func updateCachedIceMode(_ mode: IceMode) {
-        _iceModeLock.withLock { _cachedIceMode = mode }
-    }
-
-    /// Syncs ICE standby pre-warm state from IceProxyManager.
-    /// When `true`, `iceProxyPort()` returns nil even if the proxy is running —
-    /// direct routing is used until DPI is confirmed (or mode promoted to .on).
-    func updateCachedICEStandby(_ isStandby: Bool) {
-        _iceStandbyLock.withLock { _cachedICEStandby = isStandby }
-    }
-
-    /// True when `ConnectionLoop` has set an override proxy port and owns the proxy lifecycle.
-    /// When false, the legacy `IceProxyManager` C-FFI path is used instead.
-    var isConnectionLoopActive: Bool {
-        _overrideProxyPortLock.withLock { _overrideProxyPort != nil }
-    }
-
-    /// Sets (or clears) the ICE proxy port managed by `ConnectionLoop`.
-    /// When non-nil, `iceProxyPort()` returns this value directly, bypassing the legacy
-    /// C FFI / mode / standby / cooldown checks. Pass `nil` to return to legacy routing.
+    /// Sets the ICE proxy port managed by `ConnectionLoop`.
+    /// When non-nil, `iceProxyPort()` returns this value and gRPC routes through the proxy.
+    /// Pass `nil` to clear ICE routing (direct path).
     func setDirectProxyPort(_ port: UInt16?) {
         let changed = _overrideProxyPortLock.withLock { () -> Bool in
             let old = _overrideProxyPort
@@ -147,69 +58,13 @@ final class GRPCChannelManager: Sendable {
         invalidatePersistentClientIfRoutingChanged()
     }
 
-    /// Returns the local proxy port if ICE is running AND should be used for routing, nil otherwise.
-    /// Routing rule: use ICE whenever the Rust proxy is alive, unless mode is `.off`.
-    ///   `.off`        → always nil (user explicitly disabled ICE)
-    ///   `.auto`/`.on` → use ICE if the proxy is running
-    ///
-    /// In `.auto` mode the proxy starts on-demand when DPI is detected (see
-    /// `IceProxyManager.activateDPIAutoMode()`). Once started it stays running for the
-    /// session — mode changes do NOT tear down an active tunnel.
+    /// Returns the local proxy port when ICE is active, nil for direct routing.
+    /// Set by `ConnectionLoop.prepare()` via `setDirectProxyPort()`.
     func iceProxyPort() -> UInt16? {
-        // ConnectionLoop override takes priority — it manages proxy lifecycle directly.
-        if let override = _overrideProxyPortLock.withLock({ _overrideProxyPort }) {
-            return override
-        }
-        // Legacy path: read from C FFI with mode/standby/cooldown guards.
-        guard ice_proxy_is_running() != 0 else { return nil }
-        guard _iceModeLock.withLock({ _cachedIceMode }) != .off else { return nil }
-        // Standby pre-warm: proxy is running but routing suppressed — use direct until DPI confirmed.
-        guard !_iceStandbyLock.withLock({ _cachedICEStandby }) else { return nil }
-        guard !isICEOnCooldownInternal() else {
-            Log.debug("🧊 ICE on cooldown — using direct TLS", category: "gRPC")
-            return nil
-        }
-        let port = ice_proxy_port()
-        return port > 0 ? port : nil
-    }
-
-    /// Polls `ice_proxy_is_running()` and `ice_proxy_port()` until the Rust goroutine signals
-    /// it is fully ready, or the timeout elapses.
-    ///
-    /// `ice_proxy_start_tls()` binds the TCP port synchronously and returns, but the Rust goroutine
-    /// that sets the "is_running" flag runs asynchronously. Without this wait, the immediate
-    /// `iceProxyPort()` check after `restartAfterCrash()` sees 0 and
-    /// falls back to a direct channel — defeating ICE entirely.
-    ///
-    /// In practice the Rust goroutine initializes in <50 ms when ICE is already running (Rust flag
-    /// set after port bind). When ICE starts cold from scratch (full WebTunnel TCP+TLS handshake),
-    /// the tunnel may take 3–8 s to establish — hence the 10-second default.
-    func waitForProxyReady(timeout: TimeInterval = NetworkTiming.ICE.proxyReadyWaitTimeout) async {
-        // ICE OFF: proxy will never start — return immediately, no polling.
-        guard _iceModeLock.withLock({ _cachedIceMode }) != .off else { return }
-        // On WiFi the proxy typically starts in <500 ms; the full 15 s cellular timeout
-        // wastes 10+ s in failure paths on fast networks.
-        let effectiveTimeout = NetworkReachabilityManager.shared.connectionType == .cellular
-            ? timeout
-            : min(timeout, NetworkTiming.ICE.proxyReadyWaitTimeoutWiFi)
-        let deadline = Date().addingTimeInterval(effectiveTimeout)
-        while Date() < deadline {
-            if ice_proxy_is_running() != 0, ice_proxy_port() > 0 { return }
-            try? await Task.sleep(nanoseconds: 50_000_000) // 50 ms
-        }
-        Log.debug("🧊 waitForProxyReady: timed out after \(Int(effectiveTimeout * 1000)) ms", category: "gRPC")
+        _overrideProxyPortLock.withLock { _overrideProxyPort }
     }
 
     private init() {
-        // Populate in-memory ICE mode from UserDefaults — one-time read at startup.
-        let storedMode = UserDefaults.standard.string(forKey: IceMode.defaultsKey)
-            .flatMap(IceMode.init) ?? IceMode.platformDefault
-        _cachedIceMode = storedMode
-        // ICE cooldown is NOT restored on startup — the network may have changed since
-        // the app was last killed. A fresh connection attempt is always preferred.
-        // Remove any legacy persisted value from older builds.
-        UserDefaults.standard.removeObject(forKey: Self.iceFailedAtKey)
-
         // Invalidate the persistent connection whenever the network path changes
         // (cellular ↔ WiFi switch, VPN on/off, etc.).  The old TCP connection is dead
         // after a path change; proactively evicting it prevents the first post-switch
@@ -268,30 +123,9 @@ final class GRPCChannelManager: Sendable {
     }
 #endif
 
-    // ConnectionLoop override: when set, iceProxyPort() returns this value directly,
-    // bypassing the legacy C FFI / mode / standby / cooldown checks.
-    // nil means "use legacy IceProxyManager logic".
+    // Set by ConnectionLoop.prepare() via setDirectProxyPort(). iceProxyPort() returns this value.
     private nonisolated(unsafe) var _overrideProxyPort: UInt16? = nil
     private let _overrideProxyPortLock = NSLock()
-
-    // In-memory ICE cooldown state.
-    // Written by recordICEFailure/clearICECooldownState; read by isICEOnCooldownInternal.
-    private nonisolated(unsafe) var _iceCooldownUntil: Date?
-    // Consecutive ICE failure count for exponential backoff. Resets on successful connection
-    // (clearICECooldownState). Protected by _iceLock.
-    private nonisolated(unsafe) var _consecutiveICEFailures: Int = 0
-    private let _iceLock = NSLock()
-
-    // In-memory cache of the current ICE operation mode.
-    // Updated via updateCachedIceMode() when IceProxyManager.mode changes.
-    // Falls back to UserDefaults only at init time (one-time read).
-    private nonisolated(unsafe) var _cachedIceMode: IceMode = .auto
-    private let _iceModeLock = NSLock()
-
-    // ICE standby pre-warm flag: proxy is running but routing suppressed until DPI is confirmed.
-    // Updated via updateCachedICEStandby() from IceProxyManager (MainActor → non-isolated bridge).
-    private nonisolated(unsafe) var _cachedICEStandby: Bool = false
-    private let _iceStandbyLock = NSLock()
 
     private func routingKey() -> String {
         if let icePort = iceProxyPort() { return "ice:\(icePort)" }
@@ -502,57 +336,6 @@ final class GRPCChannelManager: Sendable {
         )
     }
 
-    /// Creates a one-shot gRPC client targeting a local ICE proxy port over plaintext.
-    /// Creates a temporary gRPC client that always connects directly to the server,
-    /// bypassing any active ICE proxy. Use ONLY for direct-path connectivity probes.
-    /// The caller must co-run with `client.runConnections()` to actually establish the connection.
-    func makeDirectProbeClient() throws -> GRPCClient<HTTP2ClientTransport.TransportServices> {
-        let host = currentHost
-        let port = currentPort
-        Log.debug("🧊 Direct probe client → \(host):\(port) (no ICE)", category: "ICE")
-        let transport = try HTTP2ClientTransport.TransportServices(
-            target: .dns(host: host, port: port),
-            transportSecurity: .tls,
-            config: .defaults {
-                $0.connection = .init(
-                    maxIdleTime: .seconds(15),
-                    keepalive: .init(
-                        time: .seconds(10),
-                        timeout: .seconds(5),
-                        allowWithoutCalls: false
-                    )
-                )
-            }
-        )
-        return GRPCClient(transport: transport, interceptors: [AuthInterceptor()])
-    }
-
-    /// Used for the ICE legs of a happy-eyeballs 3-way race.
-    ///
-    /// The transport target is the local ICE proxy (127.0.0.1:port), but the gRPC
-    /// `:authority` pseudo-header MUST be the logical server hostname — otherwise
-    /// upstream HTTP routers (Traefik `Host(...)` rule) won't match the request
-    /// and reply 404 even though the byte-pipe is healthy.
-    func makeICEClient(port: UInt16) throws -> GRPCClient<HTTP2ClientTransport.TransportServices> {
-        let logicalAuthority = currentHost
-        let transport = try HTTP2ClientTransport.TransportServices(
-            target: .ipv4(address: "127.0.0.1", port: Int(port)),
-            transportSecurity: .plaintext,
-            config: .defaults {
-                $0.http2.authority = logicalAuthority
-                $0.connection = .init(
-                    maxIdleTime: .seconds(NetworkTiming.GRPC.maxIdleTimeSeconds),
-                    keepalive: .init(
-                        time: .seconds(NetworkTiming.GRPC.keepaliveTimeIceSeconds),
-                        timeout: .seconds(NetworkTiming.GRPC.keepaliveTimeoutSeconds),
-                        allowWithoutCalls: true
-                    )
-                )
-            }
-        )
-        return GRPCClient(transport: transport, interceptors: [AuthInterceptor()])
-    }
-
     /// Creates a gRPC client using the HTTP/3 (QUIC/Network.framework) transport.
     /// Requires iOS 16+/macOS 13+ for stable QUIC support (NWProtocolQUIC available since iOS 15).
     /// Only called for direct-path connections — never over ICE/obfs4 proxy.
@@ -648,7 +431,6 @@ final class GRPCChannelManager: Sendable {
 
 extension Notification.Name {
     static let grpcServerChanged = Notification.Name("grpcServerChanged")
-    /// Posted when the ICE relay recovers after a cooldown (routing switches back from direct → relay).
-    /// Observers should retry any startup RPCs that may have timed out during the direct-routing window.
+    /// Posted when ICE recovers and routing switches back to a relay.
     static let iceRelayRecovered = Notification.Name("iceRelayRecovered")
 }
