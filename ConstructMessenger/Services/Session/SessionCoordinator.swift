@@ -27,7 +27,7 @@ private enum ContactSessionState: Equatable {
 }
 
 @MainActor
-final class SessionCoordinator {
+final class SessionCoordinator: MessageRouterDelegate {
 
     // MARK: - Owned services
 
@@ -38,9 +38,8 @@ final class SessionCoordinator {
 
     // MARK: - State
 
-    /// Messages that arrived before their sender's session was established.
-    /// Keyed by sender userId; ordered by arrival (first element = lowest messageNumber).
-    private var pendingFirstMessages: [String: [ChatMessage]] = [:]
+    /// Forwarded to ChatsViewModel — fires when an E2E-encrypted delivery receipt is decrypted.
+    var onE2EDeliveryReceiptDecrypted: (([String]) -> Void)?
 
     /// Tracks when we last sent END_SESSION to each peer to prevent loop storms.
     private var endSessionSentAt: [String: Date] = [:]
@@ -123,10 +122,10 @@ final class SessionCoordinator {
         publicKeyBundleHandler.setContext(context)
     }
 
-    /// Call once after init to bind MessageRouter callbacks and the stream manager reference.
+    /// Call once after init to wire MessageRouter delegate and the stream manager reference.
     func configure(streamManager: MessageStreamManager) {
         self.streamManager = streamManager
-        setupMessageRouterCallbacks()
+        messageRouter.delegate = self
         startCooldownPurgeTimer()
     }
 
@@ -134,7 +133,7 @@ final class SessionCoordinator {
 
     /// Route a single incoming message through MessageRouter.
     func routeIncomingMessage(_ message: ChatMessage, in context: NSManagedObjectContext) {
-        messageRouter.routeIncomingMessage(message, in: context, pendingMessages: &pendingFirstMessages)
+        messageRouter.routeIncomingMessage(message, in: context)
     }
 
     /// Called when the stream receives a KEY_SYNC control message.
@@ -246,147 +245,106 @@ final class SessionCoordinator {
         Log.info("✅ END_SESSION broadcast: \(successCount) sent, \(failCount) failed", category: "ChatsViewModel")
     }
 
-    // MARK: - MessageRouter callbacks
+    // MARK: - MessageRouterDelegate
 
-    private func setupMessageRouterCallbacks() {
-        messageRouter.onReceiptNeeded = { [weak self] messageIds, recipientUserId, status in
-            self?.streamManager?.sendReceipt(messageIds, to: recipientUserId, status: status)
+    func messageRouter(_ router: MessageRouter, needsReceipt messageIds: [String], to userId: String, status: Shared_Proto_Signaling_V1_ReceiptStatus) {
+        streamManager?.sendReceipt(messageIds, to: userId, status: status)
+    }
+
+    func messageRouter(_ router: MessageRouter, needsPublicKeyBundle userId: String, for message: ChatMessage) {
+        Task { @MainActor in
+            await self.handlePublicKeyBundleNeeded(userId: userId, message: message)
         }
+    }
 
-        messageRouter.onPublicKeyBundleNeeded = { [weak self] userId, message in
-            guard let self else { return }
-            Task { @MainActor in
-                await self.handlePublicKeyBundleNeeded(userId: userId, message: message)
+    func messageRouter(_ router: MessageRouter, needsUsernameUpdate userId: String) {
+        Task {
+            do {
+                let bundle = try await publicKeyBundleHandler.fetchPublicKeyWithRetry(userId: userId)
+                await MainActor.run { _ = self.publicKeyBundleHandler.handlePublicKeyBundle(bundle) }
+            } catch {
+                Log.error("❌ Failed to fetch public key for username update: \(error.localizedDescription)", category: "SessionCoordinator")
             }
         }
+    }
 
-        messageRouter.onUsernameUpdateNeeded = { [weak self] userId in
-            guard let self else { return }
-            Task {
-                do {
-                    let bundle = try await self.publicKeyBundleHandler.fetchPublicKeyWithRetry(userId: userId)
-                    await MainActor.run {
-                        _ = self.publicKeyBundleHandler.handlePublicKeyBundle(bundle)
-                    }
-                } catch {
-                    Log.error("❌ Failed to fetch public key for username update: \(error.localizedDescription)", category: "ChatsViewModel")
-                }
-            }
-        }
-
-        messageRouter.onEndSessionNeeded = { [weak self] userId in
-            guard let self else { return }
-            Task {
-                let now = Date()
-                if let lastSent = self.endSessionSentAt[userId],
-                   now.timeIntervalSince(lastSent) < self.endSessionCooldown {
-                    Log.info("⏸️ END_SESSION cooldown active for \(userId.prefix(8))..., skipping", category: "ChatsViewModel")
-                    return
-                }
-                self.endSessionSentAt[userId] = now
-                Log.info("🔄 Sending END_SESSION to \(userId.prefix(8))... (session out of sync)", category: "ChatsViewModel")
-                do {
-                    try await self.sendEndSession(to: userId, reason: "session_out_of_sync")
-                } catch {
-                    Log.error("⚠️ Failed to send END_SESSION to \(userId.prefix(8))...: \(error)", category: "SessionCoordinator")
-                }
-                // After DR divergence: auto-reinit without waiting for user action.
-                // Mirror the onEndSessionReceived logic: INITIATOR prewarms immediately,
-                // RESPONDER starts the 60s fallback timer (peer should send msgNum=0 first).
-                let myId = SessionManager.shared.currentUserId ?? ""
-                guard !myId.isEmpty else { return }
-                try? await Task.sleep(nanoseconds: 300_000_000) // 300ms — let peer process END_SESSION
-                if DeviceIdOrdering.isNaturalInitiator(myId: myId, peerId: userId) {
-                    Log.info("🔥 DR diverge: auto-reinit as natural INITIATOR for \(userId.prefix(8))…", category: "SessionInit")
-                    self.prewarmSessions(for: [userId], skipEndSessionNotification: true)
-                } else {
-                    Log.info("🔇 DR diverge: starting RESPONDER fallback for \(userId.prefix(8))…", category: "SessionInit")
-                    self.startResponderFallback(for: userId)
-                }
-            }
-        }
-
-        messageRouter.onSessionHealNeeded = { [weak self] userId, failedMessage in
-            guard let self else { return }
-            Task { @MainActor in
-                await self.handleSessionHealNeeded(userId: userId, failedMessage: failedMessage)
-            }
-        }
-
-        // Filter out stale END_SESSION messages that predate the currently-established session.
-        // This prevents server re-deliveries of old END_SESSIONs from tearing down healthy sessions.
-        messageRouter.isEndSessionStale = { [weak self] userId, endSessionTimestamp in
-            guard let self else { return false }
-            guard let establishedAt = self.establishedAt(for: userId) else { return false }
-            // Allow a 5-second grace window to handle near-simultaneous END_SESSION + session init.
-            return endSessionTimestamp + 5 < establishedAt
-        }
-
-        // When we receive END_SESSION from a peer, prewarm if we are the natural INITIATOR
-        // (higher deviceId). This ensures the session re-establishes without user action,
-        // and prevents the RESPONDER from incorrectly acting as INITIATOR with stale OTPKs.
-        messageRouter.onEndSessionReceived = { [weak self] userId, endSessionTimestamp in
-            guard let self else { return }
-            let myId = SessionManager.shared.currentUserId ?? ""
-            guard !myId.isEmpty else { return }
-
-            // Only the natural INITIATOR (higher deviceId) auto-resends and re-prewarms.
-            // If the END_SESSION came from a higher deviceId it means they are the tie-break
-            // winner and have already restored their INITIATOR session — do NOT re-prewarm
-            // or resend here; doing so would restart the tie-break loop.
-            guard DeviceIdOrdering.isNaturalInitiator(myId: myId, peerId: userId) else {
-                Log.info("🔇 END_SESSION from natural INITIATOR \(userId.prefix(8))… — waiting as RESPONDER (no resend, no prewarm)", category: "SessionInit")
-                startResponderFallback(for: userId)
-                // Notify ChatsViewModel to add an ephemeral stream subscription for this
-                // userId. Without this the INITIATOR's X3DH message can only arrive via
-                // fetchMissedMessages, which often times out while ICE is establishing.
-                onEphemeralSubscriptionNeeded?(userId)
+    func messageRouter(_ router: MessageRouter, needsEndSession userId: String) {
+        Task {
+            let now = Date()
+            if let lastSent = endSessionSentAt[userId],
+               now.timeIntervalSince(lastSent) < endSessionCooldown {
+                Log.info("⏸️ END_SESSION cooldown active for \(userId.prefix(8))..., skipping", category: "SessionCoordinator")
                 return
             }
-
-            self.resendUnconfirmedOutgoingMessagesIfNeeded(to: userId)
-            Log.info("🔥 END_SESSION received — re-prewarming as natural INITIATOR for \(userId.prefix(8))…", category: "SessionInit")
-            Task {
-                // Brief delay so END_SESSION processing (archive, queue clear) finishes first.
-                try? await Task.sleep(nanoseconds: 300_000_000) // 300 ms
-                // Do NOT send session_missing_restart here: the peer just sent us END_SESSION,
-                // which means they already know they need to reset. Sending another END_SESSION
-                // in response would cause them to restart their own onEndSessionReceived path,
-                // creating a ping-pong loop. Our X3DH init message implicitly signals the new
-                // session — that's all the peer needs to become RESPONDER.
-                self.prewarmSessions(for: [userId], skipEndSessionNotification: true)
+            endSessionSentAt[userId] = now
+            Log.info("🔄 Sending END_SESSION to \(userId.prefix(8))... (session out of sync)", category: "SessionCoordinator")
+            do {
+                try await sendEndSession(to: userId, reason: "session_out_of_sync")
+            } catch {
+                Log.error("⚠️ Failed to send END_SESSION to \(userId.prefix(8))...: \(error)", category: "SessionCoordinator")
+            }
+            let myId = SessionManager.shared.currentUserId ?? ""
+            guard !myId.isEmpty else { return }
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            if DeviceIdOrdering.isNaturalInitiator(myId: myId, peerId: userId) {
+                Log.info("🔥 DR diverge: auto-reinit as natural INITIATOR for \(userId.prefix(8))…", category: "SessionInit")
+                prewarmSessions(for: [userId], skipEndSessionNotification: true)
+            } else {
+                Log.info("🔇 DR diverge: starting RESPONDER fallback for \(userId.prefix(8))…", category: "SessionInit")
+                startResponderFallback(for: userId)
             }
         }
+    }
 
-        // When this device wins the tie-break, send SESSION_RESET_INIT — a single atomic
-        // message that carries both END_SESSION signal and the new X3DH init payload.
-        // Eliminates the 200 ms ordering hack from the old two-step sequence.
-        messageRouter.onTieBreakWin = { [weak self] userId in
-            guard let self else { return }
-            let suiteIdAtWin = Int(KeychainManager.shared.loadSessionSuiteId(userId: userId) ?? 0)
-            Log.info("🏆 SESSION_STATE[tie_break_outcome]: INITIATOR role confirmed, peer=\(userId.prefix(8))… suiteId=\(suiteIdAtWin), sending SESSION_RESET_INIT", category: "SessionInit")
-            Task {
-                // Re-initialize from scratch: fetch RESPONDER's bundle → new outgoing session
-                // (msgNum=0). SESSION_RESET_INIT then carries that X3DH init payload atomically.
-                await self.sessionInitService.initializeSessionProactively(
-                    userId: userId,
-                    onSuccess: { },
-                    onFailure: { err in
-                        Log.error("❌ SESSION_STATE[tie_break_reinit_fail]: \(err.localizedDescription)", category: "SessionInit")
-                    }
-                )
-                // Single atomic message: RESPONDER archives old session + inits in one pass.
-                await self.sendSessionResetInit(to: userId)
-                // Phase 1 of two-phase handshake: session is now "unconfirmed" until
-                // RESPONDER sends back __session_ready__. ChatViewModel will buffer any
-                // outgoing messages as .queued until confirmation is received.
-                SessionConfirmationTracker.shared.markPending(userId)
-                let suiteIdAfter = Int(KeychainManager.shared.loadSessionSuiteId(userId: userId) ?? 0)
-                Log.info("🔄 SESSION_STATE[tie_break_sri_sent]: peer=\(userId.prefix(8))… suiteId=\(suiteIdAfter)", category: "SessionInit")
-            }
-            // Start watchdog: if RESPONDER has not replied within timeout, re-send ping.
-            self.startTieBreakWatchdog(for: userId)
+    func messageRouter(_ router: MessageRouter, needsSessionHeal userId: String, failedMessage: ChatMessage) {
+        Task { @MainActor in
+            await handleSessionHealNeeded(userId: userId, failedMessage: failedMessage)
         }
+    }
+
+    func messageRouter(_ router: MessageRouter, isEndSessionStale userId: String, timestamp: UInt64) -> Bool {
+        guard let established = establishedAt(for: userId) else { return false }
+        return timestamp + 5 < established
+    }
+
+    func messageRouter(_ router: MessageRouter, receivedEndSession userId: String, timestamp: UInt64) {
+        let myId = SessionManager.shared.currentUserId ?? ""
+        guard !myId.isEmpty else { return }
+        guard DeviceIdOrdering.isNaturalInitiator(myId: myId, peerId: userId) else {
+            Log.info("🔇 END_SESSION from natural INITIATOR \(userId.prefix(8))… — waiting as RESPONDER", category: "SessionInit")
+            startResponderFallback(for: userId)
+            onEphemeralSubscriptionNeeded?(userId)
+            return
+        }
+        resendUnconfirmedOutgoingMessagesIfNeeded(to: userId)
+        Log.info("🔥 END_SESSION received — re-prewarming as natural INITIATOR for \(userId.prefix(8))…", category: "SessionInit")
+        Task {
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            prewarmSessions(for: [userId], skipEndSessionNotification: true)
+        }
+    }
+
+    func messageRouter(_ router: MessageRouter, didWinTieBreak userId: String) {
+        let suiteIdAtWin = Int(KeychainManager.shared.loadSessionSuiteId(userId: userId) ?? 0)
+        Log.info("🏆 SESSION_STATE[tie_break_outcome]: INITIATOR role confirmed, peer=\(userId.prefix(8))… suiteId=\(suiteIdAtWin), sending SESSION_RESET_INIT", category: "SessionInit")
+        Task {
+            await sessionInitService.initializeSessionProactively(
+                userId: userId,
+                onSuccess: { },
+                onFailure: { err in
+                    Log.error("❌ SESSION_STATE[tie_break_reinit_fail]: \(err.localizedDescription)", category: "SessionInit")
+                }
+            )
+            await sendSessionResetInit(to: userId)
+            SessionConfirmationTracker.shared.markPending(userId)
+            let suiteIdAfter = Int(KeychainManager.shared.loadSessionSuiteId(userId: userId) ?? 0)
+            Log.info("🔄 SESSION_STATE[tie_break_sri_sent]: peer=\(userId.prefix(8))… suiteId=\(suiteIdAfter)", category: "SessionInit")
+        }
+        startTieBreakWatchdog(for: userId)
+    }
+
+    func messageRouter(_ router: MessageRouter, didDecryptDeliveryReceipt messageIds: [String]) {
+        onE2EDeliveryReceiptDecrypted?(messageIds)
     }
 
     // MARK: - RECEIVER session init
@@ -465,7 +423,7 @@ final class SessionCoordinator {
                 if let context = viewContext {
                     PersistentACKStore.shared.markProcessed(message.id, senderId: userId, in: context)
                 }
-                pendingFirstMessages.removeValue(forKey: userId)
+                messageRouter.removePendingMessages(for: userId)
                 Task {
                     try? await sendEndSession(to: userId, reason: "session_init_failed")
                     await uploadFreshOtpks(reason: "init_failed")
@@ -529,7 +487,7 @@ final class SessionCoordinator {
                     // Permanently block re-processing of this message ID.
                     FailedInitMessageStore.shared.add(failedMessage.id)
                     PersistentACKStore.shared.markProcessed(failedMessage.id, senderId: userId, in: context)
-                    pendingFirstMessages.removeValue(forKey: userId)
+                    messageRouter.removePendingMessages(for: userId)
                     SessionHealingService.shared.clearQueue(for: userId, in: context)
                     try? await sendEndSession(to: userId, reason: "heal_exhausted")
                     await uploadFreshOtpks(reason: "heal_exhausted")
@@ -539,7 +497,7 @@ final class SessionCoordinator {
         } catch {
             Log.error("❌ SESSION_STATE[heal_bundle_error]: \(error.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
             if !canContinue {
-                pendingFirstMessages.removeValue(forKey: userId)
+                messageRouter.removePendingMessages(for: userId)
                 SessionHealingService.shared.clearQueue(for: userId, in: context)
                 try? await sendEndSession(to: userId, reason: "heal_bundle_unreachable")
             }
@@ -550,13 +508,12 @@ final class SessionCoordinator {
 
     /// Drain the pending queue for a peer after session init / heal succeeds.
     private func drainPendingQueue(for userId: String, skippingFirst: Bool) {
-        let queued = pendingFirstMessages[userId] ?? []
-        pendingFirstMessages.removeValue(forKey: userId)
+        let queued = messageRouter.drainPendingMessages(for: userId)
         let toProcess = skippingFirst ? queued.dropFirst() : queued[...]
         guard !toProcess.isEmpty, let context = viewContext else { return }
         Log.info("🔐 Decrypting \(toProcess.count) queued message(s) for \(userId.prefix(8))...", category: "SessionInit")
         for queuedMsg in toProcess {
-            messageRouter.routeIncomingMessage(queuedMsg, in: context, pendingMessages: &pendingFirstMessages)
+            messageRouter.routeIncomingMessage(queuedMsg, in: context)
         }
     }
 

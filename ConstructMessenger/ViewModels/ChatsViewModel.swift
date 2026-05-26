@@ -437,7 +437,7 @@ class ChatsViewModel {
         streamManager.onKeySyncReceived = { [weak self] userId in
             self?.sessionCoordinator.handleKeySyncRequest(for: userId)
         }
-        MessageRouter.shared.onE2EDeliveryReceiptDecrypted = { [weak self] messageIds in
+        sessionCoordinator.onE2EDeliveryReceiptDecrypted = { [weak self] messageIds in
             self?.handleDeliveryReceipts(messageIds)
         }
         streamManager.connect(contactUserIds: ids) { [weak self] message in
@@ -513,7 +513,7 @@ class ChatsViewModel {
             self.streamManager.onKeySyncReceived = { [weak self] userId in
                 self?.sessionCoordinator.handleKeySyncRequest(for: userId)
             }
-            MessageRouter.shared.onE2EDeliveryReceiptDecrypted = { [weak self] messageIds in
+            sessionCoordinator.onE2EDeliveryReceiptDecrypted = { [weak self] messageIds in
                 self?.handleDeliveryReceipts(messageIds)
             }
             self.streamManager.forceReconnect(contactUserIds: self.currentConversationIds()) { [weak self] message in
