@@ -40,7 +40,7 @@ struct ChatsListView: View {
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: String.self) { chatId in
                     if let chat = chats.first(where: { $0.id == chatId }) {
-                        ChatView(chat: chat, context: viewContext)
+                        ChatView(chat: chat, context: viewContext, sessionCoordinator: chatsViewModel.sessionCoordinator)
                     }
             }
             .sheet(isPresented: $showingQRScanner) {

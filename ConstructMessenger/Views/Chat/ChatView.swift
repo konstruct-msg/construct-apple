@@ -12,7 +12,8 @@ import UniformTypeIdentifiers
 struct ChatView: View {
     @Environment(\.managedObjectContext) private var viewContext
     @Environment(\.dismiss) private var dismiss
-    @State private var viewModel: ChatViewModel  // ✅ FIX: State persists across view updates
+    @Environment(ChatsViewModel.self) private var chatsViewModel
+    @State private var viewModel: ChatViewModel
     @State private var scrollManager = ChatScrollManager()  // ✅ NEW: Isolated scroll management
     private var connectionManager = ConnectionStatusManager.shared
     @State private var messageText = ""
@@ -51,8 +52,8 @@ struct ChatView: View {
     // - scrollOffset
     // - dragOffset
 
-    init(chat: Chat, context: NSManagedObjectContext) {
-        _viewModel = State(wrappedValue: ChatViewModel(chat: chat, context: context))
+    init(chat: Chat, context: NSManagedObjectContext, sessionCoordinator: SessionCoordinator) {
+        _viewModel = State(wrappedValue: ChatViewModel(chat: chat, context: context, sessionCoordinator: sessionCoordinator))
     }
 
     var body: some View {
@@ -781,8 +782,9 @@ struct ChatView: View {
 
     try? context.save()
 
+    let previewSessionCoordinator = SessionCoordinator()
     return NavigationStack {
-        ChatView(chat: chat, context: context)
+        ChatView(chat: chat, context: context, sessionCoordinator: previewSessionCoordinator)
             .environment(\.managedObjectContext, context)
     }
 }
