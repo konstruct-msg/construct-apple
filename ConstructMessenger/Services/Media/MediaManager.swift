@@ -242,18 +242,9 @@ class MediaManager {
         throw lastError ?? RPCError(code: .unknown, message: "Download failed: no error captured")
     }
 
-    /// Ensures the ICE proxy is running and ready when DPI has been confirmed this session.
-    /// No-op when ICE mode is `.off`, DPI has not been detected, or the relay is on cooldown.
-    private static func ensureICEForMedia() async {
-        let rawMode = UserDefaults.standard.string(forKey: IceMode.defaultsKey) ?? IceMode.platformDefault.rawValue
-        let mode = IceMode(rawValue: rawMode) ?? .auto
-        guard mode == .on else { return }
-        guard !GRPCChannelManager.shared.isICEOnCooldown else { return }
-        if ice_proxy_is_running() == 0 {
-            Log.info("🧊 ICE proxy not running (mode=on) — waiting for proxy ready", category: "MediaManager")
-            await GRPCChannelManager.shared.waitForProxyReady()
-        }
-    }
+    /// No-op: ConnectionLoop manages proxy lifecycle — readiness is guaranteed
+    /// when iceProxyPort() is non-nil and GRPCCallExecutor routes through it.
+    private static func ensureICEForMedia() async {}
 
     /// Upload a file (document, PDF, etc.) for a chat message.
     /// Text-based files are transparently compressed with ZLIB before encryption if beneficial.
