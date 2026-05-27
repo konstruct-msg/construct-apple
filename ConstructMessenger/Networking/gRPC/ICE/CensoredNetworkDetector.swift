@@ -34,19 +34,23 @@ enum CensoredNetworkDetector {
         "Europe/Minsk",
         // Central Asia
         "Asia/Baku",        // Azerbaijan
-        "Asia/Tashkent",     // Uzbekistan
-        "Asia/Samarkand",    // Uzbekistan
-        "Asia/Ashgabat",     // Turkmenistan
-        "Asia/Dushanbe",     // Tajikistan
+        "Asia/Tashkent",    // Uzbekistan
+        "Asia/Samarkand",   // Uzbekistan
+        "Asia/Ashgabat",    // Turkmenistan
+        "Asia/Dushanbe",    // Tajikistan
     ]
 
-    /// True when the device timezone suggests a DPI-censored country.
-    /// Used as a startup heuristic — runtime DPI detection via
-    /// ConnectionLoop.directFails counter provides the definitive answer.
+    /// True when the device is likely in a DPI-censored country.
+    /// Primary signal: GeoIPManager (IP-based, cached after first STUN lookup).
+    /// Fallback: timezone heuristic (used at startup before GeoIP resolves).
+    /// Used by ConnectionLoop to pre-activate ICE on startup, eliminating
+    /// the ~3.2s cold-start penalty of two failing direct attempts.
     static var isCensored: Bool {
         #if DEBUG
         if let override = _testOverride { return override }
         #endif
+        let geoRegion = GeoIPManager.shared.region
+        if geoRegion != .unknown { return geoRegion.isCensored }
         return detectFromTimezone()
     }
 

@@ -47,12 +47,34 @@ enum IceRelaySelector {
     }
 
     static func applyRegionPreference(to candidates: [String]) -> [String] {
+        // GeoIP takes priority when resolved; fall through to timezone-based server config otherwise.
+        let geoRegion = GeoIPManager.shared.region
+        if geoRegion != .unknown {
+            return applyGeoIPPreference(to: candidates, region: geoRegion)
+        }
+
+        // Timezone fallback: use server-provided or hardcoded region rules.
         let regions = IceProxyStore.cachedRelayRegions(fallback: ICEConfig.hardcodedRelayRegions)
         let tzOffset = TimeZone.current.secondsFromGMT() / 3600
         guard let rule = regions.first(where: {
             tzOffset >= $0.tzOffsetMin && tzOffset <= $0.tzOffsetMax
         }) else { return candidates }
         let preferred = rule.preferredRelays
+        let front = preferred.filter { candidates.contains($0) }
+        let back = candidates.filter { !preferred.contains($0) }
+        return front + back
+    }
+
+    // Reorders candidates based on GeoIP region: ruLike countries prefer the RU relay
+    // (WebTunnel/obfs4-capable), all others prefer the AMS relay (lower latency for EU/global).
+    private static func applyGeoIPPreference(to candidates: [String], region: GeoIPRegion) -> [String] {
+        let preferred: [String]
+        switch region {
+        case .ruLike:
+            preferred = [ICEConfig.ruRelayAddress, ICEConfig.amsRelayAddress]
+        case .other, .unknown:
+            preferred = [ICEConfig.amsRelayAddress, ICEConfig.ruRelayAddress]
+        }
         let front = preferred.filter { candidates.contains($0) }
         let back = candidates.filter { !preferred.contains($0) }
         return front + back
@@ -114,7 +136,7 @@ enum IceRelaySelector {
 
         if !cachedEntries.isEmpty {
             let skipped = cachedEntries.map { "\($0.0) (\(Int($0.1 * 1000))ms cached)" }.joined(separator: ", ")
-            Log.debug("🧊 Latency cache hit for: \(skipped)", category: "ICE")
+            Log.debug("Latency cache hit for: \(skipped)", category: "ICE")
         }
 
         let freshReachable = probeResults.filter { $0.1 != nil }

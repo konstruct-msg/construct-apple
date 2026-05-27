@@ -65,6 +65,11 @@ final class GRPCChannelManager: Sendable {
     }
 
     private init() {
+        // Resolve GeoIP in the background so relay region preference is ready
+        // before the first connection attempt. Idempotent — uses cached UserDefaults
+        // result on subsequent launches.
+        Task { await GeoIPManager.shared.resolve() }
+
         // Invalidate the persistent connection whenever the network path changes
         // (cellular ↔ WiFi switch, VPN on/off, etc.).  The old TCP connection is dead
         // after a path change; proactively evicting it prevents the first post-switch
@@ -75,9 +80,13 @@ final class GRPCChannelManager: Sendable {
             queue: .main
         ) { [weak self] _ in
             guard let self else { return }
-            Log.info("🔌 Network path changed — invalidating persistent gRPC connection", category: "gRPC")
+            Log.info("Network path changed — invalidating persistent gRPC connection", category: "gRPC")
             self.invalidatePersistentClient()
-            Task { await ConnectionLoop.shared.reset() }
+            Task {
+                await GeoIPManager.shared.invalidate()
+                await GeoIPManager.shared.resolve()
+                await ConnectionLoop.shared.reset()
+            }
         }
     }
 
@@ -165,7 +174,7 @@ final class GRPCChannelManager: Sendable {
             guard let self else { return }
             let valid = self._connLock.withLock { self._connGeneration == gen }
             guard valid else {
-                Log.debug("🔌 Persistent client gen=\(gen) already superseded — skipping runConnections()", category: "GRPCChannel")
+                Log.debug("Persistent client gen=\(gen) already superseded — skipping runConnections()", category: "GRPCChannel")
                 return
             }
             do {
@@ -173,12 +182,12 @@ final class GRPCChannelManager: Sendable {
             } catch is CancellationError {
                 // Normal shutdown.
             } catch {
-                Log.error("⚠️ Persistent gRPC connection closed: \(error)", category: "GRPCChannel")
+                Log.error("Persistent gRPC connection closed: \(error)", category: "GRPCChannel")
                 self.invalidatePersistentClient()
             }
         }
         _conn = PersistentConn(client: client, task: task, key: key)
-        Log.debug("🔌 Persistent gRPC connection created (key=\(key) gen=\(gen))", category: "GRPCChannel")
+        Log.debug("Persistent gRPC connection created (key=\(key) gen=\(gen))", category: "GRPCChannel")
         return client
     }
 
@@ -208,7 +217,7 @@ final class GRPCChannelManager: Sendable {
         }
         _connLock.unlock()
         guard didInvalidate else { return }
-        Log.debug("🔌 Persistent gRPC connection invalidated (routing: \(oldKey) → \(newKey), gen=\(_connLock.withLock { _connGeneration }))", category: "GRPCChannel")
+        Log.debug("Persistent gRPC connection invalidated (routing: \(oldKey) → \(newKey), gen=\(_connLock.withLock { _connGeneration }))", category: "GRPCChannel")
 #if canImport(Network)
         if #available(iOS 16.0, macOS 13.0, *) {
             invalidateH3Connection()
@@ -237,7 +246,7 @@ final class GRPCChannelManager: Sendable {
         }
         _connLock.unlock()
         guard didInvalidate else { return }
-        Log.debug("🔌 Persistent gRPC connection invalidated (gen=\(_connGeneration))", category: "GRPCChannel")
+        Log.debug("Persistent gRPC connection invalidated (gen=\(_connGeneration))", category: "GRPCChannel")
         // H3 is only valid on the direct path. Any routing change that kills H2 also kills H3.
 #if canImport(Network)
         if #available(iOS 16.0, macOS 13.0, *) {
@@ -257,7 +266,7 @@ final class GRPCChannelManager: Sendable {
         _conn?.client.beginGracefulShutdown()
         _conn = nil
         _connGeneration &+= 1
-        Log.debug("🔌 Persistent gRPC connection invalidated (gen=\(_connGeneration))", category: "GRPCChannel")
+        Log.debug("Persistent gRPC connection invalidated (gen=\(_connGeneration))", category: "GRPCChannel")
     }
 
     /// Returns the shared persistent channel, creating it if needed.
@@ -283,7 +292,7 @@ final class GRPCChannelManager: Sendable {
         // upstream HTTP routers (e.g. Traefik Host(...) rule) match on :authority and would
         // 404 if it was the transport address (127.0.0.1).
         if let icePort = iceProxyPort() {
-            Log.info("🧊 gRPC via ICE proxy → 127.0.0.1:\(icePort)", category: "gRPC")
+            Log.info("gRPC via ICE proxy → 127.0.0.1:\(icePort)", category: "gRPC")
             let logicalAuthority = currentHost
             let transport = try HTTP2ClientTransport.TransportServices(
                 target: .ipv4(address: "127.0.0.1", port: Int(icePort)),
@@ -307,7 +316,7 @@ final class GRPCChannelManager: Sendable {
 
         let host = currentHost
         let port = currentPort
-        Log.debug("🔌 gRPC creating channel → \(host):\(port) TLS=true", category: "gRPC")
+        Log.debug("gRPC creating channel → \(host):\(port) TLS=true", category: "gRPC")
 
         // MPTCP TODO: grpc-swift-nio-transport does not expose NIOTSChannelOptions.multipathServiceType
         // in its public Config API (verified up to v2.7.0). Once the library adds a channelOptions
@@ -343,7 +352,7 @@ final class GRPCChannelManager: Sendable {
     func makeClientH3() -> GRPCClient<HTTP3ClientTransport> {
         let host = currentHost
         let port = currentPort
-        Log.debug("🚀 gRPC creating HTTP/3 channel → \(host):\(port)", category: "gRPC")
+        Log.debug("gRPC creating HTTP/3 channel → \(host):\(port)", category: "gRPC")
         let transport = HTTP3ClientTransport(host: host, port: UInt16(clamping: port))
         return GRPCClient(transport: transport, interceptors: [AuthInterceptor()])
     }
@@ -375,7 +384,7 @@ final class GRPCChannelManager: Sendable {
             guard let self else { return }
             let valid = self._h3connLock.withLock { self._h3connGeneration == gen }
             guard valid else {
-                Log.debug("🚀 H3 client gen=\(gen) already superseded — skipping runConnections()", category: "GRPCChannel")
+                Log.debug("H3 client gen=\(gen) already superseded — skipping runConnections()", category: "GRPCChannel")
                 return
             }
             do {
@@ -383,7 +392,7 @@ final class GRPCChannelManager: Sendable {
             } catch is CancellationError {
                 // Normal shutdown.
             } catch {
-                Log.error("⚠️ H3 persistent connection closed: \(error)", category: "GRPCChannel")
+                Log.error("H3 persistent connection closed: \(error)", category: "GRPCChannel")
                 if #available(iOS 16.0, macOS 13.0, *) {
                     self.invalidateH3Connection()
                 }
@@ -391,7 +400,7 @@ final class GRPCChannelManager: Sendable {
         }
         let conn = PersistentConnH3(client: client, task: task, key: key)
         _h3connBox = conn
-        Log.debug("🚀 H3 persistent connection created (key=\(key) gen=\(gen))", category: "GRPCChannel")
+        Log.debug("H3 persistent connection created (key=\(key) gen=\(gen))", category: "GRPCChannel")
         return client
     }
 
@@ -405,7 +414,7 @@ final class GRPCChannelManager: Sendable {
         conn.client.beginGracefulShutdown()
         _h3connBox = nil
         _h3connGeneration &+= 1
-        Log.debug("🚀 H3 persistent connection invalidated (gen=\(_h3connGeneration))", category: "GRPCChannel")
+        Log.debug("H3 persistent connection invalidated (gen=\(_h3connGeneration))", category: "GRPCChannel")
     }
 #endif
 

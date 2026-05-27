@@ -91,3 +91,9 @@ venv/
 *.egg-info/
 .mypy_cache/
 ConstructEngine.xcframework/**/*.a
+
+# ── GeoIP databases ───────────────────────────────────────────────────────────
+# Downloaded automatically by scripts/fetch_geoip.sh (or the Xcode Build Phase).
+# Never committed — updated monthly from P3TERX/GeoLite.mmdb.
+GeoLite2-Country.mmdb
+GeoLite2-ASN.mmdb
