@@ -511,7 +511,7 @@ struct SynapsView: View {
             remoteState = .idle
             chatsViewModel.openOrCreateChat(with: user)
         } catch {
-            Log.error("❌ addRemoteUserAndChat failed: \(error)", category: "SynapsView")
+            Log.error("addRemoteUserAndChat failed: \(error)", category: "SynapsView")
         }
     }
 

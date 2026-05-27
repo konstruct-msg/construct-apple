@@ -49,11 +49,11 @@ final class StorageMigrationService {
         fetchRequest.fetchBatchSize = batchSize
 
         guard let messages = try? context.fetch(fetchRequest), !messages.isEmpty else {
-            Log.info("✅ Storage migration: nothing to migrate", category: "StorageMigration")
+            Log.info("Storage migration: nothing to migrate", category: "StorageMigration")
             return
         }
 
-        Log.info("🔐 Storage migration: migrating \(messages.count) messages…", category: "StorageMigration")
+        Log.info("Storage migration: migrating \(messages.count) messages…", category: "StorageMigration")
 
         var migrated = 0
         var deleted = 0
@@ -85,14 +85,14 @@ final class StorageMigrationService {
                 SecRandomCopyBytes(kSecRandomDefault, 32, $0.baseAddress!)
             }
             guard result == errSecSuccess else {
-                Log.error("❌ Storage migration: SecRandomCopyBytes failed for \(msgId.prefix(8))…", category: "StorageMigration")
+                Log.error("Storage migration: SecRandomCopyBytes failed for \(msgId.prefix(8))…", category: "StorageMigration")
                 continue
             }
 
             guard let plainData = plaintext.data(using: .utf8),
                   let encrypted = try? MessageStorageCrypto.encrypt(plaintext: plainData, key: keyBytes)
             else {
-                Log.error("❌ Storage migration: encrypt failed for \(msgId.prefix(8))…", category: "StorageMigration")
+                Log.error("Storage migration: encrypt failed for \(msgId.prefix(8))…", category: "StorageMigration")
                 continue
             }
 
@@ -108,7 +108,7 @@ final class StorageMigrationService {
 
             if migrated % batchSize == 0 {
                 try? context.save()
-                Log.info("🔐 Storage migration: \(migrated) rows done…", category: "StorageMigration")
+                Log.info("Storage migration: \(migrated) rows done…", category: "StorageMigration")
             }
         }
 
@@ -116,7 +116,7 @@ final class StorageMigrationService {
             try? context.save()
         }
 
-        Log.info("✅ Storage migration complete: \(migrated) encrypted, \(deleted) ephemeral removed",
+        Log.info("Storage migration complete: \(migrated) encrypted, \(deleted) ephemeral removed",
                  category: "StorageMigration")
     }
 }

@@ -61,23 +61,23 @@ class EnergyMonitor {
     func shouldPerformBackgroundFetch() -> Bool {
         // Check network availability first (fastest check)
         guard isNetworkAvailable() else {
-            Log.debug("❌ Network not available, skipping fetch")
+            Log.debug("Network not available, skipping fetch")
             return false
         }
 
         // Check Low Power Mode
         if isLowPowerModeEnabled() {
-            Log.debug("❌ Low Power Mode enabled, skipping fetch")
+            Log.debug("Low Power Mode enabled, skipping fetch")
             return false
         }
 
         // Check battery level
         if isBatteryLow() && !isCharging() {
-            Log.debug("❌ Battery low and not charging, skipping fetch")
+            Log.debug("Battery low and not charging, skipping fetch")
             return false
         }
 
-        Log.debug("✅ Energy conditions favorable for background fetch")
+        Log.debug("Energy conditions favorable for background fetch")
         return true
     }
 

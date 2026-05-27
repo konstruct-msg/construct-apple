@@ -220,7 +220,7 @@ struct RegistrationFlowView: View {
             deviceId: deviceId,
             username: username,
             onComplete: {
-                Log.info("👆 User pressed Continue", category: "Registration")
+                Log.info("User pressed Continue", category: "Registration")
                 authViewModel.hasRegisteredDeviceKeys = true
                 dismiss()
             },
@@ -257,7 +257,7 @@ struct RegistrationFlowView: View {
                 // Reuse keys from a previous attempt that failed mid-flight.
                 // Don't regenerate — the keys may already be registered on the server
                 // (the RPC could have timed out after the server persisted the data).
-                Log.info("♻️ Reusing previously generated keys: device_id=\(sid)", category: "Registration")
+                Log.info("Reusing previously generated keys: device_id=\(sid)", category: "Registration")
                 deviceId = sid
                 signingKey = ssign
                 identityKey = sidentity
@@ -271,15 +271,15 @@ struct RegistrationFlowView: View {
                 signingKey = signingKeyData
                 identityKey = identityKeyData
 
-                Log.info("✅ Generated keys: device_id=\(generatedDeviceId)", category: "Registration")
-                Log.info("🔐 Registration bundle verifying_key: \(bundle.verifyingKey)", category: "Registration")
+                Log.info("Generated keys: device_id=\(generatedDeviceId)", category: "Registration")
+                Log.info("Registration bundle verifying_key: \(bundle.verifyingKey)", category: "Registration")
 
                 do {
                     let derivedVerifyingKey = try deriveVerifyingKeyFromSecret(identitySecretKey: [UInt8](signingKeyData))
                     let derivedBase64 = Data(derivedVerifyingKey).base64EncodedString()
-                    Log.info("🔐 Derived verifying key from signing_secret: \(derivedBase64)", category: "Registration")
+                    Log.info("Derived verifying key from signing_secret: \(derivedBase64)", category: "Registration")
                 } catch {
-                    Log.info("⚠️ Failed to derive verifying key from signing_secret: \(error.localizedDescription)", category: "Registration")
+                    Log.info("Failed to derive verifying key from signing_secret: \(error.localizedDescription)", category: "Registration")
                 }
 
                 // Save device keys and bundle IMMEDIATELY — before any network call.
@@ -290,7 +290,7 @@ struct RegistrationFlowView: View {
                 KeychainManager.shared.saveDeviceSigningKey(signingKey)
                 KeychainManager.shared.saveDeviceIdentityKey(identityKey)
                 RegistrationFlowView.saveBundle(bundle)
-                Log.info("💾 Device keys saved to Keychain before RPC", category: "Registration")
+                Log.info("Device keys saved to Keychain before RPC", category: "Registration")
             }
             try await Task.sleep(for: .seconds(0.3)) // Brief pause for UI feedback
             
@@ -300,14 +300,14 @@ struct RegistrationFlowView: View {
             challenge = challengeResponse.challenge
             difficulty = challengeResponse.difficulty
             
-            Log.info("✅ Challenge fetched: difficulty=\(difficulty)", category: "Registration")
+            Log.info("Challenge fetched: difficulty=\(difficulty)", category: "Registration")
             
             // Step 3: Compute PoW with real-time progress
             currentStep = .computingPoW
             
-            Log.info("🔨 Starting PoW computation (difficulty: \(difficulty))...", category: "Registration")
+            Log.info("Starting PoW computation (difficulty: \(difficulty))...", category: "Registration")
             
-            // ✅ Use real progress from Rust with smooth animation
+            // Use real progress from Rust with smooth animation
             let solution = await ProofOfWorkManager.computeWithProgress(
                 challenge: challenge,
                 difficulty: difficulty,
@@ -320,7 +320,7 @@ struct RegistrationFlowView: View {
                 }
             )
             
-            Log.info("✅ PoW complete! nonce=\(solution.nonce)", category: "Registration")
+            Log.info("PoW complete! nonce=\(solution.nonce)", category: "Registration")
 
             // Step 4: Submit registration
             currentStep = .submittingRegistration
@@ -333,7 +333,7 @@ struct RegistrationFlowView: View {
                 challenge: challenge,
                 powSolution: solution
             )
-            Log.info("✅ Registration successful! userId=\(registerData.userId)", category: "Registration")
+            Log.info("Registration successful! userId=\(registerData.userId)", category: "Registration")
 
             // Clear the pending bundle — it is no longer needed after successful registration.
             RegistrationFlowView.clearSavedBundle()
@@ -348,18 +348,18 @@ struct RegistrationFlowView: View {
             // SAVE AND VERIFY ALL REGISTRATION DATA
             // ========================================
             
-            Log.info("💾 Starting data persistence...", category: "Registration")
+            Log.info("Starting data persistence...", category: "Registration")
             
             // 1. Device credentials are already in Keychain (saved before RPC).
             //    Re-save to be sure (idempotent; protects against the reuse path above
             //    where keys were loaded from Keychain but not yet saved for this run).
-            Log.info("1️⃣ Confirming device credentials in Keychain...", category: "Registration")
+            Log.info("Confirming device credentials in Keychain...", category: "Registration")
             KeychainManager.shared.saveDeviceID(deviceId)
             KeychainManager.shared.saveDeviceSigningKey(signingKey)
             KeychainManager.shared.saveDeviceIdentityKey(identityKey)
             
             // 2. Verify Keychain saves
-            Log.info("2️⃣ Verifying Keychain data...", category: "Registration")
+            Log.info("Verifying Keychain data...", category: "Registration")
             let savedDeviceId = KeychainManager.shared.loadDeviceID()
             let savedSigningKey = KeychainManager.shared.loadDeviceSigningKey()
             let savedIdentityKey = KeychainManager.shared.loadDeviceIdentityKey()
@@ -367,19 +367,19 @@ struct RegistrationFlowView: View {
             let keychainOK = savedDeviceId != nil && savedSigningKey != nil && savedIdentityKey != nil
             
             if keychainOK {
-                Log.info("   ✅ deviceId: \(savedDeviceId!.prefix(16))... (\(savedDeviceId!.count) chars)", category: "Registration")
-                Log.info("   ✅ signingKey: \(savedSigningKey!.count) bytes", category: "Registration")
-                Log.info("   ✅ identityKey: \(savedIdentityKey!.count) bytes", category: "Registration")
-                Log.info("   ✅ isDeviceRegistered: \(KeychainManager.shared.isDeviceRegistered())", category: "Registration")
+                Log.info("   deviceId: \(savedDeviceId!.prefix(16))... (\(savedDeviceId!.count) chars)", category: "Registration")
+                Log.info("   signingKey: \(savedSigningKey!.count) bytes", category: "Registration")
+                Log.info("   identityKey: \(savedIdentityKey!.count) bytes", category: "Registration")
+                Log.info("   isDeviceRegistered: \(KeychainManager.shared.isDeviceRegistered())", category: "Registration")
             } else {
-                Log.error("   ❌ Keychain verification FAILED!", category: "Registration")
+                Log.error("   Keychain verification FAILED!", category: "Registration")
                 Log.error("      deviceId: \(savedDeviceId != nil ? "✓" : "✗")", category: "Registration")
                 Log.error("      signingKey: \(savedSigningKey != nil ? "✓" : "✗")", category: "Registration")
                 Log.error("      identityKey: \(savedIdentityKey != nil ? "✓" : "✗")", category: "Registration")
             }
             
             // 3. Save session tokens + userId
-            Log.info("3️⃣ Saving session tokens + userId...", category: "Registration")
+            Log.info("Saving session tokens + userId...", category: "Registration")
             SessionManager.shared.saveTokens(
                 accessToken: registerData.sessionToken,
                 refreshToken: registerData.refreshToken,
@@ -389,21 +389,21 @@ struct RegistrationFlowView: View {
             IceProxyManager.shared.configureFromServer(cert: registerData.iceBridgeCert ?? "")
             
             // 4. Verify session tokens
-            Log.info("4️⃣ Verifying session tokens...", category: "Registration")
+            Log.info("Verifying session tokens...", category: "Registration")
             // Tokens are in published properties after saveTokens()
             let savedAccessToken = SessionManager.shared.sessionToken
             let savedRefreshToken = SessionManager.shared.refreshToken
             
             if savedAccessToken != nil && savedRefreshToken != nil {
-                Log.info("   ✅ accessToken: \(savedAccessToken!.prefix(20))...", category: "Registration")
-                Log.info("   ✅ refreshToken: \(savedRefreshToken!.prefix(20))...", category: "Registration")
-                Log.info("   ✅ isSessionValid: \(SessionManager.shared.isSessionValid)", category: "Registration")
+                Log.info("   accessToken: \(savedAccessToken!.prefix(20))...", category: "Registration")
+                Log.info("   refreshToken: \(savedRefreshToken!.prefix(20))...", category: "Registration")
+                Log.info("   isSessionValid: \(SessionManager.shared.isSessionValid)", category: "Registration")
             } else {
-                Log.error("   ❌ Session tokens verification FAILED!", category: "Registration")
+                Log.error("   Session tokens verification FAILED!", category: "Registration")
             }
             
             // 5. Update AuthViewModel
-            Log.info("5️⃣ Updating AuthViewModel...", category: "Registration")
+            Log.info("Updating AuthViewModel...", category: "Registration")
             await MainActor.run {
                 authViewModel.finalizeDeviceRegistration(userId: registerData.userId, username: username)
             }
@@ -411,20 +411,20 @@ struct RegistrationFlowView: View {
             PreKeyRotationService.shared.recordSpkUpload()
             
             // 6. Upload initial one-time prekeys (100 OTPKs for full Signal Protocol)
-            Log.info("6️⃣ Uploading initial one-time prekeys...", category: "Registration")
+            Log.info("Uploading initial one-time prekeys...", category: "Registration")
             do {
                 let uploadedCount = try await OtpkReplenishmentService.generateAndUpload(
                     count: 100,
                     deviceId: deviceId,
                     replaceExisting: true
                 )
-                Log.info("   ✅ Uploaded \(uploadedCount) one-time prekeys", category: "Registration")
+                Log.info("   Uploaded \(uploadedCount) one-time prekeys", category: "Registration")
             } catch {
-                Log.error("   ⚠️ OTPK upload failed (non-fatal): \(error)", category: "Registration")
+                Log.error("   OTPK upload failed (non-fatal): \(error)", category: "Registration")
             }
 
             // 6.5 Upload Kyber SPK + OTPKs in a single request (detached — survives view dismissal)
-            Log.info("6️⃣🔐 Uploading Kyber SPK + OTPKs (PQC)...", category: "Registration")
+            Log.info("Uploading Kyber SPK + OTPKs (PQC)...", category: "Registration")
             do {
                 let spkId = PQCKeyManager.shared.kyberSPKId()
                 let (spkPublicKey, _) = try PQCKeyManager.shared.generateAndStoreKyberSPK(keyId: spkId)
@@ -439,22 +439,22 @@ struct RegistrationFlowView: View {
                             kyberSignedPreKey: spkTuple
                         )
                         UserDefaults.standard.set(true, forKey: "pqcKyberSPKMigrationV1Done")
-                        Log.info("   ✅ Kyber SPK uploaded (keyId=\(spkId))", category: "Registration")
-                        Log.info("   ✅ Kyber OTPKs on server: \(kyberCount)", category: "Registration")
+                        Log.info("   Kyber SPK uploaded (keyId=\(spkId))", category: "Registration")
+                        Log.info("   Kyber OTPKs on server: \(kyberCount)", category: "Registration")
                     } catch {
-                        Log.error("   ⚠️ Kyber PQC upload failed (will retry on next launch): \(error)", category: "Registration")
+                        Log.error("   Kyber PQC upload failed (will retry on next launch): \(error)", category: "Registration")
                     }
                 }
             } catch {
-                Log.error("   ⚠️ Kyber PQC key generation failed: \(error)", category: "Registration")
+                Log.error("   Kyber PQC key generation failed: \(error)", category: "Registration")
             }
             
-            Log.info("   ✅ isAuthenticated: \(authViewModel.isAuthenticated)", category: "Registration")
-            Log.info("   ✅ currentUserId: \(authViewModel.currentUserId ?? "nil")", category: "Registration")
+            Log.info("   isAuthenticated: \(authViewModel.isAuthenticated)", category: "Registration")
+            Log.info("   currentUserId: \(authViewModel.currentUserId ?? "nil")", category: "Registration")
             
             // 7. Final verification summary
             Log.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", category: "Registration")
-            Log.info("📊 REGISTRATION DATA SUMMARY:", category: "Registration")
+            Log.info("REGISTRATION DATA SUMMARY:", category: "Registration")
             Log.info("   Device ID:    \(savedDeviceId?.prefix(16) ?? "MISSING")...", category: "Registration")
             Log.info("   User ID:      \(registerData.userId.prefix(8))...", category: "Registration")
             Log.info("   Username:     \(username ?? "anonymous")", category: "Registration")
@@ -464,13 +464,13 @@ struct RegistrationFlowView: View {
             Log.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", category: "Registration")
             
             if keychainOK && savedAccessToken != nil && authViewModel.isAuthenticated {
-                Log.info("🎉 ALL CHECKS PASSED - Ready for main app!", category: "Registration")
+                Log.info("ALL CHECKS PASSED - Ready for main app!", category: "Registration")
             } else {
-                Log.error("⚠️ SOME CHECKS FAILED - App may not work correctly", category: "Registration")
+                Log.error("SOME CHECKS FAILED - App may not work correctly", category: "Registration")
             }
             
         } catch {
-            Log.error("❌ Registration failed: \(error)", category: "Registration")
+            Log.error("Registration failed: \(error)", category: "Registration")
             currentStep = .error(error.userFacingMessage)
         }
     }

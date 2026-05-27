@@ -65,7 +65,7 @@ final class LockdownManager {
         activatedAt = Date()
         approvedSenders = approvedIds
         persist()
-        Log.info("🔒 Lockdown ENABLED — \(approvedIds.count) approved senders", category: "LockdownManager")
+        Log.info("Lockdown ENABLED — \(approvedIds.count) approved senders", category: "LockdownManager")
     }
 
     func disable() {
@@ -73,7 +73,7 @@ final class LockdownManager {
         activatedAt = nil
         approvedSenders = []
         persist()
-        Log.info("🔓 Lockdown DISABLED", category: "LockdownManager")
+        Log.info("Lockdown DISABLED", category: "LockdownManager")
     }
 
     // MARK: - Per-message check
@@ -88,7 +88,7 @@ final class LockdownManager {
     func approveSender(_ id: String) {
         approvedSenders.insert(id)
         persist()
-        Log.info("🔓 Lockdown: manually approved sender \(id.prefix(8))…", category: "LockdownManager")
+        Log.info("Lockdown: manually approved sender \(id.prefix(8))…", category: "LockdownManager")
     }
 
     // MARK: - Persistence

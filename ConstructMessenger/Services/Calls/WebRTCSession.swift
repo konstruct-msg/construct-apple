@@ -248,11 +248,11 @@ extension WebRTCSession: RTCPeerConnectionDelegate {
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didRemove candidates: [RTCIceCandidate]) {}
 
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didChange stateChanged: RTCSignalingState) {
-        Log.debug("📞 WebRTC signalingState → \(stateChanged.rawValue)", category: "Calls")
+        Log.debug("WebRTC signalingState → \(stateChanged.rawValue)", category: "Calls")
     }
 
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didChange newState: RTCIceConnectionState) {
-        Log.info("📞 WebRTC iceConnectionState → \(newState.debugDescription)", category: "Calls")
+        Log.info("WebRTC iceConnectionState → \(newState.debugDescription)", category: "Calls")
         // `.disconnected` is transient on mobile (brief network hiccup, device lock, switch
         // between WiFi/cellular). Triggering teardown immediately cuts live calls unnecessarily.
         // Only `.failed` means ICE has exhausted all candidates and the call cannot continue.
@@ -264,11 +264,11 @@ extension WebRTCSession: RTCPeerConnectionDelegate {
     }
 
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didChange newState: RTCIceGatheringState) {
-        Log.debug("📞 WebRTC iceGatheringState → \(newState.debugDescription)", category: "Calls")
+        Log.debug("WebRTC iceGatheringState → \(newState.debugDescription)", category: "Calls")
     }
 
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didChange newState: RTCPeerConnectionState) {
-        Log.info("📞 WebRTC peerConnectionState → \(newState.debugDescription)", category: "Calls")
+        Log.info("WebRTC peerConnectionState → \(newState.debugDescription)", category: "Calls")
         if newState == .failed {
             Task { @MainActor in
                 self.onConnectionFailed?()

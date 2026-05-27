@@ -232,7 +232,7 @@ struct QRScannerView: View {
             ErrorRouter.shared.report(.unknown(NSLocalizedString("clipboard_no_valid_invite", comment: "")))
             return
         }
-        Log.debug("📋 QRScannerView: pasting from clipboard: \(text.prefix(80))", category: "QRScannerView")
+        Log.debug("QRScannerView: pasting from clipboard: \(text.prefix(80))", category: "QRScannerView")
         handleScannedCode(text)
     }
 
@@ -257,7 +257,7 @@ struct QRScannerView: View {
     private func handleScannedCode(_ code: String) {
         scanner.stopScanning()
         let normalized = normalizeScannedCode(code)
-        Log.debug("📷 QRScannerView: scanned=\(code.prefix(120)), normalized=\(normalized.prefix(120))", category: "QRScannerView")
+        Log.debug("QRScannerView: scanned=\(code.prefix(120)), normalized=\(normalized.prefix(120))", category: "QRScannerView")
 
         if normalized.lowercased().hasPrefix("https://konstruct.cc/c/") ||
            normalized.lowercased().hasPrefix("https://konstruct.cc/add") ||
@@ -356,11 +356,11 @@ class QRCodeScanner: NSObject, AVCaptureMetadataOutputObjectsDelegate {
     private var previewLayer: AVCaptureVideoPreviewLayer?
 
     func startScanning() {
-        // ✅ FIX: Setup session SYNCHRONOUSLY first
+        // FIX: Setup session SYNCHRONOUSLY first
         let session = AVCaptureSession()
 
         guard let videoCaptureDevice = AVCaptureDevice.default(for: .video) else {
-            print("❌ No video capture device available")
+            Log.debug("No video capture device available")
             return
         }
 
@@ -368,14 +368,14 @@ class QRCodeScanner: NSObject, AVCaptureMetadataOutputObjectsDelegate {
         do {
             videoInput = try AVCaptureDeviceInput(device: videoCaptureDevice)
         } catch {
-            print("❌ Failed to create video input: \(error)")
+            Log.debug("Failed to create video input: \(error)")
             return
         }
 
         if session.canAddInput(videoInput) {
             session.addInput(videoInput)
         } else {
-            print("❌ Cannot add video input")
+            Log.debug("Cannot add video input")
             return
         }
 
@@ -385,23 +385,23 @@ class QRCodeScanner: NSObject, AVCaptureMetadataOutputObjectsDelegate {
             metadataOutput.setMetadataObjectsDelegate(self, queue: DispatchQueue.main)
             metadataOutput.metadataObjectTypes = [.qr]
         } else {
-            print("❌ Cannot add metadata output")
+            Log.debug("Cannot add metadata output")
             return
         }
 
-        // ✅ FIX: Set captureSession BEFORE starting - this is key!
+        // FIX: Set captureSession BEFORE starting - this is key!
         self.captureSession = session
 
-        // ✅ FIX: Notify that session is ready for preview layer
+        // FIX: Notify that session is ready for preview layer
         DispatchQueue.main.async {
             self.isSessionReady = true
-            print("✅ Camera session ready")
+            Log.debug("Camera session ready")
         }
 
-        // ✅ Only startRunning() is async - setup is sync
+        // Only startRunning() is async - setup is sync
         DispatchQueue.global(qos: .userInitiated).async {
             session.startRunning()
-            print("✅ Camera session started")
+            Log.debug("Camera session started")
         }
     }
 
@@ -446,22 +446,22 @@ struct QRCodeScannerViewRepresentable: UIViewRepresentable {
     func makeUIView(context: Context) -> UIView {
         let view = UIView(frame: .zero)
         view.backgroundColor = .black
-        print("📱 makeUIView called - creating camera view")
+        Log.debug("makeUIView called - creating camera view")
         return view
     }
 
     func updateUIView(_ uiView: UIView, context: Context) {
-        print("🔄 updateUIView called - isSessionReady: \(scanner.isSessionReady), hasLayer: \(context.coordinator.previewLayer != nil)")
+        Log.debug("updateUIView called - isSessionReady: \(scanner.isSessionReady), hasLayer: \(context.coordinator.previewLayer != nil)")
 
-        // ✅ FIX: Only add preview layer when session is ready AND not already added
+        // FIX: Only add preview layer when session is ready AND not already added
         if scanner.isSessionReady && context.coordinator.previewLayer == nil {
             if let previewLayer = scanner.getPreviewLayer() {
-                print("✅ Adding preview layer to view")
+                Log.debug("Adding preview layer to view")
                 previewLayer.frame = uiView.bounds
                 uiView.layer.insertSublayer(previewLayer, at: 0)
                 context.coordinator.previewLayer = previewLayer
             } else {
-                print("❌ getPreviewLayer returned nil")
+                Log.debug("getPreviewLayer returned nil")
             }
         }
 

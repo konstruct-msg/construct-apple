@@ -80,7 +80,7 @@ class ChatScrollManager {
         }
         
         hasScrolledToBottom = true
-        Log.debug("📜 Scrolled to bottom (messageId: \(messageId))", category: "ChatScrollManager")
+        Log.debug("Scrolled to bottom (messageId: \(messageId))", category: "ChatScrollManager")
     }
     
     /// Scroll to a specific message
@@ -101,7 +101,7 @@ class ChatScrollManager {
             proxy.scrollTo(messageId, anchor: anchor)
         }
         
-        Log.debug("📜 Scrolled to message: \(messageId)", category: "ChatScrollManager")
+        Log.debug("Scrolled to message: \(messageId)", category: "ChatScrollManager")
     }
     
     /// Update scroll offset (called from onScrollGeometryChange).
@@ -135,7 +135,7 @@ class ChatScrollManager {
         dragOffset = 0
         proxy = nil
         
-        Log.debug("🔄 ChatScrollManager reset", category: "ChatScrollManager")
+        Log.debug("ChatScrollManager reset", category: "ChatScrollManager")
     }
     
     // MARK: - Keyboard Handling

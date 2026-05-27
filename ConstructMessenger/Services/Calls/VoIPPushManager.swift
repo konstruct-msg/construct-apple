@@ -58,7 +58,7 @@ final class VoIPPushManager: NSObject {
         reg.desiredPushTypes = [.voIP]
         registry = reg
 
-        Log.info("📞 PushKit VoIP registry started", category: "Calls")
+        Log.info("PushKit VoIP registry started", category: "Calls")
     }
 
     func ensureTokenRegistered() async {
@@ -74,7 +74,7 @@ final class VoIPPushManager: NSObject {
         guard SessionManager.shared.sessionToken != nil else { return }
         // userId must be present — the server requires x-user-id on this RPC.
         guard SessionManager.shared.currentUserId != nil else {
-            Log.debug("⏸️ VoIP token retry deferred — userId not yet available", category: "Calls")
+            Log.debug("VoIP token retry deferred — userId not yet available", category: "Calls")
             return
         }
 
@@ -82,19 +82,19 @@ final class VoIPPushManager: NSObject {
         // so the server routes incoming call pushes to the correct device.
         let currentDeviceId = KeychainManager.shared.loadDeviceID()
         if isRegisteredWithServer && registeredDeviceId != currentDeviceId {
-            Log.info("🔄 Device ID changed — invalidating VoIP registration (was: \(registeredDeviceId?.prefix(8) ?? "nil"), now: \(currentDeviceId?.prefix(8) ?? "nil"))", category: "Calls")
+            Log.info("Device ID changed — invalidating VoIP registration (was: \(registeredDeviceId?.prefix(8) ?? "nil"), now: \(currentDeviceId?.prefix(8) ?? "nil"))", category: "Calls")
             isRegisteredWithServer = false
             registeredDeviceId = nil
         }
 
         guard let token = voipToken, !isRegisteredWithServer else { return }
-        Log.info("🔄 Retrying VoIP token registration (session now available)", category: "Calls")
+        Log.info("Retrying VoIP token registration (session now available)", category: "Calls")
         await registerWithServer(token)
     }
 
     private func registerWithServer(_ token: String) async {
         guard SessionManager.shared.sessionToken != nil else {
-            Log.info("⏸️ VoIP token registration deferred — no session yet", category: "Calls")
+            Log.info("VoIP token registration deferred — no session yet", category: "Calls")
             return
         }
 
@@ -103,7 +103,7 @@ final class VoIPPushManager: NSObject {
                 let ok = try await NotificationServiceClient.shared.registerVoipToken(voipToken: token)
                 isRegisteredWithServer = ok
                 if ok { registeredDeviceId = KeychainManager.shared.loadDeviceID() }
-                Log.info("📞 VoIP token registered with server: \(ok)", category: "Calls")
+                Log.info("VoIP token registered with server: \(ok)", category: "Calls")
                 return
             } catch {
                 let shouldRetry: Bool
@@ -114,11 +114,11 @@ final class VoIPPushManager: NSObject {
                 }
                 if shouldRetry && attempt < 2 {
                     let delay = Double(attempt + 1) * 2.0
-                    Log.info("📞 VoIP token registration failed (attempt \(attempt + 1)/3), retrying in \(Int(delay))s", category: "Calls")
+                    Log.info("VoIP token registration failed (attempt \(attempt + 1)/3), retrying in \(Int(delay))s", category: "Calls")
                     try? await Task.sleep(for: .seconds(delay))
                 } else {
                     isRegisteredWithServer = false
-                    Log.error("📞 VoIP token registration failed: \(error)", category: "Calls")
+                    Log.error("VoIP token registration failed: \(error)", category: "Calls")
                     return
                 }
             }
@@ -141,7 +141,7 @@ extension VoIPPushManager: PKPushRegistryDelegate {
             }
             voipToken = tokenString
 
-            Log.info("📞 Received VoIP token from PushKit (len=\(tokenString.count))", category: "Calls")
+            Log.info("Received VoIP token from PushKit (len=\(tokenString.count))", category: "Calls")
             Task { await registerWithServer(tokenString) }
         }
     }
@@ -149,7 +149,7 @@ extension VoIPPushManager: PKPushRegistryDelegate {
     nonisolated func pushRegistry(_ registry: PKPushRegistry, didInvalidatePushTokenFor type: PKPushType) {
         Task { @MainActor in
             guard type == .voIP else { return }
-            Log.info("📞 VoIP token invalidated", category: "Calls")
+            Log.info("VoIP token invalidated", category: "Calls")
 
             voipToken = nil
             isRegisteredWithServer = false
@@ -158,7 +158,7 @@ extension VoIPPushManager: PKPushRegistryDelegate {
                 do {
                     try await NotificationServiceClient.shared.unregisterVoipToken()
                 } catch {
-                    Log.error("📞 Failed to unregister VoIP token: \(error)", category: "Calls")
+                    Log.error("Failed to unregister VoIP token: \(error)", category: "Calls")
                 }
             }
         }
@@ -187,7 +187,7 @@ extension VoIPPushManager: PKPushRegistryDelegate {
             hasVideo: false
         )
 
-        Log.info("📞 Incoming VoIP push — CallKit notified sync (uuid=\(reportedUUID.uuidString.prefix(8))…)", category: "Calls")
+        Log.info("Incoming VoIP push — CallKit notified sync (uuid=\(reportedUUID.uuidString.prefix(8))…)", category: "Calls")
 
         // Dispatch remaining setup to MainActor after CallKit obligation is fulfilled.
         Task { @MainActor in

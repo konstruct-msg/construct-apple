@@ -79,7 +79,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication,
         didFailToRegisterForRemoteNotificationsWithError error: Error
     ) {
-        Log.error("📱 Failed to register for remote notifications: \(error)", category: "Push")
+        Log.error("Failed to register for remote notifications: \(error)", category: "Push")
         PushNotificationManager.shared.handleRegistrationError(error)
     }
 
@@ -96,7 +96,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     ) {
         let construct = userInfo["construct"] as? [AnyHashable: Any]
         let activityType = construct?["type"] as? String
-        Log.info("📱 Silent push received — activity_type: \(activityType ?? "nil")", category: "Push")
+        Log.info("Silent push received — activity_type: \(activityType ?? "nil")", category: "Push")
         PushNotificationManager.shared.signalSilentPush()
 
         if activityType == "replenish_prekeys" {
@@ -104,7 +104,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
                 await withTaskGroup(of: Void.self) { group in
                     group.addTask {
                         guard let deviceId = KeychainManager.shared.loadDeviceID() else {
-                            Log.error("📱 OTPK push: no deviceId in Keychain", category: "Push")
+                            Log.error("OTPK push: no deviceId in Keychain", category: "Push")
                             return
                         }
                         await OtpkReplenishmentService.replenishForPush(deviceId: deviceId)
@@ -120,7 +120,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 
         if activityType == "contact_request_accepted" {
             let requestId = construct?["conversation_id"] as? String
-            Log.info("📱 contact_request_accepted push — requestId: \(requestId ?? "nil")", category: "Push")
+            Log.info("contact_request_accepted push — requestId: \(requestId ?? "nil")", category: "Push")
             Task {
                 await withTaskGroup(of: Void.self) { group in
                     group.addTask {

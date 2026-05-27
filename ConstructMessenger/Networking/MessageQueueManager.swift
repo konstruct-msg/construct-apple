@@ -26,7 +26,7 @@ class MessageQueueManager {
             resetStuckSendingMessages()
             setupSubscribers()
             startPeriodicCheck()
-            Log.info("📦 MessageQueueManager initialized", category: "MessageQueue")
+            Log.info("MessageQueueManager initialized", category: "MessageQueue")
         }
     }
     
@@ -50,9 +50,9 @@ class MessageQueueManager {
             }
             do {
                 try context.save()
-                Log.info("🔄 Reset \(stuck.count) stuck-sending message(s) to queued on launch", category: "MessageQueue")
+                Log.info("Reset \(stuck.count) stuck-sending message(s) to queued on launch", category: "MessageQueue")
             } catch {
-                Log.error("⚠️ Failed to reset stuck-sending messages: \(error)", category: "MessageQueue")
+                Log.error("Failed to reset stuck-sending messages: \(error)", category: "MessageQueue")
             }
         }
     }
@@ -70,7 +70,7 @@ class MessageQueueManager {
                     }
                 }
                 guard !Task.isCancelled, self.networkManager.isReachable else { continue }
-                Log.info("📡 Network available - checking for queued messages", category: "MessageQueue")
+                Log.info("Network available - checking for queued messages", category: "MessageQueue")
                 self.processQueuedMessages()
             }
         }
@@ -97,7 +97,7 @@ class MessageQueueManager {
         checkTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in self?.checkForStuckMessages() }
         }
-        Log.info("⏰ Started periodic message queue check", category: "MessageQueue")
+        Log.info("Started periodic message queue check", category: "MessageQueue")
     }
     
     private func stopPeriodicCheck() {
@@ -110,7 +110,7 @@ class MessageQueueManager {
         // Safety check: ensure Core Data is available
         let context = PersistenceController.shared.container.viewContext
         guard context.persistentStoreCoordinator != nil else {
-            Log.info("⚠️ Core Data store coordinator unavailable, skipping stuck message check", category: "MessageQueue")
+            Log.info("Core Data store coordinator unavailable, skipping stuck message check", category: "MessageQueue")
             return
         }
         
@@ -136,7 +136,7 @@ class MessageQueueManager {
                 
                 if let message = try? context.fetch(fetchRequest).first {
                     if message.deliveryStatus == .sending {
-                        Log.info("⏱️ Message \(messageId) timed out, marking as queued", category: "MessageQueue")
+                        Log.info("Message \(messageId) timed out, marking as queued", category: "MessageQueue")
                         message.deliveryStatus = .queued
                         Task { @MainActor [weak self, messageId] in self?.markMessageAsFailed(messageId) }
                     }
@@ -146,7 +146,7 @@ class MessageQueueManager {
             do {
                 try context.save()
             } catch {
-                Log.error("⚠️ MessageQueueManager: failed to save timed-out message statuses: \(error)", category: "MessageQueue")
+                Log.error("MessageQueueManager: failed to save timed-out message statuses: \(error)", category: "MessageQueue")
             }
             // Try to resend if network is available (gRPC reconnects automatically)
             Task { @MainActor [weak self] in
@@ -160,11 +160,11 @@ class MessageQueueManager {
     /// Process all queued messages (called when network is restored).
     func processQueuedMessages() {
         guard networkManager.isReachable else {
-            Log.debug("⏸️ Cannot process queued messages - network not reachable", category: "MessageQueue")
+            Log.debug("Cannot process queued messages - network not reachable", category: "MessageQueue")
             return
         }
         guard let currentUserId = SessionManager.shared.currentUserId else {
-            Log.debug("⏸️ Cannot process queued messages - no current user", category: "MessageQueue")
+            Log.debug("Cannot process queued messages - no current user", category: "MessageQueue")
             return
         }
         MessageRetryManager.shared.processAllQueuedMessages(

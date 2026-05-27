@@ -314,7 +314,7 @@ struct DiagnosticsView: View {
             "construct.kyber.otpk.nextKeyId",
         ]
         keysToRemove.forEach { UserDefaults.standard.removeObject(forKey: $0) }
-        Log.info("🗑️ [DEV] Full Keychain + UserDefaults wipe complete (device will re-register on next launch)", category: "Diagnostics")
+        Log.info("[DEV] Full Keychain + UserDefaults wipe complete (device will re-register on next launch)", category: "Diagnostics")
     }
     #endif
 }

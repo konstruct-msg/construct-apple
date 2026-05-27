@@ -39,11 +39,11 @@ final class BlindTokenService {
     /// - Parameter count: Number of tokens to request (capped at batchSize).
     func replenish(count: Int = batchSize) async {
         guard !isReplenishing else {
-            Log.debug("🪙 BlindToken: replenishment already in progress — skipping", category: "BlindToken")
+            Log.debug("BlindToken: replenishment already in progress — skipping", category: "BlindToken")
             return
         }
         if let last = lastReplenishDate, Date().timeIntervalSince(last) < Self.cooldown {
-            Log.debug("🪙 BlindToken: cooldown active — skipping", category: "BlindToken")
+            Log.debug("BlindToken: cooldown active — skipping", category: "BlindToken")
             return
         }
 
@@ -57,9 +57,9 @@ final class BlindTokenService {
             let tokens = try await issueTokens(count: n)
             TokenWalletService.shared.deposit(tokens)
             lastReplenishDate = Date()
-            Log.info("🪙 BlindToken: replenished \(tokens.count) tokens (wallet=\(TokenWalletService.shared.balance))", category: "BlindToken")
+            Log.info("BlindToken: replenished \(tokens.count) tokens (wallet=\(TokenWalletService.shared.balance))", category: "BlindToken")
         } catch {
-            Log.error("🪙 BlindToken: replenishment failed — \(error)", category: "BlindToken")
+            Log.error("BlindToken: replenishment failed — \(error)", category: "BlindToken")
         }
     }
 
@@ -108,7 +108,7 @@ final class BlindTokenService {
 
             // Optionally verify the point is on-curve + matches server pubkey.
             if !ppVerifyClient(evaluatedBytes: evaluated, nonce: nonces[i], serverPubkeyBytes: serverPubkey) {
-                Log.error("🪙 BlindToken: evaluated point \(i) failed verification — skipping", category: "BlindToken")
+                Log.error("BlindToken: evaluated point \(i) failed verification — skipping", category: "BlindToken")
                 continue
             }
 

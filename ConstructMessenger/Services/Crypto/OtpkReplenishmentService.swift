@@ -54,7 +54,7 @@ enum OtpkReplenishmentService {
         )
 
         let mode = replaceExisting ? "replacing all" : "appending"
-        Log.info("✅ OTPK upload (\(mode)): \(pairs.count) keys for device \(deviceId.prefix(8))...", category: "OTPK")
+        Log.info("OTPK upload (\(mode)): \(pairs.count) keys for device \(deviceId.prefix(8))...", category: "OTPK")
         if replaceExisting {
             CryptoManager.shared.clearNeedsFullOtpkReplacement()
         }
@@ -66,9 +66,9 @@ enum OtpkReplenishmentService {
         do {
             let data = Data(try CryptoManager.shared.exportOneTimePrekeys())
             KeychainManager.shared.saveOtpks(data)
-            Log.debug("💾 Persisted \(CryptoManager.shared.oneTimePrekeyCount()) OTPKs (CFE) to Keychain", category: "OTPK")
+            Log.debug("Persisted \(CryptoManager.shared.oneTimePrekeyCount()) OTPKs (CFE) to Keychain", category: "OTPK")
         } catch {
-            Log.error("⚠️ Failed to persist OTPKs to Keychain: \(error)", category: "OTPK")
+            Log.error("Failed to persist OTPKs to Keychain: \(error)", category: "OTPK")
         }
     }
 
@@ -87,7 +87,7 @@ enum OtpkReplenishmentService {
     /// are dropped to prevent simultaneous-writer race conditions.
     static func replenishForPush(deviceId: String) async {
         if let last = lastReplenishDate, Date().timeIntervalSince(last) < cooldownSeconds {
-            Log.info("🔑 OTPK replenish push skipped — cooldown active (\(Int(cooldownSeconds))s)", category: "OTPK")
+            Log.info("OTPK replenish push skipped — cooldown active (\(Int(cooldownSeconds))s)", category: "OTPK")
             return
         }
         await replenishInternal(deviceId: deviceId, source: "push")
@@ -95,7 +95,7 @@ enum OtpkReplenishmentService {
 
     private static func replenishInternal(deviceId: String, source: String) async {
         guard !isReplenishing else {
-            Log.debug("🔑 OTPK replenishment already in progress, skipping (\(source))", category: "OTPK")
+            Log.debug("OTPK replenishment already in progress, skipping (\(source))", category: "OTPK")
             return
         }
         isReplenishing = true
@@ -108,22 +108,22 @@ enum OtpkReplenishmentService {
             // of the current server count so every ID on the server matches our private keys.
             let forceReplace = CryptoManager.shared.needsFullOtpkReplacement
             if forceReplace {
-                Log.info("🔑 Fresh orchestrator detected — replacing all server OTPKs [\(source)]", category: "OTPK")
+                Log.info("Fresh orchestrator detected — replacing all server OTPKs [\(source)]", category: "OTPK")
                 try await generateAndUpload(count: replenishBatchSize, deviceId: deviceId, replaceExisting: true)
                 return
             }
 
             let (serverCount, recommendedMin) = try await KeyServiceClient.shared.getPreKeyCountFull(deviceId: deviceId)
             let effective = max(recommendedMin, lowWaterMark)
-            Log.debug("🔑 OTPK server count: \(serverCount) / recommended min: \(effective) [\(source)]", category: "OTPK")
+            Log.debug("OTPK server count: \(serverCount) / recommended min: \(effective) [\(source)]", category: "OTPK")
 
             guard serverCount < effective else { return }
 
             let uploadCount = max(lowWaterMark, effective - serverCount)
-            Log.info("🔑 OTPK \(serverCount) < \(effective) — uploading \(uploadCount) keys [\(source)]...", category: "OTPK")
+            Log.info("OTPK \(serverCount) < \(effective) — uploading \(uploadCount) keys [\(source)]...", category: "OTPK")
             try await generateAndUpload(count: uploadCount, deviceId: deviceId)
         } catch {
-            Log.error("⚠️ OTPK replenishment failed (non-fatal) [\(source)]: \(error)", category: "OTPK")
+            Log.error("OTPK replenishment failed (non-fatal) [\(source)]: \(error)", category: "OTPK")
         }
     }
 }

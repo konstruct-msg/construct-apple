@@ -71,9 +71,9 @@ final class ChatMessageStore: NSObject {
             viewModel?.messages = messages
             oldestLoadedTimestamp = messages.first?.timestamp
             allLoadedMessageIds = Set(messages.map { $0.id })
-            Log.debug("✅ FRC initial fetch: \(messages.count) messages (reversed to oldest-first)", category: "ChatViewModel")
+            Log.debug("FRC initial fetch: \(messages.count) messages (reversed to oldest-first)", category: "ChatViewModel")
         } catch {
-            Log.error("❌ FRC fetch failed: \(error)", category: "ChatViewModel")
+            Log.error("FRC fetch failed: \(error)", category: "ChatViewModel")
         }
     }
 
@@ -83,7 +83,7 @@ final class ChatMessageStore: NSObject {
         guard let vm = viewModel else { return }
         guard !vm.isLoadingMore, vm.hasMoreMessages, let oldestTimestamp = oldestLoadedTimestamp else { return }
         vm.isLoadingMore = true
-        Log.debug("📥 Loading more messages before \(oldestTimestamp)", category: "ChatViewModel")
+        Log.debug("Loading more messages before \(oldestTimestamp)", category: "ChatViewModel")
         let fetchRequest = Message.fetchRequest()
         let chatPredicate = NSPredicate(format: "chat == %@ AND timestamp < %@", chat, oldestTimestamp as NSDate)
         fetchRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
@@ -97,16 +97,16 @@ final class ChatMessageStore: NSObject {
             if newMessages.isEmpty {
                 vm.hasMoreMessages = false
                 vm.isLoadingMore = false
-                Log.debug("📭 No more older messages to load", category: "ChatViewModel")
+                Log.debug("No more older messages to load", category: "ChatViewModel")
                 return
             }
             vm.messages = newMessages + vm.messages
             oldestLoadedTimestamp = vm.messages.first?.timestamp
             allLoadedMessageIds.formUnion(Set(newMessages.map { $0.id }))
             checkIfHasMoreMessages()
-            Log.debug("📬 Loaded \(newMessages.count) more messages (total: \(vm.messages.count))", category: "ChatViewModel")
+            Log.debug("Loaded \(newMessages.count) more messages (total: \(vm.messages.count))", category: "ChatViewModel")
         } else {
-            Log.error("❌ Failed to fetch more messages", category: "ChatViewModel")
+            Log.error("Failed to fetch more messages", category: "ChatViewModel")
         }
         vm.isLoadingMore = false
     }
@@ -132,7 +132,7 @@ final class ChatMessageStore: NSObject {
         do {
             try persistenceService.deleteMessage(message, chat: chat, in: viewContext)
         } catch {
-            Log.error("❌ Failed to delete message: \(error)", category: "ChatViewModel")
+            Log.error("Failed to delete message: \(error)", category: "ChatViewModel")
         }
     }
 
@@ -140,7 +140,7 @@ final class ChatMessageStore: NSObject {
         do {
             try persistenceService.deleteMessages(withIds: messageIds, chat: chat, in: viewContext)
         } catch {
-            Log.error("❌ Failed to delete messages: \(error)", category: "ChatViewModel")
+            Log.error("Failed to delete messages: \(error)", category: "ChatViewModel")
         }
     }
 
@@ -164,7 +164,7 @@ final class ChatMessageStore: NSObject {
             isValid($0) && !fetchedIds.contains($0.id)
         }
         vm.messages = historicMessages + fetchedMessages
-        Log.debug("🔄 FRC updated: \(fetchedMessages.count) recent + \(historicMessages.count) historic = \(vm.messages.count) total", category: "ChatViewModel")
+        Log.debug("FRC updated: \(fetchedMessages.count) recent + \(historicMessages.count) historic = \(vm.messages.count) total", category: "ChatViewModel")
         if let first = vm.messages.first, isValid(first) {
             oldestLoadedTimestamp = first.timestamp
         }

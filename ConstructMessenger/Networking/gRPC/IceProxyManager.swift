@@ -116,14 +116,14 @@ final class IceProxyManager: ObservableObject {
         guard !expiredAddresses.isEmpty || !expiringAddresses.isEmpty else { return }
 
         for addr in expiredAddresses {
-            Log.error("🧊 TLS cert EXPIRED on relay \(addr) — fetching fresh config", category: "ICE")
+            Log.error("TLS cert EXPIRED on relay \(addr) — fetching fresh config", category: "ICE")
         }
         for (addr, days) in expiringAddresses {
-            Log.info("🧊 TLS cert expires in \(days) day(s) on relay \(addr) — scheduling refresh", category: "ICE")
+            Log.info("TLS cert expires in \(days) day(s) on relay \(addr) — scheduling refresh", category: "ICE")
         }
 
         _ = await IceCertFetcher.shared.fetchAndCacheRelayConfig()
-        Log.info("🧊 Cert expiry refresh completed", category: "ICE")
+        Log.info("Cert expiry refresh completed", category: "ICE")
     }
 
     // MARK: - ICE Mode (tri-state)
@@ -190,7 +190,7 @@ final class IceProxyManager: ObservableObject {
             KeychainManager.shared.saveIceBridgeCert(fetched)
             return fetched
         }
-        Log.info("🧊 Using hardcoded ICE bridge cert (last resort)", category: "ICE")
+        Log.info("Using hardcoded ICE bridge cert (last resort)", category: "ICE")
         return ICEConfig.hardcodedBridgeCert
     }
 
@@ -200,10 +200,10 @@ final class IceProxyManager: ObservableObject {
     /// Returns true if a new cert was obtained and proxy was restarted successfully.
     @discardableResult
     func refreshCertAndRestart() async -> Bool {
-        Log.info("🧊 ICE recovery — refreshing cert via .well-known", category: "ICE")
+        Log.info("ICE recovery — refreshing cert via .well-known", category: "ICE")
         KeychainManager.shared.deleteIceBridgeCert()
         guard let freshCert = await IceCertFetcher.shared.fetchFromHTTPS() else {
-            Log.error("🧊 Failed to fetch fresh ICE cert", category: "ICE")
+            Log.error("Failed to fetch fresh ICE cert", category: "ICE")
             return false
         }
         KeychainManager.shared.saveIceBridgeCert(freshCert)
@@ -222,7 +222,7 @@ final class IceProxyManager: ObservableObject {
             if !IceProxyStore.hasStoredMode {
                 let migrated = IceMode.migrateFromLegacy()
                 mode = migrated
-                Log.info("🧊 Migrated to IceMode: \(migrated.rawValue)", category: "ICE")
+                Log.info("Migrated to IceMode: \(migrated.rawValue)", category: "ICE")
             }
         }
     }
@@ -234,7 +234,7 @@ final class IceProxyManager: ObservableObject {
     func startIfEnabled() async {
         migrateToModeIfNeeded()
         guard KeychainManager.shared.isDeviceRegistered() else {
-            Log.info("🧊 ICE startup skipped — device not registered", category: "ICE")
+            Log.info("ICE startup skipped — device not registered", category: "ICE")
             return
         }
         // ConnectionLoop handles proxy lifecycle — just ensure cert is available
@@ -287,7 +287,7 @@ final class IceProxyManager: ObservableObject {
         let deprecated = IceCertFetcher.cachedDeprecatedIdsSync()
         let isRetired  = deprecated.contains(mid) || (!freshIds.isEmpty && !freshIds.contains(mid))
         guard isRetired else { return }
-        Log.info("🧊 Active relay \(active.address) [\(mid)] retired by server — rotating", category: "ICE")
+        Log.info("Active relay \(active.address) [\(mid)] retired by server — rotating", category: "ICE")
         _ = try? await ConnectionLoop.shared.prepare()
     }
 

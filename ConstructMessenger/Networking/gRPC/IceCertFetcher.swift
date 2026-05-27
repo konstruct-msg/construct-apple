@@ -204,15 +204,15 @@ actor IceCertFetcher {
         do {
             let (data, response) = try await session.data(for: request)
             guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-                Log.debug("🧊 ICE .well-known returned non-200", category: "ICE")
+                Log.debug("ICE .well-known returned non-200", category: "ICE")
                 return nil
             }
             let parsed = try JSONDecoder().decode(IceCertWellKnown.self, from: data)
             guard !parsed.cert.isEmpty else { return nil }
-            Log.info("🧊 ICE cert fetched via .well-known", category: "ICE")
+            Log.info("ICE cert fetched via .well-known", category: "ICE")
             return parsed.cert
         } catch {
-            Log.debug("🧊 ICE .well-known fetch error: \(error)", category: "ICE")
+            Log.debug("ICE .well-known fetch error: \(error)", category: "ICE")
             return nil
         }
     }
@@ -238,7 +238,7 @@ actor IceCertFetcher {
         if let relays = await fetchVerifiedRelayConfig(from: mirrorURLs) {
             return relays
         }
-        Log.debug("🧊 All construct-server mirrors failed — using cache", category: "ICE")
+        Log.debug("All construct-server mirrors failed — using cache", category: "ICE")
         return Self.cachedRelayInfosSync()
     }
 
@@ -253,11 +253,11 @@ actor IceCertFetcher {
                         request.cachePolicy = .reloadIgnoringLocalCacheData
                         let (data, response) = try await self.session.data(for: request)
                         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-                            Log.debug("🧊 \(url.host ?? "") returned non-200", category: "ICE")
+                            Log.debug("\(url.host ?? "") returned non-200", category: "ICE")
                             return nil
                         }
                         guard try self.verifySignature(data) else {
-                            Log.error("🧊 \(url.host ?? "") signature invalid — ignoring", category: "ICE")
+                            Log.error("\(url.host ?? "") signature invalid — ignoring", category: "ICE")
                             return nil
                         }
                         let parsed = try JSONDecoder().decode(ConstructServerWellKnown.self, from: data)
@@ -284,10 +284,10 @@ actor IceCertFetcher {
                         }
 
                         let deprecatedNote = deprecatedIds.isEmpty ? "" : " (deprecated: \(deprecatedIds.joined(separator: ", ")))"
-                        Log.info("🧊 Relay config via \(url.host ?? "?"): \(relays.count) relay(s)\(deprecatedNote)", category: "ICE")
+                        Log.info("Relay config via \(url.host ?? "?"): \(relays.count) relay(s)\(deprecatedNote)", category: "ICE")
                         return relays
                     } catch {
-                        Log.debug("🧊 \(url.host ?? "") fetch error: \(error)", category: "ICE")
+                        Log.debug("\(url.host ?? "") fetch error: \(error)", category: "ICE")
                         return nil
                     }
                 }
@@ -361,7 +361,7 @@ actor IceCertFetcher {
         relays.removeAll { $0.addressWithPort == address }
         if let encoded = try? JSONEncoder().encode(relays) {
             UserDefaults.standard.set(encoded, forKey: cachedRelayInfosKey)
-            Log.info("🧊 Evicted relay \(address) from SPKI cache", category: "ICE")
+            Log.info("Evicted relay \(address) from SPKI cache", category: "ICE")
         }
     }
 
@@ -414,14 +414,14 @@ actor IceCertFetcher {
         guard var jsonObject = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let sigField = jsonObject["signature"] as? String,
               sigField.hasPrefix("ed25519:") else {
-            Log.debug("🧊 construct-server: missing or malformed signature field", category: "ICE")
+            Log.debug("construct-server: missing or malformed signature field", category: "ICE")
             return false
         }
 
         // 2. Extract base64url signature bytes
         let b64url = String(sigField.dropFirst("ed25519:".count))
         guard let sigData = Data(base64URLEncoded: b64url) else {
-            Log.debug("🧊 construct-server: failed to decode signature", category: "ICE")
+            Log.debug("construct-server: failed to decode signature", category: "ICE")
             return false
         }
 
@@ -434,7 +434,7 @@ actor IceCertFetcher {
 
         // 4. Load public key
         guard let pubKeyData = Data(hexString: ICEConfig.relayConfigSigningKey) else {
-            Log.error("🧊 relayConfigSigningKey is not valid hex", category: "ICE")
+            Log.error("relayConfigSigningKey is not valid hex", category: "ICE")
             return false
         }
         let publicKey = try Curve25519.Signing.PublicKey(rawRepresentation: pubKeyData)

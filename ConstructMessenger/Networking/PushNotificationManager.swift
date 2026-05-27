@@ -84,7 +84,7 @@ class PushNotificationManager: NSObject {
             }
         }
         
-        Log.info("📱 PushNotificationManager initialized", category: "Push")
+        Log.info("PushNotificationManager initialized", category: "Push")
     }
     
     // MARK: - Public API
@@ -93,7 +93,7 @@ class PushNotificationManager: NSObject {
     /// - Returns: Whether permission was granted
     @discardableResult
     func requestPermission() async -> Bool {
-        Log.info("📱 Requesting push notification permission", category: "Push")
+        Log.info("Requesting push notification permission", category: "Push")
         
         do {
             let granted = try await notificationCenter.requestAuthorization(
@@ -103,18 +103,18 @@ class PushNotificationManager: NSObject {
             await checkAuthorizationStatus()
             
             if granted {
-                Log.info("✅ Push notification permission granted", category: "Push")
+                Log.info("Push notification permission granted", category: "Push")
                 await MainActor.run {
                     UIApplication.shared.registerForRemoteNotifications()
                 }
             } else {
-                Log.info("❌ Push notification permission denied", category: "Push")
+                Log.info("Push notification permission denied", category: "Push")
             }
             
             return granted
             
         } catch {
-            Log.error("❌ Failed to request push notification permission: \(error)", category: "Push")
+            Log.error("Failed to request push notification permission: \(error)", category: "Push")
             return false
         }
     }
@@ -128,12 +128,12 @@ class PushNotificationManager: NSObject {
         isPushEnabled = (authorizationStatus == .authorized || authorizationStatus == .provisional)
                         && deviceToken != nil
         
-        Log.debug("📱 Push authorization status: \(authorizationStatus.description)", category: "Push")
+        Log.debug("Push authorization status: \(authorizationStatus.description)", category: "Push")
 
         await registerForRemoteNotificationsIfAuthorized()
 
         if authorizationStatus == .notDetermined && SessionManager.shared.sessionToken != nil {
-            Log.info("📱 Permission not yet requested but user is authenticated — requesting now", category: "Push")
+            Log.info("Permission not yet requested but user is authenticated — requesting now", category: "Push")
             await requestPermission()
         }
     }
@@ -153,7 +153,7 @@ class PushNotificationManager: NSObject {
     /// Called from AppDelegate after APNs provides device token
     func registerDeviceToken(_ tokenData: Data) async {
         let tokenString = tokenData.map { String(format: "%02.2hhx", $0) }.joined()
-        Log.info("📱 Registering device token (length: \(tokenString.count))", category: "Push")
+        Log.info("Registering device token (length: \(tokenString.count))", category: "Push")
 
         // New token from APNs — mark as not yet registered with server
         if deviceToken != tokenString {
@@ -175,11 +175,11 @@ class PushNotificationManager: NSObject {
     /// Unregister device token (e.g., on logout)
     func unregisterDeviceToken() async {
         guard let token = deviceToken else {
-            Log.debug("📱 No device token to unregister", category: "Push")
+            Log.debug("No device token to unregister", category: "Push")
             return
         }
         
-        Log.info("📱 Unregistering device token", category: "Push")
+        Log.info("Unregistering device token", category: "Push")
         
         // Unregister from server
         await unregisterFromServer(token)
@@ -192,7 +192,7 @@ class PushNotificationManager: NSObject {
     
     /// Handle failed registration
     func handleRegistrationError(_ error: Error) {
-        Log.error("❌ Failed to register for remote notifications: \(error)", category: "Push")
+        Log.error("Failed to register for remote notifications: \(error)", category: "Push")
         isPushEnabled = false
     }
     
@@ -206,14 +206,14 @@ class PushNotificationManager: NSObject {
         // APNs will call didRegisterForRemoteNotificationsWithDeviceToken which
         // calls registerDeviceToken(_:) → registerWithServer.
         guard let token = deviceToken else {
-            Log.info("📱 ensureTokenRegistered — no token, requesting from APNs", category: "Push")
+            Log.info("ensureTokenRegistered — no token, requesting from APNs", category: "Push")
             await MainActor.run { UIApplication.shared.registerForRemoteNotifications() }
             return
         }
         // Token exists but not yet confirmed on server (e.g. previous attempt failed,
         // app reinstalled, or server DB was cleared).
         if !isRegisteredWithServer {
-            Log.info("🔄 ensureTokenRegistered — token exists but not on server, retrying", category: "Push")
+            Log.info("ensureTokenRegistered — token exists but not on server, retrying", category: "Push")
             await registerWithServer(token)
         }
     }
@@ -226,26 +226,26 @@ class PushNotificationManager: NSObject {
         // If userId is still nil (e.g. race between token refresh and userId restore),
         // we'll be called again on the next sessionToken change once userId is set.
         guard SessionManager.shared.currentUserId != nil else {
-            Log.debug("⏸️ Device token retry deferred — userId not yet available", category: "Push")
+            Log.debug("Device token retry deferred — userId not yet available", category: "Push")
             return
         }
         guard let token = deviceToken, !isRegisteredWithServer else { return }
-        Log.info("🔄 Retrying device token registration (session now available)", category: "Push")
+        Log.info("Retrying device token registration (session now available)", category: "Push")
         await registerWithServer(token)
     }
     
     /// Register device token with backend server
     private func registerWithServer(_ token: String) async {
         guard SessionManager.shared.sessionToken != nil else {
-            Log.info("⏸️ Device token registration deferred — no session yet", category: "Push")
+            Log.info("Device token registration deferred — no session yet", category: "Push")
             return
         }
         for attempt in 0..<3 {
             do {
-                Log.info("📡 Registering device token with server", category: "Push")
+                Log.info("Registering device token with server", category: "Push")
                 let response = try await NotificationServiceClient.shared.registerDeviceToken(token: token)
                 isRegisteredWithServer = true
-                Log.info("✅ Device token registered with server: success=\(response.success)", category: "Push")
+                Log.info("Device token registered with server: success=\(response.success)", category: "Push")
                 return
             } catch {
                 let shouldRetry: Bool
@@ -256,10 +256,10 @@ class PushNotificationManager: NSObject {
                 }
                 if shouldRetry && attempt < 2 {
                     let delay = Double(attempt + 1) * 2.0
-                    Log.info("🔄 Push token registration failed (attempt \(attempt + 1)/3), retrying in \(Int(delay))s", category: "Push")
+                    Log.info("Push token registration failed (attempt \(attempt + 1)/3), retrying in \(Int(delay))s", category: "Push")
                     try? await Task.sleep(for: .seconds(delay))
                 } else {
-                    Log.error("❌ Failed to register device token with server: \(error)", category: "Push")
+                    Log.error("Failed to register device token with server: \(error)", category: "Push")
                     return
                 }
             }
@@ -269,14 +269,14 @@ class PushNotificationManager: NSObject {
     /// Unregister device token from backend server
     private func unregisterFromServer(_ token: String) async {
         do {
-            Log.info("📡 Unregistering device token from server", category: "Push")
+            Log.info("Unregistering device token from server", category: "Push")
             
             try await NotificationServiceClient.shared.unregisterDeviceToken(token: token)
             
-            Log.info("✅ Device token unregistered from server", category: "Push")
+            Log.info("Device token unregistered from server", category: "Push")
             
         } catch {
-            Log.error("❌ Failed to unregister device token from server: \(error)", category: "Push")
+            Log.error("Failed to unregister device token from server: \(error)", category: "Push")
         }
     }
 }
@@ -307,7 +307,7 @@ extension PushNotificationManager: UNUserNotificationCenterDelegate {
         // didReceiveRemoteNotification handler fetches messages and posts
         // its own local notification.
         if aps?["content-available"] as? Int == 1 && aps?["alert"] == nil {
-            Log.debug("📱 Silent push received in foreground — suppressed", category: "Push")
+            Log.debug("Silent push received in foreground — suppressed", category: "Push")
             completionHandler([])
             return
         }
@@ -315,7 +315,7 @@ extension PushNotificationManager: UNUserNotificationCenterDelegate {
         // APNs alert push (UNPushNotificationTrigger) — the server body may
         // contain raw ciphertext. Replace with a privacy-safe local notification.
         if notification.request.trigger is UNPushNotificationTrigger {
-            Log.debug("📱 APNs alert push in foreground — replacing with local banner", category: "Push")
+            Log.debug("APNs alert push in foreground — replacing with local banner", category: "Push")
             let chatId = construct?["conversation_id"] as? String
             LocalNotificationManager.shared.showNewMessageNotification(chatId: chatId)
             completionHandler([])   // suppress the raw push
@@ -323,7 +323,7 @@ extension PushNotificationManager: UNUserNotificationCenterDelegate {
         }
 
         // Local notification (scheduled by our own code) — show it.
-        Log.debug("📱 Local notification in foreground — showing", category: "Push")
+        Log.debug("Local notification in foreground — showing", category: "Push")
         if #available(iOS 14.0, *) {
             completionHandler([.banner, .sound, .badge])
         } else {
@@ -337,12 +337,12 @@ extension PushNotificationManager: UNUserNotificationCenterDelegate {
         didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
-        Log.info("📱 User tapped notification", category: "Push")
+        Log.info("User tapped notification", category: "Push")
         
         let userInfo = response.notification.request.content.userInfo
         
         if let conversationId = userInfo["conversation_id"] as? String {
-            Log.info("📱 Opening conversation: \(conversationId)", category: "Push")
+            Log.info("Opening conversation: \(conversationId)", category: "Push")
             Task { @MainActor in
                 if let appDelegate = UIApplication.shared.delegate as? AppDelegate {
                     appDelegate.deepLinkHandler.deepLink = .openChat(chatId: conversationId)

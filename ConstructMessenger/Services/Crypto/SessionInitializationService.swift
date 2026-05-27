@@ -49,23 +49,23 @@ class SessionInitializationService {
         
         for attempt in 1...maxAttempts {
             do {
-                Log.info("🔑 SESSION_STATE[fetch_bundle_attempt_\(attempt)]: userId=\(userId.prefix(8))..., deviceId=\(deviceId?.prefix(8) ?? "nil")...", category: "SessionInit")
+                Log.info("SESSION_STATE[fetch_bundle_attempt_\(attempt)]: userId=\(userId.prefix(8))..., deviceId=\(deviceId?.prefix(8) ?? "nil")...", category: "SessionInit")
                 let keyBundle = try await KeyServiceClient.shared.getPreKeyBundle(userId: userId, deviceId: deviceId)
-                Log.info("✅ SESSION_STATE[fetch_bundle_success]: userId=\(userId.prefix(8))..., hasVerifyingKey=\(!keyBundle.verifyingKey.isEmpty)", category: "SessionInit")
+                Log.info("SESSION_STATE[fetch_bundle_success]: userId=\(userId.prefix(8))..., hasVerifyingKey=\(!keyBundle.verifyingKey.isEmpty)", category: "SessionInit")
                 return keyBundle
             } catch {
                 lastError = error
-                Log.error("⚠️ SESSION_STATE[fetch_bundle_failed]: attempt=\(attempt)/\(maxAttempts), error=\(error) (\(type(of: error)))", category: "SessionInit")
+                Log.error("SESSION_STATE[fetch_bundle_failed]: attempt=\(attempt)/\(maxAttempts), error=\(error) (\(type(of: error)))", category: "SessionInit")
                 
                 if attempt < maxAttempts {
-                    Log.info("⏳ Retrying public key fetch in \(delay)s...", category: "SessionInit")
+                    Log.info("Retrying public key fetch in \(delay)s...", category: "SessionInit")
                     try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
                     delay *= 2  // Exponential backoff: 1s, 2s, 4s
                 }
             }
         }
         
-        Log.error("❌ SESSION_STATE[fetch_bundle_exhausted]: userId=\(userId.prefix(8))..., allAttemptsFailed", category: "SessionInit")
+        Log.error("SESSION_STATE[fetch_bundle_exhausted]: userId=\(userId.prefix(8))..., allAttemptsFailed", category: "SessionInit")
         throw lastError ?? NetworkError.connectionFailed
     }
     
@@ -79,7 +79,7 @@ class SessionInitializationService {
         if deleteExisting {
             if CryptoManager.shared.hasSession(for: userId) {
                 CryptoManager.shared.archiveSession(for: userId, reason: .manualReset)
-                Log.info("🗑️ Proactively deleted any existing session for \(userId) before initialization.", category: "SessionInit")
+                Log.info("Proactively deleted any existing session for \(userId) before initialization.", category: "SessionInit")
             }
         }
 
@@ -89,7 +89,7 @@ class SessionInitializationService {
         if bundle.spkRotationEpoch > 0 {
             let knownEpoch = KeychainManager.shared.loadSpkEpoch(for: userId)
             if bundle.spkRotationEpoch < knownEpoch {
-                Log.error("⚠️ SESSION_STATE[spk_replay_rejected]: epoch=\(bundle.spkRotationEpoch) < known=\(knownEpoch) for \(userId.prefix(8))… — possible SPK replay attack", category: "SessionInit")
+                Log.error("SESSION_STATE[spk_replay_rejected]: epoch=\(bundle.spkRotationEpoch) < known=\(knownEpoch) for \(userId.prefix(8))… — possible SPK replay attack", category: "SessionInit")
                 throw SessionError.staleSPKBundle(epoch: bundle.spkRotationEpoch, knownEpoch: knownEpoch)
             }
             KeychainManager.shared.saveSpkEpoch(bundle.spkRotationEpoch, for: userId)
@@ -99,7 +99,7 @@ class SessionInitializationService {
         // epoch == 0 means the peer never uploaded a Kyber SPK; refuse to proceed
         // rather than silently falling back to classical-only key agreement.
         if bundle.suiteId == 2 && bundle.kyberSpkRotationEpoch == 0 {
-            Log.error("⚠️ SESSION_STATE[kyber_epoch_missing]: suiteId=2 but kyberSpkRotationEpoch==0 for \(userId.prefix(8))… — refusing PQ session init", category: "SessionInit")
+            Log.error("SESSION_STATE[kyber_epoch_missing]: suiteId=2 but kyberSpkRotationEpoch==0 for \(userId.prefix(8))… — refusing PQ session init", category: "SessionInit")
             throw SessionError.kyberEpochRequired
         }
 
@@ -130,11 +130,11 @@ class SessionInitializationService {
                 kyberSpkRotationEpoch: bundle.kyberSpkRotationEpoch
             )
             PerformanceMetrics.shared.end(.sessionInitStart, endEvent: .sessionInitEnd, label: String(userId.prefix(8)))
-            Log.info("✅ Session initialized as INITIATOR for \(userId)", category: "SessionInit")
+            Log.info("Session initialized as INITIATOR for \(userId)", category: "SessionInit")
         } catch let sessionError as SessionError {
             throw sessionError
         } catch {
-            Log.error("❌ Session init failed for \(userId): \(error)", category: "SessionInit")
+            Log.error("Session init failed for \(userId): \(error)", category: "SessionInit")
             Log.error("   bundle.suiteId=\(bundle.suiteId), identityPublic.len=\(bundle.identityPublic.count), signedPrekeyPublic.len=\(bundle.signedPrekeyPublic.count)", category: "SessionInit")
             throw error
         }
@@ -155,7 +155,7 @@ class SessionInitializationService {
         onSuccess: @escaping () -> Void,
         onFailure: @escaping (Error) -> Void
     ) async {
-        Log.info("🔐 SESSION_STATE[proactive_init_start]: userId=\(userId.prefix(8))...", category: "SessionInit")
+        Log.info("SESSION_STATE[proactive_init_start]: userId=\(userId.prefix(8))...", category: "SessionInit")
 
         let staleSPKMaxRetries = 2
         let staleSPKRetryDelay: UInt64 = 60 // seconds
@@ -168,7 +168,7 @@ class SessionInitializationService {
         var lastError: Error?
         for attempt in 0...staleSPKMaxRetries {
             if attempt > 0 {
-                Log.info("🔁 SESSION_STATE[stale_spk_retry_\(attempt)]: waiting \(staleSPKRetryDelay)s for peer SPK rotation to propagate — userId=\(userId.prefix(8))…", category: "SessionInit")
+                Log.info("SESSION_STATE[stale_spk_retry_\(attempt)]: waiting \(staleSPKRetryDelay)s for peer SPK rotation to propagate — userId=\(userId.prefix(8))…", category: "SessionInit")
                 try? await Task.sleep(nanoseconds: staleSPKRetryDelay * 1_000_000_000)
                 guard !Task.isCancelled else { break }
             }
@@ -177,19 +177,19 @@ class SessionInitializationService {
                 let bundle = try await fetchPublicKeyWithRetry(userId: userId)
                 try initializeSession(userId: userId, bundle: bundle, deleteExisting: true)
 
-                Log.info("✅ SESSION_STATE[proactive_init_success]: userId=\(userId.prefix(8))...", category: "SessionInit")
+                Log.info("SESSION_STATE[proactive_init_success]: userId=\(userId.prefix(8))...", category: "SessionInit")
                 await MainActor.run { onSuccess() }
                 return
             } catch SessionError.peerSPKStale(let days) where attempt < staleSPKMaxRetries && days < staleSPKFastFailDays {
                 // SPK is barely past the staleness limit — peer may have just come online
                 // and rotated. Wait for server bundle cache to propagate.
-                Log.error("⚠️ Peer SPK stale for \(userId.prefix(8))… (\(String(format: "%.1f", days))d) — will retry in \(staleSPKRetryDelay)s (\(attempt + 1)/\(staleSPKMaxRetries))", category: "SessionInit")
+                Log.error("Peer SPK stale for \(userId.prefix(8))… (\(String(format: "%.1f", days))d) — will retry in \(staleSPKRetryDelay)s (\(attempt + 1)/\(staleSPKMaxRetries))", category: "SessionInit")
                 lastError = SessionError.peerSPKStale(ageDays: days)
                 continue
             } catch SessionError.peerSPKStale(let days) {
                 // SPK is well past the staleness limit — peer has been offline for a long
                 // time. Retrying after 60s is pointless; fail immediately.
-                Log.error("⚠️ SESSION_STATE[stale_spk_fast_fail]: peer \(userId.prefix(8))… SPK is \(String(format: "%.1f", days))d old (≥\(staleSPKFastFailDays)d threshold) — skipping retries", category: "SessionInit")
+                Log.error("SESSION_STATE[stale_spk_fast_fail]: peer \(userId.prefix(8))… SPK is \(String(format: "%.1f", days))d old (≥\(staleSPKFastFailDays)d threshold) — skipping retries", category: "SessionInit")
                 lastError = SessionError.peerSPKStale(ageDays: days)
                 break
             } catch {
@@ -199,7 +199,7 @@ class SessionInitializationService {
         }
 
         let finalError = lastError ?? NetworkError.connectionFailed
-        Log.error("❌ SESSION_STATE[proactive_init_failed]: userId=\(userId.prefix(8))..., error=\(finalError.localizedDescription)", category: "SessionInit")
+        Log.error("SESSION_STATE[proactive_init_failed]: userId=\(userId.prefix(8))..., error=\(finalError.localizedDescription)", category: "SessionInit")
         await MainActor.run { onFailure(finalError) }
     }
 }

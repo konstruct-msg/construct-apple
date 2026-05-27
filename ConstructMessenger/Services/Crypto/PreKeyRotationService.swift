@@ -61,16 +61,16 @@ final class PreKeyRotationService {
     /// and the next call will retry, subject to a 120s throttle.
     func rotateIfNeeded(deviceId: String) async {
         guard !deviceId.isEmpty else {
-            Log.error("❌ SPK rotation skipped — deviceId is empty (Keychain unavailable?)", category: "SPKRotation")
+            Log.error("SPK rotation skipped — deviceId is empty (Keychain unavailable?)", category: "SPKRotation")
             return
         }
         guard !isRotating else {
-            Log.debug("🔑 SPK rotation already in progress — skipping duplicate call", category: "SPKRotation")
+            Log.debug("SPK rotation already in progress — skipping duplicate call", category: "SPKRotation")
             return
         }
         guard isRotationDue() else {
             hasPendingRetry = false
-            Log.debug("🔑 SPK rotation not due yet", category: "SPKRotation")
+            Log.debug("SPK rotation not due yet", category: "SPKRotation")
             return
         }
         // Throttle retries: if the previous attempt failed (stream was down), wait at
@@ -78,25 +78,25 @@ final class PreKeyRotationService {
         // server during rapid ICE reconnect cycling (dozens of attempts per minute).
         let now = Date().timeIntervalSince1970
         if hasPendingRetry && now - lastAttemptAt < Self.retryIntervalSeconds {
-            Log.debug("🔑 SPK rotation retry throttled (\(Int(Self.retryIntervalSeconds - (now - lastAttemptAt)))s remaining)", category: "SPKRotation")
+            Log.debug("SPK rotation retry throttled (\(Int(Self.retryIntervalSeconds - (now - lastAttemptAt)))s remaining)", category: "SPKRotation")
             return
         }
         isRotating = true
         lastAttemptAt = now
         defer { isRotating = false }
-        Log.info("🔑 SPK rotation due — starting atomic rotation", category: "SPKRotation")
+        Log.info("SPK rotation due — starting atomic rotation", category: "SPKRotation")
         do {
             try await performAtomicRotation(deviceId: deviceId, reason: .scheduled)
             hasPendingRetry = false
         } catch {
             hasPendingRetry = true
-            Log.error("❌ SPK rotation failed: \(error)", category: "SPKRotation")
+            Log.error("SPK rotation failed: \(error)", category: "SPKRotation")
         }
     }
 
     /// Force rotation regardless of schedule (e.g., triggered by security event).
     func forceRotate(deviceId: String, reason: Shared_Proto_Services_V1_SignedPreKeyRotationReason) async throws {
-        Log.info("🔑 Force SPK rotation requested (reason: \(reason))", category: "SPKRotation")
+        Log.info("Force SPK rotation requested (reason: \(reason))", category: "SPKRotation")
         try await performAtomicRotation(deviceId: deviceId, reason: reason)
     }
 
@@ -105,14 +105,14 @@ final class PreKeyRotationService {
     func forceRotate() async {
         let deviceId = KeychainManager.shared.loadDeviceID() ?? ""
         guard !deviceId.isEmpty else {
-            Log.error("❌ forceRotate: deviceId not available", category: "SPKRotation")
+            Log.error("forceRotate: deviceId not available", category: "SPKRotation")
             return
         }
         do {
             try await forceRotate(deviceId: deviceId, reason: .user)
-            Log.info("✅ Force SPK rotation complete", category: "SPKRotation")
+            Log.info("Force SPK rotation complete", category: "SPKRotation")
         } catch {
-            Log.error("❌ Force SPK rotation failed: \(error)", category: "SPKRotation")
+            Log.error("Force SPK rotation failed: \(error)", category: "SPKRotation")
         }
     }
 
@@ -158,7 +158,7 @@ final class PreKeyRotationService {
             throw error
         }
 
-        Log.info("🔑 SPK rotation: classic keyId=\(classicKey.keyId) kyber keyId=\(kyberKey.keyId)", category: "SPKRotation")
+        Log.info("SPK rotation: classic keyId=\(classicKey.keyId) kyber keyId=\(kyberKey.keyId)", category: "SPKRotation")
 
         // ── Phase 2: single atomic RPC ───────────────────────────────────────
 
@@ -174,7 +174,7 @@ final class PreKeyRotationService {
             // RPC failed — roll back the in-memory Rust core to Keychain state.
             // Without this, the core has a new SPK that the server doesn't know
             // about, causing AEAD failures for all incoming session initiations.
-            Log.error("❌ SPK rotation RPC failed — rolling back Rust core: \(error)", category: "SPKRotation")
+            Log.error("SPK rotation RPC failed — rolling back Rust core: \(error)", category: "SPKRotation")
             CryptoManager.shared.reloadCoreFromKeychain()
             throw error
         }
@@ -195,14 +195,14 @@ final class PreKeyRotationService {
             // the server serves the new SPK public key → permanent AEAD failures.
             // Reload the core from Keychain so the in-memory state matches Keychain,
             // then re-upload the old SPK to bring the server back in sync.
-            Log.error("🚨 SPK rotation: Keychain persist FAILED — rolling back server SPK", category: "SPKRotation")
+            Log.error("SPK rotation: Keychain persist FAILED — rolling back server SPK", category: "SPKRotation")
             CryptoManager.shared.reloadCoreFromKeychain()
             throw PreKeyRotationError.keychainPersistFailed
         }
 
         recordRotation()
         let serverKyberKeyId = response.hasNewKyberKeyID ? response.newKyberKeyID : kyberKey.keyId
-        Log.info("✅ SPK rotation complete: classic keyId=\(classicKey.keyId) (server: \(response.newKeyID)), kyber keyId=\(serverKyberKeyId)", category: "SPKRotation")
+        Log.info("SPK rotation complete: classic keyId=\(classicKey.keyId) (server: \(response.newKeyID)), kyber keyId=\(serverKyberKeyId)", category: "SPKRotation")
     }
 
     // MARK: - Schedule Helpers
@@ -223,7 +223,7 @@ final class PreKeyRotationService {
         if uploadedAt > 0 {
             let spkAgeDays = (now - uploadedAt) / 86400
             if spkAgeDays >= Self.spkMaxAgeDays {
-                Log.info("🔑 SPK age \(String(format: "%.1f", spkAgeDays))d ≥ \(Self.spkMaxAgeDays)d limit — forcing rotation", category: "SPKRotation")
+                Log.info("SPK age \(String(format: "%.1f", spkAgeDays))d ≥ \(Self.spkMaxAgeDays)d limit — forcing rotation", category: "SPKRotation")
                 return true
             }
         }
@@ -241,7 +241,7 @@ final class PreKeyRotationService {
         let now = Date().timeIntervalSince1970
         UserDefaults.standard.set(now, forKey: Self.spkUploadKey)
         UserDefaults.standard.set(now, forKey: Self.lastRotationKey)
-        Log.debug("🔑 SPK upload timestamp recorded", category: "SPKRotation")
+        Log.debug("SPK upload timestamp recorded", category: "SPKRotation")
     }
 
     /// Sync the local SPK upload timestamp with the value the server reports.
@@ -256,7 +256,7 @@ final class PreKeyRotationService {
         // to Date.now during recovery while the server still has the old key.
         if local <= 0 || serverUploadedAt < local {
             UserDefaults.standard.set(serverUploadedAt, forKey: Self.spkUploadKey)
-            Log.info("🔑 SPK upload timestamp synced from server: \(Int(serverUploadedAt)) (was \(Int(local)))", category: "SPKRotation")
+            Log.info("SPK upload timestamp synced from server: \(Int(serverUploadedAt)) (was \(Int(local)))", category: "SPKRotation")
         }
     }
 

@@ -87,7 +87,7 @@ final class InAppNotificationService {
         )
         UNUserNotificationCenter.current().add(request) { error in
             if let error {
-                Log.error("❌ InAppNotification: flood alert failed — \(error)", category: "Notifications")
+                Log.error("InAppNotification: flood alert failed — \(error)", category: "Notifications")
             }
         }
     }

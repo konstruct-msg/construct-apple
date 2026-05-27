@@ -111,7 +111,7 @@ class TrafficProtectionService {
         if level >= 0 {
             self.batteryLevel = level
             manager?.updateBatteryLevel(level: level)
-            Log.debug("🔋 Battery updated: \(Int(level * 100))%", category: LogCategory.trafficProtection.name)
+            Log.debug("Battery updated: \(Int(level * 100))%", category: LogCategory.trafficProtection.name)
         }
         #endif
     }
@@ -131,13 +131,13 @@ class TrafficProtectionService {
             Task { @MainActor [weak self] in self?.checkAndSendDummy() }
         }
 
-        Log.info("⏰ Traffic protection scheduler started", category: LogCategory.trafficProtection.name)
+        Log.info("Traffic protection scheduler started", category: LogCategory.trafficProtection.name)
     }
 
     private func stopScheduler() {
         schedulerTimer?.invalidate()
         schedulerTimer = nil
-        Log.info("⏹️ Traffic protection scheduler stopped", category: LogCategory.trafficProtection.name)
+        Log.info("Traffic protection scheduler stopped", category: LogCategory.trafficProtection.name)
     }
 
     /// Check if we should send a dummy message and send it if needed
@@ -147,15 +147,15 @@ class TrafficProtectionService {
 
         // Ask Rust manager if we should send (handles timing, battery, coalescing)
         guard manager.shouldSendDummy() else {
-            Log.debug("⏭️ Skipping dummy (not ready or battery low)", category: LogCategory.trafficProtection.name)
+            Log.debug("Skipping dummy (not ready or battery low)", category: LogCategory.trafficProtection.name)
             return
         }
 
         // Generate dummy message
         let dummyData = manager.generateDummy()
 
-        // ✅ Cover traffic disabled - TODO: Implement gRPC cover traffic endpoint
-        Log.debug("⚠️ Cover traffic disabled, skipping dummy (\(dummyData.count) bytes)", category: LogCategory.trafficProtection.name)
+        // Cover traffic disabled - TODO: Implement gRPC cover traffic endpoint
+        Log.debug("Cover traffic disabled, skipping dummy (\(dummyData.count) bytes)", category: LogCategory.trafficProtection.name)
     }
 
     // MARK: - Real Message Recording

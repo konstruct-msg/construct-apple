@@ -58,7 +58,7 @@ struct LinkParser {
             do {
                 return try await parseDynamicInvite(url)
             } catch {
-                Log.info("⚠️ Dynamic invite parse failed, trying legacy parser: \(error.localizedDescription)", category: "LinkParser")
+                Log.info("Dynamic invite parse failed, trying legacy parser: \(error.localizedDescription)", category: "LinkParser")
                 if isLegacyContactURL(url) {
                     return try parseLegacyContactLink(url)
                 }
@@ -71,27 +71,27 @@ struct LinkParser {
             return try parseLegacyContactLink(url)
         }
 
-        Log.error("❌ Unsupported contact link prefix: \(urlString)", category: "LinkParser")
+        Log.error("Unsupported contact link prefix: \(urlString)", category: "LinkParser")
         throw ContactLinkError.invalidPrefix
     }
     
     // MARK: - Dynamic Invite Parsing
     
     private static func parseDynamicInvite(_ url: URL) async throws -> ContactInfo {
-        Log.info("📥 Parsing Dynamic Invite URL", category: "LinkParser")
+        Log.info("Parsing Dynamic Invite URL", category: "LinkParser")
         
         // Decode invite from URL
         let invite: InviteObject
         do {
             invite = try verifier.decodeFromURL(url)
         } catch {
-            Log.error("❌ Failed to decode invite: \(error)", category: "LinkParser")
+            Log.error("Failed to decode invite: \(error)", category: "LinkParser")
             throw ContactLinkError.inviteInvalid("Malformed invite data")
         }
         
         // Quick local TTL check (no server round-trip)
         if invite.isExpired(ttl: InviteConfig.ttlSeconds) {
-            Log.info("⚠️ Invite expired: jti=\(invite.jti.prefix(8))...", category: "LinkParser")
+            Log.info("Invite expired: jti=\(invite.jti.prefix(8))...", category: "LinkParser")
             throw ContactLinkError.inviteExpired
         }
         
@@ -136,7 +136,7 @@ struct LinkParser {
         let userId = response.userID.isEmpty ? invite.uuid : response.userID
         let deviceId = response.hasDeviceID ? response.deviceID : invite.deviceId
         
-        Log.info("✅ Invite accepted: userId=\(userId.prefix(8))..., deviceId=\(deviceId)", category: "LinkParser")
+        Log.info("Invite accepted: userId=\(userId.prefix(8))..., deviceId=\(deviceId)", category: "LinkParser")
         
         // Use the sender's username from the invite payload if present (V3+, cryptographically signed).
         // Falls back to userId as a placeholder that will be overwritten once the session is live.
@@ -155,7 +155,7 @@ struct LinkParser {
     // MARK: - Legacy Format Parsing
 
     private static func parseLegacyContactLink(_ url: URL) throws -> ContactInfo {
-        Log.info("📥 Parsing legacy contact link", category: "LinkParser")
+        Log.info("Parsing legacy contact link", category: "LinkParser")
         
         guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
             throw ContactLinkError.invalidURL

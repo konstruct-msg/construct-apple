@@ -30,7 +30,7 @@ final class PlatformBridgeImpl: PlatformBridge {
     func saveToSecureStore(key: String, data: Data) {
         let ok = KeychainManager.shared.saveData(data, forKey: key)
         if !ok {
-            Log.error("❌ PlatformBridge: failed to save '\(key)' to Keychain", category: "PlatformBridge")
+            Log.error("PlatformBridge: failed to save '\(key)' to Keychain", category: "PlatformBridge")
         }
     }
 
@@ -48,7 +48,7 @@ final class PlatformBridgeImpl: PlatformBridge {
 
     func persistRecord(table: String, json: String) {
         UserDefaults.standard.set(json, forKey: Self.udPrefix + table)
-        Log.debug("💾 PlatformBridge: persisted record in '\(table)'", category: "PlatformBridge")
+        Log.debug("PlatformBridge: persisted record in '\(table)'", category: "PlatformBridge")
     }
 
     func queryRecord(table: String, queryJson: String) -> String? {

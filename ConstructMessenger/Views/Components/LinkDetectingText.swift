@@ -53,7 +53,7 @@ struct LinkDetectingText: View {
            urlString.contains("konstruct.cc/add") ||
            urlString.contains("konstruct.cc/c/") {
             
-            Log.info("🔗 Opening konstruct link in-app: \(urlString)", category: "LinkDetectingText")
+            Log.info("Opening konstruct link in-app: \(urlString)", category: "LinkDetectingText")
             
             // Try to handle as deep link
             if let handler = deepLinkHandler {
@@ -68,7 +68,7 @@ struct LinkDetectingText: View {
             }
         } else {
             // External link - open in Safari
-            Log.info("🌐 Opening external link: \(urlString)", category: "LinkDetectingText")
+            Log.info("Opening external link: \(urlString)", category: "LinkDetectingText")
             #if canImport(UIKit)
             UIApplication.shared.open(url)
             #else

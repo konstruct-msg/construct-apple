@@ -51,10 +51,10 @@ class SessionManager {
         self.refreshToken = nil
         isSessionInvalidated = true
         GRPCAuthCache.shared.invalidate()
-        Log.info("🔑 Tokens invalidated — device re-auth will be triggered", category: "SessionManager")
+        Log.info("Tokens invalidated — device re-auth will be triggered", category: "SessionManager")
     }
     
-    // ✅ Get userId (prefer stored userId, fallback to deviceId for compatibility)
+    // Get userId (prefer stored userId, fallback to deviceId for compatibility)
     var currentUserId: String? {
         if let userId = userId, !userId.isEmpty {
             return userId
@@ -66,7 +66,7 @@ class SessionManager {
         return nil
     }
 
-    // ✅ Get deviceId from Keychain (stable for lifetime of the Keychain)
+    // Get deviceId from Keychain (stable for lifetime of the Keychain)
     var currentDeviceId: String? {
         KeychainManager.shared.loadDeviceID()
     }
@@ -80,7 +80,7 @@ class SessionManager {
         UserDefaults.standard.set(name, forKey: "local_display_name")
     }
 
-    // ✅ Get session expiration timestamp
+    // Get session expiration timestamp
     var sessionExpires: Date? {
         guard let timestamp = UserDefaults.standard.object(forKey: UserDefaultsKey.sessionExpires.key) as? TimeInterval else {
             return nil
@@ -88,7 +88,7 @@ class SessionManager {
         return Date(timeIntervalSince1970: timestamp)
     }
 
-    // ✅ Check if session is valid (not expired)
+    // Check if session is valid (not expired)
     var isSessionValid: Bool {
         guard sessionToken != nil else { return false }
 
@@ -98,7 +98,7 @@ class SessionManager {
         return Date().addingTimeInterval(bufferTime) < expires
     }
 
-    // ✅ Load token from keychain on init or when needed
+    // Load token from keychain on init or when needed
     func loadSessionToken() {
         sessionToken = KeychainManager.shared.loadSessionToken()
         refreshToken = KeychainManager.shared.loadRefreshToken()
@@ -107,7 +107,7 @@ class SessionManager {
         if let token = sessionToken,
            let alg = JWTUtils.headerAlgorithm(from: token),
            alg != "RS256" {
-            Log.error("❌ Unsupported JWT alg in cached token: \(alg). Clearing session.", category: "SessionManager")
+            Log.error("Unsupported JWT alg in cached token: \(alg). Clearing session.", category: "SessionManager")
             clearSession()
             isSessionInvalidated = true
             return
@@ -115,7 +115,7 @@ class SessionManager {
         syncAuthCache()
     }
     
-    // ✅ Save both access and refresh tokens with expiration and userId
+    // Save both access and refresh tokens with expiration and userId
     func saveTokens(accessToken: String, refreshToken: String, expiresIn: Int, userId: String? = nil) {
         // Save tokens to keychain
         KeychainManager.shared.saveSessionToken(accessToken)
@@ -125,7 +125,7 @@ class SessionManager {
         if let userId = userId {
             KeychainManager.shared.saveUserID(userId)
             self.userId = userId
-            Log.info("✅ User ID saved: \(userId.prefix(8))...", category: "SessionManager")
+            Log.info("User ID saved: \(userId.prefix(8))...", category: "SessionManager")
         }
         
         // Calculate expiration (expiresIn is in seconds)
@@ -136,7 +136,7 @@ class SessionManager {
         self.sessionToken = accessToken
         self.refreshToken = refreshToken
         
-        Log.info("✅ Tokens saved - expires in: \(expiresIn / 60) minutes", category: "SessionManager")
+        Log.info("Tokens saved - expires in: \(expiresIn / 60) minutes", category: "SessionManager")
         isSessionInvalidated = false
         Task { await TokenRefreshCoordinator.shared.resetInvalidation() }
         syncAuthCache()

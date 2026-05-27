@@ -191,7 +191,7 @@ class LogCollector {
                 try? FileManager.default.removeItem(at: rotatedFile)
             }
             
-            Log.info("🗑️ All logs cleared", category: "LogCollector")
+            Log.info("All logs cleared", category: "LogCollector")
             self.writeSystemInfo()
         }
     }

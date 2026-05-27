@@ -174,7 +174,7 @@ final class PerformanceMetrics: @unchecked Sendable {
         let durationMs = end(.envelopeArrived, endEvent: .uiDisplayed, label: messageId)
         if let ms = durationMs {
             let label = String(messageId.prefix(8))
-            Log.debug("📊 PERF msg=\(label)… receive→display: \(String(format: "%.1f", ms))ms", category: "Metrics")
+            Log.debug("PERF msg=\(label)… receive→display: \(String(format: "%.1f", ms))ms", category: "Metrics")
         }
     }
 

@@ -36,12 +36,12 @@ class ChatManagementService {
     /// - Returns: Created or existing chat, nil if context is unavailable
     func startChat(with user: PublicUserInfo) -> Chat? {
         guard let context = viewContext else { 
-            Log.error("❌ ChatManagementService: No viewContext available", category: "ChatManagementService")
+            Log.error("ChatManagementService: No viewContext available", category: "ChatManagementService")
             return nil 
         }
 
         if user.id == SessionManager.shared.currentUserId {
-            Log.info("📝 Self-chat detected — use Drafts instead", category: "ChatManagementService")
+            Log.info("Self-chat detected — use Drafts instead", category: "ChatManagementService")
             return nil
         }
         
@@ -55,7 +55,7 @@ class ChatManagementService {
         fetchRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: chatPredicates)
         
         if let existingChat = try? context.fetch(fetchRequest).first {
-            Log.debug("ℹ️ Chat already exists with user: \(user.username)", category: "ChatManagementService")
+            Log.debug("Chat already exists with user: \(user.username)", category: "ChatManagementService")
             return existingChat
         }
         
@@ -102,7 +102,7 @@ class ChatManagementService {
         
         do {
             try context.save()
-            Log.debug("✅ Chat saved successfully", category: "ChatManagementService")
+            Log.debug("Chat saved successfully", category: "ChatManagementService")
             Log.debug("   chat.id = \(chat.id)", category: "ChatManagementService")
             Log.debug("   chat.otherUser?.id = \(chat.otherUser?.id ?? "nil")", category: "ChatManagementService")
             Log.debug("   chat.otherUser?.username = \(chat.otherUser?.username ?? "nil")", category: "ChatManagementService")
@@ -113,7 +113,7 @@ class ChatManagementService {
             
             return chat
         } catch {
-            Log.error("❌ Failed to save chat: \(error)", category: "ChatManagementService")
+            Log.error("Failed to save chat: \(error)", category: "ChatManagementService")
             return nil
         }
     }
@@ -128,7 +128,7 @@ class ChatManagementService {
     /// To fully remove a contact use pruneContact(userId:).
     func deleteChat(_ chat: Chat) {
         guard let context = viewContext else {
-            Log.error("❌ ChatManagementService: No viewContext available", category: "ChatManagementService")
+            Log.error("ChatManagementService: No viewContext available", category: "ChatManagementService")
             return
         }
 
@@ -138,7 +138,7 @@ class ChatManagementService {
         // Archive crypto session.
         if let userId = otherUser?.id, CryptoManager.shared.hasSession(for: userId) {
             CryptoManager.shared.archiveSession(for: userId, reason: .manualReset)
-            Log.info("🗑️ Archived crypto session for user: \(userId)", category: "ChatManagementService")
+            Log.info("Archived crypto session for user: \(userId)", category: "ChatManagementService")
         }
 
         // Delete only the Chat (cascade removes Messages).
@@ -147,10 +147,10 @@ class ChatManagementService {
 
         do {
             try context.save()
-            Log.info("✅ Chat deleted (contact retained): \(chatId)", category: "ChatManagementService")
+            Log.info("Chat deleted (contact retained): \(chatId)", category: "ChatManagementService")
             onChatDeleted?(chatId)
         } catch {
-            Log.error("❌ Failed to delete chat: \(error)", category: "ChatManagementService")
+            Log.error("Failed to delete chat: \(error)", category: "ChatManagementService")
         }
     }
 
@@ -160,14 +160,14 @@ class ChatManagementService {
     /// This is the "prune synapse" action — irreversible from within the app.
     func pruneContact(userId: String) {
         guard let context = viewContext else {
-            Log.error("❌ ChatManagementService: No viewContext available", category: "ChatManagementService")
+            Log.error("ChatManagementService: No viewContext available", category: "ChatManagementService")
             return
         }
 
         let userFetch = User.fetchRequest()
         userFetch.predicate = NSPredicate(format: "id == %@", userId)
         guard let user = (try? context.fetch(userFetch))?.first else {
-            Log.info("⚠️ pruneContact: user \(userId.prefix(8)) not found", category: "ChatManagementService")
+            Log.info("pruneContact: user \(userId.prefix(8)) not found", category: "ChatManagementService")
             return
         }
 
@@ -191,9 +191,9 @@ class ChatManagementService {
 
         do {
             try context.save()
-            Log.info("✂️ Synapse pruned: \(userId.prefix(8))…", category: "ChatManagementService")
+            Log.info("Synapse pruned: \(userId.prefix(8))…", category: "ChatManagementService")
         } catch {
-            Log.error("❌ Failed to prune contact: \(error)", category: "ChatManagementService")
+            Log.error("Failed to prune contact: \(error)", category: "ChatManagementService")
         }
     }
 }

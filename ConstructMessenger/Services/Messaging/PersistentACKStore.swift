@@ -159,7 +159,7 @@ final class PersistentACKStore {
             do {
                 try context.save()
             } catch {
-                Log.error("❌ PersistentACKStore: failed to save ACK for \(messageId.prefix(8))…: \(error)", category: "PersistentACK")
+                Log.error("PersistentACKStore: failed to save ACK for \(messageId.prefix(8))…: \(error)", category: "PersistentACK")
             }
         }
     }
@@ -177,12 +177,12 @@ final class PersistentACKStore {
         do {
             let expired = try context.fetch(fetch)
             if !expired.isEmpty {
-                Log.info("🧹 PersistentACKStore: pruning \(expired.count) expired ACK(s)", category: "PersistentACK")
+                Log.info("PersistentACKStore: pruning \(expired.count) expired ACK(s)", category: "PersistentACK")
                 expired.forEach { context.delete($0) }
                 try context.save()
             }
         } catch {
-            Log.error("❌ PersistentACKStore: prune failed: \(error)", category: "PersistentACK")
+            Log.error("PersistentACKStore: prune failed: \(error)", category: "PersistentACK")
         }
     }
 }

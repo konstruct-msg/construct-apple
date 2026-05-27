@@ -150,7 +150,7 @@ struct MessageInputView: View {
                         } catch AudioRecorderService.RecorderError.permissionDenied {
                             showMicPermissionAlert = true
                         } catch {
-                            Log.error("❌ Recording failed: \(error)", category: "MessageInput")
+                            Log.error("Recording failed: \(error)", category: "MessageInput")
                         }
                     }
                 }

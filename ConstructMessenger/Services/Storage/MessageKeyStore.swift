@@ -101,7 +101,7 @@ final class MessageKeyStore {
             SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE | SQLITE_OPEN_FULLMUTEX,
             nil
         ) == SQLITE_OK, let ptr = pointer else {
-            Log.error("❌ MessageKeyStore: failed to open database at \(url.path)", category: "MessageKeyStore")
+            Log.error("MessageKeyStore: failed to open database at \(url.path)", category: "MessageKeyStore")
             return
         }
         db = ptr
@@ -132,7 +132,7 @@ final class MessageKeyStore {
                 ON message_keys(contact_id);
         """
         if sqlite3_exec(db, ddl, nil, nil, nil) != SQLITE_OK {
-            Log.error("❌ MessageKeyStore: schema creation failed: \(sqliteError())", category: "MessageKeyStore")
+            Log.error("MessageKeyStore: schema creation failed: \(sqliteError())", category: "MessageKeyStore")
         }
     }
 
@@ -146,7 +146,7 @@ final class MessageKeyStore {
         """
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
-            Log.error("❌ MessageKeyStore: prepare store failed: \(sqliteError())", category: "MessageKeyStore")
+            Log.error("MessageKeyStore: prepare store failed: \(sqliteError())", category: "MessageKeyStore")
             return
         }
         defer { sqlite3_finalize(stmt) }
@@ -159,7 +159,7 @@ final class MessageKeyStore {
         sqlite3_bind_int64(stmt, 4, Int64(Date().timeIntervalSince1970))
 
         if sqlite3_step(stmt) != SQLITE_DONE {
-            Log.error("❌ MessageKeyStore: store failed for \(messageId.prefix(8))…: \(sqliteError())", category: "MessageKeyStore")
+            Log.error("MessageKeyStore: store failed for \(messageId.prefix(8))…: \(sqliteError())", category: "MessageKeyStore")
         }
     }
 
@@ -223,7 +223,7 @@ final class MessageKeyStore {
                 ofItemAtPath: url.path
             )
         } catch {
-            Log.info("⚠️ MessageKeyStore: could not set file protection on \(url.lastPathComponent): \(error)", category: "MessageKeyStore")
+            Log.info("MessageKeyStore: could not set file protection on \(url.lastPathComponent): \(error)", category: "MessageKeyStore")
         }
     }
 }

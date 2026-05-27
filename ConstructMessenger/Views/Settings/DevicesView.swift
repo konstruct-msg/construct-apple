@@ -227,7 +227,7 @@ struct DevicesView: View {
             devices = try await AuthServiceClient.shared.listDevices()
         } catch {
             errorMessage = error.localizedDescription
-            Log.error("❌ listDevices failed: \(error)", category: "DevicesView")
+            Log.error("listDevices failed: \(error)", category: "DevicesView")
         }
     }
 
@@ -237,7 +237,7 @@ struct DevicesView: View {
             do {
                 try await AuthServiceClient.shared.revokeDevice(deviceId: device.id)
             } catch {
-                Log.error("❌ revokeDevice failed for \(device.name): \(error)", category: "DevicesView")
+                Log.error("revokeDevice failed for \(device.name): \(error)", category: "DevicesView")
             }
         }
         await loadDevices()
@@ -249,7 +249,7 @@ struct DevicesView: View {
             await loadDevices()
         } catch {
             errorMessage = error.localizedDescription
-            Log.error("❌ revokeDevice failed: \(error)", category: "DevicesView")
+            Log.error("revokeDevice failed: \(error)", category: "DevicesView")
         }
     }
 }

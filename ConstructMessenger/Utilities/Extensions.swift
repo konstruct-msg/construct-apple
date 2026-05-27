@@ -88,7 +88,7 @@ extension NSManagedObjectContext {
         do {
             try save()
         } catch {
-            Log.error("❌ Core Data save failed (\(file.split(separator: "/").last ?? ""):\(line)): \(error)",
+            Log.error("Core Data save failed (\(file.split(separator: "/").last ?? ""):\(line)): \(error)",
                       category: category)
         }
     }
@@ -114,10 +114,10 @@ func withRetry<T>(
             lastError = error
             if attempt < maxAttempts && retryIf(error) {
                 let delay = backoff * pow(2.0, Double(attempt - 1))
-                Log.debug("⏳ \(label) attempt \(attempt) failed (\(error.localizedDescription)), retrying in \(String(format: "%.1f", delay))s", category: "Retry")
+                Log.debug("\(label) attempt \(attempt) failed (\(error.localizedDescription)), retrying in \(String(format: "%.1f", delay))s", category: "Retry")
                 try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
             } else {
-                Log.error("❌ \(label) failed after \(attempt) attempt(s): \(error)", category: "Retry")
+                Log.error("\(label) failed after \(attempt) attempt(s): \(error)", category: "Retry")
                 throw error
             }
         }

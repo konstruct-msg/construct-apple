@@ -37,9 +37,9 @@ final class DialTonePlayer {
             playerNode.scheduleBuffer(buffer, at: nil, options: .loops)
             playerNode.play()
             isPlaying = true
-            Log.info("📞 Dial tone started", category: "Calls")
+            Log.info("Dial tone started", category: "Calls")
         } catch {
-            Log.error("📞 DialTonePlayer: engine start failed: \(error)", category: "Calls")
+            Log.error("DialTonePlayer: engine start failed: \(error)", category: "Calls")
         }
     }
 
@@ -48,7 +48,7 @@ final class DialTonePlayer {
         playerNode.stop()
         engine.stop()
         isPlaying = false
-        Log.info("📞 Dial tone stopped", category: "Calls")
+        Log.info("Dial tone stopped", category: "Calls")
     }
 
     // MARK: - PCM synthesis

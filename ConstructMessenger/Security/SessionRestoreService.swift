@@ -19,7 +19,7 @@ final class SessionRestoreService {
         let context = persistence.container.viewContext
         guard context.persistentStoreCoordinator != nil else {
             guard retryCount < 5 else {
-                Log.error("⚠️ SessionRestoreService: CoreData store unavailable after \(retryCount) retries, giving up", category: "SessionRestore")
+                Log.error("SessionRestoreService: CoreData store unavailable after \(retryCount) retries, giving up", category: "SessionRestore")
                 return
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in

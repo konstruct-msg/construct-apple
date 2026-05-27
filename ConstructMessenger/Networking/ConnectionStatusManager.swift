@@ -71,10 +71,10 @@ class ConnectionStatusManager {
         // If network is not reachable, we're "disconnected"
         if reachabilityManager.isReachable {
             connectionStatus = .connecting
-            Log.info("🔄 ConnectionStatusManager initialized: Connecting (network reachable)", category: "ConnectionStatus")
+            Log.info("ConnectionStatusManager initialized: Connecting (network reachable)", category: "ConnectionStatus")
         } else {
             connectionStatus = .disconnected
-            Log.info("🔴 ConnectionStatusManager initialized: Disconnected (no network)", category: "ConnectionStatus")
+            Log.info("ConnectionStatusManager initialized: Disconnected (no network)", category: "ConnectionStatus")
         }
     }
 
@@ -115,7 +115,7 @@ class ConnectionStatusManager {
         }
         
         if oldStatus != connectionStatus {
-            Log.info("🌐 Network reachability changed: \(oldStatus.displayText) -> \(connectionStatus.displayText)", category: "ConnectionStatus")
+            Log.info("Network reachability changed: \(oldStatus.displayText) -> \(connectionStatus.displayText)", category: "ConnectionStatus")
         }
     }
 
@@ -126,7 +126,7 @@ class ConnectionStatusManager {
         connectingPhase = nil
         connectionStatus = .connected
         if oldStatus != .connected {
-            Log.info("🟢 Connection status changed: \(oldStatus.displayText) -> Connected", category: "ConnectionStatus")
+            Log.info("Connection status changed: \(oldStatus.displayText) -> Connected", category: "ConnectionStatus")
         }
     }
 
@@ -144,7 +144,7 @@ class ConnectionStatusManager {
             if connectionStatus == .connected {
                 let gracePeriod: TimeInterval = 120
                 if !isConnectionStale(threshold: gracePeriod) {
-                    Log.debug("⚠️ Non-critical error, but staying Connected (last success was recent)", category: "ConnectionStatus")
+                    Log.debug("Non-critical error, but staying Connected (last success was recent)", category: "ConnectionStatus")
                     return
                 } else {
                     connectionStatus = .connecting
@@ -153,7 +153,7 @@ class ConnectionStatusManager {
         }
 
         if oldStatus != connectionStatus {
-            Log.info("🔴 Connection status changed: \(oldStatus.displayText) -> \(connectionStatus.displayText)", category: "ConnectionStatus")
+            Log.info("Connection status changed: \(oldStatus.displayText) -> \(connectionStatus.displayText)", category: "ConnectionStatus")
             if let error = error {
                 Log.info("   Error: \(error)", category: "ConnectionStatus")
             }
@@ -176,7 +176,7 @@ class ConnectionStatusManager {
         connectingPhase = nil
         connectionStatus = .connected
         if old != .connected {
-            Log.info("🟢 Stream connected → status: Connected", category: "ConnectionStatus")
+            Log.info("Stream connected → status: Connected", category: "ConnectionStatus")
             // Retry any avatars that failed to download while we were offline.
             AvatarRetryService.shared.retryPendingAvatarsIfNeeded()
         }
@@ -187,7 +187,7 @@ class ConnectionStatusManager {
         if reachabilityManager.isReachable {
             if connectionStatus == .connected {
                 connectionStatus = .connecting
-                Log.info("🟡 Stream disconnected → status: Connecting", category: "ConnectionStatus")
+                Log.info("Stream disconnected → status: Connecting", category: "ConnectionStatus")
             }
             if let phase { connectingPhase = phase }
         } else {

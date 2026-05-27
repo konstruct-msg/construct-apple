@@ -44,7 +44,7 @@ class ChatsViewModel {
         didSet {
             if let id = lastMessageId {
                 UserDefaults.standard.set(id, forKey: "construct.lastMessageId")
-                Log.debug("💾 Saved lastMessageId: \(id)", category: "ChatsViewModel")
+                Log.debug("Saved lastMessageId: \(id)", category: "ChatsViewModel")
             } else {
                 UserDefaults.standard.removeObject(forKey: "construct.lastMessageId")
             }
@@ -64,7 +64,7 @@ class ChatsViewModel {
 
         self.lastMessageId = UserDefaults.standard.string(forKey: "construct.lastMessageId")
         if let restored = lastMessageId {
-            Log.info("📥 Restored lastMessageId from UserDefaults: \(restored)", category: "ChatsViewModel")
+            Log.info("Restored lastMessageId from UserDefaults: \(restored)", category: "ChatsViewModel")
         }
 
         sc.configure(streamManager: sm)
@@ -151,7 +151,7 @@ class ChatsViewModel {
             try context.save()
             chatToOpen = chat.id
         } catch {
-            Log.error("❌ openOrCreateChat: failed to save: \(error)", category: "ChatsViewModel")
+            Log.error("openOrCreateChat: failed to save: \(error)", category: "ChatsViewModel")
         }
     }
 
@@ -159,7 +159,7 @@ class ChatsViewModel {
         guard let context = viewContext else { return }
         chat.isMuted.toggle()
         context.saveAndLog()
-        Log.info("🔔 Chat \(chat.id) isMuted=\(chat.isMuted)", category: "ChatsViewModel")
+        Log.info("Chat \(chat.id) isMuted=\(chat.isMuted)", category: "ChatsViewModel")
     }
 
     func deleteChatWithEndSession(chat: Chat) async {
@@ -167,7 +167,7 @@ class ChatsViewModel {
             do {
                 try await sessionCoordinator.sendEndSession(to: userId, reason: "chat_deleted")
             } catch {
-                Log.error("❌ END_SESSION failed before chat delete (continuing): \(error)", category: "ChatsViewModel")
+                Log.error("END_SESSION failed before chat delete (continuing): \(error)", category: "ChatsViewModel")
             }
         }
         chatManagementService.deleteChat(chat)

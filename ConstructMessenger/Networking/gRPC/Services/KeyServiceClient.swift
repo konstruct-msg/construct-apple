@@ -187,7 +187,7 @@ final class KeyServiceClient: Sendable {
                 switch result {
                 case .verified:
                     KTStore.shared.recordVerified()
-                    Log.info("🔐 KT: inclusion proof verified for device \(response.deviceID)", category: "KT")
+                    Log.info("KT: inclusion proof verified for device \(response.deviceID)", category: "KT")
                     Self.updateContactKTStatus(
                         userId: userId,
                         identityKey: bundle.identityKey,
@@ -195,7 +195,7 @@ final class KeyServiceClient: Sendable {
                     )
                 case .failed(let e):
                     KTStore.shared.recordFailure()
-                    Log.error("🔐 KT: proof FAILED for device \(response.deviceID) — \(e)", category: "KT")
+                    Log.error("KT: proof FAILED for device \(response.deviceID) — \(e)", category: "KT")
                     Self.updateContactKTStatus(
                         userId: userId,
                         identityKey: bundle.identityKey,
@@ -430,7 +430,7 @@ final class KeyServiceClient: Sendable {
                 // Identity key has changed since the last verified session.
                 user.ktStatus = .keyChanged
                 user.knownIdentityKey = identityKey
-                Log.error("🔐 KT: identity key changed for user \(userId)", category: "KT")
+                Log.error("KT: identity key changed for user \(userId)", category: "KT")
                 DispatchQueue.main.async {
                     NotificationCenter.default.post(
                         name: .contactKeyChanged,

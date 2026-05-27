@@ -147,7 +147,7 @@ final class StealthSenderService {
             let pubKey = try Curve25519.Signing.PublicKey(rawRepresentation: serverPubKeyData)
             return pubKey.isValidSignature(cert.serverSignature, for: payload)
         } catch {
-            Log.error("⚠️ StealthSenderService: failed to create server pub key: \(error)", category: "Stealth")
+            Log.error("StealthSenderService: failed to create server pub key: \(error)", category: "Stealth")
             return false
         }
     }
@@ -158,7 +158,7 @@ final class StealthSenderService {
     /// Returns nil if decryption or verification fails (should trigger unseal error handling).
     func resolveSender(sealedInnerBytes: Data) -> String? {
         guard let ourPrivKeyBytes = KeychainManager.shared.loadDeviceIdentityKey() else {
-            Log.error("❌ Stealth: no identity key in Keychain", category: "Stealth")
+            Log.error("Stealth: no identity key in Keychain", category: "Stealth")
             return nil
         }
         do {
@@ -169,19 +169,19 @@ final class StealthSenderService {
             // Reject expired certificates
             let now = Int64(Date().timeIntervalSince1970)
             guard cert.expiresAt > now else {
-                Log.info("⚠️ Stealth: received expired sender cert (expired \(cert.expiresAt - now)s ago)", category: "Stealth")
+                Log.info("Stealth: received expired sender cert (expired \(cert.expiresAt - now)s ago)", category: "Stealth")
                 return nil
             }
 
             guard verifyCert(cert) else {
-                Log.error("❌ Stealth: sender cert signature invalid for \(cert.senderUserID.prefix(8))…", category: "Stealth")
+                Log.error("Stealth: sender cert signature invalid for \(cert.senderUserID.prefix(8))…", category: "Stealth")
                 return nil
             }
 
-            Log.debug("🕶️ Stealth: resolved sender \(cert.senderUserID.prefix(8))…", category: "Stealth")
+            Log.debug("Stealth: resolved sender \(cert.senderUserID.prefix(8))…", category: "Stealth")
             return cert.senderUserID
         } catch {
-            Log.error("❌ Stealth: unseal failed: \(error)", category: "Stealth")
+            Log.error("Stealth: unseal failed: \(error)", category: "Stealth")
             return nil
         }
     }

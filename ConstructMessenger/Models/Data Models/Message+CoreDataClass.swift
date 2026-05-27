@@ -59,7 +59,7 @@ public class Message: NSManagedObject {
               let plainData = plaintext.data(using: .utf8),
               let encrypted = try? MessageStorageCrypto.encrypt(plaintext: plainData, key: keyBytes)
         else {
-            Log.error("❌ applyStoredEncryption failed for \(msgId.prefix(8))… — falling back to plaintext", category: "Storage")
+            Log.error("applyStoredEncryption failed for \(msgId.prefix(8))… — falling back to plaintext", category: "Storage")
             encryptedContent = Data()
             decryptedContent = plaintext
             return

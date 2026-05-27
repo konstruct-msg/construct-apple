@@ -27,13 +27,13 @@ final class SessionConfirmationTracker {
 
     func markPending(_ userId: String) {
         pending.insert(userId)
-        Log.info("🔒 SESSION_CONFIRM[pending]: \(userId.prefix(8))… — waiting for RESPONDER session_ready", category: "SessionConfirm")
+        Log.info("SESSION_CONFIRM[pending]: \(userId.prefix(8))… — waiting for RESPONDER session_ready", category: "SessionConfirm")
     }
 
     func markConfirmed(_ userId: String) {
         guard pending.contains(userId) else { return }
         pending.remove(userId)
-        Log.info("✅ SESSION_CONFIRM[confirmed]: \(userId.prefix(8))… — RESPONDER acknowledged", category: "SessionConfirm")
+        Log.info("SESSION_CONFIRM[confirmed]: \(userId.prefix(8))… — RESPONDER acknowledged", category: "SessionConfirm")
     }
 
     // MARK: - Query (called by ChatViewModel)

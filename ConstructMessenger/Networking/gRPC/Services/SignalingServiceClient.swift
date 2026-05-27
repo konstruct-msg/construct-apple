@@ -124,7 +124,7 @@ final class SignalingServiceClient: Sendable {
                 acceptedContinuation.finish()
                 incomingContinuation.finish()
             } catch {
-                Log.error("📞 Signaling stream closed with error: \(error)", category: "Calls")
+                Log.error("Signaling stream closed with error: \(error)", category: "Calls")
                 acceptedContinuation.finish()
                 incomingContinuation.finish()
                 throw error

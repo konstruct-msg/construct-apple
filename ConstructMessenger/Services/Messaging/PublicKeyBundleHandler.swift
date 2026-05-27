@@ -49,13 +49,13 @@ class PublicKeyBundleHandler {
         
         for attempt in 1...maxAttempts {
             do {
-                Log.info("🔑 SESSION_STATE[fetch_bundle_attempt_\(attempt)]: userId=\(userId.prefix(8))..., maxAttempts=\(maxAttempts)", category: "SessionInit")
+                Log.info("SESSION_STATE[fetch_bundle_attempt_\(attempt)]: userId=\(userId.prefix(8))..., maxAttempts=\(maxAttempts)", category: "SessionInit")
                 let keyBundle = try await KeyServiceClient.shared.getPreKeyBundle(userId: userId)
-                Log.info("✅ SESSION_STATE[fetch_bundle_success]: userId=\(userId.prefix(8))..., attempt=\(attempt)", category: "SessionInit")
+                Log.info("SESSION_STATE[fetch_bundle_success]: userId=\(userId.prefix(8))..., attempt=\(attempt)", category: "SessionInit")
                 return keyBundle
             } catch {
                 lastError = error
-                Log.info("⚠️ SESSION_STATE[fetch_bundle_failed]: attempt=\(attempt)/\(maxAttempts), error=\(error.localizedDescription)", category: "SessionInit")
+                Log.info("SESSION_STATE[fetch_bundle_failed]: attempt=\(attempt)/\(maxAttempts), error=\(error.localizedDescription)", category: "SessionInit")
                 
                 if attempt < maxAttempts {
                     Log.info("⏳ Retrying public key fetch in \(delay)s...", category: "SessionInit")
@@ -65,13 +65,13 @@ class PublicKeyBundleHandler {
             }
         }
         
-        Log.error("❌ SESSION_STATE[fetch_bundle_exhausted]: userId=\(userId.prefix(8))..., allAttemptsFailed", category: "SessionInit")
+        Log.error("SESSION_STATE[fetch_bundle_exhausted]: userId=\(userId.prefix(8))..., allAttemptsFailed", category: "SessionInit")
         throw lastError ?? NetworkError.connectionFailed
     }
     
     /// Handle public key bundle without pending message
     func handlePublicKeyBundle(_ data: PublicKeyBundleData) -> Bool {
-        Log.debug("📦 PublicKeyBundleHandler: Received publicKeyBundle for userId: \(data.userId)", category: "PublicKeyBundleHandler")
+        Log.debug("PublicKeyBundleHandler: Received publicKeyBundle for userId: \(data.userId)", category: "PublicKeyBundleHandler")
         return false
     }
     
@@ -87,11 +87,11 @@ class PublicKeyBundleHandler {
         onSuccess: @escaping (Chat, ChatMessage, Data) -> Void
     ) -> Bool {
         guard let context = viewContext else {
-            Log.error("❌ PublicKeyBundleHandler: No viewContext available", category: "PublicKeyBundleHandler")
+            Log.error("PublicKeyBundleHandler: No viewContext available", category: "PublicKeyBundleHandler")
             return false
         }
         
-        Log.info("📦 Received publicKeyBundle for incoming message from userId: \(data.userId)", category: "PublicKeyBundleHandler")
+        Log.info("Received publicKeyBundle for incoming message from userId: \(data.userId)", category: "PublicKeyBundleHandler")
         
         // Update username if we have the user in Core Data
         let userFetchRequest = User.fetchRequest()
@@ -105,20 +105,20 @@ class PublicKeyBundleHandler {
         if let user = try? context.fetch(userFetchRequest).first {
             // Username comes from invite payload or profile sharing — do not overwrite from bundle.
             _ = user
-            Log.debug("📦 PublicKeyBundleHandler: user found for \(data.userId.prefix(8))…", category: "PublicKeyBundleHandler")
+            Log.debug("PublicKeyBundleHandler: user found for \(data.userId.prefix(8))…", category: "PublicKeyBundleHandler")
         }
         
         // Track prekey ID and detect reinstall
         // trackPreKeyId uses base64 as stable string key for change detection/storage
         let prekeyChanged = CryptoManager.shared.trackPreKeyId(data.signedPrekeyPublic.base64EncodedString(), for: data.userId)
         if prekeyChanged {
-            Log.info("⚠️ Prekey changed for \(data.userId) - potential reinstall detected!", category: "PublicKeyBundleHandler")
+            Log.info("Prekey changed for \(data.userId) - potential reinstall detected!", category: "PublicKeyBundleHandler")
             // Session was already archived by trackPreKeyId()
         }
         
         // Initialize receiving session (we are the recipient)
         let initStartTime = Date()
-        Log.info("🔐 SESSION_STATE[init_receiving_start]: userId=\(data.userId.prefix(8))..., prekeyChanged=\(prekeyChanged)", category: "SessionInit")
+        Log.info("SESSION_STATE[init_receiving_start]: userId=\(data.userId.prefix(8))..., prekeyChanged=\(prekeyChanged)", category: "SessionInit")
         
         do {
             let bundleWithSuite = (
@@ -142,8 +142,8 @@ class PublicKeyBundleHandler {
             )
             
             let initDuration = Date().timeIntervalSince(initStartTime)
-            Log.info("✅ Receiving session initialized for \(data.userId), message decrypted", category: "PublicKeyBundleHandler")
-            Log.info("🔐 SESSION_STATE[init_receiving_success]: userId=\(data.userId.prefix(8))..., duration=\(String(format: "%.2f", initDuration))s", category: "SessionInit")
+            Log.info("Receiving session initialized for \(data.userId), message decrypted", category: "PublicKeyBundleHandler")
+            Log.info("SESSION_STATE[init_receiving_success]: userId=\(data.userId.prefix(8))..., duration=\(String(format: "%.2f", initDuration))s", category: "SessionInit")
             
             // Find chat for this user; recreate it if the user deleted it locally while
             // the remote side still had a valid session and sent a fresh X3DH init.
@@ -158,7 +158,7 @@ class PublicKeyBundleHandler {
                 // The user deleted the chat on their side; the remote party initiated a new
                 // valid session. We must NOT send END_SESSION here (that causes an
                 // endless reset loop). Just re-open the conversation.
-                Log.info("♻️ Chat not found for \(data.userId.prefix(8))… — recreating after delete", category: "PublicKeyBundleHandler")
+                Log.info("Chat not found for \(data.userId.prefix(8))… — recreating after delete", category: "PublicKeyBundleHandler")
                 let userFetchRequest = User.fetchRequest()
                 userFetchRequest.predicate = NSPredicate(format: "id == %@", data.userId)
                 let user: User
@@ -177,22 +177,22 @@ class PublicKeyBundleHandler {
 
             onSuccess(chat, message, decryptedBytes)
             context.saveAndLog()
-            Log.info("✅ Successfully saved decrypted pending message", category: "PublicKeyBundleHandler")
+            Log.info("Successfully saved decrypted pending message", category: "PublicKeyBundleHandler")
             return true
             
         } catch CryptoError.SessionInitializationFailed(let message) {
             // Log detailed error from Rust core
             let initDuration = Date().timeIntervalSince(initStartTime)
-            Log.error("❌ Session initialization failed: \(message)", category: "PublicKeyBundleHandler")
-            Log.error("🔐 SESSION_STATE[init_receiving_failed]: userId=\(data.userId.prefix(8))..., duration=\(String(format: "%.2f", initDuration))s, error=SessionInitializationFailed", category: "SessionInit")
+            Log.error("Session initialization failed: \(message)", category: "PublicKeyBundleHandler")
+            Log.error("SESSION_STATE[init_receiving_failed]: userId=\(data.userId.prefix(8))..., duration=\(String(format: "%.2f", initDuration))s, error=SessionInitializationFailed", category: "SessionInit")
             // Check if our keys match what the server serves — desync would explain AEAD failure
             Task { await CryptoManager.shared.verifyKeyConsistencyWithServer() }
             return false
             
         } catch {
             let initDuration = Date().timeIntervalSince(initStartTime)
-            Log.error("❌ Failed to initialize receiving session: \(error.localizedDescription)", category: "PublicKeyBundleHandler")
-            Log.error("🔐 SESSION_STATE[init_receiving_failed]: userId=\(data.userId.prefix(8))..., duration=\(String(format: "%.2f", initDuration))s, error=\(error.localizedDescription)", category: "SessionInit")
+            Log.error("Failed to initialize receiving session: \(error.localizedDescription)", category: "PublicKeyBundleHandler")
+            Log.error("SESSION_STATE[init_receiving_failed]: userId=\(data.userId.prefix(8))..., duration=\(String(format: "%.2f", initDuration))s, error=\(error.localizedDescription)", category: "SessionInit")
             Task { await CryptoManager.shared.verifyKeyConsistencyWithServer() }
             return false
         }

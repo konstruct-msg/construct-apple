@@ -205,8 +205,18 @@ extension AppError {
     /// Whether this error should be reported to the user or silently logged only.
     var shouldDisplay: Bool {
         switch self {
-        case .decryptionFailed: return false   // session self-heals; no user noise
-        default:                return true
+        case .decryptionFailed:
+            return false   // session self-heals; no user noise
+        case .sessionInitFailed:
+            // Message bubble already shows [!] retry — banner is redundant and misleading
+            // (often caused by stale contact keys, not a fixable network issue).
+            return false
+        case .unknown(let detail):
+            // Suppress raw internal strings that must never reach the UI.
+            let internalPrefixes = ["Orchestrator returned", "OutboundSessionService", "No session with contact"]
+            return !internalPrefixes.contains { detail.hasPrefix($0) }
+        default:
+            return true
         }
     }
 }

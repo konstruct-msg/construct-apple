@@ -18,17 +18,17 @@ enum MessageStreamParser {
         case .message(let envelope):
             // KEY_SYNC: server-triggered re-key signal — no encrypted payload, route directly
             if envelope.contentType == .keySync {
-                Log.info("🔑 KEY_SYNC envelope from \(envelope.sender.userID.prefix(8))…", category: "MessageStream")
+                Log.info("KEY_SYNC envelope from \(envelope.sender.userID.prefix(8))…", category: "MessageStream")
                 return .keySyncRequest(envelope.sender.userID)
             }
             // SESSION_RESET_INIT: atomic END_SESSION + new X3DH session init in one delivery.
             // Must be checked BEFORE the END_SESSION payload-size heuristic (it has a real payload).
             if envelope.contentType == .sessionResetInit {
                 guard let decoded = try? WirePayloadCoder.decode(envelope.encryptedPayload) else {
-                    Log.info("⚠️ Failed to decode SESSION_RESET_INIT payload for message \(envelope.messageID)", category: "MessageStream")
+                    Log.info("Failed to decode SESSION_RESET_INIT payload for message \(envelope.messageID)", category: "MessageStream")
                     return nil
                 }
-                Log.info("🔄 SESSION_RESET_INIT from \(envelope.sender.userID.prefix(8))… id=\(envelope.messageID.prefix(8))…", category: "MessageStream")
+                Log.info("SESSION_RESET_INIT from \(envelope.sender.userID.prefix(8))… id=\(envelope.messageID.prefix(8))…", category: "MessageStream")
                 return .message(ChatMessage(
                     id: envelope.messageID,
                     from: envelope.sender.userID,
@@ -54,7 +54,7 @@ enum MessageStreamParser {
                 (!envelope.encryptedPayload.isEmpty && envelope.encryptedPayload.count < WirePayloadCoder.headerSize)
             if isEndSession {
                 let detected = envelope.contentType == .sessionReset ? "contentType" : "sentinel payload (\(envelope.encryptedPayload.count)b)"
-                Log.info("🛑 END_SESSION from \(envelope.sender.userID.prefix(8))… id=\(envelope.messageID.prefix(8))… detected via \(detected)", category: "MessageStream")
+                Log.info("END_SESSION from \(envelope.sender.userID.prefix(8))… id=\(envelope.messageID.prefix(8))… detected via \(detected)", category: "MessageStream")
                 return .message(ChatMessage(
                     id: envelope.messageID,
                     from: envelope.sender.userID,
@@ -72,10 +72,10 @@ enum MessageStreamParser {
             // SENDER_SYNC: copy of own outgoing message — decrypt with per-device session
             if envelope.contentType == .senderSync {
                 guard let decoded = try? WirePayloadCoder.decode(envelope.encryptedPayload) else {
-                    Log.info("⚠️ Failed to decode SENDER_SYNC payload for message \(envelope.messageID)", category: "MessageStream")
+                    Log.info("Failed to decode SENDER_SYNC payload for message \(envelope.messageID)", category: "MessageStream")
                     return nil
                 }
-                Log.info("🔄 SENDER_SYNC from device \(envelope.senderDevice.deviceID.prefix(8))… id=\(envelope.messageID.prefix(8))…", category: "MessageStream")
+                Log.info("SENDER_SYNC from device \(envelope.senderDevice.deviceID.prefix(8))… id=\(envelope.messageID.prefix(8))…", category: "MessageStream")
                 return .message(ChatMessage(
                     id: envelope.messageID,
                     from: envelope.sender.userID,
@@ -121,7 +121,7 @@ enum MessageStreamParser {
             }
 
             guard let decoded = try? WirePayloadCoder.decode(envelope.encryptedPayload) else {
-                Log.info("⚠️ Failed to decode encrypted_payload for message \(envelope.messageID)", category: "MessageStream")
+                Log.info("Failed to decode encrypted_payload for message \(envelope.messageID)", category: "MessageStream")
                 return nil
             }
             let msg = ChatMessage(
@@ -154,19 +154,19 @@ enum MessageStreamParser {
             }
             return nil
         case .typing(let indicator):
-            Log.debug("✍️ Typing: \(indicator.userID) in \(indicator.conversationID)", category: "MessageStream")
+            Log.debug("Typing: \(indicator.userID) in \(indicator.conversationID)", category: "MessageStream")
             return nil
         case .ack(let ack):
-            Log.debug("✅ Message ack: \(ack.messageID)", category: "MessageStream")
+            Log.debug("Message ack: \(ack.messageID)", category: "MessageStream")
             return nil
         case .error(let error):
-            Log.error("❌ Stream error: \(error.errorCode) - \(error.errorMessage)", category: "MessageStream")
+            Log.error("Stream error: \(error.errorCode) - \(error.errorMessage)", category: "MessageStream")
             return nil
         case .presence(let update):
-            Log.debug("👤 Presence: \(update.userID)", category: "MessageStream")
+            Log.debug("Presence: \(update.userID)", category: "MessageStream")
             return nil
         case .heartbeatAck(let ack):
-            Log.debug("💓 Heartbeat ack: server=\(ack.serverTimestamp)", category: "MessageStream")
+            Log.debug("Heartbeat ack: server=\(ack.serverTimestamp)", category: "MessageStream")
             Task { @MainActor in
                 ConnectionStatusManager.shared.markStreamConnected()
             }

@@ -67,10 +67,10 @@ final class DeviceLinkViewModel {
             let url = "konstruct://link?token=\(result.token)"
             qrContent = url
             tokenExpiresAt = Date(timeIntervalSince1970: TimeInterval(result.expiresAt))
-            Log.info("📱 Device link QR generated — expires \(result.expiresAt)", category: "DeviceLink")
+            Log.info("Device link QR generated — expires \(result.expiresAt)", category: "DeviceLink")
         } catch {
             errorMessage = localizedError(error)
-            Log.error("❌ initiateDeviceLink failed: \(error)", category: "DeviceLink")
+            Log.error("initiateDeviceLink failed: \(error)", category: "DeviceLink")
         }
     }
 
@@ -119,7 +119,7 @@ final class DeviceLinkViewModel {
             publicKeys.signedPrekeySignature = Data(base64Encoded: bundle.signature) ?? Data()
             publicKeys.cryptoSuite = "Curve25519+Ed25519"
 
-            Log.info("🔑 Device B: generated deviceId=\(deviceId) for link confirmation", category: "DeviceLink")
+            Log.info("Device B: generated deviceId=\(deviceId) for link confirmation", category: "DeviceLink")
 
             // 2. Confirm device link — receives JWT
             let result = try await AuthServiceClient.shared.confirmDeviceLink(
@@ -137,7 +137,7 @@ final class DeviceLinkViewModel {
                 KeychainManager.shared.saveIceBridgeCert(cert)
             }
 
-            Log.info("✅ Device B: link confirmed — userId=\(result.userId.prefix(8))…", category: "DeviceLink")
+            Log.info("Device B: link confirmed — userId=\(result.userId.prefix(8))…", category: "DeviceLink")
 
             // 4. Upload OTPKs (required — senders get "no prekeys" without this)
             await uploadPreKeysAfterLink(deviceId: deviceId)
@@ -146,7 +146,7 @@ final class DeviceLinkViewModel {
 
         } catch {
             errorMessage = localizedError(error)
-            Log.error("❌ confirmDeviceLink failed: \(error)", category: "DeviceLink")
+            Log.error("confirmDeviceLink failed: \(error)", category: "DeviceLink")
         }
     }
 
@@ -172,10 +172,10 @@ final class DeviceLinkViewModel {
             joinRequestQRContent = url
             isWaitingForApproval = true
             startPollingForApproval(pendingId: deviceId)
-            Log.info("📟 Join request QR generated — deviceId=\(deviceId.prefix(8))…", category: "DeviceLink")
+            Log.info("Join request QR generated — deviceId=\(deviceId.prefix(8))…", category: "DeviceLink")
         } catch {
             errorMessage = localizedError(error)
-            Log.error("❌ generateJoinRequestQR failed: \(error)", category: "DeviceLink")
+            Log.error("generateJoinRequestQR failed: \(error)", category: "DeviceLink")
         }
     }
 
@@ -218,7 +218,7 @@ final class DeviceLinkViewModel {
                     break
                 } catch {
                     // Transient network error — keep polling
-                    Log.debug("⏳ checkDeviceLinkStatus polling: \(error)", category: "DeviceLink")
+                    Log.debug("checkDeviceLinkStatus polling: \(error)", category: "DeviceLink")
                 }
             }
             if !self.linkCompleted {
@@ -252,7 +252,7 @@ final class DeviceLinkViewModel {
                 newDevicePlatform: platform
             )
             approvalGranted = true
-            Log.info("✅ Approved join request for '\(name)' (id=\(pendingId.prefix(8))…)", category: "DeviceLink")
+            Log.info("Approved join request for '\(name)' (id=\(pendingId.prefix(8))…)", category: "DeviceLink")
         } catch {
             errorMessage = localizedError(error)
         }
@@ -275,9 +275,9 @@ final class DeviceLinkViewModel {
                 deviceId: deviceId,
                 replaceExisting: true
             )
-            Log.info("📦 Device B: uploaded \(count) OTPKs after link", category: "DeviceLink")
+            Log.info("Device B: uploaded \(count) OTPKs after link", category: "DeviceLink")
         } catch {
-            Log.error("⚠️ Device B: OTPK upload failed (non-fatal): \(error)", category: "DeviceLink")
+            Log.error("Device B: OTPK upload failed (non-fatal): \(error)", category: "DeviceLink")
         }
     }
 

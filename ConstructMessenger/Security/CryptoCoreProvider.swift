@@ -17,7 +17,7 @@ final class CryptoCoreProvider {
     func loadCore() -> (core: ClassicCryptoCore?, wasRestoredFromKeychain: Bool) {
         do {
             if let savedKeysData = keychain.loadPrivateKeysData() {
-                Log.info("🔑 Found existing keys in Keychain, restoring CryptoCore...", category: "CryptoManager")
+                Log.info("Found existing keys in Keychain, restoring CryptoCore...", category: "CryptoManager")
                 let core = try createCryptoCoreFromKeys(keys: [UInt8](savedKeysData))
 
                 // Restore persisted OTPKs so the core knows about the keys already on the server.
@@ -27,25 +27,25 @@ final class CryptoCoreProvider {
                     do {
                         try core.importOneTimePrekeys(data: [UInt8](otpksData))
                         let count = core.oneTimePrekeyCount()
-                        Log.info("✅ Restored \(count) OTPKs from Keychain (CFE)", category: "CryptoManager")
+                        Log.info("Restored \(count) OTPKs from Keychain (CFE)", category: "CryptoManager")
                     } catch {
-                        Log.error("⚠️ Failed to import persisted OTPKs — fallback will replace server keys: \(error)", category: "CryptoManager")
+                        Log.error("Failed to import persisted OTPKs — fallback will replace server keys: \(error)", category: "CryptoManager")
                     }
                 } else {
-                    Log.info("ℹ️ No persisted OTPKs found in Keychain — fallback will replace server keys on startup", category: "CryptoManager")
+                    Log.info("No persisted OTPKs found in Keychain — fallback will replace server keys on startup", category: "CryptoManager")
                 }
 
-                Log.info("✅ CryptoCore restored from saved keys (CFE)!", category: "CryptoManager")
+                Log.info("CryptoCore restored from saved keys (CFE)!", category: "CryptoManager")
                 return (core, true)
             }
 
-            Log.info("🆕 No saved keys found, CryptoCore not initialized yet", category: "CryptoManager")
+            Log.info("No saved keys found, CryptoCore not initialized yet", category: "CryptoManager")
             return (nil, false)
         } catch let error as CryptoError {
-            Log.fault("❌ Failed to restore UniFFI CryptoCore: \(error)", category: "CryptoManager")
+            Log.fault("Failed to restore UniFFI CryptoCore: \(error)", category: "CryptoManager")
             return (nil, false)
         } catch {
-            Log.fault("❌ Unexpected error restoring CryptoCore: \(error)", category: "CryptoManager")
+            Log.fault("Unexpected error restoring CryptoCore: \(error)", category: "CryptoManager")
             return (nil, false)
         }
     }

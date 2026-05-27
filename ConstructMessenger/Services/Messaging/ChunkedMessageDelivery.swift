@@ -51,7 +51,7 @@ final class ChunkedMessageSender {
                         encryptedPayload: encryptedPayload
                     )
                 } catch {
-                    Log.error("⚠️ STEALTH: seal failed, sending without stealth: \(error)", category: "ChunkedDelivery")
+                    Log.error("STEALTH: seal failed, sending without stealth: \(error)", category: "ChunkedDelivery")
                 }
             }
 
@@ -107,7 +107,7 @@ final class ChunkedMessageReassembler {
            data[magic.count] == ChunkedDeliveryConfig.version
         {
             guard let parsed = ChunkedMessageCodec.parseChunk(data: data) else {
-                Log.info("⚠️ Binary KNST magic found but header invalid, falling through", category: "ChunkedDelivery")
+                Log.info("Binary KNST magic found but header invalid, falling through", category: "ChunkedDelivery")
                 return decodeRaw(data)
             }
             return processKnstChunk(parsed)
@@ -200,12 +200,12 @@ final class ChunkedMessageReassembler {
         }
 
         guard let data = Data(base64Encoded: encoded) else {
-            Log.info("⚠️ Chunked prefix found but Base64 decode failed, treating as legacy", category: "ChunkedDelivery")
+            Log.info("Chunked prefix found but Base64 decode failed, treating as legacy", category: "ChunkedDelivery")
             return .legacy(decryptedText)
         }
 
         guard let parsed = ChunkedMessageCodec.parseChunk(data: data) else {
-            Log.info("⚠️ Chunked prefix found but header invalid, treating as legacy", category: "ChunkedDelivery")
+            Log.info("Chunked prefix found but header invalid, treating as legacy", category: "ChunkedDelivery")
             return .legacy(decryptedText)
         }
 
@@ -294,7 +294,7 @@ enum ChunkedMessageCodec {
         let payloadSize = ChunkedDeliveryConfig.chunkPayloadSize
         let totalChunks = UInt16((plaintext.count + payloadSize - 1) / payloadSize)
         if totalChunks > ChunkedDeliveryConfig.maxChunks {
-            Log.error("❌ Chunked message exceeds max chunks (\(totalChunks) > \(ChunkedDeliveryConfig.maxChunks))", category: "ChunkedDelivery")
+            Log.error("Chunked message exceeds max chunks (\(totalChunks) > \(ChunkedDeliveryConfig.maxChunks))", category: "ChunkedDelivery")
             return []
         }
         let clampedTotal = max(totalChunks, 1)

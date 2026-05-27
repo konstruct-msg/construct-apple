@@ -160,7 +160,7 @@ final class AuthServiceClient: Sendable {
             } catch let rpc as RPCError where rpc.code == .invalidArgument {
                 // Token was absent or already expired — nothing to add to blocklist.
                 // Refresh token is still revoked server-side; treat as success.
-                Log.error("⚠️ Logout: access token not invalidated (absent or expired) — continuing", category: "Auth")
+                Log.error("Logout: access token not invalidated (absent or expired) — continuing", category: "Auth")
             }
         }
     }

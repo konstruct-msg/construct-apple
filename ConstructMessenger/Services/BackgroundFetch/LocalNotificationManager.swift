@@ -180,7 +180,7 @@ class LocalNotificationManager: NSObject {
                 UIApplication.shared.applicationIconBadgeNumber = count
                 #endif
             }
-            Log.debug("📛 Badge updated to \(count)", category: "LocalNotifications")
+            Log.debug("Badge updated to \(count)", category: "LocalNotifications")
         }
     }
 
@@ -194,7 +194,7 @@ class LocalNotificationManager: NSObject {
                 UIApplication.shared.applicationIconBadgeNumber = 0
                 #endif
             }
-            Log.debug("📛 Badge cleared", category: "LocalNotifications")
+            Log.debug("Badge cleared", category: "LocalNotifications")
         }
     }
 

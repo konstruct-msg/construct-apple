@@ -68,7 +68,7 @@ final class StreamLifecycleCoordinator {
     @discardableResult
     func addEphemeralSubscription(for userId: String) -> Bool {
         guard ephemeralSubscriptionUserIds.insert(userId).inserted else { return false }
-        Log.info("📡 Ephemeral stream subscription added for \(userId.prefix(8))… (pending END_SESSION INITIATOR)", category: "StreamLifecycle")
+        Log.info("Ephemeral stream subscription added for \(userId.prefix(8))… (pending END_SESSION INITIATOR)", category: "StreamLifecycle")
         forceReconnect()
         return true
     }
@@ -101,12 +101,12 @@ final class StreamLifecycleCoordinator {
 
     func startMessageStream() {
         guard !streamManager.isPaused else {
-            Log.debug("📡 Stream paused — skipping startMessageStream", category: "StreamLifecycle")
+            Log.debug("Stream paused — skipping startMessageStream", category: "StreamLifecycle")
             return
         }
         let ids = currentConversationIds()
         guard !ids.isEmpty || streamManager.subscriptionUserIds.isEmpty else {
-            Log.debug("📡 startMessageStream — skipping empty ids (would clear \(streamManager.subscriptionUserIds.count) active subscriptions)", category: "StreamLifecycle")
+            Log.debug("startMessageStream — skipping empty ids (would clear \(streamManager.subscriptionUserIds.count) active subscriptions)", category: "StreamLifecycle")
             return
         }
         wireStreamCallbacks()
@@ -124,11 +124,11 @@ final class StreamLifecycleCoordinator {
                 guard !deviceId.isEmpty else { return }
                 let crypto = CryptoManager.shared
                 if crypto.wasRestoredFromKeychain, crypto.oneTimePrekeyCount() == 0 {
-                    Log.info("🔑 Core restored but no local OTPKs — replacing all server OTPKs (fallback sync)", category: "OTPK")
+                    Log.info("Core restored but no local OTPKs — replacing all server OTPKs (fallback sync)", category: "OTPK")
                     do {
                         try await OtpkReplenishmentService.generateAndUpload(count: 50, deviceId: deviceId, replaceExisting: true)
                     } catch {
-                        Log.error("❌ Fallback OTPK replace failed: \(error)", category: "OTPK")
+                        Log.error("Fallback OTPK replace failed: \(error)", category: "OTPK")
                         await OtpkReplenishmentService.replenishIfNeeded(deviceId: deviceId)
                     }
                 } else {
@@ -146,7 +146,7 @@ final class StreamLifecycleCoordinator {
 
     func forceReconnect() {
         guard SessionManager.shared.sessionToken != nil else {
-            Log.debug("📡 No session — skipping forceReconnect", category: "StreamLifecycle")
+            Log.debug("No session — skipping forceReconnect", category: "StreamLifecycle")
             return
         }
         reconnectDebounceTask?.cancel()
@@ -197,7 +197,7 @@ final class StreamLifecycleCoordinator {
                 )
                 guard settled != lastState else { continue }
                 lastState = settled
-                Log.debug("📡 Stream state: token=\(settled.hasToken ? "present" : "nil"), status=\(settled.status.displayText), push=\(settled.pushEnabled)", category: "StreamLifecycle")
+                Log.debug("Stream state: token=\(settled.hasToken ? "present" : "nil"), status=\(settled.status.displayText), push=\(settled.pushEnabled)", category: "StreamLifecycle")
                 self.handlePollingState(settled)
             }
         }
@@ -212,16 +212,16 @@ final class StreamLifecycleCoordinator {
             Task {
                 let deviceId = KeychainManager.shared.loadDeviceID() ?? ""
                 guard !deviceId.isEmpty else { return }
-                Log.info("🔑 Stream reconnected — retrying pending SPK rotation", category: "SPKRotation")
+                Log.info("Stream reconnected — retrying pending SPK rotation", category: "SPKRotation")
                 await PreKeyRotationService.shared.rotateIfNeeded(deviceId: deviceId)
             }
         }
 
         if state.hasToken && state.status != ConnectionStatusManager.ConnectionStatus.disconnected {
             if state.pushEnabled {
-                Log.info("📱 Push active — stream connected", category: "StreamLifecycle")
+                Log.info("Push active — stream connected", category: "StreamLifecycle")
             } else {
-                Log.info("📡 Connecting message stream", category: "StreamLifecycle")
+                Log.info("Connecting message stream", category: "StreamLifecycle")
             }
             if !pollingStateHadToken {
                 pollingStateHadToken = true
@@ -236,9 +236,9 @@ final class StreamLifecycleCoordinator {
         } else {
             pollingStateHadToken = false
             if !state.hasToken {
-                Log.info("📡 No session — stream stopped", category: "StreamLifecycle")
+                Log.info("No session — stream stopped", category: "StreamLifecycle")
             } else {
-                Log.info("📡 Disconnected (\(state.status.displayText)) — stream stopped", category: "StreamLifecycle")
+                Log.info("Disconnected (\(state.status.displayText)) — stream stopped", category: "StreamLifecycle")
             }
             stopMessageStream()
         }
@@ -251,7 +251,7 @@ final class StreamLifecycleCoordinator {
         let backgroundTask = Task { [weak self] in
             for await _ in NotificationCenter.default.notifications(named: .appDidEnterBackground) {
                 guard let self else { continue }
-                Log.debug("📱 App entered background — grace period started (\(Int(Self.backgroundGracePeriod.components.seconds))s)", category: "StreamLifecycle")
+                Log.debug("App entered background — grace period started (\(Int(Self.backgroundGracePeriod.components.seconds))s)", category: "StreamLifecycle")
                 self.backgroundDisconnectTask?.cancel()
                 self.backgroundDisconnectTask = Task { [weak self] in
                     let bgTaskId = UIApplication.shared.beginBackgroundTask(withName: "stream-grace") {
@@ -269,7 +269,7 @@ final class StreamLifecycleCoordinator {
                         return
                     }
                     guard let self else { return }
-                    Log.info("📱 App backgrounded (grace expired) — pausing stream", category: "StreamLifecycle")
+                    Log.info("App backgrounded (grace expired) — pausing stream", category: "StreamLifecycle")
                     self.streamManager.pause()
                     GRPCChannelManager.shared.invalidatePersistentClient()
                 }
@@ -286,11 +286,11 @@ final class StreamLifecycleCoordinator {
                 await IceProxyManager.shared.verifyAliveOrRestart()
                 await IceProxyManager.shared.startIfEnabled()
                 if self.streamManager.isConnected {
-                    Log.info("📱 App became active — stream still alive, skipping reconnect", category: "StreamLifecycle")
+                    Log.info("App became active — stream still alive, skipping reconnect", category: "StreamLifecycle")
                 } else if self.streamManager.isActivelyConnecting {
-                    Log.info("📱 App became active — ICE failover in progress, skipping forceReconnect", category: "StreamLifecycle")
+                    Log.info("App became active — ICE failover in progress, skipping forceReconnect", category: "StreamLifecycle")
                 } else {
-                    Log.info("📱 App became active — stream is down, reconnecting", category: "StreamLifecycle")
+                    Log.info("App became active — stream is down, reconnecting", category: "StreamLifecycle")
                     self.forceReconnect()
                 }
                 await self.checkKeyHealthInBackground()
@@ -302,14 +302,14 @@ final class StreamLifecycleCoordinator {
             for await _ in NotificationCenter.default.notifications(named: .networkPathChanged) {
                 guard let self else { continue }
                 if let bgTask = self.backgroundDisconnectTask, !bgTask.isCancelled {
-                    Log.info("🌐 Network changed during background grace — deferring reconnect to foreground", category: "StreamLifecycle")
+                    Log.info("Network changed during background grace — deferring reconnect to foreground", category: "StreamLifecycle")
                     bgTask.cancel()
                     self.backgroundDisconnectTask = nil
                     self.streamManager.pause()
                     GRPCChannelManager.shared.invalidatePersistentClient()
                     continue
                 }
-                Log.info("🌐 Network interface changed — restarting stream and ICE proxy", category: "StreamLifecycle")
+                Log.info("Network interface changed — restarting stream and ICE proxy", category: "StreamLifecycle")
                 Task { @MainActor in
                     await IceProxyManager.shared.verifyAliveOrRestart()
                     await IceProxyManager.shared.startIfEnabled()
@@ -322,7 +322,7 @@ final class StreamLifecycleCoordinator {
         let iceRecoveryTask = Task { [weak self] in
             for await _ in NotificationCenter.default.notifications(named: .iceRelayRecovered) {
                 guard let self else { return }
-                Log.info("🧊 ICE recovered — retrying key health check and token registration", category: "StreamLifecycle")
+                Log.info("ICE recovered — retrying key health check and token registration", category: "StreamLifecycle")
                 self.lastForegroundKeyCheckAt = 0
                 await self.checkKeyHealthInBackground()
                 await PushNotificationManager.shared.ensureTokenRegistered()
@@ -346,7 +346,7 @@ final class StreamLifecycleCoordinator {
                 }
                 guard !Task.isCancelled else { break }
                 if PushNotificationManager.shared.lastSilentPushDate != nil {
-                    Log.info("📱 Silent push — reconnecting stream to fetch pending messages", category: "StreamLifecycle")
+                    Log.info("Silent push — reconnecting stream to fetch pending messages", category: "StreamLifecycle")
                     self.forceReconnect()
                 }
                 #else
@@ -363,7 +363,7 @@ final class StreamLifecycleCoordinator {
         guard let context = viewContext else { return }
         let senderId = message.from
         if !senderId.isEmpty, ephemeralSubscriptionUserIds.remove(senderId) != nil {
-            Log.info("📡 Ephemeral subscription cleared for \(senderId.prefix(8))… (first message arrived)", category: "StreamLifecycle")
+            Log.info("Ephemeral subscription cleared for \(senderId.prefix(8))… (first message arrived)", category: "StreamLifecycle")
         }
         sessionCoordinator.routeIncomingMessage(message, in: context)
     }
@@ -380,9 +380,9 @@ final class StreamLifecycleCoordinator {
                 let prev = message.deliveryStatus
                 message.deliveryStatus = .delivered
                 if prev == .failed {
-                    Log.error("📬 Receipt: corrected false-failed message \(messageId) → .delivered", category: "MessageStream")
+                    Log.error("Receipt: corrected false-failed message \(messageId) → .delivered", category: "MessageStream")
                 } else {
-                    Log.info("📬 Receipt: message \(messageId) marked delivered (was \(prev))", category: "MessageStream")
+                    Log.info("Receipt: message \(messageId) marked delivered (was \(prev))", category: "MessageStream")
                 }
             }
             context.saveAndLog()
@@ -394,7 +394,7 @@ final class StreamLifecycleCoordinator {
     private func checkKeyHealthInBackground() async {
         let now = Date().timeIntervalSince1970
         guard now - lastForegroundKeyCheckAt >= Self.foregroundKeyCheckCooldownSeconds else {
-            Log.debug("🔑 Key health check skipped — cooldown active", category: "OTPK")
+            Log.debug("Key health check skipped — cooldown active", category: "OTPK")
             return
         }
         guard SessionManager.shared.sessionToken != nil else { return }

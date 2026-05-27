@@ -61,7 +61,7 @@ struct ContentView: View {
             // the device is unlocked and Keychain items are accessible.
             if SessionManager.shared.sessionToken == nil || !SessionManager.shared.isSessionValid
                 || !CryptoManager.shared.isInitialized {
-                Log.info("📱 App returning to foreground — restoring session (token missing, expired, or crypto uninitialised)", category: "Auth")
+                Log.info("App returning to foreground — restoring session (token missing, expired, or crypto uninitialised)", category: "Auth")
                 authViewModel.restoreSession()
             }
         }
@@ -69,7 +69,7 @@ struct ContentView: View {
             handleDeepLink(newDeepLink)
         }
         .onOpenURL { url in
-            // ✅ Handle Universal Links in SwiftUI (iOS 13+)
+            // Handle Universal Links in SwiftUI (iOS 13+)
             Log.info("ContentView: Received URL via onOpenURL: \(url.absoluteString)", category: "DeepLink")
             let result = deepLinkHandler.handleURL(url)
             Log.info("ContentView: Deep link handling result: \(result)", category: "DeepLink")
@@ -81,7 +81,7 @@ struct ContentView: View {
         if case .contact(let contactInfo) = deepLink {
             Log.info("ContentView: Creating chat directly for userId: \(contactInfo.userId), username: \(contactInfo.username)", category: "DeepLink")
 
-            // ✅ Create chat directly instead of opening modal
+            // Create chat directly instead of opening modal
             let publicUserInfo = PublicUserInfo(
                 id: contactInfo.userId,
                 username: contactInfo.username,

@@ -26,10 +26,10 @@ final class DeviceManagementViewModel {
 
         do {
             devices = try await AuthServiceClient.shared.listDevices()
-            Log.info("📱 Loaded \(devices.count) linked device(s)", category: "DeviceManagement")
+            Log.info("Loaded \(devices.count) linked device(s)", category: "DeviceManagement")
         } catch {
             errorMessage = error.localizedDescription
-            Log.error("❌ listDevices failed: \(error)", category: "DeviceManagement")
+            Log.error("listDevices failed: \(error)", category: "DeviceManagement")
         }
     }
 
@@ -46,10 +46,10 @@ final class DeviceManagementViewModel {
         do {
             try await AuthServiceClient.shared.revokeDevice(deviceId: id)
             devices.removeAll { $0.id == id }
-            Log.info("🗑 Revoked device \(id.prefix(8))…", category: "DeviceManagement")
+            Log.info("Revoked device \(id.prefix(8))…", category: "DeviceManagement")
         } catch {
             errorMessage = error.localizedDescription
-            Log.error("❌ revokeDevice failed: \(error)", category: "DeviceManagement")
+            Log.error("revokeDevice failed: \(error)", category: "DeviceManagement")
         }
     }
 

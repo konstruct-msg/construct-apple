@@ -137,7 +137,7 @@ extension MessageStreamManager {
 
         let host = GRPCChannelManager.shared.currentHost
         let port = GRPCChannelManager.shared.currentPort
-        Log.info("📡 openStream → \(host):\(port) subscriptions=[\(subscriptionUserIds.joined(separator: ", "))]", category: "MessageStream")
+        Log.info("openStream → \(host):\(port) subscriptions=[\(subscriptionUserIds.joined(separator: ", "))]", category: "MessageStream")
 
         // Determine transport label early for logging and accept-timeout calculation.
         // Actual channel selection happens inside GRPCStreamTransport.open().
@@ -158,12 +158,12 @@ extension MessageStreamManager {
         transportLabel = "H2"
 #endif
         lastStreamTransportWasH3 = (transportLabel == "H3")
-        Log.debug("🔌 openStream transport=\(transportLabel) → \(host):\(port)", category: "MessageStream")
+        Log.debug("openStream transport=\(transportLabel) → \(host):\(port)", category: "MessageStream")
 
         // Create outbound stream
         let (outboundStream, outboundCont) = AsyncStream<Shared_Proto_Services_V1_MessageStreamRequest>.makeStream()
         self.outboundContinuation = outboundCont
-        Log.info("⏳ MessageStream opening to \(host):\(port)", category: "MessageStream")
+        Log.info("MessageStream opening to \(host):\(port)", category: "MessageStream")
 
         // Send initial subscribe — include last-known Redis stream cursor so the server
         // resumes from the correct position instead of re-reading from the beginning.
@@ -173,11 +173,11 @@ extension MessageStreamManager {
         subscribe.includePresence = true
         if let cursor = StreamCursorStore.load() {
             subscribe.sinceCursor = cursor
-            Log.debug("📤 MessageStream subscribe with cursor=\(cursor.prefix(16))…", category: "MessageStream")
+            Log.debug("MessageStream subscribe with cursor=\(cursor.prefix(16))…", category: "MessageStream")
         }
         subscribeReq.request = .subscribe(subscribe)
         outboundCont.yield(subscribeReq)
-        Log.debug("📤 MessageStream subscribe sent: \(subscriptionUserIds.count) conversation(s)", category: "MessageStream")
+        Log.debug("MessageStream subscribe sent: \(subscriptionUserIds.count) conversation(s)", category: "MessageStream")
 
         // Flush any ACKs for messages that failed decoding before the stream was open
         if !pendingFailedAcks.isEmpty {
@@ -187,7 +187,7 @@ extension MessageStreamManager {
             for (senderId, entries) in bySender {
                 sendReceipt(entries.map(\.id), to: senderId, status: .failed)
             }
-            Log.info("📤 Flushed \(toFlush.count) failed ACK(s) for undecryptable pending message(s)", category: "MessageStream")
+            Log.info("Flushed \(toFlush.count) failed ACK(s) for undecryptable pending message(s)", category: "MessageStream")
         }
 
         // Flush delivered receipts that were queued while the stream was closed
@@ -197,7 +197,7 @@ extension MessageStreamManager {
             for ack in toFlush {
                 sendReceipt(ack.messageIds, to: ack.recipientUserId, status: .delivered)
             }
-            Log.info("📤 Flushed \(toFlush.count) pending delivered receipt(s)", category: "MessageStream")
+            Log.info("Flushed \(toFlush.count) pending delivered receipt(s)", category: "MessageStream")
         }
 
         // Start heartbeat sender
@@ -233,9 +233,9 @@ extension MessageStreamManager {
                 self.outboundContinuation = nil
                 self.heartbeatTask = nil
                 self.heartbeatWatchdogTask = nil
-                Log.info("🔌 MessageStream disconnected from \(host):\(port)", category: "MessageStream")
+                Log.info("MessageStream disconnected from \(host):\(port)", category: "MessageStream")
             } else {
-                Log.info("🔌 MessageStream disconnected (stale generation) from \(host):\(port)", category: "MessageStream")
+                Log.info("MessageStream disconnected (stale generation) from \(host):\(port)", category: "MessageStream")
             }
         }
 
@@ -247,13 +247,13 @@ extension MessageStreamManager {
             for await event in incomingStream {
                 switch event {
                 case .message(let msg):
-                    Log.debug("📩 MessageStream received message from=\(msg.from) id=\(msg.id)", category: "MessageStream")
+                    Log.debug("MessageStream received message from=\(msg.from) id=\(msg.id)", category: "MessageStream")
                     self?.onMessageReceived?(msg)
                 case .deliveryReceipt(let ids):
-                    Log.info("📬 MessageStream receipt: \(ids.count) message(s) delivered → \(ids.joined(separator: ", "))", category: "MessageStream")
+                    Log.info("MessageStream receipt: \(ids.count) message(s) delivered → \(ids.joined(separator: ", "))", category: "MessageStream")
                     self?.onDeliveryReceipt?(ids)
                 case .keySyncRequest(let userId):
-                    Log.info("🔑 KEY_SYNC received — re-keying session for \(userId.prefix(8))…", category: "MessageStream")
+                    Log.info("KEY_SYNC received — re-keying session for \(userId.prefix(8))…", category: "MessageStream")
                     self?.onKeySyncReceived?(userId)
                 case .heartbeat:
                     self?.lastHeartbeatDate = Date()
@@ -288,10 +288,10 @@ extension MessageStreamManager {
                 let streamMsStr = streamMs.map { String(format: "%.0f", $0) } ?? "?"
                 if let start = capturedConnectStart {
                     let totalMs = Int(Date().timeIntervalSince(start) * 1000)
-                    Log.info("✅ MessageStream connected — stream: \(streamMsStr)ms, total: \(totalMs)ms via \(metricsLabel)", category: "MessageStream")
+                    Log.info("MessageStream connected — stream: \(streamMsStr)ms, total: \(totalMs)ms via \(metricsLabel)", category: "MessageStream")
                     self.connectStartTime = nil
                 } else {
-                    Log.info("✅ MessageStream connected — stream: \(streamMsStr)ms via \(metricsLabel)", category: "MessageStream")
+                    Log.info("MessageStream connected — stream: \(streamMsStr)ms via \(metricsLabel)", category: "MessageStream")
                 }
             }
         }
@@ -357,7 +357,7 @@ extension MessageStreamManager {
             if isConnected, activeStreamGeneration == generation {
                 // Stream was accepted while the timeout fired; continue below to await it.
             } else {
-                Log.info("🧊 MessageStream open timed out — reconnecting", category: "MessageStream")
+                Log.info("MessageStream open timed out — reconnecting", category: "MessageStream")
                 PerformanceMetrics.shared.record(.streamOpenFastFailover, label: metricsLabel)
                 PerformanceMetrics.shared.cancelStart(.streamOpenStart, label: metricsLabel)
                 streamTask.cancel()

@@ -58,7 +58,7 @@ final class MessageCryptoService {
             // fall back to UserDefaults and log so we can investigate.
             suiteId = Self.suiteId(for: userId)
             if suiteId > 0 {
-                Log.info("⚠️ ENCRYPT: suiteId from Rust=0, falling back to UserDefaults=\(suiteId) for \(userId.prefix(8))…", category: "CryptoManager")
+                Log.info("ENCRYPT: suiteId from Rust=0, falling back to UserDefaults=\(suiteId) for \(userId.prefix(8))…", category: "CryptoManager")
             }
         } else {
             // Keep Keychain in sync so the fallback path stays correct.
@@ -66,7 +66,7 @@ final class MessageCryptoService {
         }
 
         #if DEBUG
-        Log.debug("🔐 ENCRYPT: Preparing to encrypt message", category: "CryptoManager")
+        Log.debug("ENCRYPT: Preparing to encrypt message", category: "CryptoManager")
         Log.debug("   userId: \(userId)", category: "CryptoManager")
         Log.debug("   suiteId: \(suiteId)", category: "CryptoManager")
         Log.debug("   plaintext length: \(message.count) chars", category: "CryptoManager")
@@ -77,7 +77,7 @@ final class MessageCryptoService {
             let rustComponents = try core.encryptMessage(contactId: userId, plaintext: Data(message.utf8))
 
             #if DEBUG
-            Log.debug("🔐 ENCRYPT: Rust core returned components", category: "CryptoManager")
+            Log.debug("ENCRYPT: Rust core returned components", category: "CryptoManager")
             Log.debug("   ephemeralPublicKey: \(rustComponents.ephemeralPublicKey.count) bytes", category: "CryptoManager")
             let ephemeralPreview = rustComponents.ephemeralPublicKey.prefix(16).map { String(format: "%02x", $0) }.joined()
             Log.debug("   ephemeralPublicKey preview: \(ephemeralPreview)...", category: "CryptoManager")
@@ -97,7 +97,7 @@ final class MessageCryptoService {
             )
 
             #if DEBUG
-            Log.debug("🔐 ENCRYPT: After padding", category: "CryptoManager")
+            Log.debug("ENCRYPT: After padding", category: "CryptoManager")
             Log.debug("   content (after padding): \(components.content.count) bytes", category: "CryptoManager")
             #endif
 

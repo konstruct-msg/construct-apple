@@ -64,13 +64,13 @@ class NetworkReachabilityManager {
     func startMonitoring() {
         // Skip in preview mode
         if PreviewDetector.isRunningInPreview {
-            Log.info("🌐 NetworkReachabilityManager: Skipping monitoring in preview mode", category: "NetworkReachability")
+            Log.info("NetworkReachabilityManager: Skipping monitoring in preview mode", category: "NetworkReachability")
             return
         }
         
         // Check if Network framework is available (should always be on iOS, but safety check)
         #if !os(iOS)
-        Log.info("🌐 Network framework may not be available on this platform", category: "NetworkReachability")
+        Log.info("Network framework may not be available on this platform", category: "NetworkReachability")
         #endif
         
         // Create monitor and queue only when needed (not in preview)
@@ -117,7 +117,7 @@ class NetworkReachabilityManager {
                 let interfaceSwitched = interfaceTypeSwitched || pathTopologyChanged
                 self.prevConnectionType = self.connectionType
                 if wasReachable != self.isReachable || interfaceSwitched {
-                    Log.info("🌐 Network reachability changed: \(self.isReachable ? "ONLINE" : "OFFLINE") (\(self.connectionType))", category: "NetworkReachability")
+                    Log.info("Network reachability changed: \(self.isReachable ? "ONLINE" : "OFFLINE") (\(self.connectionType))", category: "NetworkReachability")
 
                     // Post notification for other components
                     let notification = Notification(
@@ -144,14 +144,14 @@ class NetworkReachabilityManager {
         newMonitor.start(queue: newQueue)
         self.monitor = newMonitor
         self.queue = newQueue
-        Log.info("🌐 Network reachability monitoring started", category: "NetworkReachability")
+        Log.info("Network reachability monitoring started", category: "NetworkReachability")
     }
     
     func stopMonitoring() {
         monitor?.cancel()
         monitor = nil
         queue = nil
-        Log.info("🌐 Network reachability monitoring stopped", category: "NetworkReachability")
+        Log.info("Network reachability monitoring stopped", category: "NetworkReachability")
     }
     
     /// Check if network is currently reachable

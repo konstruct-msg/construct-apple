@@ -194,7 +194,7 @@ struct ChatsListView: View {
     // MARK: - QR Code Handling
 
     private func handleScannedContact(_ urlString: String) {
-        Log.info("🔍 ChatsListView: Handling scanned URL: \(urlString)", category: "ChatsListView")
+        Log.info("ChatsListView: Handling scanned URL: \(urlString)", category: "ChatsListView")
         guard let url = URL(string: urlString) else {
             showErrorAfterDismiss(NSLocalizedString("invalid_qr_code_construct", comment: ""))
             return

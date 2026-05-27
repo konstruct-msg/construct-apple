@@ -39,7 +39,7 @@ enum ServerMessage: Codable {
         let typeString = try container.decode(String.self, forKey: .type)
         guard let type = MessageType(rawValue: typeString) else {
             // Unknown message type — silently ignore for forward compatibility
-            Log.info("ℹ️ ServerMessage: ignoring unknown type '\(typeString)'", category: "ServerMessage")
+            Log.info("ServerMessage: ignoring unknown type '\(typeString)'", category: "ServerMessage")
             self = .unknown
             return
         }

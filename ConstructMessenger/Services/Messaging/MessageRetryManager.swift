@@ -25,7 +25,7 @@ class MessageRetryManager {
         context: NSManagedObjectContext,
         onError: @escaping (String) -> Void
     ) {
-        // ✅ Retry for failed or queued messages
+        // Retry for failed or queued messages
         guard message.canRetry || message.deliveryStatus == .queued else {
             Log.info("Message cannot be retried", category: "MessageRetryManager")
             return
@@ -37,13 +37,13 @@ class MessageRetryManager {
             return
         }
 
-        // ✅ Increment retry count
+        // Increment retry count
         message.retryCount += 1
         context.saveAndLog()
 
-        Log.info("🔄 Retrying message \(message.id.prefix(8))... (attempt \(message.retryCount))", category: "MessageRetryManager")
+        Log.info("Retrying message \(message.id.prefix(8))... (attempt \(message.retryCount))", category: "MessageRetryManager")
 
-        // ✅ Update existing message status instead of creating new one
+        // Update existing message status instead of creating new one
         message.deliveryStatus = .sending
         context.saveAndLog()
 
@@ -95,9 +95,9 @@ class MessageRetryManager {
                         }
                         let ecStr = finalErrorCode.isEmpty ? "" : " errorCode=\(finalErrorCode)"
                         let raStr = maxRetryAfterMs > 0 ? " retryAfterMs=\(maxRetryAfterMs)" : ""
-                        Log.info("✅ Message retry completed: \(capturedMessageId) status=\(finalStatus)\(ecStr)\(raStr)", category: "MessageRetryManager")
+                        Log.info("Message retry completed: \(capturedMessageId) status=\(finalStatus)\(ecStr)\(raStr)", category: "MessageRetryManager")
                         if finalStatus == .queued, maxRetryAfterMs > 0 {
-                            Log.info("⏳ Rate-limited retry — will reschedule in \(maxRetryAfterMs)ms for \(capturedMessageId.prefix(8))", category: "MessageRetryManager")
+                            Log.info("Rate-limited retry — will reschedule in \(maxRetryAfterMs)ms for \(capturedMessageId.prefix(8))", category: "MessageRetryManager")
                         }
                     }
                 } catch {
@@ -116,9 +116,9 @@ class MessageRetryManager {
                         liveMsg.deliveryStatus = isRetryableTransport ? .queued : .failed
                         context.saveAndLog()
                         if isRetryableTransport {
-                            Log.info("⏸️ Retry transport failure — queued \(capturedMessageId.prefix(8))… for later", category: "MessageRetryManager")
+                            Log.info("Retry transport failure — queued \(capturedMessageId.prefix(8))… for later", category: "MessageRetryManager")
                         } else {
-                            Log.error("❌ Message retry failed: \(error.localizedDescription)", category: "MessageRetryManager")
+                            Log.error("Message retry failed: \(error.localizedDescription)", category: "MessageRetryManager")
                             onError("Failed to send message: \(error.localizedDescription)")
                         }
                     }
@@ -132,7 +132,7 @@ class MessageRetryManager {
         // Double Ratchet on our side without the peer receiving the previous ciphertext,
         // causing permanent ratchet desync. Mark as failed and signal the caller to
         // send fresh content under a new message ID instead.
-        Log.error("❌ Retry: wire payload not found for \(capturedMessageId.prefix(8))… — payload expired, cannot re-send safely", category: "MessageRetryManager")
+        Log.error("Retry: wire payload not found for \(capturedMessageId.prefix(8))… — payload expired, cannot re-send safely", category: "MessageRetryManager")
         message.deliveryStatus = .failed
         context.saveAndLog()
         onError("payload_expired")
@@ -199,11 +199,11 @@ class MessageRetryManager {
         // RESPONDER), skip here — SessionCoordinator.sendSessionQueuedMessages() will call
         // us again once the new session is established.
         guard CryptoManager.shared.hasSession(for: recipientId) else {
-            Log.debug("⏸️ sendQueuedMessages: no active session for \(recipientId.prefix(8))… — deferring until session is ready", category: "MessageRetryManager")
+            Log.debug("sendQueuedMessages: no active session for \(recipientId.prefix(8))… — deferring until session is ready", category: "MessageRetryManager")
             return
         }
 
-        Log.info("📤 Sending \(queuedMessages.count) queued messages (sequential to preserve ratchet state)", category: "MessageRetryManager")
+        Log.info("Sending \(queuedMessages.count) queued messages (sequential to preserve ratchet state)", category: "MessageRetryManager")
 
         // Capture ids before the Task to avoid managed object threading issues
         let pendingIds: [String] = queuedMessages.map { $0.id }
@@ -250,7 +250,7 @@ class MessageRetryManager {
                         // ciphertext, causing permanent desync. Mark failed; the user can
                         // manually resend via the retry button, which sends fresh content
                         // under a new message ID.
-                        Log.error("⚠️ sendQueuedMessages: no wire payload for \(messageId.prefix(8))… — skipping (payload expired)", category: "MessageRetryManager")
+                        Log.error("sendQueuedMessages: no wire payload for \(messageId.prefix(8))… — skipping (payload expired)", category: "MessageRetryManager")
                         finalStatus = .failed
                     }
                     await MainActor.run {
@@ -266,9 +266,9 @@ class MessageRetryManager {
                             OutgoingWirePayloadStore.shared.remove(baseMessageId: messageId)
                         }
                         if finalStatus == .failed && OutgoingWirePayloadStore.shared.loadChunks(baseMessageId: messageId) == nil {
-                            Log.error("❌ Message \(messageId.prefix(8))… marked failed: no wire payload (engine-path message lost while transport was down)", category: "MessageRetryManager")
+                            Log.error("Message \(messageId.prefix(8))… marked failed: no wire payload (engine-path message lost while transport was down)", category: "MessageRetryManager")
                         } else {
-                            Log.debug("📮 Re-sent queued message via gRPC: \(messageId) status=\(finalStatus) (attempt \(liveMsg.retryCount))", category: "MessageRetryManager")
+                            Log.debug("Re-sent queued message via gRPC: \(messageId) status=\(finalStatus) (attempt \(liveMsg.retryCount))", category: "MessageRetryManager")
                         }
                     }
                 } catch {

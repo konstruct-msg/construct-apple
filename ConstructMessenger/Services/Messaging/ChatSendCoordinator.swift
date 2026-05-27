@@ -88,11 +88,11 @@ final class ChatSendCoordinator {
         replyTo: Message? = nil,
         replyToContentOverride: String? = nil
     ) {
-        Log.info("📤 sendMessage called with \(images.count) images, \(fileURLs.count) files", category: "ChatViewModel")
+        Log.info("sendMessage called with \(images.count) images, \(fileURLs.count) files", category: "ChatViewModel")
         let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if images.isEmpty && fileURLs.isEmpty && text.count > MessageSizeLimits.maxTextCharacters {
             let chunks = MessageValidator.splitIntoChunks(text)
-            Log.info("📋 Long paste split into \(chunks.count) messages", category: "ChatViewModel")
+            Log.info("Long paste split into \(chunks.count) messages", category: "ChatViewModel")
             for (index, chunk) in chunks.enumerated() {
                 sendMessage(
                     text: chunk,
@@ -103,16 +103,16 @@ final class ChatSendCoordinator {
             return
         }
         guard let recipientId = chat.otherUser?.id else {
-            Log.error("❌ No recipient ID", category: "ChatViewModel")
+            Log.error("No recipient ID", category: "ChatViewModel")
             return
         }
         guard let currentUserId = SessionManager.shared.currentUserId else {
-            Log.error("❌ No current user ID", category: "ChatViewModel")
+            Log.error("No current user ID", category: "ChatViewModel")
             return
         }
         guard recipientId != currentUserId else {
             ErrorRouter.shared.report(.validation(.selfSend))
-            Log.debug("❌ Blocked attempt to send message to self", category: "ChatViewModel")
+            Log.debug("Blocked attempt to send message to self", category: "ChatViewModel")
             return
         }
 
@@ -126,7 +126,7 @@ final class ChatSendCoordinator {
             let queued = QueuedMessage(text: text, images: images, replyTo: replyTo)
             queuedMessages.append(queued)
             viewModel?.isInitializingSession = true
-            Log.info("📝 SESSION_STATE[queue_message]: userId=\(recipientId.prefix(8))..., queueSize=\(queuedMessages.count)", category: "SessionInit")
+            Log.info("SESSION_STATE[queue_message]: userId=\(recipientId.prefix(8))..., queueSize=\(queuedMessages.count)", category: "SessionInit")
             Task { [weak self] in
                 await self?.sessionManager.initializeSessionProactively(userId: recipientId)
             }
@@ -148,11 +148,11 @@ final class ChatSendCoordinator {
             )
             saveMessage(stub, decryptedContent: text, isSentByMe: true, status: .queued,
                         replyTo: replyTo, replyToContentOverride: replyToContentOverride, suiteId: 0)
-            Log.info("🔒 SESSION_CONFIRM[buffered]: message \(bufferedId.prefix(8))… queued — waiting for RESPONDER session_ready from \(recipientId.prefix(8))…", category: "SessionConfirm")
+            Log.info("SESSION_CONFIRM[buffered]: message \(bufferedId.prefix(8))… queued — waiting for RESPONDER session_ready from \(recipientId.prefix(8))…", category: "SessionConfirm")
             return
         }
 
-        Log.info("📤 Sending to: \(recipientId), from: \(currentUserId)", category: "ChatViewModel")
+        Log.info("Sending to: \(recipientId), from: \(currentUserId)", category: "ChatViewModel")
         Task { @MainActor [weak self] in
             guard let self else { return }
             let ok = await SessionActivityTracker.shared.preflight(for: recipientId)
@@ -160,7 +160,7 @@ final class ChatSendCoordinator {
                 let queued = QueuedMessage(text: text, images: images, replyTo: replyTo)
                 self.queuedMessages.append(queued)
                 self.viewModel?.isInitializingSession = true
-                Log.info("⏳ Pre-flight failed — message queued, triggering proactive reinit for \(recipientId.prefix(8))…", category: "ChatViewModel")
+                Log.info("Pre-flight failed — message queued, triggering proactive reinit for \(recipientId.prefix(8))…", category: "ChatViewModel")
                 await self.sessionManager.initializeSessionProactively(userId: recipientId)
                 return
             }
@@ -235,17 +235,17 @@ final class ChatSendCoordinator {
     }
 
     private func sendQueuedMessages(userId: String) async {
-        Log.info("📤 SESSION_STATE[send_queued]: userId=\(userId.prefix(8))..., queueSize=\(queuedMessages.count)", category: "SessionInit")
+        Log.info("SESSION_STATE[send_queued]: userId=\(userId.prefix(8))..., queueSize=\(queuedMessages.count)", category: "SessionInit")
         let messagesToSend = queuedMessages
         queuedMessages.removeAll()
         for queued in messagesToSend {
-            Log.info("📤 Sending queued message: \"\(queued.text.prefix(30))\"", category: "ChatViewModel")
+            Log.info("Sending queued message: \"\(queued.text.prefix(30))\"", category: "ChatViewModel")
             sendMessage(text: queued.text, images: queued.images, replyTo: queued.replyTo)
         }
     }
 
     private func failQueuedMessages(reason: String) {
-        Log.error("❌ Failing \(queuedMessages.count) queued messages: \(reason)", category: "ChatViewModel")
+        Log.error("Failing \(queuedMessages.count) queued messages: \(reason)", category: "ChatViewModel")
         guard !queuedMessages.isEmpty else { return }
         guard let currentUserId = SessionManager.shared.currentUserId,
               let recipientId = chat.otherUser?.id else {
@@ -295,7 +295,7 @@ final class ChatSendCoordinator {
             var content = Shared_Proto_Messaging_V1_MessageContent()
             content.text = textMsg
             guard let plaintextData = try? content.serializedData(), !plaintextData.isEmpty else {
-                Log.error("❌ Failed to serialize MessageContent proto", category: "ChatViewModel")
+                Log.error("Failed to serialize MessageContent proto", category: "ChatViewModel")
                 viewModel?.isSending = false
                 return
             }
@@ -304,7 +304,7 @@ final class ChatSendCoordinator {
                 messageId: UUID(uuidString: messageId) ?? UUID()
             )
             guard !plan.payloads.isEmpty else {
-                Log.error("❌ Message too large to send", category: "ChatViewModel")
+                Log.error("Message too large to send", category: "ChatViewModel")
                 viewModel?.isSending = false
                 ErrorRouter.shared.report(.validation(.textTooLarge(currentSize: text.count, maxSize: MessageSizeLimits.maxTextCharacters)))
                 return
@@ -321,13 +321,13 @@ final class ChatSendCoordinator {
                 timestamp: UInt64(Date().timeIntervalSince1970),
                 oneTimePreKeyId: 0
             )
-            Log.debug("📤 Sending message with ID: \(messageId)", category: "ChatViewModel")
+            Log.debug("Sending message with ID: \(messageId)", category: "ChatViewModel")
             saveMessage(message, decryptedContent: text, isSentByMe: true, status: .sending,
                         replyTo: replyTo, replyToContentOverride: replyToContentOverride,
                         localThumbnails: localThumbnails, suiteId: 0)
 
             if FeatureFlags.useEngineForSend && EngineAdapter.shared.isConnected {
-                Log.info("📮 Sending message via ConstructEngine: \(messageId)", category: "ChatViewModel")
+                Log.info("Sending message via ConstructEngine: \(messageId)", category: "ChatViewModel")
                 let anonymityLevel: AnonymityLevel = UserDefaults.standard.bool(forKey: "stealth_mode_enabled") ? .ghost : .normal
                 EngineAdapter.shared.dispatch(.sendMessage(
                     contactId: recipientId,
@@ -341,9 +341,9 @@ final class ChatSendCoordinator {
                 return
             }
             if FeatureFlags.useEngineForSend && !EngineAdapter.shared.isConnected {
-                Log.error("⚠️ Engine transport down — falling back to Swift gRPC for \(messageId.prefix(8))…", category: "ChatViewModel")
+                Log.error("Engine transport down — falling back to Swift gRPC for \(messageId.prefix(8))…", category: "ChatViewModel")
             }
-            Log.info("📮 Sending message via gRPC: \(messageId)", category: "ChatViewModel")
+            Log.info("Sending message via gRPC: \(messageId)", category: "ChatViewModel")
             Task { [weak self] in
                 guard let self else { return }
                 let jitterMs = TrafficProtectionService.shared.recommendedSendDelay(isHighPriority: true)
@@ -391,12 +391,12 @@ final class ChatSendCoordinator {
                     case "blocked":
                         deliveryStatus = .failed
                         self.viewModel?.blockedByRecipient = true
-                        Log.error("🚫 Message blocked by recipient — suppressing retry for \(messageId)\(traceTag)", category: "ChatViewModel")
+                        Log.error("Message blocked by recipient — suppressing retry for \(messageId)\(traceTag)", category: "ChatViewModel")
                     case "failed":
                         if aggregated.errorCode == "encryptionFailed" {
                             deliveryStatus = .failed
                             OutgoingWirePayloadStore.shared.remove(baseMessageId: messageId)
-                            Log.error("🔐 encryptionFailed from server — triggering END_SESSION for \(self.chat.otherUser?.id.prefix(8) ?? "?")\(traceTag)", category: "ChatViewModel")
+                            Log.error("encryptionFailed from server — triggering END_SESSION for \(self.chat.otherUser?.id.prefix(8) ?? "?")\(traceTag)", category: "ChatViewModel")
                             if let peerId = self.chat.otherUser?.id {
                                 Task { [weak self] in
                                     guard let self else { return }
@@ -408,22 +408,22 @@ final class ChatSendCoordinator {
                             }
                         } else if aggregated.retryable {
                             deliveryStatus = .queued
-                            Log.error("❌ Server rejected message \(messageId): retryable=true\(ecStr)\(raStr)\(traceTag) — queued for retry", category: "ChatViewModel")
+                            Log.error("Server rejected message \(messageId): retryable=true\(ecStr)\(raStr)\(traceTag) — queued for retry", category: "ChatViewModel")
                         } else {
                             deliveryStatus = .failed
                             OutgoingWirePayloadStore.shared.remove(baseMessageId: messageId)
-                            Log.error("❌ Server rejected message \(messageId): retryable=false\(ecStr)\(traceTag)", category: "ChatViewModel")
+                            Log.error("Server rejected message \(messageId): retryable=false\(ecStr)\(traceTag)", category: "ChatViewModel")
                         }
                     default:
                         deliveryStatus = .sent
-                        Log.info("⚠️ Unknown server status: \(aggregated.status), using .sent\(traceTag)", category: "ChatViewModel")
+                        Log.info("Unknown server status: \(aggregated.status), using .sent\(traceTag)", category: "ChatViewModel")
                     }
-                    Log.info("🔄 Updating message status from sending → \(deliveryStatus) for \(messageId)\(traceTag)", category: "ChatViewModel")
+                    Log.info("Updating message status from sending → \(deliveryStatus) for \(messageId)\(traceTag)", category: "ChatViewModel")
                     self.updateMessageStatus(messageId: messageId, status: deliveryStatus)
                     if deliveryStatus == .sent || deliveryStatus == .delivered {
                         OutgoingWirePayloadStore.shared.remove(baseMessageId: messageId)
                     }
-                    Log.info("✅ Message sent via gRPC: \(messageId) status=\(aggregated.status)\(ecStr)\(traceTag)", category: "ChatViewModel")
+                    Log.info("Message sent via gRPC: \(messageId) status=\(aggregated.status)\(ecStr)\(traceTag)", category: "ChatViewModel")
                     SessionActivityTracker.shared.recordActivity(for: recipientId)
                     self.viewModel?.isSending = false
                 } catch {
@@ -442,14 +442,14 @@ final class ChatSendCoordinator {
                     }()
                     if let networkError = error as? NetworkError,
                        case .serverError(let message, let responseBody) = networkError {
-                        Log.error("❌ Failed to send message via gRPC: \(message)\nResponse: \(responseBody ?? "empty")", category: "ChatViewModel")
+                        Log.error("Failed to send message via gRPC: \(message)\nResponse: \(responseBody ?? "empty")", category: "ChatViewModel")
                     } else if let rpcError = error as? RPCError {
-                        Log.error("❌ SendMessage gRPC error: code=\(rpcError.code), message=\(rpcError.message)", category: "ChatViewModel")
+                        Log.error("SendMessage gRPC error: code=\(rpcError.code), message=\(rpcError.message)", category: "ChatViewModel")
                     } else {
-                        Log.error("❌ Failed to send message: \(error)", category: "ChatViewModel")
+                        Log.error("Failed to send message: \(error)", category: "ChatViewModel")
                     }
                     if isRetryableTransportFailure {
-                        Log.info("⏸️ Transport failure — queueing \(messageId.prefix(8))… for safe retry", category: "ChatViewModel")
+                        Log.info("Transport failure — queueing \(messageId.prefix(8))… for safe retry", category: "ChatViewModel")
                         self.updateMessageStatus(messageId: messageId, status: .queued)
                     } else {
                         self.updateMessageStatus(messageId: messageId, status: .failed)
@@ -463,15 +463,15 @@ final class ChatSendCoordinator {
             }
         } catch {
             if case CryptoManagerError.coreNotInitialized = error {
-                Log.error("🚨 coreNotInitialized in sendTextMessage — OrchestratorCore missing, not retrying", category: "ChatViewModel")
+                Log.error("coreNotInitialized in sendTextMessage — OrchestratorCore missing, not retrying", category: "ChatViewModel")
                 ErrorRouter.shared.report(error)
                 viewModel?.isSending = false
                 return
             }
-            Log.debug("🔄 Encryption failed, session was deleted. Reinitializing...", category: "ChatViewModel")
+            Log.debug("Encryption failed, session was deleted. Reinitializing...", category: "ChatViewModel")
             guard let toUserId = chat.otherUser?.id else {
                 ErrorRouter.shared.report(error)
-                Log.error("❌ Failed to encrypt message: \(error.localizedDescription)", category: "ChatViewModel")
+                Log.error("Failed to encrypt message: \(error.localizedDescription)", category: "ChatViewModel")
                 viewModel?.isSending = false
                 return
             }
@@ -480,7 +480,7 @@ final class ChatSendCoordinator {
             queuedMessages.append(queued)
             viewModel?.isInitializingSession = true
             viewModel?.isSending = false
-            Log.info("📝 Message queued for retry after session reinitialization", category: "ChatViewModel")
+            Log.info("Message queued for retry after session reinitialization", category: "ChatViewModel")
             Task { [weak self] in await self?.sessionManager.initializeSessionProactively(userId: toUserId) }
         }
     }
@@ -495,7 +495,7 @@ final class ChatSendCoordinator {
     ) {
         guard let recipientId = chat.otherUser?.id,
               let currentUserId = SessionManager.shared.currentUserId else {
-            Log.error("❌ No recipient/user ID for media message", category: "ChatViewModel")
+            Log.error("No recipient/user ID for media message", category: "ChatViewModel")
             ErrorRouter.shared.report(.unknown("Cannot send media: no recipient"))
             return
         }
@@ -515,7 +515,7 @@ final class ChatSendCoordinator {
         pendingMediaUploads[placeholderId] = MediaUploadPayload(
             images: images, fileURLs: [], caption: caption, replyTo: replyTo)
         viewModel?.isSending = true
-        Log.info("📤 Uploading \(images.count) image(s) (placeholder \(placeholderId.prefix(8))…)", category: "ChatViewModel")
+        Log.info("Uploading \(images.count) image(s) (placeholder \(placeholderId.prefix(8))…)", category: "ChatViewModel")
         Task { [weak self] in
             guard let self else { return }
             do {
@@ -528,7 +528,7 @@ final class ChatSendCoordinator {
                 persistenceService.deleteMessage(id: placeholderId, in: viewContext, autoSave: false)
                 sendTextMessage(text: result.messageContent, replyTo: replyTo, replyToContentOverride: replyToContentOverride, localThumbnails: result.thumbnails)
             } catch {
-                Log.error("❌ Media upload failed: \(error.localizedDescription) | raw: \(error)", category: "ChatViewModel")
+                Log.error("Media upload failed: \(error.localizedDescription) | raw: \(error)", category: "ChatViewModel")
                 updateMessageStatus(messageId: placeholderId, status: .failed)
                 ErrorRouter.shared.report(
                     AppError.mediaUploadFailed(error.localizedDescription),
@@ -542,7 +542,7 @@ final class ChatSendCoordinator {
     func sendVoiceMessage(url: URL, duration: TimeInterval, waveform: [Float]) {
         guard let recipientId = chat.otherUser?.id,
               let currentUserId = SessionManager.shared.currentUserId else {
-            Log.error("❌ No recipient/user ID for voice message", category: "ChatViewModel")
+            Log.error("No recipient/user ID for voice message", category: "ChatViewModel")
             return
         }
         let placeholderId = UUID().uuidString
@@ -568,7 +568,7 @@ final class ChatSendCoordinator {
                 persistenceService.deleteMessage(id: placeholderId, in: viewContext, autoSave: false)
                 sendTextMessage(text: json, replyTo: nil)
             } catch {
-                Log.error("❌ Voice upload failed: \(error.localizedDescription)", category: "ChatViewModel")
+                Log.error("Voice upload failed: \(error.localizedDescription)", category: "ChatViewModel")
                 updateMessageStatus(messageId: placeholderId, status: .failed)
                 ErrorRouter.shared.report(AppError.mediaUploadFailed(error.localizedDescription))
                 viewModel?.isSending = false
@@ -602,7 +602,7 @@ final class ChatSendCoordinator {
         pendingMediaUploads[placeholderId] = MediaUploadPayload(
             images: [], fileURLs: fileURLs, caption: caption, replyTo: replyTo)
         viewModel?.isSending = true
-        Log.info("📎 Uploading \(fileURLs.count) file(s) (placeholder \(placeholderId.prefix(8))…)", category: "ChatViewModel")
+        Log.info("Uploading \(fileURLs.count) file(s) (placeholder \(placeholderId.prefix(8))…)", category: "ChatViewModel")
         Task { [weak self] in
             guard let self else { return }
             do {
@@ -614,7 +614,7 @@ final class ChatSendCoordinator {
                 persistenceService.deleteMessage(id: placeholderId, in: viewContext, autoSave: false)
                 sendTextMessage(text: result.messageContent, replyTo: replyTo, replyToContentOverride: replyToContentOverride)
             } catch {
-                Log.error("❌ File upload failed: \(error.localizedDescription)", category: "ChatViewModel")
+                Log.error("File upload failed: \(error.localizedDescription)", category: "ChatViewModel")
                 updateMessageStatus(messageId: placeholderId, status: .failed)
                 ErrorRouter.shared.report(
                     AppError.mediaUploadFailed(error.localizedDescription),
@@ -675,7 +675,7 @@ final class ChatSendCoordinator {
             return
         }
         guard let recipientId = chat.otherUser?.id else {
-            Log.error("❌ No recipient ID for retry", category: "ChatViewModel")
+            Log.error("No recipient ID for retry", category: "ChatViewModel")
             return
         }
         retryManager.retryMessage(
@@ -687,7 +687,7 @@ final class ChatSendCoordinator {
                 if error == "payload_expired" {
                     let text = message.displayText
                     guard !text.isEmpty else { return }
-                    Log.info("🔁 Retry: payload expired — sending '\(text.prefix(20))…' as fresh message", category: "ChatViewModel")
+                    Log.info("Retry: payload expired — sending '\(text.prefix(20))…' as fresh message", category: "ChatViewModel")
                     self.sendTextMessage(text: text, replyTo: nil)
                 } else {
                     ErrorRouter.shared.report(.unknown(error))

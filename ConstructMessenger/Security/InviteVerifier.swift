@@ -38,7 +38,7 @@ class InviteVerifier {
         // Validate structure
         try invite.validate()
         
-        Log.debug("📥 Decoded invite: jti=\(invite.jti.prefix(8))..., from=\(invite.uuid.prefix(8))...", category: "InviteVerifier")
+        Log.debug("Decoded invite: jti=\(invite.jti.prefix(8))..., from=\(invite.uuid.prefix(8))...", category: "InviteVerifier")
         
         return invite
     }
@@ -54,7 +54,7 @@ class InviteVerifier {
     /// - Throws: InviteVerificationError
     func decodeFromURL(_ url: URL) throws -> InviteObject {
         guard let encoded = extractInviteString(from: url), !encoded.isEmpty else {
-            Log.error("❌ Missing invite parameter in URL: \(url.absoluteString)", category: "InviteVerifier")
+            Log.error("Missing invite parameter in URL: \(url.absoluteString)", category: "InviteVerifier")
             throw InviteVerificationError.invalidEncoding
         }
         return try decode(encoded)
@@ -105,18 +105,18 @@ class InviteVerifier {
         try invite.validate()
 
         if invite.server != ServerConfig.inviteHost {
-            Log.info("ℹ️ Invite server differs from configured host: invite=\(invite.server), expected=\(ServerConfig.inviteHost)", category: "InviteVerifier")
+            Log.info("Invite server differs from configured host: invite=\(invite.server), expected=\(ServerConfig.inviteHost)", category: "InviteVerifier")
         }
         
         // Step 2: Check expiry
         guard !invite.isExpired(ttl: ttl) else {
-            Log.info("⚠️ Invite expired: jti=\(invite.jti.prefix(8))...", category: "InviteVerifier")
+            Log.info("Invite expired: jti=\(invite.jti.prefix(8))...", category: "InviteVerifier")
             throw InviteVerificationError.expired
         }
         
         // Step 2a: Check JTI deduplication
         guard !jtiLock.withLock({ usedJtis.contains(invite.jti) }) else {
-            Log.info("⚠️ Invite JTI already used: \(invite.jti.prefix(8))...", category: "InviteVerifier")
+            Log.info("Invite JTI already used: \(invite.jti.prefix(8))...", category: "InviteVerifier")
             throw InviteVerificationError.alreadyUsed
         }
         
@@ -126,12 +126,12 @@ class InviteVerifier {
         // Step 4: Validate verifying key
         let verifyingKeyData = publicKeyBundle.verifyingKey
         guard !verifyingKeyData.isEmpty else {
-            Log.error("❌ Empty verifyingKey in bundle", category: "InviteVerifier")
+            Log.error("Empty verifyingKey in bundle", category: "InviteVerifier")
             throw InviteVerificationError.invalidVerifyingKey
         }
         
-        Log.debug("🔐 VERIFY: Server verifying key (first 16 bytes): \(verifyingKeyData.prefix(16).map { String(format: "%02x", $0) }.joined())...", category: "InviteVerifier")
-        Log.debug("🔐 Verifying key from server (first 16 bytes): \(verifyingKeyData.prefix(16).base64EncodedString())", category: "InviteVerifier")
+        Log.debug("VERIFY: Server verifying key (first 16 bytes): \(verifyingKeyData.prefix(16).map { String(format: "%02x", $0) }.joined())...", category: "InviteVerifier")
+        Log.debug("Verifying key from server (first 16 bytes): \(verifyingKeyData.prefix(16).base64EncodedString())", category: "InviteVerifier")
         
         // Step 5: Extract signature
         guard let signatureData = Data(base64Encoded: invite.sig) else {
@@ -141,17 +141,17 @@ class InviteVerifier {
         // Step 6: Get canonical string (same as used for signing)
         let dataToVerify = invite.canonicalString()
         
-        Log.debug("🔐 VERIFY: Data to verify: \(dataToVerify)", category: "InviteVerifier")
-        Log.debug("🔐 VERIFY: Signature: \(invite.sig)", category: "InviteVerifier")
+        Log.debug("VERIFY: Data to verify: \(dataToVerify)", category: "InviteVerifier")
+        Log.debug("VERIFY: Signature: \(invite.sig)", category: "InviteVerifier")
         
-        Log.debug("🔐 Data to verify: \(dataToVerify)", category: "InviteVerifier")
-        Log.debug("🔐 Signature base64: \(invite.sig)", category: "InviteVerifier")
+        Log.debug("Data to verify: \(dataToVerify)", category: "InviteVerifier")
+        Log.debug("Signature base64: \(invite.sig)", category: "InviteVerifier")
         
         // Step 7: Verify signature using Rust core
-        Log.debug("🔐 VERIFY: Calling Rust verifyInviteSignature", category: "InviteVerifier")
-        Log.debug("   Data bytes: \(dataToVerify.utf8.count)", category: "InviteVerifier")
-        Log.debug("   Signature bytes: \(signatureData.count)", category: "InviteVerifier")
-        Log.debug("   Verifying key bytes: \(verifyingKeyData.count)", category: "InviteVerifier")
+        Log.debug("VERIFY: Calling Rust verifyInviteSignature", category: "InviteVerifier")
+        Log.debug("Data bytes: \(dataToVerify.utf8.count)", category: "InviteVerifier")
+        Log.debug("Signature bytes: \(signatureData.count)", category: "InviteVerifier")
+        Log.debug("Verifying key bytes: \(verifyingKeyData.count)", category: "InviteVerifier")
         
         let isValid = try verifyInviteSignature(
             data: dataToVerify,
@@ -159,10 +159,10 @@ class InviteVerifier {
             verifyingKey: [UInt8](verifyingKeyData)
         )
         
-        Log.debug("🔐 VERIFY: Rust returned: \(isValid)", category: "InviteVerifier")
+        Log.debug("VERIFY: Rust returned: \(isValid)", category: "InviteVerifier")
         
         if isValid {
-            Log.info("✅ Invite signature valid: jti=\(invite.jti.prefix(8))...", category: "InviteVerifier")
+            Log.info("Invite signature valid: jti=\(invite.jti.prefix(8))...", category: "InviteVerifier")
         } else {
             // Compatibility: some older invites stored server with scheme.
             if invite.server.contains("http") {
@@ -187,13 +187,13 @@ class InviteVerifier {
                 )
                 
                 if normalizedValid {
-                    Log.info("✅ Invite signature valid after server normalization: jti=\(invite.jti.prefix(8))..., server=\(normalizedServer)", category: "InviteVerifier")
+                    Log.info("Invite signature valid after server normalization: jti=\(invite.jti.prefix(8))..., server=\(normalizedServer)", category: "InviteVerifier")
                     _ = jtiLock.withLock { self.usedJtis.insert(invite.jti) }
                     return true
                 }
             }
             
-            Log.info("❌ Invalid invite signature: jti=\(invite.jti.prefix(8))...", category: "InviteVerifier")
+            Log.info("Invalid invite signature: jti=\(invite.jti.prefix(8))...", category: "InviteVerifier")
             throw InviteVerificationError.invalidSignature
         }
         
@@ -225,10 +225,10 @@ class InviteVerifier {
     private func fetchPublicKey(userId: String, server: String) async throws -> PublicKeyBundleData {
         do {
             let bundle = try await KeyServiceClient.shared.getPreKeyBundle(userId: userId)
-            Log.debug("🔑 Fetched key bundle for \(userId.prefix(8))", category: "InviteVerifier")
+            Log.debug("Fetched key bundle for \(userId.prefix(8))", category: "InviteVerifier")
             return bundle
         } catch {
-            Log.error("❌ Failed to fetch key bundle for \(userId): \(error)", category: "InviteVerifier")
+            Log.error("Failed to fetch key bundle for \(userId): \(error)", category: "InviteVerifier")
             throw InviteVerificationError.publicKeyFetchFailed(error)
         }
     }

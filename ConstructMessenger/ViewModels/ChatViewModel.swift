@@ -66,7 +66,7 @@ class ChatViewModel {
     isolated deinit {
         observationTasks.forEach { $0.cancel() }
         InAppNotificationService.shared.unregisterActiveChat(ownerID: instanceID)
-        Log.debug("🔧 ChatViewModel deinitialized", category: "ChatViewModel")
+        Log.debug("ChatViewModel deinitialized", category: "ChatViewModel")
     }
 
     // MARK: - View lifecycle
@@ -81,7 +81,7 @@ class ChatViewModel {
             sessionManager.checkExistingSession()
             setupSubscribers()
             InAppNotificationService.shared.registerActiveChat(chat.id, ownerID: instanceID)
-            Log.debug("🔧 ChatViewModel initialized with viewContext", category: "ChatViewModel")
+            Log.debug("ChatViewModel initialized with viewContext", category: "ChatViewModel")
         }
         sessionManager.fetchRecipientPublicKey()
     }
@@ -101,10 +101,10 @@ class ChatViewModel {
                 }
                 guard !Task.isCancelled else { break }
                 if self.connectionStatusManager.connectionStatus == .connected {
-                    Log.info("✅ Network connected - processing queued messages", category: "ChatViewModel")
+                    Log.info("Network connected - processing queued messages", category: "ChatViewModel")
                     self.sendCoordinator.sendQueuedMessages()
                     if !self.isSessionReady {
-                        Log.info("🔄 Network recovered — retrying session init", category: "ChatViewModel")
+                        Log.info("Network recovered — retrying session init", category: "ChatViewModel")
                         self.sessionManager.fetchRecipientPublicKey()
                     }
                 }
@@ -121,7 +121,7 @@ class ChatViewModel {
                 guard let peerId = notification.userInfo?["contactId"] as? String,
                       peerId == contactId else { continue }
                 self.isSessionReady = true
-                Log.info("✅ Engine session established for \(peerId.prefix(8))…", category: "ChatViewModel")
+                Log.info("Engine session established for \(peerId.prefix(8))…", category: "ChatViewModel")
             }
         }
         observationTasks.append(engineSessionTask)

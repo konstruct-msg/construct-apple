@@ -85,7 +85,7 @@ class BackgroundFetchManager: NSObject {
             using: nil
         ) { task in
             guard let refreshTask = task as? BGAppRefreshTask else {
-                Log.error("❌ Invalid task type for message refresh", category: "BackgroundFetch")
+                Log.error("Invalid task type for message refresh", category: "BackgroundFetch")
                 task.setTaskCompleted(success: false)
                 return
             }
@@ -97,7 +97,7 @@ class BackgroundFetchManager: NSObject {
             using: nil
         ) { task in
             guard let processingTask = task as? BGProcessingTask else {
-                Log.error("❌ Invalid task type for maintenance", category: "BackgroundFetch")
+                Log.error("Invalid task type for maintenance", category: "BackgroundFetch")
                 task.setTaskCompleted(success: false)
                 return
             }
@@ -159,21 +159,21 @@ class BackgroundFetchManager: NSObject {
     #if os(iOS)
     /// Handle BGAppRefreshTask for message fetching
     private func handleMessageRefresh(task: BGAppRefreshTask) {
-        Log.info("📬 Background message refresh started")
+        Log.info("Background message refresh started")
         
         // Schedule next refresh immediately
         scheduleBackgroundFetch()
         
         // Set expiration handler (iOS gives 30 seconds)
         task.expirationHandler = {
-            Log.error("⏰ Background task expired")
+            Log.error("Background task expired")
             self.cleanupFetch()
             task.setTaskCompleted(success: false)
         }
         
         // Check if we should perform fetch (battery, network, etc.)
         guard energyMonitor.shouldPerformBackgroundFetch() else {
-            Log.info("⚠️ Skipping background fetch due to energy conditions")
+            Log.info("Skipping background fetch due to energy conditions")
             task.setTaskCompleted(success: true)
             return
         }
@@ -182,13 +182,13 @@ class BackgroundFetchManager: NSObject {
         performQuickMessageFetch { result in
             switch result {
             case .success(let messageCount):
-                Log.info("✅ Background fetch completed: \(messageCount) new messages")
+                Log.info("Background fetch completed: \(messageCount) new messages")
                 self.lastFetchDate = Date()
                 self.lastFetchResult = .success(messageCount)
                 task.setTaskCompleted(success: true)
                 
             case .failure(let error):
-                Log.error("❌ Background fetch failed: \(error)")
+                Log.error("Background fetch failed: \(error)")
                 self.lastFetchResult = .failure(error)
                 task.setTaskCompleted(success: false)
             }
@@ -197,11 +197,11 @@ class BackgroundFetchManager: NSObject {
     
     /// Handle BGProcessingTask for maintenance operations
     private func handleMaintenance(task: BGProcessingTask) {
-        Log.info("🔧 Maintenance task started")
+        Log.info("Maintenance task started")
         
         // Set expiration handler
         task.expirationHandler = {
-            Log.error("⏰ Maintenance task expired")
+            Log.error("Maintenance task expired")
             task.setTaskCompleted(success: false)
         }
         
@@ -219,11 +219,11 @@ class BackgroundFetchManager: NSObject {
     /// Perform quick message fetch with connect-fetch-disconnect pattern
     /// Target execution time: 2-5 seconds
     private func performQuickMessageFetch(completion: @escaping (Result<Int, Error>) -> Void) {
-        Log.info("🚀 Starting quick message fetch", category: "BackgroundFetch")
+        Log.info("Starting quick message fetch", category: "BackgroundFetch")
         
         // Check authentication
         guard GRPCAuthCache.shared.snapshot.token != nil else {
-            Log.error("❌ No session token available", category: "BackgroundFetch")
+            Log.error("No session token available", category: "BackgroundFetch")
             completion(.failure(BackgroundFetchError.notAuthenticated))
             return
         }
@@ -235,7 +235,7 @@ class BackgroundFetchManager: NSObject {
         let backgroundContext = NSManagedObjectContext(concurrencyType: .privateQueueConcurrencyType)
         backgroundContext.persistentStoreCoordinator = context.persistentStoreCoordinator
         
-        // ✅ Fetch pending messages via gRPC (unary, cursor-paginated)
+        // Fetch pending messages via gRPC (unary, cursor-paginated)
         Task {
             do {
                 var allMessages: [ChatMessage] = []
@@ -256,7 +256,7 @@ class BackgroundFetchManager: NSObject {
                     self.processOfflineMessages(allMessages, backgroundContext: backgroundContext, completion: completion)
                 }
             } catch {
-                Log.error("❌ Failed to fetch offline messages: \(error.localizedDescription)", category: "BackgroundFetch")
+                Log.error("Failed to fetch offline messages: \(error.localizedDescription)", category: "BackgroundFetch")
                 DispatchQueue.main.async { completion(.failure(error)) }
             }
         }
@@ -268,7 +268,7 @@ class BackgroundFetchManager: NSObject {
             return
         }
         
-        Log.info("📬 Processing \(messages.count) offline messages", category: "BackgroundFetch")
+        Log.info("Processing \(messages.count) offline messages", category: "BackgroundFetch")
         
         // Get Core Data context for processing
         let context = PersistenceController.shared.container.viewContext
@@ -289,7 +289,7 @@ class BackgroundFetchManager: NSObject {
             // Group messages by chat (skip control messages — they are not user-visible)
             for message in messages {
                 guard message.messageType != "CONTROL_MESSAGE" && message.messageType != "SENDER_SYNC" else {
-                    Log.debug("⏭️ Skipping control message \(message.id) (\(message.messageType ?? "nil")) in grouping phase", category: "BackgroundFetch")
+                    Log.debug("Skipping control message \(message.id) (\(message.messageType ?? "nil")) in grouping phase", category: "BackgroundFetch")
                     continue
                 }
                 let otherUserId = message.from == currentUserId ? message.to : message.from
@@ -299,7 +299,7 @@ class BackgroundFetchManager: NSObject {
                 // session and deletes User + Chat from Core Data. BackgroundFetch must not
                 // recreate them, nor attempt decryption against a wiped session.
                 guard !DeletedContactsStore.shared.isDeleted(otherUserId) else {
-                    Log.debug("⏭️ Skipping message \(message.id.prefix(8))… from pruned contact \(otherUserId.prefix(8))…", category: "BackgroundFetch")
+                    Log.debug("Skipping message \(message.id.prefix(8))… from pruned contact \(otherUserId.prefix(8))…", category: "BackgroundFetch")
                     continue
                 }
 
@@ -330,7 +330,7 @@ class BackgroundFetchManager: NSObject {
                 let chatFetch = Chat.fetchRequest()
                 chatFetch.predicate = NSPredicate(format: "id == %@", chatId)
                 guard let chat = try? backgroundContext.fetch(chatFetch).first else {
-                    Log.error("❌ Chat not found: \(chatId)", category: "BackgroundFetch")
+                    Log.error("Chat not found: \(chatId)", category: "BackgroundFetch")
                     continue
                 }
 
@@ -343,14 +343,14 @@ class BackgroundFetchManager: NSObject {
                     // Guard 2: RustAckStore in-memory cache — catches the race where the
                     // foreground stream called markProcessed but the save hasn't propagated.
                     if PersistentACKStore.shared.isProcessed(messageData.id, in: backgroundContext) {
-                        Log.debug("⏭️ BackgroundFetch: \(messageData.id.prefix(8))… already ACK'd, skipping", category: "BackgroundFetch")
+                        Log.debug("BackgroundFetch: \(messageData.id.prefix(8))… already ACK'd, skipping", category: "BackgroundFetch")
                         continue
                     }
 
                     // Guard 3: Skip session-management control messages — the real-time
                     // stream handles these; decrypting them here would corrupt DR state.
                     if messageData.messageType == "CONTROL_MESSAGE" || messageData.messageType == "SENDER_SYNC" {
-                        Log.debug("⏭️ Skipping control message \(messageData.id) (\(messageData.messageType ?? "nil")) in BG fetch", category: "BackgroundFetch")
+                        Log.debug("Skipping control message \(messageData.id) (\(messageData.messageType ?? "nil")) in BG fetch", category: "BackgroundFetch")
                         continue
                     }
 
@@ -389,7 +389,7 @@ class BackgroundFetchManager: NSObject {
                             )
                         }
                     } else {
-                        Log.info("⚠️ BackgroundFetch: \(result.message.id.prefix(8))… decrypt failed — foreground stream will recover", category: "BackgroundFetch")
+                        Log.info("BackgroundFetch: \(result.message.id.prefix(8))… decrypt failed — foreground stream will recover", category: "BackgroundFetch")
                     }
                 }
             }
@@ -424,10 +424,10 @@ class BackgroundFetchManager: NSObject {
                     }
                     PersistentACKStore.shared.markProcessed(item.messageData.id, senderId: item.messageData.from, in: backgroundContext)
                     if let text = assembled {
-                        Log.debug("✅ Chunk assembled in BG fetch \(item.messageData.id.prefix(8))", category: "BackgroundFetch")
+                        Log.debug("Chunk assembled in BG fetch \(item.messageData.id.prefix(8))", category: "BackgroundFetch")
                         decryptedContent = Data(text.utf8)
                     } else {
-                        Log.debug("⏭️ Chunk fragment \(item.messageData.id.prefix(8)) ACK'd; waiting for remaining chunks", category: "BackgroundFetch")
+                        Log.debug("Chunk fragment \(item.messageData.id.prefix(8)) ACK'd; waiting for remaining chunks", category: "BackgroundFetch")
                         continue
                     }
                 }
@@ -478,7 +478,7 @@ class BackgroundFetchManager: NSObject {
 
                 try backgroundContext.save()
 
-                Log.info("✅ Saved \(newMessagesCount) new messages to Core Data", category: "BackgroundFetch")
+                Log.info("Saved \(newMessagesCount) new messages to Core Data", category: "BackgroundFetch")
 
                 let capturedNotification = saveNotification
                 DispatchQueue.main.async {
@@ -499,7 +499,7 @@ class BackgroundFetchManager: NSObject {
                     completion(.success(newMessagesCount))
                 }
             } catch {
-                Log.error("❌ Failed to save messages: \(error)", category: "BackgroundFetch")
+                Log.error("Failed to save messages: \(error)", category: "BackgroundFetch")
                 DispatchQueue.main.async {
                     completion(.failure(error))
                 }
@@ -529,7 +529,7 @@ class BackgroundFetchManager: NSObject {
         let userFetch = User.fetchRequest()
         userFetch.predicate = NSPredicate(format: "id == %@", userId)
         guard let existingUser = try? context.fetch(userFetch).first else {
-            Log.info("⏭️ BackgroundFetch: unknown sender \(userId.prefix(8))… — skipping (no contact record)", category: "BackgroundFetch")
+            Log.info("BackgroundFetch: unknown sender \(userId.prefix(8))… — skipping (no contact record)", category: "BackgroundFetch")
             return nil
         }
 

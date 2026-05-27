@@ -50,7 +50,7 @@ final class ChatSessionManager {
         #endif
         viewModel?.isSessionReady = ready
         if ready {
-            Log.info("✅ Session already exists for user: \(userId)", category: "ChatViewModel")
+            Log.info("Session already exists for user: \(userId)", category: "ChatViewModel")
         } else {
             Log.debug("No session yet for user: \(userId)", category: "ChatViewModel")
         }
@@ -58,14 +58,14 @@ final class ChatSessionManager {
 
     func fetchRecipientPublicKey() {
         guard let userId = chat.otherUser?.id else {
-            Log.error("❌ Cannot fetch recipient public key: chat.otherUser?.id is nil", category: "ChatViewModel")
+            Log.error("Cannot fetch recipient public key: chat.otherUser?.id is nil", category: "ChatViewModel")
             return
         }
         guard let currentUserId = SessionManager.shared.currentUserId else {
-            Log.error("❌ Cannot fetch recipient public key: currentUserId is nil", category: "ChatViewModel")
+            Log.error("Cannot fetch recipient public key: currentUserId is nil", category: "ChatViewModel")
             return
         }
-        Log.debug("🔑 Fetching public key for userId: \(userId), currentUserId: \(currentUserId)", category: "ChatViewModel")
+        Log.debug("Fetching public key for userId: \(userId), currentUserId: \(currentUserId)", category: "ChatViewModel")
         if userId == currentUserId {
             ErrorRouter.shared.report(.validation(.selfSend))
             Log.debug("Blocked attempt to initialize session with self", category: "ChatViewModel")
@@ -78,7 +78,7 @@ final class ChatSessionManager {
         publicKeyFetchTimer = Timer.scheduledTimer(withTimeInterval: publicKeyFetchTimeout, repeats: false) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self, self.viewModel?.isSessionReady == false else { return }
-                Log.error("⏱️ Timeout waiting for public key bundle from server", category: "ChatViewModel")
+                Log.error("Timeout waiting for public key bundle from server", category: "ChatViewModel")
                 ErrorRouter.shared.report(.sessionInitFailed(contactId: userId), recovery: { [weak self] in
                     self?.fetchRecipientPublicKey()
                 })
@@ -96,7 +96,7 @@ final class ChatSessionManager {
             } catch {
                 publicKeyFetchTimer?.invalidate()
                 publicKeyFetchTimer = nil
-                Log.error("❌ Failed to fetch public key via gRPC after retries: \(error.localizedDescription)", category: "ChatViewModel")
+                Log.error("Failed to fetch public key via gRPC after retries: \(error.localizedDescription)", category: "ChatViewModel")
                 ErrorRouter.shared.report(.sessionInitFailed(contactId: userId), recovery: { [weak self] in
                     self?.fetchRecipientPublicKey()
                 })
@@ -106,16 +106,16 @@ final class ChatSessionManager {
     }
 
     private func handlePublicKeyBundle(_ data: PublicKeyBundleData) {
-        Log.debug("📦 Received publicKeyBundle for userId: \(data.userId), chat.otherUser?.id: \(chat.otherUser?.id ?? "nil"), match: \(data.userId == chat.otherUser?.id)", category: "ChatViewModel")
+        Log.debug("Received publicKeyBundle for userId: \(data.userId), chat.otherUser?.id: \(chat.otherUser?.id ?? "nil"), match: \(data.userId == chat.otherUser?.id)", category: "ChatViewModel")
         guard data.userId == chat.otherUser?.id else { return }
         self.recipientBundle = (data.identityPublic, data.signedPrekeyPublic, data.signature, data.verifyingKey)
         publicKeyFetchTimer?.invalidate()
         publicKeyFetchTimer = nil
         viewModel?.isSessionReady = true
         if CryptoManager.shared.hasSession(for: data.userId) {
-            Log.info("✅ SESSION_STATE[bundle_fetched_session_exists]: session already established for \(data.userId.prefix(8))…", category: "ChatViewModel")
+            Log.info("SESSION_STATE[bundle_fetched_session_exists]: session already established for \(data.userId.prefix(8))…", category: "ChatViewModel")
         } else {
-            Log.info("📦 SESSION_STATE[bundle_cached]: bundle ready for \(data.userId.prefix(8))…, session will be created on first send", category: "ChatViewModel")
+            Log.info("SESSION_STATE[bundle_cached]: bundle ready for \(data.userId.prefix(8))…, session will be created on first send", category: "ChatViewModel")
         }
         onSessionReady?(data.userId)
     }
@@ -187,7 +187,7 @@ final class ChatSessionManager {
                 guard let self else { return }
                 self.viewModel?.isInitializingSession = false
                 if case CryptoManagerError.coreNotInitialized = error {
-                    Log.error("🚨 coreNotInitialized in initializeSessionProactively — OrchestratorCore missing", category: "ChatViewModel")
+                    Log.error("coreNotInitialized in initializeSessionProactively — OrchestratorCore missing", category: "ChatViewModel")
                     ErrorRouter.shared.report(error)
                     self.onSessionFailed?(userId, error.userFacingMessage)
                     return
@@ -220,9 +220,9 @@ final class ChatSessionManager {
                 encryptedPayload: payload,
                 timestamp: UInt64(Date().timeIntervalSince1970)
             )
-            Log.info("🏓 SESSION_STATE[init_ping_sent]: msgNum=0 ping sent to \(userId.prefix(8))… — user messages follow as msgNum=1+", category: "SessionInit")
+            Log.info("SESSION_STATE[init_ping_sent]: msgNum=0 ping sent to \(userId.prefix(8))… — user messages follow as msgNum=1+", category: "SessionInit")
         } catch {
-            Log.error("⚠️ SESSION_STATE[init_ping_failed]: \(error.localizedDescription) for \(userId.prefix(8))… — user messages will be sent anyway", category: "SessionInit")
+            Log.error("SESSION_STATE[init_ping_failed]: \(error.localizedDescription) for \(userId.prefix(8))… — user messages will be sent anyway", category: "SessionInit")
         }
     }
 }

@@ -187,7 +187,7 @@ final class GRPCCallExecutor: Sendable {
                 } catch is CancellationError {
                     return nil
                 } catch {
-                    Log.error("⚠️ gRPC transport error: \(error)", category: "GRPCChannel")
+                    Log.error("gRPC transport error: \(error)", category: "GRPCChannel")
                     throw error
                 }
             }
@@ -270,7 +270,7 @@ final class GRPCCallExecutor: Sendable {
             if refreshed { return .retry }
         } catch {
             refreshError = error
-            Log.error("⚠️ Token refresh failed during RPC retry: \(error)", category: "GRPCChannel")
+            Log.error("Token refresh failed during RPC retry: \(error)", category: "GRPCChannel")
         }
         
         // Classify the refresh error — transport failures must bubble up.
@@ -288,11 +288,11 @@ final class GRPCCallExecutor: Sendable {
             serverRejected = refreshError == nil   // refreshIfPossible() returned false
         }
         if serverRejected {
-            Log.info("🔑 Refresh rejected by server — triggering device re-auth", category: "GRPCChannel")
+            Log.info("Refresh rejected by server — triggering device re-auth", category: "GRPCChannel")
             await MainActor.run { SessionManager.shared.invalidateTokensForReauth() }
             return .serverRejected
         } else {
-            Log.info("🔑 Refresh failed (network error) — keeping tokens for retry when online", category: "GRPCChannel")
+            Log.info("Refresh failed (network error) — keeping tokens for retry when online", category: "GRPCChannel")
             return .networkOffline
         }
     }
@@ -307,7 +307,7 @@ final class GRPCCallExecutor: Sendable {
         let cm = GRPCChannelManager.shared
 
         if reason == .staleLocalProxy {
-            Log.info("🧊 ICE proxy port dead (ECONNREFUSED) — restarting proxy", category: "gRPC")
+            Log.info("ICE proxy port dead (ECONNREFUSED) — restarting proxy", category: "gRPC")
             _ = try? await ConnectionLoop.shared.prepare()
             if cm.iceProxyPort() != nil { return .retry }
             return .propagate

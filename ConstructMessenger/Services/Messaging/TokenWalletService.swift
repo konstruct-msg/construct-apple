@@ -43,7 +43,7 @@ final class TokenWalletService {
         existing.append(contentsOf: tokens.prefix(canAdd))
         saveTokens(existing)
         balance = existing.count
-        Log.info("🪙 TokenWallet: deposited \(canAdd) blind tokens (balance=\(balance))", category: "TokenWallet")
+        Log.info("TokenWallet: deposited \(canAdd) blind tokens (balance=\(balance))", category: "TokenWallet")
     }
 
     /// Consume one token. Returns the token bytes if successful, nil if wallet is empty.
@@ -51,7 +51,7 @@ final class TokenWalletService {
     func consumeToken() -> BlindToken? {
         var tokens = loadTokens()
         guard !tokens.isEmpty else {
-            Log.debug("🪙 TokenWallet: empty — cannot consume", category: "TokenWallet")
+            Log.debug("TokenWallet: empty — cannot consume", category: "TokenWallet")
             return nil
         }
         let token = tokens.removeFirst()

@@ -32,7 +32,7 @@ class MessagePersistenceService {
         suiteId: UInt16,
         in context: NSManagedObjectContext
     ) throws -> Bool {
-        Log.debug("💾 Saving message \(message.id), isSentByMe: \(isSentByMe), status: \(status)", category: "MessagePersistence")
+        Log.debug("Saving message \(message.id), isSentByMe: \(isSentByMe), status: \(status)", category: "MessagePersistence")
         
         let fetchRequest = Message.fetchRequest()
         let messagePredicate = NSPredicate(format: "id ==[c] %@", message.id)
@@ -42,7 +42,7 @@ class MessagePersistenceService {
         let isNewMessage: Bool
         
         if let existing = try? context.fetch(fetchRequest).first {
-            Log.debug("📝 Updating existing message \(message.id)", category: "MessagePersistence")
+            Log.debug("Updating existing message \(message.id)", category: "MessagePersistence")
             existing.deliveryStatus = status
             // Recover a previously undecryptable message: if the sender re-sent the same
             // message (same UUID) after a session heal, update the content so the "unavailable"
@@ -50,13 +50,13 @@ class MessagePersistenceService {
             if !existing.hasDecryptedContent, !decryptedContent.isEmpty {
                 let contactId = isSentByMe ? message.to : message.from
                 existing.applyStoredEncryption(plaintext: decryptedContent, contactId: contactId)
-                Log.info("✅ Recovered undecryptable message \(message.id.prefix(8))… — content now available", category: "MessagePersistence")
+                Log.info("Recovered undecryptable message \(message.id.prefix(8))… — content now available", category: "MessagePersistence")
                 // Update chat preview if this was the last message showing "unavailable"
                 try? updateChatMetadata(chat: chat, lastMessageText: decryptedContent, lastMessageTime: existing.timestamp, in: context)
             }
             isNewMessage = false
         } else {
-            Log.debug("✨ Creating new message \(message.id)", category: "MessagePersistence")
+            Log.debug("Creating new message \(message.id)", category: "MessagePersistence")
             let newMessage = Message(context: context)
             newMessage.id = message.id.lowercased()
             newMessage.fromUserId = message.from
@@ -100,7 +100,7 @@ class MessagePersistenceService {
             )
         }
         
-        Log.debug("✅ Message saved to Core Data", category: "MessagePersistence")
+        Log.debug("Message saved to Core Data", category: "MessagePersistence")
         return isNewMessage
     }
     
@@ -122,7 +122,7 @@ class MessagePersistenceService {
         fetchRequest.predicate = NSPredicate(format: "id ==[c] %@", messageId)
         fetchRequest.fetchLimit = 1
         guard let message = try? context.fetch(fetchRequest).first else {
-            Log.error("❌ Cannot find message to update content: \(messageId)", category: "MessagePersistence")
+            Log.error("Cannot find message to update content: \(messageId)", category: "MessagePersistence")
             return
         }
         let contactId = message.isSentByMe ? message.toUserId : message.fromUserId
@@ -186,7 +186,7 @@ class MessagePersistenceService {
         let preview = caption.isEmpty ? "📷 Photo" : caption
         try? updateChatMetadata(chat: chat, lastMessageText: preview, lastMessageTime: now, in: context)
 
-        Log.debug("📎 Saved upload placeholder \(id.prefix(8))…", category: "MessagePersistence")
+        Log.debug("Saved upload placeholder \(id.prefix(8))…", category: "MessagePersistence")
     }
 
     /// Save a voice-upload placeholder so the voice UI appears immediately while upload is in progress.
@@ -224,7 +224,7 @@ class MessagePersistenceService {
 
         try? updateChatMetadata(chat: chat, lastMessageText: "Voice message", lastMessageTime: now, in: context)
 
-        Log.debug("🎤 Saved voice upload placeholder \(id.prefix(8))…", category: "MessagePersistence")
+        Log.debug("Saved voice upload placeholder \(id.prefix(8))…", category: "MessagePersistence")
     }
 
     /// Delete a placeholder (or any) message by ID — used after upload succeeds so the
@@ -242,7 +242,7 @@ class MessagePersistenceService {
         guard let msg = try? context.fetch(req).first else { return }
         context.delete(msg)
         if autoSave { context.saveAndLog() }
-        Log.debug("🗑️ Deleted placeholder \(id.prefix(8))…", category: "MessagePersistence")
+        Log.debug("Deleted placeholder \(id.prefix(8))…", category: "MessagePersistence")
     }
 
     // MARK: - Update Status
@@ -257,7 +257,7 @@ class MessagePersistenceService {
         fetchRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [messagePredicate])
         
         guard let message = try? context.fetch(fetchRequest).first else {
-            Log.error("❌ Message not found: \(messageId)", category: "MessagePersistence")
+            Log.error("Message not found: \(messageId)", category: "MessagePersistence")
             return
         }
         
@@ -281,7 +281,7 @@ class MessagePersistenceService {
             MessageQueueManager.shared.markMessageAsFailed(messageId)
         }
         
-        Log.debug("✅ Updated message status to \(status) for \(messageId)", category: "MessagePersistence")
+        Log.debug("Updated message status to \(status) for \(messageId)", category: "MessagePersistence")
     }
     
     // MARK: - Chat Metadata
@@ -301,7 +301,7 @@ class MessagePersistenceService {
         // Only update if this message is newer than current last message
         if let currentLastTime = chat.lastMessageTime {
             guard lastMessageTime > currentLastTime else {
-                Log.debug("⏭️ Skipping chat metadata update - message is older", category: "MessagePersistence")
+                Log.debug("Skipping chat metadata update - message is older", category: "MessagePersistence")
                 return
             }
         }
@@ -310,7 +310,7 @@ class MessagePersistenceService {
         chat.lastMessageTime = lastMessageTime
         try context.save()
         
-        Log.debug("✅ Updated chat.lastMessageText and lastMessageTime", category: "MessagePersistence")
+        Log.debug("Updated chat.lastMessageText and lastMessageTime", category: "MessagePersistence")
     }
     
     // MARK: - Message Deletion
@@ -324,23 +324,23 @@ class MessagePersistenceService {
     func deleteMessage(_ message: Message, chat: Chat, in context: NSManagedObjectContext) throws {
         guard !message.isDeleted,
               message.managedObjectContext == context else {
-            Log.error("❌ Message is deleted or not in the correct context", category: "MessagePersistenceService")
+            Log.error("Message is deleted or not in the correct context", category: "MessagePersistenceService")
             throw NSError(domain: "MessagePersistence", code: 1, userInfo: [NSLocalizedDescriptionKey: "Invalid message"])
         }
         
         let messageId = message.id
-        Log.debug("🗑️ Deleting message: \(messageId)", category: "MessagePersistenceService")
+        Log.debug("Deleting message: \(messageId)", category: "MessagePersistenceService")
         
         context.delete(message)
         context.processPendingChanges()
         try context.save()
         
-        Log.info("✅ Message deleted from Core Data: \(messageId)", category: "MessagePersistenceService")
+        Log.info("Message deleted from Core Data: \(messageId)", category: "MessagePersistenceService")
         
         // Sync parent context if needed
         if let parent = context.parent {
             parent.performAndWait {
-                do { try parent.save() } catch { Log.error("⚠️ MessagePersistenceService: parent context save failed: \(error)", category: "Persistence") }
+                do { try parent.save() } catch { Log.error("MessagePersistenceService: parent context save failed: \(error)", category: "Persistence") }
             }
         }
         
@@ -357,18 +357,18 @@ class MessagePersistenceService {
     func deleteMessages(withIds messageIds: Set<String>, chat: Chat, in context: NSManagedObjectContext) throws {
         guard !messageIds.isEmpty else { return }
         
-        Log.debug("🗑️ Deleting \(messageIds.count) messages", category: "MessagePersistenceService")
+        Log.debug("Deleting \(messageIds.count) messages", category: "MessagePersistenceService")
         
         let fetchRequest = Message.fetchRequest()
         let idsPredicate = NSPredicate(format: "id IN %@", messageIds)
         fetchRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [idsPredicate])
         
         guard let messagesToDelete = try? context.fetch(fetchRequest) else {
-            Log.error("❌ Failed to fetch messages for deletion", category: "MessagePersistenceService")
+            Log.error("Failed to fetch messages for deletion", category: "MessagePersistenceService")
             throw NSError(domain: "MessagePersistence", code: 2, userInfo: [NSLocalizedDescriptionKey: "Failed to fetch messages"])
         }
         
-        Log.debug("🗑️ Found \(messagesToDelete.count) messages to delete", category: "MessagePersistenceService")
+        Log.debug("Found \(messagesToDelete.count) messages to delete", category: "MessagePersistenceService")
         
         for message in messagesToDelete {
             context.delete(message)
@@ -377,12 +377,12 @@ class MessagePersistenceService {
         context.processPendingChanges()
         try context.save()
         
-        Log.info("✅ \(messagesToDelete.count) messages deleted from Core Data", category: "MessagePersistenceService")
+        Log.info("\(messagesToDelete.count) messages deleted from Core Data", category: "MessagePersistenceService")
         
         // Sync parent context if needed
         if let parent = context.parent {
             parent.performAndWait {
-                do { try parent.save() } catch { Log.error("⚠️ MessagePersistenceService: parent context save failed: \(error)", category: "Persistence") }
+                do { try parent.save() } catch { Log.error("MessagePersistenceService: parent context save failed: \(error)", category: "Persistence") }
             }
         }
         
@@ -416,7 +416,7 @@ class MessagePersistenceService {
         }
         
         try context.save()
-        Log.debug("✅ Updated chat metadata after deletion", category: "MessagePersistence")
+        Log.debug("Updated chat metadata after deletion", category: "MessagePersistence")
     }
 
     // MARK: - Private Helpers

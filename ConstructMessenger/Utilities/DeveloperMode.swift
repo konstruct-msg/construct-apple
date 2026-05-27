@@ -20,7 +20,7 @@ class DeveloperMode {
     private(set) var isEnabled: Bool {
         didSet {
             UserDefaults.standard.set(isEnabled, forKey: "developerModeEnabled")
-            Log.info("🔧 Developer Mode: \(isEnabled ? "ENABLED" : "DISABLED")")
+            Log.info("Developer Mode: \(isEnabled ? "ENABLED" : "DISABLED")")
         }
     }
     
@@ -33,10 +33,10 @@ class DeveloperMode {
     private let tapTimeout: TimeInterval = 5.0 // Increased to 5 seconds
     
     private init() {
-        // ✅ TEMPORARY: Always enable for QR debugging
+        // TEMPORARY: Always enable for QR debugging
         self.isEnabled = true
         UserDefaults.standard.set(true, forKey: "developerModeEnabled")
-        Log.info("🔧 Developer Mode: FORCE ENABLED for debugging")
+        Log.info("Developer Mode: FORCE ENABLED for debugging")
     }
     
     // MARK: - Public API

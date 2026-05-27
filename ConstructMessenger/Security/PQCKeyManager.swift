@@ -64,7 +64,7 @@ final class PQCKeyManager {
             throw PQCError.keychainSaveFailed
         }
 
-        Log.info("🔐 PQC: Generated ML-KEM-768 Kyber SPK, keyId=\(keyId), pk=\(pubKeyData.count)B", category: "PQC")
+        Log.info("PQC: Generated ML-KEM-768 Kyber SPK, keyId=\(keyId), pk=\(pubKeyData.count)B", category: "PQC")
         return (publicKey: pubKeyData, keyId: keyId)
     }
 
@@ -94,7 +94,7 @@ final class PQCKeyManager {
               KeychainManager.shared.saveData(Data(withUInt32: keyId), forKey: kyberSPKIdKey) else {
             throw PQCError.keychainSaveFailed
         }
-        Log.info("🔐 PQC: Committed rotated Kyber SPK to Keychain, keyId=\(keyId)", category: "PQC")
+        Log.info("PQC: Committed rotated Kyber SPK to Keychain, keyId=\(keyId)", category: "PQC")
     }
 
     // MARK: - Retrieval
@@ -151,14 +151,14 @@ final class PQCKeyManager {
                 kyberSignedPreKey: (keyId: spkId, publicKey: spkPublicKey, signature: spkSig)
             )
             UserDefaults.standard.set(true, forKey: migrationDoneKey)
-            Log.info("✅ PQC: Kyber SPK migration complete", category: "PQC")
+            Log.info("PQC: Kyber SPK migration complete", category: "PQC")
             return
         } catch {
             guard let rpcError = error as? RPCError, rpcError.code == .unavailable else {
-                Log.error("⚠️ PQC: Kyber SPK migration failed (will retry next launch): \(error)", category: "PQC")
+                Log.error("PQC: Kyber SPK migration failed (will retry next launch): \(error)", category: "PQC")
                 return
             }
-            Log.info("⚠️ PQC: Kyber SPK upload unavailable — will retry (key already in Keychain)", category: "PQC")
+            Log.info("PQC: Kyber SPK upload unavailable — will retry (key already in Keychain)", category: "PQC")
         }
 
         // Attempts 1-2: key is already stored, retry upload with fresh OTPKs
@@ -177,11 +177,11 @@ final class PQCKeyManager {
                     kyberSignedPreKey: (keyId: spkId, publicKey: spkPublicKey, signature: spkSig)
                 )
                 UserDefaults.standard.set(true, forKey: migrationDoneKey)
-                Log.info("✅ PQC: Kyber SPK migration complete (retry \(attempt))", category: "PQC")
+                Log.info("PQC: Kyber SPK migration complete (retry \(attempt))", category: "PQC")
                 return
             } catch {
                 if attempt == 2 {
-                    Log.error("⚠️ PQC: Kyber SPK migration failed after retries (will retry next launch): \(error)", category: "PQC")
+                    Log.error("PQC: Kyber SPK migration failed after retries (will retry next launch): \(error)", category: "PQC")
                 }
             }
         }
@@ -205,7 +205,7 @@ final class PQCKeyManager {
             deviceId: deviceId,
             kyberSignedPreKey: (keyId: keyId, publicKey: publicKey, signature: sigData)
         )
-        Log.info("🔐 PQC: Kyber SPK uploaded (keyId=\(keyId), pk=\(publicKey.count)B)", category: "PQC")
+        Log.info("PQC: Kyber SPK uploaded (keyId=\(keyId), pk=\(publicKey.count)B)", category: "PQC")
     }
 
     // MARK: - Kyber Key Signing
@@ -265,7 +265,7 @@ final class PQCKeyManager {
             let kp = try mlkem768Keygen()
             let pubKeyData = Data(kp.publicKey)
             guard KeychainManager.shared.saveData(Data(kp.secretKey), forKey: otpkKeychainKey(keyId)) else {
-                Log.error("⚠️ PQC: failed to save Kyber OTPK secret keyId=\(keyId)", category: "PQC")
+                Log.error("PQC: failed to save Kyber OTPK secret keyId=\(keyId)", category: "PQC")
                 continue
             }
             let sigData = try signKyberKey(publicKey: pubKeyData)
@@ -277,7 +277,7 @@ final class PQCKeyManager {
             kyberSignedPreKey: kyberSignedPreKey,
             kyberOneTimePreKeys: uploadBatch
         )
-        Log.info("✅ PQC: Uploaded \(uploadBatch.count) Kyber OTPKs, server count=\(kyberCount)", category: "PQC")
+        Log.info("PQC: Uploaded \(uploadBatch.count) Kyber OTPKs, server count=\(kyberCount)", category: "PQC")
         return kyberCount
     }
 
@@ -305,7 +305,7 @@ final class PQCKeyManager {
                 forKey: "construct.pq_deferred.\(contactId)"
             )
         }
-        Log.info("🔐 PQC: PQXDH encapsulated for \(contactId.prefix(8))..., ct=\(encapsulation.ciphertext.count)B (deferred + persisted)", category: "PQC")
+        Log.info("PQC: PQXDH encapsulated for \(contactId.prefix(8))..., ct=\(encapsulation.ciphertext.count)B (deferred + persisted)", category: "PQC")
         return Data(encapsulation.ciphertext)
     }
 
@@ -318,7 +318,7 @@ final class PQCKeyManager {
         var ss = rustContributions.takeDeferred(contactId: contactId)
         if ss == nil, let persisted = KeychainManager.shared.loadData(forKey: key) {
             ss = [UInt8](persisted)
-            Log.info("🔐 PQC: Deferred PQXDH recovered from Keychain for \(contactId.prefix(8))…", category: "PQC")
+            Log.info("PQC: Deferred PQXDH recovered from Keychain for \(contactId.prefix(8))…", category: "PQC")
         }
         guard let sharedSecret = ss else { return }
         // Delete per-entry Keychain backup regardless — contribution is consumed exactly once.
@@ -326,7 +326,7 @@ final class PQCKeyManager {
         try CryptoManager.shared.applyPqContribution(contactId: contactId, kemSharedSecret: sharedSecret)
         // Persist updated CFE snapshot after contribution is consumed.
         CryptoManager.shared.savePQCSnapshot()
-        Log.info("🔐 PQC: Deferred PQXDH applied for \(contactId.prefix(8))...", category: "PQC")
+        Log.info("PQC: Deferred PQXDH applied for \(contactId.prefix(8))...", category: "PQC")
     }
 
     /// Discard any pending PQ contribution (e.g., when kem cannot be included in the message).
@@ -356,9 +356,9 @@ final class PQCKeyManager {
               !data.isEmpty else { return }
         do {
             try core.importKyberSessionState(data: [UInt8](data))
-            Log.info("🔐 PQC: Kyber session state restored from CFE snapshot (\(data.count)B)", category: "PQC")
+            Log.info("PQC: Kyber session state restored from CFE snapshot (\(data.count)B)", category: "PQC")
         } catch {
-            Log.error("⚠️ PQC: Failed to restore Kyber session state: \(error)", category: "PQC")
+            Log.error("PQC: Failed to restore Kyber session state: \(error)", category: "PQC")
         }
     }
 
@@ -383,7 +383,7 @@ final class PQCKeyManager {
             ciphertext: [UInt8](kemCiphertext)
         )
         try CryptoManager.shared.applyPqContribution(contactId: contactId, kemSharedSecret: sharedSecret)
-        Log.info("🔐 PQC: PQXDH decapsulated for \(contactId.prefix(8))...", category: "PQC")
+        Log.info("PQC: PQXDH decapsulated for \(contactId.prefix(8))...", category: "PQC")
     }
 }
 

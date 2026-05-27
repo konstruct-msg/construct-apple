@@ -74,7 +74,7 @@ final class CallSignalCrypto {
         } else if value.hasPrefix(Self.v1Prefix) {
             return try decryptV1(String(value.dropFirst(Self.v1Prefix.count)), from: peerUserId)
         } else {
-            Log.info("📞 Received unencrypted signal field from \(peerUserId.prefix(8))… — legacy or plaintext mode", category: "Calls")
+            Log.info("Received unencrypted signal field from \(peerUserId.prefix(8))… — legacy or plaintext mode", category: "Calls")
             return value
         }
     }

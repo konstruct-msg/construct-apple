@@ -60,10 +60,10 @@ struct NewChatView: View {
     }
 
     private func handleScannedContact(_ urlString: String) {
-        Log.info("🔍 NewChatView: Handling scanned URL: \(urlString)", category: "NewChatView")
+        Log.info("NewChatView: Handling scanned URL: \(urlString)", category: "NewChatView")
 
         guard let url = URL(string: urlString) else {
-            Log.error("❌ Invalid URL string: \(urlString)", category: "NewChatView")
+            Log.error("Invalid URL string: \(urlString)", category: "NewChatView")
             showErrorAfterDismiss(NSLocalizedString("invalid_qr_code_construct", comment: "Error message for invalid QR code"))
             return
         }
@@ -71,7 +71,7 @@ struct NewChatView: View {
         Task {
             do {
                 let contactInfo = try await LinkParser.parseContactLink(url)
-                Log.info("✅ Parsed contact: userId=\(contactInfo.userId), username=\(contactInfo.username), isDynamic=\(contactInfo.isDynamic)", category: "NewChatView")
+                Log.info("Parsed contact: userId=\(contactInfo.userId), username=\(contactInfo.username), isDynamic=\(contactInfo.isDynamic)", category: "NewChatView")
                 
                 await MainActor.run {
                     addContact(contactInfo: contactInfo)
@@ -79,7 +79,7 @@ struct NewChatView: View {
                     dismiss()
                 }
             } catch {
-                Log.error("❌ Failed to parse contact link: \(error.localizedDescription)", category: "NewChatView")
+                Log.error("Failed to parse contact link: \(error.localizedDescription)", category: "NewChatView")
                 await MainActor.run {
                     showErrorAfterDismiss(error.localizedDescription)
                     showingQRScanner = false
@@ -91,7 +91,7 @@ struct NewChatView: View {
     private func addContact(contactInfo: ContactInfo) {
         let userId = contactInfo.userId
         let username = contactInfo.username
-        Log.info("📱 NewChatView: Adding contact userId=\(userId), username=\(username)", category: "NewChatView")
+        Log.info("NewChatView: Adding contact userId=\(userId), username=\(username)", category: "NewChatView")
 
         let publicUserInfo = PublicUserInfo(
             id: userId,
@@ -101,9 +101,9 @@ struct NewChatView: View {
             deviceId: contactInfo.deviceId
         )
         if let chat = chatsViewModel.startChat(with: publicUserInfo) {
-            Log.info("✅ NewChatView: Chat created with @\(username), chat.id=\(chat.id)", category: "NewChatView")
+            Log.info("NewChatView: Chat created with @\(username), chat.id=\(chat.id)", category: "NewChatView")
         } else {
-            Log.error("❌ NewChatView: Failed to create chat with @\(username)", category: "NewChatView")
+            Log.error("NewChatView: Failed to create chat with @\(username)", category: "NewChatView")
         }
     }
 

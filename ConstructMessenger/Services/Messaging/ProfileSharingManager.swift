@@ -27,12 +27,12 @@ class ProfileSharingManager {
     /// - Returns: ProfileShareData if valid profile message, nil otherwise
     func parseProfileMessage(_ content: String) -> ProfileShareData? {
         guard let data = content.data(using: .utf8) else {
-            Log.debug("❌ parseProfileMessage: Failed to convert content to data", category: "ProfileSharingManager")
+            Log.debug("parseProfileMessage: Failed to convert content to data", category: "ProfileSharingManager")
             return nil
         }
         
         // Debug: Log the content being parsed
-        Log.debug("📥 Attempting to parse profile message, content length: \(content.count)", category: "ProfileSharingManager")
+        Log.debug("Attempting to parse profile message, content length: \(content.count)", category: "ProfileSharingManager")
         Log.debug("   Content preview: \(content.prefix(200))", category: "ProfileSharingManager")
         
         // First, try to parse as generic JSON to check if it looks like a profile message
@@ -42,17 +42,17 @@ class ProfileSharingManager {
             // It's a profile message, try to decode it properly
             do {
                 let json = try JSONDecoder().decode(ProfileShareData.self, from: data)
-                Log.info("✅ Successfully parsed profile message: displayName=\(json.displayName), avatarMediaId=\(json.avatarMediaId ?? "nil"), avatarData=\(json.avatarData != nil ? "present" : "nil")", category: "ProfileSharingManager")
+                Log.info("Successfully parsed profile message: displayName=\(json.displayName), avatarMediaId=\(json.avatarMediaId ?? "nil"), avatarData=\(json.avatarData != nil ? "present" : "nil")", category: "ProfileSharingManager")
                 return json
             } catch {
-                Log.error("❌ parseProfileMessage: Failed to decode ProfileShareData: \(error)", category: "ProfileSharingManager")
+                Log.error("parseProfileMessage: Failed to decode ProfileShareData: \(error)", category: "ProfileSharingManager")
                 // Even if decoding fails, we know it's a profile message, so return nil to prevent it from being saved as regular message
                 return nil
             }
         }
         
         // Not a profile message
-        Log.debug("❌ parseProfileMessage: Content is not a profile message", category: "ProfileSharingManager")
+        Log.debug("parseProfileMessage: Content is not a profile message", category: "ProfileSharingManager")
         return nil
     }
     
@@ -74,7 +74,7 @@ class ProfileSharingManager {
         userFetchRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [userIdPredicate])
         
         guard let user = try? context.fetch(userFetchRequest).first else {
-            Log.error("❌ User not found for profile update: \(userId)", category: "ProfileSharingManager")
+            Log.error("User not found for profile update: \(userId)", category: "ProfileSharingManager")
             return
         }
         
@@ -93,7 +93,7 @@ class ProfileSharingManager {
             let userObjectID = user.objectID
             Task {
                 do {
-                    Log.info("📥 Downloading avatar from Media Upload API: \(avatarMediaId)", category: "ProfileSharingManager")
+                    Log.info("Downloading avatar from Media Upload API: \(avatarMediaId)", category: "ProfileSharingManager")
 
                     let decryptedData = try await MediaManager.shared.downloadAndDecryptAvatar(
                         mediaId: avatarMediaId,
@@ -110,13 +110,13 @@ class ProfileSharingManager {
 
                         do {
                             try viewContext.save()
-                            Log.info("✅ Avatar downloaded and saved for user \(userId)", category: "ProfileSharingManager")
+                            Log.info("Avatar downloaded and saved for user \(userId)", category: "ProfileSharingManager")
                         } catch {
-                            Log.error("❌ Failed to save avatar: \(error)", category: "ProfileSharingManager")
+                            Log.error("Failed to save avatar: \(error)", category: "ProfileSharingManager")
                         }
                     }
                 } catch {
-                    Log.error("❌ Failed to download avatar: \(error.localizedDescription)", category: "ProfileSharingManager")
+                    Log.error("Failed to download avatar: \(error.localizedDescription)", category: "ProfileSharingManager")
                 }
             }
         } else if let avatarBase64 = profileData.avatarData,
@@ -133,9 +133,9 @@ class ProfileSharingManager {
         
         do {
             try context.save()
-            Log.info("✅ Profile data updated for user \(userId): displayName=\(profileData.displayName)", category: "ProfileSharingManager")
+            Log.info("Profile data updated for user \(userId): displayName=\(profileData.displayName)", category: "ProfileSharingManager")
         } catch {
-            Log.error("❌ Failed to save profile data: \(error)", category: "ProfileSharingManager")
+            Log.error("Failed to save profile data: \(error)", category: "ProfileSharingManager")
         }
     }
     
