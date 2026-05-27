@@ -51,9 +51,10 @@ actor ConnectionLoop {
     init(relays: [IceRelay], proxy: IceProxy = IceProxy(), blockedPenalty: [String: Int] = [:]) {
         self.pool = RelayPool(relays: relays, blockedPenalty: blockedPenalty)
         self.proxy = proxy
-        if CensoredNetworkDetector.isCensored || IceProxyStore.loadMode() == .on {
+        let mode = IceProxyStore.loadMode()
+        if mode == .on || (mode != .off && CensoredNetworkDetector.isCensored) {
             directFails = Self.directFailThreshold
-            Log.info("ConnectionLoop: ICE pre-activated (censored=\(CensoredNetworkDetector.isCensored) mode=\(IceProxyStore.loadMode()))", category: "ICE")
+            Log.info("ConnectionLoop: ICE pre-activated (censored=\(CensoredNetworkDetector.isCensored) mode=\(mode))", category: "ICE")
         }
     }
 
@@ -67,10 +68,15 @@ actor ConnectionLoop {
     /// Returns the ICE proxy port, or `nil` for direct routing.
     @discardableResult
     func prepare() async throws -> UInt16? {
-        // In mode=.on ICE is mandatory regardless of directFails. This ensures that after
-        // a clean stream end (recordSuccess resets directFails=0), the next attempt still
-        // routes through ICE rather than briefly falling through to the direct path.
-        let iceRequired = shouldUseICE || IceProxyStore.loadMode() == .on
+        // mode=.off is an explicit user override — skip ICE regardless of carrier detection
+        // or directFails. mode=.on forces ICE even after recordSuccess resets directFails=0.
+        let mode = IceProxyStore.loadMode()
+        guard mode != .off else {
+            GRPCChannelManager.shared.setDirectProxyPort(nil)
+            await MainActor.run { IceProxyManager.shared.updateICEProxyState(isRunning: false, port: 0, relay: nil, isWebTunnel: false) }
+            return nil
+        }
+        let iceRequired = shouldUseICE || mode == .on
         guard iceRequired, !pool.isEmpty else {
             GRPCChannelManager.shared.setDirectProxyPort(nil)
             await MainActor.run { IceProxyManager.shared.updateICEProxyState(isRunning: false, port: 0, relay: nil, isWebTunnel: false) }
@@ -194,7 +200,9 @@ actor ConnectionLoop {
     /// Resets all state on a network path change (cellular↔WiFi, VPN on/off).
     /// The new network may or may not need ICE — restart from scratch.
     func reset() async {
-        directFails = (CensoredNetworkDetector.isCensored || IceProxyStore.loadMode() == .on) ? Self.directFailThreshold : 0
+        let mode = IceProxyStore.loadMode()
+        // Invalidate cached GeoIP result — the new network path may be different (VPN on/off etc.)
+        directFails = (mode == .on || (mode != .off && CensoredNetworkDetector.isCensored)) ? Self.directFailThreshold : 0
         consecutiveIceFails = 0
         pool.resetFailures()
         await proxy.stop()
