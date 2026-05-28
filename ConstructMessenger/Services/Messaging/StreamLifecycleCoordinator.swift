@@ -109,13 +109,16 @@ final class StreamLifecycleCoordinator {
             Log.debug("startMessageStream — skipping empty ids (would clear \(streamManager.subscriptionUserIds.count) active subscriptions)", category: "StreamLifecycle")
             return
         }
-        wireStreamCallbacks()
-        streamManager.connect(contactUserIds: ids) { [weak self] message in
-            self?.handleIncomingMessage(message)
-        }
         if EngineAdapter.isSupported {
+            // On Desktop the engine owns the stream — iOS gRPC stack is inactive.
             EngineAdapter.shared.dispatch(.openMessageStream(conversationIds: ids, sinceCursor: nil))
+        } else {
+            wireStreamCallbacks()
+            streamManager.connect(contactUserIds: ids) { [weak self] message in
+                self?.handleIncomingMessage(message)
+            }
         }
+        #if !os(macOS)
         if !hasPerformedStartupOtpkCheck {
             hasPerformedStartupOtpkCheck = true
             Task { [weak self] in
@@ -138,6 +141,7 @@ final class StreamLifecycleCoordinator {
                 AvatarRetryService.shared.retryPendingAvatarsIfNeeded()
             }
         }
+        #endif
     }
 
     func stopMessageStream() {
@@ -145,7 +149,7 @@ final class StreamLifecycleCoordinator {
     }
 
     func forceReconnect() {
-        guard SessionManager.shared.sessionToken != nil else {
+        guard AuthSessionManager.shared.sessionToken != nil else {
             Log.debug("No session — skipping forceReconnect", category: "StreamLifecycle")
             return
         }
@@ -153,14 +157,15 @@ final class StreamLifecycleCoordinator {
         reconnectDebounceTask = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(300))
             guard !Task.isCancelled, let self else { return }
-            self.wireStreamCallbacks()
-            self.streamManager.forceReconnect(contactUserIds: self.currentConversationIds()) { [weak self] message in
-                self?.handleIncomingMessage(message)
-            }
-            self.sessionCoordinator.prewarmSessions(for: self.prewarmEligibleContactIds())
             if EngineAdapter.isSupported {
                 let conversationIds = self.currentConversationIds()
                 EngineAdapter.shared.dispatch(.openMessageStream(conversationIds: conversationIds, sinceCursor: nil))
+            } else {
+                self.wireStreamCallbacks()
+                self.streamManager.forceReconnect(contactUserIds: self.currentConversationIds()) { [weak self] message in
+                    self?.handleIncomingMessage(message)
+                }
+                self.sessionCoordinator.prewarmSessions(for: self.prewarmEligibleContactIds())
             }
         }
     }
@@ -174,7 +179,7 @@ final class StreamLifecycleCoordinator {
                 guard let self else { return }
                 await withCheckedContinuation { continuation in
                     withObservationTracking {
-                        _ = SessionManager.shared.sessionToken
+                        _ = AuthSessionManager.shared.sessionToken
                         _ = self.connectionStatusManager.connectionStatus
                         #if canImport(UIKit)
                         _ = PushNotificationManager.shared.isPushEnabled
@@ -185,7 +190,7 @@ final class StreamLifecycleCoordinator {
                 }
                 await Task.yield()
                 let settled = PollingState(
-                    hasToken: SessionManager.shared.sessionToken != nil,
+                    hasToken: AuthSessionManager.shared.sessionToken != nil,
                     status: self.connectionStatusManager.connectionStatus,
                     pushEnabled: {
                         #if canImport(UIKit)
@@ -208,6 +213,7 @@ final class StreamLifecycleCoordinator {
         let didJustConnect = lastPolledStatus != .connected && state.status == .connected
         lastPolledStatus = state.status
 
+        #if !os(macOS)
         if didJustConnect && PreKeyRotationService.shared.hasPendingRetry {
             Task {
                 let deviceId = KeychainManager.shared.loadDeviceID() ?? ""
@@ -216,6 +222,7 @@ final class StreamLifecycleCoordinator {
                 await PreKeyRotationService.shared.rotateIfNeeded(deviceId: deviceId)
             }
         }
+        #endif
 
         if state.hasToken && state.status != ConnectionStatusManager.ConnectionStatus.disconnected {
             if state.pushEnabled {
@@ -288,7 +295,7 @@ final class StreamLifecycleCoordinator {
                 if self.streamManager.isConnected {
                     Log.info("App became active — stream still alive, skipping reconnect", category: "StreamLifecycle")
                 } else if self.streamManager.isActivelyConnecting {
-                    Log.info("App became active — ICE failover in progress, skipping forceReconnect", category: "StreamLifecycle")
+                    Log.info("App became active — stream is connecting, skipping forceReconnect", category: "StreamLifecycle")
                 } else {
                     Log.info("App became active — stream is down, reconnecting", category: "StreamLifecycle")
                     self.forceReconnect()
@@ -392,17 +399,19 @@ final class StreamLifecycleCoordinator {
     // MARK: - Key health
 
     private func checkKeyHealthInBackground() async {
+        #if !os(macOS)
         let now = Date().timeIntervalSince1970
         guard now - lastForegroundKeyCheckAt >= Self.foregroundKeyCheckCooldownSeconds else {
             Log.debug("Key health check skipped — cooldown active", category: "OTPK")
             return
         }
-        guard SessionManager.shared.sessionToken != nil else { return }
+        guard AuthSessionManager.shared.sessionToken != nil else { return }
         let deviceId = KeychainManager.shared.loadDeviceID() ?? ""
         guard !deviceId.isEmpty else { return }
         lastForegroundKeyCheckAt = now
         await OtpkReplenishmentService.replenishIfNeeded(deviceId: deviceId)
         await PreKeyRotationService.shared.rotateIfNeeded(deviceId: deviceId)
+        #endif
     }
 
     // MARK: - Contact helpers
@@ -410,7 +419,7 @@ final class StreamLifecycleCoordinator {
     private func currentContactIds() -> [String] {
         guard let context = viewContext else { return Array(ephemeralSubscriptionUserIds) }
         let fetchRequest = User.fetchRequest()
-        fetchRequest.predicate = NSPredicate(format: "id != %@", SessionManager.shared.currentUserId ?? "")
+        fetchRequest.predicate = NSPredicate(format: "id != %@", AuthSessionManager.shared.currentUserId ?? "")
         let users = (try? context.fetch(fetchRequest)) ?? []
         let coreDataIds = Set(users.compactMap { $0.id })
         return Array(coreDataIds.union(ephemeralSubscriptionUserIds)).sorted()
@@ -418,7 +427,7 @@ final class StreamLifecycleCoordinator {
 
     private func prewarmEligibleContactIds() -> [String] {
         guard let context = viewContext else { return [] }
-        let myId = SessionManager.shared.currentUserId ?? ""
+        let myId = AuthSessionManager.shared.currentUserId ?? ""
         guard !myId.isEmpty else { return [] }
         let fetchRequest = Chat.fetchRequest()
         fetchRequest.predicate = NSPredicate(format: "lastMessageTime != nil AND otherUser.id != %@", myId)
@@ -427,7 +436,7 @@ final class StreamLifecycleCoordinator {
     }
 
     private func currentConversationIds() -> [String] {
-        let myId = SessionManager.shared.currentUserId ?? ""
+        let myId = AuthSessionManager.shared.currentUserId ?? ""
         return currentContactIds().map { ConversationId.direct(myUserId: myId, theirUserId: $0) }
     }
 

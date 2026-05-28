@@ -209,7 +209,7 @@ final class MultiDeviceSendCoordinator {
                 contentType: contentType
             )
 
-            CryptoManager.shared.saveSessionToKeychainPublic(for: contactId)
+            CryptoManager.shared.saveSessionToKeychain(for: contactId)
             Log.info(
                 "MultiDevice[\(contentType == .senderSync ? "sync" : "fanout")]: sent to \(contactId.prefix(20))…",
                 category: "MultiDevice"
@@ -229,8 +229,8 @@ final class MultiDeviceSendCoordinator {
     /// Each device receiving this notification should independently trigger a heal with the contact.
     /// Failures are non-fatal — best-effort delivery.
     func broadcastSessionReset(contactId: String) async {
-        guard let myId = SessionManager.shared.currentUserId, !myId.isEmpty else { return }
-        guard let myDeviceId = SessionManager.shared.currentDeviceId, !myDeviceId.isEmpty else { return }
+        guard let myId = AuthSessionManager.shared.currentUserId, !myId.isEmpty else { return }
+        guard let myDeviceId = AuthSessionManager.shared.currentDeviceId, !myDeviceId.isEmpty else { return }
         let ownDevices: [DeviceBundleData]
         do {
             ownDevices = try await fetchOwnOtherDevices(myUserId: myId, myDeviceId: myDeviceId)

@@ -40,7 +40,7 @@ class ChatManagementService {
             return nil 
         }
 
-        if user.id == SessionManager.shared.currentUserId {
+        if user.id == AuthSessionManager.shared.currentUserId {
             Log.info("Self-chat detected — use Drafts instead", category: "ChatManagementService")
             return nil
         }

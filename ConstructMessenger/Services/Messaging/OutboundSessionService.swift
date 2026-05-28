@@ -128,7 +128,7 @@ final class OutboundSessionService {
     /// Sends an encrypted heartbeat to `contactId` (content_type=13).
     /// A decrypt failure on the peer side triggers proactive session healing.
     func sendSessionHeartbeat(to contactId: String) async {
-        guard let myId = SessionManager.shared.currentUserId, !myId.isEmpty else { return }
+        guard let myId = AuthSessionManager.shared.currentUserId, !myId.isEmpty else { return }
         guard CryptoManager.shared.hasSession(for: contactId) else {
             Log.debug("Heartbeat skip for \(contactId.prefix(8))… — no active session", category: "OutboundSession")
             return
@@ -162,7 +162,7 @@ final class OutboundSessionService {
         to contactId: String,
         recipientIdentityKey: Data? = nil
     ) async {
-        guard let myId = SessionManager.shared.currentUserId, !myId.isEmpty else { return }
+        guard let myId = AuthSessionManager.shared.currentUserId, !myId.isEmpty else { return }
         guard CryptoManager.shared.hasSession(for: contactId) else {
             Log.debug("E2E receipt skip — no session for \(contactId.prefix(8))…", category: "OutboundSession")
             return
@@ -245,7 +245,7 @@ final class OutboundSessionService {
             }
         } else if key.hasPrefix("archive_") {
             let contactId = String(key.dropFirst("archive_".count))
-            CryptoManager.shared.acceptRustSessionArchive(contactId: contactId, archiveBytes: rawBytes)
+            CryptoManager.shared.acceptSessionTerminated(contactId: contactId, archiveBytes: Data(rawBytes))
             CryptoManager.shared.saveOrchestratorStateCFE()
         } else if key.hasPrefix("pq_deferred_") {
             let storageKey = "construct.pq_deferred.\(String(key.dropFirst("pq_deferred_".count)))"

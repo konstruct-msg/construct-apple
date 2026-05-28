@@ -106,7 +106,7 @@ final class ChatSendCoordinator {
             Log.error("No recipient ID", category: "ChatViewModel")
             return
         }
-        guard let currentUserId = SessionManager.shared.currentUserId else {
+        guard let currentUserId = AuthSessionManager.shared.currentUserId else {
             Log.error("No current user ID", category: "ChatViewModel")
             return
         }
@@ -225,7 +225,7 @@ final class ChatSendCoordinator {
 
     func sendQueuedMessages() {
         guard let recipientId = chat.otherUser?.id,
-              let currentUserId = SessionManager.shared.currentUserId else { return }
+              let currentUserId = AuthSessionManager.shared.currentUserId else { return }
         retryManager.sendQueuedMessages(
             for: chat,
             recipientId: recipientId,
@@ -247,7 +247,7 @@ final class ChatSendCoordinator {
     private func failQueuedMessages(reason: String) {
         Log.error("Failing \(queuedMessages.count) queued messages: \(reason)", category: "ChatViewModel")
         guard !queuedMessages.isEmpty else { return }
-        guard let currentUserId = SessionManager.shared.currentUserId,
+        guard let currentUserId = AuthSessionManager.shared.currentUserId,
               let recipientId = chat.otherUser?.id else {
             queuedMessages.removeAll()
             return
@@ -277,7 +277,7 @@ final class ChatSendCoordinator {
         localThumbnails: [Data] = []
     ) {
         guard let recipientId = chat.otherUser?.id,
-              let currentUserId = SessionManager.shared.currentUserId else {
+              let currentUserId = AuthSessionManager.shared.currentUserId else {
             viewModel?.isSending = false
             return
         }
@@ -363,7 +363,7 @@ final class ChatSendCoordinator {
                             : nil
                     )
                     TrafficProtectionService.shared.recordRealMessageSent()
-                    if let myDeviceId = SessionManager.shared.currentDeviceId, !myDeviceId.isEmpty {
+                    if let myDeviceId = AuthSessionManager.shared.currentDeviceId, !myDeviceId.isEmpty {
                         Task { [weak self] in
                             _ = self
                             await MultiDeviceSendCoordinator.shared.sendSenderSync(
@@ -494,7 +494,7 @@ final class ChatSendCoordinator {
         replyToContentOverride: String? = nil
     ) {
         guard let recipientId = chat.otherUser?.id,
-              let currentUserId = SessionManager.shared.currentUserId else {
+              let currentUserId = AuthSessionManager.shared.currentUserId else {
             Log.error("No recipient/user ID for media message", category: "ChatViewModel")
             ErrorRouter.shared.report(.unknown("Cannot send media: no recipient"))
             return
@@ -541,7 +541,7 @@ final class ChatSendCoordinator {
 
     func sendVoiceMessage(url: URL, duration: TimeInterval, waveform: [Float]) {
         guard let recipientId = chat.otherUser?.id,
-              let currentUserId = SessionManager.shared.currentUserId else {
+              let currentUserId = AuthSessionManager.shared.currentUserId else {
             Log.error("No recipient/user ID for voice message", category: "ChatViewModel")
             return
         }
@@ -583,7 +583,7 @@ final class ChatSendCoordinator {
         replyToContentOverride: String? = nil
     ) {
         guard let recipientId = chat.otherUser?.id,
-              let currentUserId = SessionManager.shared.currentUserId else {
+              let currentUserId = AuthSessionManager.shared.currentUserId else {
             viewModel?.isSending = false
             return
         }
@@ -629,7 +629,7 @@ final class ChatSendCoordinator {
 
     func editMessage(_ message: Message, newText: String, editingBinding: @escaping () -> Void) {
         guard let recipientId = chat.otherUser?.id,
-              let currentUserId = SessionManager.shared.currentUserId else { return }
+              let currentUserId = AuthSessionManager.shared.currentUserId else { return }
         let conversationId = ConversationId.direct(myUserId: currentUserId, theirUserId: recipientId)
         Task { [weak self] in
             guard let self else { return }

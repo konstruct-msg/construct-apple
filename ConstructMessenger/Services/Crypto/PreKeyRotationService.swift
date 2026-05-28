@@ -265,6 +265,49 @@ final class PreKeyRotationService {
         UserDefaults.standard.set(now, forKey: Self.lastRotationKey)
         UserDefaults.standard.set(now, forKey: Self.spkUploadKey)
     }
+
+    // MARK: - Server consistency
+
+    /// Compare local public keys with what the server serves.
+    /// Returns `true` if keys match, `false` if a desync was detected (and repaired if possible).
+    @discardableResult
+    func verifyAndRepairKeyConsistency() async -> Bool {
+        guard let localUserId = await AuthSessionManager.shared.currentUserId, !localUserId.isEmpty else {
+            Log.error("Key consistency check skipped — userId unavailable", category: "SPKRotation")
+            return true
+        }
+        do {
+            let (localIk, localSpk) = try CryptoManager.shared.localBundlePublicKeys()
+            let serverBundle = try await KeyServiceClient.shared.getPreKeyBundle(userId: localUserId)
+
+            let ikMatch  = localIk  == serverBundle.identityPublic
+            let spkMatch = localSpk == serverBundle.signedPrekeyPublic
+
+            if ikMatch && spkMatch {
+                Log.info("Key consistency: identity and SPK match server", category: "SPKRotation")
+                return true
+            }
+
+            func hexPrefix(_ d: Data) -> String { d.prefix(8).map { String(format: "%02x", $0) }.joined() }
+
+            if !ikMatch {
+                Log.error("KEY DESYNC: identity_public LOCAL=\(hexPrefix(localIk))… SERVER=\(hexPrefix(serverBundle.identityPublic))…", category: "SPKRotation")
+            }
+            if !spkMatch {
+                Log.error("KEY DESYNC: signed_prekey LOCAL=\(hexPrefix(localSpk))… SERVER=\(hexPrefix(serverBundle.signedPrekeyPublic))…", category: "SPKRotation")
+                let deviceId = KeychainManager.shared.loadDeviceID() ?? ""
+                if !deviceId.isEmpty {
+                    Log.info("Key consistency: attempting SPK re-upload to repair desync…", category: "SPKRotation")
+                    try await forceRotate(deviceId: deviceId, reason: .security)
+                    Log.info("Key consistency: SPK re-upload complete", category: "SPKRotation")
+                }
+            }
+            return false
+        } catch {
+            Log.error("Key consistency check failed: \(error)", category: "SPKRotation")
+            return true
+        }
+    }
 }
 
 // MARK: - Errors

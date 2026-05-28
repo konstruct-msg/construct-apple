@@ -59,7 +59,7 @@ struct ContentView: View {
             // woken in background while the device was locked (WhenUnlockedThisDeviceOnly keys
             // temporarily unavailable). Now that the user is bringing the app to foreground,
             // the device is unlocked and Keychain items are accessible.
-            if SessionManager.shared.sessionToken == nil || !SessionManager.shared.isSessionValid
+            if AuthSessionManager.shared.sessionToken == nil || !AuthSessionManager.shared.isSessionValid
                 || !CryptoManager.shared.isInitialized {
                 Log.info("App returning to foreground — restoring session (token missing, expired, or crypto uninitialised)", category: "Auth")
                 authViewModel.restoreSession()

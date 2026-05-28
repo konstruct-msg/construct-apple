@@ -267,7 +267,7 @@ struct ChatsSplitView: View {
     }
 
     private func addContact(contactInfo: ContactInfo) {
-        if contactInfo.userId == SessionManager.shared.currentUserId {
+        if contactInfo.userId == AuthSessionManager.shared.currentUserId {
             showingDrafts = true
             return
         }

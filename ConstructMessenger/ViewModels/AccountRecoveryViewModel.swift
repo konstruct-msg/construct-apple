@@ -227,7 +227,7 @@ final class AccountRecoveryViewModel {
             KeychainManager.shared.saveDeviceID(deviceId)
             KeychainManager.shared.saveDeviceSigningKey(signingKeyData)
             KeychainManager.shared.saveDeviceIdentityKey(identityKeyData)
-            SessionManager.shared.saveTokens(
+            AuthSessionManager.shared.saveTokens(
                 accessToken: response.accessToken,
                 refreshToken: response.refreshToken,
                 expiresIn: Int(response.expiresAt ?? 0),

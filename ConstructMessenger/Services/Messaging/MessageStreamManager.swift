@@ -104,6 +104,11 @@ final class MessageStreamManager {
     /// Records whether the most recent `openStream()` call attempted H3 transport.
     /// Used by connectLoop to decide whether to try H2 direct before activating ICE.
     var lastStreamTransportWasH3 = false
+    /// Counts consecutive H3 stream-open failures across reconnects and network changes.
+    /// Not reset by forceDisconnect() so it survives network path switches.
+    /// Cleared when H3 succeeds or the stream ends cleanly.
+    var consecutiveH3OpenFailures = 0
+    static let h3OpenFailureThreshold = 2
     private(set) var isPaused = false
     private(set) var subscriptionUserIds: [String] = []
     private var lastPendingCursor: String = UserDefaults.standard.string(forKey: "construct.pendingCursor") ?? "" {
@@ -161,6 +166,7 @@ final class MessageStreamManager {
         }
 
         self.subscriptionUserIds = contactUserIds
+        if isPaused { ConnectionStatusManager.shared.markStreamResumed() }
         isPaused = false
 
         // Already fully connected with up-to-date subscriptions.
@@ -237,6 +243,7 @@ final class MessageStreamManager {
 
         shouldFallbackToH2Direct = false
         lastStreamTransportWasH3 = false
+        consecutiveH3OpenFailures = 0
         connect(contactUserIds: contactUserIds, onMessageReceived: onMessageReceived)
     }
 
@@ -274,6 +281,7 @@ final class MessageStreamManager {
     func pause() {
         guard !isPaused else { return }
         isPaused = true
+        ConnectionStatusManager.shared.markStreamPaused()
         disconnect()
         Log.info("MessageStream paused", category: "MessageStream")
     }
@@ -281,6 +289,7 @@ final class MessageStreamManager {
     func resume(onMessageReceived: @escaping (ChatMessage) -> Void) {
         guard isPaused else { return }
         isPaused = false
+        ConnectionStatusManager.shared.markStreamResumed()
         Log.info("MessageStream resuming", category: "MessageStream")
         connect(contactUserIds: subscriptionUserIds, onMessageReceived: onMessageReceived)
     }
@@ -418,6 +427,7 @@ final class MessageStreamManager {
                 retryCount = 0
                 shouldFallbackToH2Direct = false
                 lastStreamTransportWasH3 = false
+                consecutiveH3OpenFailures = 0
                 try await Task.sleep(for: .seconds(NetworkTiming.Stream.cleanEndReconnectDelay))
             } catch is CancellationError {
                 Log.info("MessageStream cancelled — connectLoop exiting", category: "MessageStream")
@@ -449,7 +459,7 @@ final class MessageStreamManager {
                     }
                     if serverRejected {
                         Log.info("MessageStream refresh rejected by server — triggering device re-auth", category: "MessageStream")
-                        SessionManager.shared.invalidateTokensForReauth()
+                        AuthSessionManager.shared.invalidateTokensForReauth()
                     } else {
                         Log.info("MessageStream refresh failed (network error) — keeping tokens, will retry later", category: "MessageStream")
                     }
@@ -463,6 +473,11 @@ final class MessageStreamManager {
                     // On the direct path, recordFailure increments directFails; once it reaches the
                     // threshold, prepare() will start the ICE proxy on the next iteration.
                     await ConnectionLoop.shared.recordFailure(rpcError)
+                    // Track persistent H3 failures so the counter survives network-path changes.
+                    if lastStreamTransportWasH3 {
+                        consecutiveH3OpenFailures += 1
+                        Log.info("H3 open failure #\(consecutiveH3OpenFailures)/\(Self.h3OpenFailureThreshold)", category: "MessageStream")
+                    }
                     // H3→H2 fallback: if H3 failed on the direct path and ICE isn't active yet,
                     // try H2 once before activating ICE (H3 may be unsupported, not blocked).
                     let routingKeyNow = GRPCChannelManager.shared.currentRoutingKey
@@ -484,6 +499,10 @@ final class MessageStreamManager {
                 // IceFailurePolicy.classify() returns nil for auth/app-layer errors, so this
                 // is safe to call unconditionally — it's a no-op for unauthenticated failures.
                 await ConnectionLoop.shared.recordFailure(error)
+                if lastStreamTransportWasH3 {
+                    consecutiveH3OpenFailures += 1
+                    Log.info("H3 failure #\(consecutiveH3OpenFailures)/\(Self.h3OpenFailureThreshold)", category: "MessageStream")
+                }
                 // Log full error details for diagnosis
                 if let rpcError = error as? RPCError {
                     Log.error("""

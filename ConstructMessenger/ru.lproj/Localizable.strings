@@ -37,6 +37,7 @@
 // MARK: - Chat
 "sending" = "Отправка...";
 "status_connecting" = "Подключение...";
+"status_paused" = "Фон";
 "status_no_connection" = "Нет соединения";
 "status_encrypting" = "Шифрование...";
 "chat" = "Чат";

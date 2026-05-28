@@ -43,10 +43,10 @@ actor TokenRefreshCoordinator {
 
         if let inFlight {
             try await inFlight.value
-            return await MainActor.run { SessionManager.shared.sessionToken != nil && SessionManager.shared.isSessionValid }
+            return await MainActor.run { AuthSessionManager.shared.sessionToken != nil && AuthSessionManager.shared.isSessionValid }
         }
 
-        let storedRefreshToken = await MainActor.run { SessionManager.shared.refreshToken }
+        let storedRefreshToken = await MainActor.run { AuthSessionManager.shared.refreshToken }
         guard let storedRefreshToken, !storedRefreshToken.isEmpty else {
             return false
         }
@@ -65,7 +65,7 @@ actor TokenRefreshCoordinator {
             }
 
             await MainActor.run {
-                SessionManager.shared.saveTokens(
+                AuthSessionManager.shared.saveTokens(
                     accessToken: response.accessToken,
                     refreshToken: response.refreshToken,
                     expiresIn: expiresIn
@@ -83,7 +83,7 @@ actor TokenRefreshCoordinator {
             }
             throw error
         }
-        return await MainActor.run { SessionManager.shared.sessionToken != nil && SessionManager.shared.isSessionValid }
+        return await MainActor.run { AuthSessionManager.shared.sessionToken != nil && AuthSessionManager.shared.isSessionValid }
     }
 }
 

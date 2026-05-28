@@ -43,6 +43,8 @@ extension Notification.Name {
     static let engineUserFound = Notification.Name("cc.konstruct.engine.userFound")
     /// User discovery: no contact found. userInfo: ["query": String]
     static let engineUserNotFound = Notification.Name("cc.konstruct.engine.userNotFound")
+    /// Remote contact sent SessionReset — local session cleared. userInfo: ["contactId": String]
+    static let engineEndSessionReceived = Notification.Name("cc.konstruct.engine.endSessionReceived")
 }
 
 // MARK: - EngineAdapter
@@ -258,6 +260,17 @@ extension EngineAdapter: EngineCallback {
                     name: .engineSessionError,
                     object: nil,
                     userInfo: ["contactId": contactId, "message": message]
+                )
+            }
+
+        case .endSessionReceived(let contactId):
+            Log.info("EngineAdapter: endSessionReceived contact=\(contactId)", category: "Engine")
+            Task { @MainActor in
+                self.sessionStates[contactId] = false
+                NotificationCenter.default.post(
+                    name: .engineEndSessionReceived,
+                    object: nil,
+                    userInfo: ["contactId": contactId]
                 )
             }
 

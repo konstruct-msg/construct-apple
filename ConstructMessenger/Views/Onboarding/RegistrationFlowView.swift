@@ -380,7 +380,7 @@ struct RegistrationFlowView: View {
             
             // 3. Save session tokens + userId
             Log.info("Saving session tokens + userId...", category: "Registration")
-            SessionManager.shared.saveTokens(
+            AuthSessionManager.shared.saveTokens(
                 accessToken: registerData.sessionToken,
                 refreshToken: registerData.refreshToken,
                 expiresIn: Int(registerData.expires - Int64(Date().timeIntervalSince1970)),
@@ -391,13 +391,13 @@ struct RegistrationFlowView: View {
             // 4. Verify session tokens
             Log.info("Verifying session tokens...", category: "Registration")
             // Tokens are in published properties after saveTokens()
-            let savedAccessToken = SessionManager.shared.sessionToken
-            let savedRefreshToken = SessionManager.shared.refreshToken
+            let savedAccessToken = AuthSessionManager.shared.sessionToken
+            let savedRefreshToken = AuthSessionManager.shared.refreshToken
             
             if savedAccessToken != nil && savedRefreshToken != nil {
                 Log.info("   accessToken: \(savedAccessToken!.prefix(20))...", category: "Registration")
                 Log.info("   refreshToken: \(savedRefreshToken!.prefix(20))...", category: "Registration")
-                Log.info("   isSessionValid: \(SessionManager.shared.isSessionValid)", category: "Registration")
+                Log.info("   isSessionValid: \(AuthSessionManager.shared.isSessionValid)", category: "Registration")
             } else {
                 Log.error("   Session tokens verification FAILED!", category: "Registration")
             }

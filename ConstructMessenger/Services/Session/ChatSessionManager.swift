@@ -61,7 +61,7 @@ final class ChatSessionManager {
             Log.error("Cannot fetch recipient public key: chat.otherUser?.id is nil", category: "ChatViewModel")
             return
         }
-        guard let currentUserId = SessionManager.shared.currentUserId else {
+        guard let currentUserId = AuthSessionManager.shared.currentUserId else {
             Log.error("Cannot fetch recipient public key: currentUserId is nil", category: "ChatViewModel")
             return
         }
@@ -203,7 +203,7 @@ final class ChatSessionManager {
 
     func sendSessionInitPing(to userId: String) async {
         guard CryptoManager.shared.hasSession(for: userId) else { return }
-        guard let myId = SessionManager.shared.currentUserId, !myId.isEmpty else { return }
+        guard let myId = AuthSessionManager.shared.currentUserId, !myId.isEmpty else { return }
         let pingId = UUID().uuidString.lowercased()
         let pingContent = "__session_ping_\(UUID().uuidString)__"
         do {

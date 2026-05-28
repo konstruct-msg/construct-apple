@@ -118,8 +118,8 @@ final class GRPCChannelManager: Sendable {
     private nonisolated(unsafe) var _connGeneration: UInt64 = 0
     private let _connLock = NSLock()
 
-    // H3 persistent connection — stored as Any? because @available stored properties are
-    // not allowed in Swift. Actual value is PersistentConnH3 on iOS 16+/macOS 13+.
+    // H3 persistent connection — stored as Any? because types guarded with #if canImport(Network)
+    // cannot be stored properties when the guard is conditional.
     private nonisolated(unsafe) var _h3connBox: Any? = nil
     private nonisolated(unsafe) var _h3connGeneration: UInt64 = 0
     private let _h3connLock = NSLock()
@@ -219,9 +219,7 @@ final class GRPCChannelManager: Sendable {
         guard didInvalidate else { return }
         Log.debug("Persistent gRPC connection invalidated (routing: \(oldKey) → \(newKey), gen=\(_connLock.withLock { _connGeneration }))", category: "GRPCChannel")
 #if canImport(Network)
-        if #available(iOS 16.0, macOS 13.0, *) {
-            invalidateH3Connection()
-        }
+        invalidateH3Connection()
 #endif
     }
 
@@ -249,9 +247,7 @@ final class GRPCChannelManager: Sendable {
         Log.debug("Persistent gRPC connection invalidated (gen=\(_connGeneration))", category: "GRPCChannel")
         // H3 is only valid on the direct path. Any routing change that kills H2 also kills H3.
 #if canImport(Network)
-        if #available(iOS 16.0, macOS 13.0, *) {
-            invalidateH3Connection()
-        }
+        invalidateH3Connection()
 #endif
     }
 
@@ -345,10 +341,9 @@ final class GRPCChannelManager: Sendable {
         )
     }
 
+#if canImport(Network)
     /// Creates a gRPC client using the HTTP/3 (QUIC/Network.framework) transport.
-    /// Requires iOS 16+/macOS 13+ for stable QUIC support (NWProtocolQUIC available since iOS 15).
     /// Only called for direct-path connections — never over ICE/obfs4 proxy.
-    @available(iOS 16.0, macOS 13.0, *)
     func makeClientH3() -> GRPCClient<HTTP3ClientTransport> {
         let host = currentHost
         let port = currentPort
@@ -357,11 +352,9 @@ final class GRPCChannelManager: Sendable {
         return GRPCClient(transport: transport, interceptors: [AuthInterceptor()])
     }
 
-#if canImport(Network)
     /// Returns (or lazily creates) the shared persistent H3 channel.
     /// Only valid on the direct path — callers must check `iceProxyPort() == nil` before calling.
     /// Analogous to `acquirePersistentClient()` for the H2 path.
-    @available(iOS 16.0, macOS 13.0, *)
     func acquireH3Channel() -> GRPCClient<HTTP3ClientTransport> {
         _h3connLock.lock()
         defer { _h3connLock.unlock() }
@@ -393,9 +386,7 @@ final class GRPCChannelManager: Sendable {
                 // Normal shutdown.
             } catch {
                 Log.error("H3 persistent connection closed: \(error)", category: "GRPCChannel")
-                if #available(iOS 16.0, macOS 13.0, *) {
-                    self.invalidateH3Connection()
-                }
+                self.invalidateH3Connection()
             }
         }
         let conn = PersistentConnH3(client: client, task: task, key: key)
@@ -406,7 +397,6 @@ final class GRPCChannelManager: Sendable {
 
     /// Gracefully shuts down the H3 persistent connection.
     /// Called automatically from `invalidatePersistentClient()` and on H3 transport errors.
-    @available(iOS 16.0, macOS 13.0, *)
     func invalidateH3Connection() {
         _h3connLock.lock()
         defer { _h3connLock.unlock() }
@@ -415,6 +405,21 @@ final class GRPCChannelManager: Sendable {
         _h3connBox = nil
         _h3connGeneration &+= 1
         Log.debug("H3 persistent connection invalidated (gen=\(_h3connGeneration))", category: "GRPCChannel")
+    }
+
+    /// Force-cancels the H3 persistent connection by cancelling the runConnections() task.
+    /// Unlike `invalidateH3Connection()` (graceful shutdown), this immediately closes the
+    /// underlying NWConnection — necessary when a QUIC handshake is stuck and doesn't
+    /// respond to Swift task cancellation or `beginGracefulShutdown()`.
+    func forceInvalidateH3Connection() {
+        _h3connLock.lock()
+        defer { _h3connLock.unlock() }
+        guard let conn = _h3connBox as? PersistentConnH3 else { return }
+        conn.task.cancel()
+        conn.client.beginGracefulShutdown()
+        _h3connBox = nil
+        _h3connGeneration &+= 1
+        Log.debug("H3 persistent connection force-invalidated (gen=\(_h3connGeneration))", category: "GRPCChannel")
     }
 #endif
 

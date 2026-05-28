@@ -32,7 +32,7 @@ class ProfileShareViewModel {
     /// Avatar is uploaded via Media Upload API to avoid size limitations
     func shareProfile(with userId: String, completion: @escaping (Bool, String?) -> Void) {
         guard let context = viewContext,
-              let currentUserId = SessionManager.shared.currentUserId else {
+              let currentUserId = AuthSessionManager.shared.currentUserId else {
             completion(false, NSLocalizedString("not_authenticated", comment: ""))
             return
         }
@@ -246,7 +246,7 @@ class ProfileShareViewModel {
     /// Uses a background Task per contact — failures are logged but don't surface to the user.
     func rebroadcastProfileToSharedContacts() {
         guard let context = viewContext,
-              let currentUserId = SessionManager.shared.currentUserId else { return }
+              let currentUserId = AuthSessionManager.shared.currentUserId else { return }
 
         // Fetch all contacts we have chosen to share our profile with
         let fetchRequest: NSFetchRequest<User> = User.fetchRequest()

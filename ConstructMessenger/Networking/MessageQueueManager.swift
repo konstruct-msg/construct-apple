@@ -163,7 +163,7 @@ class MessageQueueManager {
             Log.debug("Cannot process queued messages - network not reachable", category: "MessageQueue")
             return
         }
-        guard let currentUserId = SessionManager.shared.currentUserId else {
+        guard let currentUserId = AuthSessionManager.shared.currentUserId else {
             Log.debug("Cannot process queued messages - no current user", category: "MessageQueue")
             return
         }

@@ -51,7 +51,7 @@ final class MessageRouter {
     // MARK: - Message Routing
     
     func routeIncomingMessage(_ message: ChatMessage, in context: NSManagedObjectContext) {
-        guard let currentUserId = SessionManager.shared.currentUserId else { return }
+        guard let currentUserId = AuthSessionManager.shared.currentUserId else { return }
 
         // STEALTH: resolve sender from sealed inner before any routing.
         // `from` is empty for ConstructSEALED messages — decrypt to recover sender ID.
@@ -562,7 +562,7 @@ final class MessageRouter {
             // Mark session as confirmed so ChatViewModel stops buffering outgoing messages.
             SessionConfirmationTracker.shared.markConfirmed(otherUserId)
             // Flush messages that were buffered while waiting for RESPONDER confirmation.
-            if let myId = SessionManager.shared.currentUserId {
+            if let myId = AuthSessionManager.shared.currentUserId {
                 MessageRetryManager.shared.sendQueuedMessages(
                     for: chat,
                     recipientId: otherUserId,
@@ -779,7 +779,7 @@ final class MessageRouter {
         message: ChatMessage,
         in context: NSManagedObjectContext
     ) {
-        let myUserId = SessionManager.shared.currentUserId ?? ""
+        let myUserId = AuthSessionManager.shared.currentUserId ?? ""
         let suiteId = Int(KeychainManager.shared.loadSessionSuiteId(userId: contactId) ?? 0)
 
         if role == "Initiator" {
@@ -1085,7 +1085,7 @@ final class MessageRouter {
         toUserId userId: String,
         in context: NSManagedObjectContext
     ) {
-        guard let currentUserId = SessionManager.shared.currentUserId else { return }
+        guard let currentUserId = AuthSessionManager.shared.currentUserId else { return }
         
         // Find chat
         let fetchRequest = Chat.fetchRequest()
@@ -1244,7 +1244,7 @@ final class MessageRouter {
     /// the user's own other device. Decrypts using the per-device session and saves
     /// the message as an outgoing bubble in the correct conversation.
     private func handleSenderSync(_ message: ChatMessage, in context: NSManagedObjectContext) {
-        guard let currentUserId = SessionManager.shared.currentUserId else { return }
+        guard let currentUserId = AuthSessionManager.shared.currentUserId else { return }
 
         let partnerUserId = extractPartnerUserId(from: message.conversationId, myUserId: currentUserId)
         guard !partnerUserId.isEmpty else {
@@ -1347,7 +1347,7 @@ final class MessageRouter {
         context.saveAndLog()
 
         if !original.senderDeviceId.isEmpty {
-            CryptoManager.shared.saveSessionToKeychainPublic(
+            CryptoManager.shared.saveSessionToKeychain(
                 for: MultiDeviceSendCoordinator.sessionKey(userId: original.from, deviceId: original.senderDeviceId)
             )
         }

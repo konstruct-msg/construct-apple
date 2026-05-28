@@ -24,6 +24,10 @@ class ConnectionStatusManager {
     /// Cleared when `connected` or `disconnected`.
     private(set) var connectingPhase: String?
 
+    /// True when the stream is intentionally paused (app in background).
+    /// Visually distinct from "connecting" in the status indicator.
+    private(set) var isStreamPaused: Bool = false
+
     /// Convenience property for checking if connected
     var isConnected: Bool {
         connectionStatus == .connected
@@ -194,6 +198,14 @@ class ConnectionStatusManager {
             connectingPhase = nil
             connectionStatus = .disconnected
         }
+    }
+
+    func markStreamPaused() {
+        isStreamPaused = true
+    }
+
+    func markStreamResumed() {
+        isStreamPaused = false
     }
 
     /// Check if we should consider the connection stale

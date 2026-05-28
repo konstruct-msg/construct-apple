@@ -57,6 +57,14 @@ enum NetworkTiming {
         /// support). Using a tighter window here avoids waiting 2s per H3 attempt on servers
         /// that only speak H2, while still giving QUIC enough room on high-latency paths.
         static let streamOpenAcceptTimeoutH3: TimeInterval = 1.5
+        /// Hard deadline for H3/QUIC stream accept.
+        /// Apple's NWConnection may not honour Swift task cancellation while the QUIC
+        /// handshake is in progress — the NWConnection keeps its DispatchQueue callback
+        /// registered until a ~70s system timeout fires.  This task explicitly cancels
+        /// the H3 runConnections() task (closing NWConnection) so the stuck streamTask
+        /// fails within ~200ms instead of 70s.  Fires only when the soft 1.5s timeout
+        /// (streamOpenAcceptTimeoutH3) didn't resolve the hung channel.
+        static let streamOpenAcceptTimeoutH3Hard: TimeInterval = 5.0
         /// Faster timeout used when the relay is already verified (TCP/TLS/obfs4/HTTP2 are
         /// all warm). A verified relay should respond to any new RPC within one RTT (≤200ms
         /// for AMS). 0.8s is a comfortable upper bound; anything longer signals a broken tunnel.

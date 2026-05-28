@@ -94,21 +94,21 @@ class AuthViewModel {
         }
     }
     
-    // Subscribe to session invalidation from SessionManager
+    // Subscribe to session invalidation from AuthSessionManager
     private func setupSessionExpiredListener() {
         sessionExpiredTask = Task { [weak self] in
             while !Task.isCancelled {
                 guard let self else { return }
                 await withCheckedContinuation { continuation in
                     withObservationTracking {
-                        _ = SessionManager.shared.isSessionInvalidated
+                        _ = AuthSessionManager.shared.isSessionInvalidated
                     } onChange: {
                         continuation.resume()
                     }
                 }
                 guard !Task.isCancelled else { break }
-                if SessionManager.shared.isSessionInvalidated {
-                    SessionManager.shared.resetSessionInvalidated()
+                if AuthSessionManager.shared.isSessionInvalidated {
+                    AuthSessionManager.shared.resetSessionInvalidated()
                     await self.restoreOrAuthenticateDevice()
                 }
             }
@@ -134,8 +134,8 @@ class AuthViewModel {
             while !Task.isCancelled {
                 await withCheckedContinuation { continuation in
                     withObservationTracking {
-                        _ = SessionManager.shared.sessionToken
-                        _ = SessionManager.shared.sessionExpires
+                        _ = AuthSessionManager.shared.sessionToken
+                        _ = AuthSessionManager.shared.sessionExpires
                     } onChange: {
                         continuation.resume()
                     }
@@ -171,23 +171,23 @@ class AuthViewModel {
         print("🔄 restoreOrAuthenticateDevice() called")
         
         // Step 1: Try to restore existing session token
-        SessionManager.shared.loadSessionToken()
+        AuthSessionManager.shared.loadSessionToken()
 
         // Helper: recover userId from JWT payload when Keychain entry is missing.
         // The server embeds the user ID in the `sub` claim of every issued JWT.
         // Only touches userId — does NOT re-save tokens or overwrite session expiry.
         func recoverUserIdFromToken() -> String? {
-            guard let token = SessionManager.shared.sessionToken,
+            guard let token = AuthSessionManager.shared.sessionToken,
                   let uid = JWTUtils.extractUserId(from: token),
                   !uid.isEmpty else { return nil }
-            SessionManager.shared.updateUserId(uid)
+            AuthSessionManager.shared.updateUserId(uid)
             Log.info("[Auth] userId recovered from JWT sub claim and re-saved to Keychain: \(uid.prefix(8))...", category: "Auth")
             return uid
         }
 
         // Resolve userId — prefer in-memory/Keychain, fall back to JWT extraction.
         func resolvedUserId() -> String? {
-            if let uid = SessionManager.shared.currentUserId { return uid }
+            if let uid = AuthSessionManager.shared.currentUserId { return uid }
             return recoverUserIdFromToken()
         }
 
@@ -200,18 +200,19 @@ class AuthViewModel {
             scheduleTokenRefresh()
             CryptoManager.shared.setLocalUserId(userId)
             loadUserFromCoreData(userId: userId)
-            // Fire SPK rotation immediately in background — rotateIfNeeded() is a
-            // no-op if the key is fresh, so this is safe to call on every launch.
+            #if !os(macOS)
+            // Engine manages SPK rotation on macOS.
             Task {
                 let deviceId = KeychainManager.shared.loadDeviceID() ?? ""
                 await PreKeyRotationService.shared.rotateIfNeeded(deviceId: deviceId)
             }
+            #endif
             Task { await ServerKeyManager.shared.prefetch() }
         }
 
-        if let _ = SessionManager.shared.sessionToken,
+        if let _ = AuthSessionManager.shared.sessionToken,
            let userId = resolvedUserId(),
-           SessionManager.shared.isSessionValid {
+           AuthSessionManager.shared.isSessionValid {
             // We have session token - verify it's still valid
             print("✅ Found session token for user: \(userId)")
             if !CryptoManager.shared.isInitialized {
@@ -232,9 +233,9 @@ class AuthViewModel {
 
         // Step 1.5: Token exists but is expired/near-expired — refresh using refresh token first.
         // This is faster and less error-prone than full device auth, and keeps the gRPC stream stable.
-        if SessionManager.shared.sessionToken != nil,
+        if AuthSessionManager.shared.sessionToken != nil,
            let userId = resolvedUserId(),
-           let refresh = SessionManager.shared.refreshToken {
+           let refresh = AuthSessionManager.shared.refreshToken {
             do {
                 Log.info("Session token expired — attempting refresh", category: "Auth")
                 let response = try await AuthServiceClient.shared.refreshToken(refreshToken: refresh)
@@ -248,7 +249,7 @@ class AuthViewModel {
 
                 // Preserve userId even if the refresh response doesn't include it.
                 let refreshedUserId = response.userId.isEmpty ? userId : response.userId
-                SessionManager.shared.saveTokens(
+                AuthSessionManager.shared.saveTokens(
                     accessToken: response.accessToken,
                     refreshToken: response.refreshToken,
                     expiresIn: expiresIn,
@@ -324,7 +325,7 @@ class AuthViewModel {
                 expiresInSeconds = 3600
             }
             
-            SessionManager.shared.saveTokens(
+            AuthSessionManager.shared.saveTokens(
                 accessToken: response.accessToken,
                 refreshToken: response.refreshToken,
                 expiresIn: expiresInSeconds,
@@ -388,7 +389,7 @@ class AuthViewModel {
         tokenRefreshTimer?.invalidate()
 
         guard isAuthenticated else { return }
-        guard let expiresAt = SessionManager.shared.sessionExpires else { return }
+        guard let expiresAt = AuthSessionManager.shared.sessionExpires else { return }
 
         let now = Date()
         let refreshTime = expiresAt.addingTimeInterval(-300) // refresh 5 minutes early
@@ -404,7 +405,7 @@ class AuthViewModel {
     
     /// Refresh access token automatically
     private func refreshAccessToken() async {
-        guard let refreshToken = SessionManager.shared.refreshToken else {
+        guard let refreshToken = AuthSessionManager.shared.refreshToken else {
             Log.error("No refresh token available - forcing logout", category: "Auth")
             await MainActor.run {
                 handleSessionExpired()
@@ -425,7 +426,7 @@ class AuthViewModel {
                 } else {
                     expiresIn = response.expiresIn ?? 3600
                 }
-                SessionManager.shared.saveTokens(
+                AuthSessionManager.shared.saveTokens(
                     accessToken: response.accessToken,
                     refreshToken: response.refreshToken,
                     expiresIn: expiresIn
@@ -497,7 +498,7 @@ class AuthViewModel {
     func wipeAndReregister() {
         Log.info("[Auth] User chose to wipe and re-register", category: "Auth")
         cancelTimeouts()
-        SessionManager.shared.clearSession()
+        AuthSessionManager.shared.clearSession()
 
         // Nullify in-memory cores before Keychain deletions so no stale reference survives.
         CryptoManager.shared.deleteAllCryptoKeys()
@@ -523,7 +524,7 @@ class AuthViewModel {
             Log.info("END_SESSION sent to all contacts on logout", category: "Auth")
             
             // 1. Logout via gRPC
-            if SessionManager.shared.sessionToken != nil {
+            if AuthSessionManager.shared.sessionToken != nil {
                 do {
                     try await AuthServiceClient.shared.logout()
                 } catch {
@@ -534,7 +535,7 @@ class AuthViewModel {
             
             await MainActor.run {
                 self.cancelTimeouts()
-                SessionManager.shared.clearSession()
+                AuthSessionManager.shared.clearSession()
                 UserDefaults.standard.removeObject(forKey: "recovery_is_setup")
                 UserDefaults.standard.removeObject(forKey: "recovery_banner_dismissed")
                 KeychainManager.shared.deleteAllContactRequestMappings()
@@ -556,7 +557,7 @@ class AuthViewModel {
     /// then performs local logout. Use when a device may have been compromised.
     func logoutAllDevices() {
         Task {
-            if SessionManager.shared.sessionToken != nil {
+            if AuthSessionManager.shared.sessionToken != nil {
                 do {
                     try await AuthServiceClient.shared.logout(allDevices: true)
                     Log.info("Signed out of all devices", category: "Auth")
@@ -566,7 +567,7 @@ class AuthViewModel {
             }
             await MainActor.run {
                 self.cancelTimeouts()
-                SessionManager.shared.clearSession()
+                AuthSessionManager.shared.clearSession()
                 UserDefaults.standard.removeObject(forKey: "recovery_is_setup")
                 UserDefaults.standard.removeObject(forKey: "recovery_banner_dismissed")
                 self.isAuthenticated = false
@@ -683,14 +684,14 @@ class AuthViewModel {
         let expiresDate = Date(timeIntervalSince1970: TimeInterval(expires))
         let expiresIn = Int(expiresDate.timeIntervalSinceNow)
         
-        SessionManager.shared.saveTokens(
+        AuthSessionManager.shared.saveTokens(
             accessToken: token,
             refreshToken: refreshToken,
             expiresIn: max(expiresIn, 0),  // Don't clamp negative (already-expired) TTL to 1 hour
             userId: userId
         )
         
-        if let savedToken = SessionManager.shared.sessionToken {
+        if let savedToken = AuthSessionManager.shared.sessionToken {
             if savedToken == token {
                 Log.info("Access token saved and verified correctly", category: "Auth")
             } else {
@@ -700,7 +701,7 @@ class AuthViewModel {
             Log.error("Token not found after saving!", category: "Auth")
         }
         
-        if SessionManager.shared.refreshToken != nil {
+        if AuthSessionManager.shared.refreshToken != nil {
             Log.info("Refresh token saved successfully", category: "Auth")
         } else {
             Log.error("Refresh token not saved!", category: "Auth")
@@ -746,7 +747,7 @@ class AuthViewModel {
     }
     
     private func handleSessionExpired() {
-        SessionManager.shared.clearSession()
+        AuthSessionManager.shared.clearSession()
         self.isAuthenticated = false
         ErrorRouter.shared.report(.sessionExpired)
     }
@@ -757,7 +758,7 @@ class AuthViewModel {
         self.isLoading = false
         
         // Clear all user data
-        SessionManager.shared.clearSession()
+        AuthSessionManager.shared.clearSession()
         CryptoManager.shared.deleteAllCryptoKeys()
         KeychainManager.shared.deleteDeviceKeys()
         
@@ -893,7 +894,7 @@ class AuthViewModel {
             self.currentUserId = user.id
             self.currentUser = user
             CryptoManager.shared.setLocalUserId(user.id)
-            SessionManager.shared.saveDisplayName(user.displayName.isEmpty ? (user.username.isEmpty ? "" : user.username) : user.displayName)
+            AuthSessionManager.shared.saveDisplayName(user.displayName.isEmpty ? (user.username.isEmpty ? "" : user.username) : user.displayName)
             
             print("Restored user data from Core Data:")
             print("   userId: \(user.id)")

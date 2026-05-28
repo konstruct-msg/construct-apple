@@ -146,7 +146,7 @@ final class MessagingServiceClient: Sendable {
     // MARK: - Send End Session (replaces MessagingAPI.sendEndSession)
 
     func sendEndSession(to recipientId: String, reason: String? = nil) async throws -> EndSessionResponse {
-        let myUserId = await MainActor.run { SessionManager.shared.currentUserId } ?? ""
+        let myUserId = await MainActor.run { AuthSessionManager.shared.currentUserId } ?? ""
         return try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.endSession) { grpcClient in
             let msgClient = Shared_Proto_Services_V1_MessagingService.Client(wrapping: grpcClient)
 

@@ -37,7 +37,7 @@ struct AuthInterceptor: ClientInterceptor {
             } else {
                 // Rare recovery path: userId missing from cache, extract from JWT claim.
                 if let recovered = JWTUtils.extractUserId(from: token) {
-                    await MainActor.run { SessionManager.shared.updateUserId(recovered) }
+                    await MainActor.run { AuthSessionManager.shared.updateUserId(recovered) }
                     request.metadata.addString(recovered, forKey: "x-user-id")
                 } else {
                     throw RPCError(code: .unauthenticated, message: "x-user-id unavailable — userId missing from session")

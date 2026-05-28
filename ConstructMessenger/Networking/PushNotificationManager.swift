@@ -74,7 +74,7 @@ class PushNotificationManager: NSObject {
             while !Task.isCancelled {
                 await withCheckedContinuation { continuation in
                     withObservationTracking {
-                        _ = SessionManager.shared.sessionToken
+                        _ = AuthSessionManager.shared.sessionToken
                     } onChange: {
                         continuation.resume()
                     }
@@ -132,7 +132,7 @@ class PushNotificationManager: NSObject {
 
         await registerForRemoteNotificationsIfAuthorized()
 
-        if authorizationStatus == .notDetermined && SessionManager.shared.sessionToken != nil {
+        if authorizationStatus == .notDetermined && AuthSessionManager.shared.sessionToken != nil {
             Log.info("Permission not yet requested but user is authenticated — requesting now", category: "Push")
             await requestPermission()
         }
@@ -144,7 +144,7 @@ class PushNotificationManager: NSObject {
         // APNs returns the same token if unchanged (no-op), or a new one if rotated
         // (e.g. after reinstall). In either case registerDeviceToken() will handle it.
         await MainActor.run {
-            Log.info("📱 Requesting APNs token (re-register on every launch)", category: "Push")
+            Log.info("Requesting APNs token (re-register on every launch)", category: "Push")
             UIApplication.shared.registerForRemoteNotifications()
         }
     }
@@ -219,13 +219,13 @@ class PushNotificationManager: NSObject {
     }
 
     /// Retry registering with the server if we have a token but haven't succeeded yet.
-    /// Called whenever SessionManager.sessionToken changes to non-nil.
+    /// Called whenever AuthSessionManager.sessionToken changes to non-nil.
     private func retryServerRegistrationIfNeeded() async {
-        guard SessionManager.shared.sessionToken != nil else { return }
+        guard AuthSessionManager.shared.sessionToken != nil else { return }
         // userId must be present — the server requires x-user-id on this RPC.
         // If userId is still nil (e.g. race between token refresh and userId restore),
         // we'll be called again on the next sessionToken change once userId is set.
-        guard SessionManager.shared.currentUserId != nil else {
+        guard AuthSessionManager.shared.currentUserId != nil else {
             Log.debug("Device token retry deferred — userId not yet available", category: "Push")
             return
         }
@@ -236,7 +236,7 @@ class PushNotificationManager: NSObject {
     
     /// Register device token with backend server
     private func registerWithServer(_ token: String) async {
-        guard SessionManager.shared.sessionToken != nil else {
+        guard AuthSessionManager.shared.sessionToken != nil else {
             Log.info("Device token registration deferred — no session yet", category: "Push")
             return
         }

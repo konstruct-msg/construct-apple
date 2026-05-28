@@ -211,7 +211,7 @@ struct QRScannerView: View {
 
     private func simulateQRCodeScan() {
         let generator = InviteGenerator()
-        guard let userId = SessionManager.shared.currentUserId,
+        guard let userId = AuthSessionManager.shared.currentUserId,
               let deviceId = KeychainManager.shared.loadDeviceID() else {
             print("⚠️ No authenticated user — cannot simulate invite")
             return

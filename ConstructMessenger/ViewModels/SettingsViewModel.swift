@@ -54,7 +54,7 @@ class SettingsViewModel {
     /// Prevents redundant reloads on repeated onAppear while still allowing refresh
     /// when auth identity data changed or avatar wasn't loaded for this user yet.
     func needsUserInfoRefresh(from authViewModel: AuthViewModel) -> Bool {
-        let latestUserId = authViewModel.currentUserId ?? SessionManager.shared.currentUserId ?? ""
+        let latestUserId = authViewModel.currentUserId ?? AuthSessionManager.shared.currentUserId ?? ""
         if userId != latestUserId { return true }
         if username != authViewModel.currentUsername { return true }
         if displayName != authViewModel.currentDisplayName { return true }
@@ -68,7 +68,7 @@ class SettingsViewModel {
             return
         }
 
-        userId = authViewModel.currentUserId ?? SessionManager.shared.currentUserId ?? ""
+        userId = authViewModel.currentUserId ?? AuthSessionManager.shared.currentUserId ?? ""
         username = authViewModel.currentUsername
         displayName = authViewModel.currentDisplayName
 

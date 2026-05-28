@@ -134,7 +134,7 @@ struct SafetyNumberView: View {
     // MARK: - Computation
 
     private func computeSafetyNumber() {
-        guard let myDeviceId = SessionManager.shared.currentDeviceId, !myDeviceId.isEmpty else {
+        guard let myDeviceId = AuthSessionManager.shared.currentDeviceId, !myDeviceId.isEmpty else {
             safetyNumber = NSLocalizedString("safety_numbers_unavailable", comment: "")
             return
         }

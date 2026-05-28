@@ -160,6 +160,11 @@ final class SessionCoordinator: MessageRouterDelegate {
     /// Send END_SESSION to a peer and archive + clear the local session.
     func sendEndSession(to userId: String, reason: String = "manual_reset") async throws {
         Log.info("Sending END_SESSION to \(userId): \(reason)", category: "ChatsViewModel")
+        #if os(macOS)
+        // On Desktop the engine owns the session state — dispatch via engine.
+        EngineAdapter.shared.dispatch(.sendEndSession(contactId: userId))
+        Log.info("END_SESSION dispatched to engine for \(userId.prefix(8))…", category: "ChatsViewModel")
+        #else
         do {
             let response = try await MessagingServiceClient.shared.sendEndSession(to: userId, reason: reason)
             Log.info("END_SESSION sent successfully: \(response.messageId)", category: "ChatsViewModel")
@@ -170,13 +175,14 @@ final class SessionCoordinator: MessageRouterDelegate {
         CryptoManager.shared.archiveSession(for: userId, reason: .manualReset)
         CryptoManager.shared.clearArchivedSessions(for: userId)
         Log.info("END_SESSION complete: session archived and cleared", category: "ChatsViewModel")
+        #endif
     }
 
     /// Broadcast END_SESSION to all peers that have an active session (e.g., on logout).
     /// Pre-warm sessions for contacts where we are the natural INITIATOR (higher deviceId).
     /// Called once per app launch after stream connects. Ensures first messages are instant.
     func prewarmSessions(for contactIds: [String], skipEndSessionNotification: Bool = false) {
-        let myId = SessionManager.shared.currentUserId ?? ""
+        let myId = AuthSessionManager.shared.currentUserId ?? ""
         guard !myId.isEmpty else { return }
 
         let toPrewarm = contactIds.filter {
@@ -283,7 +289,7 @@ final class SessionCoordinator: MessageRouterDelegate {
             } catch {
                 Log.error("Failed to send END_SESSION to \(userId.prefix(8))...: \(error)", category: "SessionCoordinator")
             }
-            let myId = SessionManager.shared.currentUserId ?? ""
+            let myId = AuthSessionManager.shared.currentUserId ?? ""
             guard !myId.isEmpty else { return }
             try? await Task.sleep(nanoseconds: 300_000_000)
             if DeviceIdOrdering.isNaturalInitiator(myId: myId, peerId: userId) {
@@ -308,7 +314,7 @@ final class SessionCoordinator: MessageRouterDelegate {
     }
 
     func messageRouter(_ router: MessageRouter, receivedEndSession userId: String, timestamp: UInt64) {
-        let myId = SessionManager.shared.currentUserId ?? ""
+        let myId = AuthSessionManager.shared.currentUserId ?? ""
         guard !myId.isEmpty else { return }
         guard DeviceIdOrdering.isNaturalInitiator(myId: myId, peerId: userId) else {
             Log.info("🔇 END_SESSION from natural INITIATOR \(userId.prefix(8))… — waiting as RESPONDER", category: "SessionInit")
@@ -523,7 +529,7 @@ final class SessionCoordinator: MessageRouterDelegate {
         // Session is now established — cancel any pending RESPONDER fallback.
         cancelResponderFallback(for: userId)
         guard let context = viewContext,
-              let myId = SessionManager.shared.currentUserId, !myId.isEmpty else { return }
+              let myId = AuthSessionManager.shared.currentUserId, !myId.isEmpty else { return }
         let chatFetch = Chat.fetchRequest()
         chatFetch.predicate = NSPredicate(format: "otherUser.id == %@", userId)
         guard let chat = (try? context.fetch(chatFetch))?.first else { return }
@@ -598,11 +604,15 @@ final class SessionCoordinator: MessageRouterDelegate {
     ///
     /// Falls back to the legacy two-step sequence if all attempts fail (backward compat).
     private func sendSessionResetInit(to userId: String) async {
+        #if os(macOS)
+        Log.info("SESSION_STATE[sri_engine]: dispatching InitSessionInitiator for \(userId.prefix(8))…", category: "SessionInit")
+        EngineAdapter.shared.dispatch(.initSessionInitiator(contactId: userId))
+        #else
         guard CryptoManager.shared.hasSession(for: userId) else {
             Log.info("SESSION_STATE[sri_skip]: no INITIATOR session for \(userId.prefix(8))…", category: "SessionInit")
             return
         }
-        guard let myId = SessionManager.shared.currentUserId, !myId.isEmpty else { return }
+        guard let myId = AuthSessionManager.shared.currentUserId, !myId.isEmpty else { return }
 
         for attempt in 1...pingMaxAttempts {
             do {
@@ -635,14 +645,20 @@ final class SessionCoordinator: MessageRouterDelegate {
                 }
             }
         }
+        #endif
     }
 
     private func sendSessionPing(to userId: String) async {
+        #if os(macOS)
+        // InitSessionInitiator (dispatched by sendSessionResetInit) already sent the first
+        // encrypted message — there is no separate ping step on the engine path.
+        _ = userId
+        #else
         guard CryptoManager.shared.hasSession(for: userId) else {
             Log.info("SESSION_STATE[tie_break_ping_skip]: no INITIATOR session for \(userId.prefix(8))…", category: "SessionInit")
             return
         }
-        guard let myId = SessionManager.shared.currentUserId, !myId.isEmpty else { return }
+        guard let myId = AuthSessionManager.shared.currentUserId, !myId.isEmpty else { return }
 
         for attempt in 1...pingMaxAttempts {
             do {
@@ -673,6 +689,7 @@ final class SessionCoordinator: MessageRouterDelegate {
                 }
             }
         }
+        #endif
     }
 
     // MARK: - Session ready signal (RESPONDER → INITIATOR, phase 2 of two-phase handshake)
@@ -685,7 +702,7 @@ final class SessionCoordinator: MessageRouterDelegate {
             Log.info("SESSION_STATE[session_ready_skip]: no RESPONDER session for \(userId.prefix(8))…", category: "SessionInit")
             return
         }
-        guard let myId = SessionManager.shared.currentUserId, !myId.isEmpty else { return }
+        guard let myId = AuthSessionManager.shared.currentUserId, !myId.isEmpty else { return }
 
         do {
             let readyContent = "__session_ready_\(UUID().uuidString)__"
@@ -871,7 +888,7 @@ final class SessionCoordinator: MessageRouterDelegate {
     /// under a fresh session to avoid silent message loss.
     private func resendUnconfirmedOutgoingMessagesIfNeeded(to userId: String) {
         guard let context = viewContext else { return }
-        guard let myId = SessionManager.shared.currentUserId, !myId.isEmpty else { return }
+        guard let myId = AuthSessionManager.shared.currentUserId, !myId.isEmpty else { return }
 
         let now = Date()
         if let last = resendAttemptedAt[userId], now.timeIntervalSince(last) < resendCooldown {

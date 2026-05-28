@@ -36,8 +36,8 @@ struct DesktopChatView: View {
     @State private var contactKTStatus: KTStatus = .unverified
     @State private var containerWidth: CGFloat = 800
 
-    init(chat: Chat, context: NSManagedObjectContext) {
-        _viewModel = State(wrappedValue: ChatViewModel(chat: chat, context: context))
+    init(chat: Chat, context: NSManagedObjectContext, sessionCoordinator: SessionCoordinator) {
+        _viewModel = State(wrappedValue: ChatViewModel(chat: chat, context: context, sessionCoordinator: sessionCoordinator))
     }
 
     var body: some View {
@@ -660,7 +660,7 @@ struct DesktopChatView: View {
     _ = PreviewHelpers.createSampleMessage(context: context, chat: chat, isSentByMe: true, text: "Compiling now, almost done")
     _ = PreviewHelpers.createSampleMessage(context: context, chat: chat, isSentByMe: false, text: "Nice, let me know when it's ready")
     try? context.save()
-    return DesktopChatView(chat: chat, context: context)
+    return DesktopChatView(chat: chat, context: context, sessionCoordinator: SessionCoordinator())
         .environment(\.managedObjectContext, context)
         .frame(width: 700, height: 580)
 }

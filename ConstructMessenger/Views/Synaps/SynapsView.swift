@@ -530,7 +530,7 @@ struct SynapsView: View {
                 let contactInfo = try await LinkParser.parseContactLink(url)
                 await MainActor.run {
                     showingQRScanner = false
-                    if contactInfo.userId == SessionManager.shared.currentUserId { return }
+                    if contactInfo.userId == AuthSessionManager.shared.currentUserId { return }
                     let publicUserInfo = PublicUserInfo(
                         id: contactInfo.userId,
                         username: contactInfo.username,

@@ -1269,6 +1269,8 @@ public enum PlatformAction: Equatable, Hashable {
     )
     case sessionError(contactId: String, message: String
     )
+    case endSessionReceived(contactId: String
+    )
     case preKeyBundleReady(userId: String, bundleBytes: Data
     )
     case otpksUploaded(uploaded: UInt32, serverCount: UInt32
@@ -1355,52 +1357,55 @@ public struct FfiConverterTypePlatformAction: FfiConverterRustBuffer {
         case 12: return .sessionError(contactId: try FfiConverterString.read(from: &buf), message: try FfiConverterString.read(from: &buf)
         )
         
-        case 13: return .preKeyBundleReady(userId: try FfiConverterString.read(from: &buf), bundleBytes: try FfiConverterData.read(from: &buf)
+        case 13: return .endSessionReceived(contactId: try FfiConverterString.read(from: &buf)
         )
         
-        case 14: return .otpksUploaded(uploaded: try FfiConverterUInt32.read(from: &buf), serverCount: try FfiConverterUInt32.read(from: &buf)
+        case 14: return .preKeyBundleReady(userId: try FfiConverterString.read(from: &buf), bundleBytes: try FfiConverterData.read(from: &buf)
         )
         
-        case 15: return .preKeyCountUpdated(count: try FfiConverterUInt32.read(from: &buf), recommendedMinimum: try FfiConverterUInt32.read(from: &buf)
+        case 15: return .otpksUploaded(uploaded: try FfiConverterUInt32.read(from: &buf), serverCount: try FfiConverterUInt32.read(from: &buf)
         )
         
-        case 16: return .spkRotated(keyId: try FfiConverterUInt32.read(from: &buf)
+        case 16: return .preKeyCountUpdated(count: try FfiConverterUInt32.read(from: &buf), recommendedMinimum: try FfiConverterUInt32.read(from: &buf)
         )
         
-        case 17: return .streamReady(streamCursor: try FfiConverterOptionString.read(from: &buf)
+        case 17: return .spkRotated(keyId: try FfiConverterUInt32.read(from: &buf)
         )
         
-        case 18: return .streamError(message: try FfiConverterString.read(from: &buf)
+        case 18: return .streamReady(streamCursor: try FfiConverterOptionString.read(from: &buf)
         )
         
-        case 19: return .incomingCall(callId: try FfiConverterString.read(from: &buf), callerId: try FfiConverterString.read(from: &buf), signalBytes: try FfiConverterData.read(from: &buf)
+        case 19: return .streamError(message: try FfiConverterString.read(from: &buf)
         )
         
-        case 20: return .callSignalReceived(callId: try FfiConverterString.read(from: &buf), signalBytes: try FfiConverterData.read(from: &buf)
+        case 20: return .incomingCall(callId: try FfiConverterString.read(from: &buf), callerId: try FfiConverterString.read(from: &buf), signalBytes: try FfiConverterData.read(from: &buf)
         )
         
-        case 21: return .connectionStateChanged(connected: try FfiConverterBool.read(from: &buf)
+        case 21: return .callSignalReceived(callId: try FfiConverterString.read(from: &buf), signalBytes: try FfiConverterData.read(from: &buf)
         )
         
-        case 22: return .networkError(message: try FfiConverterString.read(from: &buf)
+        case 22: return .connectionStateChanged(connected: try FfiConverterBool.read(from: &buf)
         )
         
-        case 23: return .log(level: try FfiConverterString.read(from: &buf), message: try FfiConverterString.read(from: &buf)
+        case 23: return .networkError(message: try FfiConverterString.read(from: &buf)
         )
         
-        case 24: return .showNotification(messageId: try FfiConverterString.read(from: &buf), senderId: try FfiConverterString.read(from: &buf), conversationId: try FfiConverterString.read(from: &buf), preview: try FfiConverterOptionData.read(from: &buf), timestamp: try FfiConverterInt64.read(from: &buf)
+        case 24: return .log(level: try FfiConverterString.read(from: &buf), message: try FfiConverterString.read(from: &buf)
         )
         
-        case 25: return .backgroundFetchComplete(decryptedCount: try FfiConverterUInt32.read(from: &buf), hadErrors: try FfiConverterBool.read(from: &buf)
+        case 25: return .showNotification(messageId: try FfiConverterString.read(from: &buf), senderId: try FfiConverterString.read(from: &buf), conversationId: try FfiConverterString.read(from: &buf), preview: try FfiConverterOptionData.read(from: &buf), timestamp: try FfiConverterInt64.read(from: &buf)
         )
         
-        case 26: return .p2pStatusReport(peerId: try FfiConverterString.read(from: &buf), connected: try FfiConverterBool.read(from: &buf), latencyMs: try FfiConverterOptionUInt32.read(from: &buf), isRelay: try FfiConverterBool.read(from: &buf)
+        case 26: return .backgroundFetchComplete(decryptedCount: try FfiConverterUInt32.read(from: &buf), hadErrors: try FfiConverterBool.read(from: &buf)
         )
         
-        case 27: return .userFound(userId: try FfiConverterString.read(from: &buf), username: try FfiConverterString.read(from: &buf)
+        case 27: return .p2pStatusReport(peerId: try FfiConverterString.read(from: &buf), connected: try FfiConverterBool.read(from: &buf), latencyMs: try FfiConverterOptionUInt32.read(from: &buf), isRelay: try FfiConverterBool.read(from: &buf)
         )
         
-        case 28: return .userNotFound(query: try FfiConverterString.read(from: &buf)
+        case 28: return .userFound(userId: try FfiConverterString.read(from: &buf), username: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 29: return .userNotFound(query: try FfiConverterString.read(from: &buf)
         )
         
         default: throw UniffiInternalError.unexpectedEnumCase
@@ -1487,70 +1492,75 @@ public struct FfiConverterTypePlatformAction: FfiConverterRustBuffer {
             FfiConverterString.write(message, into: &buf)
             
         
-        case let .preKeyBundleReady(userId,bundleBytes):
+        case let .endSessionReceived(contactId):
             writeInt(&buf, Int32(13))
+            FfiConverterString.write(contactId, into: &buf)
+            
+        
+        case let .preKeyBundleReady(userId,bundleBytes):
+            writeInt(&buf, Int32(14))
             FfiConverterString.write(userId, into: &buf)
             FfiConverterData.write(bundleBytes, into: &buf)
             
         
         case let .otpksUploaded(uploaded,serverCount):
-            writeInt(&buf, Int32(14))
+            writeInt(&buf, Int32(15))
             FfiConverterUInt32.write(uploaded, into: &buf)
             FfiConverterUInt32.write(serverCount, into: &buf)
             
         
         case let .preKeyCountUpdated(count,recommendedMinimum):
-            writeInt(&buf, Int32(15))
+            writeInt(&buf, Int32(16))
             FfiConverterUInt32.write(count, into: &buf)
             FfiConverterUInt32.write(recommendedMinimum, into: &buf)
             
         
         case let .spkRotated(keyId):
-            writeInt(&buf, Int32(16))
+            writeInt(&buf, Int32(17))
             FfiConverterUInt32.write(keyId, into: &buf)
             
         
         case let .streamReady(streamCursor):
-            writeInt(&buf, Int32(17))
+            writeInt(&buf, Int32(18))
             FfiConverterOptionString.write(streamCursor, into: &buf)
             
         
         case let .streamError(message):
-            writeInt(&buf, Int32(18))
+            writeInt(&buf, Int32(19))
             FfiConverterString.write(message, into: &buf)
             
         
         case let .incomingCall(callId,callerId,signalBytes):
-            writeInt(&buf, Int32(19))
+            writeInt(&buf, Int32(20))
             FfiConverterString.write(callId, into: &buf)
             FfiConverterString.write(callerId, into: &buf)
             FfiConverterData.write(signalBytes, into: &buf)
             
         
         case let .callSignalReceived(callId,signalBytes):
-            writeInt(&buf, Int32(20))
+            writeInt(&buf, Int32(21))
             FfiConverterString.write(callId, into: &buf)
             FfiConverterData.write(signalBytes, into: &buf)
             
         
         case let .connectionStateChanged(connected):
-            writeInt(&buf, Int32(21))
+            writeInt(&buf, Int32(22))
             FfiConverterBool.write(connected, into: &buf)
             
         
         case let .networkError(message):
-            writeInt(&buf, Int32(22))
+            writeInt(&buf, Int32(23))
             FfiConverterString.write(message, into: &buf)
             
         
         case let .log(level,message):
-            writeInt(&buf, Int32(23))
+            writeInt(&buf, Int32(24))
             FfiConverterString.write(level, into: &buf)
             FfiConverterString.write(message, into: &buf)
             
         
         case let .showNotification(messageId,senderId,conversationId,preview,timestamp):
-            writeInt(&buf, Int32(24))
+            writeInt(&buf, Int32(25))
             FfiConverterString.write(messageId, into: &buf)
             FfiConverterString.write(senderId, into: &buf)
             FfiConverterString.write(conversationId, into: &buf)
@@ -1559,13 +1569,13 @@ public struct FfiConverterTypePlatformAction: FfiConverterRustBuffer {
             
         
         case let .backgroundFetchComplete(decryptedCount,hadErrors):
-            writeInt(&buf, Int32(25))
+            writeInt(&buf, Int32(26))
             FfiConverterUInt32.write(decryptedCount, into: &buf)
             FfiConverterBool.write(hadErrors, into: &buf)
             
         
         case let .p2pStatusReport(peerId,connected,latencyMs,isRelay):
-            writeInt(&buf, Int32(26))
+            writeInt(&buf, Int32(27))
             FfiConverterString.write(peerId, into: &buf)
             FfiConverterBool.write(connected, into: &buf)
             FfiConverterOptionUInt32.write(latencyMs, into: &buf)
@@ -1573,13 +1583,13 @@ public struct FfiConverterTypePlatformAction: FfiConverterRustBuffer {
             
         
         case let .userFound(userId,username):
-            writeInt(&buf, Int32(27))
+            writeInt(&buf, Int32(28))
             FfiConverterString.write(userId, into: &buf)
             FfiConverterString.write(username, into: &buf)
             
         
         case let .userNotFound(query):
-            writeInt(&buf, Int32(28))
+            writeInt(&buf, Int32(29))
             FfiConverterString.write(query, into: &buf)
             
         }
@@ -1630,6 +1640,8 @@ public enum UiEvent: Equatable, Hashable {
     case ackMessage(messageId: String, messageNumber: UInt64
     )
     case initSessionInitiator(contactId: String
+    )
+    case sendEndSession(contactId: String
     )
     case searchUser(query: String
     )
@@ -1704,30 +1716,33 @@ public struct FfiConverterTypeUiEvent: FfiConverterRustBuffer {
         case 13: return .initSessionInitiator(contactId: try FfiConverterString.read(from: &buf)
         )
         
-        case 14: return .searchUser(query: try FfiConverterString.read(from: &buf)
+        case 14: return .sendEndSession(contactId: try FfiConverterString.read(from: &buf)
         )
         
-        case 15: return .signal(callId: try FfiConverterString.read(from: &buf), signalBytes: try FfiConverterData.read(from: &buf)
+        case 15: return .searchUser(query: try FfiConverterString.read(from: &buf)
         )
         
-        case 16: return .registerPushToken(token: try FfiConverterString.read(from: &buf), platform: try FfiConverterString.read(from: &buf)
+        case 16: return .signal(callId: try FfiConverterString.read(from: &buf), signalBytes: try FfiConverterData.read(from: &buf)
         )
         
-        case 17: return .backgroundPush(sinceCursor: try FfiConverterOptionString.read(from: &buf)
+        case 17: return .registerPushToken(token: try FfiConverterString.read(from: &buf), platform: try FfiConverterString.read(from: &buf)
         )
         
-        case 18: return .keychainResult(key: try FfiConverterString.read(from: &buf), data: try FfiConverterOptionData.read(from: &buf)
+        case 18: return .backgroundPush(sinceCursor: try FfiConverterOptionString.read(from: &buf)
         )
         
-        case 19: return .platformReady
-        
-        case 20: return .p2pHandoffInitiate(peerId: try FfiConverterString.read(from: &buf), candidates: try FfiConverterSequenceTypeICECandidate.read(from: &buf)
+        case 19: return .keychainResult(key: try FfiConverterString.read(from: &buf), data: try FfiConverterOptionData.read(from: &buf)
         )
         
-        case 21: return .p2pHandoffAck(sessionId: try FfiConverterString.read(from: &buf), success: try FfiConverterBool.read(from: &buf), candidates: try FfiConverterSequenceTypeICECandidate.read(from: &buf), measuredLatencyMs: try FfiConverterOptionUInt32.read(from: &buf)
+        case 20: return .platformReady
+        
+        case 21: return .p2pHandoffInitiate(peerId: try FfiConverterString.read(from: &buf), candidates: try FfiConverterSequenceTypeICECandidate.read(from: &buf)
         )
         
-        case 22: return .p2pStatusReport(peerId: try FfiConverterString.read(from: &buf), connected: try FfiConverterBool.read(from: &buf), latencyMs: try FfiConverterOptionUInt32.read(from: &buf), isRelay: try FfiConverterBool.read(from: &buf)
+        case 22: return .p2pHandoffAck(sessionId: try FfiConverterString.read(from: &buf), success: try FfiConverterBool.read(from: &buf), candidates: try FfiConverterSequenceTypeICECandidate.read(from: &buf), measuredLatencyMs: try FfiConverterOptionUInt32.read(from: &buf)
+        )
+        
+        case 23: return .p2pStatusReport(peerId: try FfiConverterString.read(from: &buf), connected: try FfiConverterBool.read(from: &buf), latencyMs: try FfiConverterOptionUInt32.read(from: &buf), isRelay: try FfiConverterBool.read(from: &buf)
         )
         
         default: throw UniffiInternalError.unexpectedEnumCase
@@ -1812,46 +1827,51 @@ public struct FfiConverterTypeUiEvent: FfiConverterRustBuffer {
             FfiConverterString.write(contactId, into: &buf)
             
         
-        case let .searchUser(query):
+        case let .sendEndSession(contactId):
             writeInt(&buf, Int32(14))
+            FfiConverterString.write(contactId, into: &buf)
+            
+        
+        case let .searchUser(query):
+            writeInt(&buf, Int32(15))
             FfiConverterString.write(query, into: &buf)
             
         
         case let .signal(callId,signalBytes):
-            writeInt(&buf, Int32(15))
+            writeInt(&buf, Int32(16))
             FfiConverterString.write(callId, into: &buf)
             FfiConverterData.write(signalBytes, into: &buf)
             
         
         case let .registerPushToken(token,platform):
-            writeInt(&buf, Int32(16))
+            writeInt(&buf, Int32(17))
             FfiConverterString.write(token, into: &buf)
             FfiConverterString.write(platform, into: &buf)
             
         
         case let .backgroundPush(sinceCursor):
-            writeInt(&buf, Int32(17))
+            writeInt(&buf, Int32(18))
             FfiConverterOptionString.write(sinceCursor, into: &buf)
             
         
         case let .keychainResult(key,data):
-            writeInt(&buf, Int32(18))
+            writeInt(&buf, Int32(19))
             FfiConverterString.write(key, into: &buf)
             FfiConverterOptionData.write(data, into: &buf)
             
         
         case .platformReady:
-            writeInt(&buf, Int32(19))
+            writeInt(&buf, Int32(20))
         
         
         case let .p2pHandoffInitiate(peerId,candidates):
-            writeInt(&buf, Int32(20))
+            writeInt(&buf, Int32(21))
             FfiConverterString.write(peerId, into: &buf)
             FfiConverterSequenceTypeICECandidate.write(candidates, into: &buf)
             
         
         case let .p2pHandoffAck(sessionId,success,candidates,measuredLatencyMs):
-            writeInt(&buf, Int32(21))
+            writeInt(&buf, Int32(22))
             FfiConverterString.write(sessionId, into: &buf)
             FfiConverterBool.write(success, into: &buf)
             FfiConverterSequenceTypeICECandidate.write(candidates, into: &buf)
@@ -1859,7 +1879,7 @@ public struct FfiConverterTypeUiEvent: FfiConverterRustBuffer {
             
         
         case let .p2pStatusReport(peerId,connected,latencyMs,isRelay):
-            writeInt(&buf, Int32(22))
+            writeInt(&buf, Int32(23))
             FfiConverterString.write(peerId, into: &buf)
             FfiConverterBool.write(connected, into: &buf)
             FfiConverterOptionUInt32.write(latencyMs, into: &buf)

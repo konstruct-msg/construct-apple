@@ -9,8 +9,8 @@ import Foundation
 
 @MainActor
 @Observable
-class SessionManager {
-    static let shared = SessionManager()
+class AuthSessionManager {
+    static let shared = AuthSessionManager()
     private init() {}
 
     // ✅ Session token for API authentication

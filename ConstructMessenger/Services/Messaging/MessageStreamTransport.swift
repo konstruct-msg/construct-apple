@@ -60,9 +60,7 @@ final class GRPCStreamTransport: StreamTransport {
         )
 
 #if canImport(Network)
-        if #available(iOS 16.0, macOS 13.0, *),
-           !useH2Fallback,
-           GRPCChannelManager.shared.iceProxyPort() == nil {
+        if !useH2Fallback, GRPCChannelManager.shared.iceProxyPort() == nil {
             let h3 = GRPCChannelManager.shared.acquireH3Channel()
             let client = Shared_Proto_Services_V1_MessagingService.Client(wrapping: h3)
             try await runStream(client: client, request: request, events: events,
@@ -127,9 +125,13 @@ extension MessageStreamManager {
         activeStreamGeneration = generation
 
         // Consume the one-shot H2 fallback flag (set when the previous H3 attempt timed out
-        // on a direct path). Resetting before transport selection ensures subsequent iterations
-        // restart with H3 regardless of what happens in this openStream() call.
-        let useH2Fallback = shouldFallbackToH2Direct
+        // on a direct path). Also check the persistent failure counter: after h3OpenFailureThreshold
+        // consecutive H3 failures (surviving network changes), switch to H2 until a clean stream
+        // resets the counter. This handles devices where H3 never works regardless of network.
+        let useH2Fallback = shouldFallbackToH2Direct || consecutiveH3OpenFailures >= Self.h3OpenFailureThreshold
+        if consecutiveH3OpenFailures >= Self.h3OpenFailureThreshold {
+            Log.info("H3 disabled — \(consecutiveH3OpenFailures) consecutive failures, using H2 direct", category: "MessageStream")
+        }
         shouldFallbackToH2Direct = false
 
         let metricsLabel = GRPCChannelManager.shared.currentRoutingKey
@@ -145,11 +147,11 @@ extension MessageStreamManager {
         // On iOS 16+ with a direct (non-ICE) path, prefer HTTP/3 (QUIC) for connection
         // migration across WiFi↔cellular switches and head-of-line blocking elimination.
         // H3 is never used over ICE — obfs4 tunnels terminate at an H2 proxy.
-        // Fall back to H2 when ICE is active, on older OS, or when useH2Fallback is set
+        // Fall back to H2 when ICE is active or when useH2Fallback is set
         // (previous H3 attempt timed out — trying H2 direct before escalating to ICE).
         let transportLabel: String
 #if canImport(Network)
-        if #available(iOS 16.0, macOS 13.0, *), !useH2Fallback, GRPCChannelManager.shared.iceProxyPort() == nil {
+        if !useH2Fallback, GRPCChannelManager.shared.iceProxyPort() == nil {
             transportLabel = "H3"
         } else {
             transportLabel = "H2"
@@ -278,6 +280,7 @@ extension MessageStreamManager {
                 self.activeTransport = label
                 self.lastActiveTransport = label
                 self.lastHeartbeatDate = Date()
+                if self.lastStreamTransportWasH3 { self.consecutiveH3OpenFailures = 0 }
                 // The background fetch was a best-effort catch-up for messages missed
                 // while disconnected. Now that the stream is live the server will push
                 // everything from the cursor, so the in-flight fetch is no longer needed.
@@ -344,6 +347,19 @@ extension MessageStreamManager {
                 group.addTask {
                     try await streamTask.value
                 }
+                // 4) Hard H3 deadline — safety net for NWConnections that ignore the soft 1.5s
+                //    timeout.  Apple's Network.framework QUIC handshake runs on a DispatchQueue and
+                //    does not check Swift task cancellation; the connection stays alive until a ~70s
+                //    system timeout.  Explicitly cancelling the runConnections() Task (via
+                //    forceInvalidateH3Connection) closes the NWConnection so streamTask fails within
+                //    ~200ms rather than 70s.  Fires only when the 1.5s task did not cancel first.
+                if isH3Transport {
+                    group.addTask {
+                        try await Task.sleep(for: .seconds(NetworkTiming.GRPC.streamOpenAcceptTimeoutH3Hard))
+                        GRPCChannelManager.shared.forceInvalidateH3Connection()
+                        throw StreamAcceptTimeout()
+                    }
+                }
 
                 _ = try await group.next()
                 group.cancelAll()
@@ -362,6 +378,12 @@ extension MessageStreamManager {
                 PerformanceMetrics.shared.cancelStart(.streamOpenStart, label: metricsLabel)
                 streamTask.cancel()
                 incomingCont.finish()
+                // For H3/QUIC: force-cancel the runConnections() task so the NWConnection closes
+                // immediately.  beginGracefulShutdown() (used by invalidatePersistentClient) does
+                // not close a stuck QUIC handshake — task cancellation does.
+                if isH3Transport {
+                    GRPCChannelManager.shared.forceInvalidateH3Connection()
+                }
                 // Always invalidate the persistent client on stream timeout.
                 // If the underlying TCP connection was RST'd (server keepalive timeout, NAT expiry,
                 // etc.) the gRPC runConnections() error handler fires asynchronously. Without this

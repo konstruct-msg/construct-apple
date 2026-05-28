@@ -38,7 +38,7 @@ final class VoIPPushManager: NSObject {
             while !Task.isCancelled {
                 await withCheckedContinuation { continuation in
                     withObservationTracking {
-                        _ = SessionManager.shared.sessionToken
+                        _ = AuthSessionManager.shared.sessionToken
                     } onChange: {
                         continuation.resume()
                     }
@@ -71,9 +71,9 @@ final class VoIPPushManager: NSObject {
 
     private func retryServerRegistrationIfNeeded() async {
         guard CallsFeature.isEnabled else { return }
-        guard SessionManager.shared.sessionToken != nil else { return }
+        guard AuthSessionManager.shared.sessionToken != nil else { return }
         // userId must be present — the server requires x-user-id on this RPC.
-        guard SessionManager.shared.currentUserId != nil else {
+        guard AuthSessionManager.shared.currentUserId != nil else {
             Log.debug("VoIP token retry deferred — userId not yet available", category: "Calls")
             return
         }
@@ -93,7 +93,7 @@ final class VoIPPushManager: NSObject {
     }
 
     private func registerWithServer(_ token: String) async {
-        guard SessionManager.shared.sessionToken != nil else {
+        guard AuthSessionManager.shared.sessionToken != nil else {
             Log.info("VoIP token registration deferred — no session yet", category: "Calls")
             return
         }

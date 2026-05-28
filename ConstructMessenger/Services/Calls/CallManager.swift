@@ -166,7 +166,7 @@ final class CallManager {
             let initResp = try await SignalingServiceClient.shared.initiateCall(
                 callId: callId,
                 calleeUserId: userId,
-                callerName: SessionManager.shared.currentDisplayName,
+                callerName: AuthSessionManager.shared.currentDisplayName,
                 hasVideo: hasVideo
             )
             // calleeOnline=false is normal: idle users never have a signal stream open.
@@ -782,7 +782,7 @@ final class CallManager {
             for action in actions {
                 switch action {
                 case .sendEncryptedMessage(let to, let payload, let msgId, _):
-                    let currentUserId = SessionManager.shared.currentUserId ?? ""
+                    let currentUserId = AuthSessionManager.shared.currentUserId ?? ""
                     Task {
                         do {
                             _ = try await MessagingServiceClient.shared.sendMessage(
@@ -804,7 +804,7 @@ final class CallManager {
                     // Persist updated session state after Rust encrypt.
                     if key.hasPrefix("session_") {
                         let contactId = String(key.dropFirst("session_".count))
-                        CryptoManager.shared.saveSessionToKeychainPublic(for: contactId)
+                        CryptoManager.shared.saveSessionToKeychain(for: contactId)
                         CryptoManager.shared.saveOrchestratorStateCFE()
                     }
                 case .notifyError(let code, let msg):
@@ -928,7 +928,7 @@ final class CallManager {
         var answer = Shared_Proto_Signaling_V1_CallAnswer()
         answer.sdp = sdp
         answer.answererDeviceID = Self.currentDeviceId()
-        answer.answererUserID = SessionManager.shared.currentUserId ?? ""
+        answer.answererUserID = AuthSessionManager.shared.currentUserId ?? ""
         answer.answeredAt = Self.nowMs()
         var sig = Shared_Proto_Signaling_V1_WebRTCSignal()
         sig.callID = active.session.id
@@ -947,7 +947,7 @@ final class CallManager {
         offer.sdp = plainSdp
         offer.callType = .audio
         offer.callerDeviceID = Self.currentDeviceId()
-        offer.callerUserID = SessionManager.shared.currentUserId ?? ""
+        offer.callerUserID = AuthSessionManager.shared.currentUserId ?? ""
         offer.offeredAt = Self.nowMs()
         var sig = Shared_Proto_Signaling_V1_WebRTCSignal()
         sig.callID = active.session.id
@@ -1023,7 +1023,7 @@ final class CallManager {
     }
 
     private static func currentDeviceId() -> String {
-        SessionManager.shared.currentDeviceId ?? (KeychainManager.shared.loadDeviceID() ?? "")
+        AuthSessionManager.shared.currentDeviceId ?? (KeychainManager.shared.loadDeviceID() ?? "")
     }
 
     private static func makePing(timestampMs: Int64) -> Shared_Proto_Signaling_V1_SignalRequest {

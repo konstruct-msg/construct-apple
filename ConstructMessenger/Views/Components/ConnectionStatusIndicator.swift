@@ -7,9 +7,8 @@ import SwiftUI
 
 /// Compact connection status badge for the chat list header.
 ///
-/// Three states: Connected / Connecting... / Disconnected
-/// Shows a snowflake (*) when routed through ICE relay.
-/// Auto-hides after 4 s when connected.
+/// States: Connected (auto-hides, except on ICE) / Connecting... (with phase) / Paused / Disconnected.
+/// When ICE is active the connected badge stays visible permanently.
 struct ConnectionStatusIndicator: View {
     var connectionManager = ConnectionStatusManager.shared
     @ObservedObject var iceManager = IceProxyManager.shared
@@ -32,27 +31,49 @@ struct ConnectionStatusIndicator: View {
         .onChange(of: connectionManager.connectionStatus) { _, newStatus in
             handleStatusChange(newStatus)
         }
+        .onChange(of: connectionManager.isStreamPaused) { _, isPaused in
+            handlePauseChange(isPaused)
+        }
+        .onChange(of: iceManager.isRunning) { _, isRunning in
+            if case .connected = connectionManager.connectionStatus {
+                if isRunning {
+                    // ICE activated while connected — cancel hide timer, stay visible.
+                    hideTask?.cancel()
+                    hideTask = nil
+                    visible = true
+                    withAnimation(.easeOut(duration: 0.4)) { textOpacity = 1 }
+                } else {
+                    // ICE stopped while connected — start normal hide timer.
+                    handleStatusChange(.connected)
+                }
+            }
+        }
     }
 
     // MARK: - Label
 
     private var labelText: String {
-        let status: String
+        if connectionManager.isStreamPaused {
+            return "> \(NSLocalizedString("status_paused", comment: ""))"
+        }
         switch connectionManager.connectionStatus {
         case .connected:
-            status = NSLocalizedString("connected", comment: "")
+            let status = NSLocalizedString("connected", comment: "")
+            return iceManager.isRunning ? "> \(status) \(CTSymbol.star8)" : "> \(status)"
         case .connecting, .unknown:
-            status = NSLocalizedString("status_connecting", comment: "")
+            if let phase = connectionManager.connectingPhase {
+                return "> \(phase)"
+            }
+            return "> \(NSLocalizedString("status_connecting", comment: ""))"
         case .disconnected:
-            status = NSLocalizedString("disconnected", comment: "")
+            return "> \(NSLocalizedString("disconnected", comment: ""))"
         }
-        if case .connected = connectionManager.connectionStatus, iceManager.isRunning {
-            return "> \(status) \(CTSymbol.star8)"
-        }
-        return "> \(status)"
     }
 
     private var labelColor: Color {
+        if connectionManager.isStreamPaused {
+            return Color.CT.textDim.opacity(0.45)
+        }
         switch connectionManager.connectionStatus {
         case .connected:
             return iceManager.isRunning ? Color.CT.accent : Color.CT.textDim
@@ -63,9 +84,10 @@ struct ConnectionStatusIndicator: View {
         }
     }
 
-    // MARK: - Visibility
+    // MARK: - Visibility / Animation
 
     private func handleStatusChange(_ status: ConnectionStatusManager.ConnectionStatus) {
+        guard !connectionManager.isStreamPaused else { return }
         hideTask?.cancel()
         hideTask = nil
 
@@ -73,15 +95,18 @@ struct ConnectionStatusIndicator: View {
         case .connected:
             visible = true
             withAnimation(.easeOut(duration: 0.4)) { textOpacity = 1 }
-            hideTask = Task {
-                try? await Task.sleep(nanoseconds: 4_000_000_000)
-                guard !Task.isCancelled else { return }
-                await MainActor.run {
-                    withAnimation(.easeIn(duration: 0.8)) { textOpacity = 0 }
+            // Keep indicator visible permanently when ICE is active.
+            if !iceManager.isRunning {
+                hideTask = Task {
+                    try? await Task.sleep(nanoseconds: 4_000_000_000)
+                    guard !Task.isCancelled else { return }
+                    await MainActor.run {
+                        withAnimation(.easeIn(duration: 0.8)) { textOpacity = 0 }
+                    }
+                    try? await Task.sleep(nanoseconds: 900_000_000)
+                    guard !Task.isCancelled else { return }
+                    await MainActor.run { visible = false }
                 }
-                try? await Task.sleep(nanoseconds: 900_000_000)
-                guard !Task.isCancelled else { return }
-                await MainActor.run { visible = false }
             }
 
         case .connecting, .unknown:
@@ -95,10 +120,23 @@ struct ConnectionStatusIndicator: View {
             withAnimation(.easeOut(duration: 0.3)) { textOpacity = 1 }
         }
     }
+
+    private func handlePauseChange(_ isPaused: Bool) {
+        hideTask?.cancel()
+        hideTask = nil
+        visible = true
+        if isPaused {
+            withAnimation(.easeOut(duration: 0.3)) { textOpacity = 0.45 }
+        } else {
+            handleStatusChange(connectionManager.connectionStatus)
+        }
+    }
 }
 
 #Preview {
-    ConnectionStatusIndicator()
-        .padding()
-        .background(Color.CT.bg)
+    VStack(spacing: 16) {
+        ConnectionStatusIndicator()
+    }
+    .padding()
+    .background(Color.CT.bg)
 }

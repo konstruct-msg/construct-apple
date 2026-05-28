@@ -2,7 +2,7 @@ import Foundation
 
 /// A lock-protected snapshot of the auth credentials needed by `AuthInterceptor`.
 ///
-/// Updated by `SessionManager` on every session state change.
+/// Updated by `AuthSessionManager` on every session state change.
 /// Read by `AuthInterceptor` without an actor hop, eliminating the per-RPC MainActor dispatch.
 struct AuthSnapshot: Sendable {
     let token: String?
@@ -24,7 +24,7 @@ struct AuthSnapshot: Sendable {
 
 /// Thread-safe cache of `AuthSnapshot` used by `AuthInterceptor`.
 ///
-/// All writes come from `SessionManager` (on MainActor, safe to read all properties).
+/// All writes come from \`AuthSessionManager\` (on MainActor, safe to read all properties).
 /// All reads come from `AuthInterceptor` (nonisolated gRPC interceptor thread).
 final class GRPCAuthCache: Sendable {
     static let shared = GRPCAuthCache()

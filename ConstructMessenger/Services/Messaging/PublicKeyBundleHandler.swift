@@ -186,14 +186,14 @@ class PublicKeyBundleHandler {
             Log.error("Session initialization failed: \(message)", category: "PublicKeyBundleHandler")
             Log.error("SESSION_STATE[init_receiving_failed]: userId=\(data.userId.prefix(8))..., duration=\(String(format: "%.2f", initDuration))s, error=SessionInitializationFailed", category: "SessionInit")
             // Check if our keys match what the server serves — desync would explain AEAD failure
-            Task { await CryptoManager.shared.verifyKeyConsistencyWithServer() }
+            Task { await PreKeyRotationService.shared.verifyAndRepairKeyConsistency() }
             return false
             
         } catch {
             let initDuration = Date().timeIntervalSince(initStartTime)
             Log.error("Failed to initialize receiving session: \(error.localizedDescription)", category: "PublicKeyBundleHandler")
             Log.error("SESSION_STATE[init_receiving_failed]: userId=\(data.userId.prefix(8))..., duration=\(String(format: "%.2f", initDuration))s, error=\(error.localizedDescription)", category: "SessionInit")
-            Task { await CryptoManager.shared.verifyKeyConsistencyWithServer() }
+            Task { await PreKeyRotationService.shared.verifyAndRepairKeyConsistency() }
             return false
         }
     }

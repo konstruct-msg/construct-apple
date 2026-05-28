@@ -218,7 +218,7 @@ struct ChatsListView: View {
     private func addContact(contactInfo: ContactInfo) {
         let userId = contactInfo.userId
         let username = contactInfo.username
-        if userId == SessionManager.shared.currentUserId {
+        if userId == AuthSessionManager.shared.currentUserId {
             showingDrafts = true
             return
         }

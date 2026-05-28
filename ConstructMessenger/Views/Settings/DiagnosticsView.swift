@@ -303,7 +303,7 @@ struct DiagnosticsView: View {
         CryptoManager.shared.clearOrchestratorStateCFE()
 
         // Clear in-memory session state so the app shows the registration screen
-        SessionManager.shared.clearSession()
+        AuthSessionManager.shared.clearSession()
 
         // --- UserDefaults: registration / migration flags ---
         let keysToRemove = [

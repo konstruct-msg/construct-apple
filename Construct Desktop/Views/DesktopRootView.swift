@@ -114,7 +114,7 @@ struct DesktopRootView: View {
                 .environment(\.managedObjectContext, viewContext)
             } else if let chatId = chatsViewModel.chatToOpen,
                let chat = fetchChat(id: chatId) {
-                DesktopChatView(chat: chat, context: viewContext)
+                DesktopChatView(chat: chat, context: viewContext, sessionCoordinator: chatsViewModel.sessionCoordinator)
                     .onDrop(of: [.image, .fileURL], isTargeted: nil) { providers in
                         handleDrop(providers: providers, into: chat)
                     }

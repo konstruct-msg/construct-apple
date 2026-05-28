@@ -38,6 +38,7 @@
 // MARK: - Chat
 "sending" = "Sending...";
 "status_connecting" = "Connecting...";
+"status_paused" = "Background";
 "status_no_connection" = "No connection";
 "status_encrypting" = "Encrypting...";
 "chat" = "Chat";
