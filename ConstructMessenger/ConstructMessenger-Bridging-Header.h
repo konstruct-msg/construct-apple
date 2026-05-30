@@ -14,6 +14,7 @@
 // VEIL (construct-veil) — obfs4 traffic obfuscation proxy
 // Symbols are compiled into libconstruct_core.a
 #include <stdint.h>
+#include <stddef.h>
 int32_t veil_proxy_start(const char *bridge_line, const char *relay_addr, uint16_t *port_out);
 int32_t veil_proxy_start_tls(const char *bridge_line, const char *relay_addr,
                             const char *tls_server_name, uint16_t *port_out);
@@ -57,5 +58,38 @@ int32_t veil_proxy_start_webtunnel(const char *relay_addr,
                                    const char *wt_base_path, uint16_t *port_out);
 /// WebTunnel proxy port (0 = not running).
 uint16_t veil_proxy_port_webtunnel(void);
+
+// ── VEIL Coordinator FFI (Phase 1+) ─────────────────────────────────────────
+//
+// FSM-based unified entry point with parallel happy-eyeballs probing of
+// obfs4 and WebTunnel. Replaces the per-method veil_proxy_start_* family.
+// Gated by `coordinator` feature in construct-veil; symbols are present when
+// libconstruct_core.a is built with construct-veil?/coordinator enabled.
+//
+// Method ID legend in VeilStartResult.method: 0=obfs4, 1=webtunnel, 2=masque.
+
+typedef struct VeilStartRequest {
+    const char *relay_addr;            // "host:port"
+    const char *bundle;                // "cert=<base64> iat-mode=<n>"
+    const char *tls_sni;               // SNI ("" = none)
+    const char *spki_hex;              // SPKI hex pin ("" = none)
+    const char *host_header;           // WebTunnel HTTP Host header
+    const char *wt_base_path;          // WebTunnel WS base path
+    const uint8_t *network_fingerprint;// Caller-provided scoring key bytes
+    size_t network_fingerprint_len;
+    uint32_t allowed_methods;          // bitmask, 0 = all
+    const char *scores_path;           // SQLite path, NULL = in-memory
+} VeilStartRequest;
+
+typedef struct VeilStartResult {
+    uint16_t port;
+    uint8_t  method;
+    uint32_t latency_ms;
+} VeilStartResult;
+
+int32_t  veil_start(VeilStartRequest req, VeilStartResult *out);
+int32_t  veil_stop(void);
+int32_t  veil_is_alive(void);
+uint16_t veil_port(void);
 
 #endif /* ConstructMessenger_Bridging_Header_h */

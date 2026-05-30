@@ -31,6 +31,21 @@ final class MockIceProxyRuntime: VeilProxyRuntime, @unchecked Sendable {
     var startedAddresses: [String] = []
     private var _alive = false
 
+    func startUnified(
+        relay: VeilRelay,
+        fingerprint: Data,
+        scoresPath: String?
+    ) -> Result<VeilStartOutcome, VeilProxyRuntimeError> {
+        startedAddresses.append(relay.address)
+        switch startResult {
+        case .success(let port):
+            _alive = true
+            return .success(VeilStartOutcome(port: port, method: .obfs4, latencyMs: 0))
+        case .failure(let e):
+            return .failure(e)
+        }
+    }
+
     func start(_ request: VeilTransportRequest) -> Result<UInt16, VeilProxyRuntimeError> {
         startedAddresses.append(request.address)
         if case .success = startResult { _alive = true }

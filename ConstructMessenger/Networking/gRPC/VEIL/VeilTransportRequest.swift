@@ -39,3 +39,28 @@ enum VeilProxyRuntimeError: Error, Sendable {
         }
     }
 }
+
+// MARK: - Unified VEIL coordinator FFI
+
+/// Which obfuscator won the happy-eyeballs probe race inside the Rust coordinator.
+/// Mirrors `VeilStartResult.method` from the C FFI.
+enum VeilMethod: UInt8, Sendable, Equatable {
+    case obfs4 = 0
+    case webTunnel = 1
+    case masque = 2
+
+    var label: String {
+        switch self {
+        case .obfs4:     return "obfs4"
+        case .webTunnel: return "webtunnel"
+        case .masque:    return "masque"
+        }
+    }
+}
+
+/// Result of a single unified `veil_start` call.
+struct VeilStartOutcome: Sendable, Equatable {
+    let port: UInt16
+    let method: VeilMethod
+    let latencyMs: UInt32
+}

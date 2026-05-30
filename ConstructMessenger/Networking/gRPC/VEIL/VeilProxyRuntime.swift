@@ -14,28 +14,30 @@
 
 import Foundation
 
-/// Contract for the native ICE proxy C FFI layer.
+/// Contract for the native VEIL proxy C FFI layer.
 ///
-/// Wraps the six `veil_proxy_*` symbols exported by `libconstruct_core`:
-///   `veil_proxy_start`, `veil_proxy_start_tls`, `veil_proxy_start_tls_profiled`,
-///   `veil_proxy_start_webtunnel`, `veil_proxy_stop`, `veil_proxy_is_running`.
+/// Production path goes through the unified `veil_start` FFI (Rust does parallel
+/// happy-eyeballs probing of obfs4 + WebTunnel internally and picks a winner).
+/// The legacy per-method `start(_:)` / `startSecondary` calls remain on the protocol
+/// for test ergonomics — production code paths must not use them.
 protocol VeilProxyRuntime: AnyObject, Sendable {
-    /// Start the primary proxy with the given transport configuration.
-    /// Returns the bound local port on success.
+    /// Unified entry point — Rust coordinator picks the obfuscator via happy-eyeballs.
+    /// Returns the local port, the winning method, and the probe latency.
+    func startUnified(
+        relay: VeilRelay,
+        fingerprint: Data,
+        scoresPath: String?
+    ) -> Result<VeilStartOutcome, VeilProxyRuntimeError>
+
+    /// Legacy per-method start. Kept for test mocks; production callers use `startUnified`.
     func start(_ request: VeilTransportRequest) -> Result<UInt16, VeilProxyRuntimeError>
 
-    /// Start the secondary (plain obfs4) proxy for Happy Eyeballs dual-proxy mode.
-    ///
-    /// The secondary targets the `PROXY` Rust static, which does not collide with
-    /// a concurrently running `PROXY_TLS` primary.
+    /// Legacy secondary start for Happy Eyeballs dual-proxy mode. Kept for test mocks.
     func startSecondary(bridgeLine: String, address: String) -> Result<UInt16, VeilProxyRuntimeError>
 
-    /// Stop the primary proxy.
+    /// Stop the active proxy (regardless of which start variant was used).
     func stop()
 
     /// Whether the Rust proxy process is currently alive.
-    ///
-    /// Queries the native flag directly — the Swift `isRunning` state can be stale
-    /// after the OS kills background threads while the app is suspended.
     func isAlive() -> Bool
 }
