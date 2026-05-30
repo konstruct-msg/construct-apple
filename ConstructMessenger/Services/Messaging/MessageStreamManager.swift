@@ -266,7 +266,6 @@ final class MessageStreamManager {
         }
 
         Log.info("Starting MessageStream connection (subscribed to \(contactUserIds.count) contacts)", category: "MessageStream")
-        ConnectionStatusManager.shared.markConnecting()
         connectStartTime = Date()
         streamTask = Task { [weak self] in
             await self?.connectLoop()
@@ -344,7 +343,6 @@ final class MessageStreamManager {
         lastStreamTransportWasH3 = false
         continuousFailureStreakStart = nil
         isInDegradedMode = false
-        ConnectionStatusManager.shared.markStreamDisconnected()
         Log.info("MessageStream disconnected", category: "MessageStream")
     }
 
@@ -483,16 +481,6 @@ final class MessageStreamManager {
             // TransportRouter maintains ICE state continuously; no explicit prepare needed.
             // We just read whatever the router has set as current routing.
             let routerSnapshot = await TransportRouter.shared.snapshot()
-            let usingICE = routerSnapshot.state.prefersVEIL && routerSnapshot.state.veilPort != nil
-            let phaseLabel: String
-            if lastStreamTransportWasH3 && shouldFallbackToH2Direct {
-                phaseLabel = "H2 direct (H3 fallback)"
-            } else if usingICE {
-                phaseLabel = "ICE relay"
-            } else {
-                phaseLabel = retryCount == 0 ? "Connecting…" : "Reconnecting (attempt \(retryCount + 1))"
-            }
-            ConnectionStatusManager.shared.markConnecting(phase: phaseLabel)
             do {
                 try await openStream()
                 // Stream ended cleanly — brief pause before reconnecting to avoid tight loop
@@ -627,10 +615,7 @@ final class MessageStreamManager {
                 } else {
                     Log.error("MessageStream error (attempt #\(retryCount + 1)): \(error)", category: "MessageStream")
                 }
-                ConnectionStatusManager.shared.markStreamDisconnected(
-                    error: error.localizedDescription,
-                    phase: "Error: \(error.localizedDescription)"
-                )
+                ConnectionStatusManager.shared.setLastError(error.localizedDescription)
             }
 
             guard !Task.isCancelled else { break }

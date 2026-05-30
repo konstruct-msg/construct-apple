@@ -2,46 +2,60 @@
 //  ConnectionStatusManager.swift
 //  Construct Messenger
 //
-//  Manages connection status for gRPC stream architecture
+//  Single-source-of-truth wrapper around TransportRouterMirror's state.
+//  `connectionStatus` is recomputed by exactly one internal observer; all
+//  former external writers (`markStream*`, `markConnecting`, `markRequestFailed`)
+//  are removed in favour of FSM-driven derivation.
 //
 
 import Foundation
 
-/// Manages and publishes connection status for the app
-/// In gRPC architecture, connection status is based on:
-/// 1. Network reachability (device has internet)
-/// 2. gRPC MessageStream connection state
-/// 3. Session validity
+/// Publishes a coarse connection status derived from the transport FSM.
+///
+/// Inputs to the derivation:
+/// 1. `TransportRouterMirror.shared.state` — the FSM truth.
+/// 2. `NetworkReachabilityManager.shared.isReachable` — fast-path offline detection.
+/// 3. `lastSuccessfulRequest` — used as a 90s grace window so a single stream
+///    reconnect cycle doesn't flicker the UI from Connected → Connecting → Connected.
+///
+/// The only external entry points that *mutate* state are:
+/// - `markRequestSucceeded()` — bumps `lastSuccessfulRequest`, clears `lastError`.
+/// - `setLastError(_:)` — surfaces the most recent failure reason to UI.
+/// - `markStreamPaused/Resumed()` — orthogonal app-lifecycle flag (background pause).
 @MainActor
 @Observable
 class ConnectionStatusManager {
     static let shared = ConnectionStatusManager()
 
-    /// Current connection status
-    var connectionStatus: ConnectionStatus = .unknown
+    /// Current connection status. Derived; do not assign from outside.
+    private(set) var connectionStatus: ConnectionStatus = .unknown
 
-    /// Short diagnostic string for the "Connecting…" phase, e.g. "H3 → H2 fallback (attempt 2)".
-    /// Cleared when `connected` or `disconnected`.
+    /// Short diagnostic string for the "Connecting…" phase, e.g. "ICE probe 2".
+    /// Derived from the current FSM state; nil when `.connected` or `.disconnected`.
     private(set) var connectingPhase: String?
 
     /// True when the stream is intentionally paused (app in background).
-    /// Visually distinct from "connecting" in the status indicator.
+    /// Visually distinct from "connecting" in the status indicator. Orthogonal to FSM state.
     private(set) var isStreamPaused: Bool = false
 
-    /// Convenience property for checking if connected
-    var isConnected: Bool {
-        connectionStatus == .connected
-    }
+    /// Convenience property for checking if connected.
+    var isConnected: Bool { connectionStatus == .connected }
 
-    /// Last successful API request timestamp
+    /// Last successful API request timestamp. Drives the 90s grace window.
     private(set) var lastSuccessfulRequest: Date?
 
-    /// Last error message if any
+    /// Last error message if any. Set by the transport effector on failure events.
     private(set) var lastError: String?
 
-    private var reachabilityTask: Task<Void, Never>?
-    private var veilProxyObserver: NSObjectProtocol?
+    private var recomputeTask: Task<Void, Never>?
+    private var graceExpiryTask: Task<Void, Never>?
     private let reachabilityManager = NetworkReachabilityManager.shared
+
+    /// Grace window: keep showing `.connected` for this long after the last successful RPC,
+    /// even if the bidi stream restarts in the meantime. 90s covers the worst-case observed
+    /// ICE stream reconnect cycle (~50s connection life + ~20s reconnect attempt) and prevents
+    /// flicker on healthy underlying transports.
+    private static let connectedGraceWindow: TimeInterval = 90
 
     enum ConnectionStatus: Equatable {
         case connected
@@ -69,189 +83,128 @@ class ConnectionStatusManager {
     }
 
     private init() {
-        setupReachabilityObserving()
-        setupICEProxyObserving()
-
-        // Initial status based on network reachability
-        // If network is reachable, we're in "connecting" state until first successful request
-        // If network is not reachable, we're "disconnected"
-        if reachabilityManager.isReachable {
-            connectionStatus = .connecting
-            Log.info("ConnectionStatusManager initialized: Connecting (network reachable)", category: "ConnectionStatus")
-        } else {
-            connectionStatus = .disconnected
-            Log.info("ConnectionStatusManager initialized: Disconnected (no network)", category: "ConnectionStatus")
-        }
+        recompute()
+        startRecomputeLoop()
     }
 
-    // MARK: - Setup
+    // MARK: - Recompute loop (single writer)
 
-    private func setupReachabilityObserving() {
-        reachabilityTask = Task { [weak self] in
-            guard let self else { return }
+    private func startRecomputeLoop() {
+        recomputeTask = Task { [weak self] in
             while !Task.isCancelled {
-                // Wait for isReachable to change, then handle
                 await withCheckedContinuation { continuation in
                     withObservationTracking {
+                        guard let self else { return }
+                        _ = TransportRouterMirror.shared.state
                         _ = self.reachabilityManager.isReachable
+                        _ = self.lastSuccessfulRequest
                     } onChange: {
                         continuation.resume()
                     }
                 }
                 guard !Task.isCancelled else { break }
-                await MainActor.run {
-                    self.handleReachabilityChange(isReachable: self.reachabilityManager.isReachable)
+                await MainActor.run { [weak self] in
+                    self?.recompute()
                 }
             }
         }
     }
 
-    /// Observe ICE proxy state — if the proxy dies while we're on ICE, immediately
-    /// transition to "connecting" so the UI doesn't show a false "Connected" status.
-    private func setupICEProxyObserving() {
-        veilProxyObserver = NotificationCenter.default.addObserver(
-            forName: .veilProxyStateChanged,
-            object: nil,
-            queue: .main
-        ) { [weak self] notification in
-            let isRunning = (notification.userInfo?["isRunning"] as? Bool) ?? false
-            Task { @MainActor [weak self] in
-                self?.handleICEProxyStateChange(isRunning: isRunning)
-            }
-        }
-    }
-
-    private func handleICEProxyStateChange(isRunning: Bool) {
-        guard !isRunning, connectionStatus == .connected else { return }
-        // Proxy just stopped while we thought we were connected.
-        // The stream hasn't noticed yet (heartbeat timeout = 75s), so we
-        // proactively downgrade to "connecting" to avoid a false-positive UI.
-        connectionStatus = .connecting
-        connectingPhase = "ICE proxy stopped — reconnecting"
-        Log.info("ICE proxy stopped while connected — status → Connecting", category: "ConnectionStatus")
-    }
-
-    // MARK: - Status Updates
-
-    private func handleReachabilityChange(isReachable: Bool) {
+    private func recompute() {
         let oldStatus = connectionStatus
-        
-        if !isReachable {
-            connectionStatus = .disconnected
-            lastError = "No network connection"
-        } else if connectionStatus == .disconnected {
-            // Network is back, but we need to verify server connectivity
-            connectionStatus = .connecting
-            lastError = nil
-        }
-        
-        if oldStatus != connectionStatus {
-            Log.info("Network reachability changed: \(oldStatus.displayText) -> \(connectionStatus.displayText)", category: "ConnectionStatus")
-        }
-    }
+        let oldPhase = connectingPhase
 
-    func markRequestSucceeded() {
-        let oldStatus = connectionStatus
-        lastSuccessfulRequest = Date()
-        lastError = nil
-        connectingPhase = nil
-        connectionStatus = .connected
-        if oldStatus != .connected {
-            Log.info("Connection status changed: \(oldStatus.displayText) -> Connected", category: "ConnectionStatus")
-        }
-    }
+        let mirrorState = TransportRouterMirror.shared.state
+        let reachable = reachabilityManager.isReachable
+        let hasRecentRpc: Bool = {
+            guard let last = lastSuccessfulRequest else { return false }
+            return Date().timeIntervalSince(last) <= Self.connectedGraceWindow
+        }()
 
-    func markRequestFailed(error: String? = nil, isCritical: Bool = false) {
-        let oldStatus = connectionStatus
-        lastError = error
-
-        if !reachabilityManager.isReachable {
-            connectionStatus = .disconnected
-        } else if isCritical {
-            if connectionStatus == .connected {
-                connectionStatus = .connecting
-            }
+        let newStatus: ConnectionStatus
+        if !reachable {
+            newStatus = .disconnected
         } else {
-            if connectionStatus == .connected {
-                let gracePeriod: TimeInterval = 120
-                if !isConnectionStale(threshold: gracePeriod) {
-                    Log.debug("Non-critical error, but staying Connected (last success was recent)", category: "ConnectionStatus")
-                    return
+            switch mirrorState {
+            case .offline:
+                newStatus = .disconnected
+            case .direct(let fails):
+                if fails == 0 {
+                    newStatus = hasRecentRpc ? .connected : .connecting
                 } else {
-                    connectionStatus = .connecting
+                    newStatus = .connecting
                 }
+            case .veilActive:
+                newStatus = hasRecentRpc ? .connected : .connecting
+            case .veilProbing, .veilDegraded, .veilCooldown:
+                newStatus = .connecting
             }
         }
 
-        if oldStatus != connectionStatus {
-            Log.info("Connection status changed: \(oldStatus.displayText) -> \(connectionStatus.displayText)", category: "ConnectionStatus")
-            if let error = error {
-                Log.info("Error: \(error)", category: "ConnectionStatus")
-            }
+        let newPhase: String? = newStatus == .connecting ? phaseLabel(for: mirrorState, reachable: reachable) : nil
+
+        if newStatus != oldStatus {
+            connectionStatus = newStatus
+            Log.info("Status: \(oldStatus.displayText) → \(newStatus.displayText) (state=\(mirrorState.shortLabel), recentRpc=\(hasRecentRpc))", category: "ConnectionStatus")
+        }
+        if newPhase != oldPhase {
+            connectingPhase = newPhase
         }
     }
 
-    func markConnecting(phase: String? = nil) {
-        if connectionStatus != .connected && connectionStatus != .connecting {
-            connectionStatus = .connecting
+    private func phaseLabel(for state: TransportState, reachable: Bool) -> String? {
+        guard reachable else { return nil }
+        switch state {
+        case .offline:
+            return nil
+        case .direct(let fails) where fails > 0:
+            return "retry direct (\(fails))"
+        case .direct:
+            return nil
+        case .veilProbing(let attempt):
+            return "ICE probe \(attempt)"
+        case .veilActive(let relay, _, _):
+            return "ICE \(relay)"
+        case .veilDegraded(let relay, _, let fails):
+            return "ICE degraded \(relay) (\(fails))"
+        case .veilCooldown(let until):
+            let secs = max(0, Int(until.timeIntervalSinceNow))
+            return "ICE cooldown (\(secs)s)"
         }
-        if let phase { connectingPhase = phase }
     }
 
-    // MARK: - gRPC Stream Integration
+    // MARK: - External mutation surface (intentionally small)
 
-    func markStreamConnected() {
-        let old = connectionStatus
+    /// Marks a successful unary RPC. Bumps the grace window and clears the last error.
+    /// The only legitimate external mutation, called from MessageStreamManager unary success
+    /// paths and from `ConnectionStatusEffector` on every `rpcSucceeded` FSM event.
+    func markRequestSucceeded() {
         lastSuccessfulRequest = Date()
         lastError = nil
-        connectingPhase = nil
-        connectionStatus = .connected
-        if old != .connected {
-            Log.info("Stream connected → status: Connected", category: "ConnectionStatus")
-            // Retry any avatars that failed to download while we were offline.
-            AvatarRetryService.shared.retryPendingAvatarsIfNeeded()
+        // Schedule a recompute when the grace window expires, so status flips to
+        // .connecting if no further RPCs land before then.
+        graceExpiryTask?.cancel()
+        graceExpiryTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(Self.connectedGraceWindow + 1))
+            guard !Task.isCancelled else { return }
+            await MainActor.run { self?.recompute() }
         }
     }
 
-    func markStreamDisconnected(error: String? = nil, phase: String? = nil) {
-        lastError = error
-        guard reachabilityManager.isReachable else {
-            connectingPhase = nil
-            connectionStatus = .disconnected
-            return
-        }
-        // Stream disconnect doesn't necessarily mean we're offline — the gRPC channel
-        // can still handle unary RPCs while the bidi stream reconnects. If we've had a
-        // successful RPC in the last 90 seconds, treat the stream disconnect as transient
-        // and keep showing Connected. Otherwise (no recent traffic) downgrade to Connecting.
-        // 90s covers the worst-case observed ICE stream reconnect cycle (~50s connection
-        // life + ~20s reconnect attempt). This stops the UI flickering Connected → Connecting
-        // → Connected on every stream restart cycle when the underlying transport is healthy.
-        if connectionStatus == .connected, !isConnectionStale(threshold: 90) {
-            if let phase { connectingPhase = phase }
-            return
-        }
-        if connectionStatus == .connected {
-            connectionStatus = .connecting
-            Log.info("Stream disconnected → status: Connecting", category: "ConnectionStatus")
-        }
-        if let phase { connectingPhase = phase }
+    /// Surfaces a failure reason for diagnostic UI. Called by the transport effector
+    /// on `proxyStartFailed` / `rpcFailed` events. Does not affect status — that's derived.
+    func setLastError(_ message: String?) {
+        lastError = message
     }
 
-    func markStreamPaused() {
-        isStreamPaused = true
-    }
+    /// App-lifecycle flag. Stream is paused when the app is in background.
+    func markStreamPaused() { isStreamPaused = true }
+    func markStreamResumed() { isStreamPaused = false }
 
-    func markStreamResumed() {
-        isStreamPaused = false
-    }
-
-    /// Check if we should consider the connection stale
-    /// (no successful request in the last N seconds)
+    /// True if there was no successful RPC in the last `threshold` seconds.
+    /// Used by callers that want to check freshness without subscribing to status.
     func isConnectionStale(threshold: TimeInterval = 60) -> Bool {
-        guard let lastRequest = lastSuccessfulRequest else {
-            return true
-        }
+        guard let lastRequest = lastSuccessfulRequest else { return true }
         return Date().timeIntervalSince(lastRequest) > threshold
     }
 }

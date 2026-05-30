@@ -285,7 +285,7 @@ extension MessageStreamManager {
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 let streamMs = PerformanceMetrics.shared.end(.streamOpenStart, endEvent: .streamOpenEnd, label: metricsLabel)
-                ConnectionStatusManager.shared.markStreamConnected()
+                ConnectionStatusManager.shared.markRequestSucceeded()
                 self.isConnected = true
                 self.activeTransport = label
                 self.lastActiveTransport = label

@@ -168,7 +168,7 @@ enum MessageStreamParser {
         case .heartbeatAck(let ack):
             Log.debug("Heartbeat ack: server=\(ack.serverTimestamp)", category: "MessageStream")
             Task { @MainActor in
-                ConnectionStatusManager.shared.markStreamConnected()
+                ConnectionStatusManager.shared.markRequestSucceeded()
             }
             return .heartbeat
         case .none:
