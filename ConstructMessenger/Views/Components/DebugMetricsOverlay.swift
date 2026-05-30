@@ -78,8 +78,8 @@ struct DebugMetricsOverlay: View {
                       avg: vm.avgGRPCConnect,
                       p95: nil,
                       unit: "ms")
-            metricRow("ICE proxy start",
-                      avg: vm.avgICEStart,
+            metricRow("VEIL proxy start",
+                      avg: vm.avgVEILStart,
                       p95: nil,
                       unit: "ms")
 
@@ -147,7 +147,7 @@ final class DebugMetricsViewModel {
     var avgSessionInit: Double? = nil
     var p95SessionInit: Double? = nil
     var avgGRPCConnect: Double? = nil
-    var avgICEStart: Double? = nil
+    var avgVEILStart: Double? = nil
     var streamFastFailoverCount: Int = 0
 
 
@@ -173,7 +173,7 @@ final class DebugMetricsViewModel {
         avgSessionInit = m.averageLatency(for: "session_init_start→session_init_end")
         p95SessionInit = m.p95Latency(for: "session_init_start→session_init_end")
         avgGRPCConnect = m.averageLatency(for: "grpc_connect_start→grpc_connect_end")
-        avgICEStart = m.averageLatency(for: "ice_proxy_start_begin→ice_proxy_start_end")
+        avgVEILStart = m.averageLatency(for: "veil_proxy_start_begin→veil_proxy_start_end")
         streamFastFailoverCount = m.count(event: .streamOpenFastFailover, last: 200)
 
     }

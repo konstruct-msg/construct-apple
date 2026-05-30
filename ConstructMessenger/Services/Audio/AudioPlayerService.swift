@@ -74,7 +74,7 @@ final class AudioPlayerService: NSObject, ObservableObject {
             elapsed        = 0
             startProgressTimer()
         } catch {
-            print("AudioPlayerService: failed to play \(mediaId) — \(error)")
+            Log.info("AudioPlayerService: failed to play \(mediaId) — \(error)")
         }
     }
 

@@ -57,8 +57,8 @@ class ProofOfWorkManager {
                 progressCallback: observer
             )
             
-            print("[PoW] ✅ Found solution after \(solution.nonce) attempts")
-            print("[PoW] 📊 Hash: \(solution.hash)")
+            Log.info("[PoW] Found solution after \(solution.nonce) attempts")
+            Log.info("[PoW] Hash: \(solution.hash)")
             
             return solution
         }.value
@@ -81,8 +81,8 @@ class ProofOfWorkManager {
             // Call Rust implementation
             let solution = computePow(challenge: challenge, difficulty: difficulty)
             
-            print("[PoW] ✅ Found solution after \(solution.nonce) attempts")
-            print("[PoW] 📊 Hash: \(solution.hash)")
+            Log.info("[PoW] Found solution after \(solution.nonce) attempts")
+            Log.info("[PoW] Hash: \(solution.hash)")
             
             return solution
         }.value
@@ -120,7 +120,7 @@ class DeviceIDManager {
     static func deriveDeviceID(from identityPublicKey: Data) -> String {
         let deviceID = deriveDeviceId(identityPublicKey: [UInt8](identityPublicKey))
         
-        print("[DeviceID] 🔑 Derived device ID: \(deviceID)")
+        Log.info("[DeviceID] Derived device ID: \(deviceID)")
         
         return deviceID
     }
@@ -149,7 +149,7 @@ extension ProofOfWorkManager {
     
     /// Quick test with low difficulty (for development)
     static func quickTest() async {
-        print("[PoW Test] 🧪 Starting quick test (difficulty=4)...")
+        Log.info("[PoW Test] Starting quick test (difficulty=4)...")
         
         let start = Date()
         let solution = await compute(
@@ -158,9 +158,9 @@ extension ProofOfWorkManager {
         )
         let elapsed = Date().timeIntervalSince(start)
         
-        print("[PoW Test] ⏱️  Completed in \(String(format: "%.1f", elapsed))s")
-        print("[PoW Test] 🎯 Nonce: \(solution.nonce)")
-        print("[PoW Test] 🔐 Hash: \(solution.hash)")
+        Log.info("[PoW Test] Completed in \(String(format: "%.1f", elapsed))s")
+        Log.info("[PoW Test] Nonce: \(solution.nonce)")
+        Log.info("[PoW Test] Hash: \(solution.hash)")
         
         // Verify solution
         let isValid = verify(
@@ -168,7 +168,7 @@ extension ProofOfWorkManager {
             solution: solution,
             difficulty: 4
         )
-        print("[PoW Test] ✅ Verification: \(isValid ? "PASSED" : "FAILED")")
+        Log.info("[PoW Test] Verification: \(isValid ? "PASSED" : "FAILED")")
     }
 }
 
@@ -176,7 +176,7 @@ extension DeviceIDManager {
     
     /// Quick test with known value
     static func quickTest() {
-        print("[DeviceID Test] 🧪 Starting test...")
+        Log.info("[DeviceID Test] Starting test...")
         
         // Test with all-zeros key (known result)
         let zeroKey = Data(count: 32)
@@ -186,11 +186,11 @@ extension DeviceIDManager {
         let expected = "66687aadf862bd776c8fc18b8e9f8e20"
         
         if deviceID == expected {
-            print("[DeviceID Test] ✅ PASSED: \(deviceID)")
+            Log.info("[DeviceID Test] PASSED: \(deviceID)")
         } else {
-            print("[DeviceID Test] ❌ FAILED")
-            print("[DeviceID Test]    Expected: \(expected)")
-            print("[DeviceID Test]    Got:      \(deviceID)")
+            Log.error("[DeviceID Test] FAILED")
+            Log.error("[DeviceID Test] Expected: \(expected)")
+            Log.error("[DeviceID Test] Got: \(deviceID)")
         }
         
         // Test federated format
@@ -198,7 +198,7 @@ extension DeviceIDManager {
             deviceID: deviceID,
             serverHostname: "ams.konstruct.cc"
         )
-        print("[DeviceID Test] 🌐 Federated: \(federated)")
+        Log.info("[DeviceID Test] Federated: \(federated)")
     }
 }
 #endif

@@ -212,9 +212,9 @@ final class LocalBackupService {
                 try? fm.setAttributes([.protectionKey: FileProtectionType.complete], ofItemAtPath: url.path)
             }
 
-            print("✅ LocalBackupService: restore applied successfully")
+            Log.info("LocalBackupService: restore applied successfully")
         } catch {
-            print("❌ LocalBackupService: restore failed — \(error)")
+            Log.error("LocalBackupService: restore failed — \(error)")
         }
 
         UserDefaults.standard.removeObject(forKey: pendingRestoreKey)

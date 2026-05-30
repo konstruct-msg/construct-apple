@@ -1,11 +1,11 @@
 //
-//  IceProxy.swift
+//  VeilProxy.swift
 //  Construct Messenger
 //
 //  Serial actor managing the lifecycle of the local Rust ICE proxy process.
 //
 //  Replaces the proxy start/stop/restart state machine scattered across
-//  IceProxyManager. The actor executor serialises all calls — no generation
+//  VeilProxyManager. The actor executor serialises all calls — no generation
 //  counters, crash-restart flags, or resetAllProxyState() needed.
 //
 //  Transport selection priority (same as before):
@@ -17,11 +17,24 @@
 
 import Foundation
 
+// MARK: - Result
+
+/// Outcome of `VeilProxy.ensure(relay:)`.
+///
+/// `restarted == true` means a new Rust proxy instance was started. The previously
+/// listening OS socket has been closed; even if the new instance happened to bind
+/// the same ephemeral port, any TCP connection an upstream caller may already hold
+/// to `127.0.0.1:port` is dead and must be re-established.
+struct VeilProxyEnsureResult: Sendable {
+    let port: UInt16
+    let restarted: Bool
+}
+
 // MARK: - Error
 
-enum IceProxyError: Error, Sendable {
+enum VeilProxyError: Error, Sendable {
     /// Rust FFI returned a non-zero code.
-    case startFailed(underlying: IceProxyRuntimeError)
+    case startFailed(underlying: VeilProxyRuntimeError)
 
     var localizedDescription: String {
         switch self {
@@ -40,7 +53,7 @@ enum IceProxyError: Error, Sendable {
 /// let port = try await proxy.ensure(relay: relay)  // reuse if same relay
 /// await proxy.stop()
 /// ```
-actor IceProxy {
+actor VeilProxy {
 
     // MARK: - State
 
@@ -48,16 +61,16 @@ actor IceProxy {
     private(set) var port: UInt16?
 
     /// Relay the proxy is currently running for.
-    private(set) var currentRelay: IceRelay?
+    private(set) var currentRelay: VeilRelay?
 
     /// Whether the active transport is WebTunnel (true) or obfs4 (false).
     private(set) var isWebTunnel: Bool = false
 
-    private let runtime: IceProxyRuntime
+    private let runtime: VeilProxyRuntime
 
     // MARK: - Init
 
-    init(runtime: IceProxyRuntime = NativeIceProxyRuntime()) {
+    init(runtime: VeilProxyRuntime = NativeVeilRuntime()) {
         self.runtime = runtime
     }
 
@@ -65,10 +78,17 @@ actor IceProxy {
 
     /// Returns the current port if `relay` is already running.
     /// Restarts the proxy for `relay` otherwise.
+    ///
+    /// The `restarted` flag is `true` whenever a fresh Rust proxy instance was started;
+    /// callers must treat any existing TCP connection to `127.0.0.1:port` as dead in
+    /// that case, even if the new instance was assigned the same ephemeral port.
     @discardableResult
-    func ensure(relay: IceRelay) throws -> UInt16 {
-        if let p = port, currentRelay?.address == relay.address { return p }
-        return try start(relay: relay)
+    func ensure(relay: VeilRelay) throws -> VeilProxyEnsureResult {
+        if let p = port, currentRelay?.address == relay.address {
+            return VeilProxyEnsureResult(port: p, restarted: false)
+        }
+        let p = try start(relay: relay)
+        return VeilProxyEnsureResult(port: p, restarted: true)
     }
 
     /// Starts the proxy for `relay`, stopping any currently running proxy first.
@@ -76,12 +96,12 @@ actor IceProxy {
     /// WebTunnel is attempted first when the relay supports it; on failure the
     /// call falls through to obfs4 automatically.
     @discardableResult
-    func start(relay: IceRelay) throws -> UInt16 {
+    func start(relay: VeilRelay) throws -> UInt16 {
         stopIfRunning()
 
         // 1. WebTunnel
         if let wtPath = relay.wtPath, relay.tlsServerName != nil {
-            let req = IceTransportRequest.webTunnel(
+            let req = VeilTransportRequest.webTunnel(
                 address:    relay.address,
                 sni:        relay.tlsServerName ?? "",
                 spki:       relay.pinnedSpki ?? "",
@@ -103,7 +123,7 @@ actor IceProxy {
             commit(port: p, relay: relay, webTunnel: false)
             return p
         case .failure(let err):
-            throw IceProxyError.startFailed(underlying: err)
+            throw VeilProxyError.startFailed(underlying: err)
         }
     }
 
@@ -120,7 +140,7 @@ actor IceProxy {
 
     // MARK: - Private
 
-    private func commit(port p: UInt16, relay: IceRelay, webTunnel: Bool) {
+    private func commit(port p: UInt16, relay: VeilRelay, webTunnel: Bool) {
         port = p
         currentRelay = relay
         isWebTunnel = webTunnel
@@ -134,7 +154,7 @@ actor IceProxy {
         isWebTunnel = false
     }
 
-    private func obfs4Request(for relay: IceRelay) -> IceTransportRequest {
+    private func obfs4Request(for relay: VeilRelay) -> VeilTransportRequest {
         if let sni = relay.tlsServerName {
             if let spki = relay.pinnedSpki {
                 return .tlsPinned(bridgeLine: relay.bridgeLine, address: relay.address,

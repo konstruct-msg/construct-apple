@@ -21,7 +21,7 @@ struct NetworkSettingsView: View {
     @State private var customPort = "\(GRPCChannelManager.shared.currentPort)"
     @State private var showingAppliedAlert = false
 
-    @ObservedObject private var iceManager = IceProxyManager.shared
+    @ObservedObject private var veilManager = VeilProxyManager.shared
 
     var body: some View {
         VStack(spacing: 0) {
@@ -37,26 +37,26 @@ struct NetworkSettingsView: View {
 
                 // MARK: - Connection Status
                 CTSettingsSectionHeader(title: NSLocalizedString("status", comment: "").uppercased())
-                let path = iceManager.currentTrafficPath
+                let path = veilManager.currentTrafficPath
                 CTSectionGroup {
                     HStack(spacing: NetworkSettingsLayout.statusRowSpacing) {
-                        Text(connectionStatusASCII)
-                            .font(CTFont.regular(13))
+                        Image(systemName: connectionStatus)
+                            .font(.system(size: 14, weight: .medium))
                             .foregroundColor(statusColor)
                         VStack(alignment: .leading, spacing: NetworkSettingsLayout.statusDetailSpacing) {
                             Text(connectionManager.connectionStatus.displayText)
-                                .font(CTFont.regular(13))
+                                .font(CTFont.regular(14))
                                 .foregroundStyle(Color.CT.text)
                             if connectionManager.connectionStatus != .connected,
                                let phase = connectionManager.connectingPhase {
                                 Text(phase)
-                                    .font(CTFont.regular(11))
+                                    .font(CTFont.regular(13))
                                     .foregroundStyle(.orange)
                                     .textSelection(.enabled)
                                     .transition(.opacity)
                             }
                             Text(path.displayDetail)
-                                .font(CTFont.regular(11))
+                                .font(CTFont.regular(13))
                                 .foregroundStyle(Color.CT.textDim)
                                 .textSelection(.enabled)
                         }
@@ -111,53 +111,53 @@ struct NetworkSettingsView: View {
                     }
                 }
 
-                // MARK: - Traffic Protection (ICE)
+                // MARK: - Traffic Protection (VEIL)
                 CTSettingsSectionHeader(title: NSLocalizedString("traffic_protection", comment: "").uppercased())
                 CTSectionGroup {
                     // Tri-state mode selector
                     HStack {
-                        Text(LocalizedStringKey("ice_title"))
+                        Text(LocalizedStringKey("veil_title"))
                             .font(CTFont.regular(13))
                             .foregroundColor(
-                                iceManager.hasCert
+                                veilManager.hasCert
                                 ? Color.CT.textDim
                                 : Color.CT.textDim.opacity(NetworkSettingsLayout.statusDisabledOpacity)
                             )
                         Spacer()
                         CTModeSelector(
                             selection: Binding(
-                                get: { iceManager.mode },
+                                get: { veilManager.mode },
                                 set: { newMode in
-                                    let oldMode = iceManager.mode
-                                    iceManager.mode = newMode
+                                    let oldMode = veilManager.mode
+                                    veilManager.mode = newMode
                                     switch newMode {
                                     case .off:
-                                        iceManager.stop()
+                                        veilManager.stop()
                                     case .auto:
                                         // Switching to auto: stop proxy, let DPI detection handle it.
-                                        if oldMode == .on { iceManager.stop() }
+                                        if oldMode == .on { veilManager.stop() }
                                     case .on:
-                                        Task { await iceManager.startIfEnabled() }
+                                        Task { await veilManager.startIfEnabled() }
                                     }
                                 }
                             ),
-                            options: IceMode.allCases,
+                            options: VeilMode.allCases,
                             labels: [
-                                .off:  NSLocalizedString("ice_mode_off", comment: ""),
-                                .auto: NSLocalizedString("ice_mode_auto", comment: ""),
-                                .on:   NSLocalizedString("ice_mode_on", comment: "")
+                                .off:  NSLocalizedString("veil_mode_off", comment: ""),
+                                .auto: NSLocalizedString("veil_mode_auto", comment: ""),
+                                .on:   NSLocalizedString("veil_mode_on", comment: "")
                             ]
                         )
-                        .disabled(!iceManager.hasCert)
+                        .disabled(!veilManager.hasCert)
                     }
                     .padding(.horizontal, NetworkSettingsLayout.rowHorizontalPadding)
                     .padding(.vertical, NetworkSettingsLayout.rowVerticalPadding)
 
-                    if (iceManager.mode != .off || iceManager.isRunning) && iceManager.hasCert {
-                        if iceManager.isOnCooldown {
+                    if (veilManager.mode != .off || veilManager.isRunning) && veilManager.hasCert {
+                        if veilManager.isOnCooldown {
                             CTSep(style: .thin)
                             HStack {
-                                Text(LocalizedStringKey("ice_retry"))
+                                Text(LocalizedStringKey("veil_retry"))
                                     .font(CTFont.regular(13))
                                     .foregroundColor(Color.CT.textDim)
                                 Spacer()
@@ -167,18 +167,18 @@ struct NetworkSettingsView: View {
                             }
                             .padding(.horizontal, NetworkSettingsLayout.rowHorizontalPadding)
                             .padding(.vertical, NetworkSettingsLayout.rowVerticalPadding)
-                        } else if iceManager.isRunning, let relay = iceManager.activeRelay {
+                        } else if veilManager.isRunning, let relay = veilManager.activeRelay {
                             CTSep(style: .thin)
                             HStack {
-                                Text(pathASCII(iceManager.currentTrafficPath))
+                                Text(pathASCII(veilManager.currentTrafficPath))
                                     .font(CTFont.regular(13))
-                                    .foregroundColor(pathColor(iceManager.currentTrafficPath))
+                                    .foregroundColor(pathColor(veilManager.currentTrafficPath))
                                 Text(relay.address)
                                     .font(CTFont.regular(NetworkSettingsLayout.relayAddressFontSize))
                                     .foregroundColor(Color.CT.textDim)
                                     .textSelection(.enabled)
                                 Spacer()
-                                let quality = iceManager.qualityForRelay(relay.address)
+                                let quality = veilManager.qualityForRelay(relay.address)
                                 relayBadge(label: quality.badge, color: quality.badgeColor)
                                 if relay.tlsServerName != nil {
                                     relayBadge(label: NetworkSettingsLabels.tls, color: Color.CT.accentDim)
@@ -190,9 +190,9 @@ struct NetworkSettingsView: View {
                             .padding(.horizontal, NetworkSettingsLayout.rowHorizontalPadding)
                             .padding(.vertical, NetworkSettingsLayout.relayRowVerticalPadding)
 
-                        } else if iceManager.mode != .off && !iceManager.isRunning {
+                        } else if veilManager.mode != .off && !veilManager.isRunning {
                             CTSep(style: .thin)
-                            Text(iceManager.lastError ?? NSLocalizedString("ice_unavailable", comment: ""))
+                            Text(veilManager.lastError ?? NSLocalizedString("veil_unavailable", comment: ""))
                                 .font(CTFont.regular(11))
                                 .foregroundStyle(Color.CT.textDim)
                                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -202,16 +202,41 @@ struct NetworkSettingsView: View {
                     }
                 }
 
+                #if DEBUG
+                // Debug-only: live FSM diagnostics. Every transport routing decision flows
+                // through one place; this screen is that place.
+                CTSettingsSectionHeader(title: "DIAGNOSTICS (DEBUG)", color: .orange)
+                CTSectionGroup {
+                    NavigationLink {
+                        TransportDiagnosticsView()
+                    } label: {
+                        HStack {
+                            Text("Transport router state + log")
+                                .font(CTFont.regular(13))
+                                .foregroundStyle(.orange)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(.orange)
+                        }
+                        .padding(.horizontal, NetworkSettingsLayout.rowHorizontalPadding)
+                        .padding(.vertical, NetworkSettingsLayout.compactRowVerticalPadding)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+                #endif
+
                 // Footer — mode-specific
-                if !iceManager.hasCert {
-                    Text(LocalizedStringKey("ice_unavailable"))
+                if !veilManager.hasCert {
+                    Text(LocalizedStringKey("veil_unavailable"))
                         .font(CTFont.regular(11))
                         .foregroundStyle(Color.CT.textDim)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, NetworkSettingsLayout.rowHorizontalPadding)
                         .padding(.bottom, NetworkSettingsLayout.footerVerticalPadding)
                 } else {
-                    Text(LocalizedStringKey(iceFooterKey))
+                    Text(LocalizedStringKey(veilFooterKey))
                         .font(CTFont.regular(11))
                         .foregroundStyle(Color.CT.textDim)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -259,11 +284,11 @@ struct NetworkSettingsView: View {
 
     // MARK: - Helpers
 
-    private var iceFooterKey: String {
-        switch iceManager.mode {
-        case .off:  return "ice_footer_off"
-        case .auto: return "ice_footer_auto"
-        case .on:   return "ice_footer_on"
+    private var veilFooterKey: String {
+        switch veilManager.mode {
+        case .off:  return "veil_footer_off"
+        case .auto: return "veil_footer_auto"
+        case .on:   return "veil_footer_on"
         }
     }
 
@@ -276,34 +301,34 @@ struct NetworkSettingsView: View {
         }
     }
 
-    private var connectionStatusASCII: String {
+    private var connectionStatus: String {
         switch connectionManager.connectionStatus {
-        case .connected:    return "[ok]"
-        case .disconnected: return "[err]"
-        case .connecting:   return "[~]"
-        case .unknown:      return "[?]"
+        case .connected:    return "checkmark.circle.fill"
+        case .disconnected: return "xmark.circle.fill"
+        case .connecting:   return "arrow.triangle.2.circlepath.circle.fill"
+        case .unknown:      return "questionmark.circle.fill"
         }
     }
 
     private func pathASCII(_ path: TrafficPath) -> String {
         switch path {
         case .direct:          return "[→]"
-        case .icePrimary:      return "[t]"
-        case .iceRelay:        return "[t]"
-        case .iceWebTunnel:    return "[ws]"
-        case .iceCooldown:     return "[!]"
-        case .iceConnecting:   return "[~]"
+        case .veilPrimary:      return "[t]"
+        case .veilRelay:        return "[t]"
+        case .veilWebTunnel:    return "[ws]"
+        case .veilCooldown:     return "[!]"
+        case .veilConnecting:   return "[~]"
         }
     }
 
     private func pathColor(_ path: TrafficPath) -> Color {
         switch path {
         case .direct:          return Color.CT.accentDim
-        case .icePrimary:      return Color.CT.accent
-        case .iceRelay:        return Color.CT.accentDim
-        case .iceWebTunnel:    return Color.CT.accent
-        case .iceCooldown:     return .orange
-        case .iceConnecting:   return .orange
+        case .veilPrimary:      return Color.CT.accent
+        case .veilRelay:        return Color.CT.accentDim
+        case .veilWebTunnel:    return Color.CT.accent
+        case .veilCooldown:     return .orange
+        case .veilConnecting:   return .orange
         }
     }
 }

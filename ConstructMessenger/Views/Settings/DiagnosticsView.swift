@@ -59,24 +59,27 @@ struct DiagnosticsView: View {
 
                 // MARK: - Push Notifications
                 VStack(alignment: .leading, spacing: DiagnosticsLayout.sectionHintSpacing) {
-                    ConstructSection(header: NSLocalizedString("PUSH_NOTIFICATIONS", comment: "")) {
-                        diagRow(
-                            label: NSLocalizedString("diagnostics_permission", comment: ""),
-                            value: push.authorizationStatus.description,
-                            ok: isPushPermissionGranted
-                        )
-                        ConstructRowDivider(indent: SettingsLayout.rowDividerIndent)
-                        diagRow(
-                            label: NSLocalizedString("diagnostics_apns_token", comment: ""),
-                            value: pushTokenStatusText,
-                            ok: hasPushToken
-                        )
-                        ConstructRowDivider(indent: SettingsLayout.rowDividerIndent)
-                        diagRow(
-                            label: NSLocalizedString("diagnostics_registered_with_server", comment: ""),
-                            value: registrationStatusText,
-                            ok: push.isRegisteredWithServer
-                        )
+                    VStack(alignment: .leading, spacing: 0) {
+                        CTSettingsSectionHeader(title: NSLocalizedString("PUSH_NOTIFICATIONS", comment: ""), color: .orange)
+                        CTSectionGroup {
+                            diagRow(
+                                label: NSLocalizedString("diagnostics_permission", comment: ""),
+                                value: push.authorizationStatus.description,
+                                ok: isPushPermissionGranted
+                            )
+                            ConstructRowDivider(indent: SettingsLayout.rowDividerIndent)
+                            diagRow(
+                                label: NSLocalizedString("diagnostics_apns_token", comment: ""),
+                                value: pushTokenStatusText,
+                                ok: hasPushToken
+                            )
+                            ConstructRowDivider(indent: SettingsLayout.rowDividerIndent)
+                            diagRow(
+                                label: NSLocalizedString("diagnostics_registered_with_server", comment: ""),
+                                value: registrationStatusText,
+                                ok: push.isRegisteredWithServer
+                            )
+                        }
                     }
                     if !push.isRegisteredWithServer {
                         Text(LocalizedStringKey("diagnostics_server_token_warning"))
@@ -87,7 +90,7 @@ struct DiagnosticsView: View {
                 }
 
                 // MARK: - Status
-                ConstructSection {
+                CTSectionGroup {
                     HStack(spacing: SettingsLayout.rowContentSpacing) {
                         Text(CTSymbol.log)
                             .font(CTFont.bold(14))
@@ -131,33 +134,13 @@ struct DiagnosticsView: View {
                 }
 
                 // MARK: - Actions
-                ConstructSection {
-                    Button {
+                CTSectionGroup {
+                    
+                    ConstructActionRow(systemImage: "square.and.arrow.up", title: LocalizedStringKey("diagnostics_share_logs"), role: .accent) {
                         shareArchive()
-                    } label: {
-                        HStack(spacing: SettingsLayout.rowContentSpacing) {
-                            Text("[→]")
-                                .font(CTFont.bold(14))
-                                .foregroundStyle(isLogCollectionEnabled ? Color.CT.accent : Color.CT.textDim)
-                                .lineLimit(1)
-                                .fixedSize()
-                                .frame(minWidth: SettingsLayout.rowIconMinWidth, alignment: .center)
-                            Text(LocalizedStringKey("diagnostics_share_logs"))
-                                .font(CTFont.bold(16))
-                                .foregroundStyle(isLogCollectionEnabled ? Color.CT.text : Color.CT.textDim)
-                            Spacer()
-                        }
-                        .padding(.horizontal, SettingsLayout.rowHorizontalPadding)
-                        .padding(.vertical, SettingsLayout.rowVerticalPadding)
-                        .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
-                    .disabled(!isLogCollectionEnabled)
-                    .opacity(isLogCollectionEnabled ? 1 : DiagnosticsLayout.disabledActionOpacity)
 
-                    ConstructRowDivider(indent: SettingsLayout.rowDividerIndent)
-
-                    ConstructActionRow(icon: "[x]", title: LocalizedStringKey("diagnostics_clear_logs"), role: .destructive) {
+                    ConstructActionRow(systemImage: "trash", title: LocalizedStringKey("diagnostics_clear_logs"), role: .destructive) {
                         clearLogs()
                     }
                     .disabled(!isLogCollectionEnabled)
@@ -167,18 +150,21 @@ struct DiagnosticsView: View {
                 #if DEBUG
                 // MARK: - Dev Tools (Debug only)
                 VStack(alignment: .leading, spacing: DiagnosticsLayout.sectionHintSpacing) {
-                    ConstructSection(header: NSLocalizedString("DEVELOPER", comment: "")) {
-                        ConstructActionRow(icon: "[↻]", title: LocalizedStringKey("diagnostics_force_spk_rotation"), role: .secondary) {
-                            Task {
-                                await PreKeyRotationService.shared.forceRotate()
+                    VStack(alignment: .leading, spacing: 0) {
+                        CTSettingsSectionHeader(title: NSLocalizedString("DEVELOPER", comment: ""), color: .orange)
+                        CTSectionGroup {
+                            ConstructActionRow(systemImage: "arrow.clockwise", title: LocalizedStringKey("diagnostics_force_spk_rotation"), role: .secondary) {
+                                Task {
+                                    await PreKeyRotationService.shared.forceRotate()
+                                }
                             }
-                        }
-                        ConstructActionRow(icon: "[!]", title: LocalizedStringKey("diagnostics_reset_local_data_keychain"), role: .destructive) {
-                            resetLocalData()
+                            ConstructActionRow(systemImage: "exclamationmark.triangle", title: LocalizedStringKey("diagnostics_reset_local_data_keychain"), role: .destructive) {
+                                resetLocalData()
+                            }
                         }
                     }
                     Text(LocalizedStringKey("diagnostics_dev_tools_footer"))
-                        .font(CTFont.regular(11))
+                        .font(CTFont.regular(12))
                         .foregroundStyle(Color.CT.textDim)
                         .padding(.horizontal, SettingsLayout.footerHorizontalPadding)
                 }
@@ -186,16 +172,19 @@ struct DiagnosticsView: View {
 
                 // MARK: - Recent Logs
                 if !logText.isEmpty {
-                    ConstructSection(header: NSLocalizedString("diagnostics_recent_logs", comment: "")) {
-                        ScrollView {
-                            Text(logText)
-                                .font(CTFont.regular(DiagnosticsLayout.recentLogFontSize))
-                                .foregroundStyle(Color.white)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(DiagnosticsLayout.recentLogPadding)
-                                .textSelection(.enabled)
+                    VStack(alignment: .leading, spacing: 0) {
+                        CTSettingsSectionHeader(title: NSLocalizedString("diagnostics_recent_logs", comment: ""), color: .orange)
+                        CTSectionGroup {
+                            ScrollView {
+                                Text(logText)
+                                    .font(CTFont.regular(DiagnosticsLayout.recentLogFontSize))
+                                    .foregroundStyle(Color.white)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(DiagnosticsLayout.recentLogPadding)
+                                    .textSelection(.enabled)
+                            }
+                            .frame(height: DiagnosticsConfig.recentLogContainerHeight)
                         }
-                        .frame(height: DiagnosticsConfig.recentLogContainerHeight)
                     }
                 }
             }
@@ -309,7 +298,7 @@ struct DiagnosticsView: View {
         let keysToRemove = [
             "construct.deviceId", "construct.userId",
             "pqcKyberSPKMigrationV1Done",
-            "ice_bridge_cert", "iceActiveRelay", "ice_enabled",
+            "ice_bridge_cert", "veilActiveRelay", "ice_enabled",
             "recovery_is_setup", "recovery_banner_dismissed",
             "construct.kyber.otpk.nextKeyId",
         ]

@@ -19,7 +19,7 @@ import Foundation
 enum CensoredNetworkDetector {
 
     /// Timezone identifiers that correlate strongly with DPI-censored networks.
-    /// Matches the region list in IceRelaySelector.applyRegionPreference.
+    /// Matches the region list in VeilRelaySelector.applyRegionPreference.
     private static let censoredTimezones: Set<String> = [
         // Russia (11 timezones)
         "Europe/Moscow", "Europe/Kaliningrad", "Europe/Samara", "Europe/Volgograd",

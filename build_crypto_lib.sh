@@ -1,7 +1,7 @@
 #!/bin/bash
 # build_crypto_lib.sh
 # Собирает Rust-библиотеку construct-core для iOS и Mac Catalyst,
-# мёрджит ICE-символы и копирует .a файлы в корень проекта.
+# мёрджит VEIL-символы и копирует .a файлы в корень проекта.
 #
 # ИСПОЛЬЗОВАНИЕ:
 #   ./build_crypto_lib.sh          # iOS + Catalyst (по умолчанию)
@@ -36,30 +36,43 @@ BUILD_DIR="release"
 CARGO_FLAGS="--release"
 
 # ── Аргументы ────────────────────────────────────────────────────────────────
-BUILD_IOS=true
+# Build-target flags accumulate (multiple may be combined in one invocation).
+# When no build-target flag is passed, the default is iOS device only.
+BUILD_IOS=false
 BUILD_MAC=false
 BUILD_SIM=false
 BUILD_DIST=false
 DO_CLEAN=false
+ANY_TARGET_FLAG=false
 
 for arg in "$@"; do
   case "$arg" in
-    --ios)   BUILD_MAC=false; BUILD_SIM=false; BUILD_DIST=false ;;
-    --mac)   BUILD_IOS=false; BUILD_MAC=true;  BUILD_SIM=false; BUILD_DIST=false ;;
-    --sim)   BUILD_IOS=false; BUILD_MAC=false; BUILD_DIST=false; BUILD_SIM=true ;;
-    --dist)  BUILD_IOS=false; BUILD_MAC=true;  BUILD_SIM=false; BUILD_DIST=true ;;
+    --ios)   BUILD_IOS=true;  ANY_TARGET_FLAG=true ;;
+    --mac)   BUILD_MAC=true;  ANY_TARGET_FLAG=true ;;
+    --sim)   BUILD_SIM=true;  ANY_TARGET_FLAG=true ;;
+    --dist)  BUILD_DIST=true; BUILD_MAC=true; ANY_TARGET_FLAG=true ;;  # dist implies mac (adds x86_64)
+    --all)   BUILD_IOS=true;  BUILD_MAC=true; BUILD_SIM=true; ANY_TARGET_FLAG=true ;;
     --clean) DO_CLEAN=true ;;
     --debug) BUILD_DIR="debug"; CARGO_FLAGS="" ;;
     -h|--help)
-      echo "Использование: $0 [--ios] [--mac] [--sim] [--dist] [--clean] [--debug]"
+      echo "Использование: $0 [--ios] [--mac] [--sim] [--all] [--dist] [--clean] [--debug]"
       echo "  (без флагов)  iOS device (по умолчанию)"
+      echo "  --ios         iOS device (aarch64-apple-ios)"
+      echo "  --sim         iOS Симулятор (aarch64-apple-ios-sim + x86_64 fat)"
       echo "  --mac         Нативный macOS arm64 → libconstruct_core_mac.a"
-      echo "  --sim         iOS Симулятор (aarch64-apple-ios-sim)"
+      echo "  --all         Все три таргета (--ios --sim --mac) одним запуском"
       echo "  --dist        Universal macOS fat binary (arm64 + x86_64) для DMG/дистрибуции"
+      echo ""
+      echo "Флаги таргетов комбинируются: $0 --ios --sim соберёт iOS + Симулятор."
       exit 0 ;;
     *) warn "Неизвестный аргумент: $arg" ;;
   esac
 done
+
+# Default to iOS-only when no target flag was passed.
+if ! $ANY_TARGET_FLAG; then
+  BUILD_IOS=true
+fi
 
 # ── Проверка зависимостей ─────────────────────────────────────────────────────
 hdr "Проверка зависимостей"
@@ -92,25 +105,25 @@ build_target() {
   ok "Собрано: $arch"
 }
 
-# ── Функция: мёрдж ICE-символов ──────────────────────────────────────────────
-merge_ice() {
+# ── Функция: мёрдж VEIL-символов ─────────────────────────────────────────────
+merge_veil() {
   local arch="$1"
   local dest="$2"
   local core_lib="$CORE_PATH/target/$arch/$BUILD_DIR/libconstruct_core.a"
 
   [ -f "$core_lib" ] || fail "libconstruct_core.a не найден: $core_lib"
 
-  # Ищем libconstruct_ice*.a в deps/ — берём самый новый (последний build)
-  local ice_lib
-  ice_lib=$(find "$CORE_PATH/target/$arch/$BUILD_DIR/deps" \
-            -name "libconstruct_ice*.a" 2>/dev/null | xargs ls -t 2>/dev/null | head -1)
+  # Ищем libconstruct_veil*.a в deps/ — берём самый новый (последний build)
+  local veil_lib
+  veil_lib=$(find "$CORE_PATH/target/$arch/$BUILD_DIR/deps" \
+            -name "libconstruct_veil*.a" 2>/dev/null | xargs ls -t 2>/dev/null | head -1)
 
-  if [ -n "$ice_lib" ] && [ -f "$ice_lib" ]; then
-    libtool -static -o "$dest" "$core_lib" "$ice_lib"
-    info "Смёрджено с ICE: $(basename "$ice_lib")"
+  if [ -n "$veil_lib" ] && [ -f "$veil_lib" ]; then
+    libtool -static -o "$dest" "$core_lib" "$veil_lib"
+    info "Смёрджено с VEIL: $(basename "$veil_lib")"
   else
     cp "$core_lib" "$dest"
-    warn "ICE-библиотека не найдена для $arch — ICE-прокси символы отсутствуют"
+    warn "VEIL-библиотека не найдена для $arch — VEIL-прокси символы отсутствуют"
   fi
 
   local size
@@ -147,27 +160,27 @@ if $BUILD_SIM; then
 fi
 
 # ── Мёрдж + копирование ───────────────────────────────────────────────────────
-hdr "Мёрдж ICE и копирование"
+hdr "Мёрдж VEIL и копирование"
 
-$BUILD_IOS && merge_ice "aarch64-apple-ios"        "$PROJECT_ROOT/libconstruct_core.a"
+$BUILD_IOS && merge_veil "aarch64-apple-ios"        "$PROJECT_ROOT/libconstruct_core.a"
 if $BUILD_DIST; then
   # Universal fat binary: arm64 + x86_64 (for DMG / distribution)
   TMPDIR_DIST="/tmp/construct_mac_dist"
   mkdir -p "$TMPDIR_DIST"
-  merge_ice "aarch64-apple-darwin"  "$TMPDIR_DIST/libconstruct_core_arm64.a"
-  merge_ice "x86_64-apple-darwin"   "$TMPDIR_DIST/libconstruct_core_x86_64.a"
+  merge_veil "aarch64-apple-darwin"  "$TMPDIR_DIST/libconstruct_core_arm64.a"
+  merge_veil "x86_64-apple-darwin"   "$TMPDIR_DIST/libconstruct_core_x86_64.a"
   lipo -create "$TMPDIR_DIST/libconstruct_core_arm64.a" "$TMPDIR_DIST/libconstruct_core_x86_64.a" \
        -output "$PROJECT_ROOT/libconstruct_core_mac.a"
   ok "Universal macOS fat binary (arm64 + x86_64) → libconstruct_core_mac.a"
 elif $BUILD_MAC; then
-  merge_ice "aarch64-apple-darwin"  "$PROJECT_ROOT/libconstruct_core_mac.a"
+  merge_veil "aarch64-apple-darwin"  "$PROJECT_ROOT/libconstruct_core_mac.a"
 fi
 if $BUILD_SIM; then
   # Fat simulator binary: arm64 (Apple Silicon sim) + x86_64 (Intel sim)
   TMPDIR_SIM="/tmp/construct_sim"
   mkdir -p "$TMPDIR_SIM"
-  merge_ice "aarch64-apple-ios-sim" "$TMPDIR_SIM/libconstruct_core_arm64.a"
-  merge_ice "x86_64-apple-ios"      "$TMPDIR_SIM/libconstruct_core_x86_64.a"
+  merge_veil "aarch64-apple-ios-sim" "$TMPDIR_SIM/libconstruct_core_arm64.a"
+  merge_veil "x86_64-apple-ios"      "$TMPDIR_SIM/libconstruct_core_x86_64.a"
   lipo -create "$TMPDIR_SIM/libconstruct_core_arm64.a" "$TMPDIR_SIM/libconstruct_core_x86_64.a" \
        -output "$PROJECT_ROOT/libconstruct_core_sim.a"
   ok "Universal simulator fat binary (arm64 + x86_64) → libconstruct_core_sim.a"
@@ -194,14 +207,24 @@ if $BUILD_SIM; then
 fi
 
 # ── Обновление ConstructCore.xcframework ─────────────────────────────────────
+# Slice paths are read from Info.plist's LibraryIdentifier + LibraryPath. Hard-coded
+# here because the xcframework layout is stable; if you change it, also update
+# Info.plist + delete/recreate the slice folder. The cp calls deliberately run
+# without `&&` so set -e + pipefail surface any failure instead of silently dropping.
 XCFW="$PROJECT_ROOT/ConstructCore.xcframework"
 if [ -d "$XCFW" ]; then
   hdr "Обновление xcframework"
-  $BUILD_IOS && cp "$PROJECT_ROOT/libconstruct_core.a" "$XCFW/ios-arm64/libconstruct_core.a" && ok "ios-arm64 → xcframework"
-  ( $BUILD_MAC || $BUILD_DIST ) && cp "$PROJECT_ROOT/libconstruct_core_mac.a" "$XCFW/macos-arm64/libconstruct_core_mac.a" && ok "macos-arm64 → xcframework"
+  if $BUILD_IOS; then
+    cp "$PROJECT_ROOT/libconstruct_core.a"     "$XCFW/ios-arm64/libconstruct_core.a"
+    ok "ios-arm64 → xcframework"
+  fi
+  if $BUILD_MAC || $BUILD_DIST; then
+    cp "$PROJECT_ROOT/libconstruct_core_mac.a" "$XCFW/macos-arm64/libconstruct_core_mac.a"
+    ok "macos-arm64 → xcframework"
+  fi
   if $BUILD_SIM; then
-    XCFW_SIM="$XCFW/ios-arm64-simulator/libconstruct_core.a"
-    cp "$PROJECT_ROOT/libconstruct_core_sim.a" "$XCFW_SIM" && ok "ios-arm64-simulator → xcframework (arm64 + x86_64 fat)"
+    cp "$PROJECT_ROOT/libconstruct_core_sim.a" "$XCFW/ios-arm64_x86_64-simulator/libconstruct_core_sim.a"
+    ok "ios-arm64_x86_64-simulator → xcframework (arm64 + x86_64 fat)"
   fi
 fi
 

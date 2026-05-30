@@ -213,15 +213,15 @@ struct QRScannerView: View {
         let generator = InviteGenerator()
         guard let userId = AuthSessionManager.shared.currentUserId,
               let deviceId = KeychainManager.shared.loadDeviceID() else {
-            print("⚠️ No authenticated user — cannot simulate invite")
+            Log.info("No authenticated user — cannot simulate invite")
             return
         }
         do {
             let testCode = try generator.generateDeepLink(userId: userId, deviceId: deviceId, useHTTPS: false)
-            print("🧪 QRScannerView: Simulating Dynamic Invite scan")
+            Log.info("QRScannerView: Simulating Dynamic Invite scan")
             handleScannedCode(testCode)
         } catch {
-            print("❌ Failed to generate test invite: \(error)")
+            Log.info("Failed to generate test invite: \(error)")
         }
     }
 
@@ -485,7 +485,7 @@ struct QRCodeScannerViewRepresentable: UIViewRepresentable {
 
 #Preview {
     QRScannerView { code in
-        print("Scanned: \(code)")
+        Log.info("Scanned: \(code)")
     }
 }
 

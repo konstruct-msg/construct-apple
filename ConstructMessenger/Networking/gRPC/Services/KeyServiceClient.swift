@@ -173,7 +173,7 @@ final class KeyServiceClient: Sendable {
             // KT verification (non-blocking: failure is logged but does not reject the bundle)
             if response.hasKtProof {
                 let p = response.ktProof
-                let serverKey = UserDefaults.standard.data(forKey: IceCertFetcher.cachedBundleSigningKeyKey)
+                let serverKey = UserDefaults.standard.data(forKey: VeilCertFetcher.cachedBundleSigningKeyKey)
                 let result = KeyTransparencyVerifier.verify(
                     leafIndex: p.leafIndex,
                     treeSize: p.treeSize,

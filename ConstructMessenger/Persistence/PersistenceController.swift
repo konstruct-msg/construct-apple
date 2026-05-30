@@ -36,7 +36,7 @@ struct PersistenceController {
               let model = NSManagedObjectModel(contentsOf: modelURL) else {
             // Bundle is corrupted — fall back to letting CoreData find the model itself.
             // Better to start with a potentially broken container than to crash outright.
-            print("❌ Core Data: ConstructMessenger.momd not found in Bundle.main — falling back to default init")
+            Log.error("Core Data: ConstructMessenger.momd not found in Bundle.main — falling back to default init")
             let fallback = NSPersistentContainer(name: "ConstructMessenger")
             fallback.loadPersistentStores { _, _ in }
             container = fallback
@@ -68,11 +68,11 @@ struct PersistenceController {
             // Store failed to load (e.g. schema migration or file protection error).
             // Recovery: wipe the incompatible store files and recreate a blank store so
             // the app can start. The user loses local cache but won't see a crash.
-            print("⚠️ Core Data: store load failed — attempting recovery: \(error)")
+            Log.error("Core Data: store load failed — attempting recovery: \(error)")
             guard let storeURL = description.url else {
                 // No URL at all — nothing we can do but log and continue with a
                 // broken container (app will show empty state instead of crashing).
-                print("❌ Core Data: persistent store has no URL — cannot recover")
+                Log.error("Core Data: persistent store has no URL — cannot recover")
                 return
             }
             Self.nukeSQLiteFiles(at: storeURL)
@@ -86,11 +86,11 @@ struct PersistenceController {
                         NSInferMappingModelAutomaticallyOption: true
                     ]
                 )
-                print("⚠️ Core Data: store recreated after recovery — local data cleared")
+                Log.error("Core Data: store recreated after recovery — local data cleared")
             } catch {
                 // Still failed after nuke — log and continue; the app will start with
                 // an in-memory-like empty context rather than crashing.
-                print("❌ Core Data: recovery failed after nuke: \(error)")
+                Log.error("Core Data: recovery failed after nuke: \(error)")
             }
         }
 
@@ -127,9 +127,9 @@ struct PersistenceController {
         do {
             try context.save()
             UserDefaults.standard.set(true, forKey: migrationKey)
-            print("✅ Synaps migration: \(users.count) existing contact(s) moved to Synaps")
+            Log.info("Synaps migration: \(users.count) existing contact(s) moved to Synaps")
         } catch {
-            print("❌ Synaps migration failed: \(error)")
+            Log.error("Synaps migration failed: \(error)")
         }
     }
 

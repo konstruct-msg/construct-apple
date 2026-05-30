@@ -169,7 +169,7 @@ struct ChatView: View {
                 }
                 .onChange(of: viewModel.messages.count) { _, count in
                     if AppConstants.enableDebugLogging {
-                        print("ChatView: messages count changed to \(count)")
+                        Log.info("ChatView: messages count changed to \(count)")
                     }
 
                     // Auto-scroll when new messages arrive — only if user is at the bottom.
@@ -487,7 +487,7 @@ struct ChatView: View {
         )
         .disabled(isEditMode)
         .overlay(alignment: .bottomTrailing) {
-            // ✅ Scroll to bottom button (appears when scrolled far from newest)
+            // Scroll to bottom button (appears when scrolled far from newest)
             if scrollManager.shouldShowScrollToBottomButton && !isEditMode {
                 Button {
                     withAnimation(.easeOut(duration: 0.3)) {
@@ -498,7 +498,7 @@ struct ChatView: View {
                     }
                 } label: {
                     Image(systemName: "chevron.down.circle.fill")
-                        .font(.system(size: CTLayout.navIconSize))
+                        .font(.system(size: 30))
                         .foregroundColor(Color.CT.accent)
                 }
                 .padding(.trailing, 16)

@@ -46,7 +46,7 @@ struct Construct_DesktopApp: App {
                     do { try EngineAdapter.shared.start() } catch {
                         Log.error("Engine start failed: \(error)", category: "Engine")
                     }
-                    await IceProxyManager.shared.startIfEnabled()
+                    await VeilProxyManager.shared.startIfEnabled()
                     if authViewModel.isAuthenticated,
                        let deviceId = KeychainManager.shared.loadDeviceID() {
                         await PQCKeyManager.migrateIfNeeded(deviceId: deviceId)

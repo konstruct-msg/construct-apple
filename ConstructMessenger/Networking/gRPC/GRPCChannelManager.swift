@@ -46,7 +46,7 @@ final class GRPCChannelManager: Sendable {
     }
 
     /// Sets the ICE proxy port managed by `ConnectionLoop`.
-    /// When non-nil, `iceProxyPort()` returns this value and gRPC routes through the proxy.
+    /// When non-nil, `veilProxyPort()` returns this value and gRPC routes through the proxy.
     /// Pass `nil` to clear ICE routing (direct path).
     func setDirectProxyPort(_ port: UInt16?) {
         let changed = _overrideProxyPortLock.withLock { () -> Bool in
@@ -60,7 +60,7 @@ final class GRPCChannelManager: Sendable {
 
     /// Returns the local proxy port when ICE is active, nil for direct routing.
     /// Set by `ConnectionLoop.prepare()` via `setDirectProxyPort()`.
-    func iceProxyPort() -> UInt16? {
+    func veilProxyPort() -> UInt16? {
         _overrideProxyPortLock.withLock { _overrideProxyPort }
     }
 
@@ -85,7 +85,12 @@ final class GRPCChannelManager: Sendable {
             Task {
                 await GeoIPManager.shared.invalidate()
                 await GeoIPManager.shared.resolve()
-                await ConnectionLoop.shared.reset()
+                let reachable = NetworkReachabilityManager.shared.isReachable
+                let censored = CensoredNetworkDetector.isCensored
+                let mode = VeilProxyStore.loadMode()
+                await TransportRouter.shared.send(
+                    .networkPathChanged(reachable: reachable, censored: censored, mode: mode)
+                )
             }
         }
     }
@@ -132,12 +137,12 @@ final class GRPCChannelManager: Sendable {
     }
 #endif
 
-    // Set by ConnectionLoop.prepare() via setDirectProxyPort(). iceProxyPort() returns this value.
+    // Set by ConnectionLoop.prepare() via setDirectProxyPort(). veilProxyPort() returns this value.
     private nonisolated(unsafe) var _overrideProxyPort: UInt16? = nil
     private let _overrideProxyPortLock = NSLock()
 
     private func routingKey() -> String {
-        if let icePort = iceProxyPort() { return "ice:\(icePort)" }
+        if let veilPort = veilProxyPort() { return "ice:\(veilPort)" }
         return "direct:\(currentHost):\(currentPort)"
     }
 
@@ -221,6 +226,10 @@ final class GRPCChannelManager: Sendable {
 #if canImport(Network)
         invalidateH3Connection()
 #endif
+        // Notify subscribers (MessageStreamManager etc.) that routing changed so they can
+        // force-reconnect long-lived streams. Without this, a stream bound to the old H3/H2
+        // connection sits silently until heartbeat-watchdog catches it (~60-90s).
+        NotificationCenter.default.post(name: .grpcServerChanged, object: nil)
     }
 
     /// Invalidates the persistent connection so the next RPC gets a fresh one.
@@ -287,11 +296,11 @@ final class GRPCChannelManager: Sendable {
         // The :authority pseudo-header MUST be the logical server hostname (currentHost) —
         // upstream HTTP routers (e.g. Traefik Host(...) rule) match on :authority and would
         // 404 if it was the transport address (127.0.0.1).
-        if let icePort = iceProxyPort() {
-            Log.info("gRPC via ICE proxy → 127.0.0.1:\(icePort)", category: "gRPC")
+        if let veilPort = veilProxyPort() {
+            Log.info("gRPC via ICE proxy → 127.0.0.1:\(veilPort)", category: "gRPC")
             let logicalAuthority = currentHost
             let transport = try HTTP2ClientTransport.TransportServices(
-                target: .ipv4(address: "127.0.0.1", port: Int(icePort)),
+                target: .ipv4(address: "127.0.0.1", port: Int(veilPort)),
                 transportSecurity: .plaintext,
                 config: .defaults {
                     $0.http2.authority = logicalAuthority
@@ -301,7 +310,7 @@ final class GRPCChannelManager: Sendable {
                         maxIdleTime: .seconds(NetworkTiming.GRPC.maxIdleTimeSeconds),
                         keepalive: .init(
                             time: .seconds(NetworkTiming.GRPC.keepaliveTimeIceSeconds),
-                            timeout: .seconds(NetworkTiming.GRPC.keepaliveTimeoutSeconds),
+                            timeout: .seconds(NetworkTiming.GRPC.keepaliveTimeoutIceSeconds),
                             allowWithoutCalls: true
                         )
                     )
@@ -353,7 +362,7 @@ final class GRPCChannelManager: Sendable {
     }
 
     /// Returns (or lazily creates) the shared persistent H3 channel.
-    /// Only valid on the direct path — callers must check `iceProxyPort() == nil` before calling.
+    /// Only valid on the direct path — callers must check `veilProxyPort() == nil` before calling.
     /// Analogous to `acquirePersistentClient()` for the H2 path.
     func acquireH3Channel() -> GRPCClient<HTTP3ClientTransport> {
         _h3connLock.lock()
@@ -446,5 +455,5 @@ final class GRPCChannelManager: Sendable {
 extension Notification.Name {
     static let grpcServerChanged = Notification.Name("grpcServerChanged")
     /// Posted when ICE recovers and routing switches back to a relay.
-    static let iceRelayRecovered = Notification.Name("iceRelayRecovered")
+    static let veilRelayRecovered = Notification.Name("veilRelayRecovered")
 }

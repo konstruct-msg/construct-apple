@@ -290,8 +290,8 @@ final class StreamLifecycleCoordinator {
                 guard let self else { continue }
                 self.backgroundDisconnectTask?.cancel()
                 self.backgroundDisconnectTask = nil
-                await IceProxyManager.shared.verifyAliveOrRestart()
-                await IceProxyManager.shared.startIfEnabled()
+                await VeilProxyManager.shared.verifyAliveOrRestart()
+                await VeilProxyManager.shared.startIfEnabled()
                 if self.streamManager.isConnected {
                     Log.info("App became active — stream still alive, skipping reconnect", category: "StreamLifecycle")
                 } else if self.streamManager.isActivelyConnecting {
@@ -318,16 +318,16 @@ final class StreamLifecycleCoordinator {
                 }
                 Log.info("Network interface changed — restarting stream and ICE proxy", category: "StreamLifecycle")
                 Task { @MainActor in
-                    await IceProxyManager.shared.verifyAliveOrRestart()
-                    await IceProxyManager.shared.startIfEnabled()
+                    await VeilProxyManager.shared.verifyAliveOrRestart()
+                    await VeilProxyManager.shared.startIfEnabled()
                 }
                 self.forceReconnect()
             }
         }
         observationTasks.append(pathTask)
 
-        let iceRecoveryTask = Task { [weak self] in
-            for await _ in NotificationCenter.default.notifications(named: .iceRelayRecovered) {
+        let veilRecoveryTask = Task { [weak self] in
+            for await _ in NotificationCenter.default.notifications(named: .veilRelayRecovered) {
                 guard let self else { return }
                 Log.info("ICE recovered — retrying key health check and token registration", category: "StreamLifecycle")
                 self.lastForegroundKeyCheckAt = 0
@@ -338,7 +338,7 @@ final class StreamLifecycleCoordinator {
                 #endif
             }
         }
-        observationTasks.append(iceRecoveryTask)
+        observationTasks.append(veilRecoveryTask)
 
         let silentPushTask = Task { [weak self] in
             while !Task.isCancelled {

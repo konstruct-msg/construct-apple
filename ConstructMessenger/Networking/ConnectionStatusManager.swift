@@ -40,6 +40,7 @@ class ConnectionStatusManager {
     private(set) var lastError: String?
 
     private var reachabilityTask: Task<Void, Never>?
+    private var veilProxyObserver: NSObjectProtocol?
     private let reachabilityManager = NetworkReachabilityManager.shared
 
     enum ConnectionStatus: Equatable {
@@ -69,6 +70,7 @@ class ConnectionStatusManager {
 
     private init() {
         setupReachabilityObserving()
+        setupICEProxyObserving()
 
         // Initial status based on network reachability
         // If network is reachable, we're in "connecting" state until first successful request
@@ -102,6 +104,31 @@ class ConnectionStatusManager {
                 }
             }
         }
+    }
+
+    /// Observe ICE proxy state — if the proxy dies while we're on ICE, immediately
+    /// transition to "connecting" so the UI doesn't show a false "Connected" status.
+    private func setupICEProxyObserving() {
+        veilProxyObserver = NotificationCenter.default.addObserver(
+            forName: .veilProxyStateChanged,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            let isRunning = (notification.userInfo?["isRunning"] as? Bool) ?? false
+            Task { @MainActor [weak self] in
+                self?.handleICEProxyStateChange(isRunning: isRunning)
+            }
+        }
+    }
+
+    private func handleICEProxyStateChange(isRunning: Bool) {
+        guard !isRunning, connectionStatus == .connected else { return }
+        // Proxy just stopped while we thought we were connected.
+        // The stream hasn't noticed yet (heartbeat timeout = 75s), so we
+        // proactively downgrade to "connecting" to avoid a false-positive UI.
+        connectionStatus = .connecting
+        connectingPhase = "ICE proxy stopped — reconnecting"
+        Log.info("ICE proxy stopped while connected — status → Connecting", category: "ConnectionStatus")
     }
 
     // MARK: - Status Updates
@@ -159,7 +186,7 @@ class ConnectionStatusManager {
         if oldStatus != connectionStatus {
             Log.info("Connection status changed: \(oldStatus.displayText) -> \(connectionStatus.displayText)", category: "ConnectionStatus")
             if let error = error {
-                Log.info("   Error: \(error)", category: "ConnectionStatus")
+                Log.info("Error: \(error)", category: "ConnectionStatus")
             }
         }
     }
@@ -188,16 +215,27 @@ class ConnectionStatusManager {
 
     func markStreamDisconnected(error: String? = nil, phase: String? = nil) {
         lastError = error
-        if reachabilityManager.isReachable {
-            if connectionStatus == .connected {
-                connectionStatus = .connecting
-                Log.info("Stream disconnected → status: Connecting", category: "ConnectionStatus")
-            }
-            if let phase { connectingPhase = phase }
-        } else {
+        guard reachabilityManager.isReachable else {
             connectingPhase = nil
             connectionStatus = .disconnected
+            return
         }
+        // Stream disconnect doesn't necessarily mean we're offline — the gRPC channel
+        // can still handle unary RPCs while the bidi stream reconnects. If we've had a
+        // successful RPC in the last 90 seconds, treat the stream disconnect as transient
+        // and keep showing Connected. Otherwise (no recent traffic) downgrade to Connecting.
+        // 90s covers the worst-case observed ICE stream reconnect cycle (~50s connection
+        // life + ~20s reconnect attempt). This stops the UI flickering Connected → Connecting
+        // → Connected on every stream restart cycle when the underlying transport is healthy.
+        if connectionStatus == .connected, !isConnectionStale(threshold: 90) {
+            if let phase { connectingPhase = phase }
+            return
+        }
+        if connectionStatus == .connected {
+            connectionStatus = .connecting
+            Log.info("Stream disconnected → status: Connecting", category: "ConnectionStatus")
+        }
+        if let phase { connectingPhase = phase }
     }
 
     func markStreamPaused() {

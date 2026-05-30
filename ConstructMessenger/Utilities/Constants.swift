@@ -258,6 +258,26 @@ struct FeatureFlags {
     #else
     static let useEngineForSend = true
     #endif
+
+    /// HTTP/3 (QUIC) for gRPC streams on the direct path.
+    ///
+    /// **Disabled 2026-05-29** after device validation surfaced a silent failure mode:
+    /// bidi MessageStream over H3 sends `subscribe` successfully but the server's
+    /// initial response headers never reach the client — `onAccepted` never fires,
+    /// stream hangs until heartbeat-watchdog tears it down ~75s later. Unary RPCs
+    /// over H3 work fine; only bidi streaming is broken.
+    ///
+    /// Likely cause: Traefik 3.x QUIC↔h2c bridge mishandles bidi streaming response
+    /// frames OR the custom `HTTP3ClientTransport.swift` doesn't surface initial
+    /// response headers to the gRPC layer for bidi calls (it does for unary).
+    ///
+    /// Re-enable only after both ends have been verified end-to-end with a bidi
+    /// streaming test. The H3 code paths in `MessageStreamTransport.swift`,
+    /// `GRPCStreamTransport.open`, and `GRPCChannelManager.acquireH3Channel`
+    /// remain intact for that future work.
+    ///
+    /// See `wiki/decisions/h3-disabled-on-ios.md` for the full context.
+    static let h3Enabled: Bool = false
 }
 
 // MARK: - Traffic Protection Configuration
@@ -363,8 +383,8 @@ enum UserDefaultsKey: String {
     case trafficProtectionEnabled = "trafficProtection_enabled"
 
     // ICE — traffic obfuscation (Intrusion Countermeasures Electronics)
-    case iceEnabled = "ice_enabled"
-    case iceMode = "ice_mode"
+    case veilEnabled = "ice_enabled"
+    case veilMode = "ice_mode"
 
     // Background Fetch
     case backgroundFetchEnabled = "backgroundFetch_enabled"
@@ -383,13 +403,13 @@ enum UserDefaultsKey: String {
     var key: String { rawValue }
 }
 
-// MARK: - ICE Relay Region
+// MARK: - VEIL Relay Region
 
 /// Maps a UTC timezone offset range to a preferred relay ordering.
-/// Used by IceProxyManager to geo-prefer the closest relay without IP lookup or GPS.
+/// Used by VeilProxyManager to geo-prefer the closest relay without IP lookup or GPS.
 /// Fetched from `.well-known/construct-server` and cached in UserDefaults;
 /// falls back to `ICEConfig.hardcodedRelayRegions` when server config is unavailable.
-struct ICERelayRegion: Codable {
+struct VEILRelayRegion: Codable {
     /// Minimum UTC offset in hours (inclusive).
     let tzOffsetMin: Int
     /// Maximum UTC offset in hours (inclusive).
@@ -404,14 +424,14 @@ struct ICERelayRegion: Codable {
     }
 }
 
-// MARK: - ICE Bridge Configuration
-struct ICEConfig {
+// MARK: - VEIL Bridge Configuration
+struct VEILConfig {
     /// Hardcoded fallback bridge cert used when Keychain is empty (first launch before login).
     /// This is the server's public obfs4 identity — not a secret, safe to embed in binary.
     /// Update this when the production server rotates its ICE identity keypair.
     static let hardcodedBridgeCert = "3J8A3lAtPb3R4+td9UVLuzggZeva+o8TDNVw4aHx8HWdvdYpS4gV6t8gmxbGMIQTB5eGJA"
 
-    /// Primary ICE endpoint: TLS 1.3 → obfs4 → gRPC (Amsterdam, via Traefik).
+    /// Primary VEIL endpoint: TLS 1.3 → obfs4 → gRPC (Amsterdam, via Traefik).
     /// Uses `ice.<grpcHost>:443` derived at runtime from GRPCChannelManager.currentHost.
 
     // ── Relay 1: Moscow (Yandex Cloud) — REMOVED ────────────────────────────────
@@ -494,7 +514,7 @@ struct ICEConfig {
     static let cachedRelayListKey = "construct.ice_relays"
 
     /// UserDefaults key where the relay-region config fetched from the server is cached.
-    /// Value is JSON-encoded array of `ICERelayRegion` (see IceCertFetcher).
+    /// Value is JSON-encoded array of `ICERelayRegion` (see VeilCertFetcher).
     static let cachedRelayRegionsKey = "construct.ice_relay_regions"
 
     /// WebTunnel (ICE v2) WebSocket resource paths, keyed by relay address.
@@ -525,8 +545,8 @@ struct ICEConfig {
     /// RU-specific routing (SPb primary) is handled by the server OTA config via IP geolocation,
     /// not by timezone heuristics — timezone is a poor proxy for DPI presence.
     /// Override via `.well-known/construct-server` `ice.relay_regions` without a new build.
-    static let hardcodedRelayRegions: [ICERelayRegion] = [
-        ICERelayRegion(tzOffsetMin: -12, tzOffsetMax: 12, preferredRelays: [amsRelayAddress]),
+    static let hardcodedRelayRegions: [VEILRelayRegion] = [
+        VEILRelayRegion(tzOffsetMin: -12, tzOffsetMax: 12, preferredRelays: [amsRelayAddress]),
     ]
 }
 
@@ -552,7 +572,7 @@ extension APIConstants {
         KeychainManager.shared.saveCustomServerURL(url)
         UserDefaults.standard.set(url, forKey: customServerURLKey)
         NotificationCenter.default.post(name: .serverURLChanged, object: nil)
-        print("⚠️ Using custom server: \(url)")
+        Log.info("Using custom server: \(url)")
     }
 
     static func resetToDefault() {
@@ -560,7 +580,7 @@ extension APIConstants {
         KeychainManager.shared.deleteCustomServerURL()
         UserDefaults.standard.removeObject(forKey: customServerURLKey)
         NotificationCenter.default.post(name: .serverURLChanged, object: nil)
-        print("✅ Reset to default server: \(websocketURL)")
+        Log.info("Reset to default server: \(websocketURL)")
     }
     
     // Save custom server URL (used by settings views)

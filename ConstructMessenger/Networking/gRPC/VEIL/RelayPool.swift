@@ -17,7 +17,7 @@ struct RelayPool {
     // MARK: - State
 
     /// Relays ordered by TCP latency (fastest first). Set once at init.
-    private let relays: [IceRelay]
+    private let relays: [VeilRelay]
 
     /// Consecutive failure count per relay address. Resets to 0 on `recordSuccess` or `resetFailures`.
     private var failures: [String: Int] = [:]
@@ -33,7 +33,7 @@ struct RelayPool {
 
     // MARK: - Init
 
-    init(relays: [IceRelay], blockedPenalty: [String: Int] = [:]) {
+    init(relays: [VeilRelay], blockedPenalty: [String: Int] = [:]) {
         self.relays = relays
         self.webTunnelBlockedPenalty = blockedPenalty
     }
@@ -46,13 +46,13 @@ struct RelayPool {
 
     /// Returns the relay with fewest effective failures (transient + persistent penalty).
     /// Returns nil only when the pool is empty.
-    func best() -> IceRelay? {
+    func best() -> VeilRelay? {
         relays.min { effectiveScore(for: $0.address) < effectiveScore(for: $1.address) }
     }
 
     /// Returns the best relay excluding `address`, or falls back to `best()` if
     /// no alternatives exist (single-relay pool).
-    func best(excluding address: String) -> IceRelay? {
+    func best(excluding address: String) -> VeilRelay? {
         let alternatives = relays.filter { $0.address != address }
         return alternatives.min { effectiveScore(for: $0.address) < effectiveScore(for: $1.address) }
             ?? best()
@@ -60,7 +60,7 @@ struct RelayPool {
 
     // MARK: - Feedback
 
-    mutating func recordSuccess(_ relay: IceRelay) {
+    mutating func recordSuccess(_ relay: VeilRelay) {
         failures[relay.address] = 0
         webTunnelBlockedPenalty[relay.address] = 0
     }
@@ -70,7 +70,7 @@ struct RelayPool {
         webTunnelBlockedPenalty[address] = 0
     }
 
-    mutating func recordFailure(_ relay: IceRelay) {
+    mutating func recordFailure(_ relay: VeilRelay) {
         failures[relay.address, default: 0] += 1
     }
 
@@ -80,7 +80,7 @@ struct RelayPool {
 
     /// Records a carrier-level WebTunnel block. The penalty accumulates across `resetFailures()`
     /// calls so a reset to a new network path doesn't immediately retry a known-blocked relay.
-    mutating func recordWebTunnelBlocked(_ relay: IceRelay) {
+    mutating func recordWebTunnelBlocked(_ relay: VeilRelay) {
         let current = webTunnelBlockedPenalty[relay.address, default: 0]
         webTunnelBlockedPenalty[relay.address] = min(current + Self.blockedPenaltyStep, Self.maxBlockedPenalty)
     }
@@ -99,7 +99,7 @@ struct RelayPool {
     /// Current WebTunnel block penalties — read by `ConnectionLoop` to persist across launches.
     var blockedPenalty: [String: Int] { webTunnelBlockedPenalty }
 
-    func failureCount(for relay: IceRelay) -> Int {
+    func failureCount(for relay: VeilRelay) -> Int {
         failures[relay.address, default: 0]
     }
 

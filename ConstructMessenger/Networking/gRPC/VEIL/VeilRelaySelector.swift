@@ -1,34 +1,34 @@
 //
-//  IceRelaySelector.swift
+//  VeilRelaySelector.swift
 //  Construct Messenger
 //
 
 import Foundation
 import Network
 
-struct IceRelayLatencySelection {
+struct VeilRelayLatencySelection {
     let orderedAddresses: [String]
     let relayQualityScores: [String: RelayQualityScore]
     let measuredLatency: Bool
 }
 
-struct IceRelayFailureSelection {
+struct VeilRelayFailureSelection {
     let orderedAddresses: [String]
     let failedAddresses: [String]
 }
 
 /// Builds and orders ICE relay candidates without starting the native proxy.
-enum IceRelaySelector {
+enum VeilRelaySelector {
     static func manifestIdMap() -> [String: String] {
-        let infos = IceCertFetcher.cachedRelayInfosSync() ?? []
+        let infos = VeilCertFetcher.cachedRelayInfosSync() ?? []
         return Dictionary(uniqueKeysWithValues: infos.map { ($0.addressWithPort, $0.id) })
     }
 
     static func candidateAddresses(currentHost: String) -> [String] {
-        let iceHost = "ice.\(currentHost)"
+        let veilHost = "ice.\(currentHost)"
         var seen = Set<String>()
         var candidates: [String] = []
-        let allAddresses = ["\(iceHost):443"] + ICEConfig.hardcodedRelayAddresses + IceProxyStore.cachedRelayList()
+        let allAddresses = ["\(veilHost):443"] + VEILConfig.hardcodedRelayAddresses + VeilProxyStore.cachedRelayList()
         for address in allAddresses where seen.insert(address).inserted {
             candidates.append(address)
         }
@@ -36,13 +36,13 @@ enum IceRelaySelector {
     }
 
     static func cachedRelayAddresses() -> [String] {
-        IceProxyStore.cachedRelayAddresses(fallback: ICEConfig.hardcodedRelayAddresses)
+        VeilProxyStore.cachedRelayAddresses(fallback: VEILConfig.hardcodedRelayAddresses)
     }
 
     static func certificateExpiryAddresses() -> Set<String> {
         var addresses = Set<String>()
-        ICEConfig.hardcodedRelayAddresses.forEach { addresses.insert($0) }
-        IceProxyStore.cachedRelayList().forEach { addresses.insert($0) }
+        VEILConfig.hardcodedRelayAddresses.forEach { addresses.insert($0) }
+        VeilProxyStore.cachedRelayList().forEach { addresses.insert($0) }
         return addresses
     }
 
@@ -54,7 +54,7 @@ enum IceRelaySelector {
         }
 
         // Timezone fallback: use server-provided or hardcoded region rules.
-        let regions = IceProxyStore.cachedRelayRegions(fallback: ICEConfig.hardcodedRelayRegions)
+        let regions = VeilProxyStore.cachedRelayRegions(fallback: VEILConfig.hardcodedRelayRegions)
         let tzOffset = TimeZone.current.secondsFromGMT() / 3600
         guard let rule = regions.first(where: {
             tzOffset >= $0.tzOffsetMin && tzOffset <= $0.tzOffsetMax
@@ -71,9 +71,9 @@ enum IceRelaySelector {
         let preferred: [String]
         switch region {
         case .ruLike:
-            preferred = [ICEConfig.ruRelayAddress, ICEConfig.amsRelayAddress]
+            preferred = [VEILConfig.ruRelayAddress, VEILConfig.amsRelayAddress]
         case .other, .unknown:
-            preferred = [ICEConfig.amsRelayAddress, ICEConfig.ruRelayAddress]
+            preferred = [VEILConfig.amsRelayAddress, VEILConfig.ruRelayAddress]
         }
         let front = preferred.filter { candidates.contains($0) }
         let back = candidates.filter { !preferred.contains($0) }
@@ -85,10 +85,10 @@ enum IceRelaySelector {
     static func sortByLatency(
         _ addresses: [String],
         relayQualityScores: [String: RelayQualityScore],
-        timeout: TimeInterval = NetworkTiming.ICE.relayLatencyProbeTimeout
-    ) async -> IceRelayLatencySelection {
+        timeout: TimeInterval = NetworkTiming.VEIL.relayLatencyProbeTimeout
+    ) async -> VeilRelayLatencySelection {
         guard !addresses.isEmpty else {
-            return IceRelayLatencySelection(
+            return VeilRelayLatencySelection(
                 orderedAddresses: [],
                 relayQualityScores: relayQualityScores,
                 measuredLatency: false
@@ -118,7 +118,7 @@ enum IceRelaySelector {
                 for await (address, latency) in group {
                     probeResults.append((address, latency))
                     if latency != nil, earlyExitAfter == nil {
-                        earlyExitAfter = Date().addingTimeInterval(NetworkTiming.ICE.sortByLatencyEarlyExitDelay)
+                        earlyExitAfter = Date().addingTimeInterval(NetworkTiming.VEIL.sortByLatencyEarlyExitDelay)
                     }
                     if probeResults.count == toProbe.count { break }
                     if let deadline = earlyExitAfter, Date() >= deadline {
@@ -147,7 +147,7 @@ enum IceRelaySelector {
         let cancelled = toProbe.filter { !probedSet.contains($0) }
         let unreachable = probeResults.filter { $0.1 == nil }.map(\.0) + cancelled
 
-        return IceRelayLatencySelection(
+        return VeilRelayLatencySelection(
             orderedAddresses: allReachable.map(\.0) + unreachable,
             relayQualityScores: updatedScores,
             measuredLatency: !probeResults.isEmpty
@@ -158,11 +158,11 @@ enum IceRelaySelector {
         _ ordered: [String],
         isRecentlyFailed: (String) -> Bool,
         isWebTunnelBlocked: (String) -> Bool
-    ) -> IceRelayFailureSelection {
+    ) -> VeilRelayFailureSelection {
         let notFailed = ordered.filter { !isRecentlyFailed($0) }
         let failed = ordered.filter { isRecentlyFailed($0) }
         guard !failed.isEmpty else {
-            return IceRelayFailureSelection(orderedAddresses: ordered, failedAddresses: [])
+            return VeilRelayFailureSelection(orderedAddresses: ordered, failedAddresses: [])
         }
 
         let reordered: [String]
@@ -170,10 +170,10 @@ enum IceRelaySelector {
             // All relays recently failed. Prefer WebTunnel-capable relays first because CDN-fronted
             // HTTPS WebSocket is less fingerprintable than obfs4 TLS profile on some networks.
             let failedWebTunnel = failed.filter {
-                IceCertFetcher.wtPathSync(for: $0) != nil && !isWebTunnelBlocked($0)
+                VeilCertFetcher.wtPathSync(for: $0) != nil && !isWebTunnelBlocked($0)
             }
             let failedNoWebTunnel = failed.filter {
-                IceCertFetcher.wtPathSync(for: $0) == nil || isWebTunnelBlocked($0)
+                VeilCertFetcher.wtPathSync(for: $0) == nil || isWebTunnelBlocked($0)
             }
             reordered = failedWebTunnel + failedNoWebTunnel
         } else {
@@ -184,13 +184,13 @@ enum IceRelaySelector {
             reordered = notFailed + transientFailed + definitivelyBad
         }
 
-        return IceRelayFailureSelection(orderedAddresses: reordered, failedAddresses: failed)
+        return VeilRelayFailureSelection(orderedAddresses: reordered, failedAddresses: failed)
     }
 
     /// Opens a TCP connection to `host:port` and returns time-to-ready, or nil if unreachable.
     private static func probeLatency(
         address: String,
-        timeout: TimeInterval = NetworkTiming.ICE.relayLatencyProbeTimeout
+        timeout: TimeInterval = NetworkTiming.VEIL.relayLatencyProbeTimeout
     ) async -> TimeInterval? {
         let parts = address.split(separator: ":")
         guard parts.count >= 2, let port = NWEndpoint.Port(String(parts.last!)) else { return nil }

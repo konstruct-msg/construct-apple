@@ -61,6 +61,9 @@ final class MessageStreamManager {
             if let obs = serverChangedObserver {
                 NotificationCenter.default.removeObserver(obs)
             }
+            if let obs = networkPathChangedObserver {
+                NotificationCenter.default.removeObserver(obs)
+            }
         }
     }
 
@@ -94,7 +97,14 @@ final class MessageStreamManager {
     var backgroundFetchTask: Task<Void, Never>?
     var heartbeatTask: Task<Void, Never>?
     var heartbeatWatchdogTask: Task<Void, Never>?
+    /// True once the server has pushed *any* event since `openStream()` accept.
+    /// Reset to false on each new openStream. Drives the first-event watchdog: if
+    /// nothing has arrived from the server within `firstServerEventWatchdogH3` seconds
+    /// (only on H3 — we don't watchdog H2/ICE this tightly), we treat H3 as silently
+    /// broken (DPI dropped UDP after handshake) and force fallback to H2.
+    var firstServerEventReceived: Bool = false
     private var serverChangedObserver: NSObjectProtocol?
+    private var networkPathChangedObserver: NSObjectProtocol?
     private var retryCount = 0
     private let maxRetryDelay: TimeInterval = NetworkTiming.Stream.maxRetryDelay
     /// When `true`, the next `openStream()` call uses H2 direct instead of H3.
@@ -146,6 +156,50 @@ final class MessageStreamManager {
 
     /// Timestamp of the latest connection attempt — used to compute total connect latency in logs.
     var connectStartTime: Date?
+
+    // MARK: - Low-power degraded mode (P3: battery optimisation for prolonged offline)
+
+    /// Wall-clock timestamp when the connect loop first entered a continuous-failure streak.
+    /// Reset on any success, clean disconnect, or network path change.
+    private var continuousFailureStreakStart: Date?
+
+    /// After this many minutes of uninterrupted failures, the loop switches to low-power mode:
+    /// skips `fetchMissedMessages`, skips ICE `prepare()`, and uses a longer backoff.
+    private let degradedModeThreshold: TimeInterval = 5 * 60  // 5 minutes
+
+    /// Backoff used in degraded mode — longer sleep between retries to conserve battery.
+    private let degradedModeBackoff: TimeInterval = 10 * 60  // 10 minutes
+
+    /// Set to true when the loop is in low-power mode.
+    private(set) var isInDegradedMode = false
+
+    /// Whether the connect loop should skip expensive pre-stream operations.
+    private var isInDegradedModeWindow: Bool {
+        guard let start = continuousFailureStreakStart else { return false }
+        return Date().timeIntervalSince(start) >= degradedModeThreshold
+    }
+
+    /// Called on network path change — resets degraded state and forces an immediate
+    /// stream reconnect. Without the forced reconnect, the stream can stay bound to the
+    /// old (dead) connection for up to a full heartbeat-watchdog interval (~90s).
+    func onNetworkPathChanged() {
+        continuousFailureStreakStart = nil
+        isInDegradedMode = false
+        // No stream running — degraded-mode clear is all that's needed.
+        guard streamTask != nil || isConnected else {
+            Log.info("Network path changed — cleared degraded mode (no active stream)", category: "MessageStream")
+            return
+        }
+        let ids = subscriptionUserIds
+        let cb = onMessageReceived
+        guard let cb else {
+            Log.info("Network path changed — no callback, not forcing reconnect", category: "MessageStream")
+            return
+        }
+        Log.info("Network path changed — forcing stream reconnect", category: "MessageStream")
+        forceDisconnect()
+        connect(contactUserIds: ids, onMessageReceived: cb)
+    }
 
     // MARK: - Public API
 
@@ -199,6 +253,18 @@ final class MessageStreamManager {
             }
         }
 
+        // Force stream reconnect on network path change. Guarded so repeated `connect()`
+        // calls don't stack observers.
+        if networkPathChangedObserver == nil {
+            networkPathChangedObserver = NotificationCenter.default.addObserver(
+                forName: .networkPathChanged,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor in self?.onNetworkPathChanged() }
+            }
+        }
+
         Log.info("Starting MessageStream connection (subscribed to \(contactUserIds.count) contacts)", category: "MessageStream")
         ConnectionStatusManager.shared.markConnecting()
         connectStartTime = Date()
@@ -244,6 +310,8 @@ final class MessageStreamManager {
         shouldFallbackToH2Direct = false
         lastStreamTransportWasH3 = false
         consecutiveH3OpenFailures = 0
+        continuousFailureStreakStart = nil
+        isInDegradedMode = false
         connect(contactUserIds: contactUserIds, onMessageReceived: onMessageReceived)
     }
 
@@ -274,6 +342,8 @@ final class MessageStreamManager {
 
         shouldFallbackToH2Direct = false
         lastStreamTransportWasH3 = false
+        continuousFailureStreakStart = nil
+        isInDegradedMode = false
         ConnectionStatusManager.shared.markStreamDisconnected()
         Log.info("MessageStream disconnected", category: "MessageStream")
     }
@@ -301,7 +371,12 @@ final class MessageStreamManager {
         hb.timestamp = Int64(Date().timeIntervalSince1970)
         var req = Shared_Proto_Services_V1_MessageStreamRequest()
         req.request = .heartbeat(hb)
-        outboundContinuation?.yield(req)
+        if outboundContinuation != nil {
+            outboundContinuation?.yield(req)
+            Log.debug("Heartbeat sent (outbound stream alive)", category: "MessageStream")
+        } else {
+            Log.info("Heartbeat skipped — outbound stream is nil", category: "MessageStream")
+        }
     }
 
     /// Send a delivery receipt for one or more messages via the live stream.
@@ -365,50 +440,50 @@ final class MessageStreamManager {
             // Cancel any background fetch left over from the previous iteration.
             backgroundFetchTask?.cancel()
 
-            // Fetch messages that arrived while disconnected. Run as an independent
-            // Task so the wall-clock cap doesn't cancel it: pending messages live in
-            // the server's queue and are NOT replayed via the live stream cursor.
-            // The background task continues delivering them after openStream() starts.
-            let fetchTask = Task { await self.fetchMissedMessages() }
-            backgroundFetchTask = fetchTask
+            // Fetch messages that arrived while disconnected — skip in degraded mode
+            // to avoid wasteful RPCs when the network is clearly down for a long time.
+            if !isInDegradedMode {
+                let fetchTask = Task { await self.fetchMissedMessages() }
+                backgroundFetchTask = fetchTask
 
-            // Advance to openStream after wall-clock cap OR when fetch completes,
-            // whichever fires first. fetchTask is NOT cancelled — it continues as a
-            // background task alongside the live stream.
-            //
-            // IMPORTANT: do NOT use withTaskGroup { await fetchTask.value } here.
-            // task.value ignores cooperative cancellation of the caller — the group
-            // would block for the full 30 s RPC timeout even after the cap fires.
-            let fetchCapDuration = NetworkTiming.Stream.fetchMissedMessagesWallClockCap
-            let capSleep = Task<Void, any Error> {
-                try await Task.sleep(for: .seconds(fetchCapDuration))
-            }
-            // Cancel the sleep early once fetch completes so we don't wait the full cap.
-            var fetchCompletedBeforeCap = false
-            Task { [capSleep] in _ = await fetchTask.value; fetchCompletedBeforeCap = true; capSleep.cancel() }
-            // Also cancel if the outer connectLoop task is cancelled.
-            await withTaskCancellationHandler {
-                try? await capSleep.value
-            } onCancel: {
-                capSleep.cancel()
-            }
-            guard !Task.isCancelled else { break }
-            if fetchCompletedBeforeCap {
-                Log.debug("fetchMissedMessages completed (cap=\(fetchCapDuration)s not reached) — opening stream", category: "MessageStream")
+                // Advance to openStream after wall-clock cap OR when fetch completes,
+                // whichever fires first. fetchTask is NOT cancelled — it continues as a
+                // background task alongside the live stream.
+                //
+                // IMPORTANT: do NOT use withTaskGroup { await fetchTask.value } here.
+                // task.value ignores cooperative cancellation of the caller — the group
+                // would block for the full 30 s RPC timeout even after the cap fires.
+                let fetchCapDuration = NetworkTiming.Stream.fetchMissedMessagesWallClockCap
+                let capSleep = Task<Void, any Error> {
+                    try await Task.sleep(for: .seconds(fetchCapDuration))
+                }
+                // Cancel the sleep early once fetch completes so we don't wait the full cap.
+                var fetchCompletedBeforeCap = false
+                Task { [capSleep] in _ = await fetchTask.value; fetchCompletedBeforeCap = true; capSleep.cancel() }
+                // Also cancel if the outer connectLoop task is cancelled.
+                await withTaskCancellationHandler {
+                    try? await capSleep.value
+                } onCancel: {
+                    capSleep.cancel()
+                }
+                guard !Task.isCancelled else { break }
+                if fetchCompletedBeforeCap {
+                    Log.debug("fetchMissedMessages completed (cap=\(fetchCapDuration)s not reached) — opening stream", category: "MessageStream")
+                } else {
+                    Log.debug("fetchMissedMessages wall-clock cap reached (\(fetchCapDuration)s) — opening stream while fetch continues in background", category: "MessageStream")
+                }
             } else {
-                Log.debug("fetchMissedMessages wall-clock cap reached (\(fetchCapDuration)s) — opening stream while fetch continues in background", category: "MessageStream")
+                Log.debug("Skipping fetchMissedMessages — degraded mode", category: "MessageStream")
             }
 
             guard !Task.isCancelled else { break }
 
             Log.info("connectLoop: fetchMissedMessages done, isCancelled=\(Task.isCancelled) — opening stream", category: "MessageStream")
 
-            // Prepare ICE routing: starts proxy if directFails ≥ threshold, clears it otherwise.
-            do { try await ConnectionLoop.shared.prepare() } catch {
-                Log.error("ConnectionLoop prepare failed: \(error)", category: "MessageStream")
-            }
-
-            let usingICE = await ConnectionLoop.shared.shouldUseICE
+            // TransportRouter maintains ICE state continuously; no explicit prepare needed.
+            // We just read whatever the router has set as current routing.
+            let routerSnapshot = await TransportRouter.shared.snapshot()
+            let usingICE = routerSnapshot.state.prefersVEIL && routerSnapshot.state.veilPort != nil
             let phaseLabel: String
             if lastStreamTransportWasH3 && shouldFallbackToH2Direct {
                 phaseLabel = "H2 direct (H3 fallback)"
@@ -423,11 +498,23 @@ final class MessageStreamManager {
                 // Stream ended cleanly — brief pause before reconnecting to avoid tight loop
                 // (e.g. server closes stream when 0 topics are subscribed)
                 Log.info("MessageStream ended cleanly, reconnecting in \(Int(NetworkTiming.Stream.cleanEndReconnectDelay))s", category: "MessageStream")
-                await ConnectionLoop.shared.recordSuccess()
+                // Report stream-level success to the router so the FSM moves to .veilActive
+                // (or stays in .direct(0)). Latency is unknown for a stream lifecycle event;
+                // we pass 0 — relay scoring should not penalise this case.
+                let okTarget: TransportTarget
+                if let port = GRPCChannelManager.shared.veilProxyPort(),
+                   let addr = routerSnapshot.state.currentRelay {
+                    okTarget = .ice(port: port, relay: addr)
+                } else {
+                    okTarget = .direct(.h2)
+                }
+                await TransportRouter.shared.send(.rpcSucceeded(via: okTarget, latencyMs: 0))
                 retryCount = 0
                 shouldFallbackToH2Direct = false
                 lastStreamTransportWasH3 = false
                 consecutiveH3OpenFailures = 0
+                continuousFailureStreakStart = nil
+                isInDegradedMode = false
                 try await Task.sleep(for: .seconds(NetworkTiming.Stream.cleanEndReconnectDelay))
             } catch is CancellationError {
                 Log.info("MessageStream cancelled — connectLoop exiting", category: "MessageStream")
@@ -458,8 +545,28 @@ final class MessageStreamManager {
                         serverRejected = refreshError == nil  // returned false = no refresh token
                     }
                     if serverRejected {
-                        Log.info("MessageStream refresh rejected by server — triggering device re-auth", category: "MessageStream")
-                        AuthSessionManager.shared.invalidateTokensForReauth()
+                        // Untrusted-relay gate: a hostile or broken ICE relay can synthesise
+                        // an UNAUTHENTICATED response indistinguishable from a real one. Only
+                        // honor the rejection when the stream was opened over the direct path.
+                        // On ICE: rotate the relay and retry; if the rejection is real it will
+                        // surface again on a clean relay (or on direct) and be honored there.
+                        let streamWentThroughICE = GRPCChannelManager.shared.veilProxyPort() != nil
+                            || routingKeyAtLoopStart.hasPrefix("ice:")
+                        if streamWentThroughICE {
+                            let snap = await TransportRouter.shared.snapshot()
+                            let relayAddr = snap.state.currentRelay
+                            Log.info("MessageStream refresh rejected over ICE relay \(relayAddr ?? "?") — not wiping tokens, will rotate", category: "MessageStream")
+                            if let port = GRPCChannelManager.shared.veilProxyPort(), let addr = relayAddr {
+                                await TransportRouter.shared.send(
+                                    .rpcFailed(kind: .tlsFingerprintBlocked,
+                                               via: .ice(port: port, relay: addr),
+                                               foreground: true)
+                                )
+                            }
+                        } else {
+                            Log.info("MessageStream refresh rejected by server — triggering device re-auth", category: "MessageStream")
+                            AuthSessionManager.shared.invalidateTokensForReauth()
+                        }
                     } else {
                         Log.info("MessageStream refresh failed (network error) — keeping tokens, will retry later", category: "MessageStream")
                     }
@@ -469,11 +576,13 @@ final class MessageStreamManager {
                 if let rpcError = error as? RPCError,
                    rpcError.code == .unavailable,
                    rpcError.message.contains("retrying with ICE") {
-                    // Record the failure in ConnectionLoop so it can decide routing for the next attempt.
-                    // On the direct path, recordFailure increments directFails; once it reaches the
-                    // threshold, prepare() will start the ICE proxy on the next iteration.
-                    await ConnectionLoop.shared.recordFailure(rpcError)
-                    // Track persistent H3 failures so the counter survives network-path changes.
+                    // Route the failure through the FSM so it decides ICE escalation / relay rotation.
+                    let kind = RPCFailureClassifier.classify(rpcError)
+                    let failTarget: TransportTarget = routingKeyAtLoopStart.hasPrefix("ice:")
+                        ? .ice(port: GRPCChannelManager.shared.veilProxyPort() ?? 0,
+                               relay: routerSnapshot.state.currentRelay ?? "")
+                        : .direct(.h2)
+                    await TransportRouter.shared.send(.rpcFailed(kind: kind, via: failTarget, foreground: true))
                     if lastStreamTransportWasH3 {
                         consecutiveH3OpenFailures += 1
                         Log.info("H3 open failure #\(consecutiveH3OpenFailures)/\(Self.h3OpenFailureThreshold)", category: "MessageStream")
@@ -481,7 +590,7 @@ final class MessageStreamManager {
                     // H3→H2 fallback: if H3 failed on the direct path and ICE isn't active yet,
                     // try H2 once before activating ICE (H3 may be unsupported, not blocked).
                     let routingKeyNow = GRPCChannelManager.shared.currentRoutingKey
-                    let nowUsingICE = await ConnectionLoop.shared.shouldUseICE
+                    let nowUsingICE = await TransportRouter.shared.snapshot().state.prefersVEIL
                     if !nowUsingICE, routingKeyNow == routingKeyAtLoopStart,
                        routingKeyAtLoopStart.hasPrefix("direct:"), lastStreamTransportWasH3 {
                         shouldFallbackToH2Direct = true
@@ -495,10 +604,13 @@ final class MessageStreamManager {
                     retryCount = 0
                     continue
                 }
-                // Record transport failures for ICE activation.
-                // IceFailurePolicy.classify() returns nil for auth/app-layer errors, so this
-                // is safe to call unconditionally — it's a no-op for unauthenticated failures.
-                await ConnectionLoop.shared.recordFailure(error)
+                // Generic stream failure → feed to the FSM.
+                let kind = RPCFailureClassifier.classify(error)
+                let failTarget: TransportTarget = routingKeyAtLoopStart.hasPrefix("ice:")
+                    ? .ice(port: GRPCChannelManager.shared.veilProxyPort() ?? 0,
+                           relay: routerSnapshot.state.currentRelay ?? "")
+                    : .direct(.h2)
+                await TransportRouter.shared.send(.rpcFailed(kind: kind, via: failTarget, foreground: true))
                 if lastStreamTransportWasH3 {
                     consecutiveH3OpenFailures += 1
                     Log.info("H3 failure #\(consecutiveH3OpenFailures)/\(Self.h3OpenFailureThreshold)", category: "MessageStream")
@@ -523,17 +635,29 @@ final class MessageStreamManager {
 
             guard !Task.isCancelled else { break }
 
+            // Track continuous failure streak for degraded mode (P3).
+            if continuousFailureStreakStart == nil {
+                continuousFailureStreakStart = Date()
+            }
+            isInDegradedMode = isInDegradedModeWindow
+
             // Exponential backoff with ±30% jitter.
             // Wider spread than 25% reduces the thundering-herd effect: when many clients
             // disconnect simultaneously (server restart, network outage), their retries
             // are spread over a 60% window instead of bunching within 25% of the same delay.
             retryCount += 1
-            let base: TimeInterval = NetworkTiming.Stream.backoffBaseDelay
-            let delay = min(base * pow(2, Double(min(retryCount - 1, 5))), maxRetryDelay)
-            let totalDelay = max(0.1, NetworkTiming.jitter(delay, fraction: 0.3))
-            let attemptMs = Int(Date().timeIntervalSince(attemptStart) * 1000)
-
-            Log.info("MessageStream reconnecting in \(String(format: "%.1f", totalDelay))s (attempt #\(retryCount), took \(attemptMs)ms) → \(host):\(port)", category: "MessageStream")
+            let totalDelay: TimeInterval
+            if isInDegradedMode {
+                // Low-power mode: fixed long backoff to conserve battery during prolonged offline.
+                totalDelay = NetworkTiming.jitter(degradedModeBackoff, fraction: 0.3)
+                Log.info("MessageStream degraded mode — retrying in \(String(format: "%.0f", totalDelay))s (attempt #\(retryCount), streak: \(Int(Date().timeIntervalSince(continuousFailureStreakStart!)))s) → \(host):\(port)", category: "MessageStream")
+            } else {
+                let base: TimeInterval = NetworkTiming.Stream.backoffBaseDelay
+                let delay = min(base * pow(2, Double(min(retryCount - 1, 5))), maxRetryDelay)
+                totalDelay = max(0.1, NetworkTiming.jitter(delay, fraction: 0.3))
+                let attemptMs = Int(Date().timeIntervalSince(attemptStart) * 1000)
+                Log.info("MessageStream reconnecting in \(String(format: "%.1f", totalDelay))s (attempt #\(retryCount), took \(attemptMs)ms) → \(host):\(port)", category: "MessageStream")
+            }
             do {
                 try await Task.sleep(for: .seconds(totalDelay))
             } catch {

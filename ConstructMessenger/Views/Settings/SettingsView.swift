@@ -175,10 +175,10 @@ struct SettingsView: View {
 
             VStack(alignment: .leading, spacing: SettingsRootLayout.profileMetaSpacing) {
                 Text(profileDisplayName.uppercased())
-                    .font(CTFont.bold(13))
+                    .font(CTFont.bold(15))
                     .foregroundColor(Color.CT.text)
                 Text(viewModel.username.isEmpty ? NSLocalizedString("username_not_set", comment: "") : "@\(viewModel.username)")
-                    .font(CTFont.regular(11))
+                    .font(CTFont.regular(12))
                     .foregroundColor(Color.CT.textDim)
                 Text(viewModel.isDiscoverable
                     ? NSLocalizedString("searchable_indicator", comment: "")

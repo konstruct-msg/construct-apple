@@ -1,5 +1,5 @@
 //
-//  IceFailurePolicyTests.swift
+//  VeilFailurePolicyTests.swift
 //  ConstructMessengerTests
 //
 //  Unit tests for ICE failure classification policy.
@@ -10,7 +10,7 @@ import XCTest
 import GRPCCore
 @testable import Construct_Messenger
 
-final class IceFailurePolicyTests: XCTestCase {
+final class VeilFailurePolicyTests: XCTestCase {
     
     // MARK: - Helper
     
@@ -22,13 +22,13 @@ final class IceFailurePolicyTests: XCTestCase {
     
     func testClassify_ECONNREFUSED_LocalProxy() {
         let error = makeRPCError(code: .unavailable, message: "Connection refused (127.0.0.1:54952)")
-        let reason = IceFailurePolicy.classify(error)
+        let reason = VeilFailurePolicy.classify(error)
         XCTAssertEqual(reason, .staleLocalProxy)
     }
     
     func testClassify_ECONNREFUSED_DifferentPort() {
         let error = makeRPCError(code: .unavailable, message: "Connection refused (192.168.1.1:443)")
-        let reason = IceFailurePolicy.classify(error)
+        let reason = VeilFailurePolicy.classify(error)
         XCTAssertNotEqual(reason, .staleLocalProxy)
     }
     
@@ -36,25 +36,25 @@ final class IceFailurePolicyTests: XCTestCase {
     
     func testClassify_WebTunnelBlocked_NonHttpUpgrade() {
         let error = makeRPCError(code: .unimplemented, message: "Unexpected non-200 HTTP Status Code (404 Not Found)")
-        let reason = IceFailurePolicy.classify(error)
+        let reason = VeilFailurePolicy.classify(error)
         XCTAssertEqual(reason, .webTunnelBlocked)
     }
     
     func testClassify_WebTunnelBlocked_HTTPStatusCode() {
         let error = makeRPCError(code: .unimplemented, message: "HTTP Status Code: 403 Forbidden")
-        let reason = IceFailurePolicy.classify(error)
+        let reason = VeilFailurePolicy.classify(error)
         XCTAssertEqual(reason, .webTunnelBlocked)
     }
     
     func testClassify_WebTunnelBlocked_UnexpectedHttp() {
         let error = makeRPCError(code: .unimplemented, message: "Unexpected HTTP response from upstream")
-        let reason = IceFailurePolicy.classify(error)
+        let reason = VeilFailurePolicy.classify(error)
         XCTAssertEqual(reason, .webTunnelBlocked)
     }
     
     func testClassify_Unimplemented_NotWebTunnel() {
         let error = makeRPCError(code: .unimplemented, message: "Method not found: /construct.v1.UserService/GetProfile")
-        let reason = IceFailurePolicy.classify(error)
+        let reason = VeilFailurePolicy.classify(error)
         XCTAssertNil(reason, "Application-layer unimplemented should return nil")
     }
     
@@ -62,19 +62,19 @@ final class IceFailurePolicyTests: XCTestCase {
     
     func testClassify_TLSCertExpired() {
         let error = makeRPCError(code: .unavailable, message: "TLS certificate expired")
-        let reason = IceFailurePolicy.classify(error)
+        let reason = VeilFailurePolicy.classify(error)
         XCTAssertEqual(reason, .tlsCertExpired)
     }
     
     func testClassify_TLSCertVerifyFailed() {
         let error = makeRPCError(code: .unknown, message: "tls: failed to verify certificate: x509: certificate has expired")
-        let reason = IceFailurePolicy.classify(error)
+        let reason = VeilFailurePolicy.classify(error)
         XCTAssertEqual(reason, .tlsCertExpired)
     }
     
     func testClassify_TLSCertInvalid() {
         let error = makeRPCError(code: .unavailable, message: "TLS handshake failed: certificate invalid")
-        let reason = IceFailurePolicy.classify(error)
+        let reason = VeilFailurePolicy.classify(error)
         XCTAssertEqual(reason, .tlsCertExpired)
     }
     
@@ -82,13 +82,13 @@ final class IceFailurePolicyTests: XCTestCase {
     
     func testClassify_TLSFingerprintBlocked_Alert40() {
         let error = makeRPCError(code: .unavailable, message: "tls: handshake failure (alert 40)")
-        let reason = IceFailurePolicy.classify(error)
+        let reason = VeilFailurePolicy.classify(error)
         XCTAssertEqual(reason, .tlsFingerprintBlocked)
     }
     
     func testClassify_TLSFingerprintBlocked_HandshakeFailure() {
         let error = makeRPCError(code: .unknown, message: "tls: handshake_failure from server")
-        let reason = IceFailurePolicy.classify(error)
+        let reason = VeilFailurePolicy.classify(error)
         XCTAssertEqual(reason, .tlsFingerprintBlocked)
     }
     
@@ -96,7 +96,7 @@ final class IceFailurePolicyTests: XCTestCase {
     
     func testClassify_StreamTimeout() {
         let error = makeRPCError(code: .deadlineExceeded, message: "stream timeout")
-        let reason = IceFailurePolicy.classify(error)
+        let reason = VeilFailurePolicy.classify(error)
         XCTAssertEqual(reason, .streamTimeout)
     }
     
@@ -104,20 +104,20 @@ final class IceFailurePolicyTests: XCTestCase {
     
     func testClassify_TransportUnknown_Unavailable() {
         let error = makeRPCError(code: .unavailable, message: "connection lost")
-        let reason = IceFailurePolicy.classify(error)
+        let reason = VeilFailurePolicy.classify(error)
         XCTAssertEqual(reason, .transportUnknown)
     }
     
     func testClassify_TransportUnknown_Unknown() {
         let error = makeRPCError(code: .unknown, message: "network error")
-        let reason = IceFailurePolicy.classify(error)
+        let reason = VeilFailurePolicy.classify(error)
         XCTAssertEqual(reason, .transportUnknown)
     }
     
     func testClassify_NonRPCError() {
         struct TestError: Error {}
         let error = TestError()
-        let reason = IceFailurePolicy.classify(error)
+        let reason = VeilFailurePolicy.classify(error)
         XCTAssertEqual(reason, .transportUnknown)
     }
     
@@ -125,63 +125,63 @@ final class IceFailurePolicyTests: XCTestCase {
     
     func testClassify_Unauthenticated() {
         let error = makeRPCError(code: .unauthenticated, message: "Session token expired")
-        let reason = IceFailurePolicy.classify(error)
+        let reason = VeilFailurePolicy.classify(error)
         XCTAssertNil(reason, "Auth errors should return nil")
     }
     
     func testClassify_PermissionDenied() {
         let error = makeRPCError(code: .permissionDenied, message: "Access denied")
-        let reason = IceFailurePolicy.classify(error)
+        let reason = VeilFailurePolicy.classify(error)
         XCTAssertNil(reason)
     }
     
     func testClassify_InvalidArgument() {
         let error = makeRPCError(code: .invalidArgument, message: "Invalid user ID")
-        let reason = IceFailurePolicy.classify(error)
+        let reason = VeilFailurePolicy.classify(error)
         XCTAssertNil(reason)
     }
     
     func testClassify_NotFound() {
         let error = makeRPCError(code: .notFound, message: "User not found")
-        let reason = IceFailurePolicy.classify(error)
+        let reason = VeilFailurePolicy.classify(error)
         XCTAssertNil(reason)
     }
     
     func testClassify_Cancelled() {
         let error = makeRPCError(code: .cancelled, message: "Call cancelled by client")
-        let reason = IceFailurePolicy.classify(error)
+        let reason = VeilFailurePolicy.classify(error)
         XCTAssertNil(reason)
     }
     
     // MARK: - Relay Failure Type Mapping
     
     func testRelayFailureType_WebTunnelBlocked() {
-        let type = IceFailurePolicy.relayFailureType(for: .webTunnelBlocked)
+        let type = VeilFailurePolicy.relayFailureType(for: .webTunnelBlocked)
         XCTAssertEqual(type, .webTunnelBlocked)
     }
     
     func testRelayFailureType_TLSCertExpired() {
-        let type = IceFailurePolicy.relayFailureType(for: .tlsCertExpired)
+        let type = VeilFailurePolicy.relayFailureType(for: .tlsCertExpired)
         XCTAssertEqual(type, .tlsHandshake)
     }
     
     func testRelayFailureType_TLSFingerprintBlocked() {
-        let type = IceFailurePolicy.relayFailureType(for: .tlsFingerprintBlocked)
+        let type = VeilFailurePolicy.relayFailureType(for: .tlsFingerprintBlocked)
         XCTAssertEqual(type, .fingerprintBlocked)
     }
     
     func testRelayFailureType_StreamTimeout() {
-        let type = IceFailurePolicy.relayFailureType(for: .streamTimeout)
+        let type = VeilFailurePolicy.relayFailureType(for: .streamTimeout)
         XCTAssertEqual(type, .streamTimeout)
     }
     
     func testRelayFailureType_StaleLocalProxy() {
-        let type = IceFailurePolicy.relayFailureType(for: .staleLocalProxy)
+        let type = VeilFailurePolicy.relayFailureType(for: .staleLocalProxy)
         XCTAssertEqual(type, .streamTimeout, "Local proxy crash maps to streamTimeout as fallback")
     }
     
     func testRelayFailureType_TransportUnknown() {
-        let type = IceFailurePolicy.relayFailureType(for: .transportUnknown)
+        let type = VeilFailurePolicy.relayFailureType(for: .transportUnknown)
         XCTAssertEqual(type, .streamTimeout, "Unknown failures default to streamTimeout TTL")
     }
     

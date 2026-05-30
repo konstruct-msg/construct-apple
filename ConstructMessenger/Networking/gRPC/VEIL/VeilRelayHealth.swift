@@ -1,5 +1,5 @@
 //
-//  IceRelayHealth.swift
+//  VeilRelayHealth.swift
 //  Construct Messenger
 //
 
@@ -111,13 +111,15 @@ struct RelayQualityScore: Codable {
     /// Last latency measurement time, used for cache freshness.
     var latencyMeasuredAt: Date = .distantPast
     var lastUsed: Date = .distantPast
+    /// Timestamp of the most recent failure — used for time-based decay.
+    var lastFailureAt: Date = .distantPast
 
     var totalRPCs: Int { successfulRPCs + failedRPCs }
 
     /// True if the latency measurement is fresh enough to skip TCP probing.
     var hasRecentLatency: Bool {
         ewmaLatencyMs > 0
-            && Date().timeIntervalSince(latencyMeasuredAt) < NetworkTiming.ICE.latencyCacheValidity
+            && Date().timeIntervalSince(latencyMeasuredAt) < NetworkTiming.VEIL.latencyCacheValidity
     }
 
     var quality: RelayQuality {
@@ -131,9 +133,22 @@ struct RelayQualityScore: Codable {
         }
     }
 
+    /// Halve `failedRPCs` for every full 24-hour period since the last failure.
+    /// Prevents a single bad day from permanently blacklisting a relay.
+    /// Call this once on load (and optionally before reading `quality`).
+    mutating func decayOldFailures(now: Date = Date()) {
+        guard lastFailureAt != .distantPast, failedRPCs > 0 else { return }
+        let hoursSinceFailure = now.timeIntervalSince(lastFailureAt) / 3600
+        guard hoursSinceFailure >= 24 else { return }
+        let halvings = Int(hoursSinceFailure / 24)
+        failedRPCs = max(0, failedRPCs >> halvings)  // bit-shift = divide by 2^n
+        // Reset lastFailureAt if all failures decayed
+        if failedRPCs == 0 { lastFailureAt = .distantPast }
+    }
+
     mutating func applyLatencySample(_ sample: TimeInterval) {
         let ms = sample * 1000
-        let alpha = NetworkTiming.ICE.latencyCacheEWMAAlpha
+        let alpha = NetworkTiming.VEIL.latencyCacheEWMAAlpha
         ewmaLatencyMs = ewmaLatencyMs > 0 ? alpha * ms + (1 - alpha) * ewmaLatencyMs : ms
         latencyMeasuredAt = Date()
         lastUsed = Date()
@@ -146,6 +161,7 @@ struct RelayQualityScore: Codable {
 
     mutating func recordFailure() {
         failedRPCs += 1
+        lastFailureAt = Date()
         lastUsed = Date()
     }
 }

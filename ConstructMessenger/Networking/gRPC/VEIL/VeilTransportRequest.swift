@@ -1,17 +1,17 @@
 //
-//  IceTransportRequest.swift
+//  VeilTransportRequest.swift
 //  Construct Messenger
 //
 //  Fully describes a single proxy start attempt — transport type, addresses, and keys.
-//  Passed to `IceProxyRuntime.start(_:)`. The runtime owns no selection policy; it only
+//  Passed to `VeilProxyRuntime.start(_:)`. The runtime owns no selection policy; it only
 //  executes the C FFI call that corresponds to the request variant.
 //
 
 import Foundation
 
 /// Transport configuration for one proxy start attempt.
-enum IceTransportRequest: Sendable {
-    /// WebTunnel (ICE v2): HTTP CONNECT-style upgrade over TLS.
+enum VeilTransportRequest: Sendable {
+    /// WebTunnel (VEIL v2): HTTP CONNECT-style upgrade over TLS.
     /// The auth token is computed per-connection inside Rust from `bridgeCert`.
     case webTunnel(address: String, sni: String, spki: String, hostHeader: String, bridgeCert: String, wtBasePath: String)
 
@@ -26,7 +26,7 @@ enum IceTransportRequest: Sendable {
 }
 
 /// Runtime-level error from a proxy start attempt.
-enum IceProxyRuntimeError: Error, Sendable {
+enum VeilProxyRuntimeError: Error, Sendable {
     /// Rust returned code 2 — local network interface is unreachable.
     case networkUnreachable
     /// Any non-zero return code other than `networkUnreachable` (bad cert, bad address, etc.).

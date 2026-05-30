@@ -386,7 +386,7 @@ struct RegistrationFlowView: View {
                 expiresIn: Int(registerData.expires - Int64(Date().timeIntervalSince1970)),
                 userId: registerData.userId
             )
-            IceProxyManager.shared.configureFromServer(cert: registerData.iceBridgeCert ?? "")
+            VeilProxyManager.shared.configureFromServer(cert: registerData.veilBridgeCert ?? "")
             
             // 4. Verify session tokens
             Log.info("Verifying session tokens...", category: "Registration")

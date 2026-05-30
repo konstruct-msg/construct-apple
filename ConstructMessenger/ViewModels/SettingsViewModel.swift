@@ -64,7 +64,7 @@ class SettingsViewModel {
 
     func loadUserInfo(from authViewModel: AuthViewModel) {
         guard let _ = viewContext else {
-            print("⚠️ SettingsViewModel: viewContext is nil")
+            Log.info("SettingsViewModel: viewContext is nil")
             return
         }
 
@@ -72,10 +72,10 @@ class SettingsViewModel {
         username = authViewModel.currentUsername
         displayName = authViewModel.currentDisplayName
 
-        print("📋 SettingsViewModel: Loaded user info")
-        print("   userId: \(userId)")
-        print("   username: \(username)")
-        print("   displayName: \(displayName)")
+        Log.info("SettingsViewModel: Loaded user info")
+        Log.info("   userId: \(userId)")
+        Log.info("   username: \(username)")
+        Log.info("   displayName: \(displayName)")
 
         // Load avatar from Core Data
         loadAvatarFromCoreData()
@@ -86,9 +86,9 @@ class SettingsViewModel {
         guard let context = viewContext, !userId.isEmpty else { return }
         avatarLoadAttemptUserId = userId
         
-        // ✅ FIX: Check if persistent store coordinator is ready before accessing entities
+        // FIX: Check if persistent store coordinator is ready before accessing entities
         guard context.persistentStoreCoordinator != nil else {
-            print("⚠️ Core Data persistent store coordinator not ready, skipping avatar load")
+            Log.info("Core Data persistent store coordinator not ready, skipping avatar load")
             return
         }
 
@@ -105,19 +105,19 @@ class SettingsViewModel {
     /// Saves avatar to Core Data using ImageHelper for processing
     func saveAvatar(_ image: PlatformImage, authViewModel: AuthViewModel) {
         guard let context = viewContext, !userId.isEmpty else {
-            print("⚠️ Cannot save avatar: context or userId missing")
+            Log.info("Cannot save avatar: context or userId missing")
             return
         }
         
-        // ✅ FIX: Check if persistent store coordinator is ready before accessing entities
+        // Check if persistent store coordinator is ready before accessing entities
         guard context.persistentStoreCoordinator != nil else {
-            print("⚠️ Core Data persistent store coordinator not ready, cannot save avatar")
+            Log.info("Core Data persistent store coordinator not ready, cannot save avatar")
             return
         }
 
         // Optimize image using MediaOptimizer (512×512 square, JPEG 0.8)
         guard let processedData = try? MediaOptimizer.optimizeAvatar(image) else {
-            print("⚠️ Failed to process avatar image")
+            Log.info("Failed to process avatar image")
             return
         }
 
@@ -134,7 +134,7 @@ class SettingsViewModel {
                 // Update UI
                 profileImage = ImageHelper.imageFromData(processedData)
                 avatarLoadAttemptUserId = userId
-                print("✅ Avatar saved successfully")
+                Log.info("Avatar saved successfully")
 
                 // Re-send profile to all contacts we share with so they see the new avatar
                 Task {
@@ -142,10 +142,10 @@ class SettingsViewModel {
                     shareVM.rebroadcastProfileToSharedContacts()
                 }
             } else {
-                print("⚠️ User not found in Core Data")
+                Log.info("User not found in Core Data")
             }
         } catch {
-            print("⚠️ Failed to save avatar: \(error)")
+            Log.info("Failed to save avatar: \(error)")
         }
     }
 
@@ -199,9 +199,9 @@ class SettingsViewModel {
     func saveDisplayName(_ name: String, authViewModel: AuthViewModel) {
         guard let context = viewContext, !userId.isEmpty else { return }
         
-        // ✅ FIX: Check if persistent store coordinator is ready before accessing entities
+        // FIX: Check if persistent store coordinator is ready before accessing entities
         guard context.persistentStoreCoordinator != nil else {
-            print("⚠️ Core Data persistent store coordinator not ready, cannot save display name")
+            Log.info("Core Data persistent store coordinator not ready, cannot save display name")
             return
         }
 
@@ -217,11 +217,11 @@ class SettingsViewModel {
                 user.displayName = trimmed
                 try context.save()
                 
-                // ✅ REFACTOR Phase 1.2: Update local state
+                // Update local state
                 displayName = trimmed
                 // @Observable AuthViewModel tracks property access automatically
                 
-                print("✅ Display name saved: \(trimmed)")
+                Log.info("Display name saved: \(trimmed)")
 
                 // Re-send profile to all contacts we share with so they see the updated name
                 Task {
@@ -230,7 +230,7 @@ class SettingsViewModel {
                 }
             }
         } catch {
-            print("⚠️ Failed to save display name: \(error)")
+            Log.error("Failed to save display name: \(error)")
         }
     }
 

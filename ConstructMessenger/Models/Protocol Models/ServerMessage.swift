@@ -128,7 +128,7 @@ struct RegisterSuccessData: Codable {
     let sessionToken: String
     let refreshToken: String  // ✅ NEW
     let expires: Int64
-    var iceBridgeCert: String?
+    var veilBridgeCert: String?
 }
 
 struct LoginSuccessData: Codable {

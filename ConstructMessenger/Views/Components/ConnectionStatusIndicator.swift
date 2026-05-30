@@ -7,11 +7,11 @@ import SwiftUI
 
 /// Compact connection status badge for the chat list header.
 ///
-/// States: Connected (auto-hides, except on ICE) / Connecting... (with phase) / Paused / Disconnected.
-/// When ICE is active the connected badge stays visible permanently.
+/// States: Connected (auto-hides, except on VEIL) / Connecting... (with phase) / Paused / Disconnected.
+/// When VEIL is active the connected badge stays visible permanently.
 struct ConnectionStatusIndicator: View {
     var connectionManager = ConnectionStatusManager.shared
-    @ObservedObject var iceManager = IceProxyManager.shared
+    @ObservedObject var veilManager = VeilProxyManager.shared
 
     @State private var textOpacity: Double = 1
     @State private var visible: Bool = true
@@ -34,16 +34,16 @@ struct ConnectionStatusIndicator: View {
         .onChange(of: connectionManager.isStreamPaused) { _, isPaused in
             handlePauseChange(isPaused)
         }
-        .onChange(of: iceManager.isRunning) { _, isRunning in
+        .onChange(of: veilManager.isRunning) { _, isRunning in
             if case .connected = connectionManager.connectionStatus {
                 if isRunning {
-                    // ICE activated while connected — cancel hide timer, stay visible.
+                    // VEIL activated while connected — cancel hide timer, stay visible.
                     hideTask?.cancel()
                     hideTask = nil
                     visible = true
                     withAnimation(.easeOut(duration: 0.4)) { textOpacity = 1 }
                 } else {
-                    // ICE stopped while connected — start normal hide timer.
+                    // VEIL stopped while connected — start normal hide timer.
                     handleStatusChange(.connected)
                 }
             }
@@ -59,7 +59,7 @@ struct ConnectionStatusIndicator: View {
         switch connectionManager.connectionStatus {
         case .connected:
             let status = NSLocalizedString("connected", comment: "")
-            return iceManager.isRunning ? "> \(status) \(CTSymbol.star8)" : "> \(status)"
+            return veilManager.isRunning ? "> \(status) \(CTSymbol.star8)" : "> \(status)"
         case .connecting, .unknown:
             if let phase = connectionManager.connectingPhase {
                 return "> \(phase)"
@@ -76,7 +76,7 @@ struct ConnectionStatusIndicator: View {
         }
         switch connectionManager.connectionStatus {
         case .connected:
-            return iceManager.isRunning ? Color.CT.accent : Color.CT.textDim
+            return veilManager.isRunning ? Color.CT.accent : Color.CT.textDim
         case .connecting, .unknown:
             return Color.CT.textDim
         case .disconnected:
@@ -95,8 +95,8 @@ struct ConnectionStatusIndicator: View {
         case .connected:
             visible = true
             withAnimation(.easeOut(duration: 0.4)) { textOpacity = 1 }
-            // Keep indicator visible permanently when ICE is active.
-            if !iceManager.isRunning {
+            // Keep indicator visible permanently when VEIL is active.
+            if !veilManager.isRunning {
                 hideTask = Task {
                     try? await Task.sleep(nanoseconds: 4_000_000_000)
                     guard !Task.isCancelled else { return }

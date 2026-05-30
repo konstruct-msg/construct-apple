@@ -81,7 +81,7 @@ final class AuthServiceClient: Sendable {
                 sessionToken: response.tokens.accessToken,
                 refreshToken: response.tokens.refreshToken,
                 expires: response.tokens.expiresAt,
-                iceBridgeCert: response.tokens.hasIceBridgeCert ? response.tokens.iceBridgeCert : nil
+                veilBridgeCert: response.tokens.hasIceBridgeCert ? response.tokens.iceBridgeCert : nil
             )
         }
     }

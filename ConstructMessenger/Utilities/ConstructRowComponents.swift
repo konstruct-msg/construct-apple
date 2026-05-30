@@ -30,7 +30,7 @@ enum ConstructRowRole {
 /// Used for actions inside profile cards, settings sections, etc.
 struct ConstructActionRow: View {
 
-    let icon: String
+    let systemImage: String
     let title: LocalizedStringKey
     let role: ConstructRowRole
     var badge: String? = nil          // optional trailing text badge (e.g. "soon")
@@ -43,7 +43,9 @@ struct ConstructActionRow: View {
             action()
         } label: {
             HStack(spacing: 12) {
-                ctIconView(icon, color: rowForeground)
+                Image(systemName: systemImage)
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(rowForeground)
                     .frame(minWidth: 20, alignment: .center)
 
                 Text(title)
@@ -70,22 +72,6 @@ struct ConstructActionRow: View {
     }
 
     // MARK: Private helpers
-
-    /// Renders ASCII label strings (e.g. "[!]") as Text; falls back to Image(systemName:) for SF Symbol names.
-    @ViewBuilder
-    private func ctIconView(_ icon: String, color: Color) -> some View {
-        if icon.hasPrefix("[") || icon.hasPrefix("●") {
-            Text(icon)
-                .font(CTFont.regular(13))
-                .foregroundStyle(color)
-                .lineLimit(1)
-                .fixedSize()
-        } else {
-            Image(systemName: icon)
-                .font(.system(size: 16))
-                .foregroundStyle(color)
-        }
-    }
 
     private func badgeView(_ text: String) -> some View {
         Text(text)
@@ -181,7 +167,7 @@ struct ConstructNavRow<Destination: View>: View {
 /// A settings-list row that triggers an action.
 struct ConstructButtonRow: View {
 
-    let icon: String
+    let systemImage: String
     let title: LocalizedStringKey
     var iconColor: Color = Color.CT.accent
     var showChevron: Bool = false
@@ -190,7 +176,9 @@ struct ConstructButtonRow: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 14) {
-                buttonIconView(icon, color: iconColor)
+                Image(systemName: systemImage)
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(iconColor)
                     .frame(minWidth: 22, alignment: .center)
 
                 Text(title)
@@ -200,11 +188,9 @@ struct ConstructButtonRow: View {
                 Spacer()
 
                 if showChevron {
-                    Text("[→]")
-                        .font(CTFont.regular(12))
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(Color.CT.textDim)
-                        .lineLimit(1)
-                        .fixedSize()
                 }
             }
             .padding(.horizontal, 16)
@@ -212,21 +198,6 @@ struct ConstructButtonRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-    }
-
-    @ViewBuilder
-    private func buttonIconView(_ icon: String, color: Color) -> some View {
-        if icon.hasPrefix("[") || icon.hasPrefix("●") {
-            Text(icon)
-                .font(CTFont.regular(13))
-                .foregroundStyle(color)
-                .lineLimit(1)
-                .fixedSize()
-        } else {
-            Image(systemName: icon)
-                .font(.system(size: 16))
-                .foregroundStyle(color)
-        }
     }
 }
 
@@ -243,32 +214,3 @@ struct ConstructRowDivider: View {
     }
 }
 
-// MARK: - Settings Section Container
-
-/// Dark rounded card used as a settings section container.
-struct ConstructSection<Content: View>: View {
-
-    var header: String? = nil
-    @ViewBuilder var content: () -> Content
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            if let header {
-                Text(header.uppercased())
-                    .font(CTFont.bold(10))
-                    .foregroundStyle(Color.CT.textDim)
-                    .tracking(1.5)
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 6)
-            }
-
-            VStack(spacing: 0) {
-                content()
-            }
-            .background(Color.CT.bgMsg)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.CT.noise, lineWidth: 0.5))
-        }
-        .padding(.horizontal, 16)
-    }
-}

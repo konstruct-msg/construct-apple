@@ -1,12 +1,12 @@
 //
-//  IceRelay.swift
+//  VeilRelay.swift
 //  Construct Messenger
 //
 
 import Foundation
 
 /// Higher modes resist timing analysis at the cost of latency.
-enum IceIATMode: Int, CaseIterable, Identifiable {
+enum VeilIATMode: Int, CaseIterable, Identifiable {
     case none     = 0
     case enabled  = 1
     case paranoid = 2
@@ -23,7 +23,7 @@ enum IceIATMode: Int, CaseIterable, Identifiable {
 }
 
 /// Relay configuration for a single obfs4 bridge endpoint.
-struct IceRelay: Codable, Identifiable {
+struct VeilRelay: Codable, Identifiable {
     let id: UUID
     /// Stable relay ID from the server manifest, for example "ams-het-1".
     let manifestId: String?
@@ -31,7 +31,7 @@ struct IceRelay: Codable, Identifiable {
     let address: String
     /// obfs4 bridge cert received from the server or fallback config.
     let bridgeCert: String
-    let iatMode: IceIATMode
+    let iatMode: VeilIATMode
     /// nil = legacy plain-TCP obfs4. Empty string = TLS without SNI. Non-empty = TLS SNI.
     let tlsServerName: String?
     /// SHA-256 of DER SubjectPublicKeyInfo in hex.
@@ -57,7 +57,7 @@ struct IceRelay: Codable, Identifiable {
         return sni != hostname
     }
 
-    init(address: String, bridgeCert: String, iatMode: IceIATMode = .none,
+    init(address: String, bridgeCert: String, iatMode: VeilIATMode = .none,
          tlsServerName: String? = nil, pinnedSpki: String? = nil,
          wtPath: String? = nil, wtHostHeader: String? = nil,
          alternativeSNIs: [String] = [], manifestId: String? = nil) {
@@ -86,7 +86,7 @@ struct IceRelay: Codable, Identifiable {
         address = try c.decode(String.self, forKey: .address)
         bridgeCert = try c.decode(String.self, forKey: .bridgeCert)
         let raw = (try? c.decode(Int.self, forKey: .iatMode)) ?? 1
-        iatMode = IceIATMode(rawValue: raw) ?? .enabled
+        iatMode = VeilIATMode(rawValue: raw) ?? .enabled
         tlsServerName = try? c.decode(String.self, forKey: .tlsServerName)
         pinnedSpki = try? c.decode(String.self, forKey: .pinnedSpki)
         wtPath = try? c.decode(String.self, forKey: .wtPath)

@@ -143,7 +143,7 @@ struct DataStorageSettingsView: View {
                         CTSep(style: .thin)
 
                         ConstructActionRow(
-                            icon: "trash",
+                            systemImage: "trash",
                             title: isClearing
                                 ? LocalizedStringKey("storage_clearing")
                                 : LocalizedStringKey("storage_clear_media_cache"),

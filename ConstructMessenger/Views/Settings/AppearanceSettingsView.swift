@@ -22,45 +22,48 @@ struct AppearanceSettingsView: View {
                 )
                 
                 VStack(alignment: .leading, spacing: SettingsLayout.sectionHeaderSpacing) {
-                    ConstructSection(header: NSLocalizedString("theme", comment: "")) {
-                        ForEach(allThemes.indices, id: \.self) { index in
-                            let theme = allThemes[index]
-                            if index > 0 { ConstructRowDivider(indent: SettingsLayout.rowDividerIndent) }
-                            Button {
-                                guard theme.isAvailable else { return }
-                                appTheme = theme
-                            } label: {
-                                HStack(spacing: AppearanceSettingsLayout.themeRowContentSpacing) {
-                                    CTRowIcon(
-                                        sf: theme.iconName,
-                                        color: theme.isAvailable ? theme.color : Color.CT.textDim
-                                    )
-                                    Text(theme.displayName)
-                                        .font(CTFont.bold(16))
-                                        .foregroundStyle(theme.isAvailable ? Color.CT.text : Color.CT.textDim)
-                                    Spacer()
-                                    if !theme.isAvailable {
-                                        Text(LocalizedStringKey("settings_coming_soon"))
-                                            .font(CTFont.regular(10))
-                                            .foregroundStyle(Color.CT.textDim)
-                                            .padding(.horizontal, AppearanceSettingsConfig.availabilityBadgeHorizontalPadding)
-                                            .padding(.vertical, AppearanceSettingsConfig.availabilityBadgeVerticalPadding)
-                                            .overlay(
-                                                Rectangle()
-                                                    .strokeBorder(Color.CT.noise, lineWidth: AppearanceSettingsConfig.availabilityBadgeStrokeWidth)
-                                            )
-                                    } else if appTheme == theme {
-                                        Text("[✓]")
-                                            .font(CTFont.bold(14))
-                                            .foregroundStyle(Color.CT.accent)
+                    VStack(alignment: .leading, spacing: 0) {
+                        CTSettingsSectionHeader(title: NSLocalizedString("theme", comment: ""))
+                        CTSectionGroup {
+                            ForEach(allThemes.indices, id: \.self) { index in
+                                let theme = allThemes[index]
+                                if index > 0 { ConstructRowDivider(indent: SettingsLayout.rowDividerIndent) }
+                                Button {
+                                    guard theme.isAvailable else { return }
+                                    appTheme = theme
+                                } label: {
+                                    HStack(spacing: AppearanceSettingsLayout.themeRowContentSpacing) {
+                                        CTRowIcon(
+                                            sf: theme.iconName,
+                                            color: theme.isAvailable ? theme.color : Color.CT.textDim
+                                        )
+                                        Text(theme.displayName)
+                                            .font(CTFont.bold(16))
+                                            .foregroundStyle(theme.isAvailable ? Color.CT.text : Color.CT.textDim)
+                                        Spacer()
+                                        if !theme.isAvailable {
+                                            Text(LocalizedStringKey("settings_coming_soon"))
+                                                .font(CTFont.regular(10))
+                                                .foregroundStyle(Color.CT.textDim)
+                                                .padding(.horizontal, AppearanceSettingsConfig.availabilityBadgeHorizontalPadding)
+                                                .padding(.vertical, AppearanceSettingsConfig.availabilityBadgeVerticalPadding)
+                                                .overlay(
+                                                    Rectangle()
+                                                        .strokeBorder(Color.CT.noise, lineWidth: AppearanceSettingsConfig.availabilityBadgeStrokeWidth)
+                                                )
+                                        } else if appTheme == theme {
+                                            Text("[✓]")
+                                                .font(CTFont.bold(14))
+                                                .foregroundStyle(Color.CT.accent)
+                                        }
                                     }
+                                    .padding(.horizontal, AppearanceSettingsLayout.themeRowHorizontalPadding)
+                                    .padding(.vertical, AppearanceSettingsLayout.themeRowVerticalPadding)
+                                    .contentShape(Rectangle())
                                 }
-                                .padding(.horizontal, AppearanceSettingsLayout.themeRowHorizontalPadding)
-                                .padding(.vertical, AppearanceSettingsLayout.themeRowVerticalPadding)
-                                .contentShape(Rectangle())
+                                .buttonStyle(.plain)
+                                .disabled(!theme.isAvailable)
                             }
-                            .buttonStyle(.plain)
-                            .disabled(!theme.isAvailable)
                         }
                     }
                     Text(LocalizedStringKey("theme_footer"))

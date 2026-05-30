@@ -1,8 +1,8 @@
 //
-//  NativeIceProxyRuntime.swift
+//  NativeVeilRuntime.swift
 //  Construct Messenger
 //
-//  Production `IceProxyRuntime` backed by the `libconstruct_core` C FFI.
+//  Production `VeilProxyRuntime` backed by the `libconstruct_core` C FFI.
 //
 //  All methods are synchronous and thread-safe: the underlying Rust statics
 //  (`PROXY` and `PROXY_TLS`) are guarded by internal mutexes.
@@ -10,12 +10,12 @@
 
 import Foundation
 
-/// Production implementation of `IceProxyRuntime` via `libconstruct_core` C FFI.
-final class NativeIceProxyRuntime: IceProxyRuntime {
+/// Production implementation of `VeilProxyRuntime` via `libconstruct_core` C FFI.
+final class NativeVeilRuntime: VeilProxyRuntime {
 
-    // MARK: - IceProxyRuntime
+    // MARK: - VeilProxyRuntime
 
-    func start(_ request: IceTransportRequest) -> Result<UInt16, IceProxyRuntimeError> {
+    func start(_ request: VeilTransportRequest) -> Result<UInt16, VeilProxyRuntimeError> {
         var port: UInt16 = 0
         let result: Int32
 
@@ -27,7 +27,7 @@ final class NativeIceProxyRuntime: IceProxyRuntime {
                         hostHeader.withCString { hostPtr in
                             bridgeCert.withCString { bridgeCertPtr in
                                 wtBasePath.withCString { basePathPtr in
-                                    ice_proxy_start_webtunnel(addrPtr, sniPtr, spkiPtr, hostPtr, bridgeCertPtr, basePathPtr, &port)
+                                    veil_proxy_start_webtunnel(addrPtr, sniPtr, spkiPtr, hostPtr, bridgeCertPtr, basePathPtr, &port)
                                 }
                             }
                         }
@@ -41,7 +41,7 @@ final class NativeIceProxyRuntime: IceProxyRuntime {
                     sni.withCString { sniPtr in
                         spki.withCString { spkiPtr in
                             profile.withCString { profPtr in
-                                ice_proxy_start_tls_profiled(blPtr, addrPtr, sniPtr, spkiPtr, profPtr, &port)
+                                veil_proxy_start_tls_profiled(blPtr, addrPtr, sniPtr, spkiPtr, profPtr, &port)
                             }
                         }
                     }
@@ -52,7 +52,7 @@ final class NativeIceProxyRuntime: IceProxyRuntime {
             result = bridgeLine.withCString { blPtr in
                 address.withCString { addrPtr in
                     sni.withCString { sniPtr in
-                        ice_proxy_start_tls(blPtr, addrPtr, sniPtr, &port)
+                        veil_proxy_start_tls(blPtr, addrPtr, sniPtr, &port)
                     }
                 }
             }
@@ -60,7 +60,7 @@ final class NativeIceProxyRuntime: IceProxyRuntime {
         case .plainObfs4(let bridgeLine, let address):
             result = bridgeLine.withCString { blPtr in
                 address.withCString { addrPtr in
-                    ice_proxy_start(blPtr, addrPtr, &port)
+                    veil_proxy_start(blPtr, addrPtr, &port)
                 }
             }
         }
@@ -71,11 +71,11 @@ final class NativeIceProxyRuntime: IceProxyRuntime {
         return .success(port)
     }
 
-    func startSecondary(bridgeLine: String, address: String) -> Result<UInt16, IceProxyRuntimeError> {
+    func startSecondary(bridgeLine: String, address: String) -> Result<UInt16, VeilProxyRuntimeError> {
         var port: UInt16 = 0
         let result = bridgeLine.withCString { blPtr in
             address.withCString { addrPtr in
-                ice_proxy_start(blPtr, addrPtr, &port)
+                veil_proxy_start(blPtr, addrPtr, &port)
             }
         }
         guard result == 0, port > 0 else {
@@ -85,10 +85,10 @@ final class NativeIceProxyRuntime: IceProxyRuntime {
     }
 
     func stop() {
-        ice_proxy_stop()
+        veil_proxy_stop()
     }
 
     func isAlive() -> Bool {
-        ice_proxy_is_running() != 0
+        veil_proxy_is_running() != 0
     }
 }

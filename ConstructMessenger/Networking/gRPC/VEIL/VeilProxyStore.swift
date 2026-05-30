@@ -1,35 +1,35 @@
 //
-//  IceProxyStore.swift
+//  VeilProxyStore.swift
 //  Construct Messenger
 //
 
 import Foundation
 
 /// Centralized persistence for ICE mode, relay cache, and relay quality data.
-enum IceProxyStore {
+enum VeilProxyStore {
     static let legacyEnabledKey = "ice_enabled"
     static let legacyAutoDetectedDPIKey = "ice_auto_detected_dpi"
     static let modeKey = "ice_mode"
-    static let relayKey = "iceActiveRelay"
+    static let relayKey = "veilActiveRelay"
     static let modeMigrationVersion = 1
 
     private static let lastSuccessfulPathKey = "ice_last_successful_path"
     private static let qualityScoresKey = "ice_relay_quality_scores_v1"
     private static let qualityScoresMaxEntries = 20
 
-    static func loadMode() -> IceMode {
+    static func loadMode() -> VeilMode {
         if let raw = UserDefaults.standard.string(forKey: modeKey),
-           let stored = IceMode(rawValue: raw) {
+           let stored = VeilMode(rawValue: raw) {
             return stored
         }
-        return IceMode.platformDefault
+        return VeilMode.platformDefault
     }
 
     static var hasStoredMode: Bool {
         UserDefaults.standard.string(forKey: modeKey) != nil
     }
 
-    static func saveMode(_ mode: IceMode) {
+    static func saveMode(_ mode: VeilMode) {
         UserDefaults.standard.set(mode.rawValue, forKey: modeKey)
         // Keep the legacy key in sync for older fast-path readers and migration safety.
         UserDefaults.standard.set(mode == .on, forKey: legacyEnabledKey)
@@ -47,7 +47,7 @@ enum IceProxyStore {
         UserDefaults.standard.set(true, forKey: modeMigrationKey)
     }
 
-    static func migrateModeFromLegacy() -> IceMode {
+    static func migrateModeFromLegacy() -> VeilMode {
         let wasEnabled = UserDefaults.standard.bool(forKey: legacyEnabledKey)
         let wasAutoDetected = UserDefaults.standard.bool(forKey: legacyAutoDetectedDPIKey)
 
@@ -74,8 +74,13 @@ enum IceProxyStore {
 
     static func loadRelayQualityScores() -> [String: RelayQualityScore] {
         guard let data = UserDefaults.standard.data(forKey: qualityScoresKey),
-              let scores = try? JSONDecoder().decode([String: RelayQualityScore].self, from: data)
+              var scores = try? JSONDecoder().decode([String: RelayQualityScore].self, from: data)
         else { return [:] }
+        // Decay old failures on every load — prevents permanent relay blacklisting from past outages.
+        for (key, var score) in scores {
+            score.decayOldFailures()
+            scores[key] = score
+        }
         return scores
     }
 
@@ -90,14 +95,14 @@ enum IceProxyStore {
         UserDefaults.standard.set(data, forKey: qualityScoresKey)
     }
 
-    static func saveStoredRelay(_ relay: IceRelay) {
+    static func saveStoredRelay(_ relay: VeilRelay) {
         guard let data = try? JSONEncoder().encode(relay) else { return }
         UserDefaults.standard.set(data, forKey: relayKey)
     }
 
-    static func loadStoredRelay() -> IceRelay? {
+    static func loadStoredRelay() -> VeilRelay? {
         guard let data = UserDefaults.standard.data(forKey: relayKey),
-              let relay = try? JSONDecoder().decode(IceRelay.self, from: data)
+              let relay = try? JSONDecoder().decode(VeilRelay.self, from: data)
         else { return nil }
         return relay
     }
@@ -107,7 +112,7 @@ enum IceProxyStore {
     }
 
     static func cachedRelayList() -> [String] {
-        UserDefaults.standard.stringArray(forKey: ICEConfig.cachedRelayListKey) ?? []
+        UserDefaults.standard.stringArray(forKey: VEILConfig.cachedRelayListKey) ?? []
     }
 
     static func cachedRelayAddresses(fallback: [String]) -> [String] {
@@ -116,9 +121,9 @@ enum IceProxyStore {
         return (server + fallback).filter { seen.insert($0).inserted }
     }
 
-    static func cachedRelayRegions(fallback: [ICERelayRegion]) -> [ICERelayRegion] {
-        if let data = UserDefaults.standard.data(forKey: ICEConfig.cachedRelayRegionsKey),
-           let regions = try? JSONDecoder().decode([ICERelayRegion].self, from: data) {
+    static func cachedRelayRegions(fallback: [VEILRelayRegion]) -> [VEILRelayRegion] {
+        if let data = UserDefaults.standard.data(forKey: VEILConfig.cachedRelayRegionsKey),
+           let regions = try? JSONDecoder().decode([VEILRelayRegion].self, from: data) {
             return regions
         }
         return fallback

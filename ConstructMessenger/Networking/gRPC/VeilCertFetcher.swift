@@ -1,11 +1,11 @@
 //
-//  IceCertFetcher.swift
+//  VeilCertFetcher.swift
 //  Construct Messenger
 //
 //  Fetches the ICE bridge cert and relay config from .well-known endpoints.
 //  Cert fallback chain (level 3):
-//    1. AuthTokensResponse (after login) → saved to Keychain by IceProxyManager
-//    2. Keychain cache                   → IceProxyManager.getIceBridgeCert()
+//    1. AuthTokensResponse (after login) → saved to Keychain by VeilProxyManager
+//    2. Keychain cache                   → VeilProxyManager.getIceBridgeCert()
 //    3. https://konstruct.cc/.well-known/ice-cert   ← this file
 //    4. Hardcoded in binary              → ICEConfig.hardcodedBridgeCert
 //
@@ -37,7 +37,7 @@ struct RelayInfo: Codable {
     /// nil → falls back to `sni`.
     let wtHostHeader: String?
     /// IAT mode pushed by server. Defaults to `.enabled` (1) when absent.
-    let iatMode: IceIATMode
+    let iatMode: VeilIATMode
     /// Additional TLS SNI values to try for WebTunnel on this relay before falling back to obfs4.
     /// Allows domain-fronting rotation without a binary update.
     /// nil / empty → no SNI alternatives available.
@@ -73,7 +73,7 @@ struct RelayInfo: Codable {
         alternativeSNIs = try c.decodeIfPresent([String].self, forKey: .alternativeSNIs)
         certExpiresAt   = try c.decodeIfPresent(Double.self, forKey: .certExpiresAt)
         let rawIat  = (try? c.decodeIfPresent(Int.self, forKey: .iatMode)) ?? nil
-        iatMode     = rawIat.flatMap { IceIATMode(rawValue: $0) } ?? .enabled
+        iatMode     = rawIat.flatMap { VeilIATMode(rawValue: $0) } ?? .enabled
     }
 
     func encode(to encoder: Encoder) throws {
@@ -95,7 +95,7 @@ struct RelayInfo: Codable {
 
 // MARK: - Private wire types
 
-private struct IceCertWellKnown: Decodable {
+private struct VeilCertWellKnown: Decodable {
     let cert: String
     let iatMode: Int
 
@@ -109,7 +109,7 @@ private struct ConstructServerWellKnown: Decodable {
     struct ICESection: Decodable {
         let primary: String?
         let relays: [RelayInfo]?
-        let relayRegions: [ICERelayRegion]?
+        let relayRegions: [VEILRelayRegion]?
         /// Relay IDs that have been retired. Clients with any of these as their
         /// active relay should rotate immediately after fetching a fresh config.
         let deprecatedIds: [String]?
@@ -156,13 +156,13 @@ private struct ConstructServerWellKnown: Decodable {
     }
 }
 
-// MARK: - IceCertFetcher
+// MARK: - VeilCertFetcher
 
-actor IceCertFetcher {
-    static let shared = IceCertFetcher()
+actor VeilCertFetcher {
+    static let shared = VeilCertFetcher()
     private init() {}
 
-    private let timeout: TimeInterval = NetworkTiming.ICE.certFetchTimeoutHTTPS
+    private let timeout: TimeInterval = NetworkTiming.VEIL.certFetchTimeoutHTTPS
 
     // MPTCP .handover: OS migrates in-flight requests to cellular when WiFi drops,
     // preventing cert/relay-config fetches from failing on interface transitions.
@@ -207,7 +207,7 @@ actor IceCertFetcher {
                 Log.debug("ICE .well-known returned non-200", category: "ICE")
                 return nil
             }
-            let parsed = try JSONDecoder().decode(IceCertWellKnown.self, from: data)
+            let parsed = try JSONDecoder().decode(VeilCertWellKnown.self, from: data)
             guard !parsed.cert.isEmpty else { return nil }
             Log.info("ICE cert fetched via .well-known", category: "ICE")
             return parsed.cert
@@ -272,10 +272,10 @@ actor IceCertFetcher {
                             UserDefaults.standard.set(keyData, forKey: Self.cachedBundleSigningKeyKey)
                         }
                         let addressList = relays.map(\.addressWithPort)
-                        UserDefaults.standard.set(addressList, forKey: ICEConfig.cachedRelayListKey)
+                        UserDefaults.standard.set(addressList, forKey: VEILConfig.cachedRelayListKey)
                         if let regions = parsed.ice?.relayRegions,
                            let regionsData = try? JSONEncoder().encode(regions) {
-                            UserDefaults.standard.set(regionsData, forKey: ICEConfig.cachedRelayRegionsKey)
+                            UserDefaults.standard.set(regionsData, forKey: VEILConfig.cachedRelayRegionsKey)
                         }
                         // Persist deprecated relay IDs so loadStoredRelay() can evict stale cache.
                         let deprecatedIds = parsed.ice?.deprecatedIds ?? []
@@ -329,7 +329,7 @@ actor IceCertFetcher {
            let cert = relay.bridgeCert, !cert.isEmpty {
             return cert
         }
-        return ICEConfig.hardcodedRelayCerts[address]
+        return VEILConfig.hardcodedRelayCerts[address]
     }
 
     /// Synchronous WebTunnel path lookup for non-async contexts.
@@ -340,7 +340,7 @@ actor IceCertFetcher {
            let path = relay.wtPath, !path.isEmpty {
             return path
         }
-        return ICEConfig.hardcodedRelayWTPaths[address]
+        return VEILConfig.hardcodedRelayWTPaths[address]
     }
 
     /// Synchronous WebTunnel Host header lookup for non-async contexts.
@@ -370,7 +370,7 @@ actor IceCertFetcher {
         if let relay = cachedRelayInfosSync()?.first(where: { $0.addressWithPort == address }) {
             return relay.sni.isEmpty ? nil : relay.sni
         }
-        return ICEConfig.hardcodedRelaySNIs[address]
+        return VEILConfig.hardcodedRelaySNIs[address]
     }
 
     /// Synchronous alternative SNI list for non-async contexts.
@@ -380,7 +380,7 @@ actor IceCertFetcher {
            let alts = relay.alternativeSNIs, !alts.isEmpty {
             return alts
         }
-        return ICEConfig.hardcodedRelayAlternativeSNIs[address] ?? []
+        return VEILConfig.hardcodedRelayAlternativeSNIs[address] ?? []
     }
 
     /// TLS certificate expiry date for a relay, as reported by the server config.
@@ -394,7 +394,7 @@ actor IceCertFetcher {
 
     /// IAT mode pushed by server for this relay. Returns nil when relay is not in cache
     /// (caller should fall back to `.enabled`).
-    static func iatModeSync(for address: String) -> IceIATMode? {
+    static func iatModeSync(for address: String) -> VeilIATMode? {
         cachedRelayInfosSync()?.first(where: { $0.addressWithPort == address })?.iatMode
     }
 
@@ -433,7 +433,7 @@ actor IceCertFetcher {
         )
 
         // 4. Load public key
-        guard let pubKeyData = Data(hexString: ICEConfig.relayConfigSigningKey) else {
+        guard let pubKeyData = Data(hexString: VEILConfig.relayConfigSigningKey) else {
             Log.error("relayConfigSigningKey is not valid hex", category: "ICE")
             return false
         }

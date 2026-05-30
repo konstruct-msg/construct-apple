@@ -125,7 +125,7 @@ final class StealthSenderService {
     /// Uses the `bundle_signing_key` cached from /.well-known/construct-server.
     func verifyCert(_ cert: Shared_Proto_Core_V1_SenderCertificate) -> Bool {
         guard
-            let serverPubKeyData = UserDefaults.standard.data(forKey: IceCertFetcher.cachedBundleSigningKeyKey),
+            let serverPubKeyData = UserDefaults.standard.data(forKey: VeilCertFetcher.cachedBundleSigningKeyKey),
             !cert.serverSignature.isEmpty
         else { return false }
 

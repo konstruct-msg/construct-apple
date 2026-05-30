@@ -3,19 +3,19 @@
 //  ConstructMessengerTests
 //
 //  Targeted tests for the P1 dual-proxy-lifecycle fix:
-//  when ConnectionLoop owns the proxy (iceProxyPort() != nil),
-//  handleICEFailure() must route to ConnectionLoop, not IceProxyManager.
+//  when ConnectionLoop owns the proxy (veilProxyPort() != nil),
+//  handleICEFailure() must route to ConnectionLoop, not VeilProxyManager.
 //
 //  Test design note:
 //    The two paths produce different observable state changes:
 //
 //    staleLocalProxy + CL active:
 //      fix  → ConnectionLoop.prepare() runs → clears _overrideProxyPort → .propagate
-//      bug  → IceProxyManager.restartAfterCrash() fails → port preserved → .retry
+//      bug  → VeilProxyManager.restartAfterCrash() fails → port preserved → .retry
 //
 //    background RPC + CL active:
 //      fix  → ConnectionLoop.recordFailure() → directFails incremented
-//      bug  → IceProxyManager.scheduleRotation() → directFails untouched → still 0
+//      bug  → VeilProxyManager.scheduleRotation() → directFails untouched → still 0
 //
 
 import XCTest
@@ -24,23 +24,23 @@ import GRPCCore
 
 final class GRPCCallExecutorTests: XCTestCase {
 
-    // MARK: - iceProxyPort gate
+    // MARK: - veilProxyPort gate
 
     func test_iceProxyPort_nilWhenNoPortSet() {
         GRPCChannelManager.shared.setDirectProxyPort(nil)
-        XCTAssertNil(GRPCChannelManager.shared.iceProxyPort())
+        XCTAssertNil(GRPCChannelManager.shared.veilProxyPort())
     }
 
     func test_iceProxyPort_nonNilAfterSetDirectProxyPort() {
         GRPCChannelManager.shared.setDirectProxyPort(54321)
-        XCTAssertNotNil(GRPCChannelManager.shared.iceProxyPort())
+        XCTAssertNotNil(GRPCChannelManager.shared.veilProxyPort())
         GRPCChannelManager.shared.setDirectProxyPort(nil)
     }
 
     func test_iceProxyPort_nilAfterPortCleared() {
         GRPCChannelManager.shared.setDirectProxyPort(54321)
         GRPCChannelManager.shared.setDirectProxyPort(nil)
-        XCTAssertNil(GRPCChannelManager.shared.iceProxyPort())
+        XCTAssertNil(GRPCChannelManager.shared.veilProxyPort())
     }
 
     // MARK: - P1: staleLocalProxy routing
@@ -48,8 +48,8 @@ final class GRPCCallExecutorTests: XCTestCase {
     /// staleLocalProxy + ConnectionLoop active → prepare() is called (clears port when
     /// shouldUseICE=false) → .propagate.
     ///
-    /// Without the fix: IceProxyManager.restartAfterCrash() fails silently (no real proxy
-    /// in tests), _overrideProxyPort stays 54321, iceProxyPort() returns 54321 → .retry.
+    /// Without the fix: VeilProxyManager.restartAfterCrash() fails silently (no real proxy
+    /// in tests), _overrideProxyPort stays 54321, veilProxyPort() returns 54321 → .retry.
     func test_staleLocalProxy_connectionLoopActive_callsPrepare_notRestartAfterCrash() async {
         CensoredNetworkDetector._testOverride = false
         await ConnectionLoop.shared.reset()  // directFails=0, shouldUseICE=false
@@ -65,7 +65,7 @@ final class GRPCCallExecutorTests: XCTestCase {
 
         XCTAssertEqual(action, .propagate,
             "staleLocalProxy with ConnectionLoop active: prepare() must run (not restartAfterCrash)")
-        XCTAssertNil(GRPCChannelManager.shared.iceProxyPort(),
+        XCTAssertNil(GRPCChannelManager.shared.veilProxyPort(),
             "prepare() must have cleared override port (shouldUseICE=false, no ICE activation yet)")
 
         // Cleanup
@@ -79,8 +79,8 @@ final class GRPCCallExecutorTests: XCTestCase {
     /// Background RPC failure + ConnectionLoop active → routes to ConnectionLoop.recordFailure(),
     /// which increments directFails. Two failures → shouldUseICE=true.
     ///
-    /// Without the fix: routes to IceProxyManager.scheduleRotation() (which calls runtime.stop()
-    /// on the same Rust FFI that ConnectionLoop.IceProxy manages). directFails stays 0.
+    /// Without the fix: routes to VeilProxyManager.scheduleRotation() (which calls runtime.stop()
+    /// on the same Rust FFI that ConnectionLoop.VeilProxy manages). directFails stays 0.
     func test_backgroundRPCFailure_connectionLoopActive_routesToConnectionLoop() async {
         CensoredNetworkDetector._testOverride = false
         await ConnectionLoop.shared.reset()  // directFails=0
@@ -97,7 +97,7 @@ final class GRPCCallExecutorTests: XCTestCase {
         // Without fix: scheduleRotation() runs instead → directFails stays 0 → shouldUseICE=false
         let shouldUseICE = await ConnectionLoop.shared.shouldUseICE
         XCTAssertTrue(shouldUseICE,
-            "Two background RPC failures must route through ConnectionLoop.recordFailure(), not IceProxyManager.scheduleRotation()")
+            "Two background RPC failures must route through ConnectionLoop.recordFailure(), not VeilProxyManager.scheduleRotation()")
 
         // Cleanup
         GRPCChannelManager.shared.setDirectProxyPort(nil)
@@ -107,7 +107,7 @@ final class GRPCCallExecutorTests: XCTestCase {
 
     // MARK: - P1: legacy path preserved
 
-    /// When ConnectionLoop is NOT active, the legacy IceProxyManager path is used.
+    /// When ConnectionLoop is NOT active, the legacy VeilProxyManager path is used.
     /// Background transport failure with no active relay → .propagate (no rotation possible).
     func test_backgroundRPCFailure_connectionLoopInactive_usesLegacyPath() async {
         GRPCChannelManager.shared.setDirectProxyPort(nil)

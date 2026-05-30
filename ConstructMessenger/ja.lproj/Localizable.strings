@@ -402,24 +402,24 @@
 "mark_unread" = "未読にする";
 "mark_read" = "既読にする";
 
-// ICE — traffic obfuscation
-"ice_title" = "ICE";
-"ice_footer" = "ICEは、トラフィックを通常のHTTPSと区別がつかないように偽装します。設定はサーバーから自動的に提供されます。";
-"ice_unavailable" = "このサーバーでは利用できません";
-"ice_retry" = "ICE接続を再試行";
+// VEIL — traffic obfuscation
+"veil_title" = "VEIL";
+"veil_footer" = "VEILは、トラフィックを通常のHTTPSと区別がつかないように偽装します。設定はサーバーから自動的に提供されます。";
+"veil_unavailable" = "このサーバーでは利用できません";
+"veil_retry" = "VEIL接続を再試行";
 "traffic_protection" = "トラフィック保護";
-"ice_footer_short" = "ICEはトラフィックを標準のHTTPSとして偽装します。設定は自動的に行われます。";
+"veil_footer_short" = "VEILはトラフィックを標準のHTTPSとして偽装します。設定は自動的に行われます。";
 
-// ICE mode (tri-state)
-"ice_mode_off" = "オフ";
-"ice_mode_auto" = "自動";
-"ice_mode_on" = "オン";
-"ice_footer_off" = "トラフィック保護が無効です。直接接続のみ。";
-"ice_footer_auto" = "ネットワークの遮断が検出されると、ICEが自動的に有効になります。";
-"ice_footer_on" = "すべてのトラフィックがICEリレーを経由します。";
-"ice_auto_active" = "自動有効化中 ・ 直接接続遮断";
-"ice_direct_probe_ok" = "直接接続: OK (%@)";
-"ice_direct_probe_blocked" = "直接接続: 遮断";
+// VEIL mode (tri-state)
+"veil_mode_off" = "オフ";
+"veil_mode_auto" = "自動";
+"veil_mode_on" = "オン";
+"veil_footer_off" = "トラフィック保護が無効です。直接接続のみ。";
+"veil_footer_auto" = "ネットワークの遮断が検出されると、VEILが自動的に有効になります。";
+"veil_footer_on" = "すべてのトラフィックがVEILリレーを経由します。";
+"veil_auto_active" = "自動有効化中 ・ 直接接続遮断";
+"veil_direct_probe_ok" = "直接接続: OK (%@)";
+"veil_direct_probe_blocked" = "直接接続: 遮断";
    
 // Data & Storage
 "data_and_storage" = "データとストレージ";
@@ -598,7 +598,7 @@
 "session_crypto_no_session" = "アクティブなセッションなし";
  
 "voice_message" = "ボイスメッセージ";
-"ice_auto_activated_footer" = "ICEが自動的に有効になりました。ネットワークが直接接続を遮断しています。設定で無効にすることができます。";
+"veil_auto_activated_footer" = "VEILが自動的に有効になりました。ネットワークが直接接続を遮断しています。設定で無効にすることができます。";
 
 // MARK: - Calls
 "call_mute" = "ミュート";

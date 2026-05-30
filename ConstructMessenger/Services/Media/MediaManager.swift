@@ -241,7 +241,7 @@ class MediaManager {
     }
 
     /// No-op: ConnectionLoop manages proxy lifecycle — readiness is guaranteed
-    /// when iceProxyPort() is non-nil and GRPCCallExecutor routes through it.
+    /// when veilProxyPort() is non-nil and GRPCCallExecutor routes through it.
     private static func ensureICEForMedia() async {}
 
     /// Upload a file (document, PDF, etc.) for a chat message.

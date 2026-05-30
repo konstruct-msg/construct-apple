@@ -15,7 +15,6 @@
 //    Text("hello").ctMessageBlock(outgoing: false)
 //    myView.ctBackground()    → dark bg + noise layer
 //
-//  Design doc: /Documents/Konstruct/ASCII_style_design.md
 //
 
 import SwiftUI
@@ -31,21 +30,21 @@ extension Color {
         /// Main background. Dark: #090909 / Light: #F2F2F2
         static let bg         = Color(dark: 0x090909, light: 0xF2F2F2)
         /// Message bubble background (incoming). Dark: #333333 / Light: #E2E2E2
-        static let bgMsg      = Color(dark: 0x333333, light: 0xE2E2E2)
+        static let bgMsg      = Color(dark: 0x202020, light: 0xE2E2E2)
         /// Outgoing message background. Dark: #111111 / Light: #CECECE
-        static let outMsgBg   = Color(dark: 0x111111, light: 0xCECECE)
+        static let outMsgBg   = Color(dark: 0x111111, light: 0xE9E9E9)
 
         // MARK: Accent (brand blue — unchanged across themes)
         /// Primary accent: #1A3FFF
-        static let accent     = Color(hex: 0x1A3FFF)
+        static let accent     = Color(hex: 0x0062FF)
         /// Secondary accent: #4A6AFF
-        static let accentDim  = Color(hex: 0x4A6AFF)
+        static let accentDim  = Color(hex: 0x1E68DF)
 
         // MARK: Text
         /// Primary text. Dark: #E8E8E8 / Light: #111111
         static let text       = Color(dark: 0xE8E8E8, light: 0x111111)
-        /// Timestamps, metadata, inactive. Dark: #555555 / Light: #777777
-        static let textDim    = Color(dark: 0x555555, light: 0x777777)
+        /// Timestamps, metadata, inactive.
+        static let textDim    = Color(dark: 0x818181, light: 0x333333)
 
         // MARK: Structure
         /// ASCII noise chars, dividers. Dark: #1E1E1E / Light: #C8C8C8
@@ -682,8 +681,8 @@ struct CTSettingsSectionHeader: View {
 struct CTSettingsRow: View {
     let label: String
     let value: String
-    var icon: String?        = nil
-    var labelColor: Color   = Color.CT.textDim
+    var icon: String?       = nil
+    var labelColor: Color   = Color.CT.text
     var valueColor: Color   = Color.CT.text
     var isAction: Bool      = false
     var isDestructive: Bool = false

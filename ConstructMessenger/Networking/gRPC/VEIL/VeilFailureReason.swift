@@ -1,5 +1,5 @@
 //
-//  IceFailureReason.swift
+//  VeilFailureReason.swift
 //  Construct Messenger
 //
 //  Typed classification of ICE/relay transport failures.
@@ -9,9 +9,9 @@ import Foundation
 
 /// Categorized reason for an ICE relay failure.
 ///
-/// Used by `IceFailurePolicy.classify` to distinguish transport-layer failures
+/// Used by `VeilFailurePolicy.classify` to distinguish transport-layer failures
 /// (which require ICE failover) from application-layer errors (auth, validation, etc.).
-enum IceFailureReason: Sendable, Equatable {
+enum VeilFailureReason: Sendable, Equatable {
     /// WebTunnel blocked by a transparent HTTP proxy (non-200/404 on WebSocket upgrade).
     case webTunnelBlocked
     

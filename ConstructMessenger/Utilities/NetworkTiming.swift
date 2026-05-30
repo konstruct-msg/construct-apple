@@ -49,9 +49,24 @@ enum NetworkTiming {
     enum GRPC {
         // Routing failover ("happy eyeballs")
         static let fastFallbackDirectTimeout: TimeInterval = 4.0
-        /// Timeout waiting for the stream RPC to be accepted (H2 direct or ICE relay).
+        /// Timeout waiting for the stream RPC to be accepted (H2 direct).
         /// After this duration without `isConnected = true`, fast-failover to ICE is triggered.
         static let streamOpenAcceptTimeout: TimeInterval = 2.0
+        /// Separate, looser timeout when traffic is going through an ICE proxy.
+        ///
+        /// Two compounding factors require a much longer window than direct H2:
+        /// 1. The relay adds an obfs4/WebTunnel round-trip on top of TCP+TLS to the server.
+        /// 2. gRPC server bidi-stream handlers commonly don't flush initial response headers
+        ///    until the first `Send()` (or until they receive the first client heartbeat).
+        ///    With our 25s client heartbeat interval, "no headers yet" is normal for ~25s on
+        ///    a quiet stream — even on a healthy channel.
+        ///
+        /// 20s is enough to cover the first client heartbeat → server ack round-trip on slow
+        /// censored networks, while still bounded enough that a truly broken stream gets caught.
+        /// (Observed 2026-05-29 on RU networks: 6s was rotating healthy streams every cycle
+        /// because unary RPCs were succeeding via ICE but the stream subscribe wasn't getting
+        /// initial headers within 6s.)
+        static let streamOpenAcceptTimeoutICE: TimeInterval = 20.0
         /// Separate, shorter timeout for H3/QUIC streams on the direct path.
         /// QUIC either connects in <500ms (0-RTT) or fails within 1–1.5s (UDP blocked, no H3
         /// support). Using a tighter window here avoids waiting 2s per H3 attempt on servers
@@ -81,14 +96,28 @@ enum NetworkTiming {
         // Keepalive detects dead TCP connections. On mobile, interfaces go down silently
         // (WiFi → airplane mode, VPN toggle) without a TCP RST. The sum of keepaliveTime +
         // keepaliveTimeout is the worst-case detection latency before the client gives up and
-        // creates a fresh channel. Keep it low: 10+5=15s direct, 8+5=13s ICE.
+        // creates a fresh channel.
+        //
+        // CRITICAL: keepaliveTime MUST be longer than our stream heartbeat interval
+        // (NetworkTiming.Stream.heartbeatInterval = 25s). Otherwise the HTTP/2 PING fires
+        // before the first heartbeat arrives, and PING→PONG round-trip through an obfs4
+        // relay can easily exceed the 3s ACK timeout — killing the channel every 8s. This
+        // was the exact failure mode observed on RU networks 2026-05-29.
+        //
+        // Direct path: 10s ping + 5s ack = 15s detection. Fast for healthy networks.
+        // ICE path: keepalive deliberately neutered (120s ping + 30s ack = 150s detection).
+        //   Observed 2026-05-29: gRPC-swift v2's keepalive timer does NOT seem to reset on
+        //   outgoing DATA frames — only on incoming. With our stream-accept being slow on
+        //   bidi RPCs, no inbound activity → PING fires → no ACK through obfs4+relay+TLS
+        //   round-trip → connection killed every ~50s. The heartbeat-watchdog at the
+        //   application layer (NetworkTiming.Stream heartbeatInterval × multiplier = ~60s)
+        //   is the real dead-stream detector on the ICE path; HTTP/2 keepalive is just a
+        //   safety net for when even that doesn't fire.
         static let maxIdleTimeSeconds: Int64 = 300
-        // Keepalive: ping after N seconds idle, give up after M seconds with no ACK.
-        // Our server (tonic/h2) has no minimum ping interval enforcement.
-        // Detection time = keepaliveTime + keepaliveTimeout.
-        static let keepaliveTimeDirectSeconds: Int64 = 5
-        static let keepaliveTimeIceSeconds: Int64 = 5
-        static let keepaliveTimeoutSeconds: Int64 = 3
+        static let keepaliveTimeDirectSeconds: Int64 = 10
+        static let keepaliveTimeIceSeconds: Int64 = 120
+        static let keepaliveTimeoutSeconds: Int64 = 5
+        static let keepaliveTimeoutIceSeconds: Int64 = 30
 
         enum Timeouts {
             // Authentication
@@ -111,7 +140,11 @@ enum NetworkTiming {
             static let endSession: TimeInterval = 20
 
             // Messaging (background/service)
-            static let getPendingMessages: TimeInterval = 5
+            // 5s was too tight for ICE+obfs4 RU paths — server's XREAD + response
+            // can routinely take 3-7s under load. The wall-clock cap (1s) on the
+            // stream side gives the iOS UI snappy fallback while this longer timeout
+            // lets the actual fetch complete in background.
+            static let getPendingMessages: TimeInterval = 15
 
             // Key service (session init / rotations)
             static let getPreKeyBundle: TimeInterval = 20
@@ -154,9 +187,9 @@ enum NetworkTiming {
         }
     }
 
-    // MARK: - ICE
+    // MARK: - VEIL
 
-    enum ICE {
+    enum VEIL {
         static let relayCooldown: TimeInterval = 60.0
         /// Time to wait for the obfs4/WebTunnel proxy to bind its local port.
         /// Increased from 10s to 15s: Russian mobile networks (ТСПУ) require
@@ -183,14 +216,14 @@ enum NetworkTiming {
         /// Prevents waiting for unreachable endpoints (e.g. AMS blocked in RU)
         /// when a relay has already responded.
         static let sortByLatencyEarlyExitDelay: TimeInterval = 0.3
-        /// Stagger between starting the direct gRPC leg and the ICE leg
+        /// Stagger between starting the direct gRPC leg and the VEIL leg
         /// in the 3-way happy-eyeballs race. Direct always starts first.
-        static let happyEyeballsICEStaggerMs: UInt64 = 250
-        /// Stagger between starting the ICE-TLS leg and the ICE-plain (relay) leg.
+        static let happyEyeballsVEILStaggerMs: UInt64 = 250
+        /// Stagger between starting the VEILTLS leg and the VEIL-plain (relay) leg.
         static let happyEyeballsRelayStaggerMs: UInt64 = 200
 
         // Background direct probe (auto mode only)
-        /// How often to probe whether direct gRPC is accessible while on ICE.
+        /// How often to probe whether direct gRPC is accessible while on VEIL.
         static let directProbeInterval: TimeInterval = 5 * 60  // 5 min
         /// TLS connection timeout for the direct probe. Short enough to not stall
         /// UX, long enough to survive high-latency networks.
@@ -226,6 +259,13 @@ enum NetworkTiming {
         /// fetchMissedMessages RPC should complete in <100ms; 0.3s gives ample headroom while
         /// keeping the overall broken-relay detection window at ≤1.3s (0.3 + 1.0 stream timeout).
         static let fetchMissedMessagesWallClockCapVerified: TimeInterval = 0.3
+        /// After the stream is accepted (server-side ACK), the server should push *something*
+        /// (heartbeat ack, queued message, presence update) within this window. If nothing
+        /// arrives, the connection is alive at the TLS layer but data isn't flowing — most
+        /// often DPI silently dropping UDP after the QUIC handshake. Triggers H2 fallback.
+        /// 5s chosen as the trade-off between false positives on slow networks and the 23s+
+        /// silent-H3 case observed on RU networks.
+        static let firstServerEventWatchdogH3: TimeInterval = 5
     }
 
     // MARK: - Media

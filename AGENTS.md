@@ -34,7 +34,7 @@ construct-messenger/
 
 The Rust core lives at: `~/Code/construct-core`
 The Rust engine lives at: `~/Code/construct-engine`
-The Rust ICE proxy lives at: `~/Code/construct-ice`
+The Rust VEIL proxy (obfuscation layer) lives at: `~/Code/construct-veil`
 
 ---
 
@@ -126,7 +126,7 @@ All three Rust crates must be cloned alongside this repo:
 ~/Code/
 ├── construct-core/        # Cryptographic core (X3DH, Double Ratchet, Kyber, etc.)
 ├── construct-engine/      # QUIC/H3/gRPC transport engine
-├── construct-ice/         # obfs4/WebTunnel ICE proxy (DPI evasion)
+├── construct-veil/        # obfs4/WebTunnel obfuscation proxy (DPI evasion). Was construct-ice.
 └── construct-messenger/   # This repo — iOS/macOS SwiftUI app
 ```
 
@@ -138,7 +138,7 @@ You MUST build the Rust libraries before Xcode can compile the app.
 ```bash
 # 1. Build construct-core (crypto) — produces ConstructCore.xcframework
 cd ~/Code/construct-messenger
-./build_crypto_lib.sh --ios --sim --mac
+./build_crypto_lib.sh --all          # iOS + Simulator + macOS in one go
 
 # 2. Build construct-engine (transport) — produces ConstructEngine.xcframework
 cd ~/Code/construct-engine
@@ -153,8 +153,11 @@ xcodebuild -scheme ConstructMessenger \
 ### Rebuilding after Rust changes
 
 ```bash
-# Rebuild crypto (iOS device only — fastest iteration)
+# Rebuild crypto (iOS device only — fastest iteration, ~45s)
 ./build_crypto_lib.sh --ios
+
+# Rebuild crypto for everything iOS-side (device + simulator)
+./build_crypto_lib.sh --ios --sim
 
 # Rebuild engine (all platforms)
 cd ~/Code/construct-engine && ./build_engine.sh
@@ -163,14 +166,25 @@ cd ~/Code/construct-engine && ./build_engine.sh
 # Xcode: ⌘⇧K  or  Product → Clean Build Folder
 ```
 
-### Rebuilding individual platforms
+### Build target flags
+
+Target flags **accumulate** — you can combine them in one invocation.
+Without any flag the script defaults to `--ios`.
 
 ```bash
 ./build_crypto_lib.sh --ios        # iOS device only (arm64)
 ./build_crypto_lib.sh --sim        # Simulator only (arm64 + x86_64 fat)
 ./build_crypto_lib.sh --mac        # macOS native (arm64)
-./build_crypto_lib.sh --clean      # cargo clean before build
+./build_crypto_lib.sh --all        # All three at once (--ios --sim --mac)
+./build_crypto_lib.sh --dist       # macOS universal fat (arm64 + x86_64) for DMG
+./build_crypto_lib.sh --clean      # cargo clean before build (combine with target flags)
+./build_crypto_lib.sh --debug      # Debug profile instead of release (combine with target flags)
 ```
+
+After the build, the script updates all three slices of `ConstructCore.xcframework`:
+- `ios-arm64/libconstruct_core.a`
+- `ios-arm64_x86_64-simulator/libconstruct_core_sim.a`
+- `macos-arm64/libconstruct_core_mac.a`
 
 > **Note**: The xcframework binaries are NOT tracked in git.
 > They must be rebuilt locally after cloning.
@@ -264,6 +278,23 @@ We have our own terminology. Use it consistently in UI, code, and comments.
 | Server | Construct |
 | Group | Cluster |
 | Message thread | Stream |
+| ICE (obfuscation layer) | VEIL |
+| obfs4/WebTunnel proxy | VEIL |
+
+### VEIL vs WebRTC ICE — never confuse them
+
+There are two "ICE"-named concepts in the codebase. They are completely
+unrelated and must NOT be conflated:
+
+| | What | Where it lives |
+|---|---|---|
+| **VEIL** | Our obfuscation layer (obfs4 + WebTunnel pluggable transports for DPI evasion). Renamed 2026-05-29 from "ICE". | `Networking/gRPC/VEIL/`, `VeilProxy*`, `veil_*` C FFI, `construct-veil` Rust crate |
+| **WebRTC ICE** | Interactive Connectivity Establishment (industry-standard P2P NAT traversal for calls). Stays "ICE" — do not rename. | `Services/Calls/`, `IceCandidate`, `iceCandidate`, `iceFlushTask`, WebRTC.framework |
+
+When writing new obfuscation/relay/proxy code, always use `Veil*` / `veil_*`.
+When writing new call signaling code, use industry WebRTC `Ice*` names.
+The `iceBridgeCert` field in `auth_service.pb.swift` is a legacy proto field
+name for VEIL bridge cert (will be renamed when proto regenerates).
 
 ---
 
@@ -509,8 +540,8 @@ Key test files:
 
 ## Documentation
 
-All project documentation: `~/Documents/Konstruct` (Obsidian vault)
-Rules for writing documentation: `~/Documents/Konstruct/README.md`
+All project documentation: `~/Code/construct-docs` (Obsidian vault)
+Rules for writing documentation: `~/Code/construct-docs/README.md`
 
 ### Key documents for new developers
 

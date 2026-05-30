@@ -233,7 +233,7 @@ final class AccountRecoveryViewModel {
                 expiresIn: Int(response.expiresAt ?? 0),
                 userId: response.userId
             )
-            IceProxyManager.shared.configureFromServer(cert: response.iceBridgeCert ?? "")
+            VeilProxyManager.shared.configureFromServer(cert: response.iceBridgeCert ?? "")
 
             Task {
                 _ = try? await OtpkReplenishmentService.generateAndUpload(

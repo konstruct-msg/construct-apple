@@ -55,7 +55,7 @@ class DeveloperMode {
         lastTapTime = now
         showTapCount = true // Show counter while tapping
         
-        print("🔧 Version tap: \(currentTapCount)/\(requiredTaps)")
+        Log.info("Version tap: \(currentTapCount)/\(requiredTaps)")
         Log.debug("Version tap: \(currentTapCount)/\(requiredTaps)", category: "DeveloperMode")
         
         if currentTapCount >= requiredTaps {
@@ -73,7 +73,7 @@ class DeveloperMode {
     private func toggle() {
         isEnabled.toggle()
         
-        print("🔧 Developer Mode toggled: \(isEnabled ? "ENABLED ✅" : "DISABLED ❌")")
+        Log.info("Developer Mode toggled: \(isEnabled ? "ENABLED" : "DISABLED")")
         
         // Haptic feedback (iOS only)
         #if canImport(UIKit)
@@ -82,7 +82,7 @@ class DeveloperMode {
             generator.notificationOccurred(.success)
         } else {
             generator.notificationOccurred(.warning)
-            print("❌ Developer Mode DISABLED")
+            Log.info("Developer Mode DISABLED")
         }
         #endif
     }

@@ -168,7 +168,7 @@ class AuthViewModel {
         restoreInFlight = true
         defer { restoreInFlight = false }
 
-        print("🔄 restoreOrAuthenticateDevice() called")
+        Log.info("restoreOrAuthenticateDevice() called")
         
         // Step 1: Try to restore existing session token
         AuthSessionManager.shared.loadSessionToken()
@@ -214,7 +214,7 @@ class AuthViewModel {
            let userId = resolvedUserId(),
            AuthSessionManager.shared.isSessionValid {
             // We have session token - verify it's still valid
-            print("✅ Found session token for user: \(userId)")
+            Log.info("Found session token for user: \(userId)")
             if !CryptoManager.shared.isInitialized {
                 self.currentUserId = userId
                 self.isAuthenticated = true
@@ -279,7 +279,7 @@ class AuthViewModel {
         // Step 2: No session token - try device-based auth
         guard let deviceId = KeychainManager.shared.loadDeviceID(),
               let rawSigningKey = KeychainManager.shared.loadDeviceSigningKey() else {
-            print("No device keys found - user needs to register")
+            Log.info("No device keys found - user needs to register")
             // Definitively mark as unregistered so ContentView routes to OnboardingView.
             // refreshDeviceKeyState() uses only deviceId (AfterFirstUnlock) which may have
             // been nil at init time; this async confirmation is the source of truth.
@@ -287,7 +287,7 @@ class AuthViewModel {
             return
         }
         
-        print("Device keys found - authenticating with device ID: \(deviceId)")
+        Log.info("Device keys found - authenticating with device ID: \(deviceId)")
         
         do {
             // Create signature: Sign("{device_id}{timestamp}") with Ed25519 — must match server format
@@ -332,12 +332,12 @@ class AuthViewModel {
                 userId: response.userId
             )
             
-            IceProxyManager.shared.configureFromServer(cert: response.iceBridgeCert ?? "")
-            print("Device-based authentication successful")
+            VeilProxyManager.shared.configureFromServer(cert: response.iceBridgeCert ?? "")
+            Log.info("Device-based authentication successful")
             finishAuth(userId: response.userId)
             
         } catch {
-            print("Device authentication failed: \(error)")
+            Log.info("Device authentication failed: \(error)")
 
             // Only wipe device keys when the server explicitly rejects this device
             // (unauthenticated / permission-denied gRPC codes = device not registered).
@@ -662,7 +662,7 @@ class AuthViewModel {
             ErrorRouter.shared.report(.network(.connectionFailed), recovery: { [weak self] in
                 self?.restoreSession()
             })
-            print("Session restore timeout - showing login screen")
+            Log.info("Session restore timeout - showing login screen")
         }
     }
 
@@ -733,9 +733,9 @@ class AuthViewModel {
     }
 
     private func handleConnectSuccess(userId: String, username: String) {
-        print("ConnectSuccess received!")
-        print("   User ID: \(userId)")
-        print("   Username: \(username)")
+        Log.info("ConnectSuccess received!")
+        Log.info("   User ID: \(userId)")
+        Log.info("   Username: \(username)")
 
         currentUserId = userId
         isAuthenticated = true
@@ -743,7 +743,7 @@ class AuthViewModel {
 
         // Load User entity and set currentUser
         loadUserFromCoreData(userId: userId)
-        print("User authenticated successfully")
+        Log.info("User authenticated successfully")
     }
     
     private func handleSessionExpired() {
@@ -769,8 +769,8 @@ class AuthViewModel {
             "is_discoverable",
             "recovery_is_setup",
             "recovery_banner_dismissed",
-            UserDefaultsKey.iceEnabled.rawValue,
-            UserDefaultsKey.iceMode.rawValue,
+            UserDefaultsKey.veilEnabled.rawValue,
+            UserDefaultsKey.veilMode.rawValue,
             UserDefaultsKey.trafficProtectionEnabled.rawValue,
             UserDefaultsKey.backgroundFetchEnabled.rawValue,
             UserDefaultsKey.backgroundFetchIntervalMinutes.rawValue,
@@ -835,7 +835,7 @@ class AuthViewModel {
     private func loadUserFromCoreData(userId: String, username: String? = nil) {
         // Check if persistent store coordinator is ready before accessing entities
         guard viewContext.persistentStoreCoordinator != nil else {
-            print("Core Data persistent store coordinator not ready yet, skipping user load")
+            Log.info("Core Data persistent store coordinator not ready yet, skipping user load")
             return
         }
         
@@ -843,9 +843,9 @@ class AuthViewModel {
         let fetchRequest = User.fetchRequest()
         fetchRequest.predicate = NSPredicate(format: "id == %@", userId)
         
-        print("loadUserFromCoreData: Searching for userId: \(userId)")
+        Log.info("loadUserFromCoreData: Searching for userId: \(userId)")
         if let username = username {
-            print("   Username from parameter: \(username)")
+            Log.info("   Username from parameter: \(username)")
         }
         
         do {
@@ -854,12 +854,12 @@ class AuthViewModel {
             
             if let existingUser = try viewContext.fetch(fetchRequest).first {
                 user = existingUser
-                print("Found existing user in Core Data: \(user.displayName)")
+                Log.info("Found existing user in Core Data: \(user.displayName)")
                 
                 // Update username if provided and different
                 if let newUsername = username, !newUsername.isEmpty {
                     if user.username.isEmpty || user.username != newUsername {
-                        print("Updating username: '\(user.username)' -> '\(newUsername)'")
+                        Log.info("Updating username: '\(user.username)' -> '\(newUsername)'")
                         let oldUsername = user.username
                         user.username = newUsername
                         // Also update displayName if it's empty or was same as old username
@@ -870,7 +870,7 @@ class AuthViewModel {
                     }
                 }
             } else {
-                print("No user found, creating new user...")
+                Log.info("No user found, creating new user...")
                 // First login on this device, create a new User entity
                 user = User(context: viewContext)
                 user.id = userId
@@ -880,14 +880,14 @@ class AuthViewModel {
                 user.isBlocked = false
                 user.amISharingWith = false
                 needsSave = true
-                print("Created new user in Core Data for ID: \(userId)")
-                print("   username: \(user.username)")
+                Log.info("Created new user in Core Data for ID: \(userId)")
+                Log.info("   username: \(user.username)")
             }
             
             // Save if needed
             if needsSave {
                 try viewContext.save()
-                print("Saved user changes to Core Data")
+                Log.info("Saved user changes to Core Data")
             }
             
             // Set currentUser - single source of truth!
@@ -896,13 +896,13 @@ class AuthViewModel {
             CryptoManager.shared.setLocalUserId(user.id)
             AuthSessionManager.shared.saveDisplayName(user.displayName.isEmpty ? (user.username.isEmpty ? "" : user.username) : user.displayName)
             
-            print("Restored user data from Core Data:")
-            print("   userId: \(user.id)")
-            print("   username: \(user.username)")
-            print("   displayName: \(user.displayName)")
+            Log.info("Restored user data from Core Data:")
+            Log.info("   userId: \(user.id)")
+            Log.info("   username: \(user.username)")
+            Log.info("   displayName: \(user.displayName)")
             
         } catch {
-            print("Failed to fetch or create user from Core Data: \(error)")
+            Log.info("Failed to fetch or create user from Core Data: \(error)")
         }
     }
 }

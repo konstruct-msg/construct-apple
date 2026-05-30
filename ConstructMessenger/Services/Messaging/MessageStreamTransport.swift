@@ -60,7 +60,7 @@ final class GRPCStreamTransport: StreamTransport {
         )
 
 #if canImport(Network)
-        if !useH2Fallback, GRPCChannelManager.shared.iceProxyPort() == nil {
+        if !useH2Fallback, GRPCChannelManager.shared.veilProxyPort() == nil {
             let h3 = GRPCChannelManager.shared.acquireH3Channel()
             let client = Shared_Proto_Services_V1_MessagingService.Client(wrapping: h3)
             try await runStream(client: client, request: request, events: events,
@@ -123,12 +123,19 @@ extension MessageStreamManager {
         streamGeneration &+= 1
         let generation = streamGeneration
         activeStreamGeneration = generation
+        // Reset for the first-event watchdog (see below).
+        firstServerEventReceived = false
 
         // Consume the one-shot H2 fallback flag (set when the previous H3 attempt timed out
         // on a direct path). Also check the persistent failure counter: after h3OpenFailureThreshold
         // consecutive H3 failures (surviving network changes), switch to H2 until a clean stream
         // resets the counter. This handles devices where H3 never works regardless of network.
-        let useH2Fallback = shouldFallbackToH2Direct || consecutiveH3OpenFailures >= Self.h3OpenFailureThreshold
+        //
+        // Global H3 disable: `FeatureFlags.h3Enabled` short-circuits everything when H3 is
+        // turned off project-wide (see flag's docs for the 2026-05-29 disable reason).
+        let useH2Fallback = !FeatureFlags.h3Enabled
+            || shouldFallbackToH2Direct
+            || consecutiveH3OpenFailures >= Self.h3OpenFailureThreshold
         if consecutiveH3OpenFailures >= Self.h3OpenFailureThreshold {
             Log.info("H3 disabled — \(consecutiveH3OpenFailures) consecutive failures, using H2 direct", category: "MessageStream")
         }
@@ -151,7 +158,7 @@ extension MessageStreamManager {
         // (previous H3 attempt timed out — trying H2 direct before escalating to ICE).
         let transportLabel: String
 #if canImport(Network)
-        if !useH2Fallback, GRPCChannelManager.shared.iceProxyPort() == nil {
+        if !useH2Fallback, GRPCChannelManager.shared.veilProxyPort() == nil {
             transportLabel = "H3"
         } else {
             transportLabel = "H2"
@@ -247,6 +254,9 @@ extension MessageStreamManager {
         // Process incoming events — callbacks are invoked on the task's actor context (main)
         let processingTask = Task { [weak self] in
             for await event in incomingStream {
+                // Any server-pushed event proves the connection is live end-to-end
+                // (not just at TLS layer). Sets the watchdog-cancel flag below.
+                self?.firstServerEventReceived = true
                 switch event {
                 case .message(let msg):
                     Log.debug("MessageStream received message from=\(msg.from) id=\(msg.id)", category: "MessageStream")
@@ -333,13 +343,21 @@ extension MessageStreamManager {
                         try await Task.sleep(for: .seconds(NetworkTiming.GRPC.streamOpenAcceptPollInterval))
                     }
                 }
-                // 2) Timeout — two tiers:
+                // 2) Timeout — three tiers:
                 //   · H3 direct → 1.5s  (QUIC fails fast when not supported; tighter window)
-                //   · H2 / ICE  → 2.0s  (TCP+TLS needs one extra round-trip; relay may be high-latency)
+                //   · H2 direct → 2.0s  (TCP+TLS needs one extra round-trip)
+                //   · H2 / ICE  → 6.0s  (obfs4/WebTunnel + relay→server hop on a censored network
+                //                        easily eats 3-5s; tighter timeout was rotating healthy relays)
+                let usingICE = GRPCChannelManager.shared.veilProxyPort() != nil
                 group.addTask {
-                    let timeout: TimeInterval = isH3Transport
-                        ? NetworkTiming.GRPC.streamOpenAcceptTimeoutH3
-                        : NetworkTiming.GRPC.streamOpenAcceptTimeout
+                    let timeout: TimeInterval
+                    if isH3Transport {
+                        timeout = NetworkTiming.GRPC.streamOpenAcceptTimeoutH3
+                    } else if usingICE {
+                        timeout = NetworkTiming.GRPC.streamOpenAcceptTimeoutICE
+                    } else {
+                        timeout = NetworkTiming.GRPC.streamOpenAcceptTimeout
+                    }
                     try await Task.sleep(for: .seconds(timeout))
                     throw StreamAcceptTimeout()
                 }
@@ -393,6 +411,43 @@ extension MessageStreamManager {
                 GRPCChannelManager.shared.invalidatePersistentClient()
                 throw RPCError(code: .unavailable, message: "Stream open timed out — retrying with ICE")
             }
+        }
+
+        // First-event watchdog. By the time we get here the server has accepted the stream
+        // (TLS handshake done, subscribe acknowledged). But on RU/IR networks H3/QUIC is
+        // commonly let through the handshake and then silently dropped at the UDP layer —
+        // the connection looks alive but no data flows back. The heartbeat watchdog will
+        // eventually catch this (~60-90s), but that's a brutal UX. This task forces a
+        // fast fallback: if no server event arrives in `firstServerEventWatchdogH3` seconds,
+        // mark H3 as broken on this network and trigger immediate H2 reconnect.
+        //
+        // Runs only for H3 — H2 has its own (slower) backpressure path and over ICE the
+        // additional relay latency makes a 5s watchdog too aggressive.
+        if isH3Transport {
+            let firstEventWatchdog = Task { [weak self] in
+                try? await Task.sleep(for: .seconds(NetworkTiming.Stream.firstServerEventWatchdogH3))
+                guard !Task.isCancelled else { return }
+                let shouldFallback: Bool = await MainActor.run { [weak self] in
+                    guard let self,
+                          self.activeStreamGeneration == generation,
+                          !self.firstServerEventReceived
+                    else { return false }
+                    Log.info("MessageStream H3 silent for \(Int(NetworkTiming.Stream.firstServerEventWatchdogH3))s after accept — DPI likely dropping UDP, forcing H2 fallback", category: "MessageStream")
+                    self.shouldFallbackToH2Direct = true
+                    self.consecutiveH3OpenFailures += 1
+                    return true
+                }
+                guard shouldFallback else { return }
+                // Tear down H3 hard. forceInvalidateH3Connection closes the NWConnection
+                // immediately; streamTask.cancel propagates to the gRPC client. The outer
+                // connectLoop sees a CancellationError and re-enters openStream with
+                // shouldFallbackToH2Direct=true, which routes to H2.
+                GRPCChannelManager.shared.forceInvalidateH3Connection()
+                streamTask.cancel()
+            }
+            defer { firstEventWatchdog.cancel() }
+            try await streamTask.value
+            return
         }
 
         // Wait until the stream ends (disconnect, server close, etc.)

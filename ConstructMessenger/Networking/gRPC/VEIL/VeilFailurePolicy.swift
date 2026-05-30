@@ -1,5 +1,5 @@
 //
-//  IceFailurePolicy.swift
+//  VeilFailurePolicy.swift
 //  Construct Messenger
 //
 //  Pure classification function for ICE transport failures.
@@ -13,12 +13,12 @@ import GRPCCore
 /// This type contains no state and performs no I/O. It exists to make
 /// transport-layer error classification testable and to enforce the invariant
 /// that transport errors are handled before application-layer auth retry.
-enum IceFailurePolicy {
+enum VeilFailurePolicy {
     /// Classify an error as a transport-layer ICE failure, or nil if application-layer.
     ///
-    /// - Returns: `IceFailureReason` if the error represents a transport failure that
+    /// - Returns: `VeilFailureReason` if the error represents a transport failure that
     ///            should trigger ICE failover; `nil` for application errors (auth, validation, etc.).
-    static func classify(_ error: Error) -> IceFailureReason? {
+    static func classify(_ error: Error) -> VeilFailureReason? {
         // Local proxy dead — distinct from relay failure.
         if isStaleLocalProxy(error) { return .staleLocalProxy }
         
@@ -54,7 +54,7 @@ enum IceFailurePolicy {
     ///
     /// - Parameter reason: The classified failure reason.
     /// - Returns: RelayFailureType with appropriate TTL for blacklist.
-    static func relayFailureType(for reason: IceFailureReason) -> RelayFailureType {
+    static func relayFailureType(for reason: VeilFailureReason) -> RelayFailureType {
         switch reason {
         case .staleLocalProxy:
             // Local proxy crash — no blacklist needed (coordinator handles restart).

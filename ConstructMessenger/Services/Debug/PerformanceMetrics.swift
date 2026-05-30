@@ -30,8 +30,8 @@ enum MetricEvent: String {
     // Network
     case grpcConnectStart       = "grpc_connect_start"
     case grpcConnectEnd         = "grpc_connect_end"
-    case iceProxyStartBegin     = "ice_proxy_start_begin"
-    case iceProxyStartEnd       = "ice_proxy_start_end"
+    case veilProxyStartBegin     = "veil_proxy_start_begin"
+    case veilProxyStartEnd       = "veil_proxy_start_end"
     case streamOpenStart        = "stream_open_start"
     case streamOpenEnd          = "stream_open_end"
 

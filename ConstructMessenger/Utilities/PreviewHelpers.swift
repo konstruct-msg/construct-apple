@@ -39,10 +39,10 @@ struct PreviewHelpers {
 
         if let modelURL = Bundle.main.url(forResource: "ConstructMessenger", withExtension: "momd"),
            let managedObjectModel = NSManagedObjectModel(contentsOf: modelURL) {
-            print("✅ Loading CoreData model from bundle")
+            Log.info("Loading CoreData model from bundle")
             container = NSPersistentContainer(name: "ConstructMessenger", managedObjectModel: managedObjectModel)
         } else {
-            print("⚠️ Fallback: Loading CoreData model by name")
+            Log.info("Fallback: Loading CoreData model by name")
             container = NSPersistentContainer(name: "ConstructMessenger")
         }
 
@@ -56,10 +56,10 @@ struct PreviewHelpers {
 
         container.loadPersistentStores { storeDescription, error in
             if let error = error as NSError? {
-                print("⚠️ Preview CoreData Error: \(error), \(error.userInfo)")
+                Log.info("Preview CoreData Error: \(error), \(error.userInfo)")
                 loadError = error
             } else {
-                print("✅ Preview CoreData loaded successfully")
+                Log.info("Preview CoreData loaded successfully")
             }
             semaphore.signal()
         }
@@ -70,7 +70,7 @@ struct PreviewHelpers {
         if let error = loadError {
             // In-memory store failed — extremely unlikely. Return a broken container;
             // preview will show empty state rather than crashing the Xcode canvas.
-            print("⚠️ Preview CoreData failed to load: \(error)")
+            Log.info("Preview CoreData failed to load: \(error)")
         }
 
         return container
