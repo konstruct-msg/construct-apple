@@ -44,7 +44,7 @@ final class AuthServiceClient: Sendable {
     func registerDevice(
         username: String?,
         deviceId: String,
-        registrationBundle: RegistrationBundleJson,
+        registrationBundle: RegistrationBundleFields,
         challenge: String,
         powSolution: PowSolution
     ) async throws -> RegisterSuccessData {
@@ -52,10 +52,10 @@ final class AuthServiceClient: Sendable {
             let authClient = Shared_Proto_Services_V1_AuthService.Client(wrapping: grpcClient)
 
             var publicKeys = Shared_Proto_Services_V1_DevicePublicKeys()
-            publicKeys.verifyingKey = Data(base64Encoded: registrationBundle.verifyingKey) ?? Data()
-            publicKeys.identityPublic = Data(base64Encoded: registrationBundle.identityPublic) ?? Data()
-            publicKeys.signedPrekeyPublic = Data(base64Encoded: registrationBundle.signedPrekeyPublic) ?? Data()
-            publicKeys.signedPrekeySignature = Data(base64Encoded: registrationBundle.signature) ?? Data()
+            publicKeys.verifyingKey = Data(registrationBundle.verifyingKey)
+            publicKeys.identityPublic = Data(registrationBundle.identityPublic)
+            publicKeys.signedPrekeyPublic = Data(registrationBundle.signedPrekeyPublic)
+            publicKeys.signedPrekeySignature = Data(registrationBundle.signature)
             publicKeys.cryptoSuite = "Curve25519+Ed25519"
 
             var pow = Shared_Proto_Services_V1_PowSolution()

@@ -128,11 +128,11 @@ struct PublicUserInfo: Codable, Identifiable {
 
 // MARK: - Key Bundles
 struct RegistrationBundle: Codable {
-    let identityPublic: String
-    let signedPrekeyPublic: String
-    let signature: String
-    let verifyingKey: String
-    let suiteId: String // Changed from suiteID to match snake_case -> camelCase conversion
+    let identityPublic: Data
+    let signedPrekeyPublic: Data
+    let signature: Data
+    let verifyingKey: Data
+    let suiteId: String
 }
 
 struct SignedPrekeyUpdate: Codable {

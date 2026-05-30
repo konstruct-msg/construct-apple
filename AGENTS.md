@@ -453,11 +453,29 @@ CPU cost, allocation pressure, and potential encoding bugs at every message.
 
 3. **UniFFI boundary uses `Data` / `[UInt8]`.** All Swift ↔ Rust FFI calls pass binary
    data as `Data` (Swift) or `[UInt8]` (UniFFI-generated). Never stringify before
-   crossing the boundary.
+   crossing the boundary. Two patterns to watch:
+   - A UniFFI struct that exposes `String` fields holding base64 is a leak —
+     declare the UDL field as `sequence<u8>` instead. (Historical example:
+     `RegistrationBundleJson` returned base64 strings; replaced 2026-05-30 by
+     `RegistrationBundleFields` with raw byte fields.)
+   - `[UInt8](data)` / `Data(bytes)` Swift-side wrapping is the current
+     idiomatic UniFFI cost. Acceptable, but minimise — don't double-wrap.
 
-4. **CFE binary format for session state.** Session JSON-in-CFE (`CfeSessionJsonWrapperV1`)
-   is a known technical debt item. New session fields go into the binary CFE layer.
-   Do not add new JSON fields to the session serialization path.
+4. **CFE binary format for session state.** Sessions persist as CFE envelopes
+   (`CfeSessionStateV1`) — 16-byte header + MessagePack payload via `rmp_serde`.
+   The legacy `CfeSessionJsonWrapperV1` (JSON wrapped in a CFE envelope) was
+   removed from production paths on 2026-05-30; it survives only in tests
+   that exercise import backwards-compatibility. New session fields go into the
+   binary CFE layer. Do not introduce JSON-bytes-into-Keychain anywhere on the
+   crypto pipeline — every `Action::SaveSessionToSecureStore` data field must
+   originate from `export_session_bytes_for` (CFE), never from
+   `export_session_json_for`.
+
+   Active paths producing the right CFE binary today:
+   - `encrypt` / `decrypt` / `decrypt_wire_payload` follow-up save
+   - `archive_session` snapshot
+   - `maybe_apply_pq_contribution` post-Kyber save
+   - `restore_latest_archive` round-trip
 
 5. **`Codable` `Data` fields are fine.** Swift's `JSONEncoder`/`JSONDecoder` transparently
    base64-encodes `Data` values in JSON — this is acceptable for UserDefaults persistence

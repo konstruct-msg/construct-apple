@@ -159,16 +159,12 @@ class CryptoManager {
         defer { coreLock.unlock() }
         guard let core = orchestratorCore else { throw CryptoManagerError.coreNotInitialized }
         let fields = try core.getRegistrationBundleFields()
-        guard let ik = Data(base64Encoded: fields.identityPublic),
-              let spk = Data(base64Encoded: fields.signedPrekeyPublic) else {
-            throw CryptoManagerError.invalidKeyData
-        }
-        return (ik, spk)
+        return (Data(fields.identityPublic), Data(fields.signedPrekeyPublic))
     }
 
     /// Generate a complete registration bundle for device-based authentication
-    /// Returns: (deviceId, registrationBundle JSON, signing key bytes, identity key bytes)
-    func generateRegistrationBundle() throws -> (deviceId: String, bundle: RegistrationBundleJson, signingKey: Data, identityKey: Data) {
+    /// Returns: (deviceId, registrationBundle fields, signing key bytes, identity key bytes)
+    func generateRegistrationBundle() throws -> (deviceId: String, bundle: RegistrationBundleFields, signingKey: Data, identityKey: Data) {
         Log.info("Generating registration bundle...", category: "CryptoManager")
 
         // Always generate fresh keys for registration — never reuse an existing core
@@ -185,9 +181,10 @@ class CryptoManager {
             Log.error("Failed to save registration private keys to Keychain", category: "CryptoManager")
         }
 
-        // Typed bundle — zero JSON round-trip
+        // Typed bundle — bytes are bytes, no base64, no JSON
         let bundle = try activeCore.getRegistrationBundleFields()
-        Log.debug("Registration bundle: identity=\(bundle.identityPublic.prefix(20))… suiteId=\(bundle.suiteId)", category: "CryptoManager")
+        let identityHexPreview = bundle.identityPublic.prefix(8).map { String(format: "%02x", $0) }.joined()
+        Log.debug("Registration bundle: identity=\(identityHexPreview)… suiteId=\(bundle.suiteId)", category: "CryptoManager")
 
         // Key bytes — no JSON parsing
         let signingKeyData = try activeCore.getSigningKeyBytes()
@@ -196,11 +193,8 @@ class CryptoManager {
             throw CryptoError.InvalidKeyData(message: "getSigningKeyBytes or getIdentityKeyBytes returned empty")
         }
 
-        // Derive device_id from identity public key
-        guard let identityPublicBytes = Data(base64Encoded: bundle.identityPublic) else {
-            throw CryptoError.InvalidKeyData(message: "Failed to decode identityPublic base64 from bundle")
-        }
-        let deviceId = deriveDeviceId(identityPublicKey: [UInt8](identityPublicBytes))
+        // Derive device_id from identity public key bytes directly.
+        let deviceId = deriveDeviceId(identityPublicKey: bundle.identityPublic)
 
         Log.info("Generated registration bundle: device_id=\(deviceId)", category: "CryptoManager")
         return (deviceId, bundle, signingKeyData, identityKeyData)
@@ -729,9 +723,8 @@ class CryptoManager {
         guard let core = orchestratorCore else { return }
         do {
             let fields = try core.getRegistrationBundleFields()
-            func hexPrefix(_ b64: String) -> String {
-                guard let d = Data(base64Encoded: b64) else { return "?" }
-                return d.prefix(8).map { String(format: "%02x", $0) }.joined()
+            func hexPrefix(_ bytes: [UInt8]) -> String {
+                bytes.prefix(8).map { String(format: "%02x", $0) }.joined()
             }
             let ik = hexPrefix(fields.identityPublic)
             let spk = hexPrefix(fields.signedPrekeyPublic)

@@ -637,7 +637,7 @@ public protocol ClassicCryptoCoreProtocol: AnyObject, Sendable {
     /**
      * Typed registration bundle fields.
      */
-    func getRegistrationBundleFields() throws  -> RegistrationBundleJson
+    func getRegistrationBundleFields() throws  -> RegistrationBundleFields
     
     func getSessionHealth(contactId: String)  -> SessionHealthReport?
     
@@ -817,8 +817,8 @@ open func getIdentityKeyBytes()throws  -> Data  {
     /**
      * Typed registration bundle fields.
      */
-open func getRegistrationBundleFields()throws  -> RegistrationBundleJson  {
-    return try  FfiConverterTypeRegistrationBundleJson_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+open func getRegistrationBundleFields()throws  -> RegistrationBundleFields  {
+    return try  FfiConverterTypeRegistrationBundleFields_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_method_classiccryptocore_get_registration_bundle_fields(
             self.uniffiCloneHandle(),$0
     )
@@ -999,6 +999,156 @@ public func FfiConverterTypeClassicCryptoCore_lower(_ value: ClassicCryptoCore) 
 
 
 /**
+ * MLS group — stateful wrapper around openmls::MlsGroup.
+ */
+public protocol MlsGroupProtocol: AnyObject, Sendable {
+    
+    /**
+     * Current MLS epoch. Increments on every commit.
+     */
+    func epoch()  -> UInt64
+    
+    /**
+     * Current number of members in the group.
+     */
+    func memberCount()  -> UInt32
+    
+}
+/**
+ * MLS group — stateful wrapper around openmls::MlsGroup.
+ */
+open class MlsGroup: MlsGroupProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_construct_core_fn_clone_mlsgroup(self.handle, $0) }
+    }
+    /**
+     * Create a new MLS group with the caller as the sole initial member.
+     */
+public convenience init(config: GroupConfig)throws  {
+    let handle =
+        try rustCallWithError(FfiConverterTypeMlsError_lift) {
+    uniffi_construct_core_fn_constructor_mlsgroup_new(
+        FfiConverterTypeGroupConfig_lower(config),$0
+    )
+}
+    self.init(unsafeFromHandle: handle)
+}
+
+    deinit {
+        try! rustCall { uniffi_construct_core_fn_free_mlsgroup(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * Current MLS epoch. Increments on every commit.
+     */
+open func epoch() -> UInt64  {
+    return try!  FfiConverterUInt64.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_mlsgroup_epoch(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * Current number of members in the group.
+     */
+open func memberCount() -> UInt32  {
+    return try!  FfiConverterUInt32.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_mlsgroup_member_count(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeMlsGroup: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = MlsGroup
+
+    public static func lift(_ handle: UInt64) throws -> MlsGroup {
+        return MlsGroup(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: MlsGroup) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> MlsGroup {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: MlsGroup, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMlsGroup_lift(_ handle: UInt64) throws -> MlsGroup {
+    return try FfiConverterTypeMlsGroup.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMlsGroup_lower(_ value: MlsGroup) -> UInt64 {
+    return FfiConverterTypeMlsGroup.lower(value)
+}
+
+
+
+
+
+
+/**
  * Top-level orchestration facade.
  *
  * Swift / Kotlin call `handle_event_json` with a JSON-encoded `IncomingEvent`
@@ -1063,7 +1213,7 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
     /**
      * Typed registration bundle — replaces `export_registration_bundle_json()` parsing.
      */
-    func getRegistrationBundleFields() throws  -> RegistrationBundleJson
+    func getRegistrationBundleFields() throws  -> RegistrationBundleFields
     
     func getSessionHealth(contactId: String)  -> SessionHealthReport?
     
@@ -1333,8 +1483,8 @@ open func getIdentityKeyBytes()throws  -> Data  {
     /**
      * Typed registration bundle — replaces `export_registration_bundle_json()` parsing.
      */
-open func getRegistrationBundleFields()throws  -> RegistrationBundleJson  {
-    return try  FfiConverterTypeRegistrationBundleJson_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+open func getRegistrationBundleFields()throws  -> RegistrationBundleFields  {
+    return try  FfiConverterTypeRegistrationBundleFields_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_method_orchestratorcore_get_registration_bundle_fields(
             self.uniffiCloneHandle(),$0
     )
@@ -2950,6 +3100,65 @@ public func FfiConverterTypeEphemeralKeyPair_lower(_ value: EphemeralKeyPair) ->
 
 
 /**
+ * Configuration for creating or joining an MLS group.
+ */
+public struct GroupConfig: Equatable, Hashable {
+    public var signerPrivateKey: [UInt8]
+    public var signerPublicKey: [UInt8]
+    public var encryptedGroupContext: [UInt8]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(signerPrivateKey: [UInt8], signerPublicKey: [UInt8], encryptedGroupContext: [UInt8]) {
+        self.signerPrivateKey = signerPrivateKey
+        self.signerPublicKey = signerPublicKey
+        self.encryptedGroupContext = encryptedGroupContext
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension GroupConfig: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeGroupConfig: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> GroupConfig {
+        return
+            try GroupConfig(
+                signerPrivateKey: FfiConverterSequenceUInt8.read(from: &buf), 
+                signerPublicKey: FfiConverterSequenceUInt8.read(from: &buf), 
+                encryptedGroupContext: FfiConverterSequenceUInt8.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: GroupConfig, into buf: inout [UInt8]) {
+        FfiConverterSequenceUInt8.write(value.signerPrivateKey, into: &buf)
+        FfiConverterSequenceUInt8.write(value.signerPublicKey, into: &buf)
+        FfiConverterSequenceUInt8.write(value.encryptedGroupContext, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeGroupConfig_lift(_ buf: RustBuffer) throws -> GroupConfig {
+    return try FfiConverterTypeGroupConfig.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeGroupConfig_lower(_ value: GroupConfig) -> RustBuffer {
+    return FfiConverterTypeGroupConfig.lower(value)
+}
+
+
+/**
  * Packed result of `RustHealingQueue.record_attempt`.
  */
 public struct HealingAttemptResult: Equatable, Hashable {
@@ -3181,6 +3390,65 @@ public func FfiConverterTypeMLKEMKeyPair_lift(_ buf: RustBuffer) throws -> Mlkem
 #endif
 public func FfiConverterTypeMLKEMKeyPair_lower(_ value: MlkemKeyPair) -> RustBuffer {
     return FfiConverterTypeMLKEMKeyPair.lower(value)
+}
+
+
+/**
+ * Result of adding a member to an MLS group.
+ */
+public struct MemberAddition: Equatable, Hashable {
+    public var commit: [UInt8]
+    public var welcome: [UInt8]
+    public var leafIndex: UInt32
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(commit: [UInt8], welcome: [UInt8], leafIndex: UInt32) {
+        self.commit = commit
+        self.welcome = welcome
+        self.leafIndex = leafIndex
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension MemberAddition: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeMemberAddition: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> MemberAddition {
+        return
+            try MemberAddition(
+                commit: FfiConverterSequenceUInt8.read(from: &buf), 
+                welcome: FfiConverterSequenceUInt8.read(from: &buf), 
+                leafIndex: FfiConverterUInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: MemberAddition, into buf: inout [UInt8]) {
+        FfiConverterSequenceUInt8.write(value.commit, into: &buf)
+        FfiConverterSequenceUInt8.write(value.welcome, into: &buf)
+        FfiConverterUInt32.write(value.leafIndex, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMemberAddition_lift(_ buf: RustBuffer) throws -> MemberAddition {
+    return try FfiConverterTypeMemberAddition.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMemberAddition_lower(_ value: MemberAddition) -> RustBuffer {
+    return FfiConverterTypeMemberAddition.lower(value)
 }
 
 
@@ -3659,16 +3927,16 @@ public func FfiConverterTypeRecoveryKeypair_lower(_ value: RecoveryKeypair) -> R
 }
 
 
-public struct RegistrationBundleJson: Equatable, Hashable {
-    public var identityPublic: String
-    public var signedPrekeyPublic: String
-    public var signature: String
-    public var verifyingKey: String
+public struct RegistrationBundleFields: Equatable, Hashable {
+    public var identityPublic: [UInt8]
+    public var signedPrekeyPublic: [UInt8]
+    public var signature: [UInt8]
+    public var verifyingKey: [UInt8]
     public var suiteId: String
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(identityPublic: String, signedPrekeyPublic: String, signature: String, verifyingKey: String, suiteId: String) {
+    public init(identityPublic: [UInt8], signedPrekeyPublic: [UInt8], signature: [UInt8], verifyingKey: [UInt8], suiteId: String) {
         self.identityPublic = identityPublic
         self.signedPrekeyPublic = signedPrekeyPublic
         self.signature = signature
@@ -3680,29 +3948,29 @@ public struct RegistrationBundleJson: Equatable, Hashable {
 }
 
 #if compiler(>=6)
-extension RegistrationBundleJson: Sendable {}
+extension RegistrationBundleFields: Sendable {}
 #endif
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public struct FfiConverterTypeRegistrationBundleJson: FfiConverterRustBuffer {
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RegistrationBundleJson {
+public struct FfiConverterTypeRegistrationBundleFields: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RegistrationBundleFields {
         return
-            try RegistrationBundleJson(
-                identityPublic: FfiConverterString.read(from: &buf), 
-                signedPrekeyPublic: FfiConverterString.read(from: &buf), 
-                signature: FfiConverterString.read(from: &buf), 
-                verifyingKey: FfiConverterString.read(from: &buf), 
+            try RegistrationBundleFields(
+                identityPublic: FfiConverterSequenceUInt8.read(from: &buf), 
+                signedPrekeyPublic: FfiConverterSequenceUInt8.read(from: &buf), 
+                signature: FfiConverterSequenceUInt8.read(from: &buf), 
+                verifyingKey: FfiConverterSequenceUInt8.read(from: &buf), 
                 suiteId: FfiConverterString.read(from: &buf)
         )
     }
 
-    public static func write(_ value: RegistrationBundleJson, into buf: inout [UInt8]) {
-        FfiConverterString.write(value.identityPublic, into: &buf)
-        FfiConverterString.write(value.signedPrekeyPublic, into: &buf)
-        FfiConverterString.write(value.signature, into: &buf)
-        FfiConverterString.write(value.verifyingKey, into: &buf)
+    public static func write(_ value: RegistrationBundleFields, into buf: inout [UInt8]) {
+        FfiConverterSequenceUInt8.write(value.identityPublic, into: &buf)
+        FfiConverterSequenceUInt8.write(value.signedPrekeyPublic, into: &buf)
+        FfiConverterSequenceUInt8.write(value.signature, into: &buf)
+        FfiConverterSequenceUInt8.write(value.verifyingKey, into: &buf)
         FfiConverterString.write(value.suiteId, into: &buf)
     }
 }
@@ -3711,15 +3979,15 @@ public struct FfiConverterTypeRegistrationBundleJson: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeRegistrationBundleJson_lift(_ buf: RustBuffer) throws -> RegistrationBundleJson {
-    return try FfiConverterTypeRegistrationBundleJson.lift(buf)
+public func FfiConverterTypeRegistrationBundleFields_lift(_ buf: RustBuffer) throws -> RegistrationBundleFields {
+    return try FfiConverterTypeRegistrationBundleFields.lift(buf)
 }
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeRegistrationBundleJson_lower(_ value: RegistrationBundleJson) -> RustBuffer {
-    return FfiConverterTypeRegistrationBundleJson.lower(value)
+public func FfiConverterTypeRegistrationBundleFields_lower(_ value: RegistrationBundleFields) -> RustBuffer {
+    return FfiConverterTypeRegistrationBundleFields.lower(value)
 }
 
 
@@ -4843,6 +5111,129 @@ public func FfiConverterTypeCryptoError_lift(_ buf: RustBuffer) throws -> Crypto
 #endif
 public func FfiConverterTypeCryptoError_lower(_ value: CryptoError) -> RustBuffer {
     return FfiConverterTypeCryptoError.lower(value)
+}
+
+
+/**
+ * Errors that can occur during MLS group operations.
+ */
+public enum MlsError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError {
+
+    
+    
+    case CryptoError(message: String)
+    
+    case EpochMismatch(message: String)
+    
+    case NotAMember(message: String)
+    
+    case SerializationError(message: String)
+    
+    case WelcomeError(message: String)
+    
+    case CommitError(message: String)
+    
+    case EncryptionError(message: String)
+    
+
+    
+
+    
+    public var errorDescription: String? {
+        String(reflecting: self)
+    }
+    
+}
+
+#if compiler(>=6)
+extension MlsError: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeMlsError: FfiConverterRustBuffer {
+    typealias SwiftType = MlsError
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> MlsError {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        
+
+        
+        case 1: return .CryptoError(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 2: return .EpochMismatch(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 3: return .NotAMember(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 4: return .SerializationError(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 5: return .WelcomeError(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 6: return .CommitError(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 7: return .EncryptionError(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: MlsError, into buf: inout [UInt8]) {
+        switch value {
+
+        
+
+        
+        case .CryptoError(_ /* message is ignored*/):
+            writeInt(&buf, Int32(1))
+        case .EpochMismatch(_ /* message is ignored*/):
+            writeInt(&buf, Int32(2))
+        case .NotAMember(_ /* message is ignored*/):
+            writeInt(&buf, Int32(3))
+        case .SerializationError(_ /* message is ignored*/):
+            writeInt(&buf, Int32(4))
+        case .WelcomeError(_ /* message is ignored*/):
+            writeInt(&buf, Int32(5))
+        case .CommitError(_ /* message is ignored*/):
+            writeInt(&buf, Int32(6))
+        case .EncryptionError(_ /* message is ignored*/):
+            writeInt(&buf, Int32(7))
+
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMlsError_lift(_ buf: RustBuffer) throws -> MlsError {
+    return try FfiConverterTypeMlsError.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMlsError_lower(_ value: MlsError) -> RustBuffer {
+    return FfiConverterTypeMlsError.lower(value)
 }
 
 
@@ -6031,7 +6422,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_classiccryptocore_get_identity_key_bytes() != 8726) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_classiccryptocore_get_registration_bundle_fields() != 57911) {
+    if (uniffi_construct_core_checksum_method_classiccryptocore_get_registration_bundle_fields() != 798) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_classiccryptocore_get_session_health() != 64984) {
@@ -6071,6 +6462,12 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_classiccryptocore_sign_bundle_data() != 22123) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_mlsgroup_epoch() != 38711) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_mlsgroup_member_count() != 35958) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_ack_is_processed() != 63134) {
@@ -6115,7 +6512,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_orchestratorcore_get_identity_key_bytes() != 23135) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_get_registration_bundle_fields() != 23586) {
+    if (uniffi_construct_core_checksum_method_orchestratorcore_get_registration_bundle_fields() != 16675) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_get_session_health() != 34835) {
@@ -6245,6 +6642,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_trafficprotectionmanager_update_battery_level() != 31087) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_constructor_mlsgroup_new() != 43378) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_constructor_rustackstore_new() != 64675) {

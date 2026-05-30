@@ -207,10 +207,10 @@ final class AccountRecoveryViewModel {
                 try CryptoManager.shared.generateRegistrationBundle()
 
             var publicKeys = Shared_Proto_Services_V1_DevicePublicKeys()
-            publicKeys.verifyingKey = Data(base64Encoded: bundle.verifyingKey) ?? Data()
-            publicKeys.identityPublic = Data(base64Encoded: bundle.identityPublic) ?? Data()
-            publicKeys.signedPrekeyPublic = Data(base64Encoded: bundle.signedPrekeyPublic) ?? Data()
-            publicKeys.signedPrekeySignature = Data(base64Encoded: bundle.signature) ?? Data()
+            publicKeys.verifyingKey = Data(bundle.verifyingKey)
+            publicKeys.identityPublic = Data(bundle.identityPublic)
+            publicKeys.signedPrekeyPublic = Data(bundle.signedPrekeyPublic)
+            publicKeys.signedPrekeySignature = Data(bundle.signature)
             publicKeys.cryptoSuite = "Curve25519+Ed25519"
 
             // 4. Call RecoverAccount (no auth header)

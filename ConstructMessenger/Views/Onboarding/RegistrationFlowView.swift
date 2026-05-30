@@ -208,7 +208,7 @@ struct RegistrationFlowView: View {
     @State private var difficulty: UInt32 = 6
 
     // Generated keys
-    @State private var registrationBundle: RegistrationBundleJson? = nil
+    @State private var registrationBundle: RegistrationBundleFields? = nil
     @State private var signingKey: Data = Data()
     @State private var identityKey: Data = Data()
 
@@ -272,7 +272,8 @@ struct RegistrationFlowView: View {
                 identityKey = identityKeyData
 
                 Log.info("Generated keys: device_id=\(generatedDeviceId)", category: "Registration")
-                Log.info("Registration bundle verifying_key: \(bundle.verifyingKey)", category: "Registration")
+                let verifyingKeyB64 = Data(bundle.verifyingKey).base64EncodedString()
+                Log.info("Registration bundle verifying_key: \(verifyingKeyB64)", category: "Registration")
 
                 do {
                     let derivedVerifyingKey = try deriveVerifyingKeyFromSecret(identitySecretKey: [UInt8](signingKeyData))
@@ -327,8 +328,8 @@ struct RegistrationFlowView: View {
             let registerData = try await AuthServiceClient.shared.registerDevice(
                 username: username,
                 deviceId: deviceId,
-                registrationBundle: registrationBundle ?? RegistrationBundleJson(
-                    identityPublic: "", signedPrekeyPublic: "", signature: "", verifyingKey: "", suiteId: ""
+                registrationBundle: registrationBundle ?? RegistrationBundleFields(
+                    identityPublic: [], signedPrekeyPublic: [], signature: [], verifyingKey: [], suiteId: ""
                 ),
                 challenge: challenge,
                 powSolution: solution
@@ -480,23 +481,23 @@ struct RegistrationFlowView: View {
 // Delegates to PendingRegistrationStore — public-key-only data stored in UserDefaults.
 
 private extension RegistrationFlowView {
-    static func saveBundle(_ bundle: RegistrationBundleJson) {
+    static func saveBundle(_ bundle: RegistrationBundleFields) {
         PendingRegistrationStore.save(
-            identityPublic: bundle.identityPublic,
-            signedPrekeyPublic: bundle.signedPrekeyPublic,
-            signature: bundle.signature,
-            verifyingKey: bundle.verifyingKey,
+            identityPublic: Data(bundle.identityPublic),
+            signedPrekeyPublic: Data(bundle.signedPrekeyPublic),
+            signature: Data(bundle.signature),
+            verifyingKey: Data(bundle.verifyingKey),
             suiteId: bundle.suiteId
         )
     }
 
-    static func loadSavedBundle() -> RegistrationBundleJson? {
+    static func loadSavedBundle() -> RegistrationBundleFields? {
         guard let t = PendingRegistrationStore.load() else { return nil }
-        return RegistrationBundleJson(
-            identityPublic: t.identityPublic,
-            signedPrekeyPublic: t.signedPrekeyPublic,
-            signature: t.signature,
-            verifyingKey: t.verifyingKey,
+        return RegistrationBundleFields(
+            identityPublic: [UInt8](t.identityPublic),
+            signedPrekeyPublic: [UInt8](t.signedPrekeyPublic),
+            signature: [UInt8](t.signature),
+            verifyingKey: [UInt8](t.verifyingKey),
             suiteId: t.suiteId
         )
     }
