@@ -3932,11 +3932,11 @@ public struct RegistrationBundleFields: Equatable, Hashable {
     public var signedPrekeyPublic: [UInt8]
     public var signature: [UInt8]
     public var verifyingKey: [UInt8]
-    public var suiteId: String
+    public var suiteId: UInt16
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(identityPublic: [UInt8], signedPrekeyPublic: [UInt8], signature: [UInt8], verifyingKey: [UInt8], suiteId: String) {
+    public init(identityPublic: [UInt8], signedPrekeyPublic: [UInt8], signature: [UInt8], verifyingKey: [UInt8], suiteId: UInt16) {
         self.identityPublic = identityPublic
         self.signedPrekeyPublic = signedPrekeyPublic
         self.signature = signature
@@ -3962,7 +3962,7 @@ public struct FfiConverterTypeRegistrationBundleFields: FfiConverterRustBuffer {
                 signedPrekeyPublic: FfiConverterSequenceUInt8.read(from: &buf), 
                 signature: FfiConverterSequenceUInt8.read(from: &buf), 
                 verifyingKey: FfiConverterSequenceUInt8.read(from: &buf), 
-                suiteId: FfiConverterString.read(from: &buf)
+                suiteId: FfiConverterUInt16.read(from: &buf)
         )
     }
 
@@ -3971,7 +3971,7 @@ public struct FfiConverterTypeRegistrationBundleFields: FfiConverterRustBuffer {
         FfiConverterSequenceUInt8.write(value.signedPrekeyPublic, into: &buf)
         FfiConverterSequenceUInt8.write(value.signature, into: &buf)
         FfiConverterSequenceUInt8.write(value.verifyingKey, into: &buf)
-        FfiConverterString.write(value.suiteId, into: &buf)
+        FfiConverterUInt16.write(value.suiteId, into: &buf)
     }
 }
 

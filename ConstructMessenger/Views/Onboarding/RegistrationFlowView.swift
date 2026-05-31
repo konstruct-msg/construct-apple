@@ -329,7 +329,7 @@ struct RegistrationFlowView: View {
                 username: username,
                 deviceId: deviceId,
                 registrationBundle: registrationBundle ?? RegistrationBundleFields(
-                    identityPublic: [], signedPrekeyPublic: [], signature: [], verifyingKey: [], suiteId: ""
+                    identityPublic: [], signedPrekeyPublic: [], signature: [], verifyingKey: [], suiteId: 0
                 ),
                 challenge: challenge,
                 powSolution: solution

@@ -126,15 +126,6 @@ struct PublicUserInfo: Codable, Identifiable {
     var deviceId: String?    // Set when known (e.g. from Dynamic Invite)
 }
 
-// MARK: - Key Bundles
-struct RegistrationBundle: Codable {
-    let identityPublic: Data
-    let signedPrekeyPublic: Data
-    let signature: Data
-    let verifyingKey: Data
-    let suiteId: String
-}
-
 struct SignedPrekeyUpdate: Codable {
     let newPrekeyPublic: String
     let signature: String

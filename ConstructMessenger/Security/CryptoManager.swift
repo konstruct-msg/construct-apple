@@ -76,7 +76,6 @@ class CryptoManager {
     let archiveManager = SessionArchiveManager()
     private let messageCrypto = MessageCryptoService()
     private let sessionInitService = CryptoSessionInitializationService()
-    private let registrationBundleService = RegistrationBundleService()
     let sessionRestoreService = SessionRestoreService()
     
     // MARK: - Prekey ID Tracking

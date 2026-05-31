@@ -27,25 +27,26 @@ enum PendingRegistrationStore {
         signedPrekeyPublic: Data,
         signature: Data,
         verifyingKey: Data,
-        suiteId: String
+        suiteId: UInt16
     ) {
         let dict: [String: Any] = [
             "identityPublic": identityPublic,
             "signedPrekeyPublic": signedPrekeyPublic,
             "signature": signature,
             "verifyingKey": verifyingKey,
-            "suiteId": suiteId
+            "suiteId": Int(suiteId)
         ]
         UserDefaults.standard.set(dict, forKey: key)
     }
 
-    static func load() -> (identityPublic: Data, signedPrekeyPublic: Data, signature: Data, verifyingKey: Data, suiteId: String)? {
+    static func load() -> (identityPublic: Data, signedPrekeyPublic: Data, signature: Data, verifyingKey: Data, suiteId: UInt16)? {
         guard let dict = UserDefaults.standard.dictionary(forKey: key),
               let ip = dict["identityPublic"] as? Data,
               let spk = dict["signedPrekeyPublic"] as? Data,
               let sig = dict["signature"] as? Data,
               let vk = dict["verifyingKey"] as? Data,
-              let sid = dict["suiteId"] as? String else { return nil }
+              let sidInt = dict["suiteId"] as? Int,
+              let sid = UInt16(exactly: sidInt) else { return nil }
         return (ip, spk, sig, vk, sid)
     }
 
