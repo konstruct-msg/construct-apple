@@ -11,7 +11,7 @@ import Foundation
 
 // MARK: - Proxy effector
 
-/// Drives the local ICE proxy on behalf of the FSM. Owns relay selection and the
+/// Drives the local VEIL proxy on behalf of the FSM. Owns relay selection and the
 /// VeilProxy actor; the router only knows "start" and "stop".
 protocol ProxyEffector: Sendable {
     /// Bring up the proxy for the best currently-available relay.
@@ -33,8 +33,8 @@ protocol ChannelEffector: Sendable {
     /// Force the persistent gRPC client to be re-created on the next RPC.
     func invalidateClient() async
 
-    /// Configure the local ICE proxy port (nil to clear / use direct).
-    func setIcePort(_ port: UInt16?) async
+    /// Configure the local VEIL proxy port (nil to clear / use direct).
+    func setVeilPort(_ port: UInt16?) async
 }
 
 // MARK: - UI effector

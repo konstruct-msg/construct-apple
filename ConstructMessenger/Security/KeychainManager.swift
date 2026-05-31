@@ -283,26 +283,26 @@ class KeychainManager {
         delete(forKey: APIConstants.customServerURLKey)
     }
 
-    // MARK: - ICE Bridge Cert
+    // MARK: - VEIL Bridge Cert
 
-    private let iceBridgeCertKey = "ice_bridge_cert"
+    private let veilBridgeCertKey = "veil_bridge_cert"
 
-    /// Save the ICE bridge cert (obfs4 server identity) to Keychain.
+    /// Save the VEIL bridge cert (obfs4 server identity) to Keychain.
     /// Stored with `AfterFirstUnlock` so it survives device restarts.
-    func saveIceBridgeCert(_ cert: String) {
+    func saveVEILBridgeCert(_ cert: String) {
         guard let data = cert.data(using: .utf8) else { return }
-        let ok = save(data, forKey: iceBridgeCertKey, accessible: kSecAttrAccessibleAfterFirstUnlock)
-        if !ok { Log.error("Failed to save ICE bridge cert to Keychain", category: "Keychain") }
+        let ok = save(data, forKey: veilBridgeCertKey, accessible: kSecAttrAccessibleAfterFirstUnlock)
+        if !ok { Log.error("Failed to save VEIL bridge cert to Keychain", category: "Keychain") }
     }
 
-    /// Load the ICE bridge cert from Keychain. Returns nil if not yet stored.
-    func loadIceBridgeCert() -> String? {
-        guard let data = load(forKey: iceBridgeCertKey) else { return nil }
+    /// Load the VEIL bridge cert from Keychain. Returns nil if not yet stored.
+    func loadVEILBridgeCert() -> String? {
+        guard let data = load(forKey: veilBridgeCertKey) else { return nil }
         return String(data: data, encoding: .utf8)
     }
 
-    func deleteIceBridgeCert() {
-        delete(forKey: iceBridgeCertKey)
+    func deleteVEILBridgeCert() {
+        delete(forKey: veilBridgeCertKey)
     }
     
     func deleteAllKeys() {
@@ -352,21 +352,16 @@ class KeychainManager {
 
     // MARK: - Session Persistence
 
-    /// Save a session JSON string for a specific contact
-    /// - Parameters:
-    ///   - sessionJson: JSON string of the serialized session
-    ///   - contactId: The contact/user ID this session belongs to
-    /// - Returns: true if saved successfully
-    /// Save session in CFE binary format.
+    /// Persist a Double Ratchet session as CFE binary bytes for `contactId`.
+    /// `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` so push-driven decrypt
+    /// works while the screen is locked.
     @discardableResult
     func saveSessionData(_ data: Data, for contactId: String) -> Bool {
         let key = "session_\(contactId)"
-        // AfterFirstUnlockThisDeviceOnly: accessible in background after first unlock
-        // (needed so incoming push notifications can decrypt messages while screen is locked).
         return save(data, forKey: key, accessible: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly)
     }
 
-    /// Load raw session bytes (CFE or legacy JSON).
+    /// Load the CFE session bytes previously written by `saveSessionData`.
     func loadSessionData(for contactId: String) -> Data? {
         let key = "session_\(contactId)"
         return load(forKey: key)

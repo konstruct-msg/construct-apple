@@ -168,7 +168,6 @@ extension CryptoManager {
         let latest = archives[idx]
         do {
             let suiteIdBefore = KeychainManager.shared.loadSessionSuiteId(userId: userId) ?? 0
-            // importSession handles both CFE binary (new archives) and legacy JSON (old archives).
             _ = try core.importSession(contactId: userId, data: [UInt8](latest.sessionData))
             // Use typed accessor — no JSON round-trip needed.
             let suiteId = core.getSessionSuiteId(contactId: userId)

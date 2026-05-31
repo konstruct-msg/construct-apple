@@ -34,10 +34,10 @@ enum TransportReducer {
             return reduceManualReset(state: state)
 
         case .veilModeChanged(let mode, let censored):
-            return reduceIceModeChanged(state: state, mode: mode, censored: censored)
+            return reduceVEILModeChanged(state: state, mode: mode, censored: censored)
 
         case .veilConfigChanged:
-            return reduceIceConfigChanged(state: state)
+            return reduceVEILConfigChanged(state: state)
 
         default:
             break
@@ -70,20 +70,20 @@ enum TransportReducer {
 
     private static func reduceNetworkPathChanged(reachable: Bool, censored: Bool, mode: VeilMode) -> Outcome {
         guard reachable else {
-            return (.offline, [.requestProxyStop, .setIcePort(nil), .invalidateGRPCClient])
+            return (.offline, [.requestProxyStop, .setVeilPort(nil), .invalidateGRPCClient])
         }
         // New path → recompute the starting state from current inputs, then tear down
-        // everything stale and (if needed) kick a fresh ICE probe.
+        // everything stale and (if needed) kick a fresh VEIL probe.
         let initial = TransportState.initial(mode: mode, censored: censored, reachable: true)
-        var effects: [TransportEffect] = [.requestProxyStop, .setIcePort(nil), .invalidateGRPCClient]
+        var effects: [TransportEffect] = [.requestProxyStop, .setVeilPort(nil), .invalidateGRPCClient]
         if case .veilProbing = initial { effects.append(.requestProxyStart) }
         return (initial, effects)
     }
 
-    private static func reduceIceConfigChanged(state: TransportState) -> Outcome {
+    private static func reduceVEILConfigChanged(state: TransportState) -> Outcome {
         switch state {
         case .veilActive, .veilDegraded:
-            // Active ICE — drop the current proxy and probe again with the new config.
+            // Active VEIL — drop the current proxy and probe again with the new config.
             return rotateRelay()
         case .veilProbing:
             // Already probing; let the in-flight start finish, then natural cycle picks new config.
@@ -98,28 +98,34 @@ enum TransportReducer {
         guard state != .direct(consecutiveFails: 0) else {
             return (state, [.invalidateGRPCClient])
         }
-        return (.direct(consecutiveFails: 0), [.requestProxyStop, .setIcePort(nil), .invalidateGRPCClient])
+        return (.direct(consecutiveFails: 0), [.requestProxyStop, .setVeilPort(nil), .invalidateGRPCClient])
     }
 
-    private static func reduceIceModeChanged(state: TransportState, mode: VeilMode, censored: Bool) -> Outcome {
+    private static func reduceVEILModeChanged(state: TransportState, mode: VeilMode, censored: Bool) -> Outcome {
+        // While offline (no network route) mode changes have no useful effect: any
+        // transport attempt will fail-fast on DNS, burning the direct + probe budget
+        // and dumping us into a 30s cooldown for nothing. Stay in .offline; the
+        // current mode is reapplied via reduceNetworkPathChanged when reachability
+        // returns and TransportState.initial is recomputed.
+        if case .offline = state {
+            return (state, [])
+        }
         switch mode {
         case .off:
-            return (.direct(consecutiveFails: 0), [.requestProxyStop, .setIcePort(nil), .invalidateGRPCClient])
+            return (.direct(consecutiveFails: 0), [.requestProxyStop, .setVeilPort(nil), .invalidateGRPCClient])
         case .on:
             switch state {
             case .veilActive, .veilDegraded, .veilProbing:
-                return (state, [])
-            case .offline:
                 return (state, [])
             default:
                 return (.veilProbing(attempt: 1), [.requestProxyStart])
             }
         case .auto:
             // On a censored network the user toggling to .auto is an explicit request for
-            // ICE protection. Otherwise .auto means "stay on direct, escalate on failures."
+            // VEIL protection. Otherwise .auto means "stay on direct, escalate on failures."
             if censored {
                 switch state {
-                case .veilActive, .veilDegraded, .veilProbing, .offline:
+                case .veilActive, .veilDegraded, .veilProbing:
                     return (state, [])
                 default:
                     return (.veilProbing(attempt: 1), [.requestProxyStart])
@@ -138,7 +144,7 @@ enum TransportReducer {
 
         case .rpcFailed(let kind, let via, let foreground):
             // Only count foreground transport failures over the direct path.
-            guard foreground, !via.isICE, kind.isTransportFailure else {
+            guard foreground, !via.isVEIL, kind.isTransportFailure else {
                 return (.direct(consecutiveFails: fails), [])
             }
             let newFails = fails + 1
@@ -148,8 +154,8 @@ enum TransportReducer {
             return (.direct(consecutiveFails: newFails), [])
 
         case .proxyStarted(let relay, let port, let restarted):
-            // Defensive: someone started ICE while we thought we were direct. Adopt it.
-            var effects: [TransportEffect] = [.setIcePort(port)]
+            // Defensive: someone started VEIL while we thought we were direct. Adopt it.
+            var effects: [TransportEffect] = [.setVeilPort(port)]
             if restarted { effects.append(.invalidateGRPCClient) }
             return (.veilActive(relay: relay, port: port, since: now), effects)
 
@@ -161,7 +167,7 @@ enum TransportReducer {
     private static func reduceProbing(attempt: Int, event: TransportEvent, config: TransportConfig, now: Date) -> Outcome {
         switch event {
         case .proxyStarted(let relay, let port, let restarted):
-            var effects: [TransportEffect] = [.setIcePort(port)]
+            var effects: [TransportEffect] = [.setVeilPort(port)]
             if restarted { effects.append(.invalidateGRPCClient) }
             return (.veilActive(relay: relay, port: port, since: now), effects)
 
@@ -169,7 +175,7 @@ enum TransportReducer {
             let nextAttempt = attempt + 1
             if nextAttempt > config.maxProbeAttempts {
                 let until = now.addingTimeInterval(config.veilCooldownDuration)
-                return (.veilCooldown(until: until), [.setIcePort(nil), .scheduleCooldownEnd(at: until)])
+                return (.veilCooldown(until: until), [.setVeilPort(nil), .scheduleCooldownEnd(at: until)])
             }
             return (.veilProbing(attempt: nextAttempt), [.requestProxyStart])
 
@@ -185,7 +191,7 @@ enum TransportReducer {
             return (.veilActive(relay: relay, port: port, since: since), [])
 
         case .rpcFailed(let kind, let via, let foreground):
-            guard foreground, via.isICE, kind.isTransportFailure else {
+            guard foreground, via.isVEIL, kind.isTransportFailure else {
                 return (.veilActive(relay: relay, port: port, since: since), [])
             }
             // Hard relay failures (observable DPI block, cert expiry, dead local proxy):
@@ -212,7 +218,7 @@ enum TransportReducer {
             return (.veilActive(relay: relay, port: port, since: now), [])
 
         case .rpcFailed(let kind, let via, let foreground):
-            guard foreground, via.isICE, kind.isTransportFailure else {
+            guard foreground, via.isVEIL, kind.isTransportFailure else {
                 return (.veilDegraded(relay: relay, port: port, consecutiveFails: fails), [])
             }
             if isHardRelayFailure(kind) {
@@ -247,7 +253,7 @@ enum TransportReducer {
     /// Effects for "stop current proxy, drop port + grpc client, start a fresh probe."
     private static func rotateRelay() -> Outcome {
         return (.veilProbing(attempt: 1),
-                [.requestProxyStop, .setIcePort(nil), .requestProxyStart, .invalidateGRPCClient])
+                [.requestProxyStop, .setVeilPort(nil), .requestProxyStart, .invalidateGRPCClient])
     }
 
     private static func reduceCooldown(until: Date, event: TransportEvent, config: TransportConfig, now: Date) -> Outcome {
@@ -268,15 +274,15 @@ extension TransportEvent {
     var shortLabel: String {
         switch self {
         case .rpcSucceeded(let via, let ms):
-            return "rpc-ok(via=\(via.isICE ? "ice" : "direct"), \(ms)ms)"
+            return "rpc-ok(via=\(via.isVEIL ? "veil" : "direct"), \(ms)ms)"
         case .rpcFailed(let kind, let via, let fg):
-            return "rpc-fail(kind=\(kind), via=\(via.isICE ? "ice" : "direct"), fg=\(fg))"
+            return "rpc-fail(kind=\(kind), via=\(via.isVEIL ? "veil" : "direct"), fg=\(fg))"
         case .networkPathChanged(let r, let c, let m):
             return "network-path(reachable=\(r), censored=\(c), mode=\(m.rawValue))"
         case .veilModeChanged(let m, let c):
-            return "ice-mode(\(m.rawValue)\(c ? ",censored" : ""))"
+            return "veil-mode(\(m.rawValue)\(c ? ",censored" : ""))"
         case .veilConfigChanged:
-            return "ice-config-changed"
+            return "veil-config-changed"
         case .proxyStarted(let r, let p, let restarted):
             return "proxy-started(\(r):\(p)\(restarted ? ",new" : ",reuse"))"
         case .proxyStartFailed(let r, let why):
@@ -294,7 +300,7 @@ extension TransportEffect {
     var shortLabel: String {
         switch self {
         case .invalidateGRPCClient:           return "invalidate-grpc"
-        case .setIcePort(let p):              return "set-ice-port(\(p.map(String.init) ?? "nil"))"
+        case .setVeilPort(let p):              return "set-veil-port(\(p.map(String.init) ?? "nil"))"
         case .requestProxyStart:              return "start-proxy"
         case .requestProxyStop:               return "stop-proxy"
         case .scheduleCooldownEnd(let d):     return "schedule-cooldown(\(Int(d.timeIntervalSinceNow))s)"

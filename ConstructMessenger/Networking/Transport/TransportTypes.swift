@@ -8,7 +8,7 @@
 //  • All transport decisions are expressed as transitions of a single FSM.
 //  • The reducer is a pure function (state, event, config, now) -> (state, [Effect]).
 //  • All types are Sendable so the FSM can be driven from an actor without ceremony.
-//  • No reference to gRPC, ICE proxy, or any specific I/O — that lives in effectors.
+//  • No reference to gRPC, VEIL proxy, or any specific I/O — that lives in effectors.
 //
 
 import Foundation
@@ -17,14 +17,14 @@ import Foundation
 
 /// What transport the next RPC should go through.
 ///
-/// `ice` always implies a local proxy listening at `127.0.0.1:port` that forwards
+/// `veil` always implies a local proxy listening at `127.0.0.1:port` that forwards
 /// to the named relay. `direct` is a TLS handshake straight to the configured server.
 enum TransportTarget: Equatable, Sendable {
     case direct(DirectProtocol)
-    case ice(port: UInt16, relay: String)
+    case veil(port: UInt16, relay: String)
 
-    var isICE: Bool {
-        if case .ice = self { return true }
+    var isVEIL: Bool {
+        if case .veil = self { return true }
         return false
     }
 }
@@ -49,22 +49,22 @@ enum TransportState: Equatable, Sendable {
     /// transitions to `veilProbing`.
     case direct(consecutiveFails: Int)
 
-    /// Asking the proxy effector to bring up an ICE relay. `attempt` is the 1-based
+    /// Asking the proxy effector to bring up an VEIL relay. `attempt` is the 1-based
     /// attempt number within the current probing session; on `maxProbeAttempts` we
     /// give up and enter `veilCooldown`.
     case veilProbing(attempt: Int)
 
-    /// ICE proxy is running and has served at least one transport event without failure.
+    /// VEIL proxy is running and has served at least one transport event without failure.
     case veilActive(relay: String, port: UInt16, since: Date)
 
-    /// ICE proxy is running but recent traffic has failed. After
+    /// VEIL proxy is running but recent traffic has failed. After
     /// `veilDegradedFailThreshold` consecutive failures we rotate via `veilProbing`.
     case veilDegraded(relay: String, port: UInt16, consecutiveFails: Int)
 
     /// All probing attempts failed; suspended until `until`. Then we drop back to direct.
     case veilCooldown(until: Date)
 
-    /// Whether the next outgoing RPC should use the ICE proxy.
+    /// Whether the next outgoing RPC should use the VEIL proxy.
     var prefersVEIL: Bool {
         switch self {
         case .veilProbing, .veilActive, .veilDegraded:
@@ -84,7 +84,7 @@ enum TransportState: Equatable, Sendable {
         }
     }
 
-    /// The current ICE proxy port, if any (nil when no proxy is running).
+    /// The current VEIL proxy port, if any (nil when no proxy is running).
     var veilPort: UInt16? {
         switch self {
         case .veilActive(_, let p, _), .veilDegraded(_, let p, _):
@@ -99,10 +99,10 @@ enum TransportState: Equatable, Sendable {
         switch self {
         case .offline:                              return "offline"
         case .direct(let f):                        return "direct(fails=\(f))"
-        case .veilProbing(let a):                    return "ice-probing(attempt=\(a))"
-        case .veilActive(let r, _, _):               return "ice-active(\(r))"
-        case .veilDegraded(let r, _, let f):         return "ice-degraded(\(r), fails=\(f))"
-        case .veilCooldown(let until):               return "ice-cooldown(until=\(Int(until.timeIntervalSinceNow))s)"
+        case .veilProbing(let a):                    return "veil-probing(attempt=\(a))"
+        case .veilActive(let r, _, _):               return "veil-active(\(r))"
+        case .veilDegraded(let r, _, let f):         return "veil-degraded(\(r), fails=\(f))"
+        case .veilCooldown(let until):               return "veil-cooldown(until=\(Int(until.timeIntervalSinceNow))s)"
         }
     }
 }
@@ -127,7 +127,7 @@ enum RPCFailureKind: Sendable, Equatable {
     case tlsCertExpired
     /// WebTunnel relay returned a decoy 404 / non-101 — transparent proxy interfering.
     case webTunnelBlocked
-    /// ECONNREFUSED on the local ICE proxy — Rust process is dead.
+    /// ECONNREFUSED on the local VEIL proxy — Rust process is dead.
     case staleLocalProxy
     /// gRPC deadline exceeded.
     case streamTimeout
@@ -162,12 +162,12 @@ enum TransportEvent: Sendable, Equatable {
     /// starting state — keeps the reducer pure.
     case networkPathChanged(reachable: Bool, censored: Bool, mode: VeilMode)
 
-    /// User toggled ICE mode in settings.
+    /// User toggled VEIL mode in settings.
     /// `censored` carries the current detector reading so the reducer can decide
-    /// whether `.auto` should activate ICE immediately (true) or wait for failures (false).
+    /// whether `.auto` should activate VEIL immediately (true) or wait for failures (false).
     case veilModeChanged(VeilMode, censored: Bool)
 
-    /// Server-pushed cert or relay manifest changed; force ICE to restart if active.
+    /// Server-pushed cert or relay manifest changed; force VEIL to restart if active.
     /// No-op when on the direct path.
     case veilConfigChanged
 
@@ -192,8 +192,8 @@ enum TransportEffect: Equatable, Sendable {
     /// Drop the persistent gRPC client; the next RPC will create a fresh one.
     case invalidateGRPCClient
 
-    /// Set (or clear, when nil) the local ICE proxy port that gRPC routes to.
-    case setIcePort(UInt16?)
+    /// Set (or clear, when nil) the local VEIL proxy port that gRPC routes to.
+    case setVeilPort(UInt16?)
 
     /// Ask the proxy effector to select a relay and start the proxy. The effector
     /// will eventually post `proxyStarted` or `proxyStartFailed` back to the router.
@@ -211,10 +211,10 @@ enum TransportEffect: Equatable, Sendable {
 /// Thresholds and constants used by the reducer. Held by the router and passed to the
 /// reducer on every call so they're trivially overridable in tests.
 struct TransportConfig: Sendable, Equatable {
-    /// Direct-path transport failures before we escalate to ICE.
+    /// Direct-path transport failures before we escalate to VEIL.
     var directFailThreshold: Int = 2
 
-    /// ICE-path transport failures on the same relay before we rotate.
+    /// VEIL-path transport failures on the same relay before we rotate.
     var veilDegradedFailThreshold: Int = 2
 
     /// How many relays to try before falling into cooldown.

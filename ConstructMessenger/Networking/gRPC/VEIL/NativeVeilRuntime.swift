@@ -29,6 +29,17 @@ final class NativeVeilRuntime: VeilProxyRuntime {
         let hostHeader = relay.wtHostHeader ?? ""
         let wtPath     = relay.wtPath ?? ""
 
+        // Diagnose veil_start=-1 failures by logging what we hand to Rust.
+        // Empty bundle/SPKI/SNI are the most common causes of fail-before-network
+        // (Rust returns -1 without ever attempting TCP).
+        Log.info(
+            "VEIL FFI start → addr='\(address)' " +
+            "bundle.len=\(bundle.count) sni='\(sni)' " +
+            "spki.len=\(spki.count) hostHeader='\(hostHeader)' wtPath='\(wtPath)' " +
+            "fingerprint.len=\(fingerprint.count) scoresPath=\(scoresPath ?? "nil")",
+            category: "VEIL"
+        )
+
         var out = VeilStartResult(port: 0, method: 0, latency_ms: 0)
         let rc = address.withCString { addrPtr in
             bundle.withCString { bundlePtr in

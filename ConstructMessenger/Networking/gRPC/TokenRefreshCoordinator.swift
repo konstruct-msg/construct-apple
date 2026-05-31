@@ -25,7 +25,7 @@ actor TokenRefreshCoordinator {
         }
     }
 
-    private var inFlight: Task<Void, Error>?
+    private var inFlight: Task<Bool, Error>?
     // Set when the server permanently rejects the token (revoked / already used).
     // Prevents redundant network requests from concurrent callers after the first rejection.
     // Cleared by resetInvalidation() when new tokens are saved via device re-auth.
@@ -41,17 +41,22 @@ actor TokenRefreshCoordinator {
     func refreshIfPossible() async throws -> Bool {
         if permanentlyInvalid { return false }
 
+        // Join an in-flight refresh if one is already running. The task is shared
+        // by all concurrent callers so each gets the same success/failure outcome.
         if let inFlight {
-            try await inFlight.value
-            return await MainActor.run { AuthSessionManager.shared.sessionToken != nil && AuthSessionManager.shared.isSessionValid }
+            return try await inFlight.value
         }
 
-        let storedRefreshToken = await MainActor.run { AuthSessionManager.shared.refreshToken }
-        guard let storedRefreshToken, !storedRefreshToken.isEmpty else {
-            return false
-        }
+        // Create + register the task synchronously, *before* any await. Otherwise a
+        // second caller arriving at this actor during the suspension would also see
+        // inFlight == nil and launch a parallel refresh — both would race on the
+        // same stored refresh token and one would be rejected as "already used".
+        let task = Task<Bool, Error> {
+            let storedRefreshToken = await MainActor.run { AuthSessionManager.shared.refreshToken }
+            guard let storedRefreshToken, !storedRefreshToken.isEmpty else {
+                return false
+            }
 
-        let task = Task {
             let response = try await AuthServiceClient.shared.refreshToken(
                 refreshToken: storedRefreshToken,
                 allowAuthRetry: false
@@ -64,26 +69,26 @@ actor TokenRefreshCoordinator {
                 expiresIn = response.expiresIn ?? 3600
             }
 
-            await MainActor.run {
+            return await MainActor.run {
                 AuthSessionManager.shared.saveTokens(
                     accessToken: response.accessToken,
                     refreshToken: response.refreshToken,
                     expiresIn: expiresIn
                 )
+                return AuthSessionManager.shared.sessionToken != nil && AuthSessionManager.shared.isSessionValid
             }
         }
-
         inFlight = task
+
         defer { inFlight = nil }
         do {
-            try await task.value
+            return try await task.value
         } catch {
             if TokenRefreshCoordinator.isRefreshTokenPermanentlyInvalid(error) {
                 permanentlyInvalid = true
             }
             throw error
         }
-        return await MainActor.run { AuthSessionManager.shared.sessionToken != nil && AuthSessionManager.shared.isSessionValid }
     }
 }
 

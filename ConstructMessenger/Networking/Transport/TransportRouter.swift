@@ -18,7 +18,7 @@ actor TransportRouter {
 
     // MARK: - Shared instance
 
-    /// Process-wide router. Constructed lazily so initial-state inputs (ICE mode,
+    /// Process-wide router. Constructed lazily so initial-state inputs (VEIL mode,
     /// censored region, reachability) are read at first access, not at module load.
     static let shared: TransportRouter = TransportRouter.makeDefault()
 
@@ -102,7 +102,7 @@ actor TransportRouter {
     }
 
     /// Kick the FSM into action after init. Should be called once at app startup,
-    /// after reachability + ICE-mode singletons are usable. Idempotent — calling
+    /// after reachability + VEIL-mode singletons are usable. Idempotent — calling
     /// it on an already-active router is a no-op.
     func bootstrap() async {
         Log.info("Transport: bootstrap (state=\(state.shortLabel))", category: "Transport")
@@ -138,8 +138,8 @@ actor TransportRouter {
             case .invalidateGRPCClient:
                 await channelEffector.invalidateClient()
 
-            case .setIcePort(let port):
-                await channelEffector.setIcePort(port)
+            case .setVeilPort(let port):
+                await channelEffector.setVeilPort(port)
 
             case .requestProxyStop:
                 cancelCooldownTimer()

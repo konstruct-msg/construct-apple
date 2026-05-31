@@ -12,7 +12,7 @@ struct GRPCChannelEffector: ChannelEffector {
         GRPCChannelManager.shared.invalidatePersistentClient()
     }
 
-    func setIcePort(_ port: UInt16?) async {
+    func setVeilPort(_ port: UInt16?) async {
         GRPCChannelManager.shared.setDirectProxyPort(port)
     }
 }
