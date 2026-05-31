@@ -14,7 +14,6 @@ import SwiftUI
 // MARK: - Recording Bar
 
 /// Shown while the microphone is active.
-/// Layout: [x]  [live waveform]  [0:05]  [■]
 struct VoiceRecordingBar: View {
     let duration: TimeInterval
     let waveform: [Float]
@@ -23,9 +22,10 @@ struct VoiceRecordingBar: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            // Cancel
             Button(action: onCancel) {
-                asciiButton("[x]", color: Color.CT.textDim)
+                Image(systemName: "x.circle.fill")
+                    .font(.system(size: 22))
+                    .foregroundStyle(Color.CT.danger)
             }
             .buttonStyle(.plain)
             .padding(.leading, 12)
@@ -41,11 +41,9 @@ struct VoiceRecordingBar: View {
 
             // Stop
             Button(action: onStop) {
-                Text("[■]")
-                    .font(CTFont.bold(18))
-                    .foregroundStyle(Color.CT.danger)
-                    .lineLimit(1)
-                    .fixedSize()
+                Image(systemName: "stop.circle.fill")
+                    .font(.system(size: 22))
+                    .foregroundStyle(Color.CT.accent)
             }
             .buttonStyle(.plain)
             .padding(.leading, 10)
@@ -69,7 +67,9 @@ struct VoicePreviewBar: View {
         HStack(spacing: 0) {
             // Discard
             Button(action: onDiscard) {
-                asciiButton("[del]", color: Color.CT.danger)
+                Image(systemName: "trash.circle.fill")
+                    .font(.system(size: 22))
+                    .foregroundStyle(Color.CT.danger)
             }
             .buttonStyle(.plain)
             .padding(.leading, 12)
@@ -85,11 +85,9 @@ struct VoicePreviewBar: View {
 
             // Send
             Button(action: onSend) {
-                Text("[→]")
-                    .font(CTFont.bold(18))
+                Image(systemName: "arrow.up.circle.fill")
+                    .font(.system(size: 24))
                     .foregroundStyle(Color.CT.accent)
-                    .lineLimit(1)
-                    .fixedSize()
             }
             .buttonStyle(.plain)
             .padding(.leading, 10)
@@ -100,14 +98,6 @@ struct VoicePreviewBar: View {
 }
 
 // MARK: - Shared helpers
-
-private func asciiButton(_ label: String, color: Color) -> some View {
-    Text(label)
-        .font(CTFont.regular(14))
-        .foregroundStyle(color)
-        .lineLimit(1)
-        .fixedSize()
-}
 
 private func timerLabel(_ duration: TimeInterval) -> some View {
     let s = Int(duration)
@@ -122,7 +112,7 @@ private extension View {
         self
             .frame(height: 52)
             .background(Color.CT.outMsgBg)
-            .overlay(Rectangle().strokeBorder(Color.CT.accent.opacity(0.25), lineWidth: 1))
+            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.CT.accent.opacity(0.25), lineWidth: 1))
             .padding(.horizontal, 8)
     }
 }
@@ -133,7 +123,7 @@ private extension View {
 struct LiveWaveformView: View {
     let samples: [Float]
 
-    private let barCount   = 36
+    private let barCount = 52
     private let barSpacing: CGFloat = 2.5
 
     var body: some View {

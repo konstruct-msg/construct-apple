@@ -8,7 +8,6 @@
 
 import SwiftUI
 
-#if os(iOS)
 struct IncomingCallView: View {
     let session: CallManager.CallSession
 
@@ -48,7 +47,7 @@ struct IncomingCallView: View {
                                 .foregroundStyle(.white)
                                 .frame(width: 64, height: 64)
                                 .background(Color.CT.danger)
-                                .overlay(Rectangle().strokeBorder(Color.CT.danger, lineWidth: 1))
+                                .clipShape(Circle())
                         }
                         Text(NSLocalizedString("call_decline", comment: ""))
                             .font(CTFont.regular(10))
@@ -65,7 +64,7 @@ struct IncomingCallView: View {
                                 .foregroundStyle(.white)
                                 .frame(width: 64, height: 64)
                                 .background(Color.CT.accent)
-                                .overlay(Rectangle().strokeBorder(Color.CT.accent, lineWidth: 1))
+                                .clipShape(Circle())
                         }
                         Text(NSLocalizedString("call_answer", comment: ""))
                             .font(CTFont.regular(10))
@@ -97,4 +96,3 @@ struct IncomingCallView: View {
         ))
     }
 }
-#endif

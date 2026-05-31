@@ -8,7 +8,6 @@
 
 import SwiftUI
 
-#if os(iOS)
 struct InCallView: View {
     let session: CallManager.CallSession
     let isConnecting: Bool
@@ -83,9 +82,9 @@ struct InCallView: View {
                             Image(systemName: "phone.down.fill")
                                 .font(.system(size: CTLayout.callIconSize, weight: .medium))
                                 .foregroundStyle(.white)
-                                .frame(width: 68, height: 68)
+                                .frame(width: 64, height: 64)
                                 .background(Color.CT.danger)
-                                .overlay(Rectangle().strokeBorder(Color.CT.danger, lineWidth: 1))
+                                .clipShape(Circle())
                         }
                         .accessibilityLabel(NSLocalizedString("call_end", comment: ""))
 
@@ -186,33 +185,21 @@ private struct PulseRingView: View {
 // MARK: - Call control button
 
 private struct CallControlButton: View {
-    let systemImage: String   // kept for accessibility, mapped to ASCII
+    let systemImage: String
     let label: String
     let tint: Color
     let action: () -> Void
 
-    // Map SF Symbol names to ASCII equivalents
-    private var asciiLabel: String {
-        switch systemImage {
-        case "mic.fill":            return "[mic]"
-        case "mic.slash.fill":      return "[mute]"
-        case "speaker.fill":        return "[ear]"
-        case "speaker.wave.3.fill": return "[spk]"
-        default:                    return "[\(systemImage)]"
-        }
-    }
-
     var body: some View {
         Button(action: action) {
             VStack(spacing: 6) {
-                Text(asciiLabel)
-                    .font(CTFont.bold(15))
+                Image(systemName: systemImage)
+                    .font(.system(size: CTLayout.callIconSize, weight: .medium))
                     .foregroundStyle(tint)
-                    .frame(width: 52, height: 52)
+                    .frame(width: 56, height: 56)
                     .background(Color.CT.bgMsg)
-                    .overlay(Rectangle().strokeBorder(tint.opacity(0.4), lineWidth: 1))
-                    .lineLimit(1)
-                    .fixedSize()
+                    .clipShape(Circle())
+                    .overlay(Circle().stroke(tint.opacity(0.4), lineWidth: 1))
                 Text(label)
                     .font(CTFont.regular(10))
                     .foregroundStyle(Color.CT.textDim)
@@ -232,5 +219,4 @@ private struct CallControlButton: View {
     )
     InCallView(session: session, isConnecting: false)
 }
-#endif
 
