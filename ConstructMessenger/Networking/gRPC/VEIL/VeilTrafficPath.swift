@@ -8,7 +8,7 @@ import Foundation
 /// Describes the current effective traffic routing path.
 /// Used for the Network Settings connection route indicator.
 enum TrafficPath: Equatable {
-    /// Direct TLS gRPC, no ICE obfuscation.
+    /// Direct TLS gRPC, no VEIL obfuscation.
     case direct
     /// VEIL primary: TLS 1.3 -> obfs4 -> Amsterdam via Traefik.
     case veilPrimary(host: String)
@@ -38,7 +38,7 @@ enum TrafficPath: Equatable {
         case .veilPrimary(let host):    return "TLS + obfs4 \(host)"
         case .veilRelay(let address):   return "obfs4 relay \(address)"
         case .veilWebTunnel(let relay): return "wss://\(relay)"
-        case .veilCooldown:             return "Reconnecting via ICE…"
+        case .veilCooldown:             return "Reconnecting via VEIL…"
         case .veilConnecting:           return "Starting obfs4 proxy…"
         }
     }

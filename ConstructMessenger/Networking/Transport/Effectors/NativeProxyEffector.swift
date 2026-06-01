@@ -4,7 +4,7 @@
 //
 //  Concrete `ProxyEffector` that owns an `VeilProxy` actor and a `RelayPool` to
 //  pick the next relay candidate. This is the bridge between the FSM and the
-//  Rust ICE proxy lifecycle.
+//  Rust VEIL proxy lifecycle.
 //
 //  Selection logic here is intentionally minimal — `RelayPool.best()` is the
 //  same call ConnectionLoop used. Chunk 5 will replace this with a geo-aware

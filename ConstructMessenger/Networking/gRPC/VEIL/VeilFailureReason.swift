@@ -2,15 +2,15 @@
 //  VeilFailureReason.swift
 //  Construct Messenger
 //
-//  Typed classification of ICE/relay transport failures.
+//  Typed classification of VEIL/relay transport failures.
 //
 
 import Foundation
 
-/// Categorized reason for an ICE relay failure.
+/// Categorized reason for an VEIL relay failure.
 ///
 /// Used by `VeilFailurePolicy.classify` to distinguish transport-layer failures
-/// (which require ICE failover) from application-layer errors (auth, validation, etc.).
+/// (which require VEIL failover) from application-layer errors (auth, validation, etc.).
 enum VeilFailureReason: Sendable, Equatable {
     /// WebTunnel blocked by a transparent HTTP proxy (non-200/404 on WebSocket upgrade).
     case webTunnelBlocked
@@ -21,7 +21,7 @@ enum VeilFailureReason: Sendable, Equatable {
     /// TLS fingerprint blocked by DPI (alert 40 / handshake_failure).
     case tlsFingerprintBlocked
     
-    /// Local ICE proxy process died (ECONNREFUSED on 127.0.0.1).
+    /// Local VEIL proxy process died (ECONNREFUSED on 127.0.0.1).
     case staleLocalProxy
     
     /// Stream timeout on unverified relay (DPI block, congestion, etc.).

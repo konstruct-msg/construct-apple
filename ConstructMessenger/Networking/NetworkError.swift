@@ -55,7 +55,7 @@ enum GRPCMessages {
     static let streamClosed     = "stream"      // combined with `closed` in the same message
     /// The GRPCClient was shut down (beginGracefulShutdown called).
     static let channelClosed    = "channel is closed"
-    /// Connection refused on the local ICE proxy address.
+    /// Connection refused on the local VEIL proxy address.
     static let localProxyAddr   = "127.0.0.1"
     /// Our own client-side deadline message — kept for legacy log matching only.
     /// Code should use `GRPCClientError.clientSideTimeout` for new checks.

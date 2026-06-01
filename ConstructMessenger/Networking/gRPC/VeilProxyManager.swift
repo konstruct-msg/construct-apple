@@ -2,7 +2,7 @@
 //  VeilProxyManager.swift
 //  Construct Messenger
 //
-//  Manages the local obfs4 proxy (construct-ice / ICE).
+//  Manages the local obfs4 proxy (construct-veil / VEIL).
 //
 //  Architecture:
 //    [Swift gRPC] → 127.0.0.1:proxyPort (plain TCP, no TLS)
@@ -17,7 +17,7 @@
 import Foundation
 import Combine
 
-/// Manages the construct-ice local TCP proxy for gRPC obfuscation.
+/// Manages the construct-veil local TCP proxy for gRPC obfuscation.
 @MainActor
 final class VeilProxyManager: ObservableObject {
 
@@ -27,7 +27,7 @@ final class VeilProxyManager: ObservableObject {
         // Load persisted mode (or platform default if never set).
         self.mode = VeilProxyStore.loadMode()
 
-        // Restart the ICE proxy whenever the network interface changes.
+        // Restart the VEIL proxy whenever the network interface changes.
         // After a cellular ↔ WiFi switch the old TCP tunnel to the relay is dead;
         // the Rust proxy process is still "running" but silently broken.
         // We restart proactively so the next RPC finds a healthy proxy immediately.
@@ -50,7 +50,7 @@ final class VeilProxyManager: ObservableObject {
     @Published private(set) var isRunning = false {
         didSet {
             // Notify ConnectionStatusManager so it can proactively degrade status
-            // when the ICE proxy dies while the stream hasn't noticed yet.
+            // when the VEIL proxy dies while the stream hasn't noticed yet.
             NotificationCenter.default.post(
                 name: .veilProxyStateChanged,
                 object: nil,
@@ -61,9 +61,9 @@ final class VeilProxyManager: ObservableObject {
     @Published private(set) var proxyPort: UInt16 = 0
     @Published private(set) var activeRelay: VeilRelay?
     @Published private(set) var lastError: String?
-    /// True when the active transport is WebTunnel (ICE v2) rather than obfs4.
+    /// True when the active transport is WebTunnel (VEIL v2) rather than obfs4.
     @Published private(set) var isWebTunnelActive: Bool = false
-    /// True while ICE is in cooldown after a relay failure. Drives the UI directly —
+    /// True while VEIL is in cooldown after a relay failure. Drives the UI directly —
     /// changes to this property cause the Network settings view to re-render.
     @Published private(set) var isOnCooldown: Bool = false
 
@@ -77,7 +77,7 @@ final class VeilProxyManager: ObservableObject {
     }
 
     /// Persisted quality scores for known relays. Loaded from UserDefaults at init;
-    /// updated and saved after every success/failure RPC through ICE.
+    /// updated and saved after every success/failure RPC through VEIL.
     var isCurrentRelayVerified: Bool {
         get async {
             let snapshot = await TransportRouter.shared.snapshot()
@@ -97,12 +97,12 @@ final class VeilProxyManager: ObservableObject {
         .unknown  // ConnectionLoop uses simple failure counting
     }
 
-    /// Record a successful RPC through ICE. Updates the session-verified set and the
+    /// Record a successful RPC through VEIL. Updates the session-verified set and the
     /// persisted quality score. Triggers side effects on the first success of the session.
     func recordRelaySuccess(address: String, latency: TimeInterval) {
         Task {
             await TransportRouter.shared.send(
-                .rpcSucceeded(via: .ice(port: 0, relay: address), latencyMs: Int(latency * 1000))
+                .rpcSucceeded(via: .veil(port: 0, relay: address), latencyMs: Int(latency * 1000))
             )
         }
     }
@@ -135,20 +135,20 @@ final class VeilProxyManager: ObservableObject {
         guard !expiredAddresses.isEmpty || !expiringAddresses.isEmpty else { return }
 
         for addr in expiredAddresses {
-            Log.error("TLS cert EXPIRED on relay \(addr) — fetching fresh config", category: "ICE")
+            Log.error("TLS cert EXPIRED on relay \(addr) — fetching fresh config", category: "VEIL")
         }
         for (addr, days) in expiringAddresses {
-            Log.info("TLS cert expires in \(days) day(s) on relay \(addr) — scheduling refresh", category: "ICE")
+            Log.info("TLS cert expires in \(days) day(s) on relay \(addr) — scheduling refresh", category: "VEIL")
         }
 
         _ = await VeilCertFetcher.shared.fetchAndCacheRelayConfig()
-        Log.info("Cert expiry refresh completed", category: "ICE")
+        Log.info("Cert expiry refresh completed", category: "VEIL")
     }
 
-    // MARK: - ICE Mode (tri-state)
+    // MARK: - VEIL Mode (tri-state)
 
-    /// The current ICE operation mode. Persists across launches via UserDefaults.
-    /// `.off` = no ICE, `.auto` = DPI auto-detect (default iOS), `.on` = always ICE (default macOS).
+    /// The current VEIL operation mode. Persists across launches via UserDefaults.
+    /// `.off` = no VEIL, `.auto` = DPI auto-detect (default iOS), `.on` = always VEIL (default macOS).
     @Published var mode: VeilMode {
         didSet {
             VeilProxyStore.saveMode(mode)
@@ -194,7 +194,7 @@ final class VeilProxyManager: ObservableObject {
 
     /// Sync cert read: Keychain → hardcoded. Use when async context unavailable.
     func bridgeCert() -> String {
-        if let stored = KeychainManager.shared.loadIceBridgeCert(), !stored.isEmpty {
+        if let stored = KeychainManager.shared.loadVEILBridgeCert(), !stored.isEmpty {
             return stored
         }
         return VEILConfig.hardcodedBridgeCert
@@ -202,33 +202,33 @@ final class VeilProxyManager: ObservableObject {
 
     /// Full async cert chain (levels 2–4 — level 1 is AuthTokensResponse, handled at login):
     ///   2. Keychain cache
-    ///   3. https://konstruct.cc/.well-known/ice-cert  (Cloudflare CDN, reachable in Russia)
+    ///   3. https://konstruct.cc/.well-known/veil-cert  (Cloudflare CDN, reachable in Russia)
     ///   4. Hardcoded fallback in binary
-    func getIceBridgeCert() async -> String {
-        if let cached = KeychainManager.shared.loadIceBridgeCert(), !cached.isEmpty {
+    func getVEILBridgeCert() async -> String {
+        if let cached = KeychainManager.shared.loadVEILBridgeCert(), !cached.isEmpty {
             return cached
         }
         if let fetched = await VeilCertFetcher.shared.fetchFromHTTPS() {
-            KeychainManager.shared.saveIceBridgeCert(fetched)
+            KeychainManager.shared.saveVEILBridgeCert(fetched)
             return fetched
         }
-        Log.info("Using hardcoded ICE bridge cert (last resort)", category: "ICE")
+        Log.info("Using hardcoded VEIL bridge cert (last resort)", category: "VEIL")
         return VEILConfig.hardcodedBridgeCert
     }
 
-    /// Called when ICE handshake fails repeatedly (stale cert or SPKI after server key rotation).
+    /// Called when VEIL handshake fails repeatedly (stale cert or SPKI after server key rotation).
     /// Clears Keychain cache, fetches fresh obfs4 cert AND relay TLS config (SPKI pins) from .well-known,
     /// unblacklists any relay whose config was refreshed, then restarts proxy via fallback chain.
     /// Returns true if a new cert was obtained and proxy was restarted successfully.
     @discardableResult
     func refreshCertAndRestart() async -> Bool {
-        Log.info("ICE recovery — refreshing cert via .well-known", category: "ICE")
-        KeychainManager.shared.deleteIceBridgeCert()
+        Log.info("VEIL recovery — refreshing cert via .well-known", category: "VEIL")
+        KeychainManager.shared.deleteVEILBridgeCert()
         guard let freshCert = await VeilCertFetcher.shared.fetchFromHTTPS() else {
-            Log.error("Failed to fetch fresh ICE cert", category: "ICE")
+            Log.error("Failed to fetch fresh VEIL cert", category: "VEIL")
             return false
         }
-        KeychainManager.shared.saveIceBridgeCert(freshCert)
+        KeychainManager.shared.saveVEILBridgeCert(freshCert)
         await fetchConfigAndEvictIfRemoved()
         await TransportRouter.shared.send(.veilConfigChanged)
         return true
@@ -244,27 +244,27 @@ final class VeilProxyManager: ObservableObject {
             if !VeilProxyStore.hasStoredMode {
                 let migrated = VeilMode.migrateFromLegacy()
                 mode = migrated
-                Log.info("Migrated to VeilMode: \(migrated.rawValue)", category: "ICE")
+                Log.info("Migrated to VeilMode: \(migrated.rawValue)", category: "VEIL")
             }
         }
     }
 
     /// Start with the stored relay (called at app launch).
-    /// In `.on` mode: starts ICE immediately.
-    /// Start ICE if mode is .on (always-on). Delegates actual proxy lifecycle to
-    /// ConnectionLoop — this method only ensures ICE mode is migrated and stored.
+    /// In `.on` mode: starts VEIL immediately.
+    /// Start VEIL if mode is .on (always-on). Delegates actual proxy lifecycle to
+    /// ConnectionLoop — this method only ensures VEIL mode is migrated and stored.
     func startIfEnabled() async {
         migrateToModeIfNeeded()
         guard KeychainManager.shared.isDeviceRegistered() else {
-            Log.info("ICE startup skipped — device not registered", category: "ICE")
+            Log.info("VEIL startup skipped — device not registered", category: "VEIL")
             return
         }
         // ConnectionLoop handles proxy lifecycle — just ensure cert is available
-        _ = await getIceBridgeCert()
+        _ = await getVEILBridgeCert()
         await fetchConfigAndEvictIfRemoved()
     }
 
-    /// Called on app foreground to verify the ICE proxy process is actually alive.
+    /// Called on app foreground to verify the VEIL proxy process is actually alive.
     /// iOS may kill background threads; `isRunning` may be stale. Restarts if dead.
     func stop() {
         isRunning = false; proxyPort = 0; isWebTunnelActive = false
@@ -281,10 +281,10 @@ final class VeilProxyManager: ObservableObject {
     // MARK: - Server-provided configuration
 
     /// Called after login/register/recovery with the cert from `AuthTokensResponse`.
-    /// Saves the cert, refreshes the relay list, and starts the proxy if ICE is enabled.
+    /// Saves the cert, refreshes the relay list, and starts the proxy if VEIL is enabled.
     func configureFromServer(cert: String) {
         guard !cert.isEmpty else { return }
-        KeychainManager.shared.saveIceBridgeCert(cert)
+        KeychainManager.shared.saveVEILBridgeCert(cert)
         let host = GRPCChannelManager.shared.currentHost
         let veilHost = "ice.\(host)"
         let relay = VeilRelay(
@@ -315,7 +315,7 @@ final class VeilProxyManager: ObservableObject {
         let deprecated = VeilCertFetcher.cachedDeprecatedIdsSync()
         let isRetired  = deprecated.contains(mid) || (!freshIds.isEmpty && !freshIds.contains(mid))
         guard isRetired else { return }
-        Log.info("Active relay \(active.address) [\(mid)] retired by server — rotating", category: "ICE")
+        Log.info("Active relay \(active.address) [\(mid)] retired by server — rotating", category: "VEIL")
         await TransportRouter.shared.send(.veilConfigChanged)
     }
 
@@ -324,7 +324,7 @@ final class VeilProxyManager: ObservableObject {
     }
 
     /// Called by ConnectionLoop to keep published state in sync with the actual proxy.
-    func updateICEProxyState(isRunning: Bool, port: UInt16, relay: VeilRelay?, isWebTunnel: Bool) {
+    func updateVEILProxyState(isRunning: Bool, port: UInt16, relay: VeilRelay?, isWebTunnel: Bool) {
         self.isRunning = isRunning
         self.proxyPort = port
         self.activeRelay = relay

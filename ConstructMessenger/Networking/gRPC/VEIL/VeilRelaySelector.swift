@@ -17,7 +17,7 @@ struct VeilRelayFailureSelection {
     let failedAddresses: [String]
 }
 
-/// Builds and orders ICE relay candidates without starting the native proxy.
+/// Builds and orders VEIL relay candidates without starting the native proxy.
 enum VeilRelaySelector {
     static func manifestIdMap() -> [String: String] {
         let infos = VeilCertFetcher.cachedRelayInfosSync() ?? []
@@ -136,7 +136,7 @@ enum VeilRelaySelector {
 
         if !cachedEntries.isEmpty {
             let skipped = cachedEntries.map { "\($0.0) (\(Int($0.1 * 1000))ms cached)" }.joined(separator: ", ")
-            Log.debug("Latency cache hit for: \(skipped)", category: "ICE")
+            Log.debug("Latency cache hit for: \(skipped)", category: "VEIL")
         }
 
         let freshReachable = probeResults.filter { $0.1 != nil }

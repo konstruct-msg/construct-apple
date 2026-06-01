@@ -30,7 +30,7 @@ class ConnectionStatusManager {
     /// Current connection status. Derived; do not assign from outside.
     private(set) var connectionStatus: ConnectionStatus = .unknown
 
-    /// Short diagnostic string for the "Connecting…" phase, e.g. "ICE probe 2".
+    /// Short diagnostic string for the "Connecting…" phase, e.g. "VEIL probe 2".
     /// Derived from the current FSM state; nil when `.connected` or `.disconnected`.
     private(set) var connectingPhase: String?
 
@@ -53,7 +53,7 @@ class ConnectionStatusManager {
 
     /// Grace window: keep showing `.connected` for this long after the last successful RPC,
     /// even if the bidi stream restarts in the meantime. 90s covers the worst-case observed
-    /// ICE stream reconnect cycle (~50s connection life + ~20s reconnect attempt) and prevents
+    /// VEIL stream reconnect cycle (~50s connection life + ~20s reconnect attempt) and prevents
     /// flicker on healthy underlying transports.
     private static let connectedGraceWindow: TimeInterval = 90
 
@@ -162,14 +162,14 @@ class ConnectionStatusManager {
         case .direct:
             return nil
         case .veilProbing(let attempt):
-            return "ICE probe \(attempt)"
+            return "VEIL probe \(attempt)"
         case .veilActive(let relay, _, _):
-            return "ICE \(relay)"
+            return "VEIL \(relay)"
         case .veilDegraded(let relay, _, let fails):
-            return "ICE degraded \(relay) (\(fails))"
+            return "VEIL degraded \(relay) (\(fails))"
         case .veilCooldown(let until):
             let secs = max(0, Int(until.timeIntervalSinceNow))
-            return "ICE cooldown (\(secs)s)"
+            return "VEIL cooldown (\(secs)s)"
         }
     }
 

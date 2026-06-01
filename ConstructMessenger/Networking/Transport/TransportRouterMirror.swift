@@ -30,7 +30,7 @@ final class TransportRouterMirror {
     var hasHistory: Bool { !recentTransitions.isEmpty }
 
     /// True when the active transport is ICE (any sub-state).
-    var isUsingICE: Bool { state.prefersVEIL && state.veilPort != nil }
+    var isUsingVEIL: Bool { state.prefersVEIL && state.veilPort != nil }
 
     /// Most recent transition, if any.
     var latestTransition: TransitionLogEntry? { recentTransitions.last }

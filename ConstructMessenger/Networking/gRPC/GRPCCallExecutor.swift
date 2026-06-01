@@ -73,7 +73,7 @@ final class GRPCCallExecutor: Sendable {
                 let latencyMs = Int(Date().timeIntervalSince(rpcStart) * 1000)
                 let target: TransportTarget
                 if let port = cm.veilProxyPort(), let addr = capturedRelayAddr {
-                    target = .ice(port: port, relay: addr)
+                    target = .veil(port: port, relay: addr)
                 } else {
                     target = .direct(.h2)
                 }
@@ -95,7 +95,7 @@ final class GRPCCallExecutor: Sendable {
                 let kind = RPCFailureClassifier.classify(error)
                 let target: TransportTarget
                 if usingVEIL, let port = cm.veilProxyPort(), let addr = capturedRelayAddr {
-                    target = .ice(port: port, relay: addr)
+                    target = .veil(port: port, relay: addr)
                 } else {
                     target = .direct(.h2)
                 }
@@ -124,7 +124,7 @@ final class GRPCCallExecutor: Sendable {
                 // If the auth retry's own refresh RPC hit a transport failure, push it to the FSM
                 // so the router can rotate the relay. We then propagate the original error.
                 if usingVEIL, case .transportFailure(let reason) = authRetryResult {
-                    let refreshKind = RPCFailureClassifier.classifyIceReason(reason)
+                    let refreshKind = RPCFailureClassifier.classifyVEILReason(reason)
                     await TransportRouter.shared.send(
                         .rpcFailed(kind: refreshKind, via: target, foreground: true)
                     )
@@ -275,18 +275,18 @@ final class GRPCCallExecutor: Sendable {
         case retry
         /// Server rejected the refresh token — trigger re-auth.
         case serverRejected
-        /// Refresh RPC failed due to transport failure — caller should handle ICE first.
+        /// Refresh RPC failed due to transport failure — caller should handle VEIL first.
         case transportFailure(VeilFailureReason)
         /// Network offline (unavailable, deadline) — keep tokens for retry when online.
         case networkOffline
         /// Rejection looks permanent at the protocol layer, but the response came through
-        /// an ICE relay that cannot be trusted to forward auth responses unmodified.
+        /// an VEIL relay that cannot be trusted to forward auth responses unmodified.
         /// Caller should rotate the relay and retry — DO NOT wipe tokens yet.
         case suspectRejection
     }
 
     /// Returns whether the RPC should be retried after a token refresh.
-    /// - Parameter usingVEIL: whether the original RPC was routed through an ICE relay.
+    /// - Parameter usingVEIL: whether the original RPC was routed through an VEIL relay.
     /// - Parameter capturedRelayAddr: the relay address active when the original RPC started.
     private func handleAuthRetry(
         rpcError: RPCError,
@@ -317,14 +317,14 @@ final class GRPCCallExecutor: Sendable {
             serverRejected = refreshError == nil   // refreshIfPossible() returned false
         }
         if serverRejected {
-            // A hostile or broken ICE relay can synthesise an UNAUTHENTICATED / PERMISSION_DENIED
+            // A hostile or broken VEIL relay can synthesise an UNAUTHENTICATED / PERMISSION_DENIED
             // response that is indistinguishable from a real server rejection at the gRPC layer.
             // On the direct path the response is end-to-end TLS to our server, so trust it.
-            // On the ICE path we cannot tell — rotate the relay and retry; if the rejection is
+            // On the VEIL path we cannot tell — rotate the relay and retry; if the rejection is
             // real it will surface again on a clean relay (or, eventually, on the direct path)
             // and be honored at that point.
             if usingVEIL {
-                Log.info("Refresh rejected over ICE relay \(capturedRelayAddr ?? "?") — not wiping tokens, will rotate", category: "GRPCChannel")
+                Log.info("Refresh rejected over VEIL relay \(capturedRelayAddr ?? "?") — not wiping tokens, will rotate", category: "GRPCChannel")
                 // Router rotation is requested by the caller of handleAuthRetry on .suspectRejection.
                 return .suspectRejection
             }

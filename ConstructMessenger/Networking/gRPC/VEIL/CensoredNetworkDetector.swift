@@ -6,11 +6,11 @@
 //  gRPC/TLS traffic. Uses timezone as a heuristic (CoreTelephony carrier
 //  APIs were deprecated in iOS 16 and no longer return usable data).
 //
-//  Used by ConnectionLoop to pre-activate ICE on startup, eliminating
+//  Used by ConnectionLoop to pre-activate VEIL on startup, eliminating
 //  the ~3.2s cold-start penalty of two failing direct attempts on
 //  DPI-censored networks.
 //
-//  False positives are harmless (ICE starts earlier, wastes a proxy start).
+//  False positives are harmless (VEIL starts earlier, wastes a proxy start).
 //  False negatives cost ~3.2s on first connection (H3 timeout + H2 timeout).
 //
 
@@ -43,7 +43,7 @@ enum CensoredNetworkDetector {
     /// True when the device is likely in a DPI-censored country.
     /// Primary signal: GeoIPManager (IP-based, cached after first STUN lookup).
     /// Fallback: timezone heuristic (used at startup before GeoIP resolves).
-    /// Used by ConnectionLoop to pre-activate ICE on startup, eliminating
+    /// Used by ConnectionLoop to pre-activate VEIL on startup, eliminating
     /// the ~3.2s cold-start penalty of two failing direct attempts.
     static var isCensored: Bool {
         #if DEBUG

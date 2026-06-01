@@ -5,7 +5,7 @@
 
 import Foundation
 
-/// ICE operation mode: controls when and how the obfs4 proxy is used.
+/// VEIL operation mode: controls when and how the obfs4 proxy is used.
 enum VeilMode: String, CaseIterable, Identifiable {
     case off
     case auto
@@ -25,7 +25,7 @@ enum VeilMode: String, CaseIterable, Identifiable {
         #endif
     }
 
-    /// Migrate from the old boolean `ice_enabled` + `ice_auto_detected_dpi` to `VeilMode`.
+    /// Migrate from the old boolean `veil_enabled` + `veil_auto_detected_dpi` to `VeilMode`.
     static func migrateFromLegacy() -> VeilMode {
         VeilProxyStore.migrateModeFromLegacy()
     }

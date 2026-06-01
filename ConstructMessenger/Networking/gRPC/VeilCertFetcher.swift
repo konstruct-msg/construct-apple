@@ -2,17 +2,17 @@
 //  VeilCertFetcher.swift
 //  Construct Messenger
 //
-//  Fetches the ICE bridge cert and relay config from .well-known endpoints.
+//  Fetches the VEIL bridge cert and relay config from .well-known endpoints.
 //  Cert fallback chain (level 3):
 //    1. AuthTokensResponse (after login) → saved to Keychain by VeilProxyManager
-//    2. Keychain cache                   → VeilProxyManager.getIceBridgeCert()
-//    3. https://konstruct.cc/.well-known/ice-cert   ← this file
-//    4. Hardcoded in binary              → ICEConfig.hardcodedBridgeCert
+//    2. Keychain cache                   → VeilProxyManager.getVEILBridgeCert()
+//    3. https://konstruct.cc/.well-known/veil-cert   ← this file
+//    4. Hardcoded in binary              → VEILConfig.hardcodedBridgeCert
 //
 //  Relay config (with SPKI pins) fallback chain:
 //    1. https://konstruct.cc/.well-known/construct-server (Ed25519 signed)
 //    2. UserDefaults cache (last valid fetch)
-//    3. Hardcoded in ICEConfig
+//    3. Hardcoded in VEILConfig
 
 import CryptoKit
 import Foundation
@@ -30,7 +30,7 @@ struct RelayInfo: Codable {
     /// When present, overrides the AMS cert so new relays are fully OTA-updatable
     /// without a binary release. nil → falls back to the AMS cert (legacy behaviour).
     let bridgeCert: String?
-    /// WebSocket resource path for WebTunnel (ICE v2), e.g. "/construct-ice".
+    /// WebSocket resource path for WebTunnel (VEIL v2), e.g. "/construct-veil".
     /// nil / empty → relay does not advertise WebTunnel support.
     let wtPath: String?
     /// Optional HTTP Host header override for the WebSocket upgrade request.
@@ -106,7 +106,7 @@ private struct VeilCertWellKnown: Decodable {
 }
 
 private struct ConstructServerWellKnown: Decodable {
-    struct ICESection: Decodable {
+    struct VEILSection: Decodable {
         let primary: String?
         let relays: [RelayInfo]?
         let relayRegions: [VEILRelayRegion]?
@@ -121,7 +121,7 @@ private struct ConstructServerWellKnown: Decodable {
         }
     }
     let version: String?
-    let ice: ICESection?
+    let veil: VEILSection?
     let signedAt: String?
     let signature: String?
     /// Ed25519 public key (base64) used to sign pre-key bundles and KT Signed Tree Heads.
@@ -150,7 +150,7 @@ private struct ConstructServerWellKnown: Decodable {
         } else {
             signedAt = nil
         }
-        ice              = try c.decodeIfPresent(ICESection.self, forKey: .ice)
+        veil              = try c.decodeIfPresent(VEILSection.self, forKey: .ice)
         signature        = try c.decodeIfPresent(String.self,     forKey: .signature)
         bundleSigningKey = try c.decodeIfPresent(String.self,     forKey: .bundleSigningKey)
     }
@@ -261,7 +261,7 @@ actor VeilCertFetcher {
                             return nil
                         }
                         let parsed = try JSONDecoder().decode(ConstructServerWellKnown.self, from: data)
-                        guard let relays = parsed.ice?.relays, !relays.isEmpty else { return nil }
+                        guard let relays = parsed.veil?.relays, !relays.isEmpty else { return nil }
 
                         // Persist to UserDefaults — safe from any task since UserDefaults is thread-safe
                         if let encoded = try? JSONEncoder().encode(relays) {
@@ -273,21 +273,21 @@ actor VeilCertFetcher {
                         }
                         let addressList = relays.map(\.addressWithPort)
                         UserDefaults.standard.set(addressList, forKey: VEILConfig.cachedRelayListKey)
-                        if let regions = parsed.ice?.relayRegions,
+                        if let regions = parsed.veil?.relayRegions,
                            let regionsData = try? JSONEncoder().encode(regions) {
                             UserDefaults.standard.set(regionsData, forKey: VEILConfig.cachedRelayRegionsKey)
                         }
                         // Persist deprecated relay IDs so loadStoredRelay() can evict stale cache.
-                        let deprecatedIds = parsed.ice?.deprecatedIds ?? []
+                        let deprecatedIds = parsed.veil?.deprecatedIds ?? []
                         if let encodedDeprecated = try? JSONEncoder().encode(deprecatedIds) {
                             UserDefaults.standard.set(encodedDeprecated, forKey: Self.cachedDeprecatedIdsKey)
                         }
 
                         let deprecatedNote = deprecatedIds.isEmpty ? "" : " (deprecated: \(deprecatedIds.joined(separator: ", ")))"
-                        Log.info("Relay config via \(url.host ?? "?"): \(relays.count) relay(s)\(deprecatedNote)", category: "ICE")
+                        Log.info("Relay config via \(url.host ?? "?"): \(relays.count) relay(s)\(deprecatedNote)", category: "VEIL")
                         return relays
                     } catch {
-                        Log.debug("\(url.host ?? "") fetch error: \(error)", category: "ICE")
+                        Log.debug("\(url.host ?? "") fetch error: \(error)", category: "VEIL")
                         return nil
                     }
                 }
@@ -333,7 +333,7 @@ actor VeilCertFetcher {
     }
 
     /// Synchronous WebTunnel path lookup for non-async contexts.
-    /// Returns the WebSocket resource path (e.g. "/construct-ice") if the relay supports
+    /// Returns the WebSocket resource path (e.g. "/construct-veil") if the relay supports
     /// WebTunnel, or nil if it only supports obfs4.
     static func wtPathSync(for address: String) -> String? {
         if let relay = cachedRelayInfosSync()?.first(where: { $0.addressWithPort == address }),
@@ -361,7 +361,7 @@ actor VeilCertFetcher {
         relays.removeAll { $0.addressWithPort == address }
         if let encoded = try? JSONEncoder().encode(relays) {
             UserDefaults.standard.set(encoded, forKey: cachedRelayInfosKey)
-            Log.info("Evicted relay \(address) from SPKI cache", category: "ICE")
+            Log.info("Evicted relay \(address) from SPKI cache", category: "VEIL")
         }
     }
 
@@ -414,14 +414,14 @@ actor VeilCertFetcher {
         guard var jsonObject = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let sigField = jsonObject["signature"] as? String,
               sigField.hasPrefix("ed25519:") else {
-            Log.debug("construct-server: missing or malformed signature field", category: "ICE")
+            Log.debug("construct-server: missing or malformed signature field", category: "VEIL")
             return false
         }
 
         // 2. Extract base64url signature bytes
         let b64url = String(sigField.dropFirst("ed25519:".count))
         guard let sigData = Data(base64URLEncoded: b64url) else {
-            Log.debug("construct-server: failed to decode signature", category: "ICE")
+            Log.debug("construct-server: failed to decode signature", category: "VEIL")
             return false
         }
 
@@ -434,7 +434,7 @@ actor VeilCertFetcher {
 
         // 4. Load public key
         guard let pubKeyData = Data(hexString: VEILConfig.relayConfigSigningKey) else {
-            Log.error("relayConfigSigningKey is not valid hex", category: "ICE")
+            Log.error("relayConfigSigningKey is not valid hex", category: "VEIL")
             return false
         }
         let publicKey = try Curve25519.Signing.PublicKey(rawRepresentation: pubKeyData)

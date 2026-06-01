@@ -2,22 +2,22 @@
 //  VeilFailurePolicy.swift
 //  Construct Messenger
 //
-//  Pure classification function for ICE transport failures.
+//  Pure classification function for VEIL transport failures.
 //
 
 import Foundation
 import GRPCCore
 
-/// Pure classifier for ICE/relay transport failures.
+/// Pure classifier for VEIL/relay transport failures.
 ///
 /// This type contains no state and performs no I/O. It exists to make
 /// transport-layer error classification testable and to enforce the invariant
 /// that transport errors are handled before application-layer auth retry.
 enum VeilFailurePolicy {
-    /// Classify an error as a transport-layer ICE failure, or nil if application-layer.
+    /// Classify an error as a transport-layer VEIL failure, or nil if application-layer.
     ///
     /// - Returns: `VeilFailureReason` if the error represents a transport failure that
-    ///            should trigger ICE failover; `nil` for application errors (auth, validation, etc.).
+    ///            should trigger VEIL failover; `nil` for application errors (auth, validation, etc.).
     static func classify(_ error: Error) -> VeilFailureReason? {
         // Local proxy dead — distinct from relay failure.
         if isStaleLocalProxy(error) { return .staleLocalProxy }
@@ -74,7 +74,7 @@ enum VeilFailurePolicy {
     
     // MARK: - Classification predicates (moved from GRPCCallExecutor)
     
-    /// True when the error is ECONNREFUSED on the local ICE proxy port (127.0.0.1).
+    /// True when the error is ECONNREFUSED on the local VEIL proxy port (127.0.0.1).
     private static func isStaleLocalProxy(_ error: Error) -> Bool {
         guard let rpc = error as? RPCError, rpc.code == .unavailable else { return false }
         return rpc.message.contains(GRPCMessages.localProxyAddr)

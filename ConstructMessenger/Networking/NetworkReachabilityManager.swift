@@ -127,7 +127,7 @@ class NetworkReachabilityManager {
                     )
                     NotificationCenter.default.post(notification)
 
-                    // Also post a path-changed notification so subscribers can restart ICE /
+                    // Also post a path-changed notification so subscribers can restart VEIL /
                     // cancel stale TCP connections even when reachability stays .satisfied.
                     if interfaceSwitched {
                         let changeKind: NetworkChangeKind = interfaceTypeSwitched ? .newInterface : .pathTopology
@@ -171,7 +171,7 @@ extension Notification.Name {
     /// Fired when network interface switches (e.g. VPN on/off, cellular ↔ WiFi) while remaining reachable.
     /// Stale TCP connections bound to the old interface must be closed and reopened.
     static let networkPathChanged = Notification.Name("networkPathChanged")
-    /// Fired when ICE proxy starts or stops. Payload: `userInfo["isRunning"]` = Bool.
+    /// Fired when VEIL proxy starts or stops. Payload: `userInfo["isRunning"]` = Bool.
     /// Used by ConnectionStatusManager to proactively degrade status when proxy dies
     /// before the stream heartbeat watchdog detects the failure.
     static let veilProxyStateChanged = Notification.Name("veilProxyStateChanged")

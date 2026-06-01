@@ -40,7 +40,7 @@ enum RPCFailureClassifier {
 
     /// Public variant of the VeilFailureReason→RPCFailureKind translation, for code
     /// paths that already have an VeilFailureReason on hand (e.g. nested auth-retry).
-    static func classifyIceReason(_ reason: VeilFailureReason) -> RPCFailureKind {
+    static func classifyVEILReason(_ reason: VeilFailureReason) -> RPCFailureKind {
         translate(reason)
     }
 

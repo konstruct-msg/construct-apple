@@ -4,7 +4,7 @@
 //
 //  Narrow protocol isolating all `veil_proxy_*` C FFI symbols from policy logic.
 //
-//  The runtime owns **no** policy — it does not know about ICE mode, DPI detection,
+//  The runtime owns **no** policy — it does not know about VEIL mode, DPI detection,
 //  cooldowns, relay quality scores, or gRPC. `VeilProxyManager` decides which transport
 //  to start; the runtime executes the C call and returns a typed result.
 //

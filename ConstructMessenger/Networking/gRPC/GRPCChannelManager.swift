@@ -45,9 +45,9 @@ final class GRPCChannelManager: Sendable {
         NotificationCenter.default.post(name: .grpcServerChanged, object: nil)
     }
 
-    /// Sets the ICE proxy port managed by `ConnectionLoop`.
+    /// Sets the VEIL proxy port managed by `ConnectionLoop`.
     /// When non-nil, `veilProxyPort()` returns this value and gRPC routes through the proxy.
-    /// Pass `nil` to clear ICE routing (direct path).
+    /// Pass `nil` to clear VEIL routing (direct path).
     func setDirectProxyPort(_ port: UInt16?) {
         let changed = _overrideProxyPortLock.withLock { () -> Bool in
             let old = _overrideProxyPort
@@ -58,7 +58,7 @@ final class GRPCChannelManager: Sendable {
         invalidatePersistentClientIfRoutingChanged()
     }
 
-    /// Returns the local proxy port when ICE is active, nil for direct routing.
+    /// Returns the local proxy port when VEIL is active, nil for direct routing.
     /// Set by `ConnectionLoop.prepare()` via `setDirectProxyPort()`.
     func veilProxyPort() -> UInt16? {
         _overrideProxyPortLock.withLock { _overrideProxyPort }
@@ -198,13 +198,13 @@ final class GRPCChannelManager: Sendable {
 
     /// Invalidates the persistent connection only if the routing key has actually changed.
     ///
-    /// Use this instead of `invalidatePersistentClient()` for ICE lifecycle events (proxy restart,
+    /// Use this instead of `invalidatePersistentClient()` for VEIL lifecycle events (proxy restart,
     /// relay rotation, cooldown entry) that do not affect the direct path. If the connection is
-    /// already on the direct path and ICE reports a background failure, routing hasn't changed —
+    /// already on the direct path and VEIL reports a background failure, routing hasn't changed —
     /// there is nothing to invalidate and calling this is a no-op.
     ///
     /// Only tears down the connection when the new routing key differs from the key the connection
-    /// was created with (e.g. "ice:1234" → "direct:host:443"). Avoids the cascade where an ICE
+    /// was created with (e.g. "ice:1234" → "direct:host:443"). Avoids the cascade where an VEIL
     /// failure disrupts a working direct connection.
     func invalidatePersistentClientIfRoutingChanged() {
         // Compute routing key outside the lock — routingKey() acquires _iceModeLock and
@@ -263,7 +263,7 @@ final class GRPCChannelManager: Sendable {
     /// Invalidates only if the current connection generation matches `gen`.
     /// Used in GRPCCallExecutor so a background RPC that started on an old connection
     /// (e.g., fetchMissedMessages on direct gen=1) does not kill the current
-    /// connection (e.g., ICE gen=3) when routing changed while it was in-flight.
+    /// connection (e.g., VEIL gen=3) when routing changed while it was in-flight.
     func invalidatePersistentClientIfGeneration(_ gen: UInt64) {
         _connLock.lock()
         defer { _connLock.unlock() }
@@ -292,12 +292,12 @@ final class GRPCChannelManager: Sendable {
     /// Creates a new `GRPCClient` with TLS transport.
     /// Caller is responsible for running the client via `runConnections()` in a Task.
     func makeClient() throws -> GRPCClient<HTTP2ClientTransport.TransportServices> {
-        // ICE mode: connect to local proxy with plaintext, proxy handles obfs4 to relay.
+        // VEIL mode: connect to local proxy with plaintext, proxy handles obfs4 to relay.
         // The :authority pseudo-header MUST be the logical server hostname (currentHost) —
         // upstream HTTP routers (e.g. Traefik Host(...) rule) match on :authority and would
         // 404 if it was the transport address (127.0.0.1).
         if let veilPort = veilProxyPort() {
-            Log.info("gRPC via ICE proxy → 127.0.0.1:\(veilPort)", category: "gRPC")
+            Log.info("gRPC via VEIL proxy → 127.0.0.1:\(veilPort)", category: "gRPC")
             let logicalAuthority = currentHost
             let transport = try HTTP2ClientTransport.TransportServices(
                 target: .ipv4(address: "127.0.0.1", port: Int(veilPort)),
@@ -309,8 +309,8 @@ final class GRPCChannelManager: Sendable {
                     $0.connection = .init(
                         maxIdleTime: .seconds(NetworkTiming.GRPC.maxIdleTimeSeconds),
                         keepalive: .init(
-                            time: .seconds(NetworkTiming.GRPC.keepaliveTimeIceSeconds),
-                            timeout: .seconds(NetworkTiming.GRPC.keepaliveTimeoutIceSeconds),
+                            time: .seconds(NetworkTiming.GRPC.keepaliveTimeVEILSeconds),
+                            timeout: .seconds(NetworkTiming.GRPC.keepaliveTimeoutVEILSeconds),
                             allowWithoutCalls: true
                         )
                     )
@@ -352,7 +352,7 @@ final class GRPCChannelManager: Sendable {
 
 #if canImport(Network)
     /// Creates a gRPC client using the HTTP/3 (QUIC/Network.framework) transport.
-    /// Only called for direct-path connections — never over ICE/obfs4 proxy.
+    /// Only called for direct-path connections — never over VEIL/obfs4 proxy.
     func makeClientH3() -> GRPCClient<HTTP3ClientTransport> {
         let host = currentHost
         let port = currentPort
@@ -432,7 +432,7 @@ final class GRPCChannelManager: Sendable {
     }
 #endif
 
-    /// Execute a gRPC operation with automatic retry, auth refresh, and ICE failover.
+    /// Execute a gRPC operation with automatic retry, auth refresh, and VEIL failover.
     /// Delegates to `GRPCCallExecutor` — all RPC policy logic lives there.
     func performRPC<Result: Sendable>(
         timeout: TimeInterval? = nil,
@@ -454,6 +454,6 @@ final class GRPCChannelManager: Sendable {
 
 extension Notification.Name {
     static let grpcServerChanged = Notification.Name("grpcServerChanged")
-    /// Posted when ICE recovers and routing switches back to a relay.
+    /// Posted when VEIL recovers and routing switches back to a relay.
     static let veilRelayRecovered = Notification.Name("veilRelayRecovered")
 }

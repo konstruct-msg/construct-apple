@@ -36,7 +36,7 @@ struct VeilRelay: Codable, Identifiable {
     let tlsServerName: String?
     /// SHA-256 of DER SubjectPublicKeyInfo in hex.
     let pinnedSpki: String?
-    /// WebTunnel WebSocket resource path, for example "/construct-ice".
+    /// WebTunnel WebSocket resource path, for example "/construct-veil".
     let wtPath: String?
     /// HTTP Host header for WebTunnel upgrade; nil means use relay hostname/SNI.
     let wtHostHeader: String?

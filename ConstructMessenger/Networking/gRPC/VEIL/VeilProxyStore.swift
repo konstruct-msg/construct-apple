@@ -5,16 +5,16 @@
 
 import Foundation
 
-/// Centralized persistence for ICE mode, relay cache, and relay quality data.
+/// Centralized persistence for VEIL mode, relay cache, and relay quality data.
 enum VeilProxyStore {
-    static let legacyEnabledKey = "ice_enabled"
-    static let legacyAutoDetectedDPIKey = "ice_auto_detected_dpi"
-    static let modeKey = "ice_mode"
+    static let legacyEnabledKey = "veil_enabled"
+    static let legacyAutoDetectedDPIKey = "veil_auto_detected_dpi"
+    static let modeKey = "veil_mode"
     static let relayKey = "veilActiveRelay"
     static let modeMigrationVersion = 1
 
-    private static let lastSuccessfulPathKey = "ice_last_successful_path"
-    private static let qualityScoresKey = "ice_relay_quality_scores_v1"
+    private static let lastSuccessfulPathKey = "veil_last_successful_path"
+    private static let qualityScoresKey = "veil_relay_quality_scores_v1"
     private static let qualityScoresMaxEntries = 20
 
     static func loadMode() -> VeilMode {
@@ -36,7 +36,7 @@ enum VeilProxyStore {
     }
 
     static var modeMigrationKey: String {
-        "ice_mode_migration_v\(modeMigrationVersion)"
+        "veil_mode_migration_v\(modeMigrationVersion)"
     }
 
     static var needsModeMigration: Bool {
