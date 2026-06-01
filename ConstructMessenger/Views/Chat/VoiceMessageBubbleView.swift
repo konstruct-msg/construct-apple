@@ -83,10 +83,9 @@ struct VoiceMessageBubbleView: View {
                 .buttonStyle(.plain)
                 .disabled(isLoading)
 
-                CTWaveformView(
+                VoiceWaveformView(
                     samples: voiceContent.waveform,
-                    progress: isPlaying ? player.progress : 0,
-                    isSentByMe: isSentByMe
+                    style: .playback(progress: isPlaying ? player.progress : 0, isSentByMe: isSentByMe)
                 )
                 .frame(maxWidth: .infinity, minHeight: 28, maxHeight: 28)
 
@@ -154,10 +153,9 @@ struct VoiceMessageBubbleView: View {
                 .tint(isSentByMe ? .white : Color.CT.textDim)
                 .frame(minWidth: 38)
 
-            CTWaveformView(
+            VoiceWaveformView(
                 samples: voiceContent.waveform,
-                progress: 0,
-                isSentByMe: isSentByMe
+                style: .playback(progress: 0, isSentByMe: isSentByMe)
             )
             .frame(maxWidth: .infinity, minHeight: 28, maxHeight: 28)
             .opacity(0.4)
@@ -188,10 +186,9 @@ struct VoiceMessageBubbleView: View {
             }
             .buttonStyle(.plain)
 
-            CTWaveformView(
+            VoiceWaveformView(
                 samples: voiceContent.waveform,
-                progress: 0,
-                isSentByMe: isSentByMe
+                style: .playback(progress: 0, isSentByMe: isSentByMe)
             )
             .frame(maxWidth: .infinity, minHeight: 28, maxHeight: 28)
             .opacity(0.35)
@@ -219,10 +216,9 @@ struct VoiceMessageBubbleView: View {
                 .foregroundColor(Color.CT.textDim)
                 .frame(width: 38)
 
-            CTWaveformView(
+            VoiceWaveformView(
                 samples: voiceContent.waveform,
-                progress: 0,
-                isSentByMe: isSentByMe
+                style: .playback(progress: 0, isSentByMe: isSentByMe)
             )
             .frame(maxWidth: .infinity, minHeight: 28, maxHeight: 28)
             .opacity(0.2)
@@ -252,8 +248,7 @@ struct VoiceMessageBubbleView: View {
         } else {
             seconds = voiceContent.duration
         }
-        let s = Int(seconds)
-        return String(format: "%d:%02d", s / 60, s % 60)
+        return VoiceUIDurationFormatter.string(seconds)
     }
 
     // MARK: - Download
@@ -280,59 +275,6 @@ struct VoiceMessageBubbleView: View {
                     Log.error("Voice download failed: \(error.localizedDescription)", category: "VoiceMessageBubbleView")
                 }
             }
-        }
-    }
-}
-
-// MARK: - CT Waveform (terminal: flat Rectangle bars)
-
-private struct CTWaveformView: View {
-    let samples: [Float]
-    let progress: Double
-    let isSentByMe: Bool
-
-    private let barCount = 40
-    private let barSpacing: CGFloat = 2
-
-    var body: some View {
-        GeometryReader { geo in
-            let totalSpacing = barSpacing * CGFloat(barCount - 1)
-            let barWidth = max(1, (geo.size.width - totalSpacing) / CGFloat(barCount))
-            let downsampled = downsample(samples, to: barCount)
-
-            HStack(alignment: .center, spacing: barSpacing) {
-                ForEach(0..<barCount, id: \.self) { i in
-                    let fraction = Double(i) / Double(max(barCount - 1, 1))
-                    let played = progress > 0 && fraction <= progress
-                    let height = max(2, CGFloat(downsampled[i]) * geo.size.height)
-
-                    Rectangle()
-                        .fill(played ? playedColor : unplayedColor)
-                        .frame(width: barWidth, height: height)
-                }
-            }
-            .frame(width: geo.size.width, height: geo.size.height, alignment: .center)
-        }
-    }
-
-    private var playedColor: Color {
-        isSentByMe ? Color.white.opacity(0.95) : Color.CT.accent
-    }
-    private var unplayedColor: Color {
-        isSentByMe ? Color.white.opacity(0.35) : Color.CT.textDim.opacity(0.45)
-    }
-
-    private func downsample(_ array: [Float], to count: Int) -> [Float] {
-        guard !array.isEmpty else { return Array(repeating: 0.3, count: count) }
-        guard array.count >= count else {
-            return array + Array(repeating: 0.1, count: count - array.count)
-        }
-        let step = Float(array.count) / Float(count)
-        return (0..<count).map { i in
-            let start = Int(Float(i) * step)
-            let end   = min(Int(Float(i + 1) * step), array.count)
-            let slice = array[start..<end]
-            return slice.reduce(0, +) / Float(slice.count)
         }
     }
 }

@@ -9,11 +9,9 @@
 
 import SwiftUI
 
-#if os(iOS)
 
 // MARK: - Recording Bar
 
-/// Shown while the microphone is active.
 struct VoiceRecordingBar: View {
     let duration: TimeInterval
     let waveform: [Float]
@@ -31,7 +29,7 @@ struct VoiceRecordingBar: View {
             .padding(.leading, 12)
 
             // Live waveform
-            LiveWaveformView(samples: waveform)
+            VoiceWaveformView(samples: waveform, style: .liveInput)
                 .frame(maxWidth: .infinity)
                 .frame(height: 28)
                 .padding(.horizontal, 12)
@@ -55,8 +53,6 @@ struct VoiceRecordingBar: View {
 
 // MARK: - Preview Bar
 
-/// Shown after recording stops — lets the user review before sending.
-/// Layout: [del]  [static waveform]  [0:47]  [→]
 struct VoicePreviewBar: View {
     let duration: TimeInterval
     let waveform: [Float]
@@ -75,7 +71,7 @@ struct VoicePreviewBar: View {
             .padding(.leading, 12)
 
             // Static waveform
-            StaticWaveformView(samples: waveform)
+            VoiceWaveformView(samples: waveform, style: .staticAccent())
                 .frame(maxWidth: .infinity)
                 .frame(height: 28)
                 .padding(.horizontal, 12)
@@ -100,8 +96,7 @@ struct VoicePreviewBar: View {
 // MARK: - Shared helpers
 
 private func timerLabel(_ duration: TimeInterval) -> some View {
-    let s = Int(duration)
-    return Text(String(format: "%d:%02d", s / 60, s % 60))
+    return Text(VoiceUIDurationFormatter.string(duration))
         .font(CTFont.medium(14))
         .foregroundStyle(Color.CT.textDim)
         .frame(minWidth: 42, alignment: .trailing)
@@ -114,80 +109,6 @@ private extension View {
             .background(Color.CT.outMsgBg)
             .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.CT.accent.opacity(0.25), lineWidth: 1))
             .padding(.horizontal, 8)
-    }
-}
-
-// MARK: - Live Waveform (recording)
-// Bars fill from the left as the buffer grows; each bar shows the latest samples.
-
-struct LiveWaveformView: View {
-    let samples: [Float]
-
-    private let barCount = 52
-    private let barSpacing: CGFloat = 2.5
-
-    var body: some View {
-        GeometryReader { geo in
-            let totalSpacing = barSpacing * CGFloat(barCount - 1)
-            let barWidth = max(1.5, (geo.size.width - totalSpacing) / CGFloat(barCount))
-
-            HStack(alignment: .center, spacing: barSpacing) {
-                ForEach(0..<barCount, id: \.self) { i in
-                    Rectangle()
-                        .fill(Color.CT.accent.opacity(opacity(for: i)))
-                        .frame(width: barWidth, height: height(for: i, total: geo.size.height))
-                }
-            }
-            .frame(width: geo.size.width, height: geo.size.height)
-        }
-    }
-
-    private func height(for index: Int, total: CGFloat) -> CGFloat {
-        let count = samples.count
-        guard count > 0 else { return 4 }
-        let si = max(0, count - barCount + index)
-        guard si < count else { return 4 }
-        return max(4, CGFloat(samples[si]) * total * 0.9)
-    }
-
-    private func opacity(for index: Int) -> Double {
-        let startFilled = barCount - samples.count
-        return index >= startFilled ? 1.0 : 0.25
-    }
-}
-
-// MARK: - Static Waveform (preview)
-
-struct StaticWaveformView: View {
-    let samples: [Float]
-
-    private let barCount   = 36
-    private let barSpacing: CGFloat = 2.5
-
-    var body: some View {
-        GeometryReader { geo in
-            let totalSpacing = barSpacing * CGFloat(barCount - 1)
-            let barWidth = max(1.5, (geo.size.width - totalSpacing) / CGFloat(barCount))
-
-            HStack(alignment: .center, spacing: barSpacing) {
-                ForEach(0..<barCount, id: \.self) { i in
-                    Rectangle()
-                        .fill(Color.CT.accent.opacity(0.70))
-                        .frame(width: barWidth, height: height(for: i, total: geo.size.height))
-                }
-            }
-            .frame(width: geo.size.width, height: geo.size.height)
-        }
-    }
-
-    private func height(for index: Int, total: CGFloat) -> CGFloat {
-        guard !samples.isEmpty else { return 5 }
-        let step = Float(samples.count) / Float(barCount)
-        let si   = Int(Float(index) * step)
-        let ei   = min(Int(Float(index + 1) * step), samples.count)
-        guard si < ei else { return 5 }
-        let avg = samples[si..<ei].reduce(0, +) / Float(ei - si)
-        return max(5, CGFloat(avg) * total * 0.85)
     }
 }
 
@@ -223,4 +144,3 @@ struct StaticWaveformView: View {
     .preferredColorScheme(.dark)
 }
 
-#endif

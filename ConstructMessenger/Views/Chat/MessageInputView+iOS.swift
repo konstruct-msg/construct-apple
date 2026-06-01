@@ -6,7 +6,6 @@
 //  photo picker, file picker, and voice recording/preview states.
 //
 
-#if os(iOS)
 import SwiftUI
 import PhotosUI
 import UniformTypeIdentifiers
@@ -272,4 +271,24 @@ struct CameraPickerView: UIViewControllerRepresentable {
         }
     }
 }
-#endif
+
+//#Preview("Input") {
+//    @Previewable @State var text = ""
+//    @Previewable @State var dropped: [PlatformImage] = []
+//
+//    VStack {
+//        Spacer()
+//        IOSMessageInputView(
+//            text: $text,
+//            droppedImages: $dropped,
+//            isSending: false,
+//            replyingTo: nil,
+//            quoteOverride: nil,
+//            editingMessage: nil,
+//            onSend: { _, _ in },
+//            onCancelReply: {},
+//            onCancelEdit: {}
+//        )
+//    }
+//    .background(Color.platformBackground)
+//}

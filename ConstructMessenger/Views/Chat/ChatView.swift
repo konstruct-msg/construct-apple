@@ -498,7 +498,7 @@ struct ChatView: View {
                     }
                 } label: {
                     Image(systemName: "chevron.down.circle.fill")
-                        .font(.system(size: 30))
+                        .font(.system(size: 25))
                         .foregroundColor(Color.CT.accent)
                 }
                 .padding(.trailing, 16)
@@ -728,8 +728,6 @@ struct ChatView: View {
             isEditMode = false
         }
     }
-
-    // ✅ REMOVED: Message grouping logic moved to Message+Grouping.swift extension
     
     private func hideKeyboard() {
         #if canImport(UIKit)
@@ -783,9 +781,11 @@ struct ChatView: View {
     try? context.save()
 
     let previewSessionCoordinator = SessionCoordinator()
+    let previewChatsViewModel = ChatsViewModel()
     return NavigationStack {
         ChatView(chat: chat, context: context, sessionCoordinator: previewSessionCoordinator)
             .environment(\.managedObjectContext, context)
+            .environment(previewChatsViewModel)
     }
 }
 #endif

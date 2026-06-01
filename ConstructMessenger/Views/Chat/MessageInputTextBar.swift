@@ -36,13 +36,13 @@ struct MessageInputTextBar: View {
     @ViewBuilder
     private var textField: some View {
         TextField(LocalizedStringKey("message_placeholder"), text: $text, axis: .vertical)
-            .font(CTFont.regular(13))
+            .font(CTFont.regular(15))
             .foregroundColor(Color.CT.text)
             .textFieldStyle(.plain)
             .lineLimit(1...8)
             .focused($focused)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 13)
             .padding(.trailing, canSend ? 4 : 0)
             #if os(macOS)
             .onKeyPress(keys: [.return], phases: .down) { press in
