@@ -28,18 +28,18 @@ construct DPI Probe
 
 import socket
 import ssl
+import statistics
 import struct
 import sys
 import time
-import statistics
 from datetime import datetime
 
 # ─────────────────────────────────────────────────────────
-TARGET_HOST = "ams.konstruct.cc"
+TARGET_HOST = "api.divany-kresla.uk"
 TARGET_PORT = 443
-TIMEOUT     = 8.0   # секунды на один тест
-RUNS        = 10    # количество повторов каждого теста
-FAKE_SNI    = "www.bing.com"  # нейтральный домен для проверки SNI-блокировки
+TIMEOUT = 8.0  # секунды на один тест
+RUNS = 10  # количество повторов каждого теста
+FAKE_SNI = "www.bing.com"  # нейтральный домен для проверки SNI-блокировки
 
 # ⚠️  iOS / a-Shell: установи True если видишь CERTIFICATE_VERIFY_FAILED через VPN.
 # a-Shell использует устаревший CA-bundle без ISRG Root X1 (Let's Encrypt).
@@ -53,12 +53,20 @@ SKIP_TLS_VERIFY = False
 
 H2_CLIENT_PREFACE = b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"
 
+
 def _h2_frame(type_: int, flags: int, stream_id: int, payload: bytes = b"") -> bytes:
     length = len(payload)
-    return struct.pack(">I", length)[1:] + bytes([type_, flags]) + struct.pack(">I", stream_id) + payload
+    return (
+        struct.pack(">I", length)[1:]
+        + bytes([type_, flags])
+        + struct.pack(">I", stream_id)
+        + payload
+    )
 
-H2_SETTINGS       = _h2_frame(0x04, 0x00, 0)   # empty SETTINGS (client)
-H2_SETTINGS_ACK   = _h2_frame(0x04, 0x01, 0)   # SETTINGS ACK
+
+H2_SETTINGS = _h2_frame(0x04, 0x00, 0)  # empty SETTINGS (client)
+H2_SETTINGS_ACK = _h2_frame(0x04, 0x01, 0)  # SETTINGS ACK
+
 
 def _read_h2_frame(sock, timeout: float = TIMEOUT) -> tuple[int, int, bytes] | None:
     """Read exactly one HTTP/2 frame. Returns (type, flags, payload) or None on error."""
@@ -71,8 +79,8 @@ def _read_h2_frame(sock, timeout: float = TIMEOUT) -> tuple[int, int, bytes] | N
                 return None
             header += chunk
         length = (header[0] << 16) | (header[1] << 8) | header[2]
-        ftype  = header[3]
-        flags  = header[4]
+        ftype = header[3]
+        flags = header[4]
         payload = b""
         while len(payload) < length:
             chunk = sock.recv(length - len(payload))
@@ -86,32 +94,39 @@ def _read_h2_frame(sock, timeout: float = TIMEOUT) -> tuple[int, int, bytes] | N
 
 # ── gRPC health check helpers ────────────────────────────
 
+
 def _grpc_frame(payload: bytes) -> bytes:
     """Wrap protobuf bytes in gRPC length-prefixed frame."""
     return struct.pack(">BI", 0, len(payload)) + payload
 
-def _h2_headers_frame(stream_id: int, headers_block: bytes, end_headers: bool = True) -> bytes:
+
+def _h2_headers_frame(
+    stream_id: int, headers_block: bytes, end_headers: bool = True
+) -> bytes:
     flags = 0x04 if end_headers else 0x00
     return _h2_frame(0x01, flags, stream_id, headers_block)
 
+
 def _build_grpc_headers(path: str, authority: str) -> bytes:
     """Minimal HPACK-encoded headers for a gRPC POST request."""
+
     def _str(s: str) -> bytes:
         b = s.encode()
         return bytes([len(b)]) + b  # no Huffman encoding
 
     h = b""
-    h += bytes([0x83])              # :method: POST  (static index 3)
-    h += bytes([0x87])              # :scheme: https (static index 7)
+    h += bytes([0x83])  # :method: POST  (static index 3)
+    h += bytes([0x87])  # :scheme: https (static index 7)
     # :path — literal with incremental indexing, name index 4 (:path)
     h += bytes([0x44]) + _str(path)
     # :authority — literal with incremental indexing, name index 1
     h += bytes([0x41]) + _str(authority)
     # content-type: application/grpc — name index 31
-    h += bytes([0x5f]) + _str("application/grpc")
+    h += bytes([0x5F]) + _str("application/grpc")
     # te: trailers — new literal name
     h += bytes([0x40]) + _str("te") + _str("trailers")
     return h
+
 
 _HEALTH_HEADERS_HPACK = _build_grpc_headers("/grpc.health.v1.Health/Check", TARGET_HOST)
 
@@ -122,6 +137,7 @@ WINDOW_UPDATE_FRAME = _h2_frame(0x08, 0x00, 0, struct.pack(">I", 65535))
 
 
 # ── Individual tests ──────────────────────────────────────
+
 
 def test_dns(host: str) -> tuple[float | None, str | None]:
     """Resolve hostname, return (ms, error)."""
@@ -146,7 +162,9 @@ def test_tcp(ip: str, port: int) -> tuple[float | None, str | None]:
         return None, str(e)
 
 
-def test_tls(ip: str, port: int, sni: str) -> tuple[float | None, float | None, str | None]:
+def test_tls(
+    ip: str, port: int, sni: str
+) -> tuple[float | None, float | None, str | None]:
     """TCP + TLS handshake. Returns (t_tcp_ms, t_tls_ms, error)."""
     t0 = time.perf_counter()
     t_tcp = None
@@ -155,7 +173,11 @@ def test_tls(ip: str, port: int, sni: str) -> tuple[float | None, float | None, 
         t_tcp = (time.perf_counter() - t0) * 1000
 
         ctx = ssl.create_default_context()
-        ctx.set_alpn_protocols(["h2"])
+        # Offer both h2 and http/1.1 — construct relays serve only http/1.1
+        # on :443 (h2 ALPN is fingerprinted by ТСПУ DPI). Asking for h2 only
+        # gets you a fatal `no_application_protocol` alert from a working
+        # relay — that's not DPI, that's our ALPN being wrong.
+        ctx.set_alpn_protocols(["h2", "http/1.1"])
         if sni != TARGET_HOST or SKIP_TLS_VERIFY:
             ctx.check_hostname = False
             ctx.verify_mode = ssl.CERT_NONE
@@ -164,7 +186,7 @@ def test_tls(ip: str, port: int, sni: str) -> tuple[float | None, float | None, 
         t_tls = (time.perf_counter() - t0) * 1000
         alpn = tls.selected_alpn_protocol()
         tls.close()
-        return t_tcp, t_tls, (None if alpn == "h2" else f"ALPN={alpn}")
+        return t_tcp, t_tls, (None if alpn in ("h2", "http/1.1") else f"ALPN={alpn}")
     except Exception as e:
         return t_tcp, None, str(e)
 
@@ -273,32 +295,40 @@ def test_grpc_health(ip: str, port: int) -> tuple[float | None, str | None]:
 
 # ── Formatting helpers ────────────────────────────────────
 
+
 def _ok(ms: float) -> str:
     return f"✅ {ms:6.1f}ms"
+
 
 def _fail(err: str) -> str:
     short = (err or "?")[:60]
     return f"❌ {short}"
 
+
 def _stats(values: list[float], total: int) -> str:
     if not values:
         return f"  0/{total} succeeded"
-    return (f"  {len(values)}/{total} ok  "
-            f"avg={statistics.mean(values):.1f}ms  "
-            f"min={min(values):.1f}ms  "
-            f"max={max(values):.1f}ms"
-            + (f"  stdev={statistics.stdev(values):.1f}ms" if len(values) > 1 else ""))
+    return (
+        f"  {len(values)}/{total} ok  "
+        f"avg={statistics.mean(values):.1f}ms  "
+        f"min={min(values):.1f}ms  "
+        f"max={max(values):.1f}ms"
+        + (f"  stdev={statistics.stdev(values):.1f}ms" if len(values) > 1 else "")
+    )
 
 
 # ── Main ──────────────────────────────────────────────────
 
+
 def run():
-    print(f"\n{'═'*62}")
+    print(f"\n{'═' * 62}")
     print(f"  Construct DPI Probe — {TARGET_HOST}:{TARGET_PORT}")
     print(f"  {RUNS} runs per test  ·  {datetime.now().strftime('%H:%M:%S')}")
     if SKIP_TLS_VERIFY:
-        print(f"  ⚠️  SKIP_TLS_VERIFY=True — cert not validated (iOS CA bundle workaround)")
-    print(f"{'═'*62}\n")
+        print(
+            f"  ⚠️  SKIP_TLS_VERIFY=True — cert not validated (iOS CA bundle workaround)"
+        )
+    print(f"{'═' * 62}\n")
 
     # ── DNS ──────────────────────────────────────────────
     print("── 0. DNS ──────────────────────────────────────────────")
@@ -318,9 +348,9 @@ def run():
         ms, err = test_tcp(target_ip, TARGET_PORT)
         if ms is not None:
             tcp_times.append(ms)
-            print(f"  #{i+1:2d}  {_ok(ms)}")
+            print(f"  #{i + 1:2d}  {_ok(ms)}")
         else:
-            print(f"  #{i+1:2d}  {_fail(err)}")
+            print(f"  #{i + 1:2d}  {_fail(err)}")
     print(_stats(tcp_times, RUNS))
     print()
 
@@ -331,9 +361,11 @@ def run():
         t_tcp, t_tls, err = test_tls(target_ip, TARGET_PORT, sni=TARGET_HOST)
         if t_tls is not None:
             tls_real.append(t_tls)
-            print(f"  #{i+1:2d}  {_ok(t_tls)}  (tcp={t_tcp:.1f}ms)")
+            print(f"  #{i + 1:2d}  {_ok(t_tls)}  (tcp={t_tcp:.1f}ms)")
         else:
-            print(f"  #{i+1:2d}  {_fail(err)}  tcp={'n/a' if t_tcp is None else f'{t_tcp:.1f}ms'}")
+            print(
+                f"  #{i + 1:2d}  {_fail(err)}  tcp={'n/a' if t_tcp is None else f'{t_tcp:.1f}ms'}"
+            )
     print(_stats(tls_real, RUNS))
     print()
 
@@ -345,9 +377,9 @@ def run():
         t_tcp, t_tls, err = test_tls(target_ip, TARGET_PORT, sni=FAKE_SNI)
         if t_tls is not None:
             tls_fake.append(t_tls)
-            print(f"  #{i+1:2d}  {_ok(t_tls)}")
+            print(f"  #{i + 1:2d}  {_ok(t_tls)}")
         else:
-            print(f"  #{i+1:2d}  {_fail(err)}")
+            print(f"  #{i + 1:2d}  {_fail(err)}")
     print(_stats(tls_fake, RUNS))
     print()
 
@@ -358,12 +390,14 @@ def run():
         r = test_h2(target_ip, TARGET_PORT)
         if r["t_h2"] is not None:
             h2_times.append(r["t_h2"])
-            print(f"  #{i+1:2d}  {_ok(r['t_h2'])}  "
-                  f"(tcp={r['t_tcp']:.1f}ms  tls={r['t_tls']:.1f}ms)")
+            print(
+                f"  #{i + 1:2d}  {_ok(r['t_h2'])}  "
+                f"(tcp={r['t_tcp']:.1f}ms  tls={r['t_tls']:.1f}ms)"
+            )
         else:
-            tcp_s = "n/a" if r['t_tcp'] is None else f"{r['t_tcp']:.1f}ms"
-            tls_s = "n/a" if r['t_tls'] is None else f"{r['t_tls']:.1f}ms"
-            print(f"  #{i+1:2d}  {_fail(r['error'])}  tcp={tcp_s}  tls={tls_s}")
+            tcp_s = "n/a" if r["t_tcp"] is None else f"{r['t_tcp']:.1f}ms"
+            tls_s = "n/a" if r["t_tls"] is None else f"{r['t_tls']:.1f}ms"
+            print(f"  #{i + 1:2d}  {_fail(r['error'])}  tcp={tcp_s}  tls={tls_s}")
     print(_stats(h2_times, RUNS))
     print()
 
@@ -374,67 +408,85 @@ def run():
         ms, err = test_grpc_health(target_ip, TARGET_PORT)
         if ms is not None:
             grpc_times.append(ms)
-            print(f"  #{i+1:2d}  {_ok(ms)}")
+            print(f"  #{i + 1:2d}  {_ok(ms)}")
         else:
-            print(f"  #{i+1:2d}  {_fail(err)}")
+            print(f"  #{i + 1:2d}  {_fail(err)}")
     print(_stats(grpc_times, RUNS))
     print()
 
     # ── Diagnosis ─────────────────────────────────────────
     print("── ДИАГНОЗ ─────────────────────────────────────────────")
 
-    tcp_ok_rate  = len(tcp_times)  / RUNS
-    tls_ok_rate  = len(tls_real)   / RUNS
-    h2_ok_rate   = len(h2_times)   / RUNS
+    tcp_ok_rate = len(tcp_times) / RUNS
+    tls_ok_rate = len(tls_real) / RUNS
+    h2_ok_rate = len(h2_times) / RUNS
     grpc_ok_rate = len(grpc_times) / RUNS if grpc_times else 0.0
 
     no_dpi = True
 
     if tcp_ok_rate < 1.0:
-        print(f"  ❌ TCP нестабилен ({tcp_ok_rate*100:.0f}% ok) → блокировка на уровне IP/TCP")
+        print(
+            f"  ❌ TCP нестабилен ({tcp_ok_rate * 100:.0f}% ok) → блокировка на уровне IP/TCP"
+        )
         no_dpi = False
 
     elif tls_ok_rate < 0.9:
-        print(f"  ❌ TLS нестабилен ({tls_ok_rate*100:.0f}% ok) → DPI по TLS SNI или ключевому обмену")
+        print(
+            f"  ❌ TLS нестабилен ({tls_ok_rate * 100:.0f}% ok) → DPI по TLS SNI или ключевому обмену"
+        )
         no_dpi = False
         if tls_fake and len(tls_fake) / RUNS > tls_ok_rate + 0.1:
-            print(f"  ⚠️  TLS fake SNI работает лучше ({len(tls_fake)/RUNS*100:.0f}%)")
+            print(
+                f"  ⚠️  TLS fake SNI работает лучше ({len(tls_fake) / RUNS * 100:.0f}%)"
+            )
             print(f"     → DPI блокирует именно SNI «{TARGET_HOST}»")
 
     elif h2_ok_rate < 0.9:
-        print(f"  ❌ HTTP/2 нестабилен ({h2_ok_rate*100:.0f}% ok) → DPI на HTTP/2 / gRPC уровне")
+        print(
+            f"  ❌ HTTP/2 нестабилен ({h2_ok_rate * 100:.0f}% ok) → DPI на HTTP/2 / gRPC уровне"
+        )
         no_dpi = False
         if tls_real:
-            overhead = statistics.mean(h2_times) - statistics.mean(tls_real) if h2_times else 0
+            overhead = (
+                statistics.mean(h2_times) - statistics.mean(tls_real) if h2_times else 0
+            )
             print(f"     TLS→H2 overhead: {overhead:.1f}ms")
 
     elif grpc_ok_rate < 0.9:
-        print(f"  ❌ gRPC нестабилен ({grpc_ok_rate*100:.0f}% ok) → DPI на уровне gRPC/protobuf")
+        print(
+            f"  ❌ gRPC нестабилен ({grpc_ok_rate * 100:.0f}% ok) → DPI на уровне gRPC/protobuf"
+        )
         no_dpi = False
 
     if no_dpi and h2_times and tcp_times:
         avg_tcp = statistics.mean(tcp_times)
-        avg_h2  = statistics.mean(h2_times)
+        avg_h2 = statistics.mean(h2_times)
         overhead = avg_h2 - avg_tcp
         print(f"  ✅ Все слои работают стабильно")
         print(f"     TCP avg:    {avg_tcp:.1f}ms")
         if tls_real:
             avg_tls = statistics.mean(tls_real)
-            print(f"     TLS avg:    {avg_tls:.1f}ms  (+{avg_tls-avg_tcp:.1f}ms поверх TCP)")
+            print(
+                f"     TLS avg:    {avg_tls:.1f}ms  (+{avg_tls - avg_tcp:.1f}ms поверх TCP)"
+            )
         print(f"     H2 avg:     {avg_h2:.1f}ms  (+{overhead:.1f}ms поверх TCP)")
         if grpc_times:
             print(f"     gRPC avg:   {statistics.mean(grpc_times):.1f}ms")
         if overhead > 500:
             h2_only = avg_h2 - avg_tls if tls_real else overhead
             if h2_only > 300:
-                print(f"  ⚠️  H2 SETTINGS overhead над TLS ({h2_only:.0f}ms) высокий (норма <200ms)")
+                print(
+                    f"  ⚠️  H2 SETTINGS overhead над TLS ({h2_only:.0f}ms) высокий (норма <200ms)"
+                )
                 print(f"     Возможно: сервер медленно обрабатывает HTTP/2 preface")
             else:
                 print(f"  ✅ H2 SETTINGS overhead нормальный ({h2_only:.0f}ms)")
                 print(f"     Высокий H2 vs TCP объясняется самим TLS (ожидаемо)")
         else:
             print(f"  ✅ Overhead в норме — DPI на этом пути не обнаружен")
-            print(f"     Если приложение всё равно медленно → проблема в Swift-логике, не в сети")
+            print(
+                f"     Если приложение всё равно медленно → проблема в Swift-логике, не в сети"
+            )
 
     # Raw expected RTT
     if h2_times and tls_real:
@@ -442,12 +494,14 @@ def run():
         # Estimate RTT from TLS→H2 delta (≈1 round-trip for SETTINGS exchange).
         avg_tcp = statistics.mean(tcp_times) if tcp_times else 0
         avg_tls = statistics.mean(tls_real)
-        avg_h2  = statistics.mean(h2_times)
+        avg_h2 = statistics.mean(h2_times)
         h2_overhead = avg_h2 - avg_tls
         if avg_tcp < 5.0:
             rtt_est = h2_overhead
             print(f"\n  RTT оценка (из H2−TLS delta): ~{rtt_est:.0f}ms")
-            print(f"  (TCP={avg_tcp:.1f}ms — вероятно локальный прокси/VPN, не отражает реальный RTT)")
+            print(
+                f"  (TCP={avg_tcp:.1f}ms — вероятно локальный прокси/VPN, не отражает реальный RTT)"
+            )
         else:
             rtt_est = avg_tcp
             print(f"\n  Оценка RTT: ~{rtt_est:.0f}ms")
