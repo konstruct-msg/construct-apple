@@ -408,7 +408,7 @@ enum UserDefaultsKey: String {
 /// Maps a UTC timezone offset range to a preferred relay ordering.
 /// Used by VeilProxyManager to geo-prefer the closest relay without IP lookup or GPS.
 /// Fetched from `.well-known/construct-server` and cached in UserDefaults;
-/// falls back to `ICEConfig.hardcodedRelayRegions` when server config is unavailable.
+/// falls back to `VEILConfig.hardcodedRelayRegions` when server config is unavailable.
 struct VEILRelayRegion: Codable {
     /// Minimum UTC offset in hours (inclusive).
     let tzOffsetMin: Int
@@ -428,7 +428,7 @@ struct VEILRelayRegion: Codable {
 struct VEILConfig {
     /// Hardcoded fallback bridge cert used when Keychain is empty (first launch before login).
     /// This is the server's public obfs4 identity — not a secret, safe to embed in binary.
-    /// Update this when the production server rotates its ICE identity keypair.
+    /// Update this when the production server rotates its VEIL identity keypair.
     static let hardcodedBridgeCert = "3J8A3lAtPb3R4+td9UVLuzggZeva+o8TDNVw4aHx8HWdvdYpS4gV6t8gmxbGMIQTB5eGJA"
 
     /// Primary VEIL endpoint: TLS 1.3 → obfs4 → gRPC (Amsterdam, via Traefik).

@@ -217,19 +217,14 @@ enum InviteValidationError: LocalizedError {
 // MARK: - Encoding/Decoding Helpers
 
 extension InviteObject {
-    /// Encode to MessagePack binary (compact, optimized for QR codes)
-    /// - Returns: MessagePack-encoded data
-    /// - Throws: EncodingError
+    /// Encode to binary (JSON-based, used for QR codes and deep links)
     func toMessagePack() throws -> Data {
-        return try MessagePackHelper.encode(self)
+        try JSONEncoder().encode(self)
     }
     
-    /// Decode from MessagePack binary
-    /// - Parameter data: MessagePack-encoded data
-    /// - Returns: InviteObject
-    /// - Throws: DecodingError
+    /// Decode from binary (JSON-based)
     static func fromMessagePack(_ data: Data) throws -> InviteObject {
-        return try MessagePackHelper.decode(from: data)
+        try JSONDecoder().decode(InviteObject.self, from: data)
     }
     
     /// Encode to Base64-encoded MessagePack (for QR codes and links)

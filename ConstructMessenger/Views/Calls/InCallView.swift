@@ -61,7 +61,7 @@ struct InCallView: View {
                             .padding(.horizontal, 36)
                             .padding(.vertical, 14)
                             .background(Color.CT.bgMsg)
-                            .overlay(Rectangle().strokeBorder(Color.CT.noise, lineWidth: 1))
+                            .overlay(Circle().strokeBorder(Color.CT.noise, lineWidth: 1))
                     }
                     .padding(.bottom, 52)
                 } else {

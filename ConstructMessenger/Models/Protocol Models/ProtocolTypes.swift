@@ -126,11 +126,6 @@ struct PublicUserInfo: Codable, Identifiable {
     var deviceId: String?    // Set when known (e.g. from Dynamic Invite)
 }
 
-struct SignedPrekeyUpdate: Codable {
-    let newPrekeyPublic: String
-    let signature: String
-}
-
 struct PublicKeyBundleData: Codable {
     let userId: String
     let username: String
@@ -162,10 +157,15 @@ struct DeviceBundleData {
     let platform: Shared_Proto_Core_V1_DevicePlatform
 }
 
-struct EncryptedMessageV3: Codable {
-  let recipientId: String
-  let suiteId: UInt16
-  let ciphertext: String
+// MARK: - Auth Response Data
+/// Result of a successful device registration via gRPC.
+struct RegisterSuccessData: Codable {
+    let userId: String
+    let username: String
+    let sessionToken: String
+    let refreshToken: String
+    let expires: Int64
+    var veilBridgeCert: String?
 }
 
 // MARK: - Profile Sharing
@@ -223,4 +223,3 @@ struct ProfileShareData: Codable {
         case timestamp
     }
 }
-

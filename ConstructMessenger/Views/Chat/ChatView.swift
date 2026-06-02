@@ -275,23 +275,15 @@ struct ChatView: View {
             handleChatDrop(providers: providers)
         }
         .overlay {
-            if isChatDropTargeted {
-                Rectangle()
-                    .strokeBorder(Color.CT.accent, lineWidth: 2)
-                    .background(Color.CT.accent.opacity(0.05))
-                    .overlay(
-                        Text(LocalizedStringKey("drop_to_attach"))
-                            .font(CTFont.regular(16))
-                            .foregroundColor(Color.CT.accent)
-                            .padding(16)
-                            .background(Color.CT.bgMsg)
-                            .overlay(Rectangle().stroke(Color.CT.accent.opacity(0.4), lineWidth: 1))
-                    )
-                    .allowsHitTesting(false)
-                    .padding(8)
-            }
+            ChatDropOverlayView(isVisible: isChatDropTargeted)
         }
-        .overlay(alignment: .top) { searchOverlay(resultCount: renderedMessages.count) }
+        .overlay(alignment: .top) {
+            ChatSearchOverlayView(
+                isSearchActive: $isSearchActive,
+                searchText: $searchText,
+                resultCount: renderedMessages.count
+            )
+        }
         .sheet(isPresented: $showingUserProfile) {
             if let user = viewModel.chat.otherUser {
                 UserProfileView(
@@ -311,34 +303,9 @@ struct ChatView: View {
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
         }
-        .onAppear {
-            guard ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] != "1" else { return }
-            markChatAsRead()
-            viewModel.onViewAppear()
-            loadContactKTStatus()
-            // Изъян 7: notify Rust orchestrator that this chat is now active (enables heartbeat scheduling).
-            if let contactId = viewModel.chat.otherUser?.id, !contactId.isEmpty {
-                _ = try? CryptoManager.shared.handleOrchestratorEvent(
-                    .activeChatChanged(contactId: contactId, isActive: true),
-                    tag: "chat_active_true"
-                )
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .contactKeyChanged)) { note in
-            guard let changedId = note.userInfo?["userId"] as? String,
-                  changedId == viewModel.chat.otherUser?.id else { return }
-            loadContactKTStatus()
-        }
-        .onDisappear {
-            guard ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] != "1" else { return }
-            // Изъян 7: cancel heartbeat scheduling when chat is closed.
-            if let contactId = viewModel.chat.otherUser?.id, !contactId.isEmpty {
-                _ = try? CryptoManager.shared.handleOrchestratorEvent(
-                    .activeChatChanged(contactId: contactId, isActive: false),
-                    tag: "chat_active_false"
-                )
-            }
-        }
+        .onAppear(perform: handleViewAppear)
+        .onReceive(NotificationCenter.default.publisher(for: .contactKeyChanged), perform: handleContactKeyChanged)
+        .onDisappear(perform: handleViewDisappear)
         #if os(iOS)
         .fullScreenCover(item: $galleryStartItem) { item in
                 MediaGalleryViewer(
@@ -365,73 +332,41 @@ struct ChatView: View {
 
     /// Flood-burst warning banner — visible at the top of the chat when the sender
     /// is suppressed by IncomingFloodGuard.
-    @ViewBuilder
     private var floodBurstBanner: some View {
-        let senderId = viewModel.chat.otherUser?.id ?? ""
-        if floodGuard.suppressedSenders.contains(senderId) {
-            HStack(spacing: 10) {
-                Text("[!]")
-                    .font(CTFont.regular(16))
-                    .foregroundStyle(.orange)
+        ChatFloodBannerView(
+            isVisible: isFloodSenderSuppressed,
+            onAllow: unsuppressFloodSender,
+            onBlock: blockAndUnsuppressFloodSender
+        )
+    }
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(LocalizedStringKey("flood_banner_title"))
-                        .font(.footnote.weight(.semibold))
-                    Text(LocalizedStringKey("flood_banner_subtitle"))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+    private var floodSenderId: String {
+        viewModel.chat.otherUser?.id ?? ""
+    }
 
-                Spacer()
+    private var isFloodSenderSuppressed: Bool {
+        floodGuard.suppressedSenders.contains(floodSenderId)
+    }
 
-                Button {
-                    IncomingFloodGuard.shared.unsuppress(senderId: senderId)
-                } label: {
-                    Text("[allow →]")
-                        .font(CTFont.regular(12))
-                        .foregroundStyle(.orange)
-                }
+    private func unsuppressFloodSender() {
+        IncomingFloodGuard.shared.unsuppress(senderId: floodSenderId)
+    }
 
-                Button {
-                    // Delegate to existing block flow
-                    if let user = viewModel.chat.otherUser {
-                        user.isBlocked = true
-                        try? user.managedObjectContext?.save()
-                    }
-                    IncomingFloodGuard.shared.unsuppress(senderId: senderId)
-                } label: {
-                    Text("[block]")
-                        .font(CTFont.regular(12))
-                        .foregroundStyle(Color.CT.danger)
-                }
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background(Color.orange.opacity(0.08))
-            .overlay(Rectangle().frame(height: 1).foregroundStyle(.orange.opacity(0.3)), alignment: .bottom)
-            .transition(.move(edge: .top).combined(with: .opacity))
+    private func blockAndUnsuppressFloodSender() {
+        if let user = viewModel.chat.otherUser {
+            user.isBlocked = true
+            try? user.managedObjectContext?.save()
         }
+        IncomingFloodGuard.shared.unsuppress(senderId: floodSenderId)
     }
 
     @ViewBuilder
     private var deleteButtonBar: some View {
         if isEditMode && !selectedMessages.isEmpty {
-            HStack {
-                Button(role: .destructive) {
-                    deleteSelectedMessages()
-                } label: {
-                    Text("[\(NSLocalizedString("delete_selected", comment: "")) →]")
-                        .font(CTFont.regular(13))
-                        .foregroundStyle(Color.CT.danger)
-                }
-                Spacer()
-                Text("\(selectedMessages.count) \(selectedMessages.count == 1 ? "message_selected" : "messages_selected")")
-                    .font(CTFont.regular(12))
-                    .foregroundStyle(Color.CT.textDim)
-            }
-            .padding()
-            .background(Color.CT.bg)
-            .overlay(Rectangle().frame(height: 1).foregroundStyle(Color.CT.accent.opacity(0.3)), alignment: .top)
+            ChatSelectionBarView(
+                selectedCount: selectedMessages.count,
+                onDelete: deleteSelectedMessages
+            )
         }
     }
     
@@ -512,84 +447,29 @@ struct ChatView: View {
     // MARK: - CT Navigation Bar
 
     private var chatNavBar: some View {
-        HStack(spacing: 10) {
-            Button { dismiss() } label: {
-                Image(systemName: "chevron.backward.circle.fill")
-                    .font(.system(size: 22))
-                    .foregroundColor(Color.CT.accent)
-            }
-
-            Button { showingUserProfile = true } label: {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text((viewModel.chat.otherUser?.resolvedDisplayName ?? NSLocalizedString("chat", comment: "")).uppercased())
-                        .font(CTFont.bold(13))
-                        .foregroundColor(Color.CT.text)
-                    if let subtitle = navigationStatusSubtitle {
-                        Text(subtitle)
-                            .font(CTFont.regular(10))
-                            .foregroundColor(Color.CT.accentDim)
-                            .transition(.opacity)
-                    }
+        ChatNavBarView(
+            title: viewModel.chat.otherUser?.resolvedDisplayName ?? NSLocalizedString("chat", comment: ""),
+            subtitle: navigationStatusSubtitle,
+            contactKTStatus: contactKTStatus,
+            isEditMode: isEditMode,
+            canStartCall: canStartCall,
+            isSearchActive: isSearchActive,
+            onBack: { dismiss() },
+            onOpenProfile: { showingUserProfile = true },
+            onDoneEdit: {
+                withAnimation {
+                    isEditMode = false
+                    selectedMessages.removeAll()
                 }
-                .animation(.easeInOut(duration: 0.25), value: navigationStatusSubtitle)
-            }
-            .buttonStyle(.plain)
-
-            ktBadge
-
-            Spacer()
-
-            if isEditMode {
-                Button {
-                    withAnimation { isEditMode = false; selectedMessages.removeAll() }
-                } label: {
-                    Text("[done]")
-                        .font(CTFont.bold(13))
-                        .foregroundColor(Color.CT.accent)
-                }
-            } else {
-                if CallsFeature.isEnabled, let otherUser = viewModel.chat.otherUser,
-                   case .idle = callManager.state {
-                    Button {
-                        Task { await callManager.startOutgoingCall(
-                            to: otherUser.id,
-                            displayName: otherUser.resolvedDisplayName,
-                            hasVideo: false
-                        ) }
-                    } label: {
-                        Image(systemName: "phone")
-                            .font(.system(size: CTLayout.navIconSizeLg, weight: .medium))
-                            .foregroundColor(Color.CT.accent)
-                    }
-                }
-                Button {
-                    withAnimation { isSearchActive.toggle(); if !isSearchActive { searchText = "" } }
-                } label: {
-                    Image(systemName: isSearchActive ? "xmark" : "magnifyingglass")
-                        .font(.system(size: CTLayout.navIconSize, weight: .medium))
-                        .foregroundColor(Color.CT.accent)
+            },
+            onStartCall: startCall,
+            onToggleSearch: {
+                withAnimation {
+                    isSearchActive.toggle()
+                    if !isSearchActive { searchText = "" }
                 }
             }
-        }
-        .padding(.horizontal, CTLayout.edgePad)
-        .frame(height: CTLayout.navBarHeight)
-        .ctBorderBottom()
-    }
-
-    /// KT badge shown in the nav bar. `[✓]` when verified, `[!]` on key-change/failure, hidden otherwise.
-    @ViewBuilder private var ktBadge: some View {
-        switch contactKTStatus {
-        case .verified:
-            Text("[✓]")
-                .font(CTFont.regular(11))
-                .foregroundColor(Color.CT.accent)
-        case .keyChanged, .failed:
-            Text("[!]")
-                .font(CTFont.bold(11))
-                .foregroundColor(Color.CT.danger)
-        case .unverified:
-            EmptyView()
-        }
+        )
     }
 
     /// Load KT status for the contact from Core Data.
@@ -605,6 +485,24 @@ struct ChatView: View {
     }
 
 
+    private var canStartCall: Bool {
+        guard CallsFeature.isEnabled,
+              viewModel.chat.otherUser != nil,
+              case .idle = callManager.state else { return false }
+        return true
+    }
+
+    private func startCall() {
+        guard let otherUser = viewModel.chat.otherUser else { return }
+        Task {
+            await callManager.startOutgoingCall(
+                to: otherUser.id,
+                displayName: otherUser.resolvedDisplayName,
+                hasVideo: false
+            )
+        }
+    }
+
     /// Returns nil when everything is healthy (no subtitle shown).
     private var navigationStatusSubtitle: String? {
         // Only show "Encrypting..." while actively establishing a session (user tapped Send).
@@ -619,64 +517,6 @@ struct ChatView: View {
         return nil
     }
     
-    @ViewBuilder
-    private func searchOverlay(resultCount: Int) -> some View {
-        if isSearchActive {
-            VStack(spacing: 0) {
-                HStack(spacing: 8) {
-                    Text(">")
-                        .font(CTFont.regular(14))
-                        .foregroundStyle(Color.CT.accent)
-
-                    TextField("search_messages", text: $searchText)
-                        .font(CTFont.regular(14))
-                        .foregroundStyle(Color.CT.text)
-                        .tint(Color.CT.accent)
-                        #if os(iOS)
-                        .autocapitalization(.none)
-                        .submitLabel(.search)
-                        #endif
-                        .autocorrectionDisabled()
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 6)
-                        .background(Color.CT.bgMsg)
-                        .overlay(Rectangle().stroke(Color.CT.accent.opacity(0.4)))
-
-                    Button {
-                        withAnimation {
-                            isSearchActive = false
-                            searchText = ""
-                        }
-                    } label: {
-                        Text("[x]")
-                            .font(CTFont.regular(14))
-                            .foregroundStyle(Color.CT.accentDim)
-                    }
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .background(Color.CT.bg)
-
-                if !searchText.isEmpty {
-                    HStack {
-                        Text("[\(resultCount) results]")
-                            .font(CTFont.regular(12))
-                            .foregroundStyle(Color.CT.textDim)
-                        Spacer()
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.bottom, 6)
-                    .background(Color.CT.bg)
-                }
-
-                Rectangle()
-                    .frame(height: 1)
-                    .foregroundStyle(Color.CT.accent.opacity(0.3))
-
-                Spacer()
-            }
-        }
-    }
 
     // MARK: - Computed Properties
     
@@ -698,6 +538,39 @@ struct ChatView: View {
             guard let mc = parseMediaContent(from: $0.displayText) else { return false }
             return (mc.media["_placeholder"] as? Bool) != true
         }
+    }
+
+    // MARK: - Lifecycle
+
+    private var isPreviewRuntime: Bool {
+        ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
+    }
+
+    private func handleViewAppear() {
+        guard !isPreviewRuntime else { return }
+        markChatAsRead()
+        viewModel.onViewAppear()
+        loadContactKTStatus()
+        setActiveChatState(isActive: true)
+    }
+
+    private func handleViewDisappear() {
+        guard !isPreviewRuntime else { return }
+        setActiveChatState(isActive: false)
+    }
+
+    private func handleContactKeyChanged(_ note: Notification) {
+        guard let changedId = note.userInfo?["userId"] as? String,
+              changedId == viewModel.chat.otherUser?.id else { return }
+        loadContactKTStatus()
+    }
+
+    private func setActiveChatState(isActive: Bool) {
+        guard let contactId = viewModel.chat.otherUser?.id, !contactId.isEmpty else { return }
+        _ = try? CryptoManager.shared.handleOrchestratorEvent(
+            .activeChatChanged(contactId: contactId, isActive: isActive),
+            tag: isActive ? "chat_active_true" : "chat_active_false"
+        )
     }
 
     // MARK: - Actions

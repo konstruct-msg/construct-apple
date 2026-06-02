@@ -79,7 +79,7 @@ final class MessageStreamManager {
 
     /// True when a connection attempt is actively in progress (not sleeping in backoff).
     /// When true, app-foreground force-reconnect should be skipped to avoid interrupting
-    /// an ongoing ICE failover path with a new competing direct-path attempt.
+    /// an ongoing VEIL failover path with a new competing direct-path attempt.
     var isActivelyConnecting: Bool { streamTask != nil && !isConnected && retryCount == 0 }
 
     // MARK: - Callbacks
@@ -100,7 +100,7 @@ final class MessageStreamManager {
     /// True once the server has pushed *any* event since `openStream()` accept.
     /// Reset to false on each new openStream. Drives the first-event watchdog: if
     /// nothing has arrived from the server within `firstServerEventWatchdogH3` seconds
-    /// (only on H3 — we don't watchdog H2/ICE this tightly), we treat H3 as silently
+    /// (only on H3 — we don't watchdog H2/VEIL this tightly), we treat H3 as silently
     /// broken (DPI dropped UDP after handshake) and force fallback to H2.
     var firstServerEventReceived: Bool = false
     private var serverChangedObserver: NSObjectProtocol?
@@ -109,10 +109,10 @@ final class MessageStreamManager {
     private let maxRetryDelay: TimeInterval = NetworkTiming.Stream.maxRetryDelay
     /// When `true`, the next `openStream()` call uses H2 direct instead of H3.
     /// Set in connectLoop when H3 direct times out — gives H2 a chance on the same host
-    /// before escalating to ICE relay (H3 may be blocked/unsupported while H2 works fine).
+    /// before escalating to VEIL relay (H3 may be blocked/unsupported while H2 works fine).
     var shouldFallbackToH2Direct = false
     /// Records whether the most recent `openStream()` call attempted H3 transport.
-    /// Used by connectLoop to decide whether to try H2 direct before activating ICE.
+    /// Used by connectLoop to decide whether to try H2 direct before activating VEIL.
     var lastStreamTransportWasH3 = false
     /// Counts consecutive H3 stream-open failures across reconnects and network changes.
     /// Not reset by forceDisconnect() so it survives network path switches.
@@ -164,7 +164,7 @@ final class MessageStreamManager {
     private var continuousFailureStreakStart: Date?
 
     /// After this many minutes of uninterrupted failures, the loop switches to low-power mode:
-    /// skips `fetchMissedMessages`, skips ICE `prepare()`, and uses a longer backoff.
+    /// skips `fetchMissedMessages`, skips VEIL `prepare()`, and uses a longer backoff.
     private let degradedModeThreshold: TimeInterval = 5 * 60  // 5 minutes
 
     /// Backoff used in degraded mode — longer sleep between retries to conserve battery.
@@ -478,7 +478,7 @@ final class MessageStreamManager {
 
             Log.info("connectLoop: fetchMissedMessages done, isCancelled=\(Task.isCancelled) — opening stream", category: "MessageStream")
 
-            // TransportRouter maintains ICE state continuously; no explicit prepare needed.
+            // TransportRouter maintains VEIL state continuously; no explicit prepare needed.
             // We just read whatever the router has set as current routing.
             let routerSnapshot = await TransportRouter.shared.snapshot()
             do {
@@ -492,7 +492,7 @@ final class MessageStreamManager {
                 let okTarget: TransportTarget
                 if let port = GRPCChannelManager.shared.veilProxyPort(),
                    let addr = routerSnapshot.state.currentRelay {
-                    okTarget = .ice(port: port, relay: addr)
+                    okTarget = .veil(port: port, relay: addr)
                 } else {
                     okTarget = .direct(.h2)
                 }
@@ -533,21 +533,21 @@ final class MessageStreamManager {
                         serverRejected = refreshError == nil  // returned false = no refresh token
                     }
                     if serverRejected {
-                        // Untrusted-relay gate: a hostile or broken ICE relay can synthesise
+                        // Untrusted-relay gate: a hostile or broken VEIL relay can synthesise
                         // an UNAUTHENTICATED response indistinguishable from a real one. Only
                         // honor the rejection when the stream was opened over the direct path.
-                        // On ICE: rotate the relay and retry; if the rejection is real it will
+                        // On VEIL: rotate the relay and retry; if the rejection is real it will
                         // surface again on a clean relay (or on direct) and be honored there.
-                        let streamWentThroughICE = GRPCChannelManager.shared.veilProxyPort() != nil
+                        let streamWentThroughVEIL = GRPCChannelManager.shared.veilProxyPort() != nil
                             || routingKeyAtLoopStart.hasPrefix("ice:")
-                        if streamWentThroughICE {
+                        if streamWentThroughVEIL {
                             let snap = await TransportRouter.shared.snapshot()
                             let relayAddr = snap.state.currentRelay
-                            Log.info("MessageStream refresh rejected over ICE relay \(relayAddr ?? "?") — not wiping tokens, will rotate", category: "MessageStream")
+                            Log.info("MessageStream refresh rejected over VEIL relay \(relayAddr ?? "?") — not wiping tokens, will rotate", category: "MessageStream")
                             if let port = GRPCChannelManager.shared.veilProxyPort(), let addr = relayAddr {
                                 await TransportRouter.shared.send(
                                     .rpcFailed(kind: .tlsFingerprintBlocked,
-                                               via: .ice(port: port, relay: addr),
+                                               via: .veil(port: port, relay: addr),
                                                foreground: true)
                                 )
                             }
@@ -563,11 +563,11 @@ final class MessageStreamManager {
                 // reconnect without exponential backoff.
                 if let rpcError = error as? RPCError,
                    rpcError.code == .unavailable,
-                   rpcError.message.contains("retrying with ICE") {
-                    // Route the failure through the FSM so it decides ICE escalation / relay rotation.
+                   rpcError.message.contains("retrying with VEIL") {
+                    // Route the failure through the FSM so it decides VEIL escalation / relay rotation.
                     let kind = RPCFailureClassifier.classify(rpcError)
-                    let failTarget: TransportTarget = routingKeyAtLoopStart.hasPrefix("ice:")
-                        ? .ice(port: GRPCChannelManager.shared.veilProxyPort() ?? 0,
+                    let failTarget: TransportTarget = routingKeyAtLoopStart.hasPrefix("veil:")
+                        ? .veil(port: GRPCChannelManager.shared.veilProxyPort() ?? 0,
                                relay: routerSnapshot.state.currentRelay ?? "")
                         : .direct(.h2)
                     await TransportRouter.shared.send(.rpcFailed(kind: kind, via: failTarget, foreground: true))
@@ -575,11 +575,11 @@ final class MessageStreamManager {
                         consecutiveH3OpenFailures += 1
                         Log.info("H3 open failure #\(consecutiveH3OpenFailures)/\(Self.h3OpenFailureThreshold)", category: "MessageStream")
                     }
-                    // H3→H2 fallback: if H3 failed on the direct path and ICE isn't active yet,
-                    // try H2 once before activating ICE (H3 may be unsupported, not blocked).
+                    // H3→H2 fallback: if H3 failed on the direct path and VEIL isn't active yet,
+                    // try H2 once before activating VEIL (H3 may be unsupported, not blocked).
                     let routingKeyNow = GRPCChannelManager.shared.currentRoutingKey
-                    let nowUsingICE = await TransportRouter.shared.snapshot().state.prefersVEIL
-                    if !nowUsingICE, routingKeyNow == routingKeyAtLoopStart,
+                    let nowUsingVEIL = await TransportRouter.shared.snapshot().state.prefersVEIL
+                    if !nowUsingVEIL, routingKeyNow == routingKeyAtLoopStart,
                        routingKeyAtLoopStart.hasPrefix("direct:"), lastStreamTransportWasH3 {
                         shouldFallbackToH2Direct = true
                         Log.info("H3 direct timeout — trying H2 direct next", category: "MessageStream")
@@ -587,15 +587,15 @@ final class MessageStreamManager {
                         shouldFallbackToH2Direct = false
                         lastStreamTransportWasH3 = false
                     }
-                    Log.info("MessageStream reconnecting immediately (ICE=\(nowUsingICE))", category: "MessageStream")
+                    Log.info("MessageStream reconnecting immediately (VEIL=\(nowUsingVEIL))", category: "MessageStream")
                     backgroundFetchTask?.cancel()
                     retryCount = 0
                     continue
                 }
                 // Generic stream failure → feed to the FSM.
                 let kind = RPCFailureClassifier.classify(error)
-                let failTarget: TransportTarget = routingKeyAtLoopStart.hasPrefix("ice:")
-                    ? .ice(port: GRPCChannelManager.shared.veilProxyPort() ?? 0,
+                let failTarget: TransportTarget = routingKeyAtLoopStart.hasPrefix("veil:")
+                    ? .veil(port: GRPCChannelManager.shared.veilProxyPort() ?? 0,
                            relay: routerSnapshot.state.currentRelay ?? "")
                     : .direct(.h2)
                 await TransportRouter.shared.send(.rpcFailed(kind: kind, via: failTarget, foreground: true))

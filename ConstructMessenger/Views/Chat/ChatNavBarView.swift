@@ -1,0 +1,84 @@
+import SwiftUI
+
+struct ChatNavBarView: View {
+    let title: String
+    let subtitle: String?
+    let contactKTStatus: KTStatus
+    let isEditMode: Bool
+    let canStartCall: Bool
+    let isSearchActive: Bool
+    let onBack: () -> Void
+    let onOpenProfile: () -> Void
+    let onDoneEdit: () -> Void
+    let onStartCall: () -> Void
+    let onToggleSearch: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Button(action: onBack) {
+                Image(systemName: "chevron.backward.circle.fill")
+                    .font(.system(size: 22))
+                    .foregroundColor(Color.CT.accent)
+            }
+
+            Button(action: onOpenProfile) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(title.uppercased())
+                        .font(CTFont.bold(13))
+                        .foregroundColor(Color.CT.text)
+                    if let subtitle {
+                        Text(subtitle)
+                            .font(CTFont.regular(10))
+                            .foregroundColor(Color.CT.accentDim)
+                            .transition(.opacity)
+                    }
+                }
+                .animation(.easeInOut(duration: 0.25), value: subtitle)
+            }
+            .buttonStyle(.plain)
+
+            ktBadge
+
+            Spacer()
+
+            if isEditMode {
+                Button(action: onDoneEdit) {
+                    Text("[done]")
+                        .font(CTFont.bold(13))
+                        .foregroundColor(Color.CT.accent)
+                }
+            } else {
+                if canStartCall {
+                    Button(action: onStartCall) {
+                        Image(systemName: "phone")
+                            .font(.system(size: CTLayout.navIconSizeLg, weight: .medium))
+                            .foregroundColor(Color.CT.accent)
+                    }
+                }
+                Button(action: onToggleSearch) {
+                    Image(systemName: isSearchActive ? "xmark" : "magnifyingglass")
+                        .font(.system(size: CTLayout.navIconSize, weight: .medium))
+                        .foregroundColor(Color.CT.accent)
+                }
+            }
+        }
+        .padding(.horizontal, CTLayout.edgePad)
+        .frame(height: CTLayout.navBarHeight)
+        .ctBorderBottom()
+    }
+
+    @ViewBuilder private var ktBadge: some View {
+        switch contactKTStatus {
+        case .verified:
+            Text("[✓]")
+                .font(CTFont.regular(11))
+                .foregroundColor(Color.CT.accent)
+        case .keyChanged, .failed:
+            Text("[!]")
+                .font(CTFont.bold(11))
+                .foregroundColor(Color.CT.danger)
+        case .unverified:
+            EmptyView()
+        }
+    }
+}

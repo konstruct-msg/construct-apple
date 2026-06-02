@@ -320,7 +320,12 @@ final class CallManager {
                     // Open stream so callee ICE candidates reach the caller via the
                     // signaling relay instead of the E2EE fallback path.
                     try? self.openStreamIfNeeded()
-                    return  // Skip stream-based ringing — answer already sent
+                    // Server expects a ringing event on the signaling stream — without it
+                    // the call is reaped as `calleeOffline` ~7s after iceConnected, killing
+                    // an otherwise-working media tunnel. Send it even though the SDP answer
+                    // already went via E2EE; the server treats ringing as a presence beacon.
+                    sendRinging()
+                    return
                 }
 
                 // No pending E2EE offer → signal stream path: open stream, wait for offer.
@@ -689,6 +694,18 @@ final class CallManager {
                 guard let self else { return }
                 Log.error("WebRTC connection failed — ending call", category: "Calls")
                 self.endActiveCall(reason: .local("ICE connection failed"))
+            }
+        }
+        webrtc.onConnected = { [weak self] in
+            Task { @MainActor in
+                guard self != nil else { return }
+                // The dial tone is an AVAudioEngine holding the shared
+                // .playAndRecord session's playback bus. Until it stops, WebRTC's
+                // voice-processing audio unit produces no audible output. Idempotent —
+                // peerConnectionState may bounce through .connected on reconnects.
+                #if os(iOS)
+                DialTonePlayer.shared.stop()
+                #endif
             }
         }
         active.webrtc = webrtc

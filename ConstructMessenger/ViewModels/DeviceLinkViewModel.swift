@@ -134,7 +134,7 @@ final class DeviceLinkViewModel {
             KeychainManager.shared.saveSessionToken(result.accessToken)
             KeychainManager.shared.saveRefreshToken(result.refreshToken)
             if let cert = result.iceBridgeCert, !cert.isEmpty {
-                KeychainManager.shared.saveIceBridgeCert(cert)
+                KeychainManager.shared.saveVEILBridgeCert(cert)
             }
 
             Log.info("Device B: link confirmed — userId=\(result.userId.prefix(8))…", category: "DeviceLink")
@@ -201,7 +201,7 @@ final class DeviceLinkViewModel {
                         KeychainManager.shared.saveSessionToken(result.accessToken)
                         KeychainManager.shared.saveRefreshToken(result.refreshToken)
                         if let cert = result.iceBridgeCert, !cert.isEmpty {
-                            KeychainManager.shared.saveIceBridgeCert(cert)
+                            KeychainManager.shared.saveVEILBridgeCert(cert)
                         }
                         await uploadPreKeysAfterLink(deviceId: deviceId)
                         self.isWaitingForApproval = false

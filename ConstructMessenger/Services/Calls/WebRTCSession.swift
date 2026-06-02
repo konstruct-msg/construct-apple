@@ -27,6 +27,7 @@ enum WebRTCSessionError: Error {
 protocol WebRTCSessionProtocol: AnyObject {
     var onLocalIceCandidate: (@Sendable (WebRTCIceCandidate) -> Void)? { get set }
     var onConnectionFailed: (@Sendable () -> Void)? { get set }
+    var onConnected: (@Sendable () -> Void)? { get set }
 
     func createOffer() async throws -> String
     func createAnswer() async throws -> String
@@ -49,9 +50,33 @@ private final class WebRTCFactory {
 
     private init() {
         RTCInitializeSSL()
+        // NOTE: audio-session manual-mode setup lives in `WebRTCRuntime.bootstrap()`
+        // which MUST run at app launch, before anything else touches RTCAudioSession.
+        // Setting `useManualAudio` lazily here was destructive: by the time the first
+        // CallKit `didActivate` fired (which touches RTCAudioSession), this factory
+        // wasn't init'd yet, so `useManualAudio` was still false. Then when this
+        // factory finally init'd mid-call, it flipped `isAudioEnabled` back to false
+        // and silenced the audio unit for the rest of the call.
         let encoderFactory = RTCDefaultVideoEncoderFactory()
         let decoderFactory = RTCDefaultVideoDecoderFactory()
         self.factory = RTCPeerConnectionFactory(encoderFactory: encoderFactory, decoderFactory: decoderFactory)
+    }
+}
+
+/// One-time WebRTC runtime setup. Call `bootstrap()` exactly once at app launch,
+/// before any code touches `RTCAudioSession` or `CallKitProvider`. This puts
+/// `RTCAudioSession` into manual-audio mode so CallKit (not WebRTC) drives the
+/// AVAudioSession activation, and force-initialises the peer-connection factory
+/// so its setup never races later activation events.
+@MainActor
+enum WebRTCRuntime {
+    static func bootstrap() {
+        #if canImport(WebRTC)
+        let rtc = RTCAudioSession.sharedInstance()
+        rtc.useManualAudio = true
+        rtc.isAudioEnabled = false
+        _ = WebRTCFactory.shared
+        #endif
     }
 }
 
@@ -59,6 +84,11 @@ private final class WebRTCFactory {
 final class WebRTCSession: NSObject, WebRTCSessionProtocol {
     var onLocalIceCandidate: (@Sendable (WebRTCIceCandidate) -> Void)?
     var onConnectionFailed: (@Sendable () -> Void)?
+    // Fires once when `peerConnectionState` first reaches `.connected`. CallManager
+    // uses this to stop the outgoing dial tone — otherwise its `AVAudioEngine` keeps
+    // running on the shared `.playAndRecord` session and silences WebRTC's voice-
+    // processing audio unit (call shows "connected" but no audio).
+    var onConnected: (@Sendable () -> Void)?
 
     private let role: WebRTCSessionRole
     private let factory: RTCPeerConnectionFactory
@@ -95,8 +125,15 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
         try Self.configureAudioSession()
         self.localAudioTrack = Self.makeLocalAudioTrack(factory: factory)
         if let track = localAudioTrack {
-            _ = peerConnection.add(track, streamIds: ["audio"])
+            let sender = peerConnection.add(track, streamIds: ["audio"])
+            Log.info(
+                "WebRTC local audio track added: trackId=\(track.trackId) enabled=\(track.isEnabled) sender=\(sender != nil)",
+                category: "Calls"
+            )
+        } else {
+            Log.error("WebRTC local audio track is nil — call will be one-way at best", category: "Calls")
         }
+        Self.dumpAudioState(label: "session-init role=\(role)")
     }
 
     func close() {
@@ -204,10 +241,15 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
         if let turn, !turn.urls.isEmpty {
             // Server-provided TURN credentials (AMS coturn).
             // TURN servers also handle STUN binding requests, so no separate STUN needed.
+            Log.info(
+                "ICE config → TURN urls=\(turn.urls) username='\(turn.username)' credential.len=\(turn.credential.count)",
+                category: "Calls"
+            )
             servers.append(RTCIceServer(urlStrings: turn.urls, username: turn.username, credential: turn.credential))
         } else {
             // TURN unavailable (credentials fetch failed). Fall back to own STUN server (AMS).
             // Never use public STUN servers — call metadata must not leak to Google/Cloudflare.
+            Log.info("ICE config → STUN-only fallback (turn=nil)", category: "Calls")
             servers.append(RTCIceServer(urlStrings: ["stun:ams.konstruct.cc:3478"]))
         }
         return servers
@@ -269,19 +311,69 @@ extension WebRTCSession: RTCPeerConnectionDelegate {
 
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didChange newState: RTCPeerConnectionState) {
         Log.info("WebRTC peerConnectionState → \(newState.debugDescription)", category: "Calls")
-        if newState == .failed {
+        switch newState {
+        case .connected:
             Task { @MainActor in
-                self.onConnectionFailed?()
+                Self.dumpAudioState(label: "peer-connected")
+                self.dumpPeerTracks(label: "peer-connected")
+                self.onConnected?()
             }
+        case .failed:
+            Task { @MainActor in self.onConnectionFailed?() }
+        default:
+            break
         }
     }
 
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didAdd stream: RTCMediaStream) {}
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didRemove stream: RTCMediaStream) {}
     nonisolated func peerConnectionShouldNegotiate(_ peerConnection: RTCPeerConnection) {}
-    nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didAdd rtpReceiver: RTCRtpReceiver, streams: [RTCMediaStream]) {}
+    nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didAdd rtpReceiver: RTCRtpReceiver, streams: [RTCMediaStream]) {
+        let kind = rtpReceiver.track?.kind ?? "nil"
+        let trackId = rtpReceiver.track?.trackId ?? "nil"
+        let enabled = rtpReceiver.track?.isEnabled ?? false
+        Log.info(
+            "WebRTC remote receiver added: kind=\(kind) trackId=\(trackId) enabled=\(enabled) streams=\(streams.count)",
+            category: "Calls"
+        )
+    }
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didRemove rtpReceiver: RTCRtpReceiver) {}
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didOpen dataChannel: RTCDataChannel) {}
+
+    // MARK: - Diagnostics
+
+    /// One-line snapshot of AVAudioSession + RTCAudioSession state. Called at session
+    /// init and on peerConnectionState→connected so we can tell whether the audio
+    /// unit, category, and route are actually what we think they are when the
+    /// call goes silent.
+    private static func dumpAudioState(label: String) {
+        #if os(iOS)
+        let av = AVAudioSession.sharedInstance()
+        let rtc = RTCAudioSession.sharedInstance()
+        let route = av.currentRoute
+        let outputs = route.outputs.map { "\($0.portType.rawValue):\($0.portName)" }.joined(separator: ",")
+        let inputs = route.inputs.map { "\($0.portType.rawValue):\($0.portName)" }.joined(separator: ",")
+        Log.info(
+            "AUDIO[\(label)] AV{cat=\(av.category.rawValue) mode=\(av.mode.rawValue) sr=\(Int(av.sampleRate)) iobuf=\(String(format: "%.3f", av.ioBufferDuration)) in=[\(inputs)] out=[\(outputs)]} RTC{active=\(rtc.isActive) audioEnabled=\(rtc.isAudioEnabled) useManual=\(rtc.useManualAudio)}",
+            category: "Calls"
+        )
+        #endif
+    }
+
+    private func dumpPeerTracks(label: String) {
+        let senders = peerConnection.senders.compactMap { sender -> String? in
+            guard let track = sender.track else { return nil }
+            return "\(track.kind)/enabled=\(track.isEnabled)/id=\(track.trackId)"
+        }
+        let receivers = peerConnection.receivers.compactMap { receiver -> String? in
+            guard let track = receiver.track else { return nil }
+            return "\(track.kind)/enabled=\(track.isEnabled)/id=\(track.trackId)"
+        }
+        Log.info(
+            "TRACKS[\(label)] senders=[\(senders.joined(separator: " | "))] receivers=[\(receivers.joined(separator: " | "))]",
+            category: "Calls"
+        )
+    }
 }
 
 // MARK: - State Debug Descriptions
@@ -332,6 +424,7 @@ private extension RTCPeerConnectionState {
 final class WebRTCSession: WebRTCSessionProtocol {
     var onLocalIceCandidate: (@Sendable (WebRTCIceCandidate) -> Void)?
     var onConnectionFailed: (@Sendable () -> Void)?
+    var onConnected: (@Sendable () -> Void)?
 
     init(role: WebRTCSessionRole, turn: Shared_Proto_Signaling_V1_TurnCredentials?) throws {
         throw WebRTCSessionError.webRTCLibraryMissing

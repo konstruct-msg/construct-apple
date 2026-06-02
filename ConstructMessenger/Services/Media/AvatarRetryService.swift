@@ -5,7 +5,7 @@
 //  Retries failed avatar downloads after reconnect.
 //
 //  When a profile message arrives while the network is unavailable (e.g. during
-//  the ICE startup window), the avatar download fails and avatarData stays nil.
+//  the VEIL startup window), the avatar download fails and avatarData stays nil.
 //  The download metadata (mediaId/Url/Key) is already persisted in the
 //  corresponding Message.decryptedContent JSON — so on the next successful
 //  stream connection we scan for users with missing avatars and retry.

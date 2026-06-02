@@ -180,7 +180,7 @@ class MessageRetryManager {
         context: NSManagedObjectContext
     ) {
         let fetchRequest = Message.fetchRequest()
-        // Also retry failed messages that haven't exceeded the retry cap (e.g. dropped during ICE startup window)
+        // Also retry failed messages that haven't exceeded the retry cap (e.g. dropped during VEIL startup window)
         let queuedPredicate = NSPredicate(format: "chat == %@ AND deliveryStatusRaw == %d", chat, DeliveryStatus.queued.rawValue)
         let retryableFailed = NSPredicate(
             format: "chat == %@ AND deliveryStatusRaw == %d AND retryCount < %d",

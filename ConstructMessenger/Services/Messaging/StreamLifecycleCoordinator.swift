@@ -329,7 +329,7 @@ final class StreamLifecycleCoordinator {
         let veilRecoveryTask = Task { [weak self] in
             for await _ in NotificationCenter.default.notifications(named: .veilRelayRecovered) {
                 guard let self else { return }
-                Log.info("ICE recovered — retrying key health check and token registration", category: "StreamLifecycle")
+                Log.info("VEIL recovered — retrying key health check and token registration", category: "StreamLifecycle")
                 self.lastForegroundKeyCheckAt = 0
                 await self.checkKeyHealthInBackground()
                 await PushNotificationManager.shared.ensureTokenRegistered()

@@ -36,7 +36,7 @@ protocol StreamTransport: AnyObject, Sendable {
 // MARK: - Production implementation
 
 /// Production `StreamTransport` backed by `GRPCChannelManager`.
-/// Selects H3 (QUIC) vs H2 based on OS version, ICE proxy state, and `useH2Fallback`.
+/// Selects H3 (QUIC) vs H2 based on OS version, VEIL proxy state, and `useH2Fallback`.
 final class GRPCStreamTransport: StreamTransport {
 
     func open(
@@ -151,11 +151,11 @@ extension MessageStreamManager {
         // Determine transport label early for logging and accept-timeout calculation.
         // Actual channel selection happens inside GRPCStreamTransport.open().
         // Use the shared persistent channel for the stream transport.
-        // On iOS 16+ with a direct (non-ICE) path, prefer HTTP/3 (QUIC) for connection
+        // On iOS 16+ with a direct (non-VEIL) path, prefer HTTP/3 (QUIC) for connection
         // migration across WiFi↔cellular switches and head-of-line blocking elimination.
-        // H3 is never used over ICE — obfs4 tunnels terminate at an H2 proxy.
-        // Fall back to H2 when ICE is active or when useH2Fallback is set
-        // (previous H3 attempt timed out — trying H2 direct before escalating to ICE).
+        // H3 is never used over VEIL — obfs4 tunnels terminate at an H2 proxy.
+        // Fall back to H2 when VEIL is active or when useH2Fallback is set
+        // (previous H3 attempt timed out — trying H2 direct before escalating to VEIL).
         let transportLabel: String
 #if canImport(Network)
         if !useH2Fallback, GRPCChannelManager.shared.veilProxyPort() == nil {
@@ -328,8 +328,8 @@ extension MessageStreamManager {
         // forceReconnect() calls then race against it, producing "Client is closed" panics.
         defer { streamTask.cancel() }
 
-        // Fast ICE failover for stream open: if the RPC isn't accepted quickly, we retry
-        // through ICE instead of waiting for long TCP/TLS timeouts on DPI-blocked networks.
+        // Fast VEIL failover for stream open: if the RPC isn't accepted quickly, we retry
+        // through VEIL instead of waiting for long TCP/TLS timeouts on DPI-blocked networks.
         let isH3Transport = lastStreamTransportWasH3
         do {
             try await withThrowingTaskGroup(of: Void.self) { group in
@@ -346,15 +346,15 @@ extension MessageStreamManager {
                 // 2) Timeout — three tiers:
                 //   · H3 direct → 1.5s  (QUIC fails fast when not supported; tighter window)
                 //   · H2 direct → 2.0s  (TCP+TLS needs one extra round-trip)
-                //   · H2 / ICE  → 6.0s  (obfs4/WebTunnel + relay→server hop on a censored network
+                //   · H2 / VEIL  → 6.0s  (obfs4/WebTunnel + relay→server hop on a censored network
                 //                        easily eats 3-5s; tighter timeout was rotating healthy relays)
-                let usingICE = GRPCChannelManager.shared.veilProxyPort() != nil
+                let usingVEIL = GRPCChannelManager.shared.veilProxyPort() != nil
                 group.addTask {
                     let timeout: TimeInterval
                     if isH3Transport {
                         timeout = NetworkTiming.GRPC.streamOpenAcceptTimeoutH3
-                    } else if usingICE {
-                        timeout = NetworkTiming.GRPC.streamOpenAcceptTimeoutICE
+                    } else if usingVEIL {
+                        timeout = NetworkTiming.GRPC.streamOpenAcceptTimeoutVEIL
                     } else {
                         timeout = NetworkTiming.GRPC.streamOpenAcceptTimeout
                     }
@@ -409,7 +409,7 @@ extension MessageStreamManager {
                 // completes, gets the dead connection back, and GRPCStreamStateMachine asserts
                 // "Client is closed: can't send metadata" — a fatalError that kills the app.
                 GRPCChannelManager.shared.invalidatePersistentClient()
-                throw RPCError(code: .unavailable, message: "Stream open timed out — retrying with ICE")
+                throw RPCError(code: .unavailable, message: "Stream open timed out — retrying with VEIL")
             }
         }
 
@@ -421,7 +421,7 @@ extension MessageStreamManager {
         // fast fallback: if no server event arrives in `firstServerEventWatchdogH3` seconds,
         // mark H3 as broken on this network and trigger immediate H2 reconnect.
         //
-        // Runs only for H3 — H2 has its own (slower) backpressure path and over ICE the
+        // Runs only for H3 — H2 has its own (slower) backpressure path and over VEIL the
         // additional relay latency makes a 5s watchdog too aggressive.
         if isH3Transport {
             let firstEventWatchdog = Task { [weak self] in

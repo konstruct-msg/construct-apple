@@ -27,8 +27,8 @@ struct MessageInputTextBar: View {
         }
         .fixedSize(horizontal: false, vertical: true)
         .background(Color.CT.outMsgBg)
-        .clipShape(RoundedRectangle(cornerRadius: 18))
-        .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.CT.noise, lineWidth: 0.5))
+        .clipShape(RoundedRectangle(cornerRadius: ChatUIConstants.InputBar.cornerRadius))
+        .overlay(RoundedRectangle(cornerRadius: ChatUIConstants.InputBar.cornerRadius).stroke(Color.CT.noise, lineWidth: ChatUIConstants.Bubble.strokeWidth))
     }
 
     // MARK: - Text field
@@ -36,7 +36,7 @@ struct MessageInputTextBar: View {
     @ViewBuilder
     private var textField: some View {
         TextField(LocalizedStringKey("message_placeholder"), text: $text, axis: .vertical)
-            .font(CTFont.regular(15))
+            .font(CTFont.regular(ChatUIConstants.Typography.messageTextSize))
             .foregroundColor(Color.CT.text)
             .textFieldStyle(.plain)
             .lineLimit(1...8)

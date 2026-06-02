@@ -170,7 +170,7 @@ class MediaManager {
         )
     }
 
-    /// Uploads data with up to 2 automatic retries on transient gRPC/ICE stream failures.
+    /// Uploads data with up to 2 automatic retries on transient gRPC/VEIL stream failures.
     /// Checks MediaSendCache first — identical plaintext within the 30-minute TTL window
     /// skips re-encryption and re-upload entirely.
     static func uploadWithRetry(data: Data, mimeType: String) async throws -> MediaServiceClient.UploadedMedia {
@@ -186,7 +186,7 @@ class MediaManager {
         // .unavailable     → server/transport unreachable
         // .deadlineExceeded → upload timed out (large file on slow link)
         // .unknown         → gRPC-swift wraps Swift CancellationError from the transport as .unknown
-        //                     when ICE proxy restarts mid-stream (e.g. foreground wake)
+        //                     when VEIL proxy restarts mid-stream (e.g. foreground wake)
         //                     log: unknown: "The transport threw an unexpected error." (cause: "CancellationError()")
         let retryableCodes: Set<RPCError.Code> = [.cancelled, .unavailable, .deadlineExceeded, .unknown]
         let delays: [UInt64] = NetworkTiming.Media.retryDelaysNs
@@ -208,16 +208,16 @@ class MediaManager {
         throw lastError ?? RPCError(code: .unknown, message: "Upload failed: no error captured")
     }
 
-    /// Downloads encrypted media data with up to 3 automatic retries on transient ICE/stream failures.
+    /// Downloads encrypted media data with up to 3 automatic retries on transient VEIL/stream failures.
     private static func downloadWithRetry(mediaId: String) async throws -> Data {
         let retryableCodes: Set<RPCError.Code> = [.cancelled, .unavailable, .deadlineExceeded, .unknown]
-        // Generous delays: media downloads take 40 s to fail under DPI; ICE needs ~1–2 s to come up.
+        // Generous delays: media downloads take 40 s to fail under DPI; VEIL needs ~1–2 s to come up.
         let delays: [UInt64] = [3_000_000_000, 8_000_000_000, 15_000_000_000]
 
-        // Pre-flight: if DPI was confirmed this session and ICE proxy isn't routing yet,
+        // Pre-flight: if DPI was confirmed this session and VEIL proxy isn't routing yet,
         // start it and wait before the first download attempt.  Without this, a long-running
         // streaming RPC goes direct and gets silently blocked by the middlebox.
-        await ensureICEForMedia()
+        await ensureVEILForMedia()
 
         var lastError: Error?
         for (index, delay) in ([0] + delays.map { Optional($0) }).enumerated() {
@@ -229,10 +229,10 @@ class MediaManager {
             } catch let error as GRPCCore.RPCError where retryableCodes.contains(error.code) {
                 lastError = error
                 Log.info("Download dropped (code=\(error.code)) — will retry", category: "MediaManager")
-                // Start ICE after any transient failure and wait for it to be ready so the
+                // Start VEIL after any transient failure and wait for it to be ready so the
                 // next attempt uses the obfs4 tunnel instead of the blocked direct path.
                 if error.code == .unavailable || error.code == .deadlineExceeded {
-                    await ensureICEForMedia()
+                    await ensureVEILForMedia()
                 }
                 _ = index  // suppress unused-variable warning
             }
@@ -242,7 +242,7 @@ class MediaManager {
 
     /// No-op: ConnectionLoop manages proxy lifecycle — readiness is guaranteed
     /// when veilProxyPort() is non-nil and GRPCCallExecutor routes through it.
-    private static func ensureICEForMedia() async {}
+    private static func ensureVEILForMedia() async {}
 
     /// Upload a file (document, PDF, etc.) for a chat message.
     /// Text-based files are transparently compressed with ZLIB before encryption if beneficial.

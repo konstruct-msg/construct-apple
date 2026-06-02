@@ -33,10 +33,13 @@ enum MessagePadding {
         guard MessagePaddingConfig.enabled, data.count >= headerLength else { return data }
         let prefix = [UInt8](data.prefix(4))
         guard prefix == magic else { return data }
-        let lengthData = data.subdata(in: 4..<8)
+        // `Data.subdata(in:)` takes ABSOLUTE indices. A slice (`bigData[100..<200]`)
+        // has startIndex=100, so `subdata(in: 4..<8)` traps. Anchor to startIndex.
+        let start = data.startIndex
+        let lengthData = data.subdata(in: (start + 4)..<(start + 8))
         let originalLength = lengthData.toUInt32()
         guard originalLength > 0, originalLength <= data.count - headerLength else { return data }
-        return data.subdata(in: headerLength ..< headerLength + Int(originalLength))
+        return data.subdata(in: (start + headerLength)..<(start + headerLength + Int(originalLength)))
     }
 
     private static func targetBucketSize(for rawLength: Int) -> Int? {

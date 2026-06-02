@@ -7,6 +7,7 @@
 import Foundation
 import CallKit
 import AVFoundation
+import WebRTC
 
 final class CallKitProvider: NSObject, CXProviderDelegate {
     static let shared = CallKitProvider()
@@ -127,11 +128,28 @@ final class CallKitProvider: NSObject, CXProviderDelegate {
 
     nonisolated func provider(_ provider: CXProvider, didActivate audioSession: AVAudioSession) {
         Log.info("CallKit audio session activated", category: "Calls")
+        // WebRTC iOS SDK runs its own RTCAudioSession that gates audio I/O. With
+        // `useManualAudio = true` (set in WebRTCFactory), the I/O stays disabled
+        // until we explicitly hand over the activated AVAudioSession and flip
+        // `isAudioEnabled`. Skipping this leaves the call connected but silent.
+        let rtc = RTCAudioSession.sharedInstance()
+        rtc.audioSessionDidActivate(audioSession)
+        rtc.isAudioEnabled = true
+        let route = audioSession.currentRoute
+        let outputs = route.outputs.map { "\($0.portType.rawValue):\($0.portName)" }.joined(separator: ",")
+        let inputs = route.inputs.map { "\($0.portType.rawValue):\($0.portName)" }.joined(separator: ",")
+        Log.info(
+            "AUDIO[didActivate] AV{cat=\(audioSession.category.rawValue) mode=\(audioSession.mode.rawValue) sr=\(Int(audioSession.sampleRate)) in=[\(inputs)] out=[\(outputs)]} RTC{active=\(rtc.isActive) audioEnabled=\(rtc.isAudioEnabled) useManual=\(rtc.useManualAudio)}",
+            category: "Calls"
+        )
         onAudioActivated?()
     }
 
     nonisolated func provider(_ provider: CXProvider, didDeactivate audioSession: AVAudioSession) {
         Log.info("CallKit audio session deactivated", category: "Calls")
+        let rtc = RTCAudioSession.sharedInstance()
+        rtc.isAudioEnabled = false
+        rtc.audioSessionDidDeactivate(audioSession)
         onAudioDeactivated?()
     }
 

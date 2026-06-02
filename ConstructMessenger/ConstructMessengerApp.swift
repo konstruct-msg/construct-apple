@@ -27,6 +27,13 @@ struct Construct_MessengerApp: App {
         // 'A fetch request must have an entity.'
         _ = PersistenceController.shared
         applyGlobalAppearance()
+        // Put RTCAudioSession into manual-audio mode and warm the WebRTC factory
+        // BEFORE CallKit's first `didActivate` touches RTCAudioSession. Lazy-init
+        // mid-call destructively reset `isAudioEnabled = false`, silencing every
+        // call after that point.
+        MainActor.assumeIsolated {
+            WebRTCRuntime.bootstrap()
+        }
     }
 
     var body: some Scene {

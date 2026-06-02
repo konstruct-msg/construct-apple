@@ -69,7 +69,7 @@ struct TransportDiagnosticsView: View {
             CTSettingsSectionHeader(title: "ROUTING", color: .orange)
             VStack(alignment: .leading, spacing: 4) {
                 row("target", value: routingTarget)
-                row("ice port", value: veilPortLabel)
+                row("veil port", value: veilPortLabel)
                 row("active relay", value: activeRelayLabel)
                 row("prefers VEIL", value: mirror.state.prefersVEIL ? "yes" : "no")
             }
@@ -194,7 +194,7 @@ struct TransportDiagnosticsView: View {
 
     private var routingTarget: String {
         if let port = mirror.state.veilPort {
-            return "ice:\(port)"
+            return "veil:\(port)"
         }
         return "direct"
     }

@@ -28,16 +28,13 @@ struct MainTabView: View {
     @State private var visitedTabs: Set<Int> = [0]
 
     var body: some View {
+        // Incoming-call UI on iOS is owned by CallKit (system banner / lock-screen
+        // / dynamic-island). Drawing our own overlay duplicates it and the two
+        // accept buttons go out of sync (our button bypassed CallKit, leaving
+        // the system banner hanging). The custom sheet is preserved for non-iOS
+        // platforms (where CallKit doesn't exist) in their own MainTab variant.
         callContent
             .debugMetricsOverlay()
-            .overlay(alignment: .bottom) {
-                if CallsFeature.isEnabled, case .incoming(let session) = callManager.state {
-                    IncomingCallView(session: session)
-                        .zIndex(100)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: isIncomingState)
-                }
-            }
             .fullScreenCover(isPresented: .constant(CallsFeature.isEnabled && isActiveOrConnecting)) {
                 if let session = activeCallSession {
                     InCallView(session: session, isConnecting: isConnectingState, endReason: callEndReason)
@@ -118,11 +115,6 @@ struct MainTabView: View {
     }
 
     // MARK: - Call state helpers
-
-    private var isIncomingState: Bool {
-        if case .incoming = callManager.state { return true }
-        return false
-    }
 
     private var isActiveOrConnecting: Bool {
         switch callManager.state {

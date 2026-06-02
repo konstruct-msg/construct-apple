@@ -115,7 +115,7 @@ struct LinkParser {
         acceptRequest.invite = inviteToken
         
         // Retry AcceptInvite with backoff — "Stream unexpectedly closed" happens when
-        // ICE is reconnecting. A few attempts let the transport stabilize.
+        // VEIL is reconnecting. A few attempts let the transport stabilize.
         let response: Shared_Proto_Services_V1_AcceptInviteResponse
         do {
             response = try await withRetry(
