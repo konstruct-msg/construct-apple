@@ -76,6 +76,10 @@ enum WebRTCRuntime {
         rtc.useManualAudio = true
         rtc.isAudioEnabled = false
         _ = WebRTCFactory.shared
+        Log.info(
+            "WebRTC bootstrap: useManualAudio=\(rtc.useManualAudio) isAudioEnabled=\(rtc.isAudioEnabled)",
+            category: "Calls"
+        )
         #endif
     }
 }
