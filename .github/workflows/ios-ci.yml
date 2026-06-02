@@ -17,15 +17,15 @@ jobs:
     runs-on: macos-14
     steps:
       # Checkout siblings in the layout expected by build_crypto_lib.sh:
-      # $GITHUB_WORKSPACE/construct-ice/
+      # $GITHUB_WORKSPACE/construct-veil/
       # $GITHUB_WORKSPACE/construct-core/   ← build_crypto_lib.sh uses PROJECT_ROOT/../construct-core
       # $GITHUB_WORKSPACE/construct-messenger/  ← PROJECT_ROOT
 
-      - name: Checkout construct-ice
+      - name: Checkout construct-veil
         uses: actions/checkout@v4
         with:
-          repository: ${{ github.repository_owner }}/construct-ice
-          path: construct-ice
+          repository: ${{ github.repository_owner }}/construct-veil
+          path: construct-veil
 
       - name: Checkout construct-core
         uses: actions/checkout@v4
@@ -52,13 +52,17 @@ jobs:
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
             construct-core/target/
-          key: macos-cargo-ios-${{ hashFiles('construct-core/Cargo.lock', 'construct-ice/Cargo.lock') }}
+          key: macos-cargo-ios-${{ hashFiles('construct-core/Cargo.lock', 'construct-veil/Cargo.lock') }}
           restore-keys: macos-cargo-ios-
 
-      - name: Install uniffi-bindgen-cli v${{ env.UNIFFI_VERSION }}
+      # The `uniffi-bindgen` binary is shipped by the `uniffi` crate itself
+      # (gated behind the `cli` feature). The standalone `uniffi-bindgen-cli`
+      # crate this step used to reference does not exist on crates.io.
+      - name: Install uniffi-bindgen v${{ env.UNIFFI_VERSION }}
         run: |
-          cargo install uniffi-bindgen-cli \
+          cargo install uniffi \
             --version ${{ env.UNIFFI_VERSION }} \
+            --features cli \
             --locked \
             --quiet
 
@@ -91,11 +95,11 @@ jobs:
     runs-on: macos-14
     needs: build-ios
     steps:
-      - name: Checkout construct-ice
+      - name: Checkout construct-veil
         uses: actions/checkout@v4
         with:
-          repository: ${{ github.repository_owner }}/construct-ice
-          path: construct-ice
+          repository: ${{ github.repository_owner }}/construct-veil
+          path: construct-veil
 
       - name: Checkout construct-core
         uses: actions/checkout@v4
@@ -122,13 +126,14 @@ jobs:
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
             construct-core/target/
-          key: macos-cargo-ios-${{ hashFiles('construct-core/Cargo.lock', 'construct-ice/Cargo.lock') }}
+          key: macos-cargo-ios-${{ hashFiles('construct-core/Cargo.lock', 'construct-veil/Cargo.lock') }}
           restore-keys: macos-cargo-ios-
 
-      - name: Install uniffi-bindgen-cli v${{ env.UNIFFI_VERSION }}
+      - name: Install uniffi-bindgen v${{ env.UNIFFI_VERSION }}
         run: |
-          cargo install uniffi-bindgen-cli \
+          cargo install uniffi \
             --version ${{ env.UNIFFI_VERSION }} \
+            --features cli \
             --locked \
             --quiet
 
