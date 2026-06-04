@@ -48,12 +48,18 @@ enum VeilMethod: UInt8, Sendable, Equatable {
     case obfs4 = 0
     case webTunnel = 1
     case masque = 2
+    /// veil-front (honest-front HTTPS, sketch v2). Requires a per-relay ticket
+    /// supplied via `VeilRelay.veilFrontTicket`; if the ticket is missing or the
+    /// `VeilProxyStore.veilFrontEnabled` flag is off, Rust excludes veil-front
+    /// from the probe race (its ticket-parse step fails the probe fast).
+    case veilFront = 3
 
     var label: String {
         switch self {
         case .obfs4:     return "obfs4"
         case .webTunnel: return "webtunnel"
         case .masque:    return "masque"
+        case .veilFront: return "veil-front"
         }
     }
 }

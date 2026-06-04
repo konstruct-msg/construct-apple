@@ -28,6 +28,10 @@ final class NativeVeilRuntime: VeilProxyRuntime {
         let spki       = relay.pinnedSpki ?? ""
         let hostHeader = relay.wtHostHeader ?? ""
         let wtPath     = relay.wtPath ?? ""
+        // veil-front ticket is sent only when the feature flag is on AND the
+        // relay actually carries a ticket. Empty string → Rust excludes
+        // veil-front from the probe race (its ticket parse fails the probe).
+        let veilFrontTicket = (VeilProxyStore.veilFrontEnabled ? relay.veilFrontTicket : nil) ?? ""
 
         // Diagnose veil_start=-1 failures by logging what we hand to Rust.
         // Empty bundle/SPKI/SNI are the most common causes of fail-before-network
@@ -36,6 +40,7 @@ final class NativeVeilRuntime: VeilProxyRuntime {
             "VEIL FFI start → addr='\(address)' " +
             "bundle.len=\(bundle.count) sni='\(sni)' " +
             "spki.len=\(spki.count) hostHeader='\(hostHeader)' wtPath='\(wtPath)' " +
+            "veilFrontTicket.len=\(veilFrontTicket.count) " +
             "fingerprint.len=\(fingerprint.count) scoresPath=\(scoresPath ?? "nil")",
             category: "VEIL"
         )
@@ -47,22 +52,25 @@ final class NativeVeilRuntime: VeilProxyRuntime {
                     spki.withCString { spkiPtr in
                         hostHeader.withCString { hostPtr in
                             wtPath.withCString { wtPathPtr in
-                                withScoresPath(scoresPath) { scoresPtr in
-                                    fingerprint.withUnsafeBytes { fpBuf -> Int32 in
-                                        let fpBase = fpBuf.bindMemory(to: UInt8.self).baseAddress
-                                        let req = VeilStartRequest(
-                                            relay_addr: addrPtr,
-                                            bundle: bundlePtr,
-                                            tls_sni: sniPtr,
-                                            spki_hex: spkiPtr,
-                                            host_header: hostPtr,
-                                            wt_base_path: wtPathPtr,
-                                            network_fingerprint: fpBase,
-                                            network_fingerprint_len: fingerprint.count,
-                                            allowed_methods: 0,         // 0 = all methods
-                                            scores_path: scoresPtr
-                                        )
-                                        return veil_start(req, &out)
+                                veilFrontTicket.withCString { ticketPtr in
+                                    withScoresPath(scoresPath) { scoresPtr in
+                                        fingerprint.withUnsafeBytes { fpBuf -> Int32 in
+                                            let fpBase = fpBuf.bindMemory(to: UInt8.self).baseAddress
+                                            let req = VeilStartRequest(
+                                                relay_addr: addrPtr,
+                                                bundle: bundlePtr,
+                                                tls_sni: sniPtr,
+                                                spki_hex: spkiPtr,
+                                                host_header: hostPtr,
+                                                wt_base_path: wtPathPtr,
+                                                network_fingerprint: fpBase,
+                                                network_fingerprint_len: fingerprint.count,
+                                                allowed_methods: 0,         // 0 = all methods
+                                                scores_path: scoresPtr,
+                                                veil_front_ticket_b64: ticketPtr
+                                            )
+                                            return veil_start(req, &out)
+                                        }
                                     }
                                 }
                             }

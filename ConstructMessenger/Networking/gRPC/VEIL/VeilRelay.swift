@@ -42,6 +42,11 @@ struct VeilRelay: Codable, Identifiable {
     let wtHostHeader: String?
     /// Alternative TLS SNI values for WebTunnel rotation.
     let alternativeSNIs: [String]
+    /// Base64-encoded veil-front ticket (65 raw bytes pre-encoding). nil means
+    /// veil-front is not configured for this relay — the Rust coordinator will
+    /// exclude it from the probe race. Distributed via the relay manifest
+    /// alongside `bridgeCert` / `wtPath`.
+    let veilFrontTicket: String?
 
     /// Full bridge line passed to Rust: "cert=<cert> iat-mode=<n>".
     var bridgeLine: String {
@@ -49,6 +54,10 @@ struct VeilRelay: Codable, Identifiable {
     }
 
     var supportsWebTunnel: Bool { wtPath != nil }
+    var supportsVeilFront: Bool {
+        if let t = veilFrontTicket { return !t.isEmpty }
+        return false
+    }
 
     /// True when TLS SNI points to a CDN/domain-fronting host rather than the relay host.
     var isCDNFronted: Bool {
@@ -60,7 +69,8 @@ struct VeilRelay: Codable, Identifiable {
     init(address: String, bridgeCert: String, iatMode: VeilIATMode = .none,
          tlsServerName: String? = nil, pinnedSpki: String? = nil,
          wtPath: String? = nil, wtHostHeader: String? = nil,
-         alternativeSNIs: [String] = [], manifestId: String? = nil) {
+         alternativeSNIs: [String] = [], manifestId: String? = nil,
+         veilFrontTicket: String? = nil) {
         self.id = UUID()
         self.manifestId = manifestId
         self.address = address
@@ -71,12 +81,14 @@ struct VeilRelay: Codable, Identifiable {
         self.wtPath = wtPath
         self.wtHostHeader = wtHostHeader
         self.alternativeSNIs = alternativeSNIs
+        self.veilFrontTicket = veilFrontTicket
     }
 
     enum CodingKeys: String, CodingKey {
         case id, address, bridgeCert, iatMode, tlsServerName, pinnedSpki, wtPath, wtHostHeader
         case alternativeSNIs = "alternativeSNIs"
         case manifestId
+        case veilFrontTicket
     }
 
     init(from decoder: Decoder) throws {
@@ -92,6 +104,7 @@ struct VeilRelay: Codable, Identifiable {
         wtPath = try? c.decode(String.self, forKey: .wtPath)
         wtHostHeader = try? c.decode(String.self, forKey: .wtHostHeader)
         alternativeSNIs = (try? c.decode([String].self, forKey: .alternativeSNIs)) ?? []
+        veilFrontTicket = try? c.decode(String.self, forKey: .veilFrontTicket)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -106,5 +119,6 @@ struct VeilRelay: Codable, Identifiable {
         try? c.encode(wtPath, forKey: .wtPath)
         try? c.encode(wtHostHeader, forKey: .wtHostHeader)
         if !alternativeSNIs.isEmpty { try? c.encode(alternativeSNIs, forKey: .alternativeSNIs) }
+        try? c.encode(veilFrontTicket, forKey: .veilFrontTicket)
     }
 }

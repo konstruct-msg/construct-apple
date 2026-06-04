@@ -17,6 +17,16 @@ enum VeilProxyStore {
     private static let qualityScoresKey = "veil_relay_quality_scores_v1"
     private static let qualityScoresMaxEntries = 20
 
+    /// Feature flag: gate veil-front (honest-front HTTPS) participation in the
+    /// Rust coordinator's probe race. Off by default until the ticket-issuance
+    /// channel and a deployed cover application exist. When off, the FFI ticket
+    /// field is sent empty and Rust excludes the method.
+    static let veilFrontEnabledKey = "veil_front_enabled"
+    static var veilFrontEnabled: Bool {
+        get { UserDefaults.standard.bool(forKey: veilFrontEnabledKey) }
+        set { UserDefaults.standard.set(newValue, forKey: veilFrontEnabledKey) }
+    }
+
     static func loadMode() -> VeilMode {
         if let raw = UserDefaults.standard.string(forKey: modeKey),
            let stored = VeilMode(rawValue: raw) {

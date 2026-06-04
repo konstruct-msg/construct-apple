@@ -66,7 +66,8 @@ uint16_t veil_proxy_port_webtunnel(void);
 // Gated by `coordinator` feature in construct-veil; symbols are present when
 // libconstruct_core.a is built with construct-veil?/coordinator enabled.
 //
-// Method ID legend in VeilStartResult.method: 0=obfs4, 1=webtunnel, 2=masque.
+// Method ID legend in VeilStartResult.method: 0=obfs4, 1=webtunnel, 2=masque,
+// 3=veil-front (honest-front HTTPS).
 
 typedef struct VeilStartRequest {
     const char *relay_addr;            // "host:port"
@@ -79,6 +80,10 @@ typedef struct VeilStartRequest {
     size_t network_fingerprint_len;
     uint32_t allowed_methods;          // bitmask, 0 = all
     const char *scores_path;           // SQLite path, NULL = in-memory
+    // Base64-encoded veil-front ticket (65 raw bytes pre-encoding). Empty / NULL
+    // excludes veil-front from the probe race (its ticket parse fails the probe
+    // fast). MUST be the last field — Rust struct layout depends on it.
+    const char *veil_front_ticket_b64;
 } VeilStartRequest;
 
 typedef struct VeilStartResult {
