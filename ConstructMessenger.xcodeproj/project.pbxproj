@@ -10,6 +10,7 @@
 		4CC229F104334A44B3561AF2 /* GeoLite2-Country.mmdb in Resources */ = {isa = PBXBuildFile; fileRef = ECED362673164C2D8564E780 /* GeoLite2-Country.mmdb */; };
 		5DE6276511B842BCBB52CA05 /* GeoLite2-ASN.mmdb in Resources */ = {isa = PBXBuildFile; fileRef = 819FB256A68C4DC7BF0637F1 /* GeoLite2-ASN.mmdb */; };
 		A8FFA5FBCF4E4BCDBBE6AA04 /* ConstructEngine.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = D06B095D08AE45F0AEBB363D /* ConstructEngine.xcframework */; };
+		BF0A1D232FCF418600D0597C /* WhisperKit in Frameworks */ = {isa = PBXBuildFile; productRef = BF0A1D222FCF418600D0597C /* WhisperKit */; };
 		BF3DE8702F62C2000058C1AA /* ConstructCore.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = BF7098D02F01D3C400CC6F04 /* ConstructCore.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		BF3DE8722F62C2000058C1AA /* GRPCCore in Frameworks */ = {isa = PBXBuildFile; productRef = BF3DE8712F62C2000058C1AA /* GRPCCore */; };
 		BF3DE8742F62C2000058C1AA /* GRPCProtobuf in Frameworks */ = {isa = PBXBuildFile; productRef = BF3DE8732F62C2000058C1AA /* GRPCProtobuf */; };
@@ -142,6 +143,7 @@
 				BFCB6D932F7C4C4800C59B83 /* WebRTC in Frameworks */,
 				BFF6FD002F4C4E5300A31F36 /* SwiftProtobuf in Frameworks */,
 				BFF6FCF92F4C4D6600A31F36 /* GRPCNIOTransportHTTP2 in Frameworks */,
+				BF0A1D232FCF418600D0597C /* WhisperKit in Frameworks */,
 				BF7098D12F01D3C400CC6F04 /* ConstructCore.xcframework in Frameworks */,
 				D5E79C3D4B5A42FA99FF5106 /* ConstructEngine.xcframework in Frameworks */,
 				BFF6FCF42F4C4CCA00A31F36 /* GRPCProtobuf in Frameworks */,
@@ -251,6 +253,7 @@
 				BFF6FCF82F4C4D6600A31F36 /* GRPCNIOTransportHTTP2 */,
 				BFF6FCFF2F4C4E5300A31F36 /* SwiftProtobuf */,
 				BFCB6D922F7C4C4800C59B83 /* WebRTC */,
+				BF0A1D222FCF418600D0597C /* WhisperKit */,
 			);
 			productName = "Construct Messenger";
 			productReference = BF103A6F2EED889800324CEA /* Construct Messenger.app */;
@@ -400,6 +403,7 @@
 				BFF6FCF72F4C4D6600A31F36 /* XCRemoteSwiftPackageReference "grpc-swift-nio-transport" */,
 				BFF6FCFE2F4C4E5300A31F36 /* XCRemoteSwiftPackageReference "swift-protobuf" */,
 				BFCB6D912F7C4C4800C59B83 /* XCRemoteSwiftPackageReference "WebRTC" */,
+				BF0A1D212FCF418600D0597C /* XCRemoteSwiftPackageReference "argmax-oss-swift" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = BF103A702EED889800324CEA /* Products */;
@@ -579,7 +583,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = ConstructMessenger/ConstructMessenger.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 392;
+				CURRENT_PROJECT_VERSION = 398;
 				DEVELOPMENT_TEAM = PK2473XF3P;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -610,7 +614,7 @@
 				);
 				LIBRARY_SEARCH_PATHS = "$(PROJECT_DIR)";
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.13.14;
+				MARKETING_VERSION = 0.13.20;
 				PRODUCT_BUNDLE_IDENTIFIER = maximeliseyev.constructmessenger;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -764,7 +768,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = ConstructMessenger/ConstructMessenger.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 392;
+				CURRENT_PROJECT_VERSION = 398;
 				DEVELOPMENT_TEAM = PK2473XF3P;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -795,7 +799,7 @@
 				);
 				LIBRARY_SEARCH_PATHS = "$(PROJECT_DIR)";
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.13.14;
+				MARKETING_VERSION = 0.13.20;
 				PRODUCT_BUNDLE_IDENTIFIER = maximeliseyev.constructmessenger;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -820,7 +824,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = ConstructMessenger/ConstructMessenger.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 392;
+				CURRENT_PROJECT_VERSION = 398;
 				DEVELOPMENT_TEAM = PK2473XF3P;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -851,7 +855,7 @@
 				);
 				LIBRARY_SEARCH_PATHS = "$(PROJECT_DIR)";
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.13.14;
+				MARKETING_VERSION = 0.13.20;
 				PRODUCT_BUNDLE_IDENTIFIER = maximeliseyev.constructmessenger;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -1341,6 +1345,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		BF0A1D212FCF418600D0597C /* XCRemoteSwiftPackageReference "argmax-oss-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/argmaxinc/argmax-oss-swift";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
+		};
 		BFCB6D912F7C4C4800C59B83 /* XCRemoteSwiftPackageReference "WebRTC" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/stasel/WebRTC.git";
@@ -1388,6 +1400,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = BFCB6D912F7C4C4800C59B83 /* XCRemoteSwiftPackageReference "WebRTC" */;
 			productName = WebRTC;
+		};
+		BF0A1D222FCF418600D0597C /* WhisperKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BF0A1D212FCF418600D0597C /* XCRemoteSwiftPackageReference "argmax-oss-swift" */;
+			productName = WhisperKit;
 		};
 		BF3DE8712F62C2000058C1AA /* GRPCCore */ = {
 			isa = XCSwiftPackageProductDependency;
