@@ -237,6 +237,13 @@ struct DataStorageSettingsView: View {
                         }
                     }
                     sectionFooter("storage_auto_clear_footer")
+
+                    // MARK: Voice transcription (on-device Whisper)
+                    // Models are downloadable storage assets (75 MB – 3 GB),
+                    // so they live next to media cache / quotas. The section
+                    // owns its own header AND footer — do not wrap with
+                    // CTSettingsSectionHeader / sectionFooter here.
+                    STTSettingsSection()
                 }
                 .padding(.bottom, DataStorageSettingsLayout.screenBottomPadding)
             }

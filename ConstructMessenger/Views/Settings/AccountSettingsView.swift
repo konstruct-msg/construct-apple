@@ -44,8 +44,13 @@ struct AccountSettingsView: View {
     var body: some View {
         VStack(spacing: 0) {
             CTNavBar(
-                title: NSLocalizedString("account", comment: ""),
-                showBack: true,
+                title: isEditingProfile
+                    ? NSLocalizedString("edit_identity", comment: "")
+                    : NSLocalizedString("account", comment: ""),
+                // Hide back navigation while editing so the only way out is
+                // explicit save (✓) or cancel (×). Prevents accidental swipe-
+                // back from silently dropping the pending changes.
+                showBack: !isEditingProfile,
                 trailingSystemImage: isEditingProfile ? "checkmark.circle.fill" : "square.and.pencil",
                 trailingSecondarySystemImage: isEditingProfile ? "xmark.circle" : nil,
                 backAction: { handleBackTap() },
@@ -204,7 +209,7 @@ struct AccountSettingsView: View {
 
     private var avatarHeader: some View {
         VStack(spacing: AccountSettingsLayout.avatarSectionSpacing) {
-            HexagonAvatarView(
+            MainAvatarView(
                 userId: viewModel.userId,
                 displayName: viewModel.displayName,
                 image: viewModel.profileImage,
@@ -324,7 +329,7 @@ struct AccountSettingsView: View {
                 }
                 .padding(.horizontal, AccountSettingsLayout.rowHorizontalPadding)
                 .padding(.vertical, AccountSettingsLayout.rowVerticalPadding)
-                .contentShape(Rectangle())
+                .contentShape(RoundedRectangle(cornerRadius: 8))
             }
             .buttonStyle(.plain)
             flatRowDivider()
@@ -346,7 +351,7 @@ struct AccountSettingsView: View {
                 }
                 .padding(.horizontal, AccountSettingsLayout.rowHorizontalPadding)
                 .padding(.vertical, AccountSettingsLayout.rowVerticalPadding)
-                .contentShape(Rectangle())
+                .contentShape(RoundedRectangle(cornerRadius: 8))
             }
             .buttonStyle(.plain)
             flatRowDivider()
@@ -366,7 +371,7 @@ struct AccountSettingsView: View {
                 }
                 .padding(.horizontal, AccountSettingsLayout.rowHorizontalPadding)
                 .padding(.vertical, AccountSettingsLayout.rowVerticalPadding)
-                .contentShape(Rectangle())
+                .contentShape(RoundedRectangle(cornerRadius: 8))
             }
             .buttonStyle(.plain)
         }
@@ -391,7 +396,7 @@ struct AccountSettingsView: View {
                 }
                 .padding(.horizontal, AccountSettingsLayout.rowHorizontalPadding)
                 .padding(.vertical, AccountSettingsLayout.rowVerticalPadding)
-                .contentShape(Rectangle())
+                .contentShape(RoundedRectangle(cornerRadius: 8))
             }
             .buttonStyle(.plain)
             flatRowDivider()
@@ -408,7 +413,7 @@ struct AccountSettingsView: View {
                 }
                 .padding(.horizontal, AccountSettingsLayout.rowHorizontalPadding)
                 .padding(.vertical, AccountSettingsLayout.rowVerticalPadding)
-                .contentShape(Rectangle())
+                .contentShape(RoundedRectangle(cornerRadius: 8))
             }
             .buttonStyle(.plain)
             flatRowDivider()
@@ -425,7 +430,7 @@ struct AccountSettingsView: View {
                 }
                 .padding(.horizontal, AccountSettingsLayout.rowHorizontalPadding)
                 .padding(.vertical, AccountSettingsLayout.rowVerticalPadding)
-                .contentShape(Rectangle())
+                .contentShape(RoundedRectangle(cornerRadius: 8))
             }
             .buttonStyle(.plain)
             flatRowDivider()
@@ -442,7 +447,7 @@ struct AccountSettingsView: View {
                 }
                 .padding(.horizontal, AccountSettingsLayout.rowHorizontalPadding)
                 .padding(.vertical, AccountSettingsLayout.rowVerticalPadding)
-                .contentShape(Rectangle())
+                .contentShape(RoundedRectangle(cornerRadius: 8))
             }
             .buttonStyle(.plain)
         }
@@ -470,7 +475,7 @@ struct AccountSettingsView: View {
                 }
                 .padding(.horizontal, AccountSettingsLayout.rowHorizontalPadding)
                 .padding(.vertical, AccountSettingsLayout.rowVerticalPadding)
-                .contentShape(Rectangle())
+                .contentShape(RoundedRectangle(cornerRadius: 8))
             }
             .buttonStyle(.plain)
             flatRowDivider()
@@ -490,7 +495,7 @@ struct AccountSettingsView: View {
                 }
                 .padding(.horizontal, AccountSettingsLayout.rowHorizontalPadding)
                 .padding(.vertical, AccountSettingsLayout.rowVerticalPadding)
-                .contentShape(Rectangle())
+                .contentShape(RoundedRectangle(cornerRadius: 8))
             }
             .buttonStyle(.plain)
         }
@@ -562,46 +567,55 @@ struct AccountSettingsView: View {
         lowercased: Bool = false
     ) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Text(label.lowercased())
-                    .font(CTFont.regular(14))
-                    .foregroundStyle(Color.CT.textDim)
-                Spacer()
+            if isEditing {
+                // Vertical layout: the label becomes a placeholder inside the
+                // field, the field gets a visible bottom underline. Makes it
+                // unambiguous to the user where input lands.
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 8) {
+                        TextField(label.lowercased(), text: value)
+                            .font(CTFont.regular(15))
+                            .foregroundStyle(Color.CT.text)
+                            .autocorrectionDisabled()
+                            .textInputAutocapitalization(lowercased ? .never : .words)
+                            .onChange(of: value.wrappedValue) { _, newValue in
+                                var updated = newValue
+                                if lowercased {
+                                    updated = updated.lowercased()
+                                }
+                                if let max = maxLength, updated.count > max {
+                                    updated = String(updated.prefix(max))
+                                }
+                                if updated != value.wrappedValue {
+                                    value.wrappedValue = updated
+                                }
+                            }
 
-                if isEditing {
-                    TextField("", text: value)
-                        .font(CTFont.regular(14))
-                        .foregroundStyle(Color.CT.text)
-                        .multilineTextAlignment(.trailing)
-                        .autocorrectionDisabled()
-                        .textInputAutocapitalization(lowercased ? .never : .words)
-                        .onChange(of: value.wrappedValue) { _, newValue in
-                            var updated = newValue
-                            if lowercased {
-                                updated = updated.lowercased()
-                            }
-                            if let max = maxLength, updated.count > max {
-                                updated = String(updated.prefix(max))
-                            }
-                            if updated != value.wrappedValue {
-                                value.wrappedValue = updated
-                            }
+                        if isSaving {
+                            ProgressView()
+                                .tint(Color.CT.accent)
+                                .scaleEffect(AccountSettingsLayout.editableSavingIndicatorScale)
                         }
-                        .frame(maxWidth: AccountSettingsLayout.editableFieldMaxWidth)
-
-                    if isSaving {
-                        ProgressView()
-                            .tint(Color.CT.accent)
-                            .scaleEffect(AccountSettingsLayout.editableSavingIndicatorScale)
                     }
-                } else {
+                    Rectangle()
+                        .fill(Color.CT.accent)
+                        .frame(height: 1)
+                }
+                .padding(.horizontal, AccountSettingsLayout.rowHorizontalPadding)
+                .padding(.vertical, AccountSettingsLayout.rowVerticalPadding)
+            } else {
+                HStack {
+                    Text(label.lowercased())
+                        .font(CTFont.regular(14))
+                        .foregroundStyle(Color.CT.textDim)
+                    Spacer()
                     Text(value.wrappedValue.isEmpty ? "—" : value.wrappedValue)
                         .font(CTFont.regular(14))
                         .foregroundStyle(Color.CT.text)
                 }
+                .padding(.horizontal, AccountSettingsLayout.rowHorizontalPadding)
+                .padding(.vertical, AccountSettingsLayout.rowVerticalPadding)
             }
-            .padding(.horizontal, AccountSettingsLayout.rowHorizontalPadding)
-            .padding(.vertical, AccountSettingsLayout.rowVerticalPadding)
 
             if let err = errorMessage, !err.isEmpty {
                 Text("> [!] \(err)")
@@ -715,8 +729,15 @@ struct DeleteAccountConfirmationView: View {
     let onDelete: () -> Void
     let onCancel: () -> Void
 
-    @State private var countdown = DeleteAccountSheetLayout.countdownStartValue
+    /// Undo-send pattern: nil = idle (delete button is the primary action and
+    /// fires immediately on tap); non-nil = countdown is running, the same
+    /// button is now an abort, and on reaching 0 the actual delete RPC fires.
+    /// Gives the user a 10s window to change their mind AFTER committing.
+    @State private var pendingSecondsLeft: Int? = nil
+    @State private var pendingTask: Task<Void, Never>? = nil
     @State private var showLocalDeleteConfirm = false
+
+    private static let abortWindowSeconds = 10
 
     var body: some View {
         VStack(spacing: DeleteAccountSheetLayout.rootSpacing) {
@@ -744,12 +765,6 @@ struct DeleteAccountConfirmationView: View {
                 .padding(.horizontal, DeleteAccountSheetLayout.messageHorizontalPadding)
                 .padding(.bottom, DeleteAccountSheetLayout.messageBottomPadding)
 
-            // Retro digital countdown
-            if countdown > 0 && !authViewModel.isLoading {
-                CTDigitalCountdown(value: countdown)
-                    .padding(.bottom, DeleteAccountSheetLayout.countdownBottomPadding)
-            }
-
             // Local-delete fallback — shown after a server-side deletion failure
             if authViewModel.deleteAccountFailed {
                 Button {
@@ -765,60 +780,52 @@ struct DeleteAccountConfirmationView: View {
 
             Spacer()
 
-            // Delete button (full-width, appears after countdown)
+            // Delete-or-abort button (full-width)
             VStack(spacing: DeleteAccountSheetLayout.actionsSpacing) {
                 if authViewModel.isLoading {
                     ProgressView()
                         .tint(Color.CT.danger)
                         .frame(maxWidth: .infinity)
                         .frame(height: DeleteAccountSheetLayout.actionButtonHeight)
+                } else if let secondsLeft = pendingSecondsLeft {
+                    abortButton(secondsLeft: secondsLeft)
                 } else {
                     Button {
-                        onDelete()
+                        startPendingDelete()
                     } label: {
                         Text(LocalizedStringKey("delete_account"))
                             .font(CTFont.bold(16))
                             .frame(maxWidth: .infinity)
                             .frame(height: DeleteAccountSheetLayout.actionButtonHeight)
                             .background(
-                                Rectangle()
-                                    .fill(
-                                        countdown > 0
-                                        ? Color.CT.danger.opacity(DeleteAccountSheetLayout.deleteButtonIdleFillOpacity)
-                                        : Color.CT.danger.opacity(DeleteAccountSheetLayout.deleteButtonActiveFillOpacity)
-                                    )
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(Color.CT.danger.opacity(DeleteAccountSheetLayout.deleteButtonActiveFillOpacity))
                                     .overlay(
-                                        Rectangle()
+                                        RoundedRectangle(cornerRadius: 8)
                                             .strokeBorder(
-                                                countdown > 0
-                                                ? Color.CT.danger.opacity(DeleteAccountSheetLayout.deleteButtonIdleStrokeOpacity)
-                                                : Color.CT.danger.opacity(DeleteAccountSheetLayout.deleteButtonActiveStrokeOpacity),
+                                                Color.CT.danger.opacity(DeleteAccountSheetLayout.deleteButtonActiveStrokeOpacity),
                                                 lineWidth: DeleteAccountSheetLayout.deleteButtonStrokeWidth
                                             )
                                     )
                             )
-                            .foregroundStyle(
-                                countdown > 0
-                                ? Color.CT.danger.opacity(DeleteAccountSheetLayout.deleteButtonDisabledOpacity)
-                                : Color.CT.danger
-                            )
+                            .foregroundStyle(Color.CT.danger)
                     }
-                    .disabled(countdown > 0)
-                    .animation(
-                        .easeInOut(duration: DeleteAccountSheetLayout.deleteButtonAnimationDuration),
-                        value: countdown
-                    )
                 }
 
-                Button {
-                    onCancel()
-                    dismiss()
-                } label: {
-                    Text(LocalizedStringKey("cancel"))
-                        .font(CTFont.regular(15))
-                        .foregroundStyle(Color.CT.textDim)
+                // Cancel hidden during the abort window — the big button IS the abort
+                // (a separate "Cancel" beside it would let the user cancel-abort,
+                // i.e., proceed with deletion. Confusing. Keep one path.)
+                if pendingSecondsLeft == nil {
+                    Button {
+                        onCancel()
+                        dismiss()
+                    } label: {
+                        Text(LocalizedStringKey("cancel"))
+                            .font(CTFont.regular(15))
+                            .foregroundStyle(Color.CT.textDim)
+                    }
+                    .disabled(authViewModel.isLoading)
                 }
-                .disabled(authViewModel.isLoading)
             }
             .padding(.horizontal, DeleteAccountSheetLayout.actionsHorizontalPadding)
             .padding(.bottom, DeleteAccountSheetLayout.actionsBottomPadding)
@@ -834,23 +841,86 @@ struct DeleteAccountConfirmationView: View {
         } message: {
             Text("delete_account_local_only_warning")
         }
-        .task {
-            // Count down from initial value to 0 using structured concurrency — avoids RunLoop blocking on macOS.
-            while countdown > 0 {
-                try? await Task.sleep(for: .seconds(DeleteAccountSheetLayout.countdownStepSeconds))
-                guard countdown > 0 else { break }
-                countdown -= 1
-            }
-        }
         .onChange(of: authViewModel.isLoading) { _, loading in
             // Reset failed state when a new deletion attempt starts
             if loading { authViewModel.deleteAccountFailed = false }
+        }
+        .onDisappear {
+            pendingTask?.cancel()
+            pendingTask = nil
+            pendingSecondsLeft = nil
         }
         // On macOS Catalyst, sheets are child windows and don't auto-close
         // when parent view changes — explicitly dismiss when account is deleted.
         .onChange(of: authViewModel.isAuthenticated) { _, isAuthenticated in
             if !isAuthenticated { dismiss() }
         }
+    }
+
+    /// Pending-state button: the same red rectangle as the idle delete, but
+    /// the tap now aborts. Below it a thin progress bar grows left-to-right
+    /// as the abort window elapses.
+    private func abortButton(secondsLeft: Int) -> some View {
+        let total = Self.abortWindowSeconds
+        let elapsedFraction = CGFloat(max(0, total - secondsLeft)) / CGFloat(total)
+        return VStack(spacing: 6) {
+            Button {
+                abortPendingDelete()
+            } label: {
+                Text(String(format: NSLocalizedString("delete_account_abort_hint", comment: ""), secondsLeft))
+                    .font(CTFont.bold(15))
+                    .frame(maxWidth: .infinity)
+                    .frame(height: DeleteAccountSheetLayout.actionButtonHeight)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Color.CT.danger.opacity(DeleteAccountSheetLayout.deleteButtonIdleFillOpacity))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .strokeBorder(
+                                        Color.CT.danger,
+                                        lineWidth: DeleteAccountSheetLayout.deleteButtonStrokeWidth
+                                    )
+                            )
+                    )
+                    .foregroundStyle(Color.CT.danger)
+            }
+
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Rectangle()
+                        .fill(Color.CT.danger.opacity(0.2))
+                    Rectangle()
+                        .fill(Color.CT.danger)
+                        .frame(width: geo.size.width * elapsedFraction)
+                        .animation(.linear(duration: 1.0), value: elapsedFraction)
+                }
+            }
+            .frame(height: 3)
+        }
+    }
+
+    private func startPendingDelete() {
+        let total = Self.abortWindowSeconds
+        pendingSecondsLeft = total
+        pendingTask?.cancel()
+        pendingTask = Task { @MainActor in
+            for n in (0..<total).reversed() {
+                try? await Task.sleep(for: .seconds(1))
+                if Task.isCancelled { return }
+                pendingSecondsLeft = n
+            }
+            if Task.isCancelled { return }
+            // Window elapsed without abort — actually delete
+            pendingSecondsLeft = nil
+            pendingTask = nil
+            onDelete()
+        }
+    }
+
+    private func abortPendingDelete() {
+        pendingTask?.cancel()
+        pendingTask = nil
+        pendingSecondsLeft = nil
     }
 }
 

@@ -553,6 +553,12 @@ struct CTNavBar: View {
     var trailingSystemImage: String? = nil
     var trailingSecondarySystemImage: String? = nil
     var trailingColor: Color    = Color.CT.accent
+    /// Colour for the secondary trailing icon (typically a cancel/dismiss
+    /// next to a primary confirm). Defaults to dim so confirm vs cancel are
+    /// visually distinct — same colour for both reads as "two identical
+    /// buttons" and confuses the user (FaceTime-style: primary = accent,
+    /// secondary = muted).
+    var trailingSecondaryColor: Color = Color.CT.textDim
     var backAction: (() -> Void)?     = nil
     var trailingAction: (() -> Void)? = nil
     var trailingSecondaryAction: (() -> Void)? = nil
@@ -584,7 +590,7 @@ struct CTNavBar: View {
                         Button(action: { trailingSecondaryAction?() }) {
                             Image(systemName: secondaryImageName)
                                 .font(.system(size: 18))
-                                .foregroundColor(trailingColor)
+                                .foregroundColor(trailingSecondaryColor)
                         }
                         .buttonStyle(.plain)
                     }

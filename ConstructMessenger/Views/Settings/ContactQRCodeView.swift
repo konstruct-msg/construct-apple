@@ -116,12 +116,13 @@ struct ContactQRCodeView: View {
                 .frame(width: size, height: size)
                 .padding(QRCodeSize.padding)
                 .background(Color.white)
-                .overlay(Rectangle().strokeBorder(Color.CT.noise, lineWidth: ContactQRCodeLayout.qrCodeBorderWidth))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.CT.noise, lineWidth: ContactQRCodeLayout.qrCodeBorderWidth))
         } else if let error = generationError {
-            Rectangle()
+            RoundedRectangle(cornerRadius: 8)
                 .fill(Color.CT.bgMsg)
                 .frame(width: size, height: size)
-                .overlay(Rectangle().strokeBorder(Color.CT.noise, lineWidth: ContactQRCodeLayout.qrCodeBorderWidth))
+                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.CT.noise, lineWidth: ContactQRCodeLayout.qrCodeBorderWidth))
                 .overlay {
                     VStack(spacing: ContactQRCodeLayout.qrCodeErrorSpacing) {
                         Text("[!]")
@@ -135,10 +136,10 @@ struct ContactQRCodeView: View {
                     }
                 }
         } else {
-            Rectangle()
+            RoundedRectangle(cornerRadius: 8)
                 .fill(Color.CT.bgMsg)
                 .frame(width: size, height: size)
-                .overlay(Rectangle().strokeBorder(Color.CT.noise, lineWidth: ContactQRCodeLayout.qrCodeBorderWidth))
+                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.CT.noise, lineWidth: ContactQRCodeLayout.qrCodeBorderWidth))
                 .overlay {
                     Text(CTSymbol.loading)
                         .font(CTFont.regular(16))
@@ -175,10 +176,10 @@ struct ContactQRCodeView: View {
                         .padding(.horizontal, ContactQRCodeLayout.refreshButtonHorizontalPadding)
                         .padding(.vertical, ContactQRCodeLayout.refreshButtonVerticalPadding)
                         .background(
-                            Rectangle()
+                            RoundedRectangle(cornerRadius: 8)
                                 .fill(Color.CT.bgMsg)
                                 .overlay(
-                                    Rectangle().strokeBorder(
+                                    RoundedRectangle(cornerRadius: 8).strokeBorder(
                                         Color.CT.accent.opacity(ContactQRCodeLayout.refreshButtonStrokeOpacity),
                                         lineWidth: ContactQRCodeLayout.refreshButtonStrokeWidth
                                     )

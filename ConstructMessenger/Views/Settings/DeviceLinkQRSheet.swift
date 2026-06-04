@@ -113,7 +113,8 @@ struct DeviceLinkQRSheet: View {
             .frame(width: DeviceLinkQRLayout.qrSize, height: DeviceLinkQRLayout.qrSize)
             .padding(DeviceLinkQRLayout.qrPadding)
             .background(Color.white)
-            .overlay(Rectangle().stroke(Color.CT.noise, lineWidth: DeviceLinkQRLayout.qrBorderWidth))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.CT.noise, lineWidth: DeviceLinkQRLayout.qrBorderWidth))
         #else
         Image(nsImage: image)
             .interpolation(.none)
@@ -122,7 +123,8 @@ struct DeviceLinkQRSheet: View {
             .frame(width: DeviceLinkQRLayout.qrSize, height: DeviceLinkQRLayout.qrSize)
             .padding(DeviceLinkQRLayout.qrPadding)
             .background(Color.white)
-            .overlay(Rectangle().stroke(Color.CT.noise, lineWidth: DeviceLinkQRLayout.qrBorderWidth))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.CT.noise, lineWidth: DeviceLinkQRLayout.qrBorderWidth))
         #endif
     }
 
@@ -144,7 +146,8 @@ struct DeviceLinkQRSheet: View {
                     .foregroundColor(Color.CT.accent)
                     .padding(.horizontal, DeviceLinkQRLayout.actionButtonHorizontalPadding)
                     .padding(.vertical, DeviceLinkQRLayout.actionButtonVerticalPadding)
-                    .overlay(Rectangle().stroke(Color.CT.accent, lineWidth: DeviceLinkQRLayout.actionButtonStrokeWidth))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.CT.accent, lineWidth: DeviceLinkQRLayout.actionButtonStrokeWidth))
             }
             .buttonStyle(.plain)
         }
@@ -172,7 +175,8 @@ struct DeviceLinkQRSheet: View {
                     .foregroundColor(Color.CT.accent)
                     .padding(.horizontal, DeviceLinkQRLayout.actionButtonHorizontalPadding)
                     .padding(.vertical, DeviceLinkQRLayout.actionButtonVerticalPadding)
-                    .overlay(Rectangle().stroke(Color.CT.accent, lineWidth: DeviceLinkQRLayout.actionButtonStrokeWidth))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.CT.accent, lineWidth: DeviceLinkQRLayout.actionButtonStrokeWidth))
             }
             .buttonStyle(.plain)
         }

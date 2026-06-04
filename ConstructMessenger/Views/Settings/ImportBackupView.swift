@@ -56,7 +56,7 @@ struct ImportBackupView: View {
                         .frame(height: 96)
                         .padding(10)
                         .overlay(
-                            Rectangle()
+                            RoundedRectangle(cornerRadius: 8)
                                 .stroke(Color.CT.noise.opacity(0.4), lineWidth: 1)
                                 .padding(10)
                         )
