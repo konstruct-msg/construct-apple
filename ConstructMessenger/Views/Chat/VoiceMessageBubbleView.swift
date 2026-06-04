@@ -23,6 +23,11 @@ struct VoiceMessageBubbleView: View {
     @State private var audioData: Data? = nil
     @State private var isLoading = false
     @State private var loadError = false
+    /// Controls whether the transcript text is visible below the waveform.
+    /// Defaults to true and is flipped to true again whenever a new transcript
+    /// arrives — so a freshly-completed transcription reveals itself, but the
+    /// user can still collapse it via the inline toggle.
+    @State private var isTranscriptExpanded: Bool = true
 
     private var isPlaying: Bool { player.isPlaying(voiceContent.mediaId) }
     private var isUploading: Bool { deliveryStatus == .sending && voiceContent.mediaUrl.isEmpty }
@@ -89,6 +94,8 @@ struct VoiceMessageBubbleView: View {
                 )
                 .frame(maxWidth: .infinity, minHeight: 28, maxHeight: 28)
 
+                transcribeToggle
+
                 Text(durationLabel)
                     .font(CTFont.regular(11))
                     .foregroundColor(isSentByMe ? Color.white.opacity(0.85) : Color.CT.textDim)
@@ -104,11 +111,71 @@ struct VoiceMessageBubbleView: View {
         .background(CTMessageBubbleTheme.background(isSentByMe: isSentByMe))
         .clipShape(RoundedRectangle(cornerRadius: 10))
         .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.CT.noise, lineWidth: 0.5))
+        .onChange(of: transcript) { _, newTranscript in
+            // Auto-reveal a fresh transcript so the user sees what they
+            // triggered. They can still collapse via the inline toggle.
+            if let newTranscript, !newTranscript.isEmpty {
+                isTranscriptExpanded = true
+            }
+        }
+    }
+
+    /// Inline compact toggle that lives in the player HStack between the
+    /// waveform and the duration label. Three states:
+    ///   1. no transcript yet, idle  → `textformat` icon, tap → onTranscribe()
+    ///   2. transcribing             → spinner replaces the icon
+    ///   3. transcript exists        → tap toggles `isTranscriptExpanded`;
+    ///                                 icon is accent when expanded, dim when collapsed
+    @ViewBuilder
+    private var transcribeToggle: some View {
+        let hasTranscript = (transcript?.isEmpty == false)
+        let isInteractive = hasTranscript || (onTranscribe != nil && VoiceTranscriptionService.shared.isAvailable)
+        if isInteractive {
+            Button {
+                if hasTranscript {
+                    isTranscriptExpanded.toggle()
+                } else {
+                    onTranscribe?()
+                }
+            } label: {
+                if isTranscribing {
+                    ProgressView()
+                        .progressViewStyle(.circular)
+                        .scaleEffect(0.5)
+                        .tint(isSentByMe ? .white : Color.CT.accent)
+                        .frame(width: 20, height: 20)
+                } else {
+                    Image(systemName: "textformat")
+                        .font(.system(size: 13, weight: .regular))
+                        .foregroundColor(toggleTint(hasTranscript: hasTranscript))
+                        .frame(width: 20, height: 20)
+                }
+            }
+            .buttonStyle(.plain)
+            .disabled(isTranscribing)
+            .accessibilityLabel(NSLocalizedString(
+                hasTranscript
+                    ? (isTranscriptExpanded ? "stt_hide_transcript" : "stt_show_transcript")
+                    : "stt_transcribe_button",
+                comment: ""
+            ))
+        }
+    }
+
+    /// Active (accent) when the transcript exists and is currently shown;
+    /// dim otherwise. Mirrors play-button colour rules for the "sent by me"
+    /// branch (white tint vs textDim).
+    private func toggleTint(hasTranscript: Bool) -> Color {
+        if hasTranscript && isTranscriptExpanded {
+            return isSentByMe ? .white : Color.CT.accent
+        } else {
+            return isSentByMe ? .white.opacity(0.55) : Color.CT.textDim
+        }
     }
 
     @ViewBuilder
     private var transcriptSection: some View {
-        if let text = transcript, !text.isEmpty {
+        if let text = transcript, !text.isEmpty, isTranscriptExpanded {
             Rectangle().fill(Color.CT.noise).frame(height: 1)
             Text(text)
                 .font(CTFont.regular(12))
@@ -116,30 +183,6 @@ struct VoiceMessageBubbleView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 8)
-        } else if let onTranscribe, VoiceTranscriptionService.shared.isAvailable {
-            Rectangle().fill(Color.CT.noise).frame(height: 1)
-            Button(action: onTranscribe) {
-                HStack(spacing: 4) {
-                    if isTranscribing {
-                        ProgressView()
-                            .progressViewStyle(.circular)
-                            .scaleEffect(0.5)
-                            .tint(isSentByMe ? .white : Color.CT.accent)
-                    } else {
-                        Image(systemName: "waveform.and.mic")
-                            .font(.system(size: 11))
-                    }
-                    Text(isTranscribing
-                         ? NSLocalizedString("stt_transcribing", comment: "")
-                         : NSLocalizedString("stt_transcribe_button", comment: ""))
-                        .font(CTFont.regular(11))
-                }
-                .foregroundColor(isSentByMe ? .white.opacity(0.65) : Color.CT.textDim)
-            }
-            .buttonStyle(.plain)
-            .disabled(isTranscribing)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
         }
     }
 

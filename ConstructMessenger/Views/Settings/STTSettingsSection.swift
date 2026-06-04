@@ -272,10 +272,21 @@ struct STTSettingsSection: View {
                 .tint(Color.CT.accent)
 
         case .failed(let reason):
-            Text(reason.prefix(24))
-                .font(CTFont.regular(10))
+            // Tap-to-retry replaces a dead-end static error. Reason still
+            // surfaces via VoiceOver / `Log.error` in WhisperModelManager.
+            Button {
+                Task { await modelManager.downloadModel(model) }
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "exclamationmark.arrow.circlepath")
+                        .font(.system(size: 13))
+                    Text(NSLocalizedString("stt_retry_download", comment: ""))
+                        .font(CTFont.regular(12))
+                }
                 .foregroundColor(Color.CT.danger)
-                .lineLimit(1)
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint(reason)
         }
     }
 

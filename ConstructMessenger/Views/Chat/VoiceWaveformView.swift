@@ -10,23 +10,40 @@ struct VoiceWaveformView: View {
     let samples: [Float]
     let style: Style
 
-    private let barCount = 52
+    /// Preferred bar count. Used as a ceiling — the actual number rendered is
+    /// reduced when the available width can't hold that many bars at the
+    /// minimum bar width, preventing the HStack from overflowing past the
+    /// view's frame (which used to make the rightmost bars sit on top of
+    /// neighbouring controls in the message bubble).
+    private let preferredBarCount = 52
     private let barSpacing: CGFloat = 2.5
 
     var body: some View {
         GeometryReader { geo in
-            let totalSpacing = barSpacing * CGFloat(barCount - 1)
+            let barCount = effectiveBarCount(for: geo.size.width)
+            let totalSpacing = barSpacing * CGFloat(max(barCount - 1, 0))
             let barWidth = max(minBarWidth, (geo.size.width - totalSpacing) / CGFloat(barCount))
 
             HStack(alignment: .center, spacing: barSpacing) {
                 ForEach(0..<barCount, id: \.self) { i in
                     Rectangle()
-                        .fill(color(for: i))
-                        .frame(width: barWidth, height: height(for: i, total: geo.size.height))
+                        .fill(color(for: i, total: barCount))
+                        .frame(width: barWidth, height: height(for: i, total: geo.size.height, count: barCount))
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height)
         }
+    }
+
+    /// Largest bar count that still fits inside `width` when every bar is at
+    /// its minimum size. Capped at `preferredBarCount`; floored at 1.
+    private func effectiveBarCount(for width: CGFloat) -> Int {
+        let perBar = minBarWidth + barSpacing
+        guard perBar > 0 else { return preferredBarCount }
+        // (width + spacing) / perBar = how many (bar+spacing) units fit, since
+        // there's no trailing spacing after the last bar.
+        let fits = Int((width + barSpacing) / perBar)
+        return max(1, min(preferredBarCount, fits))
     }
 
     private var minBarWidth: CGFloat {
@@ -36,10 +53,10 @@ struct VoiceWaveformView: View {
         }
     }
 
-    private func color(for index: Int) -> Color {
+    private func color(for index: Int, total: Int) -> Color {
         switch style {
         case .playback(let progress, let isSentByMe):
-            let fraction = Double(index) / Double(max(barCount - 1, 1))
+            let fraction = Double(index) / Double(max(total - 1, 1))
             let played = progress > 0 && fraction <= progress
             if played {
                 return isSentByMe ? Color.white.opacity(0.95) : Color.CT.accent
@@ -48,29 +65,29 @@ struct VoiceWaveformView: View {
         case .staticAccent(let opacity):
             return Color.CT.accent.opacity(opacity)
         case .liveInput:
-            return Color.CT.accent.opacity(liveOpacity(for: index))
+            return Color.CT.accent.opacity(liveOpacity(for: index, total: total))
         }
     }
 
-    private func height(for index: Int, total: CGFloat) -> CGFloat {
+    private func height(for index: Int, total: CGFloat, count: Int) -> CGFloat {
         switch style {
         case .playback:
-            let values = downsample(samples, to: barCount, empty: 0.3, pad: 0.1)
+            let values = downsample(samples, to: count, empty: 0.3, pad: 0.1)
             return max(2, CGFloat(values[index]) * total)
         case .staticAccent:
-            let values = downsample(samples, to: barCount, empty: 0.3, pad: 0.1)
+            let values = downsample(samples, to: count, empty: 0.3, pad: 0.1)
             return max(5, CGFloat(values[index]) * total * 0.85)
         case .liveInput:
-            let count = samples.count
-            guard count > 0 else { return 4 }
-            let si = max(0, count - barCount + index)
-            guard si < count else { return 4 }
+            let sampleCount = samples.count
+            guard sampleCount > 0 else { return 4 }
+            let si = max(0, sampleCount - count + index)
+            guard si < sampleCount else { return 4 }
             return max(4, CGFloat(samples[si]) * total * 0.9)
         }
     }
 
-    private func liveOpacity(for index: Int) -> Double {
-        let startFilled = barCount - samples.count
+    private func liveOpacity(for index: Int, total: Int) -> Double {
+        let startFilled = total - samples.count
         return index >= startFilled ? 1.0 : 0.25
     }
 
