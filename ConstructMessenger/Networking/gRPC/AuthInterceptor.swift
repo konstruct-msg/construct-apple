@@ -5,7 +5,13 @@ import GRPCCore
 /// Skips auth for unauthenticated RPCs (challenge, register, authenticate).
 
 struct AuthInterceptor: ClientInterceptor {
-    /// RPCs that do not require authentication
+    /// RPCs that do not require authentication.
+    /// Must match Envoy's `jwt_authn` filter rules in `construct-server/ops/envoy.docker.yaml` —
+    /// only routes that bypass the JWT provider there can omit auth here. Public services
+    /// in Envoy: `AuthService`, `DeviceService`, `/.well-known/*`, `/health`, plus the
+    /// specific `UserService/CheckUsernameAvailability` path (carve-out for onboarding —
+    /// pre-registration users have no JWT but must check username availability). Adding
+    /// an RPC here that Envoy still gates surfaces as `Jwt is missing` to the user.
     private static let unauthenticatedMethods: Set<String> = [
         "GetPowChallenge",
         "RegisterDevice",

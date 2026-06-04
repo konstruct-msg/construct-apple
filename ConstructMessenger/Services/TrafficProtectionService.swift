@@ -75,6 +75,18 @@ class TrafficProtectionService {
         #endif
     }
 
+    deinit {
+        MainActor.assumeIsolated {
+            schedulerTimer?.invalidate()
+            if let batteryObserver {
+                NotificationCenter.default.removeObserver(batteryObserver)
+            }
+            #if os(iOS)
+            UIDevice.current.isBatteryMonitoringEnabled = false
+            #endif
+        }
+    }
+
     // MARK: - Configuration
 
     private func createConfig() -> CoverTrafficConfig {
