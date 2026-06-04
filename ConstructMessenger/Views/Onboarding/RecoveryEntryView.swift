@@ -188,7 +188,8 @@ struct RecoveryEntryView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
                     .background(Color.CT.bgMsg)
-                    .overlay(Rectangle().stroke(Color.CT.accent, lineWidth: 1))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.CT.accent, lineWidth: 1))
             }
             .padding(.horizontal)
             .padding(.bottom)
@@ -220,7 +221,8 @@ struct RecoveryEntryView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
                     .background(Color.CT.bgMsg)
-                    .overlay(Rectangle().stroke(Color.CT.accent, lineWidth: 1))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.CT.accent, lineWidth: 1))
             }
             .padding(.horizontal)
             .padding(.bottom)

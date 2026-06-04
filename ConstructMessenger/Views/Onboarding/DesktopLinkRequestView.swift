@@ -106,7 +106,8 @@ struct DesktopLinkRequestView: View {
                         .foregroundColor(Color.CT.text)
                         .padding(.horizontal, 16).padding(.vertical, 10)
                         .background(Color.CT.bgMsg)
-                        .overlay(Rectangle().stroke(Color.CT.accent, lineWidth: 1))
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.CT.accent, lineWidth: 1))
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
