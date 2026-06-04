@@ -14,23 +14,6 @@ libconstruct_core_mac.a
 libconstruct_core_sim.a
 ConstructCore.xcframework/**/*.a
 
-# Node.js
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-.pnpm-store/
-lerna-debug.log*
-.npm
-.eslintcache
-
-# WASM
-pkg/
-dist-wasm/
-*.wasm
-*_bg.wasm.d.ts
-
 # Build outputs
 dist/
 build/
@@ -39,7 +22,6 @@ out/
 .vercel/
 .turbo/
 logs/
-logs_and_screenshots/
 
 # Xcode per-user state
 *.xcuserstate
@@ -90,7 +72,9 @@ __pycache__/
 venv/
 *.egg-info/
 .mypy_cache/
+
 ConstructEngine.xcframework/**/*.a
+screenshots/
 
 # ── GeoIP databases ───────────────────────────────────────────────────────────
 # Downloaded automatically by scripts/fetch_geoip.sh (or the Xcode Build Phase).
