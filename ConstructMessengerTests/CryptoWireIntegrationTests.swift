@@ -30,25 +30,18 @@ final class CryptoWireIntegrationTests: XCTestCase {
             self.core = try createOrchestratorCoreFromKeys(keysData: keys, myUserId: userId)
         }
 
-        func bundle() throws -> (identityPublic: String, signedPrekeyPublic: String,
-                                  signature: String, verifyingKey: String, suiteId: String) {
+        func bundle() throws -> (identityPublic: [UInt8], signedPrekeyPublic: [UInt8],
+                                  signature: [UInt8], verifyingKey: [UInt8], suiteId: UInt16) {
             let fields = try core.getRegistrationBundleFields()
             return (fields.identityPublic, fields.signedPrekeyPublic, fields.signature, fields.verifyingKey, fields.suiteId)
         }
 
-        private func bundleBytes(from b: (identityPublic: String, signedPrekeyPublic: String,
-                                          signature: String, verifyingKey: String, suiteId: String)) throws -> BinaryKeyBundle {
-            guard let ip = Data(base64Encoded: b.identityPublic),
-                  let sp = Data(base64Encoded: b.signedPrekeyPublic),
-                  let sig = Data(base64Encoded: b.signature),
-                  let vk = Data(base64Encoded: b.verifyingKey),
-                  let sid = UInt16(b.suiteId) else {
-                throw NSError(domain: "TestError", code: 2)
-            }
+        private func bundleBytes(from b: (identityPublic: [UInt8], signedPrekeyPublic: [UInt8],
+                                          signature: [UInt8], verifyingKey: [UInt8], suiteId: UInt16)) throws -> BinaryKeyBundle {
             return BinaryKeyBundle(
-                identityPublic: [UInt8](ip), signedPrekeyPublic: [UInt8](sp),
-                signature: [UInt8](sig), verifyingKey: [UInt8](vk),
-                suiteId: sid, oneTimePrekeyPublic: nil, oneTimePrekeyId: nil,
+                identityPublic: b.identityPublic, signedPrekeyPublic: b.signedPrekeyPublic,
+                signature: b.signature, verifyingKey: b.verifyingKey,
+                suiteId: b.suiteId, oneTimePrekeyPublic: nil, oneTimePrekeyId: nil,
                 spkUploadedAt: 0, spkRotationEpoch: 0,
                 kyberSpkUploadedAt: 0, kyberSpkRotationEpoch: 0,
                 kyberPreKeyPublic: nil, kyberOneTimePrekeyPublic: nil, kyberOneTimePrekeyId: nil
@@ -57,8 +50,8 @@ final class CryptoWireIntegrationTests: XCTestCase {
 
         /// Initiate session as sender (X3DH)
         func initSenderSession(to contactId: String,
-                                recipientBundle: (identityPublic: String, signedPrekeyPublic: String,
-                                                  signature: String, verifyingKey: String, suiteId: String)) throws {
+                                recipientBundle: (identityPublic: [UInt8], signedPrekeyPublic: [UInt8],
+                                                  signature: [UInt8], verifyingKey: [UInt8], suiteId: UInt16)) throws {
             let bytes = try bundleBytes(from: recipientBundle)
             _ = try core.initSession(contactId: contactId, recipientBundle: bytes)
         }
@@ -97,8 +90,8 @@ final class CryptoWireIntegrationTests: XCTestCase {
 
         /// Initialize receiving session from first wire-encoded message
         func initReceiverSession(from contactId: String,
-                                  senderBundle: (identityPublic: String, signedPrekeyPublic: String,
-                                                 signature: String, verifyingKey: String, suiteId: String),
+                                  senderBundle: (identityPublic: [UInt8], signedPrekeyPublic: [UInt8],
+                                                 signature: [UInt8], verifyingKey: [UInt8], suiteId: UInt16),
                                   wirePayload: Data) throws -> String {
             let bundle = try bundleBytes(from: senderBundle)
             let decoded = try WirePayloadCoder.decode(wirePayload)

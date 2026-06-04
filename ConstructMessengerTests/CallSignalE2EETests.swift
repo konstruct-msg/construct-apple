@@ -40,8 +40,8 @@ private final class OrchestratorPeer {
 
     // MARK: Bundle
 
-    typealias Bundle = (identityPublic: String, signedPrekeyPublic: String,
-                        signature: String, verifyingKey: String, suiteId: String)
+    typealias Bundle = (identityPublic: [UInt8], signedPrekeyPublic: [UInt8],
+                        signature: [UInt8], verifyingKey: [UInt8], suiteId: UInt16)
 
     func exportBundle() throws -> Bundle {
         let fields = try core.getRegistrationBundleFields()
@@ -49,17 +49,10 @@ private final class OrchestratorPeer {
     }
 
     private func bundleBytes(from b: Bundle) throws -> BinaryKeyBundle {
-        guard let ipData  = Data(base64Encoded: b.identityPublic),
-              let spData  = Data(base64Encoded: b.signedPrekeyPublic),
-              let sigData = Data(base64Encoded: b.signature),
-              let vkData  = Data(base64Encoded: b.verifyingKey),
-              let sid     = UInt16(b.suiteId) else {
-            throw PeerError.bundleDecodeFailed
-        }
         return BinaryKeyBundle(
-            identityPublic: [UInt8](ipData), signedPrekeyPublic: [UInt8](spData),
-            signature: [UInt8](sigData), verifyingKey: [UInt8](vkData),
-            suiteId: sid, oneTimePrekeyPublic: nil, oneTimePrekeyId: nil,
+            identityPublic: b.identityPublic, signedPrekeyPublic: b.signedPrekeyPublic,
+            signature: b.signature, verifyingKey: b.verifyingKey,
+            suiteId: b.suiteId, oneTimePrekeyPublic: nil, oneTimePrekeyId: nil,
             spkUploadedAt: 0, spkRotationEpoch: 0,
             kyberSpkUploadedAt: 0, kyberSpkRotationEpoch: 0,
             kyberPreKeyPublic: nil, kyberOneTimePrekeyPublic: nil, kyberOneTimePrekeyId: nil

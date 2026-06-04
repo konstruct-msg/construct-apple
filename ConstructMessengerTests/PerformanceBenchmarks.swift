@@ -34,17 +34,10 @@ final class PerformanceBenchmarks: XCTestCase {
 
         func bundle() throws -> BinaryKeyBundle {
             let fields = try core.getRegistrationBundleFields()
-            guard let ipData  = Data(base64Encoded: fields.identityPublic),
-                  let spData  = Data(base64Encoded: fields.signedPrekeyPublic),
-                  let sigData = Data(base64Encoded: fields.signature),
-                  let vkData  = Data(base64Encoded: fields.verifyingKey),
-                  let sidVal  = UInt16(fields.suiteId) else {
-                throw NSError(domain: "Bench", code: 1)
-            }
             return BinaryKeyBundle(
-                identityPublic: [UInt8](ipData), signedPrekeyPublic: [UInt8](spData),
-                signature: [UInt8](sigData), verifyingKey: [UInt8](vkData),
-                suiteId: sidVal, oneTimePrekeyPublic: nil, oneTimePrekeyId: nil,
+                identityPublic: fields.identityPublic, signedPrekeyPublic: fields.signedPrekeyPublic,
+                signature: fields.signature, verifyingKey: fields.verifyingKey,
+                suiteId: fields.suiteId, oneTimePrekeyPublic: nil, oneTimePrekeyId: nil,
                 spkUploadedAt: 0, spkRotationEpoch: 0,
                 kyberSpkUploadedAt: 0, kyberSpkRotationEpoch: 0,
                 kyberPreKeyPublic: nil, kyberOneTimePrekeyPublic: nil, kyberOneTimePrekeyId: nil

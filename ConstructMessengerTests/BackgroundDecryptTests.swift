@@ -28,25 +28,17 @@ final class BackgroundDecryptTests: XCTestCase {
             self.core = try createOrchestratorCoreFromKeys(keysData: keys, myUserId: userId)
         }
 
-        func rawBundle() throws -> (ip: String, sp: String, sig: String, vk: String, suiteId: String) {
+        func rawBundle() throws -> (ip: [UInt8], sp: [UInt8], sig: [UInt8], vk: [UInt8], suiteId: UInt16) {
             let f = try core.getRegistrationBundleFields()
             return (f.identityPublic, f.signedPrekeyPublic, f.signature, f.verifyingKey, f.suiteId)
         }
 
         func binaryBundle() throws -> BinaryKeyBundle {
             let b = try rawBundle()
-            guard let ip  = Data(base64Encoded: b.ip),
-                  let sp  = Data(base64Encoded: b.sp),
-                  let sig = Data(base64Encoded: b.sig),
-                  let vk  = Data(base64Encoded: b.vk),
-                  let sid = UInt16(b.suiteId) else {
-                throw NSError(domain: "BackgroundDecryptTests", code: 1,
-                              userInfo: [NSLocalizedDescriptionKey: "bundle decode failed"])
-            }
             return BinaryKeyBundle(
-                identityPublic: [UInt8](ip), signedPrekeyPublic: [UInt8](sp),
-                signature: [UInt8](sig), verifyingKey: [UInt8](vk),
-                suiteId: sid, oneTimePrekeyPublic: nil, oneTimePrekeyId: nil,
+                identityPublic: b.ip, signedPrekeyPublic: b.sp,
+                signature: b.sig, verifyingKey: b.vk,
+                suiteId: b.suiteId, oneTimePrekeyPublic: nil, oneTimePrekeyId: nil,
                 spkUploadedAt: 0, spkRotationEpoch: 0,
                 kyberSpkUploadedAt: 0, kyberSpkRotationEpoch: 0,
                 kyberPreKeyPublic: nil, kyberOneTimePrekeyPublic: nil, kyberOneTimePrekeyId: nil

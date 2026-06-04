@@ -25,25 +25,18 @@ final class CryptoIntegrationTests: XCTestCase {
             self.core.setLocalUserId(userId: userId)
         }
 
-        func exportRegistrationBundle() throws -> (identityPublic: String, signedPrekeyPublic: String, signature: String, verifyingKey: String, suiteId: String) {
+        func exportRegistrationBundle() throws -> (identityPublic: [UInt8], signedPrekeyPublic: [UInt8], signature: [UInt8], verifyingKey: [UInt8], suiteId: UInt16) {
             let fields = try core.getRegistrationBundleFields()
             return (fields.identityPublic, fields.signedPrekeyPublic, fields.signature, fields.verifyingKey, fields.suiteId)
         }
 
-        func initSession(contactId: String, recipientBundle: (identityPublic: String, signedPrekeyPublic: String, signature: String, verifyingKey: String, suiteId: String)) throws {
-            guard let identityPublicData = Data(base64Encoded: recipientBundle.identityPublic),
-                  let signedPrekeyPublicData = Data(base64Encoded: recipientBundle.signedPrekeyPublic),
-                  let signatureData = Data(base64Encoded: recipientBundle.signature),
-                  let verifyingKeyData = Data(base64Encoded: recipientBundle.verifyingKey),
-                  let suiteID = UInt16(recipientBundle.suiteId) else {
-                throw NSError(domain: "TestError", code: 2, userInfo: [NSLocalizedDescriptionKey: "Invalid bundle data"])
-            }
+        func initSession(contactId: String, recipientBundle: (identityPublic: [UInt8], signedPrekeyPublic: [UInt8], signature: [UInt8], verifyingKey: [UInt8], suiteId: UInt16)) throws {
             let bundle = BinaryKeyBundle(
-                identityPublic: [UInt8](identityPublicData),
-                signedPrekeyPublic: [UInt8](signedPrekeyPublicData),
-                signature: [UInt8](signatureData),
-                verifyingKey: [UInt8](verifyingKeyData),
-                suiteId: suiteID, oneTimePrekeyPublic: nil, oneTimePrekeyId: nil,
+                identityPublic: recipientBundle.identityPublic,
+                signedPrekeyPublic: recipientBundle.signedPrekeyPublic,
+                signature: recipientBundle.signature,
+                verifyingKey: recipientBundle.verifyingKey,
+                suiteId: recipientBundle.suiteId, oneTimePrekeyPublic: nil, oneTimePrekeyId: nil,
                 spkUploadedAt: 0, spkRotationEpoch: 0,
                 kyberSpkUploadedAt: 0, kyberSpkRotationEpoch: 0,
                 kyberPreKeyPublic: nil, kyberOneTimePrekeyPublic: nil, kyberOneTimePrekeyId: nil
@@ -61,20 +54,13 @@ final class CryptoIntegrationTests: XCTestCase {
             return (Data(components.ephemeralPublicKey), components.messageNumber, components.content)
         }
 
-        func initReceivingSession(contactId: String, senderBundle: (identityPublic: String, signedPrekeyPublic: String, signature: String, verifyingKey: String, suiteId: String), firstMessage: (ephemeralPublicKey: Data, messageNumber: UInt32, content: [UInt8])) throws -> String {
-            guard let identityPublicData = Data(base64Encoded: senderBundle.identityPublic),
-                  let signedPrekeyPublicData = Data(base64Encoded: senderBundle.signedPrekeyPublic),
-                  let signatureData = Data(base64Encoded: senderBundle.signature),
-                  let verifyingKeyData = Data(base64Encoded: senderBundle.verifyingKey),
-                  let suiteID = UInt16(senderBundle.suiteId) else {
-                throw NSError(domain: "TestError", code: 4, userInfo: [NSLocalizedDescriptionKey: "Invalid sender bundle"])
-            }
+        func initReceivingSession(contactId: String, senderBundle: (identityPublic: [UInt8], signedPrekeyPublic: [UInt8], signature: [UInt8], verifyingKey: [UInt8], suiteId: UInt16), firstMessage: (ephemeralPublicKey: Data, messageNumber: UInt32, content: [UInt8])) throws -> String {
             let bundle = BinaryKeyBundle(
-                identityPublic: [UInt8](identityPublicData),
-                signedPrekeyPublic: [UInt8](signedPrekeyPublicData),
-                signature: [UInt8](signatureData),
-                verifyingKey: [UInt8](verifyingKeyData),
-                suiteId: suiteID, oneTimePrekeyPublic: nil, oneTimePrekeyId: nil,
+                identityPublic: senderBundle.identityPublic,
+                signedPrekeyPublic: senderBundle.signedPrekeyPublic,
+                signature: senderBundle.signature,
+                verifyingKey: senderBundle.verifyingKey,
+                suiteId: senderBundle.suiteId, oneTimePrekeyPublic: nil, oneTimePrekeyId: nil,
                 spkUploadedAt: 0, spkRotationEpoch: 0,
                 kyberSpkUploadedAt: 0, kyberSpkRotationEpoch: 0,
                 kyberPreKeyPublic: nil, kyberOneTimePrekeyPublic: nil, kyberOneTimePrekeyId: nil
