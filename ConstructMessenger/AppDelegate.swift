@@ -26,6 +26,10 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             "backgroundFetchEnabled": true,
         ])
 
+        if PreviewDetector.isRunningInPreview {
+            return true
+        }
+
         // CRITICAL: Register background tasks BEFORE app finishes launching
         // This must be done early in the launch process
         BackgroundFetchManager.shared.registerBackgroundTasks()
@@ -43,11 +47,11 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         // This ensures it's ready when needed
         _ = LocalNotificationManager.shared
         
-        // ✅ NEW: Initialize push notification manager
+        // NEW: Initialize push notification manager
         // This sets up the UNUserNotificationCenter delegate
         _ = PushNotificationManager.shared
 
-        // ✅ Calls base: start PushKit VoIP registry (feature-flagged).
+        // Calls base: start PushKit VoIP registry (feature-flagged).
         _ = VoIPPushManager.shared
         VoIPPushManager.shared.startIfEnabled()
         _ = CallManager.shared
@@ -66,7 +70,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication,
         didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
     ) {
-        Log.info("📱 Received device token from APNs", category: "Push")
+        Log.info("Received device token from APNs", category: "Push")
         
         // Register token with backend server
         Task {

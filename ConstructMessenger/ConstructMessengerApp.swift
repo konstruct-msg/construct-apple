@@ -31,8 +31,10 @@ struct Construct_MessengerApp: App {
         // BEFORE CallKit's first `didActivate` touches RTCAudioSession. Lazy-init
         // mid-call destructively reset `isAudioEnabled = false`, silencing every
         // call after that point.
-        MainActor.assumeIsolated {
-            WebRTCRuntime.bootstrap()
+        if !PreviewDetector.isRunningInPreview {
+            MainActor.assumeIsolated {
+                WebRTCRuntime.bootstrap()
+            }
         }
     }
 
@@ -49,6 +51,9 @@ struct Construct_MessengerApp: App {
             .environment(recoveryViewModel)
             .environment(socialRecoveryService)
             .task {
+                if PreviewDetector.isRunningInPreview {
+                    return
+                }
                 MediaManager.shared.evictOldFiles()
                 StorageMigrationService.shared.migrateIfNeeded(
                     context: PersistenceController.shared.container.viewContext

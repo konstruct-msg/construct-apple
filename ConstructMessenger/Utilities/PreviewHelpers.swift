@@ -14,11 +14,20 @@ import os.log
 struct PreviewDetector {
     static var isRunningInPreview: Bool {
         // Method 1: Check environment variable (most reliable for Xcode Previews)
-        if ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1" {
+        let environment = ProcessInfo.processInfo.environment
+        if environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1" ||
+            environment["XCODE_RUNNING_FOR_PLAYGROUNDS"] == "1" {
             return true
         }
 
-        // Method 2: Check process name - only in simulator
+        // Method 2: Xcode 17 JIT previews inject __preview.dylib without
+        // always setting XCODE_RUNNING_FOR_PREVIEWS.
+        if environment["DYLD_INSERT_LIBRARIES"]?.contains("__preview.dylib") == true ||
+            environment["DYLD_INSERT_LIBRARIES"]?.contains("PreviewsInjection") == true {
+            return true
+        }
+
+        // Method 3: Check process name - only in simulator
         #if targetEnvironment(simulator)
         let processName = ProcessInfo.processInfo.processName
         // Check for "Previews" with capital P to avoid false positives
