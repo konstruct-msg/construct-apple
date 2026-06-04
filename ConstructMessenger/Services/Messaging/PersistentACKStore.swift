@@ -143,13 +143,26 @@ final class PersistentACKStore {
 
     /// Marks `messageId` as processed. Idempotent — safe to call multiple times.
     func markProcessed(_ messageId: String, senderId: String, in context: NSManagedObjectContext) {
-        rustAck.markProcessed(messageId: messageId)
+        do {
+            try markProcessedOrThrow(messageId, senderId: senderId, in: context)
+        } catch {
+            // Already logged in markProcessedOrThrow.
+        }
+    }
+
+    func markProcessedOrThrow(_ messageId: String, senderId: String, in context: NSManagedObjectContext) throws {
+        var saveError: Error?
+        var shouldWarmCache = false
 
         context.performAndWait {
             let fetch = ProcessedMessage.fetchRequest()
             fetch.predicate = NSPredicate(format: "messageId == %@", messageId)
             fetch.fetchLimit = 1
-            guard (try? context.fetch(fetch))?.isEmpty != false else { return }
+
+            if (try? context.fetch(fetch))?.isEmpty == false {
+                shouldWarmCache = true
+                return
+            }
 
             let record = ProcessedMessage(context: context)
             record.messageId = messageId
@@ -157,10 +170,21 @@ final class PersistentACKStore {
             record.processedAt = Date()
 
             do {
-                try context.save()
+                try context.saveOrThrow(category: "PersistentACK")
+                shouldWarmCache = true
             } catch {
-                Log.error("PersistentACKStore: failed to save ACK for \(messageId.prefix(8))…: \(error)", category: "PersistentACK")
+                context.rollback()
+                saveError = error
             }
+        }
+
+        if shouldWarmCache {
+            rustAck.markProcessed(messageId: messageId)
+        }
+
+        if let saveError {
+            Log.error("PersistentACKStore: failed to save ACK for \(messageId.prefix(8))…: \(saveError)", category: "PersistentACK")
+            throw saveError
         }
     }
 

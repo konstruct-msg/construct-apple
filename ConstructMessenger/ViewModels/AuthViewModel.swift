@@ -520,7 +520,7 @@ class AuthViewModel {
 
     func logout() {
         Task {
-            await SessionCoordinator().sendEndSessionToAllContacts(reason: "logout")
+            await SessionLifecycleController.shared.sendEndSessionToAllContacts(reason: "logout")
             Log.info("END_SESSION sent to all contacts on logout", category: "Auth")
             
             // 1. Logout via gRPC

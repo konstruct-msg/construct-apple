@@ -18,10 +18,10 @@ import GRPCNIOTransportHTTP2
 // MARK: - Stream Event
 
 enum StreamEvent: Sendable {
-    case message(ChatMessage)
-    case deliveryReceipt([String])    // message IDs confirmed delivered to recipient
-    case keySyncRequest(String)       // server-triggered X3DH re-init for userId
-    case heartbeat                    // server heartbeat ack
+    case message(ChatMessage, cursor: String?)
+    case deliveryReceipt([String], cursor: String?)    // message IDs confirmed delivered to recipient
+    case keySyncRequest(String, cursor: String?)       // server-triggered X3DH re-init for userId
+    case heartbeat(cursor: String?)                    // server heartbeat ack
 }
 
 // MARK: - Stream Cursor Persistence

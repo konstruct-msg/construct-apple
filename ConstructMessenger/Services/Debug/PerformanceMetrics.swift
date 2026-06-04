@@ -27,6 +27,11 @@ enum MetricEvent: String {
     case sessionRestoreStart    = "session_restore_start"
     case sessionRestoreEnd      = "session_restore_end"
 
+    // Core Data
+    case coreDataSaveStart      = "core_data_save_start"
+    case coreDataSaveEnd        = "core_data_save_end"
+    case coreDataSaveFailed     = "core_data_save_failed"
+
     // Network
     case grpcConnectStart       = "grpc_connect_start"
     case grpcConnectEnd         = "grpc_connect_end"
@@ -178,6 +183,19 @@ final class PerformanceMetrics: @unchecked Sendable {
         }
     }
 
+    func coreDataSaveStart(label: String) {
+        start(.coreDataSaveStart, label: label)
+    }
+
+    func coreDataSaveEnd(label: String) {
+        end(.coreDataSaveStart, endEvent: .coreDataSaveEnd, label: label)
+    }
+
+    func coreDataSaveFailed(label: String) {
+        cancelStart(.coreDataSaveStart, label: label)
+        record(.coreDataSaveFailed, label: label)
+    }
+
     // MARK: - Queries
 
     func allEvents() -> [MetricRecord] {
@@ -262,6 +280,9 @@ final class PerformanceMetrics: @unchecked Sendable {
     @inline(__always) func messageDecryptStart(messageId: String) {}
     @inline(__always) func messageDecryptEnd(messageId: String) {}
     @inline(__always) func messageUIDisplayed(messageId: String) {}
+    @inline(__always) func coreDataSaveStart(label: String) {}
+    @inline(__always) func coreDataSaveEnd(label: String) {}
+    @inline(__always) func coreDataSaveFailed(label: String) {}
     @inline(__always) func clearAll() {}
     @inline(__always) func count(event: MetricEvent, last n: Int? = nil) -> Int { 0 }
 }

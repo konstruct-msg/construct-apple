@@ -33,7 +33,6 @@ final class ChatSendCoordinator {
     private let chat: Chat
     private let viewContext: NSManagedObjectContext
     private let sessionManager: ChatSessionManager
-    private let sessionCoordinator: SessionCoordinator
     private weak var viewModel: ChatViewModel?
 
     private let persistenceService = MessagePersistenceService()
@@ -57,13 +56,11 @@ final class ChatSendCoordinator {
     init(
         chat: Chat,
         viewContext: NSManagedObjectContext,
-        sessionManager: ChatSessionManager,
-        sessionCoordinator: SessionCoordinator
+        sessionManager: ChatSessionManager
     ) {
         self.chat = chat
         self.viewContext = viewContext
         self.sessionManager = sessionManager
-        self.sessionCoordinator = sessionCoordinator
     }
 
     func setViewModel(_ vm: ChatViewModel) {
@@ -398,9 +395,8 @@ final class ChatSendCoordinator {
                             OutgoingWirePayloadStore.shared.remove(baseMessageId: messageId)
                             Log.error("encryptionFailed from server — triggering END_SESSION for \(self.chat.otherUser?.id.prefix(8) ?? "?")\(traceTag)", category: "ChatViewModel")
                             if let peerId = self.chat.otherUser?.id {
-                                Task { [weak self] in
-                                    guard let self else { return }
-                                    try? await self.sessionCoordinator.sendEndSession(
+                                Task {
+                                    try? await SessionLifecycleController.shared.sendEndSession(
                                         to: peerId,
                                         reason: "server_encryption_rejected"
                                     )

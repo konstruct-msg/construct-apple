@@ -52,8 +52,8 @@ struct ChatView: View {
     // - scrollOffset
     // - dragOffset
 
-    init(chat: Chat, context: NSManagedObjectContext, sessionCoordinator: SessionCoordinator) {
-        _viewModel = State(wrappedValue: ChatViewModel(chat: chat, context: context, sessionCoordinator: sessionCoordinator))
+    init(chat: Chat, context: NSManagedObjectContext) {
+        _viewModel = State(wrappedValue: ChatViewModel(chat: chat, context: context))
     }
 
     var body: some View {
@@ -463,6 +463,7 @@ struct ChatView: View {
                 }
             },
             onStartCall: startCall,
+            onStartVideoCall: startVideoCall,
             onToggleSearch: {
                 withAnimation {
                     isSearchActive.toggle()
@@ -493,12 +494,20 @@ struct ChatView: View {
     }
 
     private func startCall() {
+        startOutgoingCall(hasVideo: false)
+    }
+
+    private func startVideoCall() {
+        startOutgoingCall(hasVideo: true)
+    }
+
+    private func startOutgoingCall(hasVideo: Bool) {
         guard let otherUser = viewModel.chat.otherUser else { return }
         Task {
             await callManager.startOutgoingCall(
                 to: otherUser.id,
                 displayName: otherUser.resolvedDisplayName,
-                hasVideo: false
+                hasVideo: hasVideo
             )
         }
     }
@@ -653,10 +662,10 @@ struct ChatView: View {
 
     try? context.save()
 
-    let previewSessionCoordinator = SessionCoordinator()
+    // SessionLifecycleController.shared is used internally — preview doesn't need DI
     let previewChatsViewModel = ChatsViewModel()
     return NavigationStack {
-        ChatView(chat: chat, context: context, sessionCoordinator: previewSessionCoordinator)
+        ChatView(chat: chat, context: context)
             .environment(\.managedObjectContext, context)
             .environment(previewChatsViewModel)
     }

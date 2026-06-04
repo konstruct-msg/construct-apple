@@ -11,6 +11,9 @@ struct ChatNavBarView: View {
     let onOpenProfile: () -> Void
     let onDoneEdit: () -> Void
     let onStartCall: () -> Void
+    /// Always non-nil so the layout is stable; rendered only when
+    /// `CallsFeature.isVideoEnabled` is true.
+    let onStartVideoCall: () -> Void
     let onToggleSearch: () -> Void
 
     var body: some View {
@@ -49,6 +52,13 @@ struct ChatNavBarView: View {
                 }
             } else {
                 if canStartCall {
+                    if CallsFeature.isVideoEnabled {
+                        Button(action: onStartVideoCall) {
+                            Image(systemName: "video.fill")
+                                .font(.system(size: CTLayout.navIconSizeLg, weight: .medium))
+                                .foregroundColor(Color.CT.accent)
+                        }
+                    }
                     Button(action: onStartCall) {
                         Image(systemName: "phone")
                             .font(.system(size: CTLayout.navIconSizeLg, weight: .medium))

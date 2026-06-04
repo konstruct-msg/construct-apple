@@ -14,12 +14,13 @@ enum MessageStreamParser {
     static func parse(
         _ response: Shared_Proto_Services_V1_MessageStreamResponse
     ) -> StreamEvent? {
+        let cursor = response.hasStreamCursor ? response.streamCursor : nil
         switch response.response {
         case .message(let envelope):
             // KEY_SYNC: server-triggered re-key signal — no encrypted payload, route directly
             if envelope.contentType == .keySync {
                 Log.info("KEY_SYNC envelope from \(envelope.sender.userID.prefix(8))…", category: "MessageStream")
-                return .keySyncRequest(envelope.sender.userID)
+                return .keySyncRequest(envelope.sender.userID, cursor: cursor)
             }
             // SESSION_RESET_INIT: atomic END_SESSION + new X3DH session init in one delivery.
             // Must be checked BEFORE the END_SESSION payload-size heuristic (it has a real payload).
@@ -44,7 +45,7 @@ enum MessageStreamParser {
                     contentType: 24,
                     kyberOtpkId: decoded.kyberOtpkId,
                     rawPayload: envelope.encryptedPayload
-                ))
+                ), cursor: cursor)
             }
             // END_SESSION: detect by contentType OR by payload size.
             // Servers may strip contentType when relaying — fall back to payload size:
@@ -67,7 +68,7 @@ enum MessageStreamParser {
                     timestamp: UInt64(envelope.timestamp),
                     kemCiphertext: Data(),
                     kyberOtpkId: 0
-                ))
+                ), cursor: cursor)
             }
             // SENDER_SYNC: copy of own outgoing message — decrypt with per-device session
             if envelope.contentType == .senderSync {
@@ -91,7 +92,7 @@ enum MessageStreamParser {
                     kyberOtpkId: decoded.kyberOtpkId,
                     senderDeviceId: envelope.senderDevice.deviceID,
                     conversationId: envelope.conversationID
-                ))
+                ), cursor: cursor)
             }
             // Unpack wire payload blob into crypto components.
             // STEALTH (sealed sender): SealedInner bytes can't be WirePayload-decoded here —
@@ -117,7 +118,7 @@ enum MessageStreamParser {
                     senderDeviceId: envelope.senderDevice.deviceID,
                     conversationId: envelope.conversationID,
                     sealedInnerData: sealedInnerBytes
-                ))
+                ), cursor: cursor)
             }
 
             guard let decoded = try? WirePayloadCoder.decode(envelope.encryptedPayload) else {
@@ -144,13 +145,13 @@ enum MessageStreamParser {
                 rawPayload: envelope.encryptedPayload
             )
             PerformanceMetrics.shared.messageEnvelopeArrived(messageId: envelope.messageID)
-            return .message(msg)
+            return .message(msg, cursor: cursor)
         case .receipt(let receipt):
             // Deliver receipt: extract confirmed message IDs and propagate
             if case .direct(let directReceipt) = receipt.receiptType,
                directReceipt.status == .delivered,
                !directReceipt.messageIds.isEmpty {
-                return .deliveryReceipt(directReceipt.messageIds)
+                return .deliveryReceipt(directReceipt.messageIds, cursor: cursor)
             }
             return nil
         case .typing(let indicator):
@@ -170,7 +171,7 @@ enum MessageStreamParser {
             Task { @MainActor in
                 ConnectionStatusManager.shared.markRequestSucceeded()
             }
-            return .heartbeat
+            return .heartbeat(cursor: cursor)
         case .none:
             return nil
         }

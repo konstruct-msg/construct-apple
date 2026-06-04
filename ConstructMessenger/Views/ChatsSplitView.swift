@@ -212,7 +212,7 @@ struct ChatsSplitView: View {
             #endif
         } else if let chatId = selectedChatId,
            let chat = chats.first(where: { $0.id == chatId }) {
-            ChatView(chat: chat, context: viewContext, sessionCoordinator: chatsViewModel.sessionCoordinator)
+            ChatView(chat: chat, context: viewContext)
         } else {
             ContentUnavailableView(
                 String(localized: "select_chat"),

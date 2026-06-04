@@ -81,15 +81,27 @@ extension Error {
 import CoreData
 
 extension NSManagedObjectContext {
+    func saveOrThrow(category: String = "CoreData", file: String = #file, line: Int = #line) throws {
+        guard hasChanges else { return }
+        let location = "\(file.split(separator: "/").last ?? ""):\(line)"
+        PerformanceMetrics.shared.coreDataSaveStart(label: location)
+        do {
+            try save()
+            PerformanceMetrics.shared.coreDataSaveEnd(label: location)
+        } catch {
+            PerformanceMetrics.shared.coreDataSaveFailed(label: location)
+            Log.error("Core Data save failed (\(location)): \(error)", category: category)
+            throw error
+        }
+    }
+
     /// Saves the context and logs any error. Use instead of `try? save()` in
     /// service-layer code where a silent failure would lose message or session data.
     func saveAndLog(category: String = "CoreData", file: String = #file, line: Int = #line) {
-        guard hasChanges else { return }
         do {
-            try save()
+            try saveOrThrow(category: category, file: file, line: line)
         } catch {
-            Log.error("Core Data save failed (\(file.split(separator: "/").last ?? ""):\(line)): \(error)",
-                      category: category)
+            // Already logged in saveOrThrow.
         }
     }
 }

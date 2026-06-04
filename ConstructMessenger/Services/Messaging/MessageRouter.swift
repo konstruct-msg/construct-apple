@@ -35,6 +35,7 @@ final class MessageRouter {
     }
 
     private let chunkReassembler = ChunkedMessageReassembler.shared
+    private var processingMessageIds: Set<String> = []
 
     // MARK: - Queue access for SessionCoordinator
 
@@ -46,6 +47,14 @@ final class MessageRouter {
     /// Clear pending messages for `userId` without returning them (e.g. after heal failure).
     func removePendingMessages(for userId: String) {
         pendingQueue.remove(for: userId)
+    }
+
+    private func beginProcessing(_ messageId: String) -> Bool {
+        processingMessageIds.insert(messageId).inserted
+    }
+
+    private func endProcessing(_ messageId: String) {
+        processingMessageIds.remove(messageId)
     }
 
     // MARK: - Message Routing
@@ -87,6 +96,12 @@ final class MessageRouter {
         }
 
         let otherUserId = message.from == currentUserId ? message.to : message.from
+
+        guard beginProcessing(message.id) else {
+            Log.debug("Skipping in-flight duplicate \(message.id.prefix(8))…", category: "MessageRouter")
+            return
+        }
+        defer { endProcessing(message.id) }
         
         #if DEBUG
         Log.debug("INCOMING message RAW from server:", category: "MessageRouter")
@@ -131,14 +146,6 @@ final class MessageRouter {
             }
             Log.info("Re-processing orphaned session init \(message.id.prefix(8))… (no active session for \(otherUserId.prefix(8))…)", category: "MessageRouter")
         }
-
-        // Claim this message ID in the in-memory ACK cache immediately — before any async
-        // Core Data or crypto operations.  Closes the race window with BackgroundFetch:
-        // if a silent push triggers a background fetch while this message is mid-processing,
-        // PersistentACKStore.isProcessed() will return `.inCache` and BackgroundFetch will
-        // skip the decrypt attempt, preventing DR-state corruption.
-        PersistentACKStore.shared.preemptACK(message.id)
-        Log.debug("MessageRouter: preemptACK \(message.id.prefix(8))… from=\(otherUserId.prefix(8))… msgNum=\(message.messageNumber) — claimed for foreground processing", category: "MessageRouter")
 
         // 2. SENDER_SYNC — copy of own outgoing message from another device.
         //    Route separately: decrypt with per-device session, save as outgoing in the
@@ -285,14 +292,17 @@ final class MessageRouter {
         // Rust returns [checkAckInDb(id)] when its in-memory cache misses; Swift checks Core Data
         // and feeds back ackDbResult so Rust can decide whether to decrypt or drop the message.
         if actions.count == 1, case .checkAckInDb(let ackMsgId) = actions[0] {
-            // Use Core-Data-only check here — NOT the in-memory preempt cache.
-            // preemptACK was already called above, so the Swift RustAckStore has this ID
-            // marked as "in-cache". Using isProcessed() would always return true here,
-            // causing every message after an app restart to be silently dropped as a duplicate.
             let isProcessed = PersistentACKStore.shared.isProcessedInCoreData(ackMsgId, in: context)
             let ackResult = CfeIncomingEvent.ackDbResult(messageId: ackMsgId, isProcessed: isProcessed)
-            if let followup = try? CryptoManager.shared.handleOrchestratorEvent(ackResult, tag: "ack_db_result"), !followup.isEmpty {
-                actions = followup
+            do {
+                let followup = try CryptoManager.shared.handleOrchestratorEvent(ackResult, tag: "ack_db_result")
+                if !followup.isEmpty {
+                    actions = followup
+                }
+            } catch {
+                Log.error("ACK DB result follow-up failed for \(ackMsgId.prefix(8))…: \(error)", category: "MessageRouter")
+                if isNewChat { context.delete(chat) }
+                return
             }
         }
 
@@ -420,9 +430,15 @@ final class MessageRouter {
         otherUserId: String,
         in context: NSManagedObjectContext
     ) {
+        // Hand off all stateless actions (storage, ACK, timers, heartbeat, call dispatch, etc.)
+        // to the centralised executor. Its switch is exhaustive — a new Rust action will
+        // refuse to compile until SessionActionExecutor handles it.
+        SessionActionExecutor.shared.execute(actions)
+
+        // Router-state-bound actions: only .messageDecrypted needs chunkReassembler,
+        // chat, message, context, and delegate. Handled inline.
         for action in actions {
-            switch action {
-            case .messageDecrypted(let contactId, _, let plaintext):
+            if case .messageDecrypted(let contactId, _, let plaintext) = action {
                 _ = contactId.isEmpty ? otherUserId : contactId
                 checkUsernameUpdate(for: otherUserId, chat: chat, in: context)
                 switch chunkReassembler.process(data: plaintext) {
@@ -436,76 +452,6 @@ final class MessageRouter {
                     Log.error("Invalid chunked message: \(reason)", category: "MessageRouter")
                     delegate?.messageRouter(self, needsReceipt: [message.id], to: otherUserId, status: .delivered)
                 }
-
-            case .saveSessionToSecureStore:
-                OutboundSessionService.shared.executeStorageActions([action])
-
-            case .notifyNewMessage:
-                break // Notification triggered by saveMessage inside handleResolvedMessage
-
-            case .persistMessage:
-                // Legacy ACK action — superseded by persistAck. No-op.
-                break
-
-            case .persistAck(let messageId, _):
-                // Rust core signals that this message should be persisted to the ACK store.
-                // Swift-side PersistentACKStore already handles this in handleResolvedMessage,
-                // but we also pre-populate the Rust cache on the M5 path.
-                CryptoManager.shared.markAckProcessedInOrchestrator(messageId: messageId)
-
-            case .pruneAckStore:
-                // Platform prunes its own ACK store on the gc_sweep timer.
-                // Nothing to do here — Swift handles this via ChatsViewModel.pruneExpired.
-                break
-
-            case .callSignalDecrypted(let contactId, _, let protoBytes):
-                // Rust decrypted a content_type=12 WirePayload — dispatch the raw proto bytes to CallManager.
-                if let signal = CallManager.decodeSignalProto(from: protoBytes) {
-                    CallManager.shared.handleCallSignalProto(from: contactId, signal: signal)
-                } else {
-                    Log.error("callSignalDecrypted: failed to decode WebRTCSignal proto from \(contactId.prefix(8))…", category: "MessageRouter")
-                }
-
-            case .checkAckInDb(let messageId):
-                // Rust cache miss after restart — check Core Data and report back.
-                // Use Core-Data-only check (not in-memory preempt cache) — see
-                // PersistentACKStore.isProcessedInCoreData for rationale.
-                Task { @MainActor in
-                    let isProcessed = await PersistentACKStore.shared.isProcessedInCoreData(messageId: messageId)
-                    let result = CfeIncomingEvent.ackDbResult(messageId: messageId, isProcessed: isProcessed)
-                    _ = try? CryptoManager.shared.handleOrchestratorEvent(result, tag: "ack_db_result_async")
-                }
-
-            case .healSuppressed(let contactId, let retryAfterMs):
-                // Heal was rate-limited — do NOT ACK so server re-delivers after cooldown.
-                Log.debug("Heal suppressed for \(contactId.prefix(8))… retry in \(retryAfterMs)ms", category: "MessageRouter")
-                // Intentionally no ACK sent.
-
-            case .sendHeartbeat(let contactId):
-                // Изъян 7: heartbeat requested — send encrypted heartbeat payload to contact.
-                Log.debug("Sending heartbeat to \(contactId.prefix(8))…", category: "MessageRouter")
-                Task { await OutboundSessionService.shared.sendSessionHeartbeat(to: contactId) }
-
-            case .notifyLinkedDevicesOfSessionReset(let contactId):
-                // Изъян 8: notify own linked devices that session with contactId was reset.
-                Log.debug("Notifying linked devices of session reset with \(contactId.prefix(8))…", category: "MessageRouter")
-                Task { await MultiDeviceSendCoordinator.shared.broadcastSessionReset(contactId: contactId) }
-
-            case .sessionTerminated(let contactId, let archiveBytes):
-                CryptoManager.shared.acceptSessionTerminated(contactId: contactId, archiveBytes: archiveBytes)
-                CryptoManager.shared.saveOrchestratorStateCFE()
-
-            case .notifyError(let code, let msg):
-                Log.error("Rust orchestrator error [\(code)]: \(msg)", category: "MessageRouter")
-
-            case .scheduleTimer(let timerId, let delayMs):
-                OutboundSessionService.shared.scheduleRustTimer(timerId: timerId, delayMs: delayMs)
-
-            case .cancelTimer(let timerId):
-                OutboundSessionService.shared.cancelRustTimer(timerId: timerId)
-
-            default:
-                Log.debug("Unhandled Rust action in M5 path: \(action)", category: "MessageRouter")
             }
         }
     }
@@ -579,32 +525,45 @@ final class MessageRouter {
             from: otherUserId,
             in: context
         ), specialMessageHandled {
-            PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
+            do {
+                try PersistentACKStore.shared.markProcessedOrThrow(message.id, senderId: otherUserId, in: context)
+                delegate?.messageRouter(self, needsReceipt: [message.id], to: otherUserId, status: .delivered)
+            } catch {
+                Log.error("Failed to persist ACK for special message \(message.id.prefix(8))…: \(error)", category: "MessageRouter")
+            }
             return  // Special message handled, don't save as regular message
         }
-
-        PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
 
         // 5a. If this is an edit to an existing message — update it instead of saving a new one
         if !message.editsMessageId.isEmpty {
             let fetchRequest = Message.fetchRequest()
             fetchRequest.predicate = NSPredicate(format: "id == %@", message.editsMessageId)
             fetchRequest.fetchLimit = 1
-            if let original = try? context.fetch(fetchRequest).first {
-                original.applyStoredEncryption(plaintext: decryptedContent, contactId: otherUserId)
-                original.isEdited = true
-                original.editedAt = Date(timeIntervalSince1970: TimeInterval(message.timestamp))
-                context.saveAndLog()
-                Log.info("Edited message \(message.editsMessageId.prefix(8))…", category: "MessageRouter")
-            } else {
-                Log.error("Cannot find original message to edit: \(message.editsMessageId)", category: "MessageRouter")
+            do {
+                if let original = try context.fetch(fetchRequest).first {
+                    original.applyStoredEncryption(plaintext: decryptedContent, contactId: otherUserId)
+                    original.isEdited = true
+                    original.editedAt = Date(timeIntervalSince1970: TimeInterval(message.timestamp))
+                    try context.saveOrThrow(category: "MessageRouter")
+                    Log.info("Edited message \(message.editsMessageId.prefix(8))…", category: "MessageRouter")
+                } else {
+                    Log.error("Cannot find original message to edit: \(message.editsMessageId)", category: "MessageRouter")
+                }
+                try PersistentACKStore.shared.markProcessedOrThrow(message.id, senderId: otherUserId, in: context)
+                delegate?.messageRouter(self, needsReceipt: [message.id], to: otherUserId, status: .delivered)
+            } catch {
+                Log.error("Failed to persist edited message \(message.id.prefix(8))…: \(error)", category: "MessageRouter")
             }
-            delegate?.messageRouter(self, needsReceipt: [message.id], to: otherUserId, status: .delivered)
             return
         }
 
-        // 5. Save regular message
-        saveMessage(for: chat, with: message, decryptedContent: decryptedContent, quotedMessage: quotedMessage, in: context)
+        do {
+            try saveMessage(for: chat, with: message, decryptedContent: decryptedContent, quotedMessage: quotedMessage, in: context)
+            try PersistentACKStore.shared.markProcessedOrThrow(message.id, senderId: otherUserId, in: context)
+        } catch {
+            Log.error("Failed to persist message \(message.id.prefix(8))…: \(error)", category: "MessageRouter")
+            return
+        }
 
         // 6. Acknowledge delivery to sender via stream (cursor ACK)
         delegate?.messageRouter(self, needsReceipt: [message.id], to: otherUserId, status: .delivered)
@@ -627,11 +586,6 @@ final class MessageRouter {
                 recipientIdentityKey: identityKeyForReceipt
             )
         }
-
-        // 7. Update chat metadata
-        chat.lastMessageText = Chat.formatPreviewText(decryptedContent)
-        chat.lastMessageTime = Date(timeIntervalSince1970: TimeInterval(message.timestamp))
-        context.saveAndLog()
 
         SessionActivityTracker.shared.recordActivity(for: message.from)
         Log.info("Message received and saved: \(message.id)", category: "MessageRouter")
@@ -751,7 +705,7 @@ final class MessageRouter {
 
         if isNewChat {
             do {
-                try context.save()
+                try context.saveOrThrow(category: "MessageRouter")
                 Log.debug("Saved new chat for \(userId)", category: "MessageRouter")
             } catch {
                 Log.error("Failed to save new chat: \(error)", category: "MessageRouter")
@@ -1114,7 +1068,7 @@ final class MessageRouter {
         chat.lastMessageTime = Date()
         
         do {
-            try context.save()
+            try context.saveOrThrow(category: "MessageRouter")
             Log.debug("System message added to chat with \(userId)", category: "MessageRouter")
         } catch {
             Log.error("Failed to save system message: \(error)", category: "MessageRouter")
@@ -1130,23 +1084,19 @@ final class MessageRouter {
         decryptedContent: String,
         quotedMessage: Shared_Proto_Messaging_V1_QuotedMessage?,
         in context: NSManagedObjectContext
-    ) {
+    ) throws {
         let fetchRequest = Message.fetchRequest()
         let messagePredicate = NSPredicate(format: "id ==[c] %@", messageData.id)
         fetchRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [messagePredicate])
         
         // Check if message already exists (from background fetch)
-        if let existingMessage = try? context.fetch(fetchRequest).first {
+        if let existingMessage = try context.fetch(fetchRequest).first {
             // Update encrypted content if message wasn't previously decrypted
             if !existingMessage.hasDecryptedContent {
                 Log.debug("Updating decrypted content for message \(messageData.id)", category: "MessageRouter")
                 existingMessage.applyStoredEncryption(plaintext: decryptedContent, contactId: messageData.from)
-                do {
-                    try context.save()
-                    Log.debug("Updated message decryption", category: "MessageRouter")
-                } catch {
-                    Log.error("Failed to update message: \(error)", category: "MessageRouter")
-                }
+                try context.saveOrThrow(category: "MessageRouter")
+                Log.debug("Updated message decryption", category: "MessageRouter")
             }
             return  // Message already exists
         }
@@ -1181,60 +1131,59 @@ final class MessageRouter {
                 message.replyToContent = replyText.isEmpty ? nil : replyText
             }
         }
-        
-        do {
-            try context.save()
-            PerformanceMetrics.shared.messageUIDisplayed(messageId: messageData.id)
 
-            let senderId = messageData.from
+        chat.lastMessageText = Chat.formatPreviewText(decryptedContent)
+        chat.lastMessageTime = message.timestamp
 
-            // ── Incoming flood check ────────────────────────────────────────────
-            let floodResult = IncomingFloodGuard.shared.check(senderId: senderId)
+        try context.saveOrThrow(category: "MessageRouter")
+        PerformanceMetrics.shared.messageUIDisplayed(messageId: messageData.id)
 
-            // ── Lockdown check ──────────────────────────────────────────────────
-            let lockdownSuppressed = LockdownManager.shared.shouldSuppress(senderId: senderId)
+        let senderId = messageData.from
 
-            // Decide whether to show notification
-            let chatId    = chat.id
-            let isMuted   = chat.isMuted
-            let senderName = (chat.otherUser?.displayName.trimmingCharacters(in: .whitespacesAndNewlines))
-                                .flatMap { $0.isEmpty ? nil : $0 }
-                            ?? chat.otherUser?.username
-                            ?? "Unknown"
-            let preview   = Chat.formatPreviewText(decryptedContent)
+        // ── Incoming flood check ────────────────────────────────────────────
+        let floodResult = IncomingFloodGuard.shared.check(senderId: senderId)
 
-            switch floodResult {
-            case .burstDetected(let count):
-                // First burst event — post a single special system notification instead
-                // of the regular message preview. Subsequent messages are silently dropped
-                // from notifications until the user reviews.
-                Log.info("Burst detected: \(count) msgs/30s from \(senderId.prefix(8))…", category: "FloodGuard")
-                if !isMuted {
-                    InAppNotificationService.shared.handleFloodAlert(
-                        chatId: chatId,
-                        senderName: senderName,
-                        messageCount: count
-                    )
-                }
+        // ── Lockdown check ──────────────────────────────────────────────────
+        let lockdownSuppressed = LockdownManager.shared.shouldSuppress(senderId: senderId)
 
-            case .alreadySuppressed:
-                // Silently save; no notification
-                Log.debug("Suppressed notification from flooder \(senderId.prefix(8))…", category: "FloodGuard")
+        // Decide whether to show notification
+        let chatId    = chat.id
+        let isMuted   = chat.isMuted
+        let senderName = (chat.otherUser?.displayName.trimmingCharacters(in: .whitespacesAndNewlines))
+                            .flatMap { $0.isEmpty ? nil : $0 }
+                        ?? chat.otherUser?.username
+                        ?? "Unknown"
+        let preview   = Chat.formatPreviewText(decryptedContent)
 
-            case .normal:
-                if lockdownSuppressed {
-                    Log.debug("Lockdown: suppressed notification from new sender \(senderId.prefix(8))…", category: "LockdownManager")
-                } else if !isMuted {
-                    InAppNotificationService.shared.handle(
-                        chatId: chatId,
-                        isMuted: false,
-                        senderName: senderName,
-                        preview: preview
-                    )
-                }
+        switch floodResult {
+        case .burstDetected(let count):
+            // First burst event — post a single special system notification instead
+            // of the regular message preview. Subsequent messages are silently dropped
+            // from notifications until the user reviews.
+            Log.info("Burst detected: \(count) msgs/30s from \(senderId.prefix(8))…", category: "FloodGuard")
+            if !isMuted {
+                InAppNotificationService.shared.handleFloodAlert(
+                    chatId: chatId,
+                    senderName: senderName,
+                    messageCount: count
+                )
             }
-        } catch {
-            Log.error("Failed to save message: \(error)", category: "MessageRouter")
+
+        case .alreadySuppressed:
+            // Silently save; no notification
+            Log.debug("Suppressed notification from flooder \(senderId.prefix(8))…", category: "FloodGuard")
+
+        case .normal:
+            if lockdownSuppressed {
+                Log.debug("Lockdown: suppressed notification from new sender \(senderId.prefix(8))…", category: "LockdownManager")
+            } else if !isMuted {
+                InAppNotificationService.shared.handle(
+                    chatId: chatId,
+                    isMuted: false,
+                    senderName: senderName,
+                    preview: preview
+                )
+            }
         }
     }
 

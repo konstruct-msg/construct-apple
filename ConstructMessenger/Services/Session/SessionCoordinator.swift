@@ -258,15 +258,17 @@ final class SessionCoordinator: MessageRouterDelegate {
     }
 
     func messageRouter(_ router: MessageRouter, needsPublicKeyBundle userId: String, for message: ChatMessage) {
-        Task { @MainActor in
+        Task { @MainActor [weak self] in
+            guard let self else { return }
             await self.handlePublicKeyBundleNeeded(userId: userId, message: message)
         }
     }
 
     func messageRouter(_ router: MessageRouter, needsUsernameUpdate userId: String) {
-        Task {
+        Task { [weak self] in
+            guard let self else { return }
             do {
-                let bundle = try await publicKeyBundleHandler.fetchPublicKeyWithRetry(userId: userId)
+                let bundle = try await self.publicKeyBundleHandler.fetchPublicKeyWithRetry(userId: userId)
                 await MainActor.run { _ = self.publicKeyBundleHandler.handlePublicKeyBundle(bundle) }
             } catch {
                 Log.error("Failed to fetch public key for username update: \(error.localizedDescription)", category: "SessionCoordinator")
@@ -275,17 +277,18 @@ final class SessionCoordinator: MessageRouterDelegate {
     }
 
     func messageRouter(_ router: MessageRouter, needsEndSession userId: String) {
-        Task {
+        Task { [weak self] in
+            guard let self else { return }
             let now = Date()
-            if let lastSent = endSessionSentAt[userId],
-               now.timeIntervalSince(lastSent) < endSessionCooldown {
+            if let lastSent = self.endSessionSentAt[userId],
+               now.timeIntervalSince(lastSent) < self.endSessionCooldown {
                 Log.info("END_SESSION cooldown active for \(userId.prefix(8))..., skipping", category: "SessionCoordinator")
                 return
             }
-            endSessionSentAt[userId] = now
+            self.endSessionSentAt[userId] = now
             Log.info("Sending END_SESSION to \(userId.prefix(8))... (session out of sync)", category: "SessionCoordinator")
             do {
-                try await sendEndSession(to: userId, reason: "session_out_of_sync")
+                try await self.sendEndSession(to: userId, reason: "session_out_of_sync")
             } catch {
                 Log.error("Failed to send END_SESSION to \(userId.prefix(8))...: \(error)", category: "SessionCoordinator")
             }
@@ -294,10 +297,10 @@ final class SessionCoordinator: MessageRouterDelegate {
             try? await Task.sleep(nanoseconds: 300_000_000)
             if DeviceIdOrdering.isNaturalInitiator(myId: myId, peerId: userId) {
                 Log.info("DR diverge: auto-reinit as natural INITIATOR for \(userId.prefix(8))…", category: "SessionInit")
-                prewarmSessions(for: [userId], skipEndSessionNotification: true)
+                self.prewarmSessions(for: [userId], skipEndSessionNotification: true)
             } else {
                 Log.info("DR diverge: starting RESPONDER fallback for \(userId.prefix(8))…", category: "SessionInit")
-                startResponderFallback(for: userId)
+                self.startResponderFallback(for: userId)
             }
         }
     }
@@ -324,24 +327,26 @@ final class SessionCoordinator: MessageRouterDelegate {
         }
         resendUnconfirmedOutgoingMessagesIfNeeded(to: userId)
         Log.info("END_SESSION received — re-prewarming as natural INITIATOR for \(userId.prefix(8))…", category: "SessionInit")
-        Task {
+        Task { [weak self] in
+            guard let self else { return }
             try? await Task.sleep(nanoseconds: 300_000_000)
-            prewarmSessions(for: [userId], skipEndSessionNotification: true)
+            self.prewarmSessions(for: [userId], skipEndSessionNotification: true)
         }
     }
 
     func messageRouter(_ router: MessageRouter, didWinTieBreak userId: String) {
         let suiteIdAtWin = Int(KeychainManager.shared.loadSessionSuiteId(userId: userId) ?? 0)
         Log.info("SESSION_STATE[tie_break_outcome]: INITIATOR role confirmed, peer=\(userId.prefix(8))… suiteId=\(suiteIdAtWin), sending SESSION_RESET_INIT", category: "SessionInit")
-        Task {
-            await sessionInitService.initializeSessionProactively(
+        Task { [weak self] in
+            guard let self else { return }
+            await self.sessionInitService.initializeSessionProactively(
                 userId: userId,
                 onSuccess: { },
                 onFailure: { err in
                     Log.error("SESSION_STATE[tie_break_reinit_fail]: \(err.localizedDescription)", category: "SessionInit")
                 }
             )
-            await sendSessionResetInit(to: userId)
+            await self.sendSessionResetInit(to: userId)
             SessionConfirmationTracker.shared.markPending(userId)
             let suiteIdAfter = Int(KeychainManager.shared.loadSessionSuiteId(userId: userId) ?? 0)
             Log.info("SESSION_STATE[tie_break_sri_sent]: peer=\(userId.prefix(8))… suiteId=\(suiteIdAfter)", category: "SessionInit")
@@ -395,7 +400,19 @@ final class SessionCoordinator: MessageRouterDelegate {
                         contactId: userId,
                         sessionData: Data(sessionBytes)
                     )
-                    _ = try? CryptoManager.shared.handleOrchestratorEvent(event, tag: "session_init_completed_responder")
+                    do {
+                        _ = try CryptoManager.shared.handleOrchestratorEvent(event, tag: "session_init_completed_responder")
+                    } catch {
+                        Log.error("SESSION_STATE[init_completed_event_failed]: \(error.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
+                        Task { [weak self] in
+                            guard let self else { return }
+                            do {
+                                try await self.sendEndSession(to: userId, reason: "session_init_completed_failed")
+                            } catch {
+                                Log.error("SESSION_STATE[init_completed_end_session_failed]: \(error.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
+                            }
+                        }
+                    }
                 }
 
                 // Replenish OTPKs — Bob consumed one OTPK for this X3DH session init.
@@ -411,7 +428,10 @@ final class SessionCoordinator: MessageRouterDelegate {
                 // Phase 2 of two-phase handshake: notify INITIATOR that RESPONDER
                 // session is established. INITIATOR cancels its watchdog and flushes
                 // any buffered outgoing messages.
-                Task { await self.sendSessionReady(to: userId) }
+                Task { [weak self] in
+                    guard let self else { return }
+                    await self.sendSessionReady(to: userId)
+                }
             } else {
                 // initReceivingSession failed — prekey exhausted or invalid.
                 Log.info("initReceivingSession failed — clearing queue, sending END_SESSION to \(userId.prefix(8))...", category: "SessionInit")
@@ -430,9 +450,14 @@ final class SessionCoordinator: MessageRouterDelegate {
                     PersistentACKStore.shared.markProcessed(message.id, senderId: userId, in: context)
                 }
                 messageRouter.removePendingMessages(for: userId)
-                Task {
-                    try? await sendEndSession(to: userId, reason: "session_init_failed")
-                    await uploadFreshOtpks(reason: "init_failed")
+                Task { [weak self] in
+                    guard let self else { return }
+                    do {
+                        try await self.sendEndSession(to: userId, reason: "session_init_failed")
+                    } catch {
+                        Log.error("SESSION_STATE[init_failed_end_session]: \(error.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
+                    }
+                    await self.uploadFreshOtpks(reason: "init_failed")
                 }
             }
         } catch {
@@ -495,7 +520,11 @@ final class SessionCoordinator: MessageRouterDelegate {
                     PersistentACKStore.shared.markProcessed(failedMessage.id, senderId: userId, in: context)
                     messageRouter.removePendingMessages(for: userId)
                     SessionHealingService.shared.clearQueue(for: userId, in: context)
-                    try? await sendEndSession(to: userId, reason: "heal_exhausted")
+                    do {
+                        try await sendEndSession(to: userId, reason: "heal_exhausted")
+                    } catch {
+                        Log.error("SESSION_STATE[heal_exhausted_end_session]: \(error.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
+                    }
                     await uploadFreshOtpks(reason: "heal_exhausted")
                 }
                 // Otherwise leave HealingMessage in CoreData; next reconnect retries.
@@ -505,7 +534,11 @@ final class SessionCoordinator: MessageRouterDelegate {
             if !canContinue {
                 messageRouter.removePendingMessages(for: userId)
                 SessionHealingService.shared.clearQueue(for: userId, in: context)
-                try? await sendEndSession(to: userId, reason: "heal_bundle_unreachable")
+                do {
+                    try await sendEndSession(to: userId, reason: "heal_bundle_unreachable")
+                } catch {
+                    Log.error("SESSION_STATE[heal_bundle_end_session]: \(error.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
+                }
             }
         }
     }
@@ -858,7 +891,6 @@ final class SessionCoordinator: MessageRouterDelegate {
         if let existing = try? context.fetch(fetchRequest).first {
             if !existing.hasDecryptedContent {
                 existing.applyStoredEncryption(plaintext: plaintext, contactId: messageData.from)
-                context.saveAndLog()
             }
             return
         }
@@ -877,8 +909,6 @@ final class SessionCoordinator: MessageRouterDelegate {
 
         chat.lastMessageText = Chat.formatPreviewText(plaintext)
         chat.lastMessageTime = message.timestamp
-
-        context.saveAndLog()
     }
 
     // MARK: - Auto-resend After END_SESSION (sender-side recovery)

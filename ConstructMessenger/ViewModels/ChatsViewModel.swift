@@ -29,7 +29,6 @@ class ChatsViewModel {
 
     // MARK: - Core dependencies
 
-    let sessionCoordinator: SessionCoordinator
     private let streamManager: MessageStreamManager
     private let chatManagementService = ChatManagementService()
     private let streamLifecycle: StreamLifecycleCoordinator
@@ -55,11 +54,10 @@ class ChatsViewModel {
 
     init() {
         let sm = MessageStreamManager.shared
-        let sc = SessionCoordinator()
-        let lifecycle = StreamLifecycleCoordinator(streamManager: sm, sessionCoordinator: sc)
+        let controller = SessionLifecycleController.shared
+        let lifecycle = StreamLifecycleCoordinator(streamManager: sm, sessionCoordinator: controller.coordinator)
 
         self.streamManager = sm
-        self.sessionCoordinator = sc
         self.streamLifecycle = lifecycle
 
         self.lastMessageId = UserDefaults.standard.string(forKey: "construct.lastMessageId")
@@ -67,9 +65,9 @@ class ChatsViewModel {
             Log.info("Restored lastMessageId from UserDefaults: \(restored)", category: "ChatsViewModel")
         }
 
-        sc.configure(streamManager: sm)
+        controller.configure(streamManager: sm)
 
-        sc.onEphemeralSubscriptionNeeded = { [weak lifecycle] userId in
+        controller.onEphemeralSubscriptionNeeded = { [weak lifecycle] userId in
             lifecycle?.addEphemeralSubscription(for: userId)
         }
 
@@ -85,7 +83,7 @@ class ChatsViewModel {
     func setContext(_ context: NSManagedObjectContext) {
         if let existing = viewContext, existing === context { return }
         self.viewContext = context
-        sessionCoordinator.setContext(context)
+        SessionLifecycleController.shared.setContext(context)
         chatManagementService.setContext(context)
         streamLifecycle.setContext(context)
         if !didPerformFirstContextSetup && streamManager.subscriptionUserIds.isEmpty {
@@ -114,17 +112,17 @@ class ChatsViewModel {
         streamLifecycle.forceReconnect()
         if !CryptoManager.shared.hasSession(for: user.id) {
             CryptoManager.shared.clearArchivedSessions(for: user.id)
-            sessionCoordinator.prewarmSessions(for: [user.id])
+            SessionLifecycleController.shared.prewarmSessions(for: [user.id])
         }
         return chat
     }
 
     func sendEndSession(to userId: String, reason: String = "manual_reset") async throws {
-        try await sessionCoordinator.sendEndSession(to: userId, reason: reason)
+        try await SessionLifecycleController.shared.sendEndSession(to: userId, reason: reason)
     }
 
     func sendEndSessionToAllContacts(reason: String = "logout") async {
-        await sessionCoordinator.sendEndSessionToAllContacts(reason: reason)
+        await SessionLifecycleController.shared.sendEndSessionToAllContacts(reason: reason)
     }
 
     func deleteChat(chat: Chat) {
@@ -165,7 +163,7 @@ class ChatsViewModel {
     func deleteChatWithEndSession(chat: Chat) async {
         if let userId = chat.otherUser?.id {
             do {
-                try await sessionCoordinator.sendEndSession(to: userId, reason: "chat_deleted")
+                try await SessionLifecycleController.shared.sendEndSession(to: userId, reason: "chat_deleted")
             } catch {
                 Log.error("END_SESSION failed before chat delete (continuing): \(error)", category: "ChatsViewModel")
             }

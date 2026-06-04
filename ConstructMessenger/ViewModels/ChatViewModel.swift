@@ -46,7 +46,7 @@ class ChatViewModel {
 
     // MARK: - Init
 
-    init(chat: Chat, context: NSManagedObjectContext, sessionCoordinator: SessionCoordinator) {
+    init(chat: Chat, context: NSManagedObjectContext) {
         self.chat = chat
 
         let store = ChatMessageStore(chat: chat, viewContext: context)
@@ -54,8 +54,7 @@ class ChatViewModel {
         let coordinator = ChatSendCoordinator(
             chat: chat,
             viewContext: context,
-            sessionManager: manager,
-            sessionCoordinator: sessionCoordinator
+            sessionManager: manager
         )
 
         self.messageStore = store

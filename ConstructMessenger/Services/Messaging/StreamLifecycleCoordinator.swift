@@ -367,7 +367,17 @@ final class StreamLifecycleCoordinator {
     // MARK: - Incoming message + delivery receipts
 
     private func handleIncomingMessage(_ message: ChatMessage) {
-        guard let context = viewContext else { return }
+        let context: NSManagedObjectContext
+        if let viewContext {
+            context = viewContext
+        } else {
+            Log.error("Incoming message \(message.id.prefix(8))… arrived before StreamLifecycle context was set — using shared context", category: "StreamLifecycle")
+            let fallback = PersistenceController.shared.container.viewContext
+            setContext(fallback)
+            context = fallback
+        }
+
+        Log.debug("Dispatching incoming message \(message.id.prefix(8))… from=\(message.from.prefix(8))…", category: "StreamLifecycle")
         let senderId = message.from
         if !senderId.isEmpty, ephemeralSubscriptionUserIds.remove(senderId) != nil {
             Log.info("Ephemeral subscription cleared for \(senderId.prefix(8))… (first message arrived)", category: "StreamLifecycle")

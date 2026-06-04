@@ -51,24 +51,10 @@ final class OutboundSessionService {
     }
 
     private func executeRustTimerActions(_ actions: [CfeAction]) {
-        for action in actions {
-            switch action {
-            case .scheduleTimer(let id, let delay):
-                scheduleRustTimer(timerId: id, delayMs: delay)
-            case .cancelTimer(let id):
-                cancelRustTimer(timerId: id)
-            case .notifyError(let code, let msg):
-                Log.error("Rust timer action error [\(code)]: \(msg)", category: "OutboundSession")
-            default:
-                if case .saveSessionToSecureStore = action {
-                    executeStorageActions([action])
-                } else if case .sessionTerminated = action {
-                    executeStorageActions([action])
-                } else {
-                    Log.debug("Unhandled Rust timer action: \(action)", category: "OutboundSession")
-                }
-            }
-        }
+        // Delegate to the centralised executor — it handles scheduleTimer/cancelTimer,
+        // notifyError, saveSessionToSecureStore, sessionTerminated, and the rest of the
+        // CfeAction surface exhaustively. See SessionActionExecutor.
+        SessionActionExecutor.shared.execute(actions)
     }
 
     // MARK: - Outgoing Encryption

@@ -176,9 +176,14 @@ class PublicKeyBundleHandler {
             }
 
             onSuccess(chat, message, decryptedBytes)
-            context.saveAndLog()
-            Log.info("Successfully saved decrypted pending message", category: "PublicKeyBundleHandler")
-            return true
+            do {
+                try context.saveOrThrow(category: "PublicKeyBundleHandler")
+                Log.info("Successfully saved decrypted pending message", category: "PublicKeyBundleHandler")
+                return true
+            } catch {
+                Log.error("Failed to persist decrypted pending message for \(data.userId.prefix(8))…: \(error)", category: "PublicKeyBundleHandler")
+                return false
+            }
             
         } catch CryptoError.SessionInitializationFailed(let message) {
             // Log detailed error from Rust core

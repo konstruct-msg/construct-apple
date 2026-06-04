@@ -96,7 +96,6 @@ final class GRPCStreamTransport: StreamTransport {
                     for try await part in contents.bodyParts {
                         switch part {
                         case .message(let resp):
-                            if resp.hasStreamCursor { StreamCursorStore.save(resp.streamCursor) }
                             if let event = MessageStreamParser.parse(resp) { events.yield(event) }
                         case .trailingMetadata:
                             break
@@ -258,17 +257,33 @@ extension MessageStreamManager {
                 // (not just at TLS layer). Sets the watchdog-cancel flag below.
                 self?.firstServerEventReceived = true
                 switch event {
-                case .message(let msg):
+                case .message(let msg, let cursor):
                     Log.debug("MessageStream received message from=\(msg.from) id=\(msg.id)", category: "MessageStream")
-                    self?.onMessageReceived?(msg)
-                case .deliveryReceipt(let ids):
+                    if let handler = self?.onMessageReceived {
+                        handler(msg)
+                        if let cursor { StreamCursorStore.save(cursor) }
+                    } else {
+                        Log.error("MessageStream has no onMessageReceived handler — not advancing cursor for \(msg.id.prefix(8))…", category: "MessageStream")
+                    }
+                case .deliveryReceipt(let ids, let cursor):
                     Log.info("MessageStream receipt: \(ids.count) message(s) delivered → \(ids.joined(separator: ", "))", category: "MessageStream")
-                    self?.onDeliveryReceipt?(ids)
-                case .keySyncRequest(let userId):
+                    if let handler = self?.onDeliveryReceipt {
+                        handler(ids)
+                        if let cursor { StreamCursorStore.save(cursor) }
+                    } else {
+                        Log.error("MessageStream has no delivery receipt handler — not advancing cursor", category: "MessageStream")
+                    }
+                case .keySyncRequest(let userId, let cursor):
                     Log.info("KEY_SYNC received — re-keying session for \(userId.prefix(8))…", category: "MessageStream")
-                    self?.onKeySyncReceived?(userId)
-                case .heartbeat:
+                    if let handler = self?.onKeySyncReceived {
+                        handler(userId)
+                        if let cursor { StreamCursorStore.save(cursor) }
+                    } else {
+                        Log.error("MessageStream has no key-sync handler — not advancing cursor", category: "MessageStream")
+                    }
+                case .heartbeat(let cursor):
                     self?.lastHeartbeatDate = Date()
+                    if let cursor { StreamCursorStore.save(cursor) }
                 }
             }
         }
