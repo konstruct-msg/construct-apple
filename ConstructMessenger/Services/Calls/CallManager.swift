@@ -47,6 +47,11 @@ final class CallManager {
 
     private(set) var state: CallState = .idle
     private(set) var lastError: String? = nil
+    /// Coarse network health for the active call. `good` is the normal
+    /// state; flips to `reconnecting` while WebRTC sees `iceConnectionState
+    /// .disconnected` (transient network blip). Resets to `good` on every
+    /// new call so a stale value from a previous call never leaks into the UI.
+    private(set) var callQuality: CallQuality = .good
 
     func clearLastError() { lastError = nil }
 
@@ -98,6 +103,15 @@ final class CallManager {
 
     private init() {
         #if os(iOS)
+        // SwiftUI Previews run under XOJIT, which cannot register CallKit's
+        // @objc class chain (`CXProvider`, `PKPushRegistry`) — touching
+        // `CallKitProvider.shared` / `VoIPPushManager.shared` here aborts the
+        // preview with `_objc_fatal: Attempt to use unknown class …`. CallKit
+        // and PushKit are also meaningless under previews (no real device,
+        // no push infra), so skip wiring entirely.
+        if PreviewDetector.isRunningInPreview {
+            return
+        }
         VoIPPushManager.shared.onIncomingPush = { [weak self] payload, reportedUUID in
             Task { @MainActor in self?.handleIncomingPush(payload, reportedUUID: reportedUUID) }
         }
@@ -223,17 +237,10 @@ final class CallManager {
         let callId  = (payload["call_id"]  as? String) ?? reportedUUID.uuidString
         let callerId = (payload["caller_id"] as? String) ?? "Unknown"
         // Privacy: do NOT use caller_name from push payload (exposed to APNs infrastructure).
-        // Look up display name from local CoreData; fall back to generic app name.
-        let callerName: String = {
-            let ctx = PersistenceController.shared.container.viewContext
-            let req = User.fetchRequest()
-            req.predicate = NSPredicate(format: "id == %@", callerId)
-            req.fetchLimit = 1
-            if let user = (try? ctx.fetch(req))?.first {
-                return user.displayName
-            }
-            return NSLocalizedString("construct_app_name", comment: "")
-        }()
+        // Resolve from local CoreData via `resolvedDisplayName` (profile-shared name →
+        // server username → deterministic generated fallback). Never shows raw UUID.
+        let callerName = Self.resolveContactDisplayName(userId: callerId)
+            ?? NSLocalizedString("construct_app_name", comment: "")
 
         // reportedUUID was already passed to CallKit synchronously inside PushKit's delegate
         // callback (iOS 13+ requirement). Do not call reportIncomingCall again.
@@ -346,6 +353,14 @@ final class CallManager {
         end(callUUID: active.session.uuid)
     }
 
+    /// Dismiss the post-call `.ended` overlay immediately, before the auto-clear
+    /// timer (`endedAutoClearDelay`) fires. The in-call full-screen cover is
+    /// driven by call state; transitioning back to `.idle` here lets it dismiss
+    /// on tap instead of leaving the user staring at a phantom screen.
+    func dismissEndedCall() {
+        if case .ended = state { state = .idle }
+    }
+
     /// Answer the current incoming call from in-app UI (bypasses CallKit transaction).
     func answerIncomingCall() {
         guard let active, case .incoming = state else { return }
@@ -361,11 +376,6 @@ final class CallManager {
     /// Mute or unmute the local microphone.
     func setMuted(_ muted: Bool) {
         active?.webrtc?.setMuted(muted)
-    }
-
-    /// Enable or disable loudspeaker.
-    func setSpeaker(_ enabled: Bool) {
-        active?.webrtc?.setSpeaker(enabled)
     }
 
     /// End the call identified by `callUUID`.
@@ -708,6 +718,10 @@ final class CallManager {
                 #endif
             }
         }
+        webrtc.onQualityChanged = { [weak self] q in
+            Task { @MainActor in self?.callQuality = q }
+        }
+        callQuality = .good   // reset for a fresh call
         active.webrtc = webrtc
         Log.info("WebRTC session created (role=\(role), turn=\(active.turn != nil ? "yes" : "STUN-only"))", category: "Calls")
     }
@@ -846,9 +860,12 @@ final class CallManager {
 
         switch signal.signal {
         case .offer(let offer):
+            // Note: `offer.callerUserID` is a UUID, not a display name. Resolve via
+            // local CoreData like the PushKit path does.
             handleIncomingCallOffer(callId: signal.callID, callerUserId: senderUserId,
-                                    callerName: offer.callerUserID.isEmpty ? nil : offer.callerUserID,
+                                    callerName: nil,
                                     sdp: offer.sdp)
+            _ = offer  // currently unused; reserved for future video-flag etc.
         case .answer(let answer):
             guard let active, active.session.id == signal.callID else { return }
             let sdp = answer.sdp
@@ -921,9 +938,13 @@ final class CallManager {
             Log.info("Stored pending SDP for existing call callId=\(callId.prefix(8))…", category: "Calls")
             return
         }
-        // No existing call — create from message-based offer.
+        // No existing call — create from message-based offer. Caller name is resolved
+        // from local CoreData (profile-shared name → username → generated fallback);
+        // never surface the raw UUID.
         let uuid = UUID()
-        let name = callerName ?? "Incoming Call"
+        let name = callerName
+            ?? Self.resolveContactDisplayName(userId: callerUserId)
+            ?? NSLocalizedString("call_incoming_audio", comment: "")
         let session = CallSession(id: callId, uuid: uuid, peerUserId: callerUserId, peerName: name, direction: .incoming)
         begin(session: session, initialState: .incoming(session))
         active?.pendingRemoteOfferSdp = sdp
@@ -935,6 +956,11 @@ final class CallManager {
         active?.close()
         let adjusted = CallSession(id: callId, uuid: reportedUUID, peerUserId: callerUserId, peerName: name, direction: .incoming)
         active = ActiveCall(session: adjusted)
+        // Mark the call as known to CallKit so `endActiveCall` later calls
+        // `reportCallEnded` for this UUID. Without this flag CallKit retains
+        // the previous call as "active" and the next outgoing CXStartCallAction
+        // fails with `maximumCallGroupsReached` (CXErrorCodeRequestTransactionError 7).
+        active?.callKitRegistered = true
         active?.pendingRemoteOfferSdp = sdp
         state = .incoming(adjusted)
         #endif
@@ -1041,6 +1067,19 @@ final class CallManager {
 
     private static func currentDeviceId() -> String {
         AuthSessionManager.shared.currentDeviceId ?? (KeychainManager.shared.loadDeviceID() ?? "")
+    }
+
+    /// Single source of truth for "what name do we show for an incoming call from
+    /// `userId`?". Looks up the local `User` entity and returns its
+    /// `resolvedDisplayName` (profile-shared real name → server username →
+    /// deterministic generated fallback). Returns `nil` when the contact is
+    /// completely unknown to this device.
+    private static func resolveContactDisplayName(userId: String) -> String? {
+        let ctx = PersistenceController.shared.container.viewContext
+        let req = User.fetchRequest()
+        req.predicate = NSPredicate(format: "id == %@", userId)
+        req.fetchLimit = 1
+        return (try? ctx.fetch(req))?.first?.resolvedDisplayName
     }
 
     private static func makePing(timestampMs: Int64) -> Shared_Proto_Signaling_V1_SignalRequest {

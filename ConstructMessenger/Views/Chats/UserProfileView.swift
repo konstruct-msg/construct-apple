@@ -110,7 +110,11 @@ struct UserProfileView: View {
         ) {
             Button(LocalizedStringKey("reset_session"), role: .destructive) {
                 Task {
-                    try? await SessionCoordinator().sendEndSession(to: user.id, reason: "user_requested")
+                    do {
+                        try await SessionLifecycleController.shared.sendEndSession(to: user.id, reason: "user_requested")
+                    } catch {
+                        Log.error("Failed to send user-requested END_SESSION for \(user.id.prefix(8))…: \(error)", category: "UserProfileView")
+                    }
                 }
             }
             Button(LocalizedStringKey("cancel"), role: .cancel) {}
@@ -130,7 +134,7 @@ struct UserProfileView: View {
     private var avatarHeader: some View {
         let avatarImage: PlatformImage? = user.avatarData.flatMap { PlatformImage(data: $0) }
         return VStack(spacing: 14) {
-            HexagonAvatarView(
+            MainAvatarView(
                 userId: user.id,
                 displayName: user.resolvedDisplayName,
                 image: avatarImage,
@@ -206,6 +210,20 @@ struct UserProfileView: View {
                     dismiss()
                 }
                 flatRowDivider()
+
+                if CallsFeature.isVideoEnabled {
+                    actionRow(label: NSLocalizedString("call_video", comment: "Video call"), color: Color.CT.accent) {
+                        Task {
+                            await callManager.startOutgoingCall(
+                                to: user.id,
+                                displayName: user.resolvedDisplayName,
+                                hasVideo: true
+                            )
+                        }
+                        dismiss()
+                    }
+                    flatRowDivider()
+                }
             } else if !CallsFeature.isEnabled {
                 disabledRow(label: NSLocalizedString("call_voice", comment: "Voice call"))
                 flatRowDivider()
@@ -391,7 +409,7 @@ struct UserProfileView: View {
     }
 
     private func refreshSessionSecurityState() {
-        let sessionExists = CryptoManager.shared.hasSession(for: user.id)
+        let sessionExists = SessionLifecycleController.shared.hasActiveSession(for: user.id)
         let suiteId = Int(KeychainManager.shared.loadSessionSuiteId(userId: user.id) ?? 0)
         hasSession = sessionExists
         sessionSuiteLabel = sessionExists && suiteId > 0
@@ -407,7 +425,7 @@ struct UserProfileView: View {
                 isSharingInProgress = false
                 if success {
                     user.amISharingWith = true
-                    try? viewContext.save()
+                    viewContext.saveAndLog(category: "UserProfileView")
                     shareAlertMessage = NSLocalizedString("profile_shared_successfully", comment: "")
                 } else {
                     shareAlertMessage = error ?? NSLocalizedString("failed_to_share_profile", comment: "")
@@ -416,7 +434,7 @@ struct UserProfileView: View {
             }
         } else {
             user.amISharingWith = false
-            try? viewContext.save()
+            viewContext.saveAndLog(category: "UserProfileView")
             shareAlertMessage = NSLocalizedString("profile_sharing_stopped", comment: "")
             showingShareAlert = true
         }
@@ -424,7 +442,7 @@ struct UserProfileView: View {
 
     private func handleBlockToggle() {
         user.isBlocked.toggle()
-        try? viewContext.save()
+        viewContext.saveAndLog(category: "UserProfileView")
     }
 }
 

@@ -632,6 +632,13 @@
 "call_no_relay" = "Нет соединения (relay недоступен)";
 "call_dismiss" = "Закрыть";
 "call_call_back" = "Перезвонить";
+"call_minimize" = "Свернуть";
+"call_minibar_in_call" = "звонок";
+"call_minibar_connecting" = "соединение";
+"call_reconnecting" = "переподключение…";
+"call_e2ee_badge" = "сквозное шифрование";
+"edit_identity" = "редактирование";
+"delete_account_abort_hint" = "нажмите чтобы отменить · %d с";
 
 // MARK: - Account / Identity Settings
 "change_photo" = "изменить фото";
@@ -648,6 +655,8 @@
 
 // MARK: - Profile / User
 "call_voice" = "голосовой звонок";
+"call_video" = "видеозвонок";
+"call_audio_route" = "звук";
 "end_to_end_encrypted" = "изменения защищены сквозным шифрованием";
 
 // MARK: - QR / Invite
@@ -917,8 +926,19 @@
 "stt_delete_confirm_title" = "Удалить эту модель?";
 "stt_transcribe_button" = "Транскрибировать";
 "stt_transcribing" = "Транскрипция…";
+"stt_show_transcript" = "Показать текст";
+"stt_hide_transcript" = "Скрыть текст";
+"stt_section_header" = "транскрипция";
+"stt_section_footer" = "Голосовые сообщения можно расшифровать локально. Модели качаются один раз и не покидают телефон.";
+"stt_retry_download" = "повторить";
 "account_discard_changes_title" = "Отменить изменения?";
 "account_discard_changes_message" = "Есть несохранённые изменения профиля. Выйти без сохранения?";
 "account_discard_changes_discard" = "Не сохранять";
 "account_discard_changes_keep_editing" = "Продолжить редактирование";
 "account_editing_profile" = "> Режим редактирования профиля. Нажмите ✓ для сохранения или x для отмены.";
+
+"liquid_logo.title" = "ЖИДКИЙ ЛОГОТИП";
+"liquid_logo.size" = "РАЗМЕР";
+"liquid_logo.haptics" = "Виброотклик";
+"liquid_logo.replay" = "ПОВТОР";
+"liquid_logo.hint" = "коснитесь экрана для повтора";

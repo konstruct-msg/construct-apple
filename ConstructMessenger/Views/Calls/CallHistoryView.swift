@@ -140,7 +140,7 @@ private struct CallHistoryRow: View {
                     .frame(width: 20, alignment: .center)
 
                 // Avatar
-                HexagonAvatarView(
+                MainAvatarView(
                     userId: record.peerUserId,
                     displayName: record.peerName,
                     size: 40

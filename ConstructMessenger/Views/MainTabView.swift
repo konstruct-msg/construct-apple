@@ -27,6 +27,11 @@ struct MainTabView: View {
     /// @FetchRequest.update on ALL ZStack children (even opacity=0 ones) during layout.
     @State private var visitedTabs: Set<Int> = [0]
 
+    /// True when the in-call full-screen cover should be shown; false when the
+    /// user has minimised the call to the top-of-screen mini bar. Persists across
+    /// tab switches; reset to `true` whenever a new call begins.
+    @State private var isCallExpanded: Bool = true
+
     var body: some View {
         // Incoming-call UI on iOS is owned by CallKit (system banner / lock-screen
         // / dynamic-island). Drawing our own overlay duplicates it and the two
@@ -35,11 +40,45 @@ struct MainTabView: View {
         // platforms (where CallKit doesn't exist) in their own MainTab variant.
         callContent
             .debugMetricsOverlay()
-            .fullScreenCover(isPresented: .constant(CallsFeature.isEnabled && isActiveOrConnecting)) {
-                if let session = activeCallSession {
-                    InCallView(session: session, isConnecting: isConnectingState, endReason: callEndReason)
+            .safeAreaInset(edge: .top, spacing: 0) {
+                if CallsFeature.isEnabled, isActiveOrConnecting, !isCallExpanded,
+                   let session = activeCallSession {
+                    InCallMiniBar(
+                        peerName: session.peerName,
+                        isConnecting: isConnectingState,
+                        onTap: { isCallExpanded = true }
+                    )
                 }
             }
+            .fullScreenCover(isPresented: fullScreenCoverBinding) {
+                if let session = activeCallSession {
+                    InCallView(
+                        session: session,
+                        isConnecting: isConnectingState,
+                        endReason: callEndReason,
+                        quality: callManager.callQuality,
+                        onMinimize: { isCallExpanded = false }
+                    )
+                }
+            }
+            .onChange(of: isActiveOrConnecting) { _, isActive in
+                // New call begins → restore full-screen even if the previous call
+                // ended in the minimised state.
+                if isActive { isCallExpanded = true }
+            }
+    }
+
+    /// Binding that drives `fullScreenCover`. The cover is shown when there is
+    /// a live call AND the user hasn't minimised it. The setter handles
+    /// SwiftUI's own dismiss path (e.g. interactive swipe-down) by treating it
+    /// as a minimise request — the call itself stays alive on `CallManager`.
+    private var fullScreenCoverBinding: Binding<Bool> {
+        Binding(
+            get: { CallsFeature.isEnabled && isActiveOrConnecting && isCallExpanded },
+            set: { newValue in
+                if !newValue { isCallExpanded = false }
+            }
+        )
     }
 
     @ViewBuilder
@@ -141,6 +180,44 @@ struct MainTabView: View {
     private var callEndReason: CallManager.EndReason? {
         if case .ended(_, let reason) = callManager.state { return reason }
         return nil
+    }
+}
+
+// MARK: - In-call mini bar
+
+/// Top-of-screen pill shown while a call is live and the user has minimised
+/// the full-screen `InCallView`. Tap restores full-screen. Mirrors the iOS
+/// system in-call indicator pattern: thin, accent-coloured, single tap area.
+private struct InCallMiniBar: View {
+    let peerName: String
+    let isConnecting: Bool
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 8) {
+                Image(systemName: "chevron.up")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(Color.CT.bg)
+                Text("> \(peerName)")
+                    .font(CTFont.bold(12))
+                    .foregroundStyle(Color.CT.bg)
+                    .lineLimit(1)
+                Spacer(minLength: 8)
+                Text(NSLocalizedString(
+                    isConnecting ? "call_minibar_connecting" : "call_minibar_in_call",
+                    comment: ""
+                ))
+                .font(CTFont.regular(11))
+                .foregroundStyle(Color.CT.bg.opacity(0.75))
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 6)
+            .frame(maxWidth: .infinity)
+            .background(Color.CT.accent)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(NSLocalizedString("call_minibar_in_call", comment: ""))
     }
 }
 

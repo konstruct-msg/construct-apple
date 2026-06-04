@@ -630,6 +630,13 @@
 "call_no_relay" = "No connection (relay unavailable)";
 "call_dismiss" = "Dismiss";
 "call_call_back" = "Call Back";
+"call_minimize" = "Minimize";
+"call_minibar_in_call" = "in call";
+"call_minibar_connecting" = "connecting";
+"call_reconnecting" = "reconnecting…";
+"call_e2ee_badge" = "end-to-end encrypted";
+"edit_identity" = "edit identity";
+"delete_account_abort_hint" = "tap to abort · %ds";
 "share" = "Share";
 "show_qr_code" = "Show QR Code";
 "copy_contact_link" = "Copy Contact Link";
@@ -648,6 +655,8 @@
 "manage_action" = "manage";
 "add_action" = "add";
 "call_voice" = "voice call";
+"call_video" = "video call";
+"call_audio_route" = "audio";
 "end_to_end_encrypted" = "changes are end-to-end encrypted";
 "invite" = "invite";
 "qr_caption_trust" = "trust is computed, not assumed.";
@@ -907,8 +916,19 @@
 "stt_delete_confirm_title" = "Delete this model?";
 "stt_transcribe_button" = "Transcribe";
 "stt_transcribing" = "Transcribing…";
+"stt_show_transcript" = "Show transcript";
+"stt_hide_transcript" = "Hide transcript";
+"stt_section_header" = "transcription";
+"stt_section_footer" = "Voice messages can be transcribed on-device. Models are downloaded once and never leave the phone.";
+"stt_retry_download" = "retry";
 "account_discard_changes_title" = "Discard changes?";
 "account_discard_changes_message" = "You have unsaved profile changes. Leave without saving?";
 "account_discard_changes_discard" = "Discard";
 "account_discard_changes_keep_editing" = "Keep Editing";
 "account_editing_profile" = "> Editing profile fields. Tap ✓ to save or x to cancel.";
+
+"liquid_logo.title" = "LIQUID LOGO";
+"liquid_logo.size" = "SIZE";
+"liquid_logo.haptics" = "Haptics";
+"liquid_logo.replay" = "REPLAY";
+"liquid_logo.hint" = "tap anywhere to replay";

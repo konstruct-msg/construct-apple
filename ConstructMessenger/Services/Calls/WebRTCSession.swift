@@ -23,11 +23,22 @@ enum WebRTCSessionError: Error {
     case invalidState(String)
 }
 
+/// Coarse health signal derived from `iceConnectionState`. The UI uses this to
+/// decide whether to show the reconnecting pulse + status text.
+/// `.checking` (initial setup) is *not* surfaced here — InCallView already
+/// renders the "connecting" pulse during that phase via its own
+/// `isConnecting` parameter.
+enum CallQuality: Sendable, Equatable {
+    case good          // .connected or .completed
+    case reconnecting  // .disconnected — transient, may recover
+}
+
 @MainActor
 protocol WebRTCSessionProtocol: AnyObject {
     var onLocalIceCandidate: (@Sendable (WebRTCIceCandidate) -> Void)? { get set }
     var onConnectionFailed: (@Sendable () -> Void)? { get set }
     var onConnected: (@Sendable () -> Void)? { get set }
+    var onQualityChanged: (@Sendable (CallQuality) -> Void)? { get set }
 
     func createOffer() async throws -> String
     func createAnswer() async throws -> String
@@ -35,7 +46,6 @@ protocol WebRTCSessionProtocol: AnyObject {
     func setRemoteAnswer(sdp: String) async throws
     func addRemoteIceCandidate(_ candidate: WebRTCIceCandidate) async throws
     func setMuted(_ muted: Bool)
-    func setSpeaker(_ enabled: Bool)
     func close()
 }
 
@@ -93,6 +103,10 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
     // running on the shared `.playAndRecord` session and silences WebRTC's voice-
     // processing audio unit (call shows "connected" but no audio).
     var onConnected: (@Sendable () -> Void)?
+    /// Fires on `.connected` / `.completed` / `.disconnected` transitions so
+    /// the UI can render a "reconnecting" indicator without ending the call.
+    /// `.failed` keeps going through `onConnectionFailed`.
+    var onQualityChanged: (@Sendable (CallQuality) -> Void)?
 
     private let role: WebRTCSessionRole
     private let factory: RTCPeerConnectionFactory
@@ -149,13 +163,6 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
 
     func setMuted(_ muted: Bool) {
         localAudioTrack?.isEnabled = !muted
-    }
-
-    func setSpeaker(_ enabled: Bool) {
-        #if os(iOS)
-        let session = AVAudioSession.sharedInstance()
-        try? session.overrideOutputAudioPort(enabled ? .speaker : .none)
-        #endif
     }
 
     func createOffer() async throws -> String {
@@ -302,10 +309,15 @@ extension WebRTCSession: RTCPeerConnectionDelegate {
         // `.disconnected` is transient on mobile (brief network hiccup, device lock, switch
         // between WiFi/cellular). Triggering teardown immediately cuts live calls unnecessarily.
         // Only `.failed` means ICE has exhausted all candidates and the call cannot continue.
-        if newState == .failed {
-            Task { @MainActor in
-                self.onConnectionFailed?()
-            }
+        switch newState {
+        case .failed:
+            Task { @MainActor in self.onConnectionFailed?() }
+        case .connected, .completed:
+            Task { @MainActor in self.onQualityChanged?(.good) }
+        case .disconnected:
+            Task { @MainActor in self.onQualityChanged?(.reconnecting) }
+        default:
+            break
         }
     }
 
@@ -429,6 +441,7 @@ final class WebRTCSession: WebRTCSessionProtocol {
     var onLocalIceCandidate: (@Sendable (WebRTCIceCandidate) -> Void)?
     var onConnectionFailed: (@Sendable () -> Void)?
     var onConnected: (@Sendable () -> Void)?
+    var onQualityChanged: (@Sendable (CallQuality) -> Void)?
 
     init(role: WebRTCSessionRole, turn: Shared_Proto_Signaling_V1_TurnCredentials?) throws {
         throw WebRTCSessionError.webRTCLibraryMissing
@@ -440,7 +453,6 @@ final class WebRTCSession: WebRTCSessionProtocol {
     func setRemoteAnswer(sdp: String) async throws { throw WebRTCSessionError.webRTCLibraryMissing }
     func addRemoteIceCandidate(_ candidate: WebRTCIceCandidate) async throws { throw WebRTCSessionError.webRTCLibraryMissing }
     func setMuted(_ muted: Bool) {}
-    func setSpeaker(_ enabled: Bool) {}
     func close() {}
 }
 
