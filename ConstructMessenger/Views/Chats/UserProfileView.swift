@@ -42,7 +42,7 @@ struct UserProfileView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var viewModel = ProfileShareViewModel()
-    @State private var callManager = CallManager.shared
+    @State private var callManager: (any CallUIManaging)? = CallRuntimeProvider.makeUIManager()
     @State private var showingBlockConfirmation = false
     @State private var showResetSessionConfirm = false
     @State private var showingShareAlert = false
@@ -198,7 +198,7 @@ struct UserProfileView: View {
                 flatRowDivider()
             }
 
-            if CallsFeature.isEnabled, case .idle = callManager.state {
+            if CallsFeature.isEnabled, let callManager, case .idle = callManager.state {
                 actionRow(label: NSLocalizedString("call_voice", comment: "Voice call"), color: Color.CT.accent) {
                     Task {
                         await callManager.startOutgoingCall(

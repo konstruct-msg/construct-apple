@@ -52,6 +52,7 @@ struct SynapsView: View {
     @State private var contactRequestsVM: ContactRequestsViewModel? = nil
     @State private var selectedRequest: ContactRequestsViewModel.IncomingRequest? = nil
     @State private var contactMetricsByUser: [String: ContactMetrics] = [:]
+    @State private var isRefreshingContactRequests = false
 
     private var filtered: [User] {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -130,25 +131,15 @@ struct SynapsView: View {
             .task {
                 let vm = ContactRequestsViewModel(viewContext: context)
                 contactRequestsVM = vm
-                await vm.load()
-
-                // Contacts created by a background push (before this view loaded) are stored
-                // as user IDs in UserDefaults. Consume them first for navigation.
-                let pendingIds = ContactRequestService.shared.consumePendingNavigationUserIds()
-                let pendingUser: User? = pendingIds.first.flatMap { userId in
-                    guard let uuid = UUID(uuidString: userId) else { return nil }
-                    let req = NSFetchRequest<User>(entityName: "User")
-                    req.predicate = NSPredicate(format: "id == %@", uuid as CVarArg)
-                    req.fetchLimit = 1
-                    return try? context.fetch(req).first
-                }
-
-                // Also check for acceptances that haven't been processed yet (e.g. no push).
-                let accepted = await vm.checkAcceptedRequests(context: context)
-
-                if let first = accepted.first ?? pendingUser {
-                    chatsViewModel.openOrCreateChat(with: first)
-                }
+                await refreshContactRequests(vm: vm, reason: "initial_task")
+            }
+            .onChange(of: chatsViewModel.selectedTab) { _, newTab in
+                guard newTab == 1, let vm = contactRequestsVM else { return }
+                Task { await refreshContactRequests(vm: vm, reason: "tab_selected") }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .appDidBecomeActive)) { _ in
+                guard chatsViewModel.selectedTab == 1, let vm = contactRequestsVM else { return }
+                Task { await refreshContactRequests(vm: vm, reason: "app_active") }
             }
             .onReceive(NotificationCenter.default.publisher(for: .contactRequestAccepted)) { _ in
                 // The service already ran (from AppDelegate) and stored pending user IDs.
@@ -278,6 +269,36 @@ struct SynapsView: View {
         return false
     }
 
+    @MainActor
+    private func refreshContactRequests(
+        vm: ContactRequestsViewModel,
+        reason: String
+    ) async {
+        guard !isRefreshingContactRequests else {
+            Log.debug("Skipping contact request refresh (\(reason)) — already in progress", category: "SynapsView")
+            return
+        }
+        isRefreshingContactRequests = true
+        defer { isRefreshingContactRequests = false }
+
+        Log.info("Refreshing contact requests (\(reason))", category: "SynapsView")
+        await vm.load()
+
+        let pendingIds = ContactRequestService.shared.consumePendingNavigationUserIds()
+        let pendingUser: User? = pendingIds.first.flatMap { userId in
+            guard let uuid = UUID(uuidString: userId) else { return nil }
+            let req = NSFetchRequest<User>(entityName: "User")
+            req.predicate = NSPredicate(format: "id == %@", uuid as CVarArg)
+            req.fetchLimit = 1
+            return try? context.fetch(req).first
+        }
+
+        let accepted = await vm.checkAcceptedRequests(context: context)
+        if let first = accepted.first ?? pendingUser {
+            chatsViewModel.openOrCreateChat(with: first)
+        }
+    }
+
     // MARK: - Nav Bar
 
     private var synapsNavBar: some View {
@@ -359,6 +380,7 @@ struct SynapsView: View {
                 let alreadySent = contactRequestsVM.map {
                     $0.hasPendingSentRequest(toUserId: profile.userID)
                 } ?? false
+                let fallbackQuery = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
 
                 Button {
                     if !alreadySent {
@@ -379,6 +401,14 @@ struct SynapsView: View {
                                 Text("@\(profile.username)")
                                     .font(CTFont.regular(12))
                                     .foregroundStyle(Color.CT.textDim)
+                            } else if !fallbackQuery.isEmpty {
+                                Text("@\(fallbackQuery)")
+                                    .font(CTFont.regular(12))
+                                    .foregroundStyle(Color.CT.text)
+                            } else {
+                                Text(DisplayNameGenerator.generate(from: profile.userID))
+                                    .font(CTFont.regular(13))
+                                    .foregroundStyle(Color.CT.text)
                             }
                         }
                         Spacer()
@@ -474,11 +504,9 @@ struct SynapsView: View {
                                     .font(CTFont.regular(13))
                                     .foregroundStyle(Color.CT.text)
                             } else {
-                                Text(request.fromUserId)
-                                    .font(CTFont.regular(12))
+                                Text(DisplayNameGenerator.generate(from: request.fromUserId))
+                                    .font(CTFont.regular(13))
                                     .foregroundStyle(Color.CT.textDim)
-                                    .lineLimit(1)
-                                    .truncationMode(.middle)
                             }
                         }
                         Spacer()

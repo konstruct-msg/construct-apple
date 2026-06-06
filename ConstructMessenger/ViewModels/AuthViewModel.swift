@@ -202,12 +202,16 @@ class AuthViewModel {
             loadUserFromCoreData(userId: userId)
             #if !os(macOS)
             // Engine manages SPK rotation on macOS.
-            Task {
+            Task { [weak self] in
+                guard self != nil else { return }
                 let deviceId = KeychainManager.shared.loadDeviceID() ?? ""
                 await PreKeyRotationService.shared.rotateIfNeeded(deviceId: deviceId)
             }
             #endif
-            Task { await ServerKeyManager.shared.prefetch() }
+            Task { [weak self] in
+                guard self != nil else { return }
+                await ServerKeyManager.shared.prefetch()
+            }
         }
 
         if let _ = AuthSessionManager.shared.sessionToken,
@@ -519,7 +523,8 @@ class AuthViewModel {
     }
 
     func logout() {
-        Task {
+        Task { [weak self] in
+            guard let self else { return }
             await SessionLifecycleController.shared.sendEndSessionToAllContacts(reason: "logout")
             Log.info("END_SESSION sent to all contacts on logout", category: "Auth")
             
@@ -556,7 +561,8 @@ class AuthViewModel {
     /// Signs out of ALL devices simultaneously (invalidates all refresh tokens server-side),
     /// then performs local logout. Use when a device may have been compromised.
     func logoutAllDevices() {
-        Task {
+        Task { [weak self] in
+            guard let self else { return }
             if AuthSessionManager.shared.sessionToken != nil {
                 do {
                     try await AuthServiceClient.shared.logout(allDevices: true)
@@ -582,7 +588,8 @@ class AuthViewModel {
         
         Log.info("Requesting account deletion", category: "AuthViewModel")
         
-        Task {
+        Task { [weak self] in
+            guard let self else { return }
             do {
                 try await self.deleteAccountWithDeviceSignature()
                 await MainActor.run { self.handleDeleteAccountSuccess() }
@@ -618,11 +625,16 @@ class AuthViewModel {
     /// Immediately wipes all local data; attempts server deletion best-effort in background.
     func triggerDuressWipe() {
         Log.info("Duress PIN triggered — initiating silent wipe", category: "AuthViewModel")
-        Task {
-            _ = try? await UserServiceClient.shared.deleteAccount(
-                confirmation: "DELETE",
-                reason: "duress"
-            )
+        Task { [weak self] in
+            guard self != nil else { return }
+            do {
+                _ = try await UserServiceClient.shared.deleteAccount(
+                    confirmation: "DELETE",
+                    reason: "duress"
+                )
+            } catch {
+                Log.error("Duress wipe: remote delete failed: \(error.localizedDescription)", category: "AuthViewModel")
+            }
         }
         handleDeleteAccountSuccess()
     }
@@ -717,7 +729,8 @@ class AuthViewModel {
         // Request push permission (first login) or ensure the token is on the server
         // (subsequent logins where permission is already granted). Both paths end with
         // the device token reliably registered in the backend DB.
-        Task {
+        Task { [weak self] in
+            guard self != nil else { return }
             #if canImport(UIKit)
             let granted = await PushNotificationManager.shared.requestPermission()
             if granted {

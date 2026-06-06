@@ -23,7 +23,7 @@ struct ChatView: View {
     /// Message opened for "Quote & Reply" selection sheet.
     @State private var quotingMessage: Message? = nil
     @State private var showingUserProfile = false
-    @State private var callManager = CallManager.shared
+    @State private var callManager: (any CallUIManaging)? = CallRuntimeProvider.makeUIManager()
 
     @State private var searchText = ""
     @State private var isSearchActive = false
@@ -318,12 +318,12 @@ struct ChatView: View {
             )
         }
         #endif
-        .alert(callManager.lastError ?? "", isPresented: Binding(
-            get: { callManager.lastError != nil },
-            set: { if !$0 { callManager.clearLastError() } }
+        .alert(callManager?.lastError ?? "", isPresented: Binding(
+            get: { callManager?.lastError != nil },
+            set: { if !$0 { callManager?.clearLastError() } }
         )) {
             Button(NSLocalizedString("ok", comment: ""), role: .cancel) {
-                callManager.clearLastError()
+                callManager?.clearLastError()
             }
         }
     }
@@ -488,6 +488,7 @@ struct ChatView: View {
 
     private var canStartCall: Bool {
         guard CallsFeature.isEnabled,
+              let callManager,
               viewModel.chat.otherUser != nil,
               case .idle = callManager.state else { return false }
         return true
@@ -503,6 +504,7 @@ struct ChatView: View {
 
     private func startOutgoingCall(hasVideo: Bool) {
         guard let otherUser = viewModel.chat.otherUser else { return }
+        guard let callManager else { return }
         Task {
             await callManager.startOutgoingCall(
                 to: otherUser.id,

@@ -16,7 +16,7 @@ struct ContactRequestSheet: View {
     private var displayTitle: String {
         if let name = request.displayName, !name.isEmpty { return name }
         if let username = request.username, !username.isEmpty { return "@\(username)" }
-        return request.fromUserId
+        return DisplayNameGenerator.generate(from: request.fromUserId)
     }
 
     var body: some View {

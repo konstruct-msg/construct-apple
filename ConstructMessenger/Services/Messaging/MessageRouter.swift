@@ -180,8 +180,13 @@ final class MessageRouter {
         let existingFetch = Message.fetchRequest()
         existingFetch.predicate = NSPredicate(format: "id == %@", message.id)
         existingFetch.fetchLimit = 1
-        if (try? context.fetch(existingFetch))?.first != nil {
-            Log.debug("Skipping already-saved message \(message.id.prefix(8))…", category: "MessageRouter")
+        do {
+            if try context.fetch(existingFetch).first != nil {
+                Log.debug("Skipping already-saved message \(message.id.prefix(8))…", category: "MessageRouter")
+                return
+            }
+        } catch {
+            Log.error("Failed to deduplicate incoming message \(message.id.prefix(8))…: \(error)", category: "MessageRouter")
             return
         }
 
@@ -213,7 +218,14 @@ final class MessageRouter {
         }
 
         // 5. Find or create chat
-        let (chat, isNewChat) = findOrCreateChat(for: otherUserId, in: context)
+        let chat: Chat
+        let isNewChat: Bool
+        do {
+            (chat, isNewChat) = try findOrCreateChat(for: otherUserId, in: context)
+        } catch {
+            Log.error("Failed to resolve chat for \(otherUserId.prefix(8))…: \(error)", category: "MessageRouter")
+            return
+        }
         
         // 6. Check if we have a session for this user.
         // Guard against startup race: the deferred restoreRecentSessions() may not have run yet
@@ -408,7 +420,14 @@ final class MessageRouter {
             "previous_chain_length": 0,
             "suite_id": Int(message.suiteId)
         ]
-        guard let wireJsonData = try? JSONSerialization.data(withJSONObject: wireMessage) else { return nil }
+
+        let wireJsonData: Data
+        do {
+            wireJsonData = try JSONSerialization.data(withJSONObject: wireMessage)
+        } catch {
+            Log.error("buildIncomingEventLegacy: failed to encode wire JSON for \(message.id.prefix(8))…: \(error)", category: "MessageRouter")
+            return nil
+        }
 
         return .messageReceived(
             messageId: message.id,
@@ -577,7 +596,12 @@ final class MessageRouter {
             let req = User.fetchRequest()
             req.predicate = NSPredicate(format: "id == %@", otherUserId)
             req.fetchLimit = 1
-            return (try? context.fetch(req))?.first?.knownIdentityKey
+            do {
+                return try context.fetch(req).first?.knownIdentityKey
+            } catch {
+                Log.error("Failed to load identity key for encrypted receipt to \(otherUserId.prefix(8))…: \(error)", category: "MessageRouter")
+                return nil
+            }
         }()
         Task {
             await OutboundSessionService.shared.sendEncryptedDeliveryReceipt(
@@ -601,22 +625,27 @@ final class MessageRouter {
     private func findOrCreateChat(
         for userId: String,
         in context: NSManagedObjectContext
-    ) -> (Chat, Bool) {
+    ) throws -> (Chat, Bool) {
         let fetchRequest = Chat.fetchRequest()
         let otherUserPredicate = NSPredicate(format: "otherUser.id == %@", userId)
         fetchRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [otherUserPredicate])
-        
-        if let existingChat = try? context.fetch(fetchRequest).first {
-            return (existingChat, false)
+
+        do {
+            if let existingChat = try context.fetch(fetchRequest).first {
+                return (existingChat, false)
+            }
+        } catch {
+            Log.error("Failed to fetch chat for \(userId.prefix(8))…: \(error)", category: "MessageRouter")
+            throw error
         }
-        
+
         // Create new user and chat
-        let user = findOrCreateUser(for: userId, in: context)
-        
+        let user = try findOrCreateUser(for: userId, in: context)
+
         let newChat = Chat(context: context)
         newChat.id = UUID().uuidString
         newChat.otherUser = user
-        
+
         return (newChat, true)
     }
     
@@ -628,7 +657,7 @@ final class MessageRouter {
     private func findOrCreateUser(
         for userId: String,
         in context: NSManagedObjectContext
-    ) -> User {
+    ) throws -> User {
         let userFetchRequest = User.fetchRequest()
         let userIdPredicate = NSPredicate(format: "id == %@", userId)
         var predicates: [NSPredicate] = [userIdPredicate]
@@ -636,12 +665,17 @@ final class MessageRouter {
             predicates.insert(existingPredicate, at: 0)
         }
         userFetchRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: predicates)
-        
-        if let existingUser = try? context.fetch(userFetchRequest).first {
-            Log.debug("Using existing user: id=\(userId)", category: "MessageRouter")
-            return existingUser
+
+        do {
+            if let existingUser = try context.fetch(userFetchRequest).first {
+                Log.debug("Using existing user: id=\(userId)", category: "MessageRouter")
+                return existingUser
+            }
+        } catch {
+            Log.error("Failed to fetch user \(userId.prefix(8))…: \(error)", category: "MessageRouter")
+            throw error
         }
-        
+
         // Create new user with temporary username (will be updated from publicKeyBundle)
         let newUser = User(context: context)
         newUser.id = userId
@@ -778,6 +812,19 @@ final class MessageRouter {
     
     // MARK: - Special Message Types
 
+    private func parseJSONObject(
+        _ data: Data,
+        category: String,
+        context: String
+    ) throws -> [String: Any]? {
+        do {
+            return try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        } catch {
+            Log.error("\(context): JSON parse failed: \(error)", category: category)
+            throw error
+        }
+    }
+
     // MARK: - E2E Delivery Receipts
 
     /// Parse and dispatch an incoming E2E delivery receipt (content_type=14).
@@ -795,9 +842,22 @@ final class MessageRouter {
             PersistentACKStore.shared.markProcessed(messageId, senderId: otherUserId, in: context)
             delegate?.messageRouter(self, needsReceipt: [messageId], to: otherUserId, status: .delivered)
         }
-        guard let data = payload.data(using: .utf8),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let type_ = json["type"] as? String, type_ == "delivery_receipt",
+        guard let data = payload.data(using: .utf8) else {
+            Log.error("E2E receipt: failed to encode UTF-8 payload from \(otherUserId.prefix(8))…", category: "MessageRouter")
+            return
+        }
+        let json: [String: Any]
+        do {
+            guard let parsed = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                Log.error("E2E receipt: payload is not a JSON object from \(otherUserId.prefix(8))…", category: "MessageRouter")
+                return
+            }
+            json = parsed
+        } catch {
+            Log.error("E2E receipt: JSON parse failed from \(otherUserId.prefix(8))…: \(error)", category: "MessageRouter")
+            return
+        }
+        guard let type_ = json["type"] as? String, type_ == "delivery_receipt",
               let ids = json["message_ids"] as? [String], !ids.isEmpty else {
             Log.error("E2E receipt: failed to parse payload from \(otherUserId.prefix(8))…", category: "MessageRouter")
             return
@@ -815,9 +875,19 @@ final class MessageRouter {
     ) -> Bool? {
         // Check for profile message
         if decryptedContent.trimmingCharacters(in: .whitespaces).hasPrefix("{"),
-           let jsonData = decryptedContent.data(using: .utf8),
-           let jsonDict = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
-           let type = jsonDict["type"] as? String {
+           let jsonData = decryptedContent.data(using: .utf8) {
+            let jsonDict: [String: Any]
+            do {
+                guard let parsed = try parseJSONObject(jsonData, category: "MessageRouter", context: "special message") else {
+                    return false
+                }
+                jsonDict = parsed
+            } catch {
+                return false
+            }
+            guard let type = jsonDict["type"] as? String else {
+                return false
+            }
 
             if type == "delivery_receipt" {
                 // Backward-compat guard: content_type=14 is handled in handleResolvedMessage.
@@ -872,9 +942,12 @@ final class MessageRouter {
                 isControl: true,
                 contentType: 0
             )
-            if let actions = try? CryptoManager.shared.handleOrchestratorEvent(event, tag: "sri_archive") {
+            do {
+                let actions = try CryptoManager.shared.handleOrchestratorEvent(event, tag: "sri_archive")
                 OutboundSessionService.shared.executeStorageActions(actions)
                 rustHandled = true
+            } catch {
+                Log.error("SESSION_RESET_INIT: Rust archive failed for \(userId.prefix(8))…: \(error)", category: "MessageRouter")
             }
         }
         if !rustHandled {
@@ -889,10 +962,14 @@ final class MessageRouter {
         SessionHealingService.shared.clearQueue(for: userId, in: context)
 
         // 4. Route the X3DH payload as a fresh msgNum=0 — triggers normal RESPONDER init path.
-        let (chat, isNewChat) = findOrCreateChat(for: userId, in: context)
-        handleFirstMessage(message, from: userId, chat: chat, isNewChat: isNewChat, in: context)
+        do {
+            let (chat, isNewChat) = try findOrCreateChat(for: userId, in: context)
+            handleFirstMessage(message, from: userId, chat: chat, isNewChat: isNewChat, in: context)
 
-        Log.info("SESSION_RESET_INIT: old session archived, RESPONDER init triggered for \(userId.prefix(8))…", category: "MessageRouter")
+            Log.info("SESSION_RESET_INIT: old session archived, RESPONDER init triggered for \(userId.prefix(8))…", category: "MessageRouter")
+        } catch {
+            Log.error("SESSION_RESET_INIT: failed to resolve chat for \(userId.prefix(8))…: \(error)", category: "MessageRouter")
+        }
     }
 
     /// Handle END_SESSION message.
@@ -927,11 +1004,13 @@ final class MessageRouter {
                 isControl: true,
                 contentType: 0
             )
-            if let actions = try? CryptoManager.shared.handleOrchestratorEvent(event, tag: "end_session_archive") {
+            do {
+                let actions = try CryptoManager.shared.handleOrchestratorEvent(event, tag: "end_session_archive")
                 OutboundSessionService.shared.executeStorageActions(actions)
                 rustHandled = true
                 Log.debug("END_SESSION: session archived via Rust orchestrator for \(userId.prefix(8))…", category: "MessageRouter")
-            } else {
+            } catch {
+                Log.error("END_SESSION: Rust archive failed for \(userId.prefix(8))…: \(error)", category: "MessageRouter")
                 Log.debug("END_SESSION: Rust handleEvent failed for \(userId.prefix(8))… — falling back to Swift archive", category: "MessageRouter")
             }
         }
@@ -977,7 +1056,15 @@ final class MessageRouter {
     ) {
         let chatFetch = Chat.fetchRequest()
         chatFetch.predicate = NSPredicate(format: "otherUser.id == %@", userId)
-        guard let chat = (try? context.fetch(chatFetch))?.first else { return }
+
+        let chat: Chat
+        do {
+            guard let fetchedChat = try context.fetch(chatFetch).first else { return }
+            chat = fetchedChat
+        } catch {
+            Log.error("END_SESSION: failed to fetch chat for \(userId.prefix(8))…: \(error)", category: "MessageRouter")
+            return
+        }
 
         let msgFetch = Message.fetchRequest()
         msgFetch.predicate = NSPredicate(
@@ -987,7 +1074,14 @@ final class MessageRouter {
         )
         msgFetch.sortDescriptors = [NSSortDescriptor(key: "timestamp", ascending: true)]
 
-        guard let messages = try? context.fetch(msgFetch), !messages.isEmpty else { return }
+        let messages: [Message]
+        do {
+            messages = try context.fetch(msgFetch)
+        } catch {
+            Log.error("END_SESSION: failed to fetch sent messages for \(userId.prefix(8))…: \(error)", category: "MessageRouter")
+            return
+        }
+        guard !messages.isEmpty else { return }
 
         let maxRetries = FeatureFlags.maxMessageRetryAttempts
         var requeuedCount = 0
@@ -1045,9 +1139,16 @@ final class MessageRouter {
         let fetchRequest = Chat.fetchRequest()
         let otherUserPredicate = NSPredicate(format: "otherUser.id == %@", userId)
         fetchRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [otherUserPredicate])
-        
-        guard let chat = try? context.fetch(fetchRequest).first else {
-            Log.error("Cannot add system message: chat not found for \(userId)", category: "MessageRouter")
+
+        let chat: Chat
+        do {
+            guard let fetchedChat = try context.fetch(fetchRequest).first else {
+                Log.error("Cannot add system message: chat not found for \(userId)", category: "MessageRouter")
+                return
+            }
+            chat = fetchedChat
+        } catch {
+            Log.error("Cannot add system message: failed to fetch chat for \(userId): \(error)", category: "MessageRouter")
             return
         }
         
@@ -1126,9 +1227,13 @@ final class MessageRouter {
             let replyFetch = Message.fetchRequest()
             replyFetch.predicate = NSPredicate(format: "id ==[c] %@", messageData.replyToMessageId)
             replyFetch.fetchLimit = 1
-            if let replyMsg = (try? context.fetch(replyFetch))?.first {
-                let replyText = replyMsg.displayText
-                message.replyToContent = replyText.isEmpty ? nil : replyText
+            do {
+                if let replyMsg = try context.fetch(replyFetch).first {
+                    let replyText = replyMsg.displayText
+                    message.replyToContent = replyText.isEmpty ? nil : replyText
+                }
+            } catch {
+                Log.error("Failed to fetch reply context for \(messageData.id.prefix(8))…: \(error)", category: "MessageRouter")
             }
         }
 
@@ -1208,11 +1313,13 @@ final class MessageRouter {
         let hasSession = CryptoManager.shared.hasSession(for: contactId)
 
         if hasSession {
-            guard let decryptResult = try? CryptoManager.shared.decryptMessage(message, contactIdOverride: contactId) else {
-                Log.error("SENDER_SYNC: decryption failed for contactId=\(contactId.prefix(20))…", category: "MessageRouter")
+            do {
+                let decryptResult = try CryptoManager.shared.decryptMessage(message, contactIdOverride: contactId)
+                saveSenderSyncMessage(decryptResult.plaintext, original: message, partnerUserId: partnerUserId, in: context)
+            } catch {
+                Log.error("SENDER_SYNC: decryption failed for contactId=\(contactId.prefix(20))…: \(error)", category: "MessageRouter")
                 return
             }
-            saveSenderSyncMessage(decryptResult.plaintext, original: message, partnerUserId: partnerUserId, in: context)
         } else if message.messageNumber == 0 {
             // New device: init receiving session async, then save
             guard !message.senderDeviceId.isEmpty else {
@@ -1251,7 +1358,14 @@ final class MessageRouter {
         partnerUserId: String,
         in context: NSManagedObjectContext
     ) {
-        let (chat, _) = findOrCreateChat(for: partnerUserId, in: context)
+        let chat: Chat
+        do {
+            let resolved = try findOrCreateChat(for: partnerUserId, in: context)
+            chat = resolved.0
+        } catch {
+            Log.error("SENDER_SYNC: failed to resolve chat for \(partnerUserId.prefix(8))…: \(error)", category: "MessageRouter")
+            return
+        }
 
         // Decode raw bytes through the binary pipeline (same as normal messages).
         let decrypted: String
@@ -1275,8 +1389,13 @@ final class MessageRouter {
         let fetch = Message.fetchRequest()
         fetch.predicate = NSPredicate(format: "id == %@", original.id)
         fetch.fetchLimit = 1
-        if (try? context.fetch(fetch))?.first != nil {
-            return // already saved (duplicate delivery)
+        do {
+            if try context.fetch(fetch).first != nil {
+                return // already saved (duplicate delivery)
+            }
+        } catch {
+            Log.error("SENDER_SYNC: failed to deduplicate message \(original.id.prefix(8))…: \(error)", category: "MessageRouter")
+            return
         }
 
         let msg = Message(context: context)
@@ -1343,3 +1462,24 @@ final class MessageRouter {
         }
     }
 }
+
+#if DEBUG
+extension MessageRouter {
+    func _testPersistRegularIncomingMessage(
+        _ decryptedContent: String,
+        message: ChatMessage,
+        from otherUserId: String,
+        chat: Chat,
+        in context: NSManagedObjectContext
+    ) throws {
+        try saveMessage(
+            for: chat,
+            with: message,
+            decryptedContent: decryptedContent,
+            quotedMessage: nil,
+            in: context
+        )
+        try PersistentACKStore.shared.markProcessedOrThrow(message.id, senderId: otherUserId, in: context)
+    }
+}
+#endif

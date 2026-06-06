@@ -17,33 +17,8 @@ import SwiftProtobuf
 
 @MainActor
 @Observable
-final class CallManager {
+final class CallManager: CallUIManaging {
     static let shared = CallManager()
-
-    enum CallState: Equatable {
-        case idle
-        case incoming(CallSession)
-        case dialing(CallSession)
-        case ringing(CallSession)
-        case connecting(CallSession)
-        case active(CallSession)
-        case ended(CallSession, EndReason)
-    }
-
-    struct CallSession: Equatable {
-        enum Direction: Equatable { case incoming, outgoing }
-        let id: String
-        let uuid: UUID
-        let peerUserId: String
-        let peerName: String
-        let direction: Direction
-    }
-
-    enum EndReason: Equatable {
-        case hangup(Shared_Proto_Signaling_V1_HangupReason)
-        case error(Shared_Proto_Signaling_V1_SignalErrorCode)
-        case local(String)
-    }
 
     private(set) var state: CallState = .idle
     private(set) var lastError: String? = nil
@@ -604,7 +579,7 @@ final class CallManager {
         }
     }
 
-    private func endActiveCall(reason: EndReason, reportToCallKit: Bool = true) {
+    private func endActiveCall(reason: CallEndReason, reportToCallKit: Bool = true) {
         guard let active else { return }
         let session = active.session
         let startedAt = active.startedAt

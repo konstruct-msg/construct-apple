@@ -23,16 +23,6 @@ enum WebRTCSessionError: Error {
     case invalidState(String)
 }
 
-/// Coarse health signal derived from `iceConnectionState`. The UI uses this to
-/// decide whether to show the reconnecting pulse + status text.
-/// `.checking` (initial setup) is *not* surfaced here — InCallView already
-/// renders the "connecting" pulse during that phase via its own
-/// `isConnecting` parameter.
-enum CallQuality: Sendable, Equatable {
-    case good          // .connected or .completed
-    case reconnecting  // .disconnected — transient, may recover
-}
-
 @MainActor
 protocol WebRTCSessionProtocol: AnyObject {
     var onLocalIceCandidate: (@Sendable (WebRTCIceCandidate) -> Void)? { get set }

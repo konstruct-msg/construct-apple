@@ -13,13 +13,15 @@ import AVFoundation
 #endif
 
 struct InCallView: View {
-    let session: CallManager.CallSession
+    let session: CallSession
     let isConnecting: Bool
-    var endReason: CallManager.EndReason? = nil
+    var endReason: CallEndReason? = nil
     /// Coarse network health for the active call. `.reconnecting` makes the
     /// pulse re-appear around the avatar and overrides the status text with a
     /// "reconnecting…" hint. `.good` is the calm baseline.
     var quality: CallQuality = .good
+    var onEnd: () -> Void = {}
+    var onMuteChanged: (Bool) -> Void = { _ in }
     /// Optional minimise handler. When non-nil, a chevron-down button appears
     /// in the top-left and tapping it asks the host to dismiss the full-screen
     /// cover without ending the call. `MainTabView` then shows a top-of-screen
@@ -105,7 +107,7 @@ struct InCallView: View {
                 // just the avatar + status text and let `endedAutoClearDelay`
                 // dismiss the full-screen cover — FaceTime-style.
                 if !isEnded {
-                    CallControlsBar(onEnd: { CallManager.shared.endCall() }) {
+                    CallControlsBar(onEnd: onEnd) {
                         CallControlButton(config: muteConfig)
                         #if os(iOS)
                         AudioRoutePickerButton()
@@ -137,7 +139,7 @@ struct InCallView: View {
             tint: isMuted ? Color.CT.accent : Color.CT.textDim,
             action: {
                 isMuted.toggle()
-                CallManager.shared.setMuted(isMuted)
+                onMuteChanged(isMuted)
             }
         )
     }
@@ -351,7 +353,7 @@ private struct AVRoutePickerViewRepresentable: UIViewRepresentable {
 #endif
 
 #Preview {
-    let session = CallManager.CallSession(
+    let session = CallSession(
         id: UUID().uuidString,
         uuid: UUID(),
         peerUserId: "user_preview",
