@@ -255,11 +255,15 @@ final class VeilProxyManager: ObservableObject {
     /// ConnectionLoop — this method only ensures VEIL mode is migrated and stored.
     func startIfEnabled() async {
         migrateToModeIfNeeded()
+        guard mode != .off else {
+            Log.info("VEIL startup skipped — mode is off", category: "VEIL")
+            return
+        }
         guard KeychainManager.shared.isDeviceRegistered() else {
             Log.info("VEIL startup skipped — device not registered", category: "VEIL")
             return
         }
-        // ConnectionLoop handles proxy lifecycle — just ensure cert is available
+        // ConnectionLoop handles proxy lifecycle — just ensure cert/config is available
         _ = await getVEILBridgeCert()
         await fetchConfigAndEvictIfRemoved()
     }

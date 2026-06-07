@@ -148,7 +148,8 @@ enum TransportReducer {
                 return (.direct(consecutiveFails: fails), [])
             }
             let newFails = fails + 1
-            if newFails >= config.directFailThreshold {
+            if config.allowDirectToVeilEscalation,
+               newFails >= config.directFailThreshold {
                 return (.veilProbing(attempt: 1), [.requestProxyStart, .invalidateGRPCClient])
             }
             return (.direct(consecutiveFails: newFails), [])

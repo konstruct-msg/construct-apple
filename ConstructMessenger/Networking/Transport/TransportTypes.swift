@@ -214,6 +214,10 @@ struct TransportConfig: Sendable, Equatable {
     /// Direct-path transport failures before we escalate to VEIL.
     var directFailThreshold: Int = 2
 
+    /// Whether direct-path failures may escalate into VEIL probing.
+    /// Disabled when the user explicitly sets VEIL mode to `.off`.
+    var allowDirectToVeilEscalation: Bool = true
+
     /// VEIL-path transport failures on the same relay before we rotate.
     var veilDegradedFailThreshold: Int = 2
 

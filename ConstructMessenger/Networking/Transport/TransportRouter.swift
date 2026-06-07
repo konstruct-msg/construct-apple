@@ -43,6 +43,7 @@ actor TransportRouter {
     // MARK: - State
 
     private var config: TransportConfig
+    private var currentMode: VeilMode
     private(set) var state: TransportState
     private var transitionLog: [TransitionLogEntry] = []
     private let transitionLogCapacity = 200
@@ -61,6 +62,7 @@ actor TransportRouter {
         self.channelEffector = channelEffector
         self.uiEffector = uiEffector
         let mode = VeilProxyStore.loadMode()
+        self.currentMode = mode
         let censored = CensoredNetworkDetector.isCensored
         let reachable = NetworkReachabilityManager.shared.isReachable
         self.state = .initial(mode: mode, censored: censored, reachable: reachable)
@@ -73,7 +75,14 @@ actor TransportRouter {
     /// the resulting state transition and effects are applied serially before returning.
     func send(_ event: TransportEvent) async {
         let now = Date()
-        let outcome = TransportReducer.reduce(state: state, event: event, config: config, now: now)
+        let modeForEvent = resolvedMode(for: event)
+        currentMode = modeForEvent
+        let outcome = TransportReducer.reduce(
+            state: state,
+            event: event,
+            config: effectiveConfig(for: modeForEvent),
+            now: now
+        )
         let oldState = state
         state = outcome.state
 
@@ -178,6 +187,23 @@ actor TransportRouter {
         if transitionLog.count > transitionLogCapacity {
             transitionLog.removeFirst(transitionLog.count - transitionLogCapacity)
         }
+    }
+
+    private func resolvedMode(for event: TransportEvent) -> VeilMode {
+        switch event {
+        case .veilModeChanged(let mode, _):
+            return mode
+        case .networkPathChanged(_, _, let mode):
+            return mode
+        default:
+            return currentMode
+        }
+    }
+
+    private func effectiveConfig(for mode: VeilMode) -> TransportConfig {
+        var effective = config
+        effective.allowDirectToVeilEscalation = mode != .off
+        return effective
     }
 }
 
