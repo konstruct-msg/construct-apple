@@ -15,7 +15,7 @@ struct AuthResponse: Codable {
     let refreshToken: String
     let expiresAt: Int64?   // Unix timestamp (legacy)
     let expiresIn: Int?     // Seconds from now (current)
-    var iceBridgeCert: String?
+    var veilBridgeCert: String?
 }
 
 // MARK: - Messaging
