@@ -281,9 +281,13 @@ extension MessageStreamManager {
                     } else {
                         Log.error("MessageStream has no key-sync handler — not advancing cursor", category: "MessageStream")
                     }
-                case .heartbeat(let cursor):
+                case .heartbeat:
+                    // A heartbeat is NOT a Redis stream entry — it must never advance the
+                    // resume cursor. The server now trims the offline stream by the client's
+                    // acked cursor (since_cursor), so advancing it past a non-message event
+                    // would tell the server to delete messages the client never received.
+                    // (The server already sends no cursor on heartbeats; this is defensive.)
                     self?.lastHeartbeatDate = Date()
-                    if let cursor { StreamCursorStore.save(cursor) }
                 }
             }
         }
