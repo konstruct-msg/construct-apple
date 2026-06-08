@@ -81,3 +81,12 @@ screenshots/
 # Never committed — updated monthly from P3TERX/GeoLite.mmdb.
 GeoLite2-Country.mmdb
 GeoLite2-ASN.mmdb
+
+# ── Swift / Xcode / SwiftPM build artifacts ───────────────────────────────────
+# SwiftPM build cache (e.g. ConstructUI/.build/, including index-build/*.mdb) —
+# large, machine-specific, and regenerated on every build. Never commit.
+.build/
+.swiftpm/
+DerivedData/
+*.xcuserstate
+xcuserdata/
