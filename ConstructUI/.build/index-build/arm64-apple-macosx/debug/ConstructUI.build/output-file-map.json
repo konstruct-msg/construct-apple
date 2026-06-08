@@ -1,0 +1,12 @@
+{
+  "": {
+    "swift-dependencies": "/Users/maximeliseyev/Code/construct-messenger/ConstructUI/.build/index-build/arm64-apple-macosx/debug/ConstructUI.build/master.swiftdeps"
+  },
+  "/Users/maximeliseyev/Code/construct-messenger/ConstructUI/Sources/ConstructUI/ConstructTheme.swift": {
+    "dependencies": "/Users/maximeliseyev/Code/construct-messenger/ConstructUI/.build/index-build/arm64-apple-macosx/debug/ConstructUI.build/ConstructTheme.d",
+    "object": "/Users/maximeliseyev/Code/construct-messenger/ConstructUI/.build/index-build/arm64-apple-macosx/debug/ConstructUI.build/ConstructTheme.swift.o",
+    "swiftmodule": "/Users/maximeliseyev/Code/construct-messenger/ConstructUI/.build/index-build/arm64-apple-macosx/debug/ConstructUI.build/ConstructTheme~partial.swiftmodule",
+    "swift-dependencies": "/Users/maximeliseyev/Code/construct-messenger/ConstructUI/.build/index-build/arm64-apple-macosx/debug/ConstructUI.build/ConstructTheme.swiftdeps",
+    "diagnostics": "/Users/maximeliseyev/Code/construct-messenger/ConstructUI/.build/index-build/arm64-apple-macosx/debug/ConstructUI.build/ConstructTheme.dia"
+  }
+}
