@@ -45,6 +45,10 @@ extension Color {
         static let text       = Color(dark: 0xE8E8E8, light: 0x111111)
         /// Timestamps, metadata, inactive.
         static let textDim    = Color(dark: 0x818181, light: 0x333333)
+        /// Text/icons inside outgoing bubbles. Dark: #FFFFFF (on #111111) /
+        /// Light: #111111 (on #E9E9E9). Adaptive — never hardcode `.white` here,
+        /// or it becomes unreadable on the light outgoing background.
+        static let outMsgText = Color(dark: 0xFFFFFF, light: 0x111111)
 
         // MARK: Structure
         /// ASCII noise chars, dividers. Dark: #1E1E1E / Light: #C8C8C8

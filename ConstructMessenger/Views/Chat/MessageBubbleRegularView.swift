@@ -134,7 +134,7 @@ struct MessageBubbleRegularView: View {
                             } else {
                                 LinkDetectingText(
                                     text,
-                                    color: message.isSentByMe ? .white : Color.CT.text
+                                    color: message.isSentByMe ? Color.CT.outMsgText : Color.CT.text
                                 )
                                 .font(CTFont.regular(ChatUIConstants.Typography.messageTextSize))
                             }

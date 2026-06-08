@@ -59,9 +59,9 @@ struct VoiceWaveformView: View {
             let fraction = Double(index) / Double(max(total - 1, 1))
             let played = progress > 0 && fraction <= progress
             if played {
-                return isSentByMe ? Color.white.opacity(0.95) : Color.CT.accent
+                return isSentByMe ? Color.CT.outMsgText.opacity(0.95) : Color.CT.accent
             }
-            return isSentByMe ? Color.white.opacity(0.35) : Color.CT.textDim.opacity(0.45)
+            return isSentByMe ? Color.CT.outMsgText.opacity(0.35) : Color.CT.textDim.opacity(0.45)
         case .staticAccent(let opacity):
             return Color.CT.accent.opacity(opacity)
         case .liveInput:

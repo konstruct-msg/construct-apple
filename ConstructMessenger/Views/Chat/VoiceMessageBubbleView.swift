@@ -76,12 +76,12 @@ struct VoiceMessageBubbleView: View {
                         ProgressView()
                             .progressViewStyle(.circular)
                             .scaleEffect(0.7)
-                            .tint(isSentByMe ? .white : Color.CT.accent)
+                            .tint(isSentByMe ? Color.CT.outMsgText : Color.CT.accent)
                             .frame(minWidth: 38)
                     } else {
                         Image(systemName: isPlaying ? "pause.fill" : "play.fill")
                             .font(.system(size: 14, weight: .regular))
-                            .foregroundColor(isSentByMe ? .white : Color.CT.accent)
+                            .foregroundColor(isSentByMe ? Color.CT.outMsgText : Color.CT.accent)
                             .frame(minWidth: 38)
                     }
                 }
@@ -98,7 +98,7 @@ struct VoiceMessageBubbleView: View {
 
                 Text(durationLabel)
                     .font(CTFont.regular(11))
-                    .foregroundColor(isSentByMe ? Color.white.opacity(0.85) : Color.CT.textDim)
+                    .foregroundColor(isSentByMe ? Color.CT.outMsgText.opacity(0.85) : Color.CT.textDim)
                     .monospacedDigit()
                     .frame(width: 34, alignment: .trailing)
             }
@@ -142,7 +142,7 @@ struct VoiceMessageBubbleView: View {
                     ProgressView()
                         .progressViewStyle(.circular)
                         .scaleEffect(0.5)
-                        .tint(isSentByMe ? .white : Color.CT.accent)
+                        .tint(isSentByMe ? Color.CT.outMsgText : Color.CT.accent)
                         .frame(width: 20, height: 20)
                 } else {
                     Image(systemName: "textformat")
@@ -167,9 +167,9 @@ struct VoiceMessageBubbleView: View {
     /// branch (white tint vs textDim).
     private func toggleTint(hasTranscript: Bool) -> Color {
         if hasTranscript && isTranscriptExpanded {
-            return isSentByMe ? .white : Color.CT.accent
+            return isSentByMe ? Color.CT.outMsgText : Color.CT.accent
         } else {
-            return isSentByMe ? .white.opacity(0.55) : Color.CT.textDim
+            return isSentByMe ? Color.CT.outMsgText.opacity(0.55) : Color.CT.textDim
         }
     }
 
@@ -179,7 +179,7 @@ struct VoiceMessageBubbleView: View {
             Rectangle().fill(Color.CT.noise).frame(height: 1)
             Text(text)
                 .font(CTFont.regular(12))
-                .foregroundColor(isSentByMe ? .white.opacity(0.85) : Color.CT.textDim)
+                .foregroundColor(isSentByMe ? Color.CT.outMsgText.opacity(0.85) : Color.CT.textDim)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 8)
@@ -193,7 +193,7 @@ struct VoiceMessageBubbleView: View {
             ProgressView()
                 .progressViewStyle(.circular)
                 .scaleEffect(0.7)
-                .tint(isSentByMe ? .white : Color.CT.textDim)
+                .tint(isSentByMe ? Color.CT.outMsgText : Color.CT.textDim)
                 .frame(minWidth: 38)
 
             VoiceWaveformView(
@@ -205,7 +205,7 @@ struct VoiceMessageBubbleView: View {
 
             Text(durationLabel)
                 .font(CTFont.regular(11))
-                .foregroundColor(isSentByMe ? Color.white.opacity(0.7) : Color.CT.textDim)
+                .foregroundColor(isSentByMe ? Color.CT.outMsgText.opacity(0.7) : Color.CT.textDim)
                 .monospacedDigit()
                 .frame(width: 34, alignment: .trailing)
         }
