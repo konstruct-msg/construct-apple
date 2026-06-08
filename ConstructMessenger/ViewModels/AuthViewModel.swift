@@ -76,8 +76,13 @@ class AuthViewModel {
     private var restoreInFlight = false
     private var lastRestoreAttemptAt: Date?
 
-    init(context: NSManagedObjectContext) {
+    init(context: NSManagedObjectContext, startRuntime: Bool? = nil) {
         self.viewContext = context
+        let shouldStartRuntime = startRuntime ?? !PreviewDetector.isRunningInPreview
+        guard shouldStartRuntime else {
+            refreshDeviceKeyState()
+            return
+        }
         setupSubscribers()
         startTokenRefreshMonitoring()
         setupSessionExpiredListener()
@@ -336,7 +341,7 @@ class AuthViewModel {
                 userId: response.userId
             )
             
-            VeilProxyManager.shared.configureFromServer(cert: response.iceBridgeCert ?? "")
+            VeilProxyManager.shared.configureFromServer(cert: response.veilBridgeCert ?? "")
             Log.info("Device-based authentication successful")
             finishAuth(userId: response.userId)
             
@@ -932,11 +937,22 @@ extension AuthViewModel {
         user.displayName = displayName
         return user
     }
+
+    static func makePreview(
+        context: NSManagedObjectContext,
+        username: String = "john_doe",
+        displayName: String = "John Doe"
+    ) -> AuthViewModel {
+        let viewModel = AuthViewModel(context: context, startRuntime: false)
+        viewModel.configureMockAuth(username: username, displayName: displayName)
+        return viewModel
+    }
     
     /// Configures AuthViewModel for previews with mock data
     func configureMockAuth(username: String = "john_doe", displayName: String = "John Doe") {
         self.isAuthenticated = true
         self.currentUserId = UUID().uuidString
+        self.hasRegisteredDeviceKeys = true
         self.currentUser = AuthViewModel.createMockUser(context: viewContext, username: username, displayName: displayName)
     }
 }

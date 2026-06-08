@@ -424,6 +424,64 @@ class CryptoManager {
         return Data(sigBytes)
     }
 
+    // MARK: - Hybrid PQ Identity Signatures (Ed25519 + ML-DSA-65)
+    //
+    // These wrap the stateless `hybrid*` free functions from construct-core. They do
+    // NOT touch orchestratorCore, so no coreLock is needed. The 2016-byte hybrid
+    // private key lives in Keychain (WhenUnlockedThisDeviceOnly) and is wiped by
+    // deleteAllCryptoKeys()/deleteAllKeys() (account deletion, duress, local reset).
+    //
+    // Client and server share the SAME implementation (RustCrypto ml-dsa, seed-based),
+    // so every format is byte-identical and signatures cross-verify:
+    //   private key 2016 = [ed25519_seed (32)] [mldsa65_seed (32)] [mldsa65_pk (1952)]
+    //   public key  1984 = [ed25519_pk (32)] [mldsa65_pk (1952)]
+    //   signature   3373 = [ed25519_sig (64)] [mldsa65_sig (3309)]
+
+    /// Returns the device hybrid identity public key (1984 bytes), generating and
+    /// persisting a fresh hybrid keypair on first use.
+    @discardableResult
+    func ensureHybridIdentityPublicKey() throws -> Data {
+        if let stored = KeychainManager.shared.loadHybridSigPrivateKey() {
+            return Data(try hybridPublicKeyFromPrivate(privateKey: [UInt8](stored)))
+        }
+        let pair = try hybridSignatureKeygen()
+        guard KeychainManager.shared.saveHybridSigPrivateKey(Data(pair.privateKey)) else {
+            throw CryptoManagerError.invalidKeyData
+        }
+        Log.info("Generated hybrid PQ identity signing keypair (Ed25519 + ML-DSA-65)", category: "CryptoManager")
+        return Data(pair.publicKey)
+    }
+
+    /// The device hybrid identity public key if a keypair already exists, else nil
+    /// (does not generate one).
+    func hybridIdentityPublicKey() -> Data? {
+        guard let stored = KeychainManager.shared.loadHybridSigPrivateKey() else { return nil }
+        return (try? hybridPublicKeyFromPrivate(privateKey: [UInt8](stored))).map { Data($0) }
+    }
+
+    /// Signs a message with the device hybrid identity key, generating the keypair on
+    /// first use. Returns a 3373-byte hybrid signature.
+    func signHybrid(_ message: [UInt8]) throws -> Data {
+        let priv: [UInt8]
+        if let stored = KeychainManager.shared.loadHybridSigPrivateKey() {
+            priv = [UInt8](stored)
+        } else {
+            let pair = try hybridSignatureKeygen()
+            guard KeychainManager.shared.saveHybridSigPrivateKey(Data(pair.privateKey)) else {
+                throw CryptoManagerError.invalidKeyData
+            }
+            Log.info("Generated hybrid PQ identity signing keypair (Ed25519 + ML-DSA-65)", category: "CryptoManager")
+            priv = pair.privateKey
+        }
+        return Data(try hybridSign(privateKey: priv, message: message))
+    }
+
+    /// Verifies a hybrid signature against a peer's hybrid public key. Both the
+    /// Ed25519 and ML-DSA-65 components must validate. Stateless.
+    func verifyHybrid(publicKey: [UInt8], message: [UInt8], signature: [UInt8]) throws -> Bool {
+        return try hybridVerify(publicKey: publicKey, message: message, signature: signature)
+    }
+
     /// Apply a Kyber KEM shared secret to the named DR session.
     func applyPqContribution(contactId: String, kemSharedSecret: [UInt8]) throws {
         coreLock.lock()

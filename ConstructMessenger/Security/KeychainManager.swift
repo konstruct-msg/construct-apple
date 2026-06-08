@@ -224,9 +224,24 @@ class KeychainManager {
     func saveSigningKey(_ data: Data) -> Bool {
         return save(data, forKey: "signing_key", accessible: kSecAttrAccessibleWhenUnlockedThisDeviceOnly)
     }
-    
+
     func loadSigningKey() -> Data? {
         return load(forKey: "signing_key")
+    }
+
+    // Hybrid PQ identity signing private key (Ed25519 + ML-DSA-65), 2016 bytes.
+    // Local-only and never transmitted; the 1984-byte public key is derived on demand.
+    @discardableResult
+    func saveHybridSigPrivateKey(_ data: Data) -> Bool {
+        return save(data, forKey: "hybrid_sig_private_key", accessible: kSecAttrAccessibleWhenUnlockedThisDeviceOnly)
+    }
+
+    func loadHybridSigPrivateKey() -> Data? {
+        return load(forKey: "hybrid_sig_private_key")
+    }
+
+    func deleteHybridSigPrivateKey() {
+        delete(forKey: "hybrid_sig_private_key")
     }
 
     // MARK: - Private Keys JSON (for Rust persistence)
@@ -310,6 +325,7 @@ class KeychainManager {
         delete(forKey: "signed_prekey")
         delete(forKey: "signing_key")
         delete(forKey: "userId")
+        deleteHybridSigPrivateKey()
         deletePrivateKeys()
         deleteAllSessions()
         Log.info("All cryptographic keys and sessions deleted", category: "Keychain")

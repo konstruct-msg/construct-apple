@@ -14,24 +14,33 @@ struct Construct_MessengerApp: App {
     // IMPORTANT: AppDelegate for background tasks registration
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
-    @State private var authViewModel = AuthViewModel(context: PersistenceController.shared.container.viewContext)
-    @State private var securityViewModel = SecurityViewModel()
-    @State private var recoveryViewModel = AccountRecoveryViewModel()
-    @State private var socialRecoveryService = SocialRecoveryService()
+    @State private var authViewModel: AuthViewModel
+    @State private var securityViewModel: SecurityViewModel
+    @State private var recoveryViewModel: AccountRecoveryViewModel
+    @State private var socialRecoveryService: SocialRecoveryService
+    private let rootContainer: NSPersistentContainer
 
     init() {
+        let isPreview = PreviewDetector.isRunningInPreview
+        let container = isPreview
+            ? PersistenceController.preview.container
+            : PersistenceController.shared.container
+        self.rootContainer = container
+        _authViewModel = State(initialValue: AuthViewModel(context: container.viewContext, startRuntime: !isPreview))
+        _securityViewModel = State(initialValue: SecurityViewModel())
+        _recoveryViewModel = State(initialValue: AccountRecoveryViewModel())
+        _socialRecoveryService = State(initialValue: SocialRecoveryService())
         // Eagerly load the CoreData stack so NSManagedObjectModel is registered
         // before any view body runs. On iOS 26 TabView / ZStack initialises
         // @FetchRequest for all children during the first layout pass; without
         // this the entity registry is empty and the app crashes with
         // 'A fetch request must have an entity.'
-        _ = PersistenceController.shared
         applyGlobalAppearance()
         // Put RTCAudioSession into manual-audio mode and warm the WebRTC factory
         // BEFORE CallKit's first `didActivate` touches RTCAudioSession. Lazy-init
         // mid-call destructively reset `isAudioEnabled = false`, silencing every
         // call after that point.
-        if !PreviewDetector.isRunningInPreview {
+        if !isPreview {
             MainActor.assumeIsolated {
                 WebRTCRuntime.bootstrap()
             }
@@ -42,7 +51,7 @@ struct Construct_MessengerApp: App {
         WindowGroup {
             SecurityGateView {
                 ContentView()
-                    .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
+                    .environment(\.managedObjectContext, rootContainer.viewContext)
                     .environment(authViewModel)
                     .environment(appDelegate.deepLinkHandler)
             }
@@ -56,7 +65,7 @@ struct Construct_MessengerApp: App {
                 }
                 MediaManager.shared.evictOldFiles()
                 StorageMigrationService.shared.migrateIfNeeded(
-                    context: PersistenceController.shared.container.viewContext
+                    context: rootContainer.viewContext
                 )
                 // Start VEIL proxy if user has it enabled — async to allow .well-known cert fetch
                 await VeilProxyManager.shared.startIfEnabled()

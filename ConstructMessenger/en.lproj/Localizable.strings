@@ -103,6 +103,11 @@
 "pin_code_length" = "PIN must be 6-12 digits";
 "pin_codes_dont_match" = "PIN codes don't match";
 "wrong_pin_code" = "Wrong PIN Code";
+"cant_unlock" = "Can't sign in?";
+"pin_reset_title" = "Reset this device?";
+"pin_reset_explain" = "All local data will be erased from this device. Your identity can be restored later with your seed phrase, only if recovery was set up.";
+"pin_reset_action" = "Reset";
+"pin_reset_countdown" = "Resetting in %d… enter your PIN to cancel";
 "lock_delay" = "Lock After";
 "lock_now" = "Lock Now";
 "lock_delay_immediate" = "Immediately";

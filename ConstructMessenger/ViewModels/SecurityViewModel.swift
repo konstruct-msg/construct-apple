@@ -169,6 +169,31 @@ final class SecurityViewModel {
         isBiometricEnabled = false
     }
 
+    /// Destructive: removes ALL local PIN + duress + biometric state.
+    ///
+    /// SECURITY INVARIANT: a PIN must never be "reset in place" to regain entry to
+    /// the same account — that would make the app-lock cosmetic (delete app → reset
+    /// PIN → walk in). This method is therefore the local-half of an explicit,
+    /// user-initiated *destructive* reset only: the caller (PinLockView escape hatch)
+    /// pairs it with `AuthViewModel.wipeAndReregister()` so the device drops to fresh
+    /// onboarding. The identity is recoverable afterwards only via seed phrase (if
+    /// recovery was configured). It is NOT a silent path and is NOT triggered by any
+    /// UserDefaults flag, so the `spkEpoch`/`pqxdh` anti-tamper invariants stand.
+    func wipeSecurityState() {
+        KeychainManager.shared.deleteData(forKey: Self.pinHashKey)
+        KeychainManager.shared.deleteData(forKey: Self.pinSaltKey)
+        KeychainManager.shared.deleteData(forKey: Self.pinHashVersionKey)
+        KeychainManager.shared.deleteData(forKey: Self.duressPinHashKey)
+        KeychainManager.shared.deleteData(forKey: Self.duressPinSaltKey)
+        KeychainManager.shared.deleteData(forKey: Self.duressPinHashVersionKey)
+        UserDefaults.standard.removeObject(forKey: Self.pinLengthKey)
+        UserDefaults.standard.removeObject(forKey: Self.biometricEnabledKey)
+        isPinEnabled = false
+        isDuresspinEnabled = false
+        isBiometricEnabled = false
+        isUnlocked = true
+    }
+
     // MARK: - Duress PIN
 
     /// Returns true and saves duress PIN if it doesn't match the main PIN.

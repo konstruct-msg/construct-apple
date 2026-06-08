@@ -402,7 +402,7 @@ final class AuthServiceClient: Sendable {
                     accessToken: t.accessToken,
                     refreshToken: t.refreshToken,
                     expiresAt: t.expiresAt,
-                    veilBridgeCert: t.hasIceBridgeCert ? t.veilBridgeCert : nil
+                    veilBridgeCert: t.hasVeilBridgeCert ? t.veilBridgeCert : nil
                 )
             case .rejected:
                 throw DeviceLinkError.rejected
