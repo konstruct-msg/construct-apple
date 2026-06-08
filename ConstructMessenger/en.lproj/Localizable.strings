@@ -866,6 +866,7 @@
 "history_sync_offer_skip" = "Skip";
 "history_sync_user_mismatch" = "History transfer failed: this history belongs to a different account.";
 "call_error_not_contacts" = "Cannot call this node. Make sure you are mutual contacts.";
+"call_error_busy" = "You're already in a call.";
 "call_error_peer_offline" = "Node is offline. Try again later.";
 
 /* Tab bar labels */

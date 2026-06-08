@@ -57,6 +57,15 @@ final class CallManager: CallUIManaging {
         var pendingOutgoingIce: [Shared_Proto_Signaling_V1_IceCandidate] = []
         /// Task that fires after a short debounce to flush pendingOutgoingIce.
         var iceFlushTask: Task<Void, Never>? = nil
+        /// True once WebRTC media (ICE/DTLS) has connected at least once. After this, a
+        /// signaling-stream close must NOT tear down the call — media is P2P/TURN and
+        /// independent of the signaling stream. The call ends only on iceConnectionState
+        /// = failed (onConnectionFailed) or explicit hangup.
+        var mediaConnected: Bool = false
+        /// Signaling-stream reconnect attempts made *after* media was already connected.
+        /// Capped to avoid a tight reconnect loop if the server keeps closing the stream.
+        var postMediaStreamReconnects: Int = 0
+        static let maxPostMediaReconnects = 5
 
         init(session: CallSession) {
             self.session = session
@@ -124,6 +133,24 @@ final class CallManager: CallUIManaging {
     func startOutgoingCall(to userId: String, displayName: String, hasVideo: Bool = false) async {
         guard CallsFeature.isEnabled else {
             Log.info("Calls disabled — ignoring outgoing call request", category: "Calls")
+            return
+        }
+
+        // Busy / glare guard. Without this, `begin()` → `active?.close()` would tear down
+        // an existing call to start the new outgoing one, and the subsequent
+        // CXStartCallAction fails with maximumCallGroupsReached (Code 7) — orphaning the
+        // original call in CallKit ("Answer for unknown call"). Mirrors the guard in
+        // `handleIncomingPush`, which `startOutgoingCall` was missing.
+        if let active {
+            // Glare: the same peer is already calling us → answer their call instead of
+            // starting a competing outgoing one.
+            if case .incoming = active.session.direction, active.session.peerUserId == userId {
+                Log.info("Glare: outgoing request to \(userId.prefix(8))… while incoming from same peer — answering instead", category: "Calls")
+                answer(callUUID: active.session.uuid)
+                return
+            }
+            Log.info("Busy — ignoring outgoing call to \(userId.prefix(8))… (a call is already active)", category: "Calls")
+            lastError = NSLocalizedString("call_error_busy", comment: "")
             return
         }
 
@@ -490,8 +517,25 @@ final class CallManager: CallUIManaging {
             // the call that the new stream is serving.
             await MainActor.run { [weak self, weak active] in
                 guard let self, let active else { return }
-                if self.active === active, active.stream === stream {
-                    Log.error("Signaling stream closed unexpectedly", category: "Calls")
+                guard self.active === active, active.stream === stream else { return }
+                if active.mediaConnected {
+                    // Media (WebRTC/TURN) is P2P and independent of the signaling stream.
+                    // Closing the call here was the ~30s drop: the server closes the idle
+                    // signaling stream and this teardown killed an otherwise-healthy call.
+                    // Keep the call alive and reconnect the stream in the background (needed
+                    // only for renegotiation/hangup; hangup also rides the E2EE path). The
+                    // call ends only on iceConnectionState=failed (onConnectionFailed) or an
+                    // explicit hangup. Capped to avoid a tight loop on repeated closes.
+                    active.stream = nil
+                    if active.postMediaStreamReconnects < ActiveCall.maxPostMediaReconnects {
+                        active.postMediaStreamReconnects += 1
+                        Log.info("Signaling stream closed but media is up — reconnecting (\(active.postMediaStreamReconnects)/\(ActiveCall.maxPostMediaReconnects)), keeping call", category: "Calls")
+                        try? self.openStreamIfNeeded()
+                    } else {
+                        Log.info("Signaling stream closed but media is up — reconnect cap reached, keeping call on E2EE-only path", category: "Calls")
+                    }
+                } else {
+                    Log.error("Signaling stream closed before media connected — ending call", category: "Calls")
                     self.endActiveCall(reason: .local("Signal stream closed"))
                 }
             }
@@ -683,7 +727,10 @@ final class CallManager: CallUIManaging {
         }
         webrtc.onConnected = { [weak self] in
             Task { @MainActor in
-                guard self != nil else { return }
+                guard let self else { return }
+                // Media path is up — from now on the call survives signaling-stream drops
+                // (see receive-loop close handler in openStreamIfNeeded).
+                self.active?.mediaConnected = true
                 // The dial tone is an AVAudioEngine holding the shared
                 // .playAndRecord session's playback bus. Until it stops, WebRTC's
                 // voice-processing audio unit produces no audible output. Idempotent —
@@ -912,6 +959,21 @@ final class CallManager: CallUIManaging {
             active.pendingRemoteOfferSdp = sdp
             Log.info("Stored pending SDP for existing call callId=\(callId.prefix(8))…", category: "Calls")
             return
+        }
+        // Glare: we have an OUTGOING call to the same peer and now receive THEIR offer
+        // (both sides dialed simultaneously, each with its own callId). Deterministic
+        // tie-break mirrors session init (higher userId stays INITIATOR): the higher
+        // userId keeps its outgoing call and ignores the incoming offer; the lower userId
+        // yields and answers. Without this both sides tear down their outgoing call and
+        // the call never establishes.
+        if let active, case .outgoing = active.session.direction, active.session.peerUserId == callerUserId {
+            let myUserId = AuthSessionManager.shared.currentUserId ?? ""
+            if myUserId > callerUserId {
+                Log.info("Glare: keeping our outgoing call to \(callerUserId.prefix(8))… (tie-break win) — ignoring their offer", category: "Calls")
+                return
+            }
+            Log.info("Glare: yielding our outgoing call to \(callerUserId.prefix(8))… (tie-break lose) — accepting their offer", category: "Calls")
+            // fall through: begin() below closes our outgoing call and creates the incoming one.
         }
         // No existing call — create from message-based offer. Caller name is resolved
         // from local CoreData (profile-shared name → username → generated fallback);
