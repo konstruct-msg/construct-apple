@@ -135,12 +135,22 @@ final class ContactRequestsViewModel {
             username = identity.username
         }
 
-        return try ContactLinkService.shared.createOrUpdateContact(
+        let user = try ContactLinkService.shared.createOrUpdateContact(
             userId: request.fromUserId,
             username: username,
             displayName: displayName,
             context: context
         )
+
+        // Rebuild the message-stream subscription set and prewarm the session for
+        // the freshly-accepted contact. Without this the stream stays subscribed
+        // to the pre-acceptance contact set, so the server delivers none of this
+        // contact's messages (ChatsViewModel observes this notification and calls
+        // forceReconnect). The sender side gets the same treatment via
+        // ContactRequestService.checkAndCreateContacts.
+        NotificationCenter.default.post(name: .contactRequestAccepted, object: nil)
+
+        return user
     }
 
     func declineAndBlock(requestId: String) async throws {

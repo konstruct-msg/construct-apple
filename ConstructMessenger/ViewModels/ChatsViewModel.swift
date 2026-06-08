@@ -33,6 +33,9 @@ class ChatsViewModel {
     private let chatManagementService = ChatManagementService()
     private let streamLifecycle: StreamLifecycleCoordinator
 
+    /// Observer for `.contactRequestAccepted` — see init for rationale.
+    private var contactAcceptedObserver: NSObjectProtocol?
+
     // MARK: - Setup state
 
     private var viewContext: NSManagedObjectContext?
@@ -72,9 +75,26 @@ class ChatsViewModel {
         }
 
         lifecycle.start()
+
+        // When a contact request is accepted (search → request → accept), a new
+        // contact appears but the message stream is still subscribed to the old
+        // contact set captured at connect time, so the server delivers none of
+        // the new contact's messages and no crypto session is prewarmed. The QR
+        // path avoids this because `startChat` calls forceReconnect; the
+        // contact-request path did not. Rebuild the subscription set (and prewarm)
+        // on acceptance from either side. Posted by ContactRequestService
+        // (sender reconcile) and ContactRequestsViewModel.accept (responder).
+        contactAcceptedObserver = NotificationCenter.default.addObserver(
+            forName: .contactRequestAccepted, object: nil, queue: nil
+        ) { [weak lifecycle] _ in
+            Task { @MainActor in lifecycle?.forceReconnect() }
+        }
     }
 
     isolated deinit {
+        if let obs = contactAcceptedObserver {
+            NotificationCenter.default.removeObserver(obs)
+        }
         streamLifecycle.stop()
     }
 
