@@ -391,6 +391,7 @@ struct ChatView: View {
                         replyToContentOverride: replyQuoteText
                     )
                     messageText = ""
+                    DraftStore.shared.clear(for: viewModel.chat.id)
                     replyingTo = nil
                     replyQuoteText = nil
 
@@ -559,6 +560,10 @@ struct ChatView: View {
 
     private func handleViewAppear() {
         guard !isPreviewRuntime else { return }
+        // Restore an unsent draft saved when we last left this chat.
+        if viewModel.editingMessage == nil, messageText.isEmpty {
+            messageText = DraftStore.shared.draft(for: viewModel.chat.id)
+        }
         markChatAsRead()
         viewModel.onViewAppear()
         loadContactKTStatus()
@@ -567,6 +572,11 @@ struct ChatView: View {
 
     private func handleViewDisappear() {
         guard !isPreviewRuntime else { return }
+        // Preserve a half-typed message across navigation. Skip while editing,
+        // so the edit buffer never leaks into the new-message draft.
+        if viewModel.editingMessage == nil {
+            DraftStore.shared.save(messageText, for: viewModel.chat.id)
+        }
         setActiveChatState(isActive: false)
     }
 
