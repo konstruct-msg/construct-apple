@@ -18,9 +18,9 @@ final class NotificationServiceClient: Sendable {
 
     private var pushEnvironment: Shared_Proto_Services_V1_PushEnvironment {
         #if DEBUG
-        return .pushEnvSandbox
+        return .sandbox
         #else
-        return .pushEnvProduction
+        return .production
         #endif
     }
 
@@ -33,7 +33,7 @@ final class NotificationServiceClient: Sendable {
 
         let environment = pushEnvironment
 
-        Log.info("Registering APNs token — environment: \(environment.rawValue) (\(environment == .pushEnvProduction ? "production" : "sandbox"))", category: "Notifications")
+        Log.info("Registering APNs token — environment: \(environment.rawValue) (\(environment == .production ? "production" : "sandbox"))", category: "Notifications")
 
         return try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.registerDeviceToken) { grpcClient in
             let client = Shared_Proto_Services_V1_NotificationService.Client(wrapping: grpcClient)

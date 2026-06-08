@@ -172,6 +172,10 @@ enum MessageStreamParser {
                 ConnectionStatusManager.shared.markRequestSucceeded()
             }
             return .heartbeat(cursor: cursor)
+        case .p2PHandoff(let request):
+            // P2P handoff request from server — not yet handled at the stream layer.
+            Log.debug("P2P handoff request: session=\(request.p2PSessionID)", category: "MessageStream")
+            return nil
         case .none:
             return nil
         }
