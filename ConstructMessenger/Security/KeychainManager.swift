@@ -412,6 +412,21 @@ class KeychainManager {
                   accessible: CFString = kSecAttrAccessibleWhenUnlockedThisDeviceOnly) -> Bool {
         return save(data, forKey: key, accessible: accessible)
     }
+
+    /// Re-store an existing item under a new accessibility class.
+    ///
+    /// `SecItemUpdate` does NOT reliably change `kSecAttrAccessible` on an existing item,
+    /// so an item created by an older build under a stricter class (e.g. the Double Ratchet
+    /// orchestrator state under `WhenUnlockedThisDeviceOnly`) cannot be migrated by simply
+    /// saving over it — it must be removed and re-added. Call this ONLY while the device is
+    /// unlocked (foreground): a locked read returns nil and the item would be left as-is.
+    /// Returns true only when an item was actually re-added under `accessible`.
+    @discardableResult
+    func migrateAccessibility(forKey key: String, to accessible: CFString) -> Bool {
+        guard let data = loadData(forKey: key) else { return false }
+        delete(forKey: key)
+        return save(data, forKey: key, accessible: accessible)
+    }
     
     /// Load generic data from Keychain
     func loadData(forKey key: String) -> Data? {

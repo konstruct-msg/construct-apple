@@ -357,6 +357,21 @@ class CryptoManager {
     /// Restore the orchestrator coordination state into `core` from Keychain.
     /// Called during `reloadCoreFromKeychain` and `setLocalUserId`.
     private func loadOrchestratorStateCFE(into core: OrchestratorCore) {
+        // One-time migration: older builds stored this under WhenUnlockedThisDeviceOnly, which
+        // fails to save during background/locked push decrypt → the advanced ratchet is lost →
+        // session desync on next launch. SecItemUpdate can't change accessibility, so re-add the
+        // item once. Runs here (foreground restore, device unlocked); the flag is set only after
+        // a confirmed re-add so a locked/absent read retries on the next launch.
+        let migrationFlag = "construct.orchestrator_state.afu_migrated.v1"
+        if !UserDefaults.standard.bool(forKey: migrationFlag) {
+            if KeychainManager.shared.migrateAccessibility(
+                forKey: Self.orchestratorStateCFEKey,
+                to: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+            ) {
+                UserDefaults.standard.set(true, forKey: migrationFlag)
+                Log.info("Migrated orchestrator state Keychain accessibility → AfterFirstUnlock", category: "CryptoManager")
+            }
+        }
         guard let data = KeychainManager.shared.loadData(forKey: Self.orchestratorStateCFEKey) else {
             Log.debug("No orchestrator state CFE found in Keychain (first launch or cleared)", category: "CryptoManager")
             // Fresh orchestrator: next_otpk_id resets to 1,000,000. Any OTPKs on the server
