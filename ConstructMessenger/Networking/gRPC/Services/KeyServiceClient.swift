@@ -228,6 +228,30 @@ final class KeyServiceClient: Sendable {
                 }
             }
 
+            // Hybrid identity KT inclusion proof (defense-in-depth, non-blocking like the
+            // identity KT proof above — the blocking PQ check is HybridBundleVerifier below).
+            if response.hasHybridKtProof, bundle.hasHybridIdentityKey, !bundle.hybridIdentityKey.isEmpty {
+                let hp = response.hybridKtProof
+                let serverKey = UserDefaults.standard.data(forKey: VeilCertFetcher.cachedBundleSigningKeyKey)
+                switch KeyTransparencyVerifier.verifyHybrid(
+                    leafIndex: hp.leafIndex,
+                    treeSize: hp.treeSize,
+                    rootHash: hp.rootHash,
+                    proofHashes: hp.proofHashes,
+                    treeHeadSignature: hp.treeHeadSignature,
+                    deviceId: response.deviceID,
+                    hybridIdentityKey: bundle.hybridIdentityKey,
+                    serverBundleSigningPublicKey: serverKey
+                ) {
+                case .verified:
+                    Log.info("KT(hybrid): inclusion proof verified for device \(response.deviceID)", category: "KT")
+                case .failed(let e):
+                    Log.error("KT(hybrid): proof FAILED for device \(response.deviceID) — \(e)", category: "KT")
+                case .unavailable:
+                    break
+                }
+            }
+
             // Hybrid PQ verification. Phase 2: present-but-invalid → tampering, reject.
             // Phase 3: absent for a previously hybrid-capable peer → downgrade, reject.
             let hybridOutcome = HybridBundleVerifier.verify(
