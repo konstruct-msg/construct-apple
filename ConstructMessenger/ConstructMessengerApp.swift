@@ -77,6 +77,8 @@ struct Construct_MessengerApp: App {
                 if authViewModel.isAuthenticated,
                    let deviceId = KeychainManager.shared.loadDeviceID() {
                     await PQCKeyManager.migrateIfNeeded(deviceId: deviceId)
+                    // Phase 1: lazily publish the hybrid PQ identity bundle (Ed25519 + ML-DSA-65).
+                    await HybridIdentityService.publishIfNeeded(deviceId: deviceId)
                 }
                 // FIXME(masque): iOS blocks raw UDP port 443 (owned by Network.framework).
                 // construct-engine's QUIC handshake times out immediately on iOS —

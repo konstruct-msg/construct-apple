@@ -57,6 +57,11 @@ extension User {
         set { ktStatusRaw = newValue.rawValue }
     }
 
+    /// Hybrid PQ downgrade protection (Phase 3). `true` once a valid hybrid bundle has been seen
+    /// for the current `knownIdentityKey`. A subsequent Ed25519-only bundle for the same identity
+    /// is treated as a downgrade attack and rejected. Reset when the identity key changes.
+    @NSManaged public var hybridCapable: Bool
+
     @NSManaged public var chats: NSSet?
 }
 

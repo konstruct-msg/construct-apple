@@ -238,9 +238,47 @@ public struct Shared_Proto_Services_V1_DevicePublicKeys: Sendable {
   /// Suite identifier, e.g. "Curve25519+Ed25519"
   public var cryptoSuite: String = String()
 
+  /// Hybrid identity public key, 1984 bytes = [ed25519_pk(32)] [mldsa65_pk(1952)].
+  /// The Ed25519 half is independent; binding is the cross-signature below
+  /// (no [0..32]==verifying_key invariant).
+  public var hybridIdentityKey: Data {
+    get {_hybridIdentityKey ?? Data()}
+    set {_hybridIdentityKey = newValue}
+  }
+  /// Returns true if `hybridIdentityKey` has been explicitly set.
+  public var hasHybridIdentityKey: Bool {self._hybridIdentityKey != nil}
+  /// Clears the value of `hybridIdentityKey`. Subsequent reads from it will return its default value.
+  public mutating func clearHybridIdentityKey() {self._hybridIdentityKey = nil}
+
+  /// Ed25519 cross-signature (64 bytes) over ("KonstruktHybridId-v1" || hybrid_identity_key),
+  /// verifiable with verifying_key.
+  public var hybridIdentitySignature: Data {
+    get {_hybridIdentitySignature ?? Data()}
+    set {_hybridIdentitySignature = newValue}
+  }
+  /// Returns true if `hybridIdentitySignature` has been explicitly set.
+  public var hasHybridIdentitySignature: Bool {self._hybridIdentitySignature != nil}
+  /// Clears the value of `hybridIdentitySignature`. Subsequent reads from it will return its default value.
+  public mutating func clearHybridIdentitySignature() {self._hybridIdentitySignature = nil}
+
+  /// Hybrid signature over the SPK sign-message (3373 bytes); proves the SPK under the
+  /// hybrid key in addition to signed_prekey_signature. (scope B)
+  public var signedPrekeyHybridSignature: Data {
+    get {_signedPrekeyHybridSignature ?? Data()}
+    set {_signedPrekeyHybridSignature = newValue}
+  }
+  /// Returns true if `signedPrekeyHybridSignature` has been explicitly set.
+  public var hasSignedPrekeyHybridSignature: Bool {self._signedPrekeyHybridSignature != nil}
+  /// Clears the value of `signedPrekeyHybridSignature`. Subsequent reads from it will return its default value.
+  public mutating func clearSignedPrekeyHybridSignature() {self._signedPrekeyHybridSignature = nil}
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
+
+  fileprivate var _hybridIdentityKey: Data? = nil
+  fileprivate var _hybridIdentitySignature: Data? = nil
+  fileprivate var _signedPrekeyHybridSignature: Data? = nil
 }
 
 public struct Shared_Proto_Services_V1_PowSolution: Sendable {
@@ -1532,7 +1570,7 @@ extension Shared_Proto_Services_V1_GetPowChallengeResponse: SwiftProtobuf.Messag
 
 extension Shared_Proto_Services_V1_DevicePublicKeys: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".DevicePublicKeys"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}verifying_key\0\u{3}identity_public\0\u{3}signed_prekey_public\0\u{3}signed_prekey_signature\0\u{3}crypto_suite\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}verifying_key\0\u{3}identity_public\0\u{3}signed_prekey_public\0\u{3}signed_prekey_signature\0\u{3}crypto_suite\0\u{3}hybrid_identity_key\0\u{3}hybrid_identity_signature\0\u{3}signed_prekey_hybrid_signature\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1545,12 +1583,19 @@ extension Shared_Proto_Services_V1_DevicePublicKeys: SwiftProtobuf.Message, Swif
       case 3: try { try decoder.decodeSingularBytesField(value: &self.signedPrekeyPublic) }()
       case 4: try { try decoder.decodeSingularBytesField(value: &self.signedPrekeySignature) }()
       case 5: try { try decoder.decodeSingularStringField(value: &self.cryptoSuite) }()
+      case 6: try { try decoder.decodeSingularBytesField(value: &self._hybridIdentityKey) }()
+      case 7: try { try decoder.decodeSingularBytesField(value: &self._hybridIdentitySignature) }()
+      case 8: try { try decoder.decodeSingularBytesField(value: &self._signedPrekeyHybridSignature) }()
       default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
     if !self.verifyingKey.isEmpty {
       try visitor.visitSingularBytesField(value: self.verifyingKey, fieldNumber: 1)
     }
@@ -1566,6 +1611,15 @@ extension Shared_Proto_Services_V1_DevicePublicKeys: SwiftProtobuf.Message, Swif
     if !self.cryptoSuite.isEmpty {
       try visitor.visitSingularStringField(value: self.cryptoSuite, fieldNumber: 5)
     }
+    try { if let v = self._hybridIdentityKey {
+      try visitor.visitSingularBytesField(value: v, fieldNumber: 6)
+    } }()
+    try { if let v = self._hybridIdentitySignature {
+      try visitor.visitSingularBytesField(value: v, fieldNumber: 7)
+    } }()
+    try { if let v = self._signedPrekeyHybridSignature {
+      try visitor.visitSingularBytesField(value: v, fieldNumber: 8)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1575,6 +1629,9 @@ extension Shared_Proto_Services_V1_DevicePublicKeys: SwiftProtobuf.Message, Swif
     if lhs.signedPrekeyPublic != rhs.signedPrekeyPublic {return false}
     if lhs.signedPrekeySignature != rhs.signedPrekeySignature {return false}
     if lhs.cryptoSuite != rhs.cryptoSuite {return false}
+    if lhs._hybridIdentityKey != rhs._hybridIdentityKey {return false}
+    if lhs._hybridIdentitySignature != rhs._hybridIdentitySignature {return false}
+    if lhs._signedPrekeyHybridSignature != rhs._signedPrekeyHybridSignature {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

@@ -203,6 +203,14 @@ final class PreKeyRotationService {
         recordRotation()
         let serverKyberKeyId = response.hasNewKyberKeyID ? response.newKyberKeyID : kyberKey.keyId
         Log.info("SPK rotation complete: classic keyId=\(classicKey.keyId) (server: \(response.newKeyID)), kyber keyId=\(serverKyberKeyId)", category: "SPKRotation")
+
+        // Rotation clears the hybrid prekey signatures server-side; re-attach them over
+        // the freshly-rotated SPK / Kyber SPK (best-effort, capability-gated).
+        do {
+            try await HybridIdentityService.publish(deviceId: deviceId)
+        } catch {
+            Log.error("SPK rotation: hybrid signature re-attach failed (non-fatal): \(error.localizedDescription)", category: "SPKRotation")
+        }
     }
 
     // MARK: - Schedule Helpers

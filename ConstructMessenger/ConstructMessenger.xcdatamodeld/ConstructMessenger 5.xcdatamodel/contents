@@ -17,6 +17,9 @@
         <attribute name="knownIdentityKey" optional="YES" attributeType="Binary"/>
         <!-- KTStatus raw value: 0=unverified, 1=verified, 2=keyChanged, 3=failed -->
         <attribute name="ktStatusRaw" optional="YES" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <!-- Hybrid PQ downgrade protection: true once a valid hybrid bundle was seen for the -->
+        <!-- current knownIdentityKey. A later Ed25519-only bundle for the same identity is a downgrade. -->
+        <attribute name="hybridCapable" optional="YES" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
         <relationship name="chats" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="Chat" inverseName="otherUser" inverseEntity="Chat"/>
         <uniquenessConstraints>
             <uniquenessConstraint>
