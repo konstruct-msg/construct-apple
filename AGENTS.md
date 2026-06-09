@@ -336,7 +336,8 @@ On failure: falls through to END_SESSION → full re-init.
 **Keychain accessibility of session keys:**
 - `deviceSigningKey` / `deviceIdentityKey`: `kSecAttrAccessibleWhenUnlockedThisDeviceOnly`
 - `deviceId`: `kSecAttrAccessibleAfterFirstUnlock`
-- Session JSON: `kSecAttrAccessibleWhenUnlockedThisDeviceOnly`
+- Per-contact session data (`saveSessionData`): `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` (needed for push-driven background decrypt)
+- **Double Ratchet orchestrator state** (`construct.orchestrator_state`): `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` (changed 2026-06-09). It advances during background/locked push decrypt; the old `WhenUnlockedThisDeviceOnly` made the locked-device save fail → the advanced ratchet was lost → silent session desync on next launch. Any crypto state that must survive a background decrypt MUST use `AfterFirstUnlock*`, never `WhenUnlocked*`. (Session archives, PQC OTPK/SPK still use the generic `saveData` default `WhenUnlockedThisDeviceOnly` — same latent issue, not yet migrated.)
 - Auth token: `kSecAttrAccessibleAfterFirstUnlock`
 
 **Auth guard**: if `isAuthenticated == true` in memory, skip Keychain re-read.

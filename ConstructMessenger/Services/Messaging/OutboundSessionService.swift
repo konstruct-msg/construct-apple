@@ -246,7 +246,13 @@ final class OutboundSessionService {
             if rawBytes.isEmpty {
                 Log.debug("Orchestrator state save with empty data — ignoring", category: "OutboundSession")
             } else {
-                _ = KeychainManager.shared.saveData(Data(rawBytes), forKey: "construct.orchestrator_state")
+                // AfterFirstUnlock: this Rust-driven save also fires during background
+                // push decrypt while locked; WhenUnlocked would drop it → ratchet desync.
+                _ = KeychainManager.shared.saveData(
+                    Data(rawBytes),
+                    forKey: "construct.orchestrator_state",
+                    accessible: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+                )
                 Log.debug("Orchestrator state persisted (\(rawBytes.count) bytes) via Rust action", category: "OutboundSession")
             }
         } else {

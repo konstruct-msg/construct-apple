@@ -46,9 +46,16 @@ struct MessageBubbleRegularView: View {
                 Button {
                     onSelect?(message)
                 } label: {
-                    Text(isSelected ? "[✓]" : "[○]")
-                        .font(CTFont.bold(14))
-                        .foregroundColor(isSelected ? Color.CT.accent : Color.CT.textDim)
+                    if isSelected {
+                        Image(systemName: "circle")
+                            .font(CTFont.regular(14))
+                            .foregroundColor(Color.CT.textDim)
+                    }
+                    else {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(CTFont.regular(14))
+                            .foregroundColor(Color.CT.accentDim)
+                    }
                 }
                 .buttonStyle(.plain)
             }
@@ -256,9 +263,16 @@ struct MessageBubbleRegularView: View {
                 Button {
                     onSelect?(message)
                 } label: {
-                    Text(isSelected ? "[✓]" : "[○]")
-                        .font(CTFont.bold(14))
-                        .foregroundColor(isSelected ? Color.CT.accent : Color.CT.textDim)
+                    if isSelected {
+                        Image(systemName: "circle")
+                            .font(CTFont.regular(14))
+                            .foregroundColor(Color.CT.textDim)
+                    }
+                    else {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(CTFont.regular(14))
+                            .foregroundColor(Color.CT.accentDim)
+                    }
                 }
                 .buttonStyle(.plain)
             }
@@ -269,23 +283,23 @@ struct MessageBubbleRegularView: View {
     private var deliveryStatusView: some View {
         switch message.deliveryStatus {
         case .sending:
-            Text("···")
+            Image(systemName: "circle")
                 .font(CTFont.regular(10))
                 .foregroundColor(Color.CT.textDim)
 
         case .sent:
-            Text("·")
-                .font(CTFont.bold(10))
+            Image(systemName: "circle.fill")
+                .font(CTFont.regular(10))
                 .foregroundColor(Color.CT.textDim)
 
         case .delivered:
-            Text("[✓]")
+            Image(systemName: "checkmark.circle")
                 .font(CTFont.regular(10))
-                .foregroundColor(Color.CT.accentDim)
+                .foregroundColor(.green)
 
         case .queued:
             Button { onRetry?(message) } label: {
-                Text("[q] retry")
+                Image(systemName: "arrow.clockwise")
                     .font(CTFont.regular(10))
                     .foregroundColor(Color.CT.textDim)
             }
@@ -293,8 +307,8 @@ struct MessageBubbleRegularView: View {
 
         case .failed:
             Button { onRetry?(message) } label: {
-                Text("[!] retry")
-                    .font(CTFont.bold(10))
+                Image(systemName: "exclamationmark.circle.fill")
+                    .font(CTFont.regular(10))
                     .foregroundColor(Color.CT.danger)
             }
             .buttonStyle(.plain)

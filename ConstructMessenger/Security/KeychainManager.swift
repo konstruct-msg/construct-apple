@@ -401,9 +401,16 @@ class KeychainManager {
     
     // MARK: - Generic Data Storage (for archived sessions, etc.)
     
-    /// Save generic data to Keychain
-    func saveData(_ data: Data, forKey key: String) -> Bool {
-        return save(data, forKey: key, accessible: kSecAttrAccessibleWhenUnlockedThisDeviceOnly)
+    /// Save generic data to Keychain.
+    ///
+    /// `accessible` defaults to `WhenUnlockedThisDeviceOnly`. Crypto state that must be
+    /// persisted/loaded during background push-driven decrypt (the Double Ratchet
+    /// orchestrator state) MUST pass `AfterFirstUnlockThisDeviceOnly` — otherwise a
+    /// locked-device save fails ("Keychain write error"), the just-advanced ratchet is
+    /// lost, and the session desyncs on the next launch.
+    func saveData(_ data: Data, forKey key: String,
+                  accessible: CFString = kSecAttrAccessibleWhenUnlockedThisDeviceOnly) -> Bool {
+        return save(data, forKey: key, accessible: accessible)
     }
     
     /// Load generic data from Keychain

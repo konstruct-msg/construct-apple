@@ -311,7 +311,7 @@ final class SessionCoordinator: MessageRouterDelegate {
             }
             if DeviceIdOrdering.isNaturalInitiator(myId: myId, peerId: userId) {
                 Log.info("DR diverge: auto-reinit as natural INITIATOR for \(userId.prefix(8))…", category: "SessionInit")
-                self.prewarmSessions(for: [userId], skipEndSessionNotification: true)
+                self.reinitAndAnnounceAsInitiator(to: userId, reason: "dr_diverge")
             } else {
                 Log.info("DR diverge: starting RESPONDER fallback for \(userId.prefix(8))…", category: "SessionInit")
                 self.startResponderFallback(for: userId)
@@ -341,7 +341,7 @@ final class SessionCoordinator: MessageRouterDelegate {
             return
         }
         resendUnconfirmedOutgoingMessagesIfNeeded(to: userId)
-        Log.info("END_SESSION received — re-prewarming as natural INITIATOR for \(userId.prefix(8))…", category: "SessionInit")
+        Log.info("END_SESSION received — re-init as natural INITIATOR for \(userId.prefix(8))…", category: "SessionInit")
         Task { [weak self] in
             guard let self else { return }
             do {
@@ -349,26 +349,41 @@ final class SessionCoordinator: MessageRouterDelegate {
             } catch {
                 return
             }
-            self.prewarmSessions(for: [userId], skipEndSessionNotification: true)
+            self.reinitAndAnnounceAsInitiator(to: userId, reason: "end_session_received")
         }
     }
 
     func messageRouter(_ router: MessageRouter, didWinTieBreak userId: String) {
         let suiteIdAtWin = Int(KeychainManager.shared.loadSessionSuiteId(userId: userId) ?? 0)
         Log.info("SESSION_STATE[tie_break_outcome]: INITIATOR role confirmed, peer=\(userId.prefix(8))… suiteId=\(suiteIdAtWin), sending SESSION_RESET_INIT", category: "SessionInit")
+        reinitAndAnnounceAsInitiator(to: userId, reason: "tie_break_win")
+    }
+
+    /// Re-initialise as INITIATOR **and transmit** the X3DH init (SESSION_RESET_INIT)
+    /// to the peer, then arm the tie-break watchdog to re-send if no `session_ready`
+    /// comes back. Every natural-INITIATOR entry point must go through here.
+    ///
+    /// Why this exists: the DR-diverge and END_SESSION-as-initiator paths used to call
+    /// bare `prewarmSessions`, which creates a local INITIATOR session but sends the peer
+    /// *nothing*. The peer's RESPONDER wait then timed out after 60s and flipped to
+    /// INITIATOR — producing a dueling-initiator deadlock where the winner buffers its
+    /// outgoing messages forever (`SessionConfirmationTracker.pending` never clears) and
+    /// silently drops the loser's inits (`stale_init_drop`). Transmitting the SRI here
+    /// lets the RESPONDER bootstrap and reply `session_ready`, which clears `pending` and
+    /// flushes the buffer via the existing markConfirmed → sendQueuedMessages path.
+    private func reinitAndAnnounceAsInitiator(to userId: String, reason: String) {
+        Log.info("SESSION_STATE[initiator_announce]: re-init + SESSION_RESET_INIT for \(userId.prefix(8))… (\(reason))", category: "SessionInit")
         Task { [weak self] in
             guard let self else { return }
             await self.sessionInitService.initializeSessionProactively(
                 userId: userId,
                 onSuccess: { },
                 onFailure: { err in
-                    Log.error("SESSION_STATE[tie_break_reinit_fail]: \(err.localizedDescription)", category: "SessionInit")
+                    Log.error("SESSION_STATE[initiator_announce_fail]: \(err.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
                 }
             )
             await self.sendSessionResetInit(to: userId)
             SessionConfirmationTracker.shared.markPending(userId)
-            let suiteIdAfter = Int(KeychainManager.shared.loadSessionSuiteId(userId: userId) ?? 0)
-            Log.info("SESSION_STATE[tie_break_sri_sent]: peer=\(userId.prefix(8))… suiteId=\(suiteIdAfter)", category: "SessionInit")
         }
         startTieBreakWatchdog(for: userId)
     }

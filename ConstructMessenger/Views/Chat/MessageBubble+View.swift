@@ -17,7 +17,15 @@ extension MessageBubble {
             if message.isDeleted || message.managedObjectContext == nil {
                 EmptyView()
             } else if message.fromUserId == "SYSTEM" {
-                MessageBubbleSystemView(content: message.displayText.isEmpty ? "System message" : message.displayText)
+                // A SYSTEM row with no resolvable text has nothing to show — render
+                // nothing instead of a literal "System message" placeholder. These
+                // appeared when an ephemeral control message leaked into the transcript
+                // or its at-rest content key was briefly unreadable (see MessageKeyStore).
+                if message.displayText.isEmpty {
+                    EmptyView()
+                } else {
+                    MessageBubbleSystemView(content: message.displayText)
+                }
             } else if message.displayText.hasPrefix("[SYSTEM]") {
                 MessageBubbleSystemView(
                     content: message.displayText

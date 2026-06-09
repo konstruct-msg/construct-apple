@@ -684,6 +684,10 @@ final class ChatSendCoordinator {
                     let text = message.displayText
                     guard !text.isEmpty else { return }
                     Log.info("Retry: payload expired — sending '\(text.prefix(20))…' as fresh message", category: "ChatViewModel")
+                    // Remove the orphaned failed placeholder before re-sending under a new
+                    // message ID — otherwise the original lingers and the chat shows two
+                    // bubbles for one delivered message (mirrors the media-retry path above).
+                    self.persistenceService.deleteMessage(id: message.id, in: self.viewContext)
                     self.sendTextMessage(text: text, replyTo: nil)
                 } else {
                     ErrorRouter.shared.report(.unknown(error))

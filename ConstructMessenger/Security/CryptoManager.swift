@@ -336,7 +336,14 @@ class CryptoManager {
         guard let core = orchestratorCore else { return }
         do {
             let blob = try core.exportOrchestratorState()
-            let ok = KeychainManager.shared.saveData(Data(blob), forKey: Self.orchestratorStateCFEKey)
+            // AfterFirstUnlock (not WhenUnlocked): the Double Ratchet state advances during
+            // background push-driven decrypt while the device is locked. A WhenUnlocked save
+            // fails there → the advanced ratchet is never persisted → desync on next launch.
+            let ok = KeychainManager.shared.saveData(
+                Data(blob),
+                forKey: Self.orchestratorStateCFEKey,
+                accessible: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+            )
             if ok {
                 Log.debug("Orchestrator state saved (CFE, \(blob.count)B)", category: "CryptoManager")
             } else {

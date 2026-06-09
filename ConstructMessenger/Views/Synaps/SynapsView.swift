@@ -473,7 +473,11 @@ struct SynapsView: View {
             // Refresh UI to show [pending] state.
             remoteState = .found(profile)
         } catch {
-            // Silently ignore — UI stays as-is; user can retry.
+            // Surface the failure instead of swallowing it — a silent catch here hid the
+            // real reason "Send request" did nothing (RPC rejected / no delivery). Log the
+            // exact error and tell the user so it's retryable and diagnosable.
+            Log.error("sendContactRequest failed for \(profile.userID.prefix(8))…: \(error)", category: "ContactRequest")
+            ErrorRouter.shared.report(.unknown(error.userFacingMessage))
         }
     }
 
