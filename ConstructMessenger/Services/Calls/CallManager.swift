@@ -794,11 +794,6 @@ final class CallManager: CallUIManaging {
                 // peerConnectionState may bounce through .connected on reconnects.
                 #if os(iOS)
                 DialTonePlayer.shared.stop()
-                // Safety net: if CallKit never delivered `didActivate` (happens when
-                // the callee answers from the background — first push-woken call),
-                // audio is still disabled here and the connected call would be silent.
-                // No-op when didActivate already enabled audio.
-                CallKitProvider.shared.activateAudioIfNeeded()
                 #endif
             }
         }
