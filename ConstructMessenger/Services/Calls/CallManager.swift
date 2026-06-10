@@ -191,12 +191,12 @@ final class CallManager: CallUIManaging {
             // the server TTL expires (server sends an error signal when the call times out).
             Log.info("InitiateCall: calleeOnline=\(initResp.calleeOnline) (call_id=\(callId.prefix(8))…)", category: "Calls")
 
-            let turn = try? await SignalingServiceClient.shared.getTurnCredentials(callId: callId)
+            let turn = await fetchTurnWithRetry(callId: callId)
             if let turn {
                 active?.turn = turn
                 Log.info("TURN credentials ready for outgoing call (call_id=\(callId.prefix(8))…)", category: "Calls")
             } else {
-                Log.info("TURN unavailable — proceeding STUN-only (call_id=\(callId.prefix(8))…)", category: "Calls")
+                Log.info("TURN unavailable after retries — proceeding STUN-only (call_id=\(callId.prefix(8))…)", category: "Calls")
             }
 
             try openStreamIfNeeded()
@@ -210,6 +210,31 @@ final class CallManager: CallUIManaging {
             }
             endActiveCall(reason: .local("Call setup failed"))
         }
+    }
+
+    /// Fetch TURN credentials with quick retries before falling back to STUN-only.
+    /// STUN-only is a near-guaranteed failure on mobile/symmetric NAT (no relay path →
+    /// ICE can't connect or sustain), and a single getTurnCredentials over the shared
+    /// gRPC channel fails transiently (channel churn / timeout). A bare `try?` silently
+    /// degraded those transient failures into a doomed STUN-only call. Returns nil only
+    /// after all attempts are exhausted.
+    private func fetchTurnWithRetry(
+        callId: String,
+        attempts: Int = 3
+    ) async -> Shared_Proto_Signaling_V1_TurnCredentials? {
+        for attempt in 1...attempts {
+            do {
+                let turn = try await SignalingServiceClient.shared.getTurnCredentials(callId: callId)
+                if !turn.urls.isEmpty { return turn }
+                Log.info("TURN fetch \(attempt)/\(attempts): empty urls (call_id=\(callId.prefix(8))…)", category: "Calls")
+            } catch {
+                Log.error("TURN fetch \(attempt)/\(attempts) failed (call_id=\(callId.prefix(8))…): \(error)", category: "Calls")
+            }
+            if attempt < attempts {
+                try? await Task.sleep(nanoseconds: 400_000_000 * UInt64(attempt))
+            }
+        }
+        return nil
     }
 
     // MARK: - Incoming (from PushKit)
@@ -286,12 +311,12 @@ final class CallManager: CallUIManaging {
         Task { [weak self] in
             guard let self else { return }
             do {
-                let turn = try? await SignalingServiceClient.shared.getTurnCredentials(callId: active.session.id)
+                let turn = await self.fetchTurnWithRetry(callId: active.session.id)
                 if let turn {
                     self.active?.turn = turn
                     Log.info("TURN ready for incoming call", category: "Calls")
                 } else {
-                    Log.info("TURN unavailable — proceeding STUN-only (incoming)", category: "Calls")
+                    Log.info("TURN unavailable after retries — proceeding STUN-only (incoming)", category: "Calls")
                 }
                 try self.ensureWebRTC(role: .callee)
 
