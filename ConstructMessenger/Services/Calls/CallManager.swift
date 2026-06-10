@@ -1099,46 +1099,36 @@ final class CallManager: CallUIManaging {
         ice.sdpMid = c.sdpMid
         ice.sdpMLineIndex = UInt32(max(0, c.sdpMLineIndex))
 
-        if active.stream != nil {
-            // Queue and flush as a batch after 200ms debounce.
-            active.pendingOutgoingIce.append(ice)
-            active.iceFlushTask?.cancel()
-            active.iceFlushTask = Task { @MainActor [weak self] in
-                try? await Task.sleep(for: .milliseconds(200))
-                guard !Task.isCancelled, let self, let active = self.active else { return }
-                let batch = active.pendingOutgoingIce
-                guard !batch.isEmpty else { return }
-                active.pendingOutgoingIce.removeAll()
-                active.iceFlushTask = nil
-                if let stream = active.stream {
-                    if batch.count == 1 {
-                        stream.send(Self.makeRoutedSignal(callId: active.session.id, deviceId: Self.currentDeviceId(), signal: .iceCandidate(batch[0])))
-                    } else {
-                        var candidates = Shared_Proto_Signaling_V1_IceCandidateBatch()
-                        candidates.candidates = batch
-                        stream.send(Self.makeRoutedSignal(callId: active.session.id, deviceId: Self.currentDeviceId(), signal: .iceCandidates(candidates)))
-                    }
-                    Log.debug("Flushed \(batch.count) ICE candidate(s) via stream (call_id=\(active.session.id.prefix(8))…)", category: "Calls")
-                } else {
-                    // Stream closed before flush — send via E2EE.
-                    for candidate in batch {
-                        var sig = Shared_Proto_Signaling_V1_WebRTCSignal()
-                        sig.callID = active.session.id
-                        sig.senderDeviceID = Self.currentDeviceId()
-                        sig.timestamp = Self.nowMs()
-                        sig.signal = .iceCandidate(candidate)
-                        self.sendCallSignalProto(sig, to: peerUserId)
-                    }
-                }
-            }
-        } else {
-            // No stream (E2EE-only call path) — send ICE via DR-encrypted message.
+        // Trickle candidates over E2EE (MessagingService) — the same reliable, queued
+        // path the offer/answer/hangup use. The signaling-stream relay is real-time
+        // with NO buffering: the two peers' signaling streams join the call at
+        // different times (the callee's opens only when it answers), so candidates
+        // flushed before the peer joined were dropped server-side → neither side ever
+        // received the other's candidates → ICE stuck at `checking` → medialess,
+        // silent call. E2EE delivery is persisted/queued, so it arrives regardless of
+        // join order. Batch with a 200ms debounce to coalesce the initial burst.
+        active.pendingOutgoingIce.append(ice)
+        active.iceFlushTask?.cancel()
+        active.iceFlushTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(200))
+            guard !Task.isCancelled, let self, let active = self.active else { return }
+            let batch = active.pendingOutgoingIce
+            guard !batch.isEmpty else { return }
+            active.pendingOutgoingIce.removeAll()
+            active.iceFlushTask = nil
             var sig = Shared_Proto_Signaling_V1_WebRTCSignal()
             sig.callID = active.session.id
             sig.senderDeviceID = Self.currentDeviceId()
             sig.timestamp = Self.nowMs()
-            sig.signal = .iceCandidate(ice)
-            sendCallSignalProto(sig, to: peerUserId)
+            if batch.count == 1 {
+                sig.signal = .iceCandidate(batch[0])
+            } else {
+                var candidates = Shared_Proto_Signaling_V1_IceCandidateBatch()
+                candidates.candidates = batch
+                sig.signal = .iceCandidates(candidates)
+            }
+            self.sendCallSignalProto(sig, to: peerUserId)
+            Log.info("Flushed \(batch.count) ICE candidate(s) via E2EE (call_id=\(active.session.id.prefix(8))…)", category: "Calls")
         }
     }
 
