@@ -229,6 +229,13 @@ final class CallManager: CallUIManaging {
                 Log.info("TURN fetch \(attempt)/\(attempts): empty urls (call_id=\(callId.prefix(8))…)", category: "Calls")
             } catch {
                 Log.error("TURN fetch \(attempt)/\(attempts) failed (call_id=\(callId.prefix(8))…): \(error)", category: "Calls")
+                // Rate limit is not a transient error — retrying immediately only burns the
+                // per-user budget faster. Bail to STUN-only now (cached creds, when present,
+                // are served before we ever reach this helper).
+                if let rpc = error as? RPCError, rpc.code == .resourceExhausted {
+                    Log.info("TURN rate-limited — not retrying (call_id=\(callId.prefix(8))…)", category: "Calls")
+                    break
+                }
             }
             if attempt < attempts {
                 try? await Task.sleep(nanoseconds: 400_000_000 * UInt64(attempt))
