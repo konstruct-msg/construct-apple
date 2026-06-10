@@ -32,6 +32,12 @@ final class CallManager: CallUIManaging {
 
     private var active: ActiveCall?
 
+    /// Serializes outgoing E2EE call-signal RPC sends so they reach the server in the
+    /// order the orchestrator encrypted them (see `sendCallSignalProto`). Without this,
+    /// rapid transitions (offer → candidates → hangup) spawn independent send Tasks that
+    /// can race and deliver out of order (e.g. hangup before offer). `nil` once idle.
+    private var callSignalSendChain: Task<Void, Never>?
+
     private final class ActiveCall {
         let session: CallSession
         var stream: SignalStream?
@@ -305,6 +311,13 @@ final class CallManager: CallUIManaging {
             guard let self else { return }
             do {
                 let turn = await self.fetchTurnWithRetry(callId: active.session.id)
+                // The call may have ended (hangup) or been replaced by a new call during
+                // the TURN fetch await. Without this re-check the continuation would set
+                // TURN/WebRTC and state on the wrong call (stale captured `active`).
+                guard self.active === active else {
+                    Log.info("Call changed during TURN fetch — aborting answer for \(callUUID.uuidString.prefix(8))…", category: "Calls")
+                    return
+                }
                 if let turn {
                     self.active?.turn = turn
                     Log.info("TURN ready for incoming call", category: "Calls")
@@ -336,6 +349,10 @@ final class CallManager: CallUIManaging {
                     let answerSdp = try await webrtc.createAnswer()
                     guard !answerSdp.isEmpty else {
                         throw WebRTCSessionError.invalidState("createAnswer returned empty SDP")
+                    }
+                    guard self.active === active else {
+                        Log.info("Call changed during answer build — discarding stale answer", category: "Calls")
+                        return
                     }
                     sendAnswer(sdp: answerSdp)
                     self.active?.answeredAt = Date()
@@ -805,6 +822,12 @@ final class CallManager: CallUIManaging {
             guard !answerSdp.isEmpty else {
                 throw WebRTCSessionError.invalidState("createAnswer returned empty SDP")
             }
+            // The call may have ended/changed during the awaits above (hangup, or a new
+            // call). Don't apply a stale answer or clobber the current call's state.
+            guard self.active === active else {
+                Log.info("Call changed during offer handling — discarding stale answer", category: "Calls")
+                return
+            }
             sendAnswer(sdp: answerSdp)
             active.answeredAt = Date()
             state = .active(session)
@@ -821,6 +844,11 @@ final class CallManager: CallUIManaging {
             let sdp = try CallSignalCrypto.shared.decryptField(answer.sdp, from: session.peerUserId)
             try ensureWebRTC(role: .caller)
             try await active.webrtc?.setRemoteAnswer(sdp: sdp)
+            // The call may have ended/changed during setRemoteAnswer.
+            guard self.active === active else {
+                Log.info("Call changed during answer handling — discarding stale state update", category: "Calls")
+                return
+            }
             active.answeredAt = Date()
             state = .active(session)
             PerformanceMetrics.shared.end(.callSetupStart, endEvent: .callSetupEnd, label: String(session.id.prefix(8)))
@@ -880,7 +908,14 @@ final class CallManager: CallUIManaging {
                 switch action {
                 case .sendEncryptedMessage(let to, let payload, let msgId, _):
                     let currentUserId = AuthSessionManager.shared.currentUserId ?? ""
-                    Task {
+                    let callId = signal.callID
+                    // Chain onto the previous send so the RPCs reach the server in the
+                    // order the orchestrator encrypted them. The Task hops to @MainActor,
+                    // so reads/writes of `callSignalSendChain` are serialized; `await
+                    // previous?.value` enforces FIFO across the async sends.
+                    let previous = self.callSignalSendChain
+                    self.callSignalSendChain = Task { @MainActor in
+                        await previous?.value
                         do {
                             _ = try await MessagingServiceClient.shared.sendMessage(
                                 messageId: msgId,
@@ -892,7 +927,7 @@ final class CallManager: CallUIManaging {
                                 senderDeviceId: Self.currentDeviceId(),
                                 contentType: .callSignal
                             )
-                            Log.info("WebRTCSignal sent via Rust E2EE to=\(to.prefix(8))… callId=\(signal.callID.prefix(8))…", category: "Calls")
+                            Log.info("WebRTCSignal sent via Rust E2EE to=\(to.prefix(8))… callId=\(callId.prefix(8))…", category: "Calls")
                         } catch {
                             Log.error("Failed to send WebRTCSignal: \(error)", category: "Calls")
                         }
@@ -943,6 +978,13 @@ final class CallManager: CallUIManaging {
                         guard let self, let active = self.active, active.session.id == signal.callID else { return }
                         self.state = .active(active.session)
                         active.answeredAt = Date()
+                        // Parity with the stream-path handleRemoteAnswer: finalize the
+                        // setup metric and promote CallKit out of "connecting" (otherwise
+                        // the caller's lock-screen call UI stays stuck connecting).
+                        PerformanceMetrics.shared.end(.callSetupStart, endEvent: .callSetupEnd, label: String(active.session.id.prefix(8)))
+                        #if os(iOS)
+                        CallKitProvider.shared.reportOutgoingCallConnected(uuid: active.session.uuid)
+                        #endif
                     }
                 } catch {
                     Log.error("Failed to set remote answer: \(error)", category: "Calls")
@@ -1019,6 +1061,16 @@ final class CallManager: CallUIManaging {
                 return
             }
             Log.info("Glare: yielding our outgoing call to \(callerUserId.prefix(8))… (tie-break lose) — accepting their offer", category: "Calls")
+            // End our outgoing call in CallKit before begin() replaces it. begin() →
+            // active.close() only tears down WebRTC/stream, NOT the CallKit call. With
+            // maximumCallGroups=1 the stale outgoing UUID would otherwise stay "active",
+            // blocking the next CXStartCallAction with maximumCallGroupsReached and
+            // leaving a phantom call on the lock screen.
+            #if os(iOS)
+            if active.callKitRegistered {
+                CallKitProvider.shared.reportCallEnded(uuid: active.session.uuid)
+            }
+            #endif
             // fall through: begin() below closes our outgoing call and creates the incoming one.
         }
         // No existing call — create from message-based offer. Caller name is resolved
