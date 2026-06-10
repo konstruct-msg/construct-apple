@@ -739,13 +739,17 @@ final class CallManager: CallUIManaging {
         sig.senderDeviceID = Self.currentDeviceId()
         sig.timestamp = Self.nowMs()
         sig.signal = .hangup(Self.makeCallHangup(deviceId: Self.currentDeviceId(), timestampMs: Self.nowMs(), reason: reason))
+        // Send over BOTH channels. After media connects either side may have closed its idle
+        // signaling stream (the call survives on the E2EE media path), so a stream-only hangup
+        // is silently dropped and the peer stays "in call" — the user then has to hang up on
+        // both ends. The E2EE messaging path is always connected (offers/answers ride it too);
+        // the signaling stream is a best-effort fast path. The peer's hangup handler is
+        // idempotent, so receiving it twice is a no-op.
+        sendCallSignalProto(sig, to: active.session.peerUserId)
         if let stream = active.stream {
             stream.send(Self.makeRoutedSignal(callId: active.session.id, deviceId: Self.currentDeviceId(), signal: .hangup(Self.makeCallHangup(deviceId: Self.currentDeviceId(), timestampMs: Self.nowMs(), reason: reason))))
-        } else {
-            // Stream not available (E2EE-only call path) — send hangup via DR-encrypted message.
-            sendCallSignalProto(sig, to: active.session.peerUserId)
-            Log.info("Hangup sent via E2EE (no stream) to \(active.session.peerUserId.prefix(8))…", category: "Calls")
         }
+        Log.info("Hangup sent (E2EE\(active.stream != nil ? "+stream" : "")) to \(active.session.peerUserId.prefix(8))… reason=\(reason)", category: "Calls")
     }
 
     // MARK: - WebRTC (Phase 3)
