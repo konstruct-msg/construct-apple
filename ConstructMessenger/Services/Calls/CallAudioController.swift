@@ -82,6 +82,7 @@ final class CallAudioController {
         let rtc = RTCAudioSession.sharedInstance()
         rtc.isAudioEnabled = false
         rtc.audioSessionDidDeactivate(audioSession)
+        dumpRoute(label: "didDeactivate", audioSession: audioSession, rtc: rtc)
         Task { @MainActor in DialTonePlayer.shared.stop() }
     }
 

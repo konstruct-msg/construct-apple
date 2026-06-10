@@ -155,9 +155,13 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
 
     func close() {
         peerConnection.close()
-        #if os(iOS)
-        try? AVAudioSession.sharedInstance().setActive(false, options: [.notifyOthersOnDeactivation])
-        #endif
+        // Do NOT deactivate the audio session here. A raw
+        // `AVAudioSession.setActive(false)` bypasses RTCAudioSession and desyncs its
+        // internal active-state from the real session. With `useManualAudio`, that
+        // leaves the shared voice-processing audio unit wedged, so the NEXT call in
+        // the same app session is silent until a full relaunch re-runs
+        // WebRTCRuntime.bootstrap(). Deactivation is owned by CallAudioController,
+        // driven by CallKit's didDeactivate (RTCAudioSession.audioSessionDidDeactivate).
     }
 
     func setMuted(_ muted: Bool) {
