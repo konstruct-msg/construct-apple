@@ -155,13 +155,60 @@ final class CallKitProvider: NSObject, CXProviderDelegate {
 
     nonisolated func provider(_ provider: CXProvider, perform action: CXStartCallAction) {
         Log.info("CallKit start (uuid=\(action.callUUID.uuidString.prefix(8))…)", category: "Calls")
+        Self.prepareAudioSessionForCall()
         action.fulfill()
     }
 
     nonisolated func provider(_ provider: CXProvider, perform action: CXAnswerCallAction) {
         Log.info("CallKit answer (uuid=\(action.callUUID.uuidString.prefix(8))…)", category: "Calls")
+        // Configure WebRTC's audio session category BEFORE fulfilling the answer.
+        // When the callee answers from the background/lock screen (the normal case
+        // for an incoming VoIP call), CallKit only reliably delivers `didActivate`
+        // if an audio-capable category is already set on the RTCAudioSession. Our
+        // own `configureAudioSession()` runs later, asynchronously inside `answer()`
+        // → `ensureWebRTC()` — too late. Without this, the first push-woken call
+        // connects (ICE → connected) but stays silent both ways because the
+        // `didActivate` callback (where we flip `isAudioEnabled`) is never delivered.
+        Self.prepareAudioSessionForCall()
         onAnswer?(action.callUUID)
         action.fulfill()
+    }
+
+    /// Pre-set the RTCAudioSession category/mode so CallKit reliably activates audio.
+    /// Does NOT activate the session — CallKit still owns activation via `didActivate`.
+    nonisolated static func prepareAudioSessionForCall() {
+        let rtc = RTCAudioSession.sharedInstance()
+        rtc.lockForConfiguration()
+        let config = RTCAudioSessionConfiguration.webRTC()
+        config.category = AVAudioSession.Category.playAndRecord.rawValue
+        config.mode = AVAudioSession.Mode.voiceChat.rawValue
+        config.categoryOptions = [.defaultToSpeaker, .allowBluetoothHFP]
+        do {
+            try rtc.setConfiguration(config)
+        } catch {
+            Log.error("Failed to pre-configure RTCAudioSession: \(error)", category: "Calls")
+        }
+        rtc.unlockForConfiguration()
+    }
+
+    /// Safety net for the documented CallKit bug where `didActivate` is never
+    /// delivered for a backgrounded answer. Call once the media path is up
+    /// (ICE connected): if audio is still disabled, CallKit dropped the callback,
+    /// so activate the WebRTC audio session ourselves. No-op when `didActivate`
+    /// already enabled audio (the normal path), so it never fights CallKit.
+    @MainActor
+    func activateAudioIfNeeded() {
+        let rtc = RTCAudioSession.sharedInstance()
+        guard !rtc.isAudioEnabled else { return }
+        Log.info("AUDIO[fallback] didActivate not delivered by ICE-connected — forcing activation", category: "Calls")
+        rtc.lockForConfiguration()
+        do {
+            try rtc.setActive(true)
+            rtc.isAudioEnabled = true
+        } catch {
+            Log.error("Fallback audio activation failed: \(error)", category: "Calls")
+        }
+        rtc.unlockForConfiguration()
     }
 
     nonisolated func provider(_ provider: CXProvider, perform action: CXEndCallAction) {
