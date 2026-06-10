@@ -715,6 +715,23 @@ final class CallManager: CallUIManaging {
         active.stream?.send(msg)
     }
 
+    /// Tell the signaling server the call is genuinely established (media is up).
+    /// In the E2EE flow the answer SDP travels over encrypted messaging, so the server
+    /// never sees an `.answer` on the signaling stream and `answered_at_ms` stays nil —
+    /// leaving the call under the aggressive "ringing without answer" reaper. This
+    /// non-SDP presence signal sets `answered_at_ms` server-side (note_connected), moving
+    /// the call to the lenient 60s keepalive reaper.
+    private func sendConnected() {
+        guard let active else { return }
+        let msg = Self.makeRoutedSignal(
+            callId: active.session.id,
+            deviceId: Self.currentDeviceId(),
+            signal: .connected(Self.makeCallConnected(deviceId: Self.currentDeviceId(), timestampMs: Self.nowMs()))
+        )
+        active.stream?.send(msg)
+        Log.info("CallConnected presence sent (call_id=\(active.session.id.prefix(8))…)", category: "Calls")
+    }
+
     private func sendHangup(reason: Shared_Proto_Signaling_V1_HangupReason) {
         guard let active else { return }
         var sig = Shared_Proto_Signaling_V1_WebRTCSignal()
@@ -756,6 +773,10 @@ final class CallManager: CallUIManaging {
                 // Media path is up — from now on the call survives signaling-stream drops
                 // (see receive-loop close handler in openStreamIfNeeded).
                 self.active?.mediaConnected = true
+                // Promote the call to "answered" server-side so the aggressive
+                // ringing-without-answer reaper stops applying (E2EE answer never reaches
+                // the signaling stream). Non-SDP presence signal; note_connected is idempotent.
+                self.sendConnected()
                 // The dial tone is an AVAudioEngine holding the shared
                 // .playAndRecord session's playback bus. Until it stops, WebRTC's
                 // voice-processing audio unit produces no audible output. Idempotent —
@@ -972,7 +993,9 @@ final class CallManager: CallUIManaging {
         case .ringing:
             guard let active, active.session.id == signal.callID else { return }
             if case .dialing = state { state = .ringing(active.session) }
-        case .mediaUpdate, nil:
+        case .connected, .mediaUpdate, nil:
+            // .connected is a server-side presence marker forwarded over the signaling
+            // stream (handled there); nothing to do on the E2EE path.
             break
         }
     }
@@ -1176,6 +1199,13 @@ final class CallManager: CallUIManaging {
         r.deviceID = deviceId
         r.ringingAt = timestampMs
         return r
+    }
+
+    private static func makeCallConnected(deviceId: String, timestampMs: Int64) -> Shared_Proto_Signaling_V1_CallConnected {
+        var c = Shared_Proto_Signaling_V1_CallConnected()
+        c.deviceID = deviceId
+        c.connectedAt = timestampMs
+        return c
     }
 
     private static func makeCallHangup(

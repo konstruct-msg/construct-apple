@@ -395,6 +395,18 @@ public struct Shared_Proto_Signaling_V1_WebRTCSignal: Sendable {
     set {signal = .mediaUpdate(newValue)}
   }
 
+  /// Peer confirmed media connectivity (iceConnectionState >= connected).
+  /// Sent by either side after the E2EE answer exchange completes and WebRTC
+  /// reports the connection is live. Sets answered_at_ms on the server so the
+  /// aggressive "ringing without answer" reaper no longer applies.
+  public var connected: Shared_Proto_Signaling_V1_CallConnected {
+    get {
+      if case .connected(let v)? = signal {return v}
+      return Shared_Proto_Signaling_V1_CallConnected()
+    }
+    set {signal = .connected(newValue)}
+  }
+
   /// Sender device ID
   public var senderDeviceID: String = String()
 
@@ -421,6 +433,11 @@ public struct Shared_Proto_Signaling_V1_WebRTCSignal: Sendable {
     case ringing(Shared_Proto_Signaling_V1_CallRinging)
     /// Media update (add/remove video, screen share)
     case mediaUpdate(Shared_Proto_Signaling_V1_MediaUpdate)
+    /// Peer confirmed media connectivity (iceConnectionState >= connected).
+    /// Sent by either side after the E2EE answer exchange completes and WebRTC
+    /// reports the connection is live. Sets answered_at_ms on the server so the
+    /// aggressive "ringing without answer" reaper no longer applies.
+    case connected(Shared_Proto_Signaling_V1_CallConnected)
 
   }
 
@@ -640,6 +657,26 @@ public struct Shared_Proto_Signaling_V1_CallRinging: Sendable {
   public init() {}
 }
 
+/// CallConnected - Peer confirmed media connectivity.
+/// Sent after iceConnectionState reaches "connected" (or "completed").
+/// This is a lightweight presence signal — no SDP payload — that tells the
+/// server the E2EE answer exchange succeeded and media is flowing P2P.
+public struct Shared_Proto_Signaling_V1_CallConnected: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// Device that confirmed connectivity
+  public var deviceID: String = String()
+
+  /// Timestamp (Unix ms)
+  public var connectedAt: Int64 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 /// MediaUpdate - Update media streams during call
 public struct Shared_Proto_Signaling_V1_MediaUpdate: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
@@ -819,7 +856,7 @@ extension Shared_Proto_Signaling_V1_CallStatus: SwiftProtobuf._ProtoNameProvidin
 
 extension Shared_Proto_Signaling_V1_WebRTCSignal: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".WebRTCSignal"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}call_id\0\u{1}offer\0\u{1}answer\0\u{3}ice_candidate\0\u{3}ice_candidates\0\u{1}hangup\0\u{1}busy\0\u{1}ringing\0\u{3}media_update\0\u{3}sender_device_id\0\u{1}timestamp\0\u{c}\u{c}\u{9}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}call_id\0\u{1}offer\0\u{1}answer\0\u{3}ice_candidate\0\u{3}ice_candidates\0\u{1}hangup\0\u{1}busy\0\u{1}ringing\0\u{3}media_update\0\u{3}sender_device_id\0\u{1}timestamp\0\u{2}\u{a}connected\0\u{c}\u{c}\u{9}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -934,6 +971,19 @@ extension Shared_Proto_Signaling_V1_WebRTCSignal: SwiftProtobuf.Message, SwiftPr
       }()
       case 10: try { try decoder.decodeSingularStringField(value: &self.senderDeviceID) }()
       case 11: try { try decoder.decodeSingularInt64Field(value: &self.timestamp) }()
+      case 21: try {
+        var v: Shared_Proto_Signaling_V1_CallConnected?
+        var hadOneofValue = false
+        if let current = self.signal {
+          hadOneofValue = true
+          if case .connected(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.signal = .connected(v)
+        }
+      }()
       default: break
       }
     }
@@ -980,7 +1030,7 @@ extension Shared_Proto_Signaling_V1_WebRTCSignal: SwiftProtobuf.Message, SwiftPr
       guard case .mediaUpdate(let v)? = self.signal else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 9)
     }()
-    case nil: break
+    default: break
     }
     if !self.senderDeviceID.isEmpty {
       try visitor.visitSingularStringField(value: self.senderDeviceID, fieldNumber: 10)
@@ -988,6 +1038,9 @@ extension Shared_Proto_Signaling_V1_WebRTCSignal: SwiftProtobuf.Message, SwiftPr
     if self.timestamp != 0 {
       try visitor.visitSingularInt64Field(value: self.timestamp, fieldNumber: 11)
     }
+    try { if case .connected(let v)? = self.signal {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 21)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1322,6 +1375,41 @@ extension Shared_Proto_Signaling_V1_CallRinging: SwiftProtobuf.Message, SwiftPro
   public static func ==(lhs: Shared_Proto_Signaling_V1_CallRinging, rhs: Shared_Proto_Signaling_V1_CallRinging) -> Bool {
     if lhs.deviceID != rhs.deviceID {return false}
     if lhs.ringingAt != rhs.ringingAt {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Shared_Proto_Signaling_V1_CallConnected: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".CallConnected"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0\u{3}connected_at\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.deviceID) }()
+      case 2: try { try decoder.decodeSingularInt64Field(value: &self.connectedAt) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.deviceID.isEmpty {
+      try visitor.visitSingularStringField(value: self.deviceID, fieldNumber: 1)
+    }
+    if self.connectedAt != 0 {
+      try visitor.visitSingularInt64Field(value: self.connectedAt, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Signaling_V1_CallConnected, rhs: Shared_Proto_Signaling_V1_CallConnected) -> Bool {
+    if lhs.deviceID != rhs.deviceID {return false}
+    if lhs.connectedAt != rhs.connectedAt {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
