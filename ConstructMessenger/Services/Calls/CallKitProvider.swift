@@ -7,7 +7,6 @@
 import Foundation
 import CallKit
 import AVFoundation
-import WebRTC
 
 final class CallKitProvider: NSObject, CXProviderDelegate {
     static let shared = CallKitProvider()
@@ -16,10 +15,6 @@ final class CallKitProvider: NSObject, CXProviderDelegate {
     private let callController = CXCallController()
     var onAnswer: (@Sendable (UUID) -> Void)?
     var onEnd: (@Sendable (UUID) -> Void)?
-    /// Called when CallKit activates the audio session (safe to start audio output).
-    var onAudioActivated: (@Sendable () -> Void)?
-    /// Called when CallKit deactivates the audio session.
-    var onAudioDeactivated: (@Sendable () -> Void)?
 
     private override init() {
         let config = CXProviderConfiguration()
@@ -128,38 +123,27 @@ final class CallKitProvider: NSObject, CXProviderDelegate {
 
     nonisolated func provider(_ provider: CXProvider, didActivate audioSession: AVAudioSession) {
         Log.info("CallKit audio session activated", category: "Calls")
-        // WebRTC iOS SDK runs its own RTCAudioSession that gates audio I/O. With
-        // `useManualAudio = true` (set in WebRTCFactory), the I/O stays disabled
-        // until we explicitly hand over the activated AVAudioSession and flip
-        // `isAudioEnabled`. Skipping this leaves the call connected but silent.
-        let rtc = RTCAudioSession.sharedInstance()
-        rtc.audioSessionDidActivate(audioSession)
-        rtc.isAudioEnabled = true
-        let route = audioSession.currentRoute
-        let outputs = route.outputs.map { "\($0.portType.rawValue):\($0.portName)" }.joined(separator: ",")
-        let inputs = route.inputs.map { "\($0.portType.rawValue):\($0.portName)" }.joined(separator: ",")
-        Log.info(
-            "AUDIO[didActivate] AV{cat=\(audioSession.category.rawValue) mode=\(audioSession.mode.rawValue) sr=\(Int(audioSession.sampleRate)) in=[\(inputs)] out=[\(outputs)]} RTC{active=\(rtc.isActive) audioEnabled=\(rtc.isAudioEnabled) useManual=\(rtc.useManualAudio)}",
-            category: "Calls"
-        )
-        onAudioActivated?()
+        CallAudioController.handleCallKitActivated(audioSession)
     }
 
     nonisolated func provider(_ provider: CXProvider, didDeactivate audioSession: AVAudioSession) {
         Log.info("CallKit audio session deactivated", category: "Calls")
-        let rtc = RTCAudioSession.sharedInstance()
-        rtc.isAudioEnabled = false
-        rtc.audioSessionDidDeactivate(audioSession)
-        onAudioDeactivated?()
+        CallAudioController.handleCallKitDeactivated(audioSession)
     }
 
     nonisolated func provider(_ provider: CXProvider, perform action: CXStartCallAction) {
         Log.info("CallKit start (uuid=\(action.callUUID.uuidString.prefix(8))…)", category: "Calls")
+        // Set the audio category before fulfilling so CallKit reliably activates audio.
+        CallAudioController.prepareCategory()
         action.fulfill()
     }
 
     nonisolated func provider(_ provider: CXProvider, perform action: CXAnswerCallAction) {
         Log.info("CallKit answer (uuid=\(action.callUUID.uuidString.prefix(8))…)", category: "Calls")
+        // Set the audio category before fulfilling. Critical for the callee answering
+        // from background/lock screen: without it CallKit drops `didActivate` and the
+        // connected call is silent. See CallAudioController.prepareCategory.
+        CallAudioController.prepareCategory()
         onAnswer?(action.callUUID)
         action.fulfill()
     }

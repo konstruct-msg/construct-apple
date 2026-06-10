@@ -130,7 +130,7 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
 
         self.peerConnection.delegate = self
 
-        try Self.configureAudioSession()
+        Self.configureAudioSession()
         self.localAudioTrack = Self.makeLocalAudioTrack(factory: factory)
         if let track = localAudioTrack {
             let sender = peerConnection.add(track, streamIds: ["audio"])
@@ -261,16 +261,13 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
         return factory.audioTrack(with: source, trackId: "audio0")
     }
 
-    private static func configureAudioSession() throws {
+    private static func configureAudioSession() {
         #if os(iOS)
-        let session = AVAudioSession.sharedInstance()
-        try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetoothHFP])
-        try? session.setPreferredSampleRate(NetworkTiming.Calls.audioPreferredSampleRateHz)
-        try? session.setPreferredIOBufferDuration(NetworkTiming.Calls.audioPreferredIOBufferDuration)
-        // Do NOT call setActive(true) here — CallKit manages the audio session lifecycle.
-        // Activation happens via CXProviderDelegate.provider(_:didActivate:audioSession:).
-        // Calling setActive() here races with CallKit's own activation and throws
-        // NSOSStatusErrorDomain 561017449 when a previous call's session is still tearing down.
+        // Single owner: CallAudioController sets the category (and never activates —
+        // CallKit owns activation). This is idempotent with the pre-fulfill call in
+        // the CallKit start/answer handlers; doing it here too covers the in-app
+        // answer path that bypasses the CXAnswerCallAction transaction.
+        CallAudioController.prepareCategory()
         #endif
         // macOS: WebRTC handles audio device selection natively; no session configuration needed.
     }

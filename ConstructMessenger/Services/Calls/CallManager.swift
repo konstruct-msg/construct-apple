@@ -105,26 +105,8 @@ final class CallManager: CallUIManaging {
         CallKitProvider.shared.onEnd = { [weak self] uuid in
             Task { @MainActor in self?.end(callUUID: uuid, fromCallKit: true) }
         }
-        CallKitProvider.shared.onAudioActivated = { [weak self] in
-            Task { @MainActor in
-                guard let self else { return }
-                // CallKit has activated the audio session — configure it now.
-                // This is the correct place per Apple's CallKit documentation.
-                // WebRTCSession.configureAudioSession() sets category but defers
-                // setActive; CallKit calls this when it's safe to use audio.
-                let avSession = AVAudioSession.sharedInstance()
-                try? avSession.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetoothHFP])
-                try? avSession.setActive(true)
-                // Play dial tone only on outgoing calls (dialing or ringing state).
-                switch self.state {
-                case .dialing, .ringing: DialTonePlayer.shared.start()
-                default: break
-                }
-            }
-        }
-        CallKitProvider.shared.onAudioDeactivated = {
-            Task { @MainActor in DialTonePlayer.shared.stop() }
-        }
+        // Audio session lifecycle is owned by CallAudioController; CallKit's
+        // didActivate/didDeactivate forward to it directly (see CallKitProvider).
         #endif
     }
 
@@ -166,6 +148,10 @@ final class CallManager: CallUIManaging {
             direction: .outgoing
         )
         begin(session: session, initialState: .dialing(session))
+        #if os(iOS)
+        // Arm the ringback tone; it starts once CallKit activates audio.
+        CallAudioController.shared.notifyDialing()
+        #endif
 
         do {
             #if os(iOS)
@@ -687,7 +673,7 @@ final class CallManager: CallUIManaging {
         active.close()
         self.active = nil
         #if os(iOS)
-        DialTonePlayer.shared.stop()
+        CallAudioController.shared.notifyTeardown()
         #endif
         state = .ended(session, reason)
 
@@ -788,12 +774,13 @@ final class CallManager: CallUIManaging {
                 // ringing-without-answer reaper stops applying (E2EE answer never reaches
                 // the signaling stream). Non-SDP presence signal; note_connected is idempotent.
                 self.sendConnected()
-                // The dial tone is an AVAudioEngine holding the shared
-                // .playAndRecord session's playback bus. Until it stops, WebRTC's
-                // voice-processing audio unit produces no audible output. Idempotent —
-                // peerConnectionState may bounce through .connected on reconnects.
+                // Media is up — stop the ringback tone (its AVAudioEngine otherwise
+                // holds the shared .playAndRecord playback bus and silences WebRTC's
+                // voice-processing unit) and, as a safety net, enable audio if CallKit
+                // never delivered didActivate. Idempotent — peerConnectionState may
+                // bounce through .connected on reconnects.
                 #if os(iOS)
-                DialTonePlayer.shared.stop()
+                CallAudioController.shared.notifyMediaConnected()
                 #endif
             }
         }
