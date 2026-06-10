@@ -104,6 +104,15 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
 
     private var localAudioTrack: RTCAudioTrack?
 
+    /// WebRTC rejects `addIceCandidate` before the remote description is set, and a
+    /// rejected candidate is lost permanently (no retry) — a frequent cause of a call
+    /// stuck at `iceConnectionState=checking` when the peer's candidates arrive before
+    /// its SDP. We buffer remote candidates until the remote description is applied,
+    /// then drain them. Single owner of ICE-candidate ordering (was fragmented across
+    /// CallManager's ad-hoc `pendingIceCandidates` which covered only one path).
+    private var remoteDescriptionSet = false
+    private var pendingRemoteCandidates: [WebRTCIceCandidate] = []
+
     init(role: WebRTCSessionRole, turn: Shared_Proto_Signaling_V1_TurnCredentials?) throws {
         self.role = role
 
@@ -182,14 +191,40 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
     func setRemoteOffer(sdp: String) async throws {
         let desc = RTCSessionDescription(type: .offer, sdp: sdp)
         try await setRemoteDescription(desc)
+        await onRemoteDescriptionSet()
     }
 
     func setRemoteAnswer(sdp: String) async throws {
         let desc = RTCSessionDescription(type: .answer, sdp: sdp)
         try await setRemoteDescription(desc)
+        await onRemoteDescriptionSet()
     }
 
     func addRemoteIceCandidate(_ candidate: WebRTCIceCandidate) async throws {
+        // Buffer until the remote description is set — adding earlier makes WebRTC
+        // drop the candidate permanently, stranding ICE at `checking`.
+        guard remoteDescriptionSet else {
+            pendingRemoteCandidates.append(candidate)
+            Log.info("ICE: buffered remote candidate (\(pendingRemoteCandidates.count) pending, no remote SDP yet) \(Self.candidateSummary(candidate))", category: "Calls")
+            return
+        }
+        try await addCandidateNow(candidate)
+    }
+
+    /// Drain any candidates that arrived before the remote description was applied.
+    private func onRemoteDescriptionSet() async {
+        remoteDescriptionSet = true
+        guard !pendingRemoteCandidates.isEmpty else { return }
+        let buffered = pendingRemoteCandidates
+        pendingRemoteCandidates.removeAll()
+        Log.info("ICE: remote SDP applied — draining \(buffered.count) buffered candidate(s)", category: "Calls")
+        for candidate in buffered {
+            do { try await addCandidateNow(candidate) }
+            catch { Log.error("ICE: failed to add buffered candidate: \(error)", category: "Calls") }
+        }
+    }
+
+    private func addCandidateNow(_ candidate: WebRTCIceCandidate) async throws {
         let rtc = RTCIceCandidate(
             sdp: candidate.sdp,
             sdpMLineIndex: candidate.sdpMLineIndex,
@@ -200,6 +235,17 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
                 if let error { cont.resume(throwing: error) } else { cont.resume() }
             }
         }
+        Log.info("ICE: added remote candidate \(Self.candidateSummary(candidate))", category: "Calls")
+    }
+
+    /// Compact one-line candidate descriptor (type + protocol) for diagnostics, e.g.
+    /// `typ relay udp`. Avoids dumping the full SDP (IPs/ports) at info level.
+    nonisolated private static func candidateSummary(_ candidate: WebRTCIceCandidate) -> String {
+        let parts = candidate.sdp.split(separator: " ").map(String.init)
+        var typ = "?"
+        if let i = parts.firstIndex(of: "typ"), i + 1 < parts.count { typ = parts[i + 1] }
+        let proto = parts.count > 2 ? parts[2].lowercased() : "?"
+        return "typ \(typ) \(proto)"
     }
 
     // MARK: - Helpers
@@ -280,6 +326,7 @@ extension WebRTCSession: RTCPeerConnectionDelegate {
             sdpMid: candidate.sdpMid ?? "",
             sdpMLineIndex: candidate.sdpMLineIndex
         )
+        Log.debug("ICE: local candidate generated \(Self.candidateSummary(c))", category: "Calls")
         Task { @MainActor in
             self.onLocalIceCandidate?(c)
         }
