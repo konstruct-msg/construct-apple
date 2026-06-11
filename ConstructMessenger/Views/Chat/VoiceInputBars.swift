@@ -21,7 +21,7 @@ struct VoiceRecordingBar: View {
     var body: some View {
         HStack(spacing: 0) {
             Button(action: onCancel) {
-                Image(systemName: "x.circle.fill")
+                Image(systemName: "xmark.circle.fill")
                     .font(.system(size: 22))
                     .foregroundStyle(Color.CT.danger)
             }

@@ -33,7 +33,7 @@ extension Message {
         }
 
         // If more than 5 minutes apart, start a new group
-        let timeDifference = nextMessage.timestamp.timeIntervalSince(self.timestamp)
+        let timeDifference = nextMessage.safeTimestamp.timeIntervalSince(self.safeTimestamp)
         if timeDifference > 300 { // 5 minutes = 300 seconds
             return true
         }
