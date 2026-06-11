@@ -154,11 +154,17 @@ final class CallManager: CallUIManaging {
             direction: .outgoing
         )
         begin(session: session, initialState: .dialing(session))
+        guard let call = active else { return }
         #if os(iOS)
         // Arm the ringback tone; it starts once CallKit activates audio.
         CallAudioController.shared.notifyDialing()
         #endif
 
+        // The setup below has several awaits. A simultaneous incoming offer from the
+        // same peer (glare) replaces `active` with the incoming call via
+        // handleIncomingCallOffer's tie-break-lose branch. Re-check `self.active === call`
+        // after each await so we never apply TURN/stream/offer of this outgoing call to
+        // the call that replaced it; bail out silently if it changed.
         do {
             #if os(iOS)
             try await CallKitProvider.shared.requestStartCall(
@@ -167,7 +173,8 @@ final class CallManager: CallUIManaging {
                 calleeName: displayName,
                 hasVideo: hasVideo
             )
-            active?.callKitRegistered = true
+            guard self.active === call else { Log.info("Call replaced during CallKit start — aborting outgoing setup", category: "Calls"); return }
+            call.callKitRegistered = true
             #endif
 
             // Notify server: checks rate limits, delivers push/stream notification to callee.
@@ -177,6 +184,7 @@ final class CallManager: CallUIManaging {
                 callerName: AuthSessionManager.shared.currentDisplayName,
                 hasVideo: hasVideo
             )
+            guard self.active === call else { Log.info("Call replaced during initiateCall — aborting outgoing setup", category: "Calls"); return }
             // calleeOnline=false is normal: idle users never have a signal stream open.
             // The server sends a VoIP push to wake the callee in this case.
             // Continue the call regardless — it will ring until the callee answers or
@@ -184,8 +192,9 @@ final class CallManager: CallUIManaging {
             Log.info("InitiateCall: calleeOnline=\(initResp.calleeOnline) (call_id=\(callId.prefix(8))…)", category: "Calls")
 
             let turn = await fetchTurnWithRetry(callId: callId)
+            guard self.active === call else { Log.info("Call replaced during TURN fetch — aborting outgoing setup", category: "Calls"); return }
             if let turn {
-                active?.turn = turn
+                call.turn = turn
                 Log.info("TURN credentials ready for outgoing call (call_id=\(callId.prefix(8))…)", category: "Calls")
             } else {
                 Log.info("TURN unavailable after retries — proceeding STUN-only (call_id=\(callId.prefix(8))…)", category: "Calls")
@@ -287,9 +296,8 @@ final class CallManager: CallUIManaging {
                 CallKitProvider.shared.updateCallInfo(uuid: reportedUUID, callerName: callerName)
             }
         }
-        active = ActiveCall(session: session)
+        // begin() already created the ActiveCall and set state; just flag CallKit.
         active?.callKitRegistered = true
-        state = .incoming(session)
         #endif
     }
 
@@ -358,9 +366,9 @@ final class CallManager: CallUIManaging {
                     self.active?.answeredAt = Date()
                     self.state = .active(active.session)
                     Log.info("E2EE incoming call answered: SDP exchanged", category: "Calls")
-                    #if os(iOS)
-                    CallKitProvider.shared.reportOutgoingCallConnected(uuid: active.session.uuid)
-                    #endif
+                    // Note: no reportOutgoingCallConnected here — this is the callee.
+                    // CallKit promotes an incoming call to connected via the fulfilled
+                    // CXAnswerCallAction. reportOutgoingCallConnected is for the caller.
                     // Open stream so callee ICE candidates reach the caller via the
                     // signaling relay instead of the E2EE fallback path.
                     try? self.openStreamIfNeeded()
@@ -438,12 +446,12 @@ final class CallManager: CallUIManaging {
         let wasRegisteredWithCallKit = active.callKitRegistered
 
         Task {
-            do {
-                try openStreamIfNeeded()
-                sendHangup(reason: reason)
-            } catch {
-                Log.error("Failed to send hangup: \(error)", category: "Calls")
-            }
+            // Best-effort: open the signaling stream so the hangup also takes the fast
+            // relay path. The hangup MUST be sent even if the stream can't open — it is
+            // also sent via E2EE (sendHangup uses both), and skipping it leaves the peer
+            // ringing until the server-side TTL.
+            try? openStreamIfNeeded()
+            sendHangup(reason: reason)
             endActiveCall(reason: .hangup(reason), reportToCallKit: false)
             #if os(iOS)
             // When the user ends the call from within the app, CallKit still thinks the
@@ -968,24 +976,31 @@ final class CallManager: CallUIManaging {
                                     sdp: offer.sdp)
             _ = offer  // currently unused; reserved for future video-flag etc.
         case .answer(let answer):
-            guard let active, active.session.id == signal.callID else { return }
+            guard active?.session.id == signal.callID else { return }
             let sdp = answer.sdp
-            Task {
+            let callId = signal.callID
+            // Re-fetch `active` inside the @MainActor task rather than capturing it, so
+            // setRemoteAnswer is applied to the CURRENT call's WebRTC (not a stale one if
+            // the call changed between dispatch and execution), then re-guard after the
+            // await before mutating state.
+            Task { @MainActor [weak self] in
+                guard let self, let active = self.active, active.session.id == callId else { return }
                 do {
                     Log.info("Received E2EE answer SDP, setting remote description", category: "Calls")
                     try await active.webrtc?.setRemoteAnswer(sdp: sdp)
-                    await MainActor.run { [weak self] in
-                        guard let self, let active = self.active, active.session.id == signal.callID else { return }
-                        self.state = .active(active.session)
-                        active.answeredAt = Date()
-                        // Parity with the stream-path handleRemoteAnswer: finalize the
-                        // setup metric and promote CallKit out of "connecting" (otherwise
-                        // the caller's lock-screen call UI stays stuck connecting).
-                        PerformanceMetrics.shared.end(.callSetupStart, endEvent: .callSetupEnd, label: String(active.session.id.prefix(8)))
-                        #if os(iOS)
-                        CallKitProvider.shared.reportOutgoingCallConnected(uuid: active.session.uuid)
-                        #endif
+                    guard self.active === active else {
+                        Log.info("Call changed during E2EE answer — discarding stale state update", category: "Calls")
+                        return
                     }
+                    self.state = .active(active.session)
+                    active.answeredAt = Date()
+                    // Parity with the stream-path handleRemoteAnswer: finalize the
+                    // setup metric and promote CallKit out of "connecting" (otherwise
+                    // the caller's lock-screen call UI stays stuck connecting).
+                    PerformanceMetrics.shared.end(.callSetupStart, endEvent: .callSetupEnd, label: String(active.session.id.prefix(8)))
+                    #if os(iOS)
+                    CallKitProvider.shared.reportOutgoingCallConnected(uuid: active.session.uuid)
+                    #endif
                 } catch {
                     Log.error("Failed to set remote answer: \(error)", category: "Calls")
                 }
@@ -1076,29 +1091,27 @@ final class CallManager: CallUIManaging {
         // No existing call — create from message-based offer. Caller name is resolved
         // from local CoreData (profile-shared name → username → generated fallback);
         // never surface the raw UUID.
-        let uuid = UUID()
         let name = callerName
             ?? Self.resolveContactDisplayName(userId: callerUserId)
             ?? NSLocalizedString("call_incoming_audio", comment: "")
+        // Report to CallKit FIRST so the session uses CallKit's UUID from the start —
+        // avoids creating a provisional ActiveCall and immediately closing/recreating it.
+        // callKitRegistered lets endActiveCall call reportCallEnded for this UUID, so the
+        // next outgoing CXStartCallAction doesn't fail with maximumCallGroupsReached.
+        #if os(iOS)
+        let uuid = CallKitProvider.shared.reportIncomingCall(
+            callId: callId, callerId: callerUserId, callerName: name, hasVideo: false
+        )
+        #else
+        let uuid = UUID()
+        #endif
         let session = CallSession(id: callId, uuid: uuid, peerUserId: callerUserId, peerName: name, direction: .incoming)
         begin(session: session, initialState: .incoming(session))
         active?.pendingRemoteOfferSdp = sdp
-        Log.info("Incoming call via E2EE offer from \(callerUserId.prefix(8))… callId=\(callId.prefix(8))…", category: "Calls")
         #if os(iOS)
-        let reportedUUID = CallKitProvider.shared.reportIncomingCall(
-            callId: callId, callerId: callerUserId, callerName: name, hasVideo: false
-        )
-        active?.close()
-        let adjusted = CallSession(id: callId, uuid: reportedUUID, peerUserId: callerUserId, peerName: name, direction: .incoming)
-        active = ActiveCall(session: adjusted)
-        // Mark the call as known to CallKit so `endActiveCall` later calls
-        // `reportCallEnded` for this UUID. Without this flag CallKit retains
-        // the previous call as "active" and the next outgoing CXStartCallAction
-        // fails with `maximumCallGroupsReached` (CXErrorCodeRequestTransactionError 7).
         active?.callKitRegistered = true
-        active?.pendingRemoteOfferSdp = sdp
-        state = .incoming(adjusted)
         #endif
+        Log.info("Incoming call via E2EE offer from \(callerUserId.prefix(8))… callId=\(callId.prefix(8))…", category: "Calls")
     }
 
     private func sendAnswer(sdp: String) {
