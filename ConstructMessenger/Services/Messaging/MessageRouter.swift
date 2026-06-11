@@ -460,6 +460,15 @@ final class MessageRouter {
             if case .messageDecrypted(let contactId, _, let plaintext) = action {
                 _ = contactId.isEmpty ? otherUserId : contactId
                 checkUsernameUpdate(for: otherUserId, chat: chat, in: context)
+
+                // DELIVERY_RECEIPT (content_type=14): intercept raw bytes before reassembler.
+                // The payload is either legacy JSON (starts with `{`) or binary proto (starts with 0x0A).
+                // The reassembler would reject binary proto as "non-decodable binary".
+                if message.contentType == 14 {
+                    handleIncomingE2EDeliveryReceipt(plaintext, messageId: message.id, from: otherUserId, in: context)
+                    continue
+                }
+
                 switch chunkReassembler.process(data: plaintext) {
                 case .assembled(let text, let quoted):
                     handleResolvedMessage(text, quotedMessage: quoted, for: message, from: otherUserId, chat: chat, in: context)
@@ -489,13 +498,6 @@ final class MessageRouter {
             Log.debug("Heartbeat received from \(otherUserId.prefix(8))… — session healthy", category: "MessageRouter")
             PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
             delegate?.messageRouter(self, needsReceipt: [message.id], to: otherUserId, status: .delivered)
-            return
-        }
-
-        // DELIVERY_RECEIPT (content_type=14): E2E-encrypted delivery confirmation.
-        // Parse payload, notify observers, send cursor ACK. Do NOT save to Core Data.
-        if message.contentType == 14 {
-            handleIncomingE2EDeliveryReceipt(decryptedContent, messageId: message.id, from: otherUserId, in: context)
             return
         }
 
@@ -829,11 +831,14 @@ final class MessageRouter {
 
     /// Parse and dispatch an incoming E2E delivery receipt (content_type=14).
     ///
-    /// Payload format: `{"type":"delivery_receipt","message_ids":["<uuid>",...]}`
+    /// Payload format (sniff first byte):
+    /// - `0x7B` (`{`) → legacy JSON: `{"type":"delivery_receipt","message_ids":["<uuid>",...]}`
+    /// - else → binary proto: `Shared_Proto_Signaling_V1_DeliveryReceipt` with `.direct(DirectReceipt{ messageIds, ... })`
+    ///
     /// Backward compat: JSON `type` field is checked so old clients that fall through to
     /// `handleSpecialMessage` also silently discard the payload instead of saving it.
     private func handleIncomingE2EDeliveryReceipt(
-        _ payload: String,
+        _ payload: Data,
         messageId: String,
         from otherUserId: String,
         in context: NSManagedObjectContext
@@ -842,28 +847,74 @@ final class MessageRouter {
             PersistentACKStore.shared.markProcessed(messageId, senderId: otherUserId, in: context)
             delegate?.messageRouter(self, needsReceipt: [messageId], to: otherUserId, status: .delivered)
         }
-        guard let data = payload.data(using: .utf8) else {
-            Log.error("E2E receipt: failed to encode UTF-8 payload from \(otherUserId.prefix(8))…", category: "MessageRouter")
+
+        guard !payload.isEmpty else {
+            Log.error("E2E receipt: empty payload from \(otherUserId.prefix(8))…", category: "MessageRouter")
             return
         }
+
+        let ids: [String]
+
+        if payload.first == 0x7B {
+            // Legacy JSON path: {"type":"delivery_receipt","message_ids":[...]}
+            ids = parseLegacyJsonReceipt(payload, from: otherUserId) ?? []
+        } else {
+            // Binary proto path: Shared_Proto_Signaling_V1_DeliveryReceipt
+            ids = parseBinaryReceipt(payload, from: otherUserId) ?? []
+        }
+
+        guard !ids.isEmpty else {
+            Log.error("E2E receipt: failed to parse payload from \(otherUserId.prefix(8))…", category: "MessageRouter")
+            return
+        }
+
+        Log.info("E2E receipt: \(ids.count) message(s) confirmed by \(otherUserId.prefix(8))…", category: "MessageRouter")
+        delegate?.messageRouter(self, didDecryptDeliveryReceipt: ids)
+    }
+
+    /// Parse legacy JSON delivery receipt: `{"type":"delivery_receipt","message_ids":[...]}`
+    private func parseLegacyJsonReceipt(_ payload: Data, from otherUserId: String) -> [String]? {
         let json: [String: Any]
         do {
-            guard let parsed = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            guard let parsed = try JSONSerialization.jsonObject(with: payload) as? [String: Any] else {
                 Log.error("E2E receipt: payload is not a JSON object from \(otherUserId.prefix(8))…", category: "MessageRouter")
-                return
+                return nil
             }
             json = parsed
         } catch {
             Log.error("E2E receipt: JSON parse failed from \(otherUserId.prefix(8))…: \(error)", category: "MessageRouter")
-            return
+            return nil
         }
         guard let type_ = json["type"] as? String, type_ == "delivery_receipt",
               let ids = json["message_ids"] as? [String], !ids.isEmpty else {
-            Log.error("E2E receipt: failed to parse payload from \(otherUserId.prefix(8))…", category: "MessageRouter")
-            return
+            Log.error("E2E receipt: failed to parse JSON payload from \(otherUserId.prefix(8))…", category: "MessageRouter")
+            return nil
         }
-        Log.info("E2E receipt: \(ids.count) message(s) confirmed by \(otherUserId.prefix(8))…", category: "MessageRouter")
-        delegate?.messageRouter(self, didDecryptDeliveryReceipt: ids)
+        return ids
+    }
+
+    /// Parse binary proto delivery receipt: `Shared_Proto_Signaling_V1_DeliveryReceipt`
+    private func parseBinaryReceipt(_ payload: Data, from otherUserId: String) -> [String]? {
+        do {
+            let receipt = try Shared_Proto_Signaling_V1_DeliveryReceipt(serializedBytes: payload)
+            switch receipt.receiptType {
+            case .direct(let direct):
+                guard !direct.messageIds.isEmpty else {
+                    Log.error("E2E receipt: empty messageIds in binary proto from \(otherUserId.prefix(8))…", category: "MessageRouter")
+                    return nil
+                }
+                return direct.messageIds
+            case .group:
+                Log.info("E2E receipt: group receipt received (not yet supported) from \(otherUserId.prefix(8))…", category: "MessageRouter")
+                return nil
+            case nil:
+                Log.error("E2E receipt: no receiptType in binary proto from \(otherUserId.prefix(8))…", category: "MessageRouter")
+                return nil
+            }
+        } catch {
+            Log.error("E2E receipt: binary proto parse failed from \(otherUserId.prefix(8))…: \(error)", category: "MessageRouter")
+            return nil
+        }
     }
 
     /// Handle special message types (profile, etc.)

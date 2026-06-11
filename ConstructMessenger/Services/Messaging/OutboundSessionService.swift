@@ -143,6 +143,10 @@ final class OutboundSessionService {
     }
 
     /// Sends an E2E-encrypted delivery receipt (content_type=14) to `contactId`.
+    ///
+    /// Payload format: binary proto `Shared_Proto_Signaling_V1_DeliveryReceipt` with
+    /// `.direct(DirectReceipt{ messageIds, status: .delivered, timestamp, senderDeviceID, recipientUserID })`.
+    /// The binary format aligns with the binary-data-pipeline rule in AGENTS.md.
     func sendEncryptedDeliveryReceipt(
         messageIds: [String],
         to contactId: String,
@@ -154,8 +158,22 @@ final class OutboundSessionService {
             return
         }
         let receiptId = UUID().uuidString.lowercased()
-        let payloadJSON: [String: Any] = ["type": "delivery_receipt", "message_ids": messageIds]
-        guard let payloadData = try? JSONSerialization.data(withJSONObject: payloadJSON) else { return }
+
+        // Build binary proto payload: Shared_Proto_Signaling_V1_DeliveryReceipt
+        var receipt = Shared_Proto_Signaling_V1_DeliveryReceipt()
+        var direct = Shared_Proto_Signaling_V1_DirectReceipt()
+        direct.messageIds = messageIds
+        direct.status = .delivered
+        direct.timestamp = Int64(Date().timeIntervalSince1970 * 1000)
+        direct.senderDeviceID = KeychainManager.shared.loadDeviceID() ?? ""
+        direct.recipientUserID = contactId
+        receipt.receiptType = .direct(direct)
+
+        guard let payloadData = try? receipt.serializedData() else {
+            Log.error("E2E receipt: failed to serialize proto", category: "OutboundSession")
+            return
+        }
+
         do {
             let wirePayload = try encryptOutgoing(
                 plaintext: payloadData,
