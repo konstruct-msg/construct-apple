@@ -114,8 +114,9 @@ final class CallAudioController {
     }
 
     /// The call is tearing down — stop the ringback tone and return to idle.
-    /// AVAudioSession deactivation is driven by CallKit's `didDeactivate` and
-    /// `WebRTCSession.close()`; this only owns the tone + phase.
+    /// AVAudioSession deactivation is driven solely by CallKit's `didDeactivate`
+    /// (`WebRTCSession.close()` no longer touches the session — see its comment); this
+    /// only owns the tone + phase.
     func notifyTeardown() {
         DialTonePlayer.shared.stop()
         phase = .idle

@@ -35,7 +35,9 @@ final class CallManager: CallUIManaging {
     /// Serializes outgoing E2EE call-signal RPC sends so they reach the server in the
     /// order the orchestrator encrypted them (see `sendCallSignalProto`). Without this,
     /// rapid transitions (offer → candidates → hangup) spawn independent send Tasks that
-    /// can race and deliver out of order (e.g. hangup before offer). `nil` once idle.
+    /// can race and deliver out of order (e.g. hangup before offer). Reset to `nil` at each
+    /// call boundary (`begin`/`endActiveCall`) so it orders signals only within one call —
+    /// a stalled send from a previous call must never block the next call's signaling.
     private var callSignalSendChain: Task<Void, Never>?
 
     private final class ActiveCall {
@@ -469,6 +471,11 @@ final class CallManager: CallUIManaging {
 
     private func begin(session: CallSession, initialState: CallState) {
         active?.close()
+        // Start this call with a fresh signal-send chain. The chain only needs to order
+        // signals WITHIN one call; carrying it across calls means a stalled send from the
+        // previous call (e.g. a hung sendMessage response) would block this call's offer.
+        // Nil (don't cancel) so any still-in-flight send from the old call can finish.
+        callSignalSendChain = nil
         active = ActiveCall(session: session)
         state = initialState
         PerformanceMetrics.shared.start(.callSetupStart, label: String(session.id.prefix(8)))
@@ -697,6 +704,10 @@ final class CallManager: CallUIManaging {
 
         active.close()
         self.active = nil
+        // Return the signal-send chain to idle. sendHangup() above already chained this
+        // call's hangup, whose Task keeps running after this nil (it still delivers); we
+        // only drop the reference so the next call never awaits a stalled send from this one.
+        callSignalSendChain = nil
         #if os(iOS)
         CallAudioController.shared.notifyTeardown()
         #endif
