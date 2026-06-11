@@ -263,7 +263,8 @@ enum ConnectionLoopRelayBridge {
             wtPath: wtPath,
             wtHostHeader: wtHostHeader,
             alternativeSNIs: altSNIs,
-            manifestId: nil
+            manifestId: nil,
+            veilFrontTicket: VEILConfig.hardcodedRelayVeilFrontTickets[address]
         )
     }
 }

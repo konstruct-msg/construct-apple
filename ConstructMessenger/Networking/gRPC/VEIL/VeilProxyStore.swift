@@ -18,12 +18,14 @@ enum VeilProxyStore {
     private static let qualityScoresMaxEntries = 20
 
     /// Feature flag: gate veil-front (honest-front HTTPS) participation in the
-    /// Rust coordinator's probe race. Off by default until the ticket-issuance
-    /// channel and a deployed cover application exist. When off, the FFI ticket
-    /// field is sent empty and Rust excludes the method.
+    /// Rust coordinator's probe race. Enabled by default since 2026-06-11 — the
+    /// gate condition (a deployed veil-front relay with a cover site + an issued
+    /// ticket, see VEILConfig.hardcodedRelayVeilFrontTickets) is now met. A relay
+    /// without a ticket still excludes veil-front (the FFI ticket field is empty).
+    /// Defaults to true when unset; an explicit stored value still overrides.
     static let veilFrontEnabledKey = "veil_front_enabled"
     static var veilFrontEnabled: Bool {
-        get { UserDefaults.standard.bool(forKey: veilFrontEnabledKey) }
+        get { UserDefaults.standard.object(forKey: veilFrontEnabledKey) as? Bool ?? true }
         set { UserDefaults.standard.set(newValue, forKey: veilFrontEnabledKey) }
     }
 

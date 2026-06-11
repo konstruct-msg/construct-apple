@@ -461,14 +461,21 @@ struct VEILConfig {
     // 45.135.233.5:52143 (VKCS SPb, s3.vkcs.cloud SNI) — IP blocked by RU DPI (TCP RST at TLS handshake).
     // VPS deleted. Replaced by ruRelay below (2026-05-16).
 
-    // ── Relay 3: RU relay (194.87.232.51 / api.divany-kresla.uk) ─────────────
-    /// construct-relay on VKCS, SNI-camouflaged behind Nginx, anti-probe → Apple CDN.
-    /// Upstream: ams.konstruct.cc:443. Provisioned 2026-05-16.
+    // ── Relay 3: RU relay (api.divany-kresla.uk) ─────────────────────────────
+    /// 2026-06-11: VPS repurposed as the **veil-front relay** (honest-front HTTPS +
+    /// session-bound ticket auth). It terminates veil-TLS with its own Let's Encrypt
+    /// cert and re-wraps gRPC over TLS to ams.konstruct.cc:443 (--backend-tls).
+    /// SPKI below is now that veil-front cert. obfs4/WebTunnel are no longer served
+    /// here — veil-front wins the coordinator race via `ruRelayVeilFrontTicket`.
     static let ruRelayAddress    = "api.divany-kresla.uk:443"
     static let ruRelaySNI        = "api.divany-kresla.uk"
-    static let ruRelayPinnedSPKI = "bb42af0f12a95779fb45dcbe3039746616b51aacf8c7cc954ba6cbb048055943"
-    /// Update when relay container is recreated (new keypair in /data/relay.obfs4).
+    static let ruRelayPinnedSPKI = "b2361c0448a33a10e6521300aa4de8d8fe402791dd4fd5b0fe10fbb09457570c"
+    /// Stale obfs4 keypair cert — kept only so the obfs4 probe has a bridge line; it
+    /// fails fast (relay no longer speaks obfs4) and veil-front wins the race.
     static let ruRelayBridgeCert = "zdfEJKLpy4nVo09zbd/5q3Yx02FyL7Tlr+5Aurww51IbYacIWIqbcTndB1UL+n2g68XBQw"
+    /// Base64 veil-front ticket (issued by the relay's issue-ticket; 65 raw bytes).
+    /// Shared per-relay auth material (not per-user). Rotate when the relay reissues.
+    static let ruRelayVeilFrontTicket = "miU1T2UWn/iItJjmC0BKtUYMY6tKh7XqaekoyQ1XrWri6HP32LHh3WGXcQUdJIth2MMqagAAAADY3XlqAAAAAAE="
 
     /// Ed25519 public key used to verify `.well-known/construct-server` signature.
     /// This is the ONLY value hardcoded permanently — everything else is OTA-updatable.
@@ -508,6 +515,15 @@ struct VEILConfig {
         ruRelayAddress:  ruRelayPinnedSPKI,
         // mskRelayAddress:      mskRelayPinnedSPKI,    // MSK removed
         // mskRelayObfs4Address: mskRelayPinnedSPKI,    // MSK removed
+    ]
+
+    /// Base64 veil-front tickets keyed by relay address. A present, non-empty entry
+    /// means the relay supports veil-front (honest-front HTTPS): `buildRelay` attaches
+    /// it to `VeilRelay.veilFrontTicket`, and the Rust coordinator includes veil-front
+    /// in the probe race (gated by `VeilProxyStore.veilFrontEnabled`). Auth material —
+    /// shared per-relay, not per-user.
+    static let hardcodedRelayVeilFrontTickets: [String: String] = [
+        ruRelayAddress: ruRelayVeilFrontTicket,
     ]
 
     /// UserDefaults key where the relay list fetched from the server is cached.
