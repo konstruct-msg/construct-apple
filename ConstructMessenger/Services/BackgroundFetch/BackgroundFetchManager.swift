@@ -406,6 +406,20 @@ class BackgroundFetchManager: NSObject {
             var deferredProfileMessages: [(from: String, content: String)] = []
 
             for item in eligible {
+                // Ephemeral control/signaling messages are NOT chat content: call signals (12),
+                // heartbeat (13), delivery receipt (14), webrtc (10), presence (11). The live
+                // stream routes these via the orchestrator (callSignalDecrypted / receipt
+                // handler / discard); the background batch path has no such routing and would
+                // otherwise save them as a regular bubble whose non-text bytes render as
+                // "Message not available". Consume (ACK) and skip — they are moot in the
+                // background (e.g. an old call signal for a call that is already over), and
+                // ACKing stops the server re-delivering a stuck, never-decryptable one.
+                // Session-control types (20-24) are left to the foreground orchestrator.
+                if (10...14).contains(item.messageData.contentType) {
+                    PersistentACKStore.shared.markProcessed(item.messageData.id, senderId: item.messageData.from, in: backgroundContext)
+                    continue
+                }
+
                 guard let batchResult = resultsByMessageId[item.messageData.id],
                       batchResult.succeeded else {
                     // Decrypt failed — do not create Message entity. The foreground stream
