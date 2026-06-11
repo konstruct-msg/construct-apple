@@ -30,6 +30,21 @@ public class Message: NSManagedObject {
         contentKeyRef != nil || decryptedContent != nil
     }
 
+    /// True if this row is a service/control payload that leaked into the transcript —
+    /// e.g. a `{"type":"delivery_receipt",…}` JSON persisted by (or received from) an
+    /// older build before delivery receipts were routed by content_type. Such rows must
+    /// never render as a chat bubble. Cheap string pre-check gates the JSON parse so
+    /// normal messages cost almost nothing.
+    var isServiceArtifact: Bool {
+        let text = displayText
+        guard text.hasPrefix("{"), text.contains("\"delivery_receipt\"") else { return false }
+        guard let data = text.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              (json["type"] as? String) == "delivery_receipt"
+        else { return false }
+        return true
+    }
+
     // MARK: - Storage Encryption
 
     /// Encrypt `plaintext` with a fresh random key and persist it in place of the wire bytes.
