@@ -23,6 +23,21 @@ struct NetworkSettingsView: View {
 
     @ObservedObject private var veilManager = VeilProxyManager.shared
 
+    // VEIL access provisioning (per-user ticket imported out-of-band).
+    @State private var showingVeilScanner = false
+    @State private var showingVeilPaste = false
+    @State private var veilPasteText = ""
+    @State private var veilImportMessage: String?
+    @State private var veilImportIsError = false
+    /// Bumped after an import to refresh the configured-status row.
+    @State private var veilTicketRefresh = 0
+
+    private var veilConfiguredRelay: String? {
+        _ = veilTicketRefresh
+        let addr = VEILConfig.ruRelayAddress
+        return VeilTicketStore.ticket(for: addr) != nil ? addr : nil
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             if showNavBar {
@@ -202,6 +217,8 @@ struct NetworkSettingsView: View {
                     }
                 }
 
+                veilAccessSection
+
                 #if DEBUG
                 // Debug-only: live FSM diagnostics. Every transport routing decision flows
                 // through one place; this screen is that place.
@@ -265,6 +282,101 @@ struct NetworkSettingsView: View {
         let port = Int(customPort.trimmingCharacters(in: .whitespaces)) ?? 443
         GRPCChannelManager.shared.setCustomServer(host: host, port: port)
         showingAppliedAlert = true
+    }
+
+    // MARK: - VEIL access (per-user ticket import)
+
+    @ViewBuilder
+    private var veilAccessSection: some View {
+        CTSettingsSectionHeader(title: NSLocalizedString("veil_config_section", comment: "").uppercased())
+        CTSectionGroup {
+            HStack {
+                Text(LocalizedStringKey("veil_title"))
+                    .font(CTFont.regular(13))
+                    .foregroundColor(Color.CT.text)
+                Spacer()
+                if let relay = veilConfiguredRelay {
+                    Text(String(format: NSLocalizedString("veil_config_active", comment: ""), relay))
+                        .font(CTFont.regular(11))
+                        .foregroundColor(Color.CT.accent)
+                        .textSelection(.enabled)
+                } else {
+                    Text(LocalizedStringKey("veil_config_none"))
+                        .font(CTFont.regular(11))
+                        .foregroundColor(Color.CT.textDim)
+                }
+            }
+            .padding(.horizontal, NetworkSettingsLayout.rowHorizontalPadding)
+            .padding(.vertical, NetworkSettingsLayout.rowVerticalPadding)
+
+            CTSep(style: .thin)
+            Button { showingVeilScanner = true } label: {
+                veilAccessRow(icon: "qrcode.viewfinder", title: NSLocalizedString("veil_config_scan", comment: ""))
+            }
+            .buttonStyle(.plain)
+
+            CTSep(style: .thin)
+            Button { veilPasteText = ""; showingVeilPaste = true } label: {
+                veilAccessRow(icon: "doc.on.clipboard", title: NSLocalizedString("veil_config_paste", comment: ""))
+            }
+            .buttonStyle(.plain)
+
+            if let msg = veilImportMessage {
+                CTSep(style: .thin)
+                Text(msg)
+                    .font(CTFont.regular(11))
+                    .foregroundStyle(veilImportIsError ? Color.CT.danger : Color.CT.accent)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, NetworkSettingsLayout.rowHorizontalPadding)
+                    .padding(.vertical, NetworkSettingsLayout.compactRowVerticalPadding)
+            }
+        }
+        .sheet(isPresented: $showingVeilScanner) {
+            QRScannerView { code in
+                showingVeilScanner = false
+                handleVeilImport(code)
+            }
+        }
+        .alert(NSLocalizedString("veil_config_paste", comment: ""), isPresented: $showingVeilPaste) {
+            TextField(NSLocalizedString("veil_config_paste", comment: ""), text: $veilPasteText)
+            Button(NSLocalizedString("veil_config_import", comment: "")) { handleVeilImport(veilPasteText) }
+            Button(NSLocalizedString("cancel", comment: ""), role: .cancel) {}
+        }
+    }
+
+    private func veilAccessRow(icon: String, title: String) -> some View {
+        HStack {
+            Image(systemName: icon)
+                .font(.system(size: 14))
+                .foregroundColor(Color.CT.accent)
+            Text(title)
+                .font(CTFont.regular(13))
+                .foregroundColor(Color.CT.text)
+            Spacer()
+            Image(systemName: "chevron.right")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(Color.CT.textDim)
+        }
+        .padding(.horizontal, NetworkSettingsLayout.rowHorizontalPadding)
+        .padding(.vertical, NetworkSettingsLayout.compactRowVerticalPadding)
+        .contentShape(Rectangle())
+    }
+
+    private func handleVeilImport(_ text: String) {
+        switch VeilConfigImporter.importScannedOrPasted(text) {
+        case .success:
+            veilImportIsError = false
+            veilImportMessage = NSLocalizedString("veil_config_import_ok", comment: "")
+            veilTicketRefresh += 1
+            // Re-snapshot the relay list so the new ticket is used immediately.
+            Task {
+                let vm = VeilProxyManager.shared
+                if vm.mode != .off { vm.stop(); await vm.startIfEnabled() }
+            }
+        case .failure(let err):
+            veilImportIsError = true
+            veilImportMessage = err.localizedDescription
+        }
     }
 
     @ViewBuilder

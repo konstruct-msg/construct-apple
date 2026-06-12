@@ -264,7 +264,9 @@ enum ConnectionLoopRelayBridge {
             wtHostHeader: wtHostHeader,
             alternativeSNIs: altSNIs,
             manifestId: nil,
-            veilFrontTicket: VEILConfig.hardcodedRelayVeilFrontTickets[address]
+            // Per-user ticket imported out-of-band (signed config blob → Keychain);
+            // never hardcoded in the binary. nil → coordinator excludes veil-front.
+            veilFrontTicket: VeilTicketStore.ticket(for: address)
         )
     }
 }

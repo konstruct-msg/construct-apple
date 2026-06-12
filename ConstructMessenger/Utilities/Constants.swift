@@ -473,9 +473,9 @@ struct VEILConfig {
     /// Stale obfs4 keypair cert — kept only so the obfs4 probe has a bridge line; it
     /// fails fast (relay no longer speaks obfs4) and veil-front wins the race.
     static let ruRelayBridgeCert = "zdfEJKLpy4nVo09zbd/5q3Yx02FyL7Tlr+5Aurww51IbYacIWIqbcTndB1UL+n2g68XBQw"
-    /// Base64 veil-front ticket (issued by the relay's issue-ticket; 65 raw bytes).
-    /// Shared per-relay auth material (not per-user). Rotate when the relay reissues.
-    static let ruRelayVeilFrontTicket = "miU1T2UWn/iItJjmC0BKtUYMY6tKh7XqaekoyQ1XrWri6HP32LHh3WGXcQUdJIth2MMqagAAAADY3XlqAAAAAAE="
+    // The veil-front ticket is per-user auth material — NOT hardcoded here. It is
+    // imported out-of-band via a signed config blob (QR / konstruct://veil-config deep
+    // link) into VeilTicketStore. See VeilTicketProvisioning.swift.
 
     /// Ed25519 public key used to verify `.well-known/construct-server` signature.
     /// This is the ONLY value hardcoded permanently — everything else is OTA-updatable.
@@ -515,15 +515,6 @@ struct VEILConfig {
         ruRelayAddress:  ruRelayPinnedSPKI,
         // mskRelayAddress:      mskRelayPinnedSPKI,    // MSK removed
         // mskRelayObfs4Address: mskRelayPinnedSPKI,    // MSK removed
-    ]
-
-    /// Base64 veil-front tickets keyed by relay address. A present, non-empty entry
-    /// means the relay supports veil-front (honest-front HTTPS): `buildRelay` attaches
-    /// it to `VeilRelay.veilFrontTicket`, and the Rust coordinator includes veil-front
-    /// in the probe race (gated by `VeilProxyStore.veilFrontEnabled`). Auth material —
-    /// shared per-relay, not per-user.
-    static let hardcodedRelayVeilFrontTickets: [String: String] = [
-        ruRelayAddress: ruRelayVeilFrontTicket,
     ]
 
     /// UserDefaults key where the relay list fetched from the server is cached.

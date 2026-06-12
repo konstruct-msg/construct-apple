@@ -420,6 +420,17 @@
 "veil_footer" = "VEIL защищает трафик, делая его неотличимым от обычного HTTPS. Конфигурация предоставляется сервером автоматически.";
 "veil_retry" = "Повторить подключение";
 "veil_unavailable" = "Недоступно на этом сервере";
+"veil_import_err_malformed" = "Неверный код конфигурации";
+"veil_import_err_signature" = "Недействительная подпись конфигурации";
+"veil_import_err_expired" = "Конфигурация истекла — запросите новую";
+"veil_import_err_unknown_relay" = "Конфигурация для неизвестного реле";
+"veil_config_import_ok" = "Доступ VEIL настроен";
+"veil_config_scan" = "Сканировать QR конфигурации";
+"veil_config_paste" = "Вставить код конфигурации";
+"veil_config_import" = "Импорт";
+"veil_config_section" = "ДОСТУП VEIL";
+"veil_config_active" = "Доступ настроен для %@";
+"veil_config_none" = "Доступ не настроен";
 "traffic_protection" = "Защита трафика";
 "veil_footer_short" = "VEIL маскирует трафик под обычный HTTPS. Конфигурация предоставляется автоматически.";
 

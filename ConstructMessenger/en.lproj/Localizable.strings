@@ -419,6 +419,17 @@
 "veil_footer" = "VEIL masks your traffic to make it indistinguishable from regular HTTPS. The configuration is provided automatically by the server.";
 "veil_unavailable" = "Not available on this server";
 "veil_retry" = "Retry VEIL connection";
+"veil_import_err_malformed" = "Invalid configuration code";
+"veil_import_err_signature" = "Configuration signature is invalid";
+"veil_import_err_expired" = "This configuration has expired — request a new one";
+"veil_import_err_unknown_relay" = "Configuration is for an unknown relay";
+"veil_config_import_ok" = "VEIL access configured";
+"veil_config_scan" = "Scan configuration QR";
+"veil_config_paste" = "Paste configuration code";
+"veil_config_import" = "Import";
+"veil_config_section" = "VEIL ACCESS";
+"veil_config_active" = "Access configured for %@";
+"veil_config_none" = "No access configured";
 "traffic_protection" = "Traffic Protection";
 "veil_footer_short" = "VEIL masks traffic as standard HTTPS. Configuration is provided automatically.";
 
