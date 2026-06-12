@@ -221,18 +221,19 @@ actor VeilCertFetcher {
 
     /// Fetch, verify, and cache the relay config from `.well-known/construct-server`.
     ///
-    /// Tries multiple mirror URLs in parallel. The first response that
+    /// Tries the mirror URL(s) in parallel. The first response that
     /// - returns HTTP 200, AND
     /// - passes Ed25519 signature verification
-    /// wins and is persisted to UserDefaults. All URLs carry the same signed payload so
-    /// no additional trust assumption is introduced by the GitHub mirror.
+    /// wins and is persisted to UserDefaults.
     ///
-    /// Mirror list order: primary (konstruct.cc) → GitHub raw (construct-relay repo).
+    /// Source: konstruct.cc primary. The `construct-relay` GitHub-raw mirror was
+    /// removed when obfs4/WebTunnel were retired in favour of veil-front
+    /// (2026-06-12); the veil-front relay is hardcoded and per-user tickets are
+    /// delivered out-of-band, so this legacy manifest no longer needs a RU mirror.
     @discardableResult
     func fetchAndCacheRelayConfig() async -> [RelayInfo]? {
         let mirrorURLs: [String] = [
             "https://\(ServerConfig.inviteHost)/.well-known/construct-server",
-            "https://raw.githubusercontent.com/konstruct-msg/construct-relay/main/.well-known/construct-server",
         ]
 
         if let relays = await fetchVerifiedRelayConfig(from: mirrorURLs) {
