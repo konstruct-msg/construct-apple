@@ -81,7 +81,12 @@ final class NativeVeilRuntime: VeilProxyRuntime {
         }
 
         guard rc == 0, out.port > 0 else {
-            return .failure(rc == 2 ? .networkUnreachable : .startFailed(code: rc))
+            // Surface the real failing stage (Rust collapses everything to rc=-1).
+            var errBuf = [CChar](repeating: 0, count: 256)
+            let errLen = veil_last_error(&errBuf, errBuf.count)
+            let reason = errLen > 0 ? String(cString: errBuf) : nil
+            Log.error("VEIL FFI start failed rc=\(rc) port=\(out.port) → \(reason ?? "(no detail)")", category: "VEIL")
+            return .failure(rc == 2 ? .networkUnreachable : .startFailed(code: rc, reason: reason))
         }
         let method = VeilMethod(rawValue: out.method) ?? .obfs4
         return .success(VeilStartOutcome(port: out.port, method: method, latencyMs: out.latency_ms))
@@ -151,7 +156,7 @@ final class NativeVeilRuntime: VeilProxyRuntime {
         }
 
         guard result == 0, port > 0 else {
-            return .failure(result == 2 ? .networkUnreachable : .startFailed(code: result))
+            return .failure(result == 2 ? .networkUnreachable : .startFailed(code: result, reason: nil))
         }
         return .success(port)
     }
@@ -164,7 +169,7 @@ final class NativeVeilRuntime: VeilProxyRuntime {
             }
         }
         guard result == 0, port > 0 else {
-            return .failure(result == 2 ? .networkUnreachable : .startFailed(code: result))
+            return .failure(result == 2 ? .networkUnreachable : .startFailed(code: result, reason: nil))
         }
         return .success(port)
     }

@@ -207,7 +207,7 @@ struct NetworkSettingsView: View {
 
                         } else if veilManager.mode != .off && !veilManager.isRunning {
                             CTSep(style: .thin)
-                            Text(veilManager.lastError ?? NSLocalizedString("veil_unavailable", comment: ""))
+                            Text(veilManager.lastError ?? NSLocalizedString("veil_establishing", comment: ""))
                                 .font(CTFont.regular(11))
                                 .foregroundStyle(Color.CT.textDim)
                                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -291,10 +291,6 @@ struct NetworkSettingsView: View {
         CTSettingsSectionHeader(title: NSLocalizedString("veil_config_section", comment: "").uppercased())
         CTSectionGroup {
             HStack {
-                Text(LocalizedStringKey("veil_title"))
-                    .font(CTFont.regular(13))
-                    .foregroundColor(Color.CT.text)
-                Spacer()
                 if let relay = veilConfiguredRelay {
                     Text(String(format: NSLocalizedString("veil_config_active", comment: ""), relay))
                         .font(CTFont.regular(11))
@@ -304,6 +300,7 @@ struct NetworkSettingsView: View {
                     Text(LocalizedStringKey("veil_config_none"))
                         .font(CTFont.regular(11))
                         .foregroundColor(Color.CT.textDim)
+                        
                 }
             }
             .padding(.horizontal, NetworkSettingsLayout.rowHorizontalPadding)
@@ -425,8 +422,7 @@ struct NetworkSettingsView: View {
     private func pathASCII(_ path: TrafficPath) -> String {
         switch path {
         case .direct:          return "[→]"
-        case .veilPrimary:      return "[t]"
-        case .veilRelay:        return "[t]"
+        case .veilFront:        return "[v]"
         case .veilWebTunnel:    return "[ws]"
         case .veilCooldown:     return "[!]"
         case .veilConnecting:   return "[~]"
@@ -436,8 +432,7 @@ struct NetworkSettingsView: View {
     private func pathColor(_ path: TrafficPath) -> Color {
         switch path {
         case .direct:          return Color.CT.accentDim
-        case .veilPrimary:      return Color.CT.accent
-        case .veilRelay:        return Color.CT.accentDim
+        case .veilFront:        return Color.CT.accent
         case .veilWebTunnel:    return Color.CT.accent
         case .veilCooldown:     return .orange
         case .veilConnecting:   return .orange

@@ -406,6 +406,7 @@
 "veil_title" = "VEIL";
 "veil_footer" = "VEILは、トラフィックを通常のHTTPSと区別がつかないように偽装します。設定はサーバーから自動的に提供されます。";
 "veil_unavailable" = "このサーバーでは利用できません";
+"veil_establishing" = "veil-frontトンネルを確立中…";
 "veil_retry" = "VEIL接続を再試行";
 "traffic_protection" = "トラフィック保護";
 "veil_footer_short" = "VEILはトラフィックを標準のHTTPSとして偽装します。設定は自動的に行われます。";

@@ -179,8 +179,8 @@ final class VeilProxyManager: ObservableObject {
             return .direct
         }
         if isWebTunnelActive { return .veilWebTunnel(relay: relay.address) }
-        if relay.tlsServerName != nil { return .veilPrimary(host: relay.address) }
-        return .veilRelay(address: relay.address)
+        // iOS uses veil-front (honest-front HTTPS); obfs4/WebTunnel are retired.
+        return .veilFront(relay: relay.address)
     }
 
     func clearCooldown() {
@@ -333,5 +333,12 @@ final class VeilProxyManager: ObservableObject {
         self.proxyPort = port
         self.activeRelay = relay
         self.isWebTunnelActive = isWebTunnel
+    }
+
+    /// Record the most recent proxy-start failure reason (from `veil_last_error`,
+    /// e.g. "veil-front: timeout after 7003ms"), shown in Network settings while
+    /// VEIL is enabled but not yet running. Pass `nil` on a successful start.
+    func reportLastError(_ reason: String?) {
+        lastError = reason
     }
 }

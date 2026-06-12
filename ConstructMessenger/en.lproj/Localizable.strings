@@ -418,6 +418,7 @@
 "veil_title" = "VEIL";
 "veil_footer" = "VEIL masks your traffic to make it indistinguishable from regular HTTPS. The configuration is provided automatically by the server.";
 "veil_unavailable" = "Not available on this server";
+"veil_establishing" = "Establishing veil-front tunnel…";
 "veil_retry" = "Retry VEIL connection";
 "veil_import_err_malformed" = "Invalid configuration code";
 "veil_import_err_signature" = "Configuration signature is invalid";

@@ -10,11 +10,10 @@ import Foundation
 enum TrafficPath: Equatable {
     /// Direct TLS gRPC, no VEIL obfuscation.
     case direct
-    /// VEIL primary: TLS 1.3 -> obfs4 -> Amsterdam via Traefik.
-    case veilPrimary(host: String)
-    /// VEIL relay: plain obfs4 -> relay -> Amsterdam.
-    case veilRelay(address: String)
-    /// VEIL v2 WebTunnel: TLS -> WebSocket -> relay -> server.
+    /// VEIL veil-front: TLS 1.3 → honest-front HTTPS relay → backend.
+    /// The active obfuscation transport on iOS.
+    case veilFront(relay: String)
+    /// VEIL v2 WebTunnel: TLS -> WebSocket -> relay -> server. (legacy, non-utls)
     case veilWebTunnel(relay: String)
     /// VEIL is enabled but proxy is temporarily bypassed after a failure.
     case veilCooldown
@@ -24,8 +23,7 @@ enum TrafficPath: Equatable {
     var displayTitle: String {
         switch self {
         case .direct:           return "Direct gRPC"
-        case .veilPrimary:       return "VEIL (Primary)"
-        case .veilRelay:         return "VEIL (Relay)"
+        case .veilFront:         return "VEIL (veil-front)"
         case .veilWebTunnel:     return "VEIL v2 (WebTunnel)"
         case .veilCooldown:      return "Direct gRPC (VEIL recovering)"
         case .veilConnecting:    return "VEIL (Connecting…)"
@@ -35,20 +33,18 @@ enum TrafficPath: Equatable {
     var displayDetail: String {
         switch self {
         case .direct:                  return "TLS 1.3 ams.konstruct.cc:443"
-        case .veilPrimary(let host):    return "TLS + obfs4 \(host)"
-        case .veilRelay(let address):   return "obfs4 relay \(address)"
+        case .veilFront(let relay):     return "TLS 1.3 → veil-front → \(relay)"
         case .veilWebTunnel(let relay): return "wss://\(relay)"
         case .veilCooldown:             return "Reconnecting via VEIL…"
-        case .veilConnecting:           return "Starting obfs4 proxy…"
+        case .veilConnecting:           return "Establishing veil-front tunnel…"
         }
     }
-    
+
     /// Color name for SwiftUI consumers without importing SwiftUI into every caller.
     var color: String {
         switch self {
         case .direct:        return "blue"
-        case .veilPrimary:    return "green"
-        case .veilRelay:      return "purple"
+        case .veilFront:      return "green"
         case .veilWebTunnel:  return "teal"
         case .veilCooldown:   return "orange"
         case .veilConnecting: return "orange"
