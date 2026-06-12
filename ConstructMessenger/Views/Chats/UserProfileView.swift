@@ -286,8 +286,8 @@ struct UserProfileView: View {
                 showingSafetyNumbers = true
             } label: {
                 profileRow(label: NSLocalizedString("safety_numbers", comment: "")) {
-                    Text(CTSymbol.forward)
-                        .font(CTFont.regular(13))
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(Color.CT.textDim)
                 }
             }
@@ -375,7 +375,7 @@ struct UserProfileView: View {
                 if isLoading {
                     ProgressView().scaleEffect(0.75).tint(Color.CT.textDim)
                 } else {
-                    Text("[→]")
+                    Image(systemName: "chevron.right")
                         .font(CTFont.regular(13))
                         .foregroundStyle(color.opacity(0.6))
                 }

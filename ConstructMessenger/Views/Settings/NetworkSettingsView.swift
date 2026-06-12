@@ -176,8 +176,8 @@ struct NetworkSettingsView: View {
                                     .font(CTFont.regular(13))
                                     .foregroundColor(Color.CT.textDim)
                                 Spacer()
-                                Text(CTSymbol.refresh)
-                                    .font(CTFont.regular(13))
+                                Image(systemName: "arrow.clockwise")
+                                    .font(.system(size: 13, weight: .regular))
                                     .foregroundColor(Color.CT.textDim)
                             }
                             .padding(.horizontal, NetworkSettingsLayout.rowHorizontalPadding)

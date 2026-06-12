@@ -172,8 +172,8 @@ private struct CallHistoryRow: View {
                     }
                 }
 
-                Text(CTSymbol.callOut)
-                    .font(CTFont.regular(13))
+                Image(systemName: "arrow.up.right")
+                    .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Color.CT.accent)
             }
             .padding(.horizontal, 16)

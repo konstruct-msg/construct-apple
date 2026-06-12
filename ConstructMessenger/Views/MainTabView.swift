@@ -145,13 +145,13 @@ struct MainTabView: View {
 
     private var tabItems: [CTTabItem] {
         var items: [CTTabItem] = [
-            CTTabItem(symbol: CTSymbol.tabChats, sfName: "message"),
-            CTTabItem(symbol: CTSymbol.tabSynaps, sfName: "circle.grid.cross"),
+            CTTabItem(sfName: "message"),
+            CTTabItem(sfName: "circle.grid.cross"),
         ]
         if CallsFeature.isEnabled {
-            items.append(CTTabItem(symbol: CTSymbol.tabCalls, sfName: "phone"))
+            items.append(CTTabItem(sfName: "phone"))
         }
-        items.append(CTTabItem(symbol: CTSymbol.tabSettings, sfName: "gearshape"))
+        items.append(CTTabItem(sfName: "gearshape"))
         return items
     }
 

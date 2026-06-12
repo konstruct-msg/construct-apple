@@ -625,7 +625,6 @@ struct CTNavBar: View {
 // MARK: - Tab Bar
 
 struct CTTabItem {
-    let symbol: String
     var sfName: String
 }
 
@@ -641,9 +640,9 @@ struct CTTabBar: View {
 
     static var defaultItems: [CTTabItem] {
         [
-            CTTabItem(symbol: CTSymbol.tabChats, sfName: "message"),
-            CTTabItem(symbol: CTSymbol.tabSynaps, sfName: "circle.grid.cross"),
-            CTTabItem(symbol: CTSymbol.tabSettings, sfName: "gearshape"),
+            CTTabItem(sfName: "message"),
+            CTTabItem(sfName: "circle.grid.cross"),
+            CTTabItem(sfName: "gearshape"),
         ]
     }
 
@@ -690,12 +689,16 @@ struct CTSettingsSectionHeader: View {
 
 struct CTSettingsRow: View {
     let label: String
-    let value: String
+    /// Optional trailing value text (status / detail). Empty = no value shown.
+    var value: String       = ""
     var icon: String?       = nil
     var labelColor: Color   = Color.CT.text
     var valueColor: Color   = Color.CT.text
     var isAction: Bool      = false
     var isDestructive: Bool = false
+    /// Trailing iOS-style disclosure chevron (SF Symbol). Use for navigation /
+    /// action rows instead of the legacy `[→]` (`CTSymbol.forward`) glyph.
+    var disclosure: Bool    = false
 
     var body: some View {
         HStack(spacing: 0) {
@@ -711,13 +714,21 @@ struct CTSettingsRow: View {
                 .foregroundColor(isDestructive ? Color.CT.danger : labelColor)
                 .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
             Spacer(minLength: 8)
-            Text(value)
-                .font(isAction ? CTFont.bold(13) : CTFont.regular(13))
-                .foregroundColor(
-                    isDestructive ? Color.CT.danger :
-                    isAction      ? Color.CT.accent : valueColor
-                )
-                .frame(maxWidth: .infinity, alignment: .trailing)
+            if !value.isEmpty {
+                Text(value)
+                    .font(isAction ? CTFont.bold(13) : CTFont.regular(13))
+                    .foregroundColor(
+                        isDestructive ? Color.CT.danger :
+                        isAction      ? Color.CT.accent : valueColor
+                    )
+                    .multilineTextAlignment(.trailing)
+            }
+            if disclosure {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(isDestructive ? Color.CT.danger : Color.CT.textDim)
+                    .padding(.leading, value.isEmpty ? 0 : 6)
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 9)

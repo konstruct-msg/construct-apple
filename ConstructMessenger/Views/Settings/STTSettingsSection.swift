@@ -120,7 +120,8 @@ struct STTSettingsSection: View {
             CTSettingsRow(
                 label: NSLocalizedString("stt_language_label", comment: ""),
                 value: currentName,
-                isAction: true
+                isAction: true,
+                disclosure: true
             )
         }
         #else

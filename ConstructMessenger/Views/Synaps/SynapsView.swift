@@ -514,9 +514,9 @@ struct SynapsView: View {
                             }
                         }
                         Spacer()
-                        Text(CTSymbol.forward)
-                            .font(CTFont.regular(13))
-                            .foregroundStyle(Color.CT.accent)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(Color.CT.textDim)
                     }
                     .padding(.horizontal, 14)
                     .padding(.vertical, 11)

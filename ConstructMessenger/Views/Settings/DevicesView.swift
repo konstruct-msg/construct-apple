@@ -285,7 +285,7 @@ private struct DeviceRow: View {
 
     var body: some View {
         HStack(spacing: DevicesSettingsLayout.rowContentSpacing) {
-            CTRowIcon(asciiPlatformIcon,
+            CTRowIcon(sf: platformSFSymbol,
                       color: isCurrent ? Color.CT.accent : Color.CT.textDim)
 
             VStack(alignment: .leading, spacing: DevicesSettingsLayout.deviceMetaSpacing) {
@@ -312,7 +312,7 @@ private struct DeviceRow: View {
 
             if !isCurrent {
                 Button(role: .destructive, action: onRevoke) {
-                    Text("[x]")
+                    Image(systemName: "xmark.circle.fill")
                         .font(CTFont.bold(14))
                         .foregroundStyle(Color.CT.danger)
                 }
@@ -321,12 +321,12 @@ private struct DeviceRow: View {
         }
     }
 
-    private var asciiPlatformIcon: String {
+    private var platformSFSymbol: String {
         switch device.platform {
-        case .ios:     return CTSymbol.deviceIOS
-        case .desktop: return CTSymbol.deviceMac
-        case .android: return CTSymbol.deviceAndroid
-        default:       return CTSymbol.deviceGeneric
+        case .ios:     return "iphone"
+        case .desktop: return "laptopcomputer"
+        case .android: return "candybarphone"
+        default:       return "desktopcomputer"
         }
     }
 

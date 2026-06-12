@@ -61,7 +61,7 @@ struct ErrorToastView: View {
                 Button {
                     router.dismiss()
                 } label: {
-                    Text("[x]")
+                    Image(systemName: "xmark.circle.fill")
                         .font(CTFont.regular(13))
                         .foregroundColor(Color.CT.textDim)
                         .frame(width: 36, height: 36)

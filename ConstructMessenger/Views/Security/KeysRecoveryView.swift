@@ -58,9 +58,9 @@ struct KeysRecoveryView: View {
                                 label: NSLocalizedString("keys_recovery_retry_action", comment: ""),
                                 value: retryCount > 0
                                     ? NSLocalizedString("keys_recovery_retry_failed", comment: "")
-                                    : CTSymbol.forward,
-                                valueColor: retryCount > 0 ? Color.CT.danger : Color.CT.text,
-                                isAction: retryCount == 0
+                                    : "",
+                                valueColor: Color.CT.danger,
+                                disclosure: retryCount == 0
                             )
                         }
                         .buttonStyle(.plain)
@@ -78,8 +78,7 @@ struct KeysRecoveryView: View {
                         } label: {
                             CTSettingsRow(
                                 label: NSLocalizedString("keys_recovery_seed_action", comment: ""),
-                                value: CTSymbol.forward,
-                                isAction: true
+                                disclosure: true
                             )
                         }
                         .buttonStyle(.plain)
@@ -100,9 +99,8 @@ struct KeysRecoveryView: View {
                         } label: {
                             CTSettingsRow(
                                 label: NSLocalizedString("keys_recovery_new_action", comment: ""),
-                                value: CTSymbol.forward,
-                                isAction: true,
-                                isDestructive: true
+                                isDestructive: true,
+                                disclosure: true
                             )
                         }
                         .buttonStyle(.plain)

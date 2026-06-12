@@ -139,7 +139,7 @@ private struct SingleMediaCell: View {
                     Text(LocalizedStringKey("failed_to_load")).font(CTFont.regular(11)).foregroundColor(Color.CT.textDim)
                     Button { loadThumbnail() } label: {
                         HStack(spacing: 4) {
-                            Text(CTSymbol.refresh)
+                            Image(systemName: "arrow.clockwise").font(.system(size: 11, weight: .regular))
                             Text(LocalizedStringKey("retry"))
                         }
                         .font(CTFont.regular(11)).foregroundColor(Color.CT.accent)

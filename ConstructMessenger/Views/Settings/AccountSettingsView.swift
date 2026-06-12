@@ -286,10 +286,10 @@ struct AccountSettingsView: View {
             // status — placeholder, not yet implemented
             profileRow(label: NSLocalizedString("status", comment: "")) {
                 HStack(spacing: AccountSettingsLayout.inlineStatusSpacing) {
-                    Text("[[ONLINE]]")
+                    Text("ONLINE")
                         .font(CTFont.regular(14))
                         .foregroundStyle(Color.CT.accent)
-                    Text("[→]")
+                    Image(systemName: "chevron.right")
                         .font(CTFont.regular(13))
                         .foregroundStyle(Color.CT.accent.opacity(AccountSettingsLayout.inlineStatusAccentOpacity))
                 }
@@ -323,7 +323,8 @@ struct AccountSettingsView: View {
                         .font(CTFont.regular(14))
                         .foregroundStyle(Color.CT.textDim)
                     Spacer()
-                    Text("[\(NSLocalizedString("manage_action", comment: "")) [→]]")
+                    
+                    Text("[\(NSLocalizedString("manage_action", comment: ""))]")
                         .font(CTFont.regular(13))
                         .foregroundStyle(Color.CT.accent)
                 }
@@ -345,7 +346,7 @@ struct AccountSettingsView: View {
                         .font(CTFont.regular(14))
                         .foregroundStyle(socialRecoveryService.isConfigured ? Color.CT.accent : Color.CT.textDim)
                     Spacer()
-                    Text("[→]")
+                    Image(systemName: "chevron.right")
                         .font(CTFont.regular(13))
                         .foregroundStyle(Color.CT.accent)
                 }
@@ -365,7 +366,7 @@ struct AccountSettingsView: View {
                         .font(CTFont.regular(14))
                         .foregroundStyle(Color.CT.text)
                     Spacer()
-                    Text("[→]")
+                    Image(systemName: "chevron.right")
                         .font(CTFont.regular(13))
                         .foregroundStyle(Color.CT.accent)
                 }
@@ -390,7 +391,7 @@ struct AccountSettingsView: View {
                         .font(CTFont.regular(14))
                         .foregroundStyle(Color.CT.text)
                     Spacer()
-                    Text("[→]")
+                    Image(systemName: "chevron.right")
                         .font(CTFont.regular(13))
                         .foregroundStyle(Color.CT.accent)
                 }
@@ -407,7 +408,7 @@ struct AccountSettingsView: View {
                         .font(CTFont.regular(14))
                         .foregroundStyle(Color.CT.text)
                     Spacer()
-                    Text("[→]")
+                    Image(systemName: "chevron.right")
                         .font(CTFont.regular(13))
                         .foregroundStyle(Color.CT.accent)
                 }
@@ -424,7 +425,7 @@ struct AccountSettingsView: View {
                         .font(CTFont.regular(14))
                         .foregroundStyle(Color.CT.text)
                     Spacer()
-                    Text("[→]")
+                    Image(systemName: "chevron.right")
                         .font(CTFont.regular(13))
                         .foregroundStyle(Color.CT.accent)
                 }
@@ -441,7 +442,7 @@ struct AccountSettingsView: View {
                         .font(CTFont.regular(14))
                         .foregroundStyle(Color.CT.text)
                     Spacer()
-                    Text("[→]")
+                    Image(systemName: "chevron.right")
                         .font(CTFont.regular(13))
                         .foregroundStyle(Color.CT.accent)
                 }
@@ -469,7 +470,7 @@ struct AccountSettingsView: View {
                         .font(CTFont.regular(14))
                         .foregroundStyle(Color.CT.danger.opacity(AccountSettingsLayout.dangerPrimaryOpacity))
                     Spacer()
-                    Text("[→]")
+                    Image(systemName: "chevron.right")
                         .font(CTFont.regular(13))
                         .foregroundStyle(Color.CT.danger.opacity(AccountSettingsLayout.dangerSecondaryOpacity))
                 }
@@ -489,7 +490,7 @@ struct AccountSettingsView: View {
                         .font(CTFont.regular(14))
                         .foregroundStyle(Color.CT.danger)
                     Spacer()
-                    Text("[\(NSLocalizedString("delete_action", comment: "")) →]")
+                    Text("[\(NSLocalizedString("delete_action", comment: ""))]")
                         .font(CTFont.regular(13))
                         .foregroundStyle(Color.CT.danger.opacity(AccountSettingsLayout.dangerSecondaryOpacity))
                 }

@@ -26,8 +26,8 @@ struct MessagePhotoPreviewBar: View {
                             .clipShape(Rectangle())
 
                         Button { onRemove(index) } label: {
-                            Text("[x]")
-                                .font(CTFont.bold(11))
+                            Image(systemName: "xmark.circle.fill")
+                                .font(CTFont.regular(11))
                                 .foregroundColor(Color.CT.text)
                                 .padding(4)
                                 .background(Color.black.opacity(0.6))
@@ -74,7 +74,7 @@ struct MessageFilePreviewBar: View {
                         }
 
                         Button { onRemove(index) } label: {
-                            Text("[x]")
+                            Image(systemName: "xmark.circle.fill")
                                 .font(CTFont.regular(11))
                                 .foregroundColor(Color.CT.textDim)
                                 .lineLimit(1).fixedSize()

@@ -24,7 +24,7 @@ struct ContactRequestSheet: View {
             CTNavBar(
                 title: NSLocalizedString("contact_request_sheet_title", comment: ""),
                 showBack: false,
-                trailingSymbol: CTSymbol.close,
+                trailingSystemImage: "xmark",
                 trailingAction: { dismiss() }
             )
 

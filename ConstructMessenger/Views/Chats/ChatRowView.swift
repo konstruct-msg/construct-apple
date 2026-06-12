@@ -31,8 +31,8 @@ struct ChatRowView: View {
                             .foregroundColor(Color.CT.textDim)
                     }
                     if chat.isPinned && chat.unreadCount == 0 {
-                        Text(CTSymbol.pin)
-                            .font(CTFont.regular(10))
+                        Image(systemName: "pin.fill")
+                            .font(.system(size: 10, weight: .regular))
                             .foregroundColor(Color.CT.textDim)
                     }
                 }

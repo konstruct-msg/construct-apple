@@ -112,7 +112,7 @@ struct MediaGalleryViewer: View {
             // Top chrome: close / counter / save
             HStack(alignment: .center) {
                 Button { isPresented = false } label: {
-                    Text("[x]")
+                    Image(systemName: "xmark.circle.fill")
                         .font(CTFont.bold(20))
                         .foregroundColor(.white.opacity(0.9))
                         .frame(width: 44, height: 44)
@@ -131,7 +131,7 @@ struct MediaGalleryViewer: View {
                 Spacer()
 
                 Button { saveCurrentImage() } label: {
-                    Text(saveStatusAscii)
+                    Image(systemName: saveStatusIcon)
                         .font(CTFont.bold(16))
                         .foregroundColor(saveStatusColor)
                         .frame(width: 44, height: 44)
@@ -182,18 +182,15 @@ struct MediaGalleryViewer: View {
                 }
         )
     }
-
-    private var saveStatusAscii: String {
-        switch saveStatus {
-        case .idle:    return "[↓]"
-        case .saving:  return CTSymbol.loading
-        case .saved:   return "[✓]"
-        case .failed:  return "[!]"
+    
+    private var saveStatusIcon: String {
+            switch saveStatus {
+            case .idle:    return "arrow.down.circle"
+            case .saving:  return "arrow.down.circle"
+            case .saved:   return "checkmark.circle"
+            case .failed:  return "exclamationmark.circle"
+            }
         }
-    }
-
-    @available(*, unavailable)
-    private var saveStatusIcon: String { "" }
 
     private var saveStatusColor: Color {
         switch saveStatus {

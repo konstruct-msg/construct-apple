@@ -289,7 +289,7 @@ struct SocialRecoverySetupView: View {
                         Text("share \(i + 1)")
                             .font(CTFont.regular(12))
                             .foregroundColor(Color.CT.textDim)
-                        Text("[→]")
+                        Image(systemName: "chevron.right")
                             .font(CTFont.regular(12))
                             .foregroundColor(Color.CT.accent)
                         Text(label)

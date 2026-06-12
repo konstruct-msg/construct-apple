@@ -86,7 +86,7 @@ struct NotificationsSettingsView: View {
                                     .font(CTFont.regular(13))
                                     .foregroundColor(Color.CT.textDim)
                                 Spacer()
-                                Text("[→]")
+                                Image(systemName: "chevron.right")
                                     .font(CTFont.regular(13))
                                     .foregroundColor(Color.CT.accent)
                             }
@@ -103,7 +103,7 @@ struct NotificationsSettingsView: View {
                                     .font(CTFont.regular(13))
                                     .foregroundColor(Color.CT.accent)
                                 Spacer()
-                                Text("[→]")
+                                Image(systemName: "chevron.right")
                                     .font(CTFont.regular(13))
                                     .foregroundColor(Color.CT.accent)
                             }

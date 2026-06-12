@@ -172,8 +172,8 @@ struct ReceiveBackupNearbyView: View {
 
     private var completeView: some View {
         VStack(spacing: 16) {
-            Text(CTSymbol.forward)
-                .font(CTFont.bold(32))
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 32, weight: .bold))
                 .foregroundColor(Color.CT.accent)
             Text(NSLocalizedString("transfer_complete", comment: ""))
                 .font(CTFont.bold(15))
