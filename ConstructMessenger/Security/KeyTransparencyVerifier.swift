@@ -25,7 +25,7 @@ enum KTVerificationResult: Equatable {
     case unavailable
 }
 
-enum KTVerificationError: Error, Equatable {
+enum KTVerificationError: Error, Equatable, ApplicationLayerError {
     case malformedProof
     case inclusionProofInvalid
     case rootMismatch

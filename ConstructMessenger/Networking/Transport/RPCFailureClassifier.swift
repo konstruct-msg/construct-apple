@@ -15,12 +15,28 @@
 import Foundation
 import GRPCCore
 
+/// Marker for errors that originate ABOVE the transport layer — crypto, bundle,
+/// or session validation that runs on an RPC's *response*. The call physically
+/// reached the server and returned a payload; the failure is in interpreting
+/// that payload, so it must never be counted as a transport failure. Counting it
+/// as one spuriously increments the consecutive-fail counter (flipping the status
+/// indicator to "Connecting…" on a healthy link) and can even trigger VEIL
+/// failover for a non-network problem. Conforming types are routed to
+/// `.applicationError`, which is neutral for transport health.
+protocol ApplicationLayerError: Error {}
+
 enum RPCFailureClassifier {
     /// Classify any error thrown by a gRPC call.
     static func classify(_ error: Error) -> RPCFailureKind {
         if error is CancellationError { return .transientCancellation }
         if error is GRPCClientError { return .transientCancellation }
         if let rpc = error as? RPCError, rpc.code == .cancelled { return .transientCancellation }
+
+        // Application-layer validation (bundle/crypto/session) rides on top of a
+        // transport call that actually succeeded — classify before the transport
+        // heuristics below, which would otherwise bucket any non-RPCError as
+        // `.transportUnknown`.
+        if error is ApplicationLayerError { return .applicationError }
 
         if let reason = VeilFailurePolicy.classify(error) {
             return translate(reason)

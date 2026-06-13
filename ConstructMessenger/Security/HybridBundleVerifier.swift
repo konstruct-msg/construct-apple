@@ -120,7 +120,7 @@ enum HybridBundleVerifier {
 }
 
 /// Thrown when a fetched bundle carries hybrid fields that fail verification.
-struct HybridBundleVerificationError: Error, LocalizedError {
+struct HybridBundleVerificationError: Error, LocalizedError, ApplicationLayerError {
     let reason: String
     var errorDescription: String? { "Hybrid PQ bundle verification failed: \(reason)" }
 }

@@ -6,7 +6,7 @@
 import Foundation
 
 /// CryptoManager-specific errors (wraps UniFFI CryptoError)
-enum CryptoManagerError: Error, LocalizedError {
+enum CryptoManagerError: Error, LocalizedError, ApplicationLayerError {
     case coreNotInitialized
     case sessionNotFound
     case sessionInitializationFailed
