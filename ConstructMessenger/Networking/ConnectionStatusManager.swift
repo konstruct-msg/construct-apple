@@ -136,7 +136,7 @@ class ConnectionStatusManager {
                 }
             case .veilActive:
                 newStatus = hasRecentRpc ? .connected : .connecting
-            case .veilProbing, .veilDegraded, .veilCooldown:
+            case .veilProbing, .veilCooldown:
                 newStatus = .connecting
             }
         }
@@ -161,12 +161,10 @@ class ConnectionStatusManager {
             return "retry direct (\(fails))"
         case .direct:
             return nil
-        case .veilProbing(let attempt):
-            return "VEIL probe \(attempt)"
+        case .veilProbing:
+            return "VEIL probe"
         case .veilActive(let relay, _, _):
             return "VEIL \(relay)"
-        case .veilDegraded(let relay, _, let fails):
-            return "VEIL degraded \(relay) (\(fails))"
         case .veilCooldown(let until):
             let secs = max(0, Int(until.timeIntervalSinceNow))
             return "VEIL cooldown (\(secs)s)"

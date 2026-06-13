@@ -49,17 +49,13 @@ enum TransportState: Equatable, Sendable {
     /// transitions to `veilProbing`.
     case direct(consecutiveFails: Int)
 
-    /// Asking the proxy effector to bring up an VEIL relay. `attempt` is the 1-based
-    /// attempt number within the current probing session; on `maxProbeAttempts` we
-    /// give up and enter `veilCooldown`.
-    case veilProbing(attempt: Int)
+    /// Asking the proxy effector to bring up a VEIL relay via a single `veil_start`.
+    /// The Rust coordinator does the actual happy-eyeballs probing + retries inside
+    /// that one call; on failure we enter `veilCooldown`.
+    case veilProbing
 
     /// VEIL proxy is running and has served at least one transport event without failure.
     case veilActive(relay: String, port: UInt16, since: Date)
-
-    /// VEIL proxy is running but recent traffic has failed. After
-    /// `veilDegradedFailThreshold` consecutive failures we rotate via `veilProbing`.
-    case veilDegraded(relay: String, port: UInt16, consecutiveFails: Int)
 
     /// All probing attempts failed; suspended until `until`. Then we drop back to direct.
     case veilCooldown(until: Date)
@@ -67,7 +63,7 @@ enum TransportState: Equatable, Sendable {
     /// Whether the next outgoing RPC should use the VEIL proxy.
     var prefersVEIL: Bool {
         switch self {
-        case .veilProbing, .veilActive, .veilDegraded:
+        case .veilProbing, .veilActive:
             return true
         case .offline, .direct, .veilCooldown:
             return false
@@ -77,7 +73,7 @@ enum TransportState: Equatable, Sendable {
     /// The current relay address, if any.
     var currentRelay: String? {
         switch self {
-        case .veilActive(let r, _, _), .veilDegraded(let r, _, _):
+        case .veilActive(let r, _, _):
             return r
         case .offline, .direct, .veilProbing, .veilCooldown:
             return nil
@@ -87,7 +83,7 @@ enum TransportState: Equatable, Sendable {
     /// The current VEIL proxy port, if any (nil when no proxy is running).
     var veilPort: UInt16? {
         switch self {
-        case .veilActive(_, let p, _), .veilDegraded(_, let p, _):
+        case .veilActive(_, let p, _):
             return p
         case .offline, .direct, .veilProbing, .veilCooldown:
             return nil
@@ -99,9 +95,8 @@ enum TransportState: Equatable, Sendable {
         switch self {
         case .offline:                              return "offline"
         case .direct(let f):                        return "direct(fails=\(f))"
-        case .veilProbing(let a):                    return "veil-probing(attempt=\(a))"
+        case .veilProbing:                           return "veil-probing"
         case .veilActive(let r, _, _):               return "veil-active(\(r))"
-        case .veilDegraded(let r, _, let f):         return "veil-degraded(\(r), fails=\(f))"
         case .veilCooldown(let until):               return "veil-cooldown(until=\(Int(until.timeIntervalSinceNow))s)"
         }
     }
@@ -218,13 +213,10 @@ struct TransportConfig: Sendable, Equatable {
     /// Disabled when the user explicitly sets VEIL mode to `.off`.
     var allowDirectToVeilEscalation: Bool = true
 
-    /// VEIL-path transport failures on the same relay before we rotate.
-    var veilDegradedFailThreshold: Int = 2
-
-    /// How many relays to try before falling into cooldown.
-    var maxProbeAttempts: Int = 3
-
-    /// Seconds spent in cooldown after exhausting probing attempts.
+    /// Seconds spent in cooldown after a failed `veil_start` before dropping to direct.
+    /// One `veil_start` = the full probe (the Rust coordinator does happy-eyeballs +
+    /// retries internally); a failure here is real, so we back off rather than
+    /// re-firing `veil_start` back-to-back (the old retry loop was the connection churn).
     var veilCooldownDuration: TimeInterval = 30
 
     static let `default` = TransportConfig()
@@ -240,9 +232,9 @@ extension TransportState {
         case .off:
             return .direct(consecutiveFails: 0)
         case .on:
-            return .veilProbing(attempt: 1)
+            return .veilProbing
         case .auto:
-            return censored ? .veilProbing(attempt: 1) : .direct(consecutiveFails: 0)
+            return censored ? .veilProbing : .direct(consecutiveFails: 0)
         }
     }
 }

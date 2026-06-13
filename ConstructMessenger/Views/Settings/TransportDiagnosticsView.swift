@@ -179,13 +179,11 @@ struct TransportDiagnosticsView: View {
             return ["network unreachable"]
         case .direct(let f):
             return ["consecutive direct failures: \(f)"]
-        case .veilProbing(let a):
-            return ["probing attempt \(a)"]
+        case .veilProbing:
+            return ["probing"]
         case .veilActive(let r, let p, let since):
             let s = Int(now.timeIntervalSince(since))
             return ["relay: \(r)", "local port: \(p)", "active for: \(s)s"]
-        case .veilDegraded(let r, let p, let f):
-            return ["relay: \(r)", "local port: \(p)", "consecutive failures: \(f)"]
         case .veilCooldown(let until):
             let s = max(0, Int(until.timeIntervalSinceNow))
             return ["cooldown ends in: \(s)s"]
