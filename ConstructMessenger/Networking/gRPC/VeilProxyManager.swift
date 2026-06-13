@@ -200,40 +200,6 @@ final class VeilProxyManager: ObservableObject {
         return VEILConfig.hardcodedBridgeCert
     }
 
-    /// Full async cert chain (levels 2–4 — level 1 is AuthTokensResponse, handled at login):
-    ///   2. Keychain cache
-    ///   3. https://konstruct.cc/.well-known/veil-cert  (Cloudflare CDN, reachable in Russia)
-    ///   4. Hardcoded fallback in binary
-    func getVEILBridgeCert() async -> String {
-        if let cached = KeychainManager.shared.loadVEILBridgeCert(), !cached.isEmpty {
-            return cached
-        }
-        if let fetched = await VeilCertFetcher.shared.fetchFromHTTPS() {
-            KeychainManager.shared.saveVEILBridgeCert(fetched)
-            return fetched
-        }
-        Log.info("Using hardcoded VEIL bridge cert (last resort)", category: "VEIL")
-        return VEILConfig.hardcodedBridgeCert
-    }
-
-    /// Called when VEIL handshake fails repeatedly (stale cert or SPKI after server key rotation).
-    /// Clears Keychain cache, fetches fresh obfs4 cert AND relay TLS config (SPKI pins) from .well-known,
-    /// unblacklists any relay whose config was refreshed, then restarts proxy via fallback chain.
-    /// Returns true if a new cert was obtained and proxy was restarted successfully.
-    @discardableResult
-    func refreshCertAndRestart() async -> Bool {
-        Log.info("VEIL recovery — refreshing cert via .well-known", category: "VEIL")
-        KeychainManager.shared.deleteVEILBridgeCert()
-        guard let freshCert = await VeilCertFetcher.shared.fetchFromHTTPS() else {
-            Log.error("Failed to fetch fresh VEIL cert", category: "VEIL")
-            return false
-        }
-        KeychainManager.shared.saveVEILBridgeCert(freshCert)
-        await fetchConfigAndEvictIfRemoved()
-        await TransportRouter.shared.send(.veilConfigChanged)
-        return true
-    }
-
     /// Rotates to the next available relay without re-fetching the certificate.
     /// Used for inline relay rotation in performRPC when a relay's obfs4 tunnel
     /// is DPI-blocked but the cert itself is still valid.
@@ -263,8 +229,10 @@ final class VeilProxyManager: ObservableObject {
             Log.info("VEIL startup skipped — device not registered", category: "VEIL")
             return
         }
-        // ConnectionLoop handles proxy lifecycle — just ensure cert/config is available
-        _ = await getVEILBridgeCert()
+        // ConnectionLoop handles proxy lifecycle. iOS is veil-front-only (SPKI pin +
+        // per-user ticket); the obfs4 bridge cert is not used, so we no longer fetch it
+        // here — that fetch only added two 8s .well-known/ice-cert timeouts on censored
+        // networks. The relay manifest is still refreshed for AMS relay retirement.
         await fetchConfigAndEvictIfRemoved()
     }
 

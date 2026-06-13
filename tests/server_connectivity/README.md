@@ -56,5 +56,5 @@ To reproduce from Mac:
 
 ## Notes
 
-- **HTTP 404 on /.well-known/ice-cert** is expected if the endpoint isn't configured
+- **HTTP 200 on /.well-known/construct-server** is the DPI sanity check (a 404 here trips false-positive DPI detection). The obfs4-era `/.well-known/ice-cert` endpoint is retired.
 - `GetPowChallenge` returns `difficulty=8` — this is the PoW difficulty for registration
