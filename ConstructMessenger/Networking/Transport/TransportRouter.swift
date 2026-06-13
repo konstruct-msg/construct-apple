@@ -235,12 +235,22 @@ enum ConnectionLoopRelayBridge {
         let wtHostHeader: String?
 
         if useTLS {
+            // A binary-pinned relay's SPKI is the source of truth. `sniSync` falls back
+            // to the hardcoded SNI, so `serverPushedSNI` is non-nil for every relay we
+            // ship an SNI for — which made the cached-manifest pin (spkiPinSync) win
+            // unconditionally and the hardcoded pin below dead code. A stale cached
+            // manifest then handed `veil_start` a wrong SPKI → the relay's real cert
+            // failed the pin check → `HandshakeFailure`. It is also a downgrade vector:
+            // the untrusted server manifest must never override a pin baked into the
+            // binary. So the hardcoded pin always wins; the manifest pin is only used
+            // for relays we do not pin ourselves.
+            let hardcodedPin = VEILConfig.hardcodedRelaySPKIs[address]
             if let s = serverPushedSNI, !s.isEmpty {
                 sni = s
-                pin = VeilCertFetcher.spkiPinSync(for: address)
+                pin = hardcodedPin ?? VeilCertFetcher.spkiPinSync(for: address)
             } else if let explicitSNI = hardcodedSNI {
                 sni = explicitSNI
-                pin = VEILConfig.hardcodedRelaySPKIs[address]
+                pin = hardcodedPin
             } else {
                 sni = address.components(separatedBy: ":").first.flatMap { $0.isEmpty ? nil : $0 }
                 pin = nil

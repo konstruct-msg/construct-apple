@@ -39,7 +39,7 @@ final class NativeVeilRuntime: VeilProxyRuntime {
         Log.info(
             "VEIL FFI start → addr='\(address)' " +
             "bundle.len=\(bundle.count) sni='\(sni)' " +
-            "spki.len=\(spki.count) hostHeader='\(hostHeader)' wtPath='\(wtPath)' " +
+            "spki.len=\(spki.count) spki.pfx=\(String(spki.prefix(12))) hostHeader='\(hostHeader)' wtPath='\(wtPath)' " +
             "veilFrontTicket.len=\(veilFrontTicket.count) " +
             "fingerprint.len=\(fingerprint.count) scoresPath=\(scoresPath ?? "nil")",
             category: "VEIL"
