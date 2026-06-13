@@ -32,7 +32,8 @@ struct ErrorToastView: View {
     @ViewBuilder
     private func toast(for error: AppError) -> some View {
         HStack(spacing: 10) {
-            Text(asciiIcon(for: error))
+            
+            Text(icon(for: error))
                 .font(CTFont.bold(14))
                 .foregroundColor(tintColor(for: error))
                 .lineLimit(1).fixedSize()
@@ -74,7 +75,7 @@ struct ErrorToastView: View {
         .padding(.horizontal, 14)
         .background(Color.CT.bgMsg)
         .overlay(
-            Rectangle()
+            RoundedRectangle(cornerRadius: 8)
                 .stroke(tintColor(for: error).opacity(0.4), lineWidth: 1)
         )
         .padding(.horizontal, 16)
@@ -98,17 +99,23 @@ struct ErrorToastView: View {
         case .critical: return Color.CT.danger
         }
     }
-
-    private func asciiIcon(for error: AppError) -> String {
+    
+    private func icon(for error: AppError) -> Image {
         switch error {
-        case .network, .streamDisconnected:                     return "[~]"
+        case .network, .streamDisconnected:
+            return Image(systemName: "wifi.slash")
         case .sessionInitFailed, .decryptionFailed,
-             .cryptoCoreUnavailable, .keyOperationFailed:       return "[!]"
+             .cryptoCoreUnavailable, .keyOperationFailed:
+            return Image(systemName: "exclamationmark.triangle.fill")
         case .mediaUploadFailed, .mediaDownloadFailed,
-             .mediaOptimizationFailed:                          return "[!]"
-        case .validation:                                       return "[?]"
-        case .authFailed, .sessionExpired:                      return "[🔒]"
-        case .unknown:                                          return "[err]"
+                .mediaOptimizationFailed:
+            return Image(systemName: "exclamationmark.icloud.fill")
+        case .validation:
+            return Image(systemName: "exclamationmark.bubble.fill")
+        case .authFailed, .sessionExpired:
+            return Image(systemName: "lock.rotation")
+        case .unknown:
+            return Image(systemName: "exclamationmark.bubble.fill")
         }
     }
 

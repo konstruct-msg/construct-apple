@@ -353,7 +353,7 @@ struct ConstructFont {
         if let _ = fontExists("Exo2-Medium") {
             let name: String
             switch weight {
-            case .semibold: name = "Exo2-SemiBold"
+            case .semibold: name = "Exo2-SemiBold"  
             case .bold:     name = "Exo2-Bold"
             case .light:    name = "Exo2-Light"
             default:        name = "Exo2-Medium"

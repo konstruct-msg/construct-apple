@@ -382,9 +382,9 @@ enum UserDefaultsKey: String {
     // Traffic Protection
     case trafficProtectionEnabled = "trafficProtection_enabled"
 
-    // ICE — traffic obfuscation (Intrusion Countermeasures Electronics)
-    case veilEnabled = "ice_enabled"
-    case veilMode = "ice_mode"
+    // VEIL — traffic obfuscation (Intrusion Countermeasures Electronics)
+    case veilEnabled = "veil_enabled"
+    case veilMode = "veil_mode"
 
     // Background Fetch
     case backgroundFetchEnabled = "backgroundFetch_enabled"

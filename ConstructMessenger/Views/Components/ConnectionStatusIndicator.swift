@@ -59,7 +59,7 @@ struct ConnectionStatusIndicator: View {
         switch connectionManager.connectionStatus {
         case .connected:
             let status = NSLocalizedString("connected", comment: "")
-            return veilManager.isRunning ? "> \(status) \(CTSymbol.star8)" : "> \(status)"
+            return veilManager.isRunning ? "> \(status) ✷" : "> \(status)"
         case .connecting, .unknown:
             if let phase = connectionManager.connectingPhase {
                 return "> \(phase)"

@@ -18,9 +18,9 @@ struct DesktopSecurityView: View {
             if securityViewModel.isBiometricAvailable {
                 // Biometric lock toggle
                 HStack(spacing: 10) {
-                    CTRowIcon(CTSymbol.biometric,
-                              color: securityViewModel.isBiometricEnabled
-                                ? Color.CT.accent : Color.CT.textDim)
+                    Image(systemName: "faceid", color: securityViewModel.isBiometricEnabled
+                          ? Color.CT.accent : Color.CT.textDim
+                    )
                     Text(String(format: NSLocalizedString("use_biometric", comment: ""),
                                 securityViewModel.biometricDisplayName))
                         .font(CTFont.regular(13))
@@ -59,7 +59,8 @@ struct DesktopSecurityView: View {
                         securityViewModel.lockIfNeeded()
                     } label: {
                         HStack(spacing: 10) {
-                            CTRowIcon(CTSymbol.lock)
+                            Image(systemName: "lock.fill")
+                            
                             Text(NSLocalizedString("lock_now", comment: ""))
                                 .font(CTFont.regular(13))
                                 .foregroundStyle(Color.CT.text)

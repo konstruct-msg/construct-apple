@@ -5,15 +5,6 @@
 //  Terminal design system — single source of truth.
 //  iOS · macOS Desktop · TUI share the same aesthetic.
 //
-//  Usage:
-//    Color.CT.accent          → brand blue
-//    CTFont.bold(14)          → JetBrains Mono Bold 14pt
-//    CTSymbol.back            → "[←]"
-//    CTHexAvatar(initials: "AX", size: .medium)
-//    CTNoise()                → ASCII noise background layer
-//    CTNavBar(title: "CHATS", trailingSymbol: CTSymbol.add)
-//    Text("hello").ctMessageBlock(outgoing: false)
-//    myView.ctBackground()    → dark bg + noise layer
 //
 //
 
@@ -168,73 +159,7 @@ extension Color {
 
 // MARK: - Symbol Table
 
-/// All UI symbols as named constants. Never hardcode "[←]" inline.
 enum CTSymbol {
-
-    static let star8 = "✷"
-
-    // Navigation
-    static let back     = "[←]"
-    static let forward  = "[→]"
-
-    // Actions
-    static let add      = "[+]"
-    static let close    = "[×]"
-    static let send     = "[→]"
-    static let media    = "[◎]"
-    static let menu     = "[***]"
-    static let edit     = "[edit]"
-    static let refresh  = "[↺]"
-    static let retry    = "[↺]"
-    static let upload   = "[↑]"
-    static let callOut  = "[↗]"
-
-    // Status
-    static let ok          = "[✓]"
-    static let read        = "[↵]"
-    static let delivered   = "[✓✓]"
-    static let error       = "[!]"
-    static let online      = "[[ONLINE]]"
-    static let cursor      = "_"
-    static let loading     = "[···]"
-    static let empty       = "[ — ]"
-
-    // State
-    static let pin         = "[pin]"
-    static let scan        = "[scan]"
-    static let search      = "[srch]"
-    static let drafts      = "[dft]"
-    static let ttl         = "[ttl]"
-    static let setup       = "[setup →]"
-
-    // Security / Settings row icons
-    static let biometric   = "[bio]"
-    static let key         = "[key]"
-    static let lock        = "[lock]"
-    static let log         = "[log]"
-    static let disk        = "[disk]"
-    static let image       = "[img]"
-
-    // Calls
-    static let callEnd     = "[end]"
-    static let callAnswer  = "[ans]"
-
-    // Devices / Platform
-    static let deviceGeneric  = "[dev]"
-    static let deviceIOS      = "[iOS]"
-    static let deviceMac      = "[mac]"
-    static let deviceAndroid  = "[drd]"
-
-    // Tab bar
-    static let tabChats    = "[msg]"
-    static let tabSynaps   = "[syn]"
-    static let tabCalls    = "[tel]"
-    static let tabContacts = "[syn]"
-    static let tabSettings = "[cfg]"
-
-    // Input
-    static let mic         = "[mic]"
-    static let attach      = "[+]"
 
     // Separators — call as functions for custom length
     static func thin(_ count: Int = 25)  -> String { String(repeating: "- ", count: count) }

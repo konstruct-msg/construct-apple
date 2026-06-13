@@ -51,8 +51,7 @@ struct AccountSettingsView: View {
                 // explicit save (✓) or cancel (×). Prevents accidental swipe-
                 // back from silently dropping the pending changes.
                 showBack: !isEditingProfile,
-                trailingSystemImage: isEditingProfile ? "checkmark.circle.fill" : "square.and.pencil",
-                trailingSecondarySystemImage: isEditingProfile ? "xmark.circle" : nil,
+                trailingSystemImage: isEditingProfile ? "xmark.circle" : "square.and.pencil",
                 backAction: { handleBackTap() },
                 trailingAction: { handleProfileEditActionTap() },
                 trailingSecondaryAction: { handleProfileEditCancelTap() }
