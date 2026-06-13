@@ -205,11 +205,19 @@ final class PreKeyRotationService {
         Log.info("SPK rotation complete: classic keyId=\(classicKey.keyId) (server: \(response.newKeyID)), kyber keyId=\(serverKyberKeyId)", category: "SPKRotation")
 
         // Rotation clears the hybrid prekey signatures server-side; re-attach them over
-        // the freshly-rotated SPK / Kyber SPK (best-effort, capability-gated).
-        do {
-            try await HybridIdentityService.publish(deviceId: deviceId)
-        } catch {
-            Log.error("SPK rotation: hybrid signature re-attach failed (non-fatal): \(error.localizedDescription)", category: "SPKRotation")
+        // the freshly-rotated SPK / Kyber SPK. Bounded retry to ride out a transient RPC
+        // failure (which previously left the bundle with a hybrid identity but no SPK
+        // hybrid signature → peers reject it with "SPK hybrid signature missing"). If it
+        // still fails, HybridIdentityService.publishIfNeeded() repairs it on the next
+        // launch: it detects the now-stale SPK fingerprint and re-publishes.
+        for attempt in 1...3 {
+            do {
+                try await HybridIdentityService.publish(deviceId: deviceId)
+                break
+            } catch {
+                Log.error("SPK rotation: hybrid signature re-attach failed (attempt \(attempt)/3, non-fatal): \(error.localizedDescription)", category: "SPKRotation")
+                if attempt < 3 { try? await Task.sleep(nanoseconds: 2_000_000_000) }
+            }
         }
     }
 

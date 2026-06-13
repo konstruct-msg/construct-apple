@@ -20,6 +20,7 @@
 //
 
 import Foundation
+import CryptoKit
 
 @MainActor
 enum HybridIdentityService {
@@ -34,13 +35,27 @@ enum HybridIdentityService {
     /// force a one-time re-publish after a protocol change.
     private static let publishedFlagKey = "construct.hybridIdentity.published.v1"
 
-    /// Lazily publish the hybrid identity bundle once per device. Idempotent and
-    /// best-effort: on failure the flag is left unset so the next launch retries.
+    /// SHA-256 of the classic SPK the hybrid signatures were last published over.
+    /// An SPK rotation clears the server-side hybrid SPK signature; comparing this
+    /// against the current SPK lets `publishIfNeeded` detect that state and re-attach.
+    /// Without it, a rotation whose best-effort re-attach failed (transient RPC error)
+    /// left the bundle permanently unverifiable — hybrid identity present but
+    /// "SPK hybrid signature missing" — because the one-time published flag made
+    /// `publishIfNeeded` skip forever.
+    private static let spkFingerprintKey = "construct.hybridIdentity.spkFingerprint.v1"
+
+    /// Publish the hybrid identity bundle when needed. Self-healing and best-effort:
+    /// re-publishes when never published OR when the SPK has rotated since the last
+    /// successful publish (stale server-side hybrid SPK signature). On failure nothing
+    /// is recorded, so the next launch retries.
     static func publishIfNeeded(deviceId: String) async {
-        guard !UserDefaults.standard.bool(forKey: publishedFlagKey) else { return }
+        let published = UserDefaults.standard.bool(forKey: publishedFlagKey)
+        let current = try? currentSpkFingerprint()
+        let recorded = UserDefaults.standard.string(forKey: spkFingerprintKey)
+        // Up to date only when we've published AND the SPK hasn't rotated since.
+        if published, let current, current == recorded { return }
         do {
             try await publish(deviceId: deviceId)
-            UserDefaults.standard.set(true, forKey: publishedFlagKey)
         } catch {
             Log.error("Hybrid identity publish failed (will retry next launch): \(error.localizedDescription)", category: "HybridPQ")
         }
@@ -77,7 +92,24 @@ enum HybridIdentityService {
             signedPreKeyHybridSignature: spkHybridSig,
             kyberSignedPreKeyHybridSignature: kyberHybridSig
         )
+
+        // 6. Record success so publishIfNeeded can detect a later SPK rotation and
+        //    re-attach. Only set AFTER the upload is acknowledged — a failed publish
+        //    must leave the fingerprint stale so the next launch retries.
+        UserDefaults.standard.set(true, forKey: publishedFlagKey)
+        UserDefaults.standard.set(Self.fingerprint(spkPublic), forKey: spkFingerprintKey)
         Log.info("Hybrid PQ identity published (key=\(hybridPub.count)B, spkSig=\(spkHybridSig.count)B, kyberSig=\(kyberHybridSig?.count ?? 0)B)", category: "HybridPQ")
+    }
+
+    /// SHA-256 hex of the device's current classic SPK — the staleness key for the
+    /// hybrid SPK signature. Rotation changes the SPK, so this changes too.
+    private static func currentSpkFingerprint() throws -> String {
+        let spk = try CryptoManager.shared.localBundlePublicKeys().signedPrekeyPublic
+        return fingerprint(spk)
+    }
+
+    private static func fingerprint(_ data: Data) -> String {
+        SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
     }
 
     /// `x3dhPrologue || [0x00, suite_id] || public_key` — identical bytes as the Ed25519
