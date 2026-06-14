@@ -244,26 +244,24 @@ class AuthViewModel {
         // This is faster and less error-prone than full device auth, and keeps the gRPC stream stable.
         if AuthSessionManager.shared.sessionToken != nil,
            let userId = resolvedUserId(),
-           let refresh = AuthSessionManager.shared.refreshToken {
+           AuthSessionManager.shared.refreshToken != nil {
             do {
-                Log.info("Session token expired — attempting refresh", category: "Auth")
-                let response = try await AuthServiceClient.shared.refreshToken(refreshToken: refresh)
-
-                let expiresIn: Int
-                if let expiresAt = response.expiresAt {
-                    expiresIn = max(Int(expiresAt - Int64(Date().timeIntervalSince1970)), 0)
-                } else {
-                    expiresIn = response.expiresIn ?? 3600
+                Log.info("Session token expired — attempting refresh (via coordinator)", category: "Auth")
+                // Route through the single-flight coordinator instead of calling refreshToken
+                // directly. At launch several components hit .unauthenticated at once; a direct
+                // call here raced the coordinator on the same stored refresh token, one side got
+                // "already used / revoked", and the rejection wiped the freshly-rotated good
+                // tokens. Sharing the coordinator's in-flight task makes every caller observe the
+                // same outcome and use the same rotated token. The coordinator persists the new
+                // access+refresh+expiry on success.
+                let refreshed = try await TokenRefreshCoordinator.shared.refreshIfPossible()
+                guard refreshed else {
+                    Log.info("Coordinator refresh did not yield a valid session — falling back to device auth", category: "Auth")
+                    throw NetworkError.connectionFailed
                 }
-
-                // Preserve userId even if the refresh response doesn't include it.
-                let refreshedUserId = response.userId.isEmpty ? userId : response.userId
-                AuthSessionManager.shared.saveTokens(
-                    accessToken: response.accessToken,
-                    refreshToken: response.refreshToken,
-                    expiresIn: expiresIn,
-                    userId: refreshedUserId
-                )
+                // saveTokens(userId:) inside the coordinator is called with nil userId (refresh
+                // doesn't change identity); ensure the resolved userId is persisted/in-memory.
+                AuthSessionManager.shared.updateUserId(userId)
 
                 if !CryptoManager.shared.isInitialized {
                     self.currentUserId = userId

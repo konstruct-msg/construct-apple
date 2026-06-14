@@ -25,14 +25,31 @@ actor TokenRefreshCoordinator {
         }
     }
 
+    /// Max number of VEIL relay rotations to attempt before honoring an auth rejection
+    /// as real. A rejection forwarded by a VEIL relay can't be trusted (a hostile relay
+    /// could forge it), so we rotate and retry on a clean relay — but only this many times.
+    /// Past it, the rejection is treated as genuine (wipe + device re-auth) so a truly dead
+    /// token recovers instead of churning the relay forever.
+    static let maxSuspectRotations = 2
+
     private var inFlight: Task<Bool, Error>?
     // Set when the server permanently rejects the token (revoked / already used).
     // Prevents redundant network requests from concurrent callers after the first rejection.
-    // Cleared by resetInvalidation() when new tokens are saved via device re-auth.
+    // Cleared by resetInvalidation() when new tokens are saved.
     private var permanentlyInvalid = false
+    // Consecutive auth rejections received over a VEIL relay. Bounds suspect-relay rotation
+    // (see maxSuspectRotations). Reset on any successful token save via resetInvalidation().
+    private var suspectRejectionCount = 0
 
     func resetInvalidation() {
         permanentlyInvalid = false
+        suspectRejectionCount = 0
+    }
+
+    /// Records one auth rejection seen over a VEIL relay and returns the running count.
+    func recordSuspectRejection() -> Int {
+        suspectRejectionCount += 1
+        return suspectRejectionCount
     }
 
     /// Refreshes access token using the stored refresh token.
@@ -82,7 +99,14 @@ actor TokenRefreshCoordinator {
 
         defer { inFlight = nil }
         do {
-            return try await task.value
+            let ok = try await task.value
+            // A successful refresh un-poisons any latched invalidation and clears the
+            // suspect-rotation budget — the token is demonstrably good again.
+            if ok {
+                permanentlyInvalid = false
+                suspectRejectionCount = 0
+            }
+            return ok
         } catch {
             if TokenRefreshCoordinator.isRefreshTokenPermanentlyInvalid(error) {
                 permanentlyInvalid = true
