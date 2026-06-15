@@ -143,10 +143,12 @@ class MediaManager {
     ///   - recipientId: User ID to encrypt media key for
     /// - Returns: Media metadata for message content
     func uploadImage(_ attachment: MediaAttachment, for recipientId: String) async throws -> MediaMessageData {
-        Log.info("Uploading image for recipient: \(recipientId) (quality=\(attachment.quality))", category: "MediaManager")
+        // Original-quality: upload the source bytes untouched (preserve HEIC/PNG + mime).
+        if attachment.quality == .original {
+            return try await uploadOriginalImage(attachment, for: recipientId)
+        }
 
-        // Phase 1a: behaviour-preserving — still optimize the display image regardless of
-        // `quality`. Phase 1b will branch on `.original` to upload `attachment.originalData`.
+        Log.info("Uploading image for recipient: \(recipientId) (compressed)", category: "MediaManager")
         guard let image = attachment.displayImage ?? PlatformImage(data: attachment.originalData) else {
             throw MediaOptimizationError.conversionFailed
         }
@@ -173,6 +175,47 @@ class MediaManager {
             filename: nil,
             compressed: false
         )
+    }
+
+    /// Upload the original source bytes untouched (no JPEG re-encode), preserving the
+    /// real mime (HEIC/PNG/JPEG). A small JPEG thumbnail + pixel dimensions are still
+    /// derived from the display image so bubbles render before the full download.
+    private func uploadOriginalImage(_ attachment: MediaAttachment, for recipientId: String) async throws -> MediaMessageData {
+        let data = attachment.originalData
+        Log.info("Uploading ORIGINAL image for recipient: \(recipientId) (mime=\(attachment.mimeType), \(data.count) bytes)", category: "MediaManager")
+        guard Int64(data.count) <= MessageSizeLimits.maxImageBytes else {
+            throw MediaUploadError.fileTooLarge(data.count, Int(MessageSizeLimits.maxImageBytes))
+        }
+        let uploadResult = try await Self.uploadWithRetry(data: data, mimeType: attachment.mimeType)
+        Log.info("Original image uploaded: \(uploadResult.mediaId)", category: "MediaManager")
+
+        let thumbnail = attachment.displayImage.flatMap { try? MediaOptimizer.generateThumbnail(from: $0) }
+        let (width, height) = Self.pixelDimensions(of: attachment.displayImage)
+
+        return MediaMessageData(
+            mediaId: uploadResult.mediaId,
+            mediaUrl: uploadResult.mediaUrl,
+            mediaKey: uploadResult.encryptionKey,
+            mediaType: attachment.mimeType,
+            size: uploadResult.encryptedSize,
+            width: width,
+            height: height,
+            duration: nil,
+            thumbnail: thumbnail,
+            hash: uploadResult.hash,
+            filename: nil,
+            compressed: false
+        )
+    }
+
+    /// Pixel dimensions of an image (nil when unavailable).
+    private static func pixelDimensions(of image: PlatformImage?) -> (Int?, Int?) {
+        guard let image else { return (nil, nil) }
+        #if canImport(UIKit)
+        return (Int(image.size.width * image.scale), Int(image.size.height * image.scale))
+        #else
+        return (Int(image.size.width), Int(image.size.height))
+        #endif
     }
 
     /// Uploads data with up to 2 automatic retries on transient gRPC/VEIL stream failures.

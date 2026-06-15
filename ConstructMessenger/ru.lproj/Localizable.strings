@@ -497,6 +497,7 @@
 // MARK: - Message States
 "uploading" = "Загрузка…";
 "loading" = "Загрузка...";
+"send_original_quality" = "Оригинал";
 "failed_to_load" = "Не удалось загрузить";
 "shared_profile" = "Профиль отправлен";
 

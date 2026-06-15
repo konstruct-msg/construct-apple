@@ -496,6 +496,7 @@
 // MARK: - Message States
 "uploading" = "Uploading…";
 "loading" = "Loading...";
+"send_original_quality" = "Original quality";
 "failed_to_load" = "Failed to load";
 "shared_profile" = "Shared profile";
 

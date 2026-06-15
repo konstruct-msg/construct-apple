@@ -32,6 +32,8 @@ struct IOSMessageInputView: View {
     @State private var showCameraPicker = false
     @StateObject private var audioRecorder = AudioRecorderService.shared
     @State private var showMicPermissionAlert = false
+    /// Per-user preference: send photos at original quality (no recompression).
+    @AppStorage("composer.sendOriginalPhotos") private var sendOriginal = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -91,6 +93,7 @@ struct IOSMessageInputView: View {
     private var attachmentPreviews: some View {
         if !selectedAttachments.isEmpty {
             MessagePhotoPreviewBar(images: selectedAttachments.compactMap { $0.displayImage }, onRemove: removePhoto)
+            qualityToggle
         }
         if !selectedFileURLs.isEmpty {
             MessageFilePreviewBar(fileURLs: selectedFileURLs) { index in
@@ -124,6 +127,23 @@ struct IOSMessageInputView: View {
         case .idle:
             inputRow
         }
+    }
+
+    /// Compress / original-quality toggle, shown above the composer when photos are attached.
+    private var qualityToggle: some View {
+        Button { sendOriginal.toggle() } label: {
+            HStack(spacing: 6) {
+                Image(systemName: sendOriginal ? "checkmark.square.fill" : "square")
+                    .font(.system(size: 13))
+                Text(LocalizedStringKey("send_original_quality"))
+                    .font(CTFont.regular(12))
+            }
+            .foregroundColor(sendOriginal ? Color.CT.accent : Color.CT.textDim)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 14)
+        .padding(.bottom, 4)
     }
 
     private var inputRow: some View {
@@ -184,7 +204,11 @@ struct IOSMessageInputView: View {
     }
 
     private func sendMessage() {
-        onSend(selectedAttachments, selectedFileURLs)
+        let quality: MediaQuality = sendOriginal ? .original : .compressed
+        let attachments = selectedAttachments.map { att -> MediaAttachment in
+            var a = att; a.quality = quality; return a
+        }
+        onSend(attachments, selectedFileURLs)
         selectedPhotos.removeAll()
         selectedAttachments.removeAll()
         selectedFileURLs.removeAll()
