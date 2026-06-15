@@ -40,12 +40,12 @@ final class ConnectionLoopTests: XCTestCase {
         XCTAssertNil(VeilProxyStore.lastSuccessfulPath)
     }
 
+    // MARK: - Reducer: direct-path escalation
+
     func testTransportReducer_DirectFailureDoesNotEscalateWhenVEILFallbackDisabled() {
         let config = TransportConfig(
             directFailThreshold: 2,
             allowDirectToVeilEscalation: false,
-            veilDegradedFailThreshold: 2,
-            maxProbeAttempts: 3,
             veilCooldownDuration: 30
         )
 
@@ -60,6 +60,73 @@ final class ConnectionLoopTests: XCTestCase {
         XCTAssertFalse(outcome.effects.contains(.requestProxyStart))
         XCTAssertFalse(outcome.effects.contains(.invalidateGRPCClient))
     }
+
+    /// With escalation enabled (the default), reaching the threshold flips to VEIL.
+    func testTransportReducer_DirectFailureEscalatesAtThreshold() {
+        let outcome = TransportReducer.reduce(
+            state: .direct(consecutiveFails: 1),
+            event: .rpcFailed(kind: .transportUnknown, via: .direct(.h2), foreground: true),
+            config: .default,
+            now: Date()
+        )
+
+        XCTAssertEqual(outcome.state, .veilProbing)
+        XCTAssertTrue(outcome.effects.contains(.requestProxyStart))
+    }
+
+    // MARK: - Reducer: auto mode must try direct first (regression for the
+    // censored-region pre-activation that tore down working direct connections).
+
+    func testTransportReducer_AutoOnCensoredNetwork_StartsDirectNotVeil() {
+        // A device in a "censored" timezone/region must still begin on direct.
+        let initial = TransportState.initial(mode: .auto, censored: true, reachable: true)
+        XCTAssertEqual(initial, .direct(consecutiveFails: 0))
+    }
+
+    func testTransportReducer_AutoToggleOnCensored_DoesNotForceVeil() {
+        // Toggling to .auto on a censored network must NOT force a VEIL probe; it
+        // keeps the current (working) direct path and lets failures drive escalation.
+        let outcome = TransportReducer.reduce(
+            state: .direct(consecutiveFails: 0),
+            event: .veilModeChanged(.auto, censored: true),
+            config: .default,
+            now: Date()
+        )
+
+        XCTAssertEqual(outcome.state, .direct(consecutiveFails: 0))
+        XCTAssertFalse(outcome.effects.contains(.requestProxyStart))
+    }
+
+    func testTransportReducer_NetworkPathChange_AutoCensored_DoesNotStartProxy() {
+        // A network-path change on a censored network in auto mode recomputes the
+        // starting state — it must land on direct without requesting a proxy start.
+        let outcome = TransportReducer.reduce(
+            state: .direct(consecutiveFails: 1),
+            event: .networkPathChanged(reachable: true, censored: true, mode: .auto),
+            config: .default,
+            now: Date()
+        )
+
+        XCTAssertEqual(outcome.state, .direct(consecutiveFails: 0))
+        XCTAssertFalse(outcome.effects.contains(.requestProxyStart))
+    }
+
+    /// Mode `.on` still force-activates VEIL regardless of the censored heuristic.
+    func testTransportReducer_ModeOn_ForcesVeilProbing() {
+        let initial = TransportState.initial(mode: .on, censored: false, reachable: true)
+        XCTAssertEqual(initial, .veilProbing)
+
+        let outcome = TransportReducer.reduce(
+            state: .direct(consecutiveFails: 0),
+            event: .veilModeChanged(.on, censored: false),
+            config: .default,
+            now: Date()
+        )
+        XCTAssertEqual(outcome.state, .veilProbing)
+        XCTAssertTrue(outcome.effects.contains(.requestProxyStart))
+    }
+
+    // MARK: - Router (async, with mock effectors)
 
     func testTransportRouter_ModeOff_DirectFailuresNeverStartVEIL() async {
         VeilProxyStore.saveMode(.off)
@@ -79,6 +146,28 @@ final class ConnectionLoopTests: XCTestCase {
         let snapshot = await router.snapshot()
         let proxyStartCalls = await proxy.startCalls()
         XCTAssertEqual(snapshot.state, .direct(consecutiveFails: 2))
+        XCTAssertEqual(proxyStartCalls, 0)
+    }
+
+    func testTransportRouter_AutoCensored_StaysDirectUntilRealFailure() async {
+        VeilProxyStore.saveMode(.auto)
+
+        let proxy = MockProxyEffector()
+        let router = TransportRouter(
+            config: .default,
+            proxyEffector: proxy,
+            channelEffector: MockChannelEffector(),
+            uiEffector: MockUIEffector()
+        )
+
+        // Censored network, auto mode: must begin on direct and stay there while the
+        // direct path is healthy / only blips once (below the escalation threshold).
+        await router.send(.networkPathChanged(reachable: true, censored: true, mode: .auto))
+        await router.send(.rpcFailed(kind: .transportUnknown, via: .direct(.h2), foreground: true))
+
+        let snapshot = await router.snapshot()
+        let proxyStartCalls = await proxy.startCalls()
+        XCTAssertEqual(snapshot.state, .direct(consecutiveFails: 1))
         XCTAssertEqual(proxyStartCalls, 0)
     }
 }

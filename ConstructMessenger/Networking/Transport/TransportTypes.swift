@@ -234,7 +234,14 @@ extension TransportState {
         case .on:
             return .veilProbing
         case .auto:
-            return censored ? .veilProbing : .direct(consecutiveFails: 0)
+            // Auto = try direct first, escalate to VEIL only on real direct failures
+            // (see TransportReducer.reduceDirect, directFailThreshold). We deliberately
+            // do NOT pre-activate VEIL from the censored-region heuristic: geography is
+            // a false-positive-prone signal — a working direct path in a "censored"
+            // timezone would otherwise be torn down and forced through the slower relay.
+            // `censored` is still carried for callers/logging but no longer forces VEIL.
+            _ = censored
+            return .direct(consecutiveFails: 0)
         }
     }
 }

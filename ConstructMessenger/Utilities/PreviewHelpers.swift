@@ -95,11 +95,12 @@ struct PreviewHelpers {
     }
 
     /// Creates sample Chat for preview
-    static func createSampleChat(context: NSManagedObjectContext, with user: User) -> Chat {
+    static func createSampleChat(context: NSManagedObjectContext, with user: User, unread: Int16 = 0) -> Chat {
         let chat = Chat(context: context)
         chat.id = UUID().uuidString
         chat.otherUser = user
         chat.lastMessageTime = Date()
+        chat.unreadCount = unread
         return chat
     }
 

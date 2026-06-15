@@ -20,7 +20,7 @@ struct ConnectionStatusIndicator: View {
     var body: some View {
         Group {
             if visible {
-                Text(labelText)
+                Text(connectionManager.statusIndicatorText)
                     .opacity(textOpacity)
             }
         }
@@ -47,26 +47,6 @@ struct ConnectionStatusIndicator: View {
                     handleStatusChange(.connected)
                 }
             }
-        }
-    }
-
-    // MARK: - Label
-
-    private var labelText: String {
-        if connectionManager.isStreamPaused {
-            return "> \(NSLocalizedString("status_paused", comment: ""))"
-        }
-        switch connectionManager.connectionStatus {
-        case .connected:
-            let status = NSLocalizedString("connected", comment: "")
-            return veilManager.isRunning ? "> \(status) ✷" : "> \(status)"
-        case .connecting, .unknown:
-            if let phase = connectionManager.connectingPhase {
-                return "> \(phase)"
-            }
-            return "> \(NSLocalizedString("status_connecting", comment: ""))"
-        case .disconnected:
-            return "> \(NSLocalizedString("disconnected", comment: ""))"
         }
     }
 

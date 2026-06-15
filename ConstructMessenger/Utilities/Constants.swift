@@ -467,9 +467,12 @@ struct VEILConfig {
     /// cert and re-wraps gRPC over TLS to ams.konstruct.cc:443 (--backend-tls).
     /// SPKI below is now that veil-front cert. obfs4/WebTunnel are no longer served
     /// here — veil-front wins the coordinator race via `ruRelayVeilFrontTicket`.
+    /// 2026-06-14: relay moved to a new VPS (195.133.44.113); cert reissued, so the
+    /// pinned SPKI below was rotated. `api.divany-kresla.uk` A-record must point at
+    /// the new IP for the on-wire SNI to match a resolvable host.
     static let ruRelayAddress    = "api.divany-kresla.uk:443"
     static let ruRelaySNI        = "api.divany-kresla.uk"
-    static let ruRelayPinnedSPKI = "b2361c0448a33a10e6521300aa4de8d8fe402791dd4fd5b0fe10fbb09457570c"
+    static let ruRelayPinnedSPKI = "5621e47a745614de08efb054b01388f3bcf32c763ecf5f0aeaeb6b0785ff6861"
     /// Stale obfs4 keypair cert — kept only so the obfs4 probe has a bridge line; it
     /// fails fast (relay no longer speaks obfs4) and veil-front wins the race.
     static let ruRelayBridgeCert = "zdfEJKLpy4nVo09zbd/5q3Yx02FyL7Tlr+5Aurww51IbYacIWIqbcTndB1UL+n2g68XBQw"

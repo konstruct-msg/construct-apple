@@ -119,21 +119,18 @@ enum NetworkSettingsLabels {
 enum BackgroundFetchSettingsLayout {
     static let rowHorizontalPadding: CGFloat = 12
     static let rowVerticalPadding: CGFloat = 12
+    static let toggleRowSpacing: CGFloat = 12
     static let warningSpacing: CGFloat = 4
     static let sectionVerticalPadding: CGFloat = 20
     static let footerBottomPadding: CGFloat = 8
-    static let intervalSectionSpacing: CGFloat = 12
-    static let stepperDividerWidth: CGFloat = 1
-    static let stepperDividerHeight: CGFloat = 24
-    static let stepperButtonWidth: CGFloat = 44
-    static let stepperButtonHeight: CGFloat = 32
-    static let presetSpacing: CGFloat = 8
-    static let presetHorizontalPadding: CGFloat = 6
-    static let presetVerticalPadding: CGFloat = 3
-    static let presetStrokeWidth: CGFloat = 1
+    static let sliderSectionSpacing: CGFloat = 12
+    static let tickLabelFontSize: CGFloat = 10
+    static let tickLabelMinimumScale: CGFloat = 0.7
+    static let trackMarkSpacing: CGFloat = 4
+    static let trackMarkWidth: CGFloat = 1
+    static let trackMinorMarkHeight: CGFloat = 5
+    static let trackMajorMarkHeight: CGFloat = 8
     static let disabledRowOpacity: Double = 0.5
-    static let stepperButtonFontSize: CGFloat = 13
-    static let stepperBorderStrokeWidth: CGFloat = 1
 }
 
 enum BackgroundFetchSettingsConfig {

@@ -36,36 +36,26 @@ struct BackgroundFetchSettingsView: View {
                     // MARK: - Enable/Disable section
                     CTSettingsSectionHeader(title: NSLocalizedString("enable_background_fetch", comment: "").uppercased())
                     CTSectionGroup {
-                        Button {
-                            if !isLowPowerModeEnabled {
-                                isEnabled.toggle()
-                                handleToggleChange(isEnabled)
-                            }
-                        } label: {
-                            HStack {
-                                VStack(alignment: .leading, spacing: BackgroundFetchSettingsLayout.warningSpacing) {
-                                    Text(LocalizedStringKey("enable_background_fetch"))
-                                        .font(CTFont.regular(13))
-                                        .foregroundColor(
-                                            isLowPowerModeEnabled
-                                            ? Color.CT.textDim.opacity(BackgroundFetchSettingsLayout.disabledRowOpacity)
-                                            : Color.CT.text
-                                        )
-                                    if isLowPowerModeEnabled {
-                                        Text(LocalizedStringKey("background_fetch_low_power_mode_warning"))
-                                            .font(CTFont.regular(11))
-                                            .foregroundStyle(.orange)
-                                    }
-                                }
-                                Spacer()
-                                Text(isEnabled && !isLowPowerModeEnabled ? "[■ ON]" : "[□ OFF]")
-                                    .font(CTFont.bold(12))
-                                    .foregroundColor(isEnabled && !isLowPowerModeEnabled ? Color.CT.accent : Color.CT.textDim)
-                            }
-                            .padding(.horizontal, BackgroundFetchSettingsLayout.rowHorizontalPadding)
-                            .padding(.vertical, BackgroundFetchSettingsLayout.rowVerticalPadding)
+                        HStack(spacing: BackgroundFetchSettingsLayout.toggleRowSpacing) {
+                            Text(LocalizedStringKey("enable_background_fetch"))
+                                .font(CTFont.regular(13))
+                                .foregroundColor(
+                                    isLowPowerModeEnabled
+                                    ? Color.CT.textDim.opacity(BackgroundFetchSettingsLayout.disabledRowOpacity)
+                                    : Color.CT.text
+                                )
+                            Spacer(minLength: 0)
+                            Toggle("", isOn: $isEnabled)
+                                .labelsHidden()
+                                .tint(Color.CT.accent)
                         }
-                        .buttonStyle(.plain)
+                        .padding(.horizontal, BackgroundFetchSettingsLayout.rowHorizontalPadding)
+                        .padding(.vertical, BackgroundFetchSettingsLayout.rowVerticalPadding)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .disabled(isLowPowerModeEnabled)
+                    }
+                    .onChange(of: isEnabled) { _, newValue in
+                        handleToggleChange(newValue)
                     }
 
                     sectionFooter("background_fetch_footer")
@@ -74,9 +64,10 @@ struct BackgroundFetchSettingsView: View {
                     if isEnabled && !isLowPowerModeEnabled {
                         CTSettingsSectionHeader(title: NSLocalizedString("background_fetch_interval_settings", comment: "").uppercased())
                         CTSectionGroup {
-                            VStack(alignment: .leading, spacing: BackgroundFetchSettingsLayout.intervalSectionSpacing) {
+                            VStack(alignment: .leading, spacing: BackgroundFetchSettingsLayout.sliderSectionSpacing) {
                                 intervalHeader
-                                intervalStepper
+                                intervalSlider
+                                intervalTrackMarks
                             }
                             .padding(.horizontal, BackgroundFetchSettingsLayout.rowHorizontalPadding)
                             .padding(.vertical, BackgroundFetchSettingsLayout.rowVerticalPadding)
@@ -169,96 +160,60 @@ struct BackgroundFetchSettingsView: View {
         }
     }
 
-    /// CT-style interval stepper: [-] current value [+]
-    private var intervalStepper: some View {
+    private var intervalSlider: some View {
+        Slider(
+            value: intervalMinutesBinding,
+            in: Double(BackgroundFetchConfig.minIntervalMinutes)...Double(BackgroundFetchConfig.maxIntervalMinutes),
+            step: Double(BackgroundFetchSettingsConfig.intervalStepMinutes)
+        )
+        .tint(Color.CT.accent)
+        .accessibilityLabel(Text(NSLocalizedString("background_fetch_interval", comment: "")))
+    }
+
+    private var intervalTrackMarks: some View {
         HStack(spacing: 0) {
-            Button {
-                let newVal = max(
-                    BackgroundFetchConfig.minIntervalMinutes,
-                    intervalMinutes - BackgroundFetchSettingsConfig.intervalStepMinutes
-                )
-                if newVal != intervalMinutes {
-                    intervalMinutes = newVal
-                    handleIntervalChange(newVal)
-                }
-            } label: {
-                Image(systemName: "minus")
-                    .font(CTFont.bold(BackgroundFetchSettingsLayout.stepperButtonFontSize))
-                    .foregroundColor(intervalMinutes > BackgroundFetchConfig.minIntervalMinutes ? Color.CT.accent : Color.CT.textDim)
-                    .frame(
-                        width: BackgroundFetchSettingsLayout.stepperButtonWidth,
-                        height: BackgroundFetchSettingsLayout.stepperButtonHeight
-                    )
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-
-            Rectangle()
-                .fill(Color.CT.noise)
-                .frame(
-                    width: BackgroundFetchSettingsLayout.stepperDividerWidth,
-                    height: BackgroundFetchSettingsLayout.stepperDividerHeight
-                )
-
-            Spacer()
-
-            // Preset chips: 5 · 15 · 30 · 60
-            HStack(spacing: BackgroundFetchSettingsLayout.presetSpacing) {
-                ForEach(BackgroundFetchSettingsConfig.intervalPresets, id: \.self) { preset in
-                    Button {
-                        intervalMinutes = preset
-                        handleIntervalChange(preset)
-                    } label: {
-                        Text("\(preset)")
-                            .font(CTFont.regular(11))
-                            .foregroundColor(intervalMinutes == preset ? Color.CT.accent : Color.CT.textDim)
-                            .padding(.horizontal, BackgroundFetchSettingsLayout.presetHorizontalPadding)
-                            .padding(.vertical, BackgroundFetchSettingsLayout.presetVerticalPadding)
-                            .overlay(
-                                Rectangle()
-                                    .stroke(
-                                        intervalMinutes == preset ? Color.CT.accent : Color.CT.noise,
-                                        lineWidth: BackgroundFetchSettingsLayout.presetStrokeWidth
-                                    )
-                            )
+            ForEach(intervalTickValues, id: \.self) { value in
+                VStack(spacing: BackgroundFetchSettingsLayout.trackMarkSpacing) {
+                    Rectangle()
+                        .fill(value == intervalMinutes ? Color.CT.accent : Color.CT.noise)
+                        .frame(
+                            width: BackgroundFetchSettingsLayout.trackMarkWidth,
+                            height: value == intervalMinutes
+                                ? BackgroundFetchSettingsLayout.trackMajorMarkHeight
+                                : BackgroundFetchSettingsLayout.trackMinorMarkHeight
+                        )
+                    if BackgroundFetchSettingsConfig.intervalPresets.contains(value) {
+                        Text(BackgroundFetchConfig.formatInterval(value))
+                            .font(CTFont.regular(BackgroundFetchSettingsLayout.tickLabelFontSize))
+                            .foregroundStyle(value == intervalMinutes ? Color.CT.accent : Color.CT.textDim)
+                            .frame(maxWidth: .infinity)
+                            .multilineTextAlignment(.center)
+                            .lineLimit(1)
+                            .minimumScaleFactor(BackgroundFetchSettingsLayout.tickLabelMinimumScale)
+                    } else {
+                        Text(" ")
+                            .font(CTFont.regular(BackgroundFetchSettingsLayout.tickLabelFontSize))
+                            .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.plain)
                 }
             }
-
-            Spacer()
-
-            Rectangle()
-                .fill(Color.CT.noise)
-                .frame(
-                    width: BackgroundFetchSettingsLayout.stepperDividerWidth,
-                    height: BackgroundFetchSettingsLayout.stepperDividerHeight
-                )
-
-            Button {
-                let newVal = min(
-                    BackgroundFetchConfig.maxIntervalMinutes,
-                    intervalMinutes + BackgroundFetchSettingsConfig.intervalStepMinutes
-                )
-                if newVal != intervalMinutes {
-                    intervalMinutes = newVal
-                    handleIntervalChange(newVal)
-                }
-            } label: {
-                Image(systemName: "plus")
-                    .font(CTFont.bold(BackgroundFetchSettingsLayout.stepperButtonFontSize))
-                    .foregroundColor(intervalMinutes < BackgroundFetchConfig.maxIntervalMinutes ? Color.CT.accent : Color.CT.textDim)
-                    .frame(
-                        width: BackgroundFetchSettingsLayout.stepperButtonWidth,
-                        height: BackgroundFetchSettingsLayout.stepperButtonHeight
-                    )
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
         }
-        .overlay(
-            Rectangle()
-                .stroke(Color.CT.noise, lineWidth: BackgroundFetchSettingsLayout.stepperBorderStrokeWidth)
+    }
+
+    private var intervalTickValues: [Int] {
+        Array(stride(
+            from: BackgroundFetchConfig.minIntervalMinutes,
+            through: BackgroundFetchConfig.maxIntervalMinutes,
+            by: BackgroundFetchSettingsConfig.intervalStepMinutes
+        ))
+    }
+
+    private var intervalMinutesBinding: Binding<Double> {
+        Binding(
+            get: { Double(intervalMinutes) },
+            set: { newValue in
+                updateIntervalMinutes(Int(newValue.rounded()))
+            }
         )
     }
 
@@ -307,6 +262,16 @@ struct BackgroundFetchSettingsView: View {
     private func handleIntervalChange(_ newValue: Int) {
         BackgroundFetchConfig.intervalMinutes = newValue
         fetchManager.updateFetchInterval(newValue)
+    }
+
+    private func updateIntervalMinutes(_ newValue: Int) {
+        let clampedValue = max(
+            BackgroundFetchConfig.minIntervalMinutes,
+            min(BackgroundFetchConfig.maxIntervalMinutes, newValue)
+        )
+        guard clampedValue != intervalMinutes else { return }
+        intervalMinutes = clampedValue
+        handleIntervalChange(clampedValue)
     }
 
     private func formatLastCheckDate(_ date: Date) -> String {

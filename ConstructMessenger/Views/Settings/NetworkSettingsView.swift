@@ -59,7 +59,7 @@ struct NetworkSettingsView: View {
                             .font(.system(size: 14, weight: .medium))
                             .foregroundColor(statusColor)
                         VStack(alignment: .leading, spacing: NetworkSettingsLayout.statusDetailSpacing) {
-                            Text(connectionManager.connectionStatus.displayText)
+                            Text(connectionManager.connectionStatus.text(localized: true))
                                 .font(CTFont.regular(14))
                                 .foregroundStyle(Color.CT.text)
                             if connectionManager.connectionStatus != .connected,
@@ -75,9 +75,9 @@ struct NetworkSettingsView: View {
                                 .foregroundStyle(Color.CT.textDim)
                                 .textSelection(.enabled)
                         }
-                        
+
                         Spacer()
-                        
+
                         let displayTransport = streamManager.activeTransport.isEmpty
                             ? streamManager.lastActiveTransport
                             : streamManager.activeTransport

@@ -113,7 +113,7 @@ struct MediaGalleryViewer: View {
             HStack(alignment: .center) {
                 Button { isPresented = false } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(CTFont.bold(20))
+                        .font(CTFont.regular(20))
                         .foregroundColor(.white.opacity(0.9))
                         .frame(width: 44, height: 44)
                         .contentShape(Rectangle())
@@ -132,7 +132,7 @@ struct MediaGalleryViewer: View {
 
                 Button { saveCurrentImage() } label: {
                     Image(systemName: saveStatusIcon)
-                        .font(CTFont.bold(16))
+                        .font(CTFont.regular(16))
                         .foregroundColor(saveStatusColor)
                         .frame(width: 44, height: 44)
                         .contentShape(Rectangle())
@@ -185,8 +185,8 @@ struct MediaGalleryViewer: View {
     
     private var saveStatusIcon: String {
             switch saveStatus {
-            case .idle:    return "arrow.down.circle"
-            case .saving:  return "arrow.down.circle"
+            case .idle:    return "arrow.down.circle.fill"
+            case .saving:  return "arrow.down.circle.fill"
             case .saved:   return "checkmark.circle"
             case .failed:  return "exclamationmark.circle"
             }

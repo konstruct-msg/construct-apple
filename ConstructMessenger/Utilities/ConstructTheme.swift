@@ -219,22 +219,6 @@ struct CTRowIcon: View {
     }
 }
 
-// MARK: - Hexagonal Avatar Shape
-
-struct CTHexShape: Shape {
-    func path(in rect: CGRect) -> Path {
-        let cx = rect.midX, cy = rect.midY
-        let r  = min(rect.width, rect.height) / 2
-        var p  = Path()
-        for i in 0..<6 {
-            let a  = CGFloat(i) * .pi / 3 - .pi / 6
-            let pt = CGPoint(x: cx + r * cos(a), y: cy + r * sin(a))
-            i == 0 ? p.move(to: pt) : p.addLine(to: pt)
-        }
-        p.closeSubpath()
-        return p
-    }
-}
 
 // MARK: - CTHexAvatar
 
@@ -621,8 +605,6 @@ struct CTSettingsRow: View {
     var valueColor: Color   = Color.CT.text
     var isAction: Bool      = false
     var isDestructive: Bool = false
-    /// Trailing iOS-style disclosure chevron (SF Symbol). Use for navigation /
-    /// action rows instead of the legacy `[→]` (`CTSymbol.forward`) glyph.
     var disclosure: Bool    = false
 
     var body: some View {

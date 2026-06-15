@@ -373,8 +373,8 @@ struct MessageBubbleRegularView: View {
     @ViewBuilder
     private var swipeIndicatorOverlay: some View {
         if swipeOffset > 10 {
-            Text("[←]")
-                .font(CTFont.bold(13))
+            Image(systemName: "arrow.uturn.right")
+                .font(CTFont.regular(14))
                 .foregroundColor(Color.CT.accent)
                 .opacity(min(max(Double(swipeOffset / 40), 0), 1))
                 .offset(x: message.isSentByMe ? -swipeOffset - 8 : swipeOffset + 8)

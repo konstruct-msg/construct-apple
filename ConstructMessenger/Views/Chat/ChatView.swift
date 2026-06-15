@@ -515,23 +515,14 @@ struct ChatView: View {
         }
     }
 
-    /// Returns nil when everything is healthy (no subtitle shown).
     private var navigationStatusSubtitle: String? {
-        // Only show "Encrypting..." while actively establishing a session (user tapped Send).
-        // Absence of a session before first send is normal — don't show a misleading subtitle.
-        if viewModel.isInitializingSession {
-            return NSLocalizedString("status_encrypting", comment: "")
-        } else if connectionManager.connectionStatus == .connecting {
-            return NSLocalizedString("status_connecting", comment: "")
-        } else if !connectionManager.isConnected {
-            return NSLocalizedString("status_no_connection", comment: "")
-        }
-        return nil
+        connectionManager.navigationStatusSubtitle(
+            isInitializingSession: viewModel.isInitializingSession
+        )
     }
-    
 
     // MARK: - Computed Properties
-    
+
     private var filteredMessages: [Message] {
         // Guard against accessing deleted/faulted Core Data objects that the FRC
         // may not have removed from viewModel.messages before SwiftUI re-evaluates.

@@ -14,17 +14,24 @@ struct ChatRowView: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 HStack {
-                    // <@username> only when user has a real handle; otherwise deterministic name
-                    if let user = chat.otherUser, !user.username.isEmpty {
-                        Text("<@\(user.username.lowercased())>")
-                            .font(CTFont.bold(13))
-                            .foregroundColor(Color.CT.text)
-                    } else {
-                        Text((chat.otherUser?.resolvedDisplayName ?? NSLocalizedString("unknown", comment: "")).uppercased())
-                            .font(CTFont.bold(13))
-                            .foregroundColor(Color.CT.text)
+                    if let user = chat.otherUser {
+                        if !user.displayName.isEmpty {
+                            Text(user.displayName)
+                                .font(CTFont.bold(13))
+                                .foregroundColor(Color.CT.text)
+                        } else if !user.username.isEmpty {
+                            Text("@\(user.username.lowercased())")
+                                .font(CTFont.bold(13))
+                                .foregroundColor(Color.CT.text)
+                        }
+                        else {
+                            Text((chat.otherUser?.resolvedDisplayName ?? NSLocalizedString("unknown", comment: "")).uppercased())
+                                .font(CTFont.bold(13))
+                                .foregroundColor(Color.CT.text)
+                        }
                     }
                     Spacer()
+                    
                     if let ts = chat.lastMessageTime {
                         Text(ts, formatter: ChatRowView.rowTimeFormatter)
                             .font(CTFont.regular(11))
@@ -46,13 +53,13 @@ struct ChatRowView: View {
                     }
                     Spacer()
                     if chat.unreadCount > 0 {
-                        Text(chat.unreadCount < 100 ? "[\(chat.unreadCount)]" : "[99+]")
-                            .font(CTFont.bold(11))
+                        Text(chat.unreadCount < 10000 ? "\(chat.unreadCount)" : "9999+")
+                            .font(CTFont.bold(13))
                             .foregroundColor(Color.CT.bg)
                             .padding(.horizontal, 5)
                             .padding(.vertical, 2)
                             .background(Color.CT.accent)
-                            .clipShape(Rectangle())
+                            .clipShape(Capsule())
                             .animation(.easeInOut(duration: 0.2), value: chat.unreadCount)
                     }
                 }

@@ -118,16 +118,12 @@ enum TransportReducer {
                 return (.veilProbing, [.requestProxyStart])
             }
         case .auto:
-            // On a censored network the user toggling to .auto is an explicit request for
-            // VEIL protection. Otherwise .auto means "stay on direct, escalate on failures."
-            if censored {
-                switch state {
-                case .veilActive, .veilProbing:
-                    return (state, [])
-                default:
-                    return (.veilProbing, [.requestProxyStart])
-                }
-            }
+            // Auto never force-starts VEIL from the censored heuristic. It means "stay
+            // on the current path; escalate to VEIL only when direct actually fails"
+            // (see reduceDirect). Geography alone must not abandon a working direct
+            // connection. Toggling to auto just stops forcing — keep the current state
+            // and let RPC outcomes drive the next transition. `censored` is unused here.
+            _ = censored
             return (state, [])
         }
     }
