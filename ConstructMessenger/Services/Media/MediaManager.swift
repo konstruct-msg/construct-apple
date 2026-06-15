@@ -142,11 +142,16 @@ class MediaManager {
     ///   - image: UIImage to upload
     ///   - recipientId: User ID to encrypt media key for
     /// - Returns: Media metadata for message content
-    func uploadImage(_ image: PlatformImage, for recipientId: String) async throws -> MediaMessageData {
-        Log.info("Uploading image for recipient: \(recipientId)", category: "MediaManager")
-        
+    func uploadImage(_ attachment: MediaAttachment, for recipientId: String) async throws -> MediaMessageData {
+        Log.info("Uploading image for recipient: \(recipientId) (quality=\(attachment.quality))", category: "MediaManager")
+
+        // Phase 1a: behaviour-preserving — still optimize the display image regardless of
+        // `quality`. Phase 1b will branch on `.original` to upload `attachment.originalData`.
+        guard let image = attachment.displayImage ?? PlatformImage(data: attachment.originalData) else {
+            throw MediaOptimizationError.conversionFailed
+        }
         let optimized = try MediaOptimizer.optimizeImage(image)
-        
+
         // Upload with 1 automatic retry on stream failure
         let uploadResult = try await Self.uploadWithRetry(data: optimized.data, mimeType: optimized.metadata.mimeType)
         Log.info("Image uploaded: \(uploadResult.mediaId)", category: "MediaManager")

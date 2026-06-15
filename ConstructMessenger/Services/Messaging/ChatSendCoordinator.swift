@@ -13,13 +13,13 @@ import UIKit
 
 struct QueuedMessage {
     let text: String
-    let images: [PlatformImage]
+    let attachments: [MediaAttachment]
     let replyTo: Message?
     let timestamp: Date
 
-    init(text: String, images: [PlatformImage] = [], replyTo: Message? = nil) {
+    init(text: String, attachments: [MediaAttachment] = [], replyTo: Message? = nil) {
         self.text = text
-        self.images = images
+        self.attachments = attachments
         self.replyTo = replyTo
         self.timestamp = Date()
     }
@@ -44,7 +44,7 @@ final class ChatSendCoordinator {
     private var queuedMessages: [QueuedMessage] = []
 
     private struct MediaUploadPayload {
-        let images: [PlatformImage]
+        let attachments: [MediaAttachment]
         let fileURLs: [URL]
         let caption: String
         let replyTo: Message?
@@ -80,14 +80,14 @@ final class ChatSendCoordinator {
 
     func sendMessage(
         text: String,
-        images: [PlatformImage] = [],
+        attachments: [MediaAttachment] = [],
         fileURLs: [URL] = [],
         replyTo: Message? = nil,
         replyToContentOverride: String? = nil
     ) {
-        Log.info("sendMessage called with \(images.count) images, \(fileURLs.count) files", category: "ChatViewModel")
+        Log.info("sendMessage called with \(attachments.count) images, \(fileURLs.count) files", category: "ChatViewModel")
         let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if images.isEmpty && fileURLs.isEmpty && text.count > MessageSizeLimits.maxTextCharacters {
+        if attachments.isEmpty && fileURLs.isEmpty && text.count > MessageSizeLimits.maxTextCharacters {
             let chunks = MessageValidator.splitIntoChunks(text)
             Log.info("Long paste split into \(chunks.count) messages", category: "ChatViewModel")
             for (index, chunk) in chunks.enumerated() {
@@ -120,7 +120,7 @@ final class ChatSendCoordinator {
         #endif
 
         if !hasSession {
-            let queued = QueuedMessage(text: text, images: images, replyTo: replyTo)
+            let queued = QueuedMessage(text: text, attachments: attachments, replyTo: replyTo)
             queuedMessages.append(queued)
             viewModel?.isInitializingSession = true
             Log.info("SESSION_STATE[queue_message]: userId=\(recipientId.prefix(8))..., queueSize=\(queuedMessages.count)", category: "SessionInit")
@@ -154,7 +154,7 @@ final class ChatSendCoordinator {
             guard let self else { return }
             let ok = await SessionActivityTracker.shared.preflight(for: recipientId)
             guard ok else {
-                let queued = QueuedMessage(text: text, images: images, replyTo: replyTo)
+                let queued = QueuedMessage(text: text, attachments: attachments, replyTo: replyTo)
                 self.queuedMessages.append(queued)
                 self.viewModel?.isInitializingSession = true
                 Log.info("Pre-flight failed — message queued, triggering proactive reinit for \(recipientId.prefix(8))…", category: "ChatViewModel")
@@ -163,7 +163,7 @@ final class ChatSendCoordinator {
             }
             self.dispatchSend(
                 text: text,
-                images: images,
+                attachments: attachments,
                 fileURLs: fileURLs,
                 replyTo: replyTo,
                 replyToContentOverride: replyToContentOverride
@@ -175,7 +175,7 @@ final class ChatSendCoordinator {
 
     private func dispatchSend(
         text: String,
-        images: [PlatformImage],
+        attachments: [MediaAttachment],
         fileURLs: [URL],
         replyTo: Message?,
         replyToContentOverride: String?
@@ -193,7 +193,7 @@ final class ChatSendCoordinator {
             sendFileMessage(fileURLs: fileURLs, caption: text, replyTo: replyTo, replyToContentOverride: replyToContentOverride)
             return
         }
-        if !images.isEmpty {
+        if !attachments.isEmpty {
             do {
                 try MessageValidator.validateCaption(text)
             } catch let error as MessageValidationError {
@@ -203,7 +203,7 @@ final class ChatSendCoordinator {
                 ErrorRouter.shared.report(.unknown(error.userFacingMessage))
                 return
             }
-            sendMediaMessage(images: images, caption: text, replyTo: replyTo, replyToContentOverride: replyToContentOverride)
+            sendMediaMessage(attachments: attachments, caption: text, replyTo: replyTo, replyToContentOverride: replyToContentOverride)
             return
         }
         do {
@@ -237,7 +237,7 @@ final class ChatSendCoordinator {
         queuedMessages.removeAll()
         for queued in messagesToSend {
             Log.info("Sending queued message: \"\(queued.text.prefix(30))\"", category: "ChatViewModel")
-            sendMessage(text: queued.text, images: queued.images, replyTo: queued.replyTo)
+            sendMessage(text: queued.text, attachments: queued.attachments, replyTo: queued.replyTo)
         }
     }
 
@@ -472,7 +472,7 @@ final class ChatSendCoordinator {
                 return
             }
             viewModel?.isSessionReady = false
-            let queued = QueuedMessage(text: text, images: [], replyTo: replyTo)
+            let queued = QueuedMessage(text: text, attachments: [], replyTo: replyTo)
             queuedMessages.append(queued)
             viewModel?.isInitializingSession = true
             viewModel?.isSending = false
@@ -484,7 +484,7 @@ final class ChatSendCoordinator {
     // MARK: - Media messages
 
     func sendMediaMessage(
-        images: [PlatformImage],
+        attachments: [MediaAttachment],
         caption: String,
         replyTo: Message?,
         replyToContentOverride: String? = nil
@@ -496,7 +496,7 @@ final class ChatSendCoordinator {
             return
         }
         let placeholderId = UUID().uuidString
-        let thumbnail: Data? = images.first.flatMap { MediaManager.shared.generateThumbnail(from: $0) }
+        let thumbnail: Data? = attachments.first?.displayImage.flatMap { MediaManager.shared.generateThumbnail(from: $0) }
         persistenceService.savePlaceholderMessage(
             id: placeholderId,
             fromUserId: currentUserId,
@@ -509,14 +509,14 @@ final class ChatSendCoordinator {
             in: viewContext
         )
         pendingMediaUploads[placeholderId] = MediaUploadPayload(
-            images: images, fileURLs: [], caption: caption, replyTo: replyTo)
+            attachments: attachments, fileURLs: [], caption: caption, replyTo: replyTo)
         viewModel?.isSending = true
-        Log.info("Uploading \(images.count) image(s) (placeholder \(placeholderId.prefix(8))…)", category: "ChatViewModel")
+        Log.info("Uploading \(attachments.count) image(s) (placeholder \(placeholderId.prefix(8))…)", category: "ChatViewModel")
         Task { [weak self] in
             guard let self else { return }
             do {
                 let result = try await mediaUploadManager.uploadMediaAndBuildContent(
-                    images: images,
+                    attachments: attachments,
                     caption: caption,
                     recipientId: recipientId
                 )
@@ -596,7 +596,7 @@ final class ChatSendCoordinator {
             in: viewContext
         )
         pendingMediaUploads[placeholderId] = MediaUploadPayload(
-            images: [], fileURLs: fileURLs, caption: caption, replyTo: replyTo)
+            attachments: [], fileURLs: fileURLs, caption: caption, replyTo: replyTo)
         viewModel?.isSending = true
         Log.info("Uploading \(fileURLs.count) file(s) (placeholder \(placeholderId.prefix(8))…)", category: "ChatViewModel")
         Task { [weak self] in
@@ -663,8 +663,8 @@ final class ChatSendCoordinator {
         if let payload = pendingMediaUploads[message.id] {
             pendingMediaUploads.removeValue(forKey: message.id)
             persistenceService.deleteMessage(id: message.id, in: viewContext)
-            if !payload.images.isEmpty {
-                sendMediaMessage(images: payload.images, caption: payload.caption, replyTo: payload.replyTo)
+            if !payload.attachments.isEmpty {
+                sendMediaMessage(attachments: payload.attachments, caption: payload.caption, replyTo: payload.replyTo)
             } else {
                 sendFileMessage(fileURLs: payload.fileURLs, caption: payload.caption, replyTo: payload.replyTo)
             }

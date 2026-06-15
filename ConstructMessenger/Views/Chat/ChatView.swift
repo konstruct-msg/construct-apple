@@ -353,14 +353,14 @@ struct ChatView: View {
             replyingTo: replyingTo,
             quoteOverride: replyQuoteText,
             editingMessage: viewModel.editingMessage,
-            onSend: { images, fileURLs in
+            onSend: { attachments, fileURLs in
                 if let editMsg = viewModel.editingMessage {
                     viewModel.editMessage(editMsg, newText: messageText)
                     messageText = ""
                 } else {
                     viewModel.sendMessage(
                         text: messageText,
-                        images: images,
+                        attachments: attachments,
                         fileURLs: fileURLs,
                         replyTo: replyingTo,
                         replyToContentOverride: replyQuoteText

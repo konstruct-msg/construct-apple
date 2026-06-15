@@ -15,7 +15,7 @@ struct MessageInputView: View {
     let replyingTo: Message?
     let quoteOverride: String?
     let editingMessage: Message?
-    let onSend: ([PlatformImage], [URL]) -> Void
+    let onSend: ([MediaAttachment], [URL]) -> Void
     var onSendVoice: ((URL, TimeInterval, [Float]) -> Void)? = nil
     let onCancelReply: () -> Void
     let onCancelEdit: () -> Void

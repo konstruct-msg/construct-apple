@@ -18,13 +18,13 @@ struct IOSMessageInputView: View {
     let replyingTo: Message?
     let quoteOverride: String?
     let editingMessage: Message?
-    let onSend: ([PlatformImage], [URL]) -> Void
+    let onSend: ([MediaAttachment], [URL]) -> Void
     var onSendVoice: ((URL, TimeInterval, [Float]) -> Void)? = nil
     let onCancelReply: () -> Void
     let onCancelEdit: () -> Void
 
     @State private var selectedPhotos: [PhotosPickerItem] = []
-    @State private var selectedImages: [PlatformImage] = []
+    @State private var selectedAttachments: [MediaAttachment] = []
     @State private var selectedFileURLs: [URL] = []
     @State private var showAttachmentMenu = false
     @State private var showPhotoPicker = false
@@ -44,7 +44,7 @@ struct IOSMessageInputView: View {
         .animation(.easeInOut(duration: 0.2), value: canSend)
         .animation(.easeInOut(duration: 0.2), value: replyingTo != nil)
         .animation(.easeInOut(duration: 0.2), value: editingMessage != nil)
-        .animation(.easeInOut(duration: 0.2), value: !selectedImages.isEmpty)
+        .animation(.easeInOut(duration: 0.2), value: !selectedAttachments.isEmpty)
         .animation(.easeInOut(duration: 0.15), value: audioRecorder.state)
         .alert("Microphone Access Denied", isPresented: $showMicPermissionAlert) {
             Button("Cancel", role: .cancel) {}
@@ -61,7 +61,7 @@ struct IOSMessageInputView: View {
         }
         .onChange(of: droppedImages) { _, newImages in
             guard !newImages.isEmpty else { return }
-            selectedImages.append(contentsOf: newImages)
+            selectedAttachments.append(contentsOf: newImages.map { MediaAttachment(image: $0) })
             droppedImages.removeAll()
         }
         .fileImporter(
@@ -89,8 +89,8 @@ struct IOSMessageInputView: View {
 
     @ViewBuilder
     private var attachmentPreviews: some View {
-        if !selectedImages.isEmpty {
-            MessagePhotoPreviewBar(images: selectedImages, onRemove: removePhoto)
+        if !selectedAttachments.isEmpty {
+            MessagePhotoPreviewBar(images: selectedAttachments.compactMap { $0.displayImage }, onRemove: removePhoto)
         }
         if !selectedFileURLs.isEmpty {
             MessageFilePreviewBar(fileURLs: selectedFileURLs) { index in
@@ -159,7 +159,7 @@ struct IOSMessageInputView: View {
         .photosPicker(isPresented: $showPhotoPicker, selection: $selectedPhotos, maxSelectionCount: 10, matching: .images)
         .sheet(isPresented: $showCameraPicker) {
             CameraPickerView { image in
-                selectedImages.append(image)
+                selectedAttachments.append(MediaAttachment(image: image))
             }
             .ignoresSafeArea()
         }
@@ -167,7 +167,7 @@ struct IOSMessageInputView: View {
 
     private var canSend: Bool {
         !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        || !selectedImages.isEmpty
+        || !selectedAttachments.isEmpty
         || !selectedFileURLs.isEmpty
     }
 
@@ -184,29 +184,31 @@ struct IOSMessageInputView: View {
     }
 
     private func sendMessage() {
-        onSend(selectedImages, selectedFileURLs)
+        onSend(selectedAttachments, selectedFileURLs)
         selectedPhotos.removeAll()
-        selectedImages.removeAll()
+        selectedAttachments.removeAll()
         selectedFileURLs.removeAll()
     }
 
     private func removePhoto(at index: Int) {
-        guard index < selectedImages.count else { return }
-        selectedImages.remove(at: index)
+        guard index < selectedAttachments.count else { return }
+        selectedAttachments.remove(at: index)
         if index < selectedPhotos.count { selectedPhotos.remove(at: index) }
     }
 
     private func loadSelectedPhotos() async {
-        selectedImages.removeAll()
+        selectedAttachments.removeAll()
         for item in selectedPhotos {
+            // Keep the ORIGINAL bytes (+ mime) — original-quality sending (1b) needs them;
+            // the compressed path (1a default) derives a display image from the same data.
             guard let data = try? await item.loadTransferable(type: Data.self),
                   let image = PlatformImage(data: data) else { continue }
-            if let jpeg = image.platformJPEGData(quality: 0.8),
-               Int64(jpeg.count) > MessageSizeLimits.maxImageBytes {
+            if Int64(data.count) > MessageSizeLimits.maxImageBytes {
                 Log.error("Photo too large", category: "MessageInput")
                 continue
             }
-            selectedImages.append(image)
+            let mime = item.supportedContentTypes.first?.preferredMIMEType ?? "image/jpeg"
+            selectedAttachments.append(MediaAttachment(originalData: data, mimeType: mime, displayImage: image))
         }
     }
 
@@ -216,9 +218,9 @@ struct IOSMessageInputView: View {
             defer { url.stopAccessingSecurityScopedResource() }
             guard let data = try? Data(contentsOf: url),
                   let image = PlatformImage(data: data) else { continue }
-            if let jpeg = image.platformJPEGData(quality: 0.8),
-               Int64(jpeg.count) > MessageSizeLimits.maxImageBytes { continue }
-            selectedImages.append(image)
+            if Int64(data.count) > MessageSizeLimits.maxImageBytes { continue }
+            let mime = UTType(filenameExtension: url.pathExtension)?.preferredMIMEType ?? "image/jpeg"
+            selectedAttachments.append(MediaAttachment(originalData: data, mimeType: mime, displayImage: image))
         }
     }
 

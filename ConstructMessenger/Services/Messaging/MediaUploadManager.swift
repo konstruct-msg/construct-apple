@@ -25,27 +25,28 @@ class MediaUploadManager {
     /// - Returns: MediaUploadResult with content and thumbnails
     /// - Throws: MediaUploadError if upload fails
     func uploadMediaAndBuildContent(
-        images: [PlatformImage],
+        attachments: [MediaAttachment],
         caption: String,
         recipientId: String
     ) async throws -> MediaUploadResult {
         var mediaDataList: [MediaMessageData] = []
         var thumbnails: [Data] = []
-        
+
         // Upload each image using MediaManager
-        for (index, image) in images.enumerated() {
-            Log.info("Uploading image \(index + 1)/\(images.count)", category: "MediaUploadManager")
-            
+        for (index, attachment) in attachments.enumerated() {
+            Log.info("Uploading image \(index + 1)/\(attachments.count)", category: "MediaUploadManager")
+
             // Generate thumbnail before upload (for local storage on sender side)
-            if let thumbnail = MediaManager.shared.generateThumbnail(from: image) {
+            if let displayImage = attachment.displayImage,
+               let thumbnail = MediaManager.shared.generateThumbnail(from: displayImage) {
                 thumbnails.append(thumbnail)
                 Log.debug("Generated thumbnail: \(thumbnail.count) bytes", category: "MediaUploadManager")
             }
-            
+
             // Upload via MediaManager
-            let mediaData = try await MediaManager.shared.uploadImage(image, for: recipientId)
+            let mediaData = try await MediaManager.shared.uploadImage(attachment, for: recipientId)
             mediaDataList.append(mediaData)
-            
+
             Log.info("Image \(index + 1) uploaded: \(mediaData.mediaId)", category: "MediaUploadManager")
         }
         

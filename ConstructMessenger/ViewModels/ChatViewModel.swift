@@ -130,14 +130,14 @@ class ChatViewModel {
 
     func sendMessage(
         text: String,
-        images: [PlatformImage] = [],
+        attachments: [MediaAttachment] = [],
         fileURLs: [URL] = [],
         replyTo: Message? = nil,
         replyToContentOverride: String? = nil
     ) {
         sendCoordinator.sendMessage(
             text: text,
-            images: images,
+            attachments: attachments,
             fileURLs: fileURLs,
             replyTo: replyTo,
             replyToContentOverride: replyToContentOverride
