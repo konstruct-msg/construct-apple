@@ -163,6 +163,7 @@ class MediaManager {
         
         let width = optimized.metadata.width
         let height = optimized.metadata.height
+        let blurhash = BlurHash.encode(image)
 
         return MediaMessageData(
             mediaId: uploadResult.mediaId,
@@ -176,7 +177,8 @@ class MediaManager {
             thumbnail: optimized.thumbnail,
             hash: uploadResult.hash,
             filename: nil,
-            compressed: false
+            compressed: false,
+            blurhash: blurhash
         )
     }
 
@@ -196,6 +198,7 @@ class MediaManager {
 
         let thumbnail = attachment.displayImage.flatMap { try? MediaOptimizer.generateThumbnail(from: $0) }
         let (width, height) = Self.pixelDimensions(of: attachment.displayImage)
+        let blurhash = attachment.displayImage.flatMap { BlurHash.encode($0) }
 
         return MediaMessageData(
             mediaId: uploadResult.mediaId,
@@ -209,7 +212,8 @@ class MediaManager {
             thumbnail: thumbnail,
             hash: uploadResult.hash,
             filename: nil,
-            compressed: false
+            compressed: false,
+            blurhash: blurhash
         )
     }
 

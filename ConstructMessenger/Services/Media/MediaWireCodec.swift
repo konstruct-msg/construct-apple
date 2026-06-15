@@ -44,7 +44,7 @@ enum MediaWireCodec {
                 m.dimensions = dims
             }
             if let d = item.duration, d > 0 { m.durationMs = UInt32(d * 1000) }
-            // thumbnail / blurhash intentionally left empty here (blurhash is a later phase).
+            if let bh = item.blurhash, !bh.isEmpty { m.blurhash = bh }
             return m
         }
         if !caption.isEmpty { album.caption = caption }

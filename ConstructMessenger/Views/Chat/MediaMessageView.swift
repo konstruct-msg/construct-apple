@@ -65,6 +65,7 @@ private struct SingleMediaCell: View {
     @State private var isLoading = false
     @State private var loadError: String?
     @State private var downloadProgress: Double = 0
+    @State private var blurPreview: PlatformImage?
 
     private var itemDict: [String: Any] {
         mediaContent.mediaItems.indices.contains(itemIndex)
@@ -97,6 +98,7 @@ private struct SingleMediaCell: View {
                 emptyPlaceholder
             }
         }
+        .animation(.easeInOut(duration: 0.25), value: thumbnailImage != nil)
         .onAppear { loadThumbnail() }
     }
 
@@ -114,18 +116,47 @@ private struct SingleMediaCell: View {
     }
 
     private var loadingPlaceholder: some View {
-        Rectangle()
-            .fill(Color.CT.bgMsg).frame(width: 200, height: 200)
-            .overlay {
-                VStack(spacing: 12) {
-                    ProgressView().scaleEffect(1.5).tint(Color.CT.accent)
-                    if downloadProgress > 0 && downloadProgress < 1 {
-                        Text("\(Int(downloadProgress * 100))%").font(CTFont.regular(11)).foregroundColor(Color.CT.textDim)
-                    } else {
-                        Text(LocalizedStringKey("loading")).font(CTFont.regular(11)).foregroundColor(Color.CT.textDim)
-                    }
+        ZStack {
+            if let preview = blurPreview {
+                // Blurred preview from the transmitted BlurHash — clears to the full image.
+                Image(platformImage: preview)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: previewSize.width, height: previewSize.height)
+                    .clipped()
+            } else {
+                Rectangle().fill(Color.CT.bgMsg)
+                    .frame(width: previewSize.width, height: previewSize.height)
+            }
+
+            // Liquid Glass progress chip over the preview.
+            Group {
+                if downloadProgress > 0 && downloadProgress < 1 {
+                    Text("\(Int(downloadProgress * 100))%")
+                        .font(CTFont.regular(12))
+                        .foregroundColor(.white)
+                        .monospacedDigit()
+                } else {
+                    ProgressView().tint(.white)
                 }
             }
+            .padding(14)
+            .ctGlassCircle()
+        }
+        .frame(width: previewSize.width, height: previewSize.height)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+    }
+
+    /// Display size for the loading preview, from the descriptor's pixel dimensions
+    /// (so the blurred preview matches the final image's shape), capped to the bubble.
+    private var previewSize: CGSize {
+        let maxW: CGFloat = 260, maxH: CGFloat = 320
+        guard let w = (itemDict["width"] as? Int).map(CGFloat.init), w > 0,
+              let h = (itemDict["height"] as? Int).map(CGFloat.init), h > 0 else {
+            return CGSize(width: 200, height: 200)
+        }
+        let scale = min(maxW / w, maxH / h, 1)
+        return CGSize(width: max(120, w * scale), height: max(120, h * scale))
     }
 
     private var errorPlaceholder: some View {
@@ -168,6 +199,11 @@ private struct SingleMediaCell: View {
     private func loadThumbnail() {
         if thumbnailImage != nil || isLoading { return }
         loadError = nil
+
+        // Decode the transmitted BlurHash into a blurred preview shown while downloading.
+        if blurPreview == nil, let bh = itemDict["blurhash"] as? String, !bh.isEmpty {
+            blurPreview = BlurHash.decode(bh, size: CGSize(width: 32, height: 32))
+        }
 
         // Fast first paint from a locally-stored thumbnail (placeholder / sent), then
         // upgrade to full quality below. The sender's full image is cached at send time
@@ -382,6 +418,19 @@ private struct GridCell: View {
                 MediaImageCache.shared.store(image, for: message.id, at: itemIndex)
                 thumbnailImage = thumb
             }
+        }
+    }
+}
+
+// MARK: - Liquid Glass helper
+
+private extension View {
+    /// Liquid Glass background on iOS 26+, `.ultraThinMaterial` fallback otherwise.
+    @ViewBuilder func ctGlassCircle() -> some View {
+        if #available(iOS 26.0, *) {
+            self.glassEffect(.regular, in: Circle())
+        } else {
+            self.background(.ultraThinMaterial, in: Circle())
         }
     }
 }
