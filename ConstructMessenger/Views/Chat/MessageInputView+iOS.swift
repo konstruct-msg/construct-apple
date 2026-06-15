@@ -176,7 +176,7 @@ struct IOSMessageInputView: View {
             Button(LocalizedStringKey("files")) { showFilePicker = true }
             Button(LocalizedStringKey("cancel"), role: .cancel) {}
         }
-        .photosPicker(isPresented: $showPhotoPicker, selection: $selectedPhotos, maxSelectionCount: 10, matching: .images)
+        .photosPicker(isPresented: $showPhotoPicker, selection: $selectedPhotos, maxSelectionCount: 99, matching: .images)
         .sheet(isPresented: $showCameraPicker) {
             CameraPickerView { image in
                 selectedAttachments.append(MediaAttachment(image: image))

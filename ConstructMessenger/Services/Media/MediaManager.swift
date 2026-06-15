@@ -157,6 +157,9 @@ class MediaManager {
         // Upload with 1 automatic retry on stream failure
         let uploadResult = try await Self.uploadWithRetry(data: optimized.data, mimeType: optimized.metadata.mimeType)
         Log.info("Image uploaded: \(uploadResult.mediaId)", category: "MediaManager")
+        // Cache the full plaintext locally so the SENDER sees full quality (bubble +
+        // gallery) without re-downloading their own upload.
+        cacheSentMedia(optimized.data, mediaId: uploadResult.mediaId)
         
         let width = optimized.metadata.width
         let height = optimized.metadata.height
@@ -188,6 +191,8 @@ class MediaManager {
         }
         let uploadResult = try await Self.uploadWithRetry(data: data, mimeType: attachment.mimeType)
         Log.info("Original image uploaded: \(uploadResult.mediaId)", category: "MediaManager")
+        // Cache the full original locally so the SENDER sees full quality offline.
+        cacheSentMedia(data, mediaId: uploadResult.mediaId)
 
         let thumbnail = attachment.displayImage.flatMap { try? MediaOptimizer.generateThumbnail(from: $0) }
         let (width, height) = Self.pixelDimensions(of: attachment.displayImage)
@@ -206,6 +211,18 @@ class MediaManager {
             filename: nil,
             compressed: false
         )
+    }
+
+    /// Persist the full plaintext of a just-sent media item under its `mediaId`, into the
+    /// same memory + disk cache the download path reads. The sender's bubble/gallery then
+    /// resolve full quality via the normal `downloadAndDecryptMedia` cache-first path —
+    /// no network, no low-res-thumbnail fallback.
+    func cacheSentMedia(_ plaintext: Data, mediaId: String) {
+        saveToDiskcache(plaintext, mediaId: mediaId)
+        if currentCacheSize + plaintext.count < maxCacheSize {
+            mediaCache[mediaId] = plaintext
+            currentCacheSize += plaintext.count
+        }
     }
 
     /// Pixel dimensions of an image (nil when unavailable).

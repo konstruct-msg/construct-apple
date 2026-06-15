@@ -80,12 +80,12 @@ private struct SingleMediaCell: View {
                     .resizable()
                     .scaledToFit()
                     .frame(maxWidth: 260, maxHeight: 320)
-                    .clipShape(Rectangle())
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
                     .overlay(alignment: .bottom) {
                         if isUploading { uploadingBadge }
                     }
                     .overlay(
-                        Rectangle()
+                        RoundedRectangle(cornerRadius: 10)
                             .stroke(isSelected ? Color.CT.accent : Color.clear, lineWidth: 2)
                     )
                     .onTapGesture { onTap() }
@@ -166,33 +166,34 @@ private struct SingleMediaCell: View {
     // MARK: Load logic
 
     private func loadThumbnail() {
+        if thumbnailImage != nil || isLoading { return }
         loadError = nil
-        if message.isSentByMe {
-            if let data = MediaManager.shared.retrieveThumbnail(for: message.id, at: itemIndex),
-               let img = PlatformImage(data: data)
-            {
-                thumbnailImage = img
-                MediaImageCache.shared.store(img, for: message.id, at: itemIndex)
-                return
-            }
+
+        // Fast first paint from a locally-stored thumbnail (placeholder / sent), then
+        // upgrade to full quality below. The sender's full image is cached at send time
+        // (MediaManager.cacheSentMedia), so the upgrade is a cache hit — no re-download.
+        if message.isSentByMe,
+           let data = MediaManager.shared.retrieveThumbnail(for: message.id, at: itemIndex),
+           let img = PlatformImage(data: data) {
+            thumbnailImage = img
         }
+
         guard let mediaId = itemDict["mediaId"] as? String,
               let mediaUrl = itemDict["mediaUrl"] as? String,
               let mediaKeyStr = itemDict["mediaKey"] as? String,
               let mediaKey = Data(base64Encoded: mediaKeyStr)
         else {
-            loadError = "Missing media info"
+            if thumbnailImage == nil { loadError = "Missing media info" }
             return
         }
-        isLoading = true
-        downloadProgress = 0.02
+        if thumbnailImage == nil { isLoading = true; downloadProgress = 0.02 }
         // Real byte-level progress: encrypted total comes from the descriptor `size`.
         let total = Double((itemDict["size"] as? Int) ?? 0)
         let onProgress: @Sendable (Int64) -> Void = { received in
             guard total > 0 else { return }
             // Reserve the top 10% for the decrypt + thumbnail step below.
             let frac = min(0.9, Double(received) / total)
-            Task { @MainActor in downloadProgress = frac }
+            Task { @MainActor in if isLoading { downloadProgress = frac } }
         }
         Task {
             do {
@@ -202,15 +203,16 @@ private struct SingleMediaCell: View {
                     mediaKey: mediaKey,
                     onProgress: onProgress
                 )
-                await MainActor.run { downloadProgress = 0.95 }
+                await MainActor.run { if isLoading { downloadProgress = 0.95 } }
                 guard let image = PlatformImage(data: imageData) else {
                     await MainActor.run {
                         isLoading = false
-                        loadError = "Invalid image data"
+                        if thumbnailImage == nil { loadError = "Invalid image data" }
                         downloadProgress = 0
                     }
                     return
                 }
+                // Full image → gallery cache; a 320px thumb keeps the bubble light.
                 let thumbnail = MediaManager.shared.generateThumbnailImage(from: image, maxSize: 320)
                 await MainActor.run {
                     MediaImageCache.shared.store(image, for: message.id, at: itemIndex)
@@ -221,7 +223,7 @@ private struct SingleMediaCell: View {
             } catch {
                 await MainActor.run {
                     isLoading = false
-                    loadError = error.localizedDescription
+                    if thumbnailImage == nil { loadError = error.localizedDescription }
                     downloadProgress = 0
                 }
             }
@@ -238,34 +240,77 @@ private struct MediaGridView: View {
     let isSelected: Bool
     let onTapItem: (Int) -> Void
 
-    private let gridSize: CGFloat = 120
-    private let spacing: CGFloat = 3
+    private let albumWidth: CGFloat = 244
+    private let spacing: CGFloat = 2
     private let maxVisible = 4
 
     private var itemCount: Int { mediaContent.mediaItems.count }
     private var visibleCount: Int { min(itemCount, maxVisible) }
 
     var body: some View {
-        let columns = [
-            GridItem(.fixed(gridSize), spacing: spacing),
-            GridItem(.fixed(gridSize), spacing: spacing),
-        ]
-        LazyVGrid(columns: columns, spacing: spacing) {
-            ForEach(0..<visibleCount, id: \.self) { index in
-                GridCell(
-                    mediaContent: mediaContent,
-                    message: message,
-                    itemIndex: index,
-                    isPlaceholder: isPlaceholder,
-                    extraCount: index == maxVisible - 1 ? max(0, itemCount - maxVisible) : 0,
-                    onTap: { onTapItem(index) }
-                )
-                .frame(width: gridSize, height: gridSize)
-                .clipShape(Rectangle())
+        // Square-crop mosaic: 2 = two squares, 3 = big-left + 2 stacked right,
+        // 4 = 2×2, 5+ = 2×2 with a "+N" overlay on the last tile. Outer corners are
+        // rounded by clipping the whole album; inner tiles are square with 2px gaps.
+        Group {
+            switch visibleCount {
+            case 2:  twoLayout
+            case 3:  threeLayout
+            default: fourLayout
             }
         }
-        .frame(width: gridSize * 2 + spacing)
-        .overlay(Rectangle().stroke(isSelected ? Color.CT.accent : Color.clear, lineWidth: 2))
+        .frame(width: albumWidth)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(isSelected ? Color.CT.accent : Color.clear, lineWidth: 2))
+    }
+
+    private func tile(_ index: Int, _ w: CGFloat, _ h: CGFloat, extra: Int = 0) -> some View {
+        GridCell(
+            mediaContent: mediaContent,
+            message: message,
+            itemIndex: index,
+            isPlaceholder: isPlaceholder,
+            extraCount: extra,
+            onTap: { onTapItem(index) }
+        )
+        .frame(width: w, height: h)
+        .clipped()
+    }
+
+    private var twoLayout: some View {
+        let t = (albumWidth - spacing) / 2
+        return HStack(spacing: spacing) {
+            tile(0, t, t)
+            tile(1, t, t)
+        }
+    }
+
+    private var threeLayout: some View {
+        let bigW = (albumWidth - spacing) * 0.64
+        let smallW = albumWidth - spacing - bigW
+        let bigH = bigW
+        let smallH = (bigH - spacing) / 2
+        return HStack(spacing: spacing) {
+            tile(0, bigW, bigH)
+            VStack(spacing: spacing) {
+                tile(1, smallW, smallH)
+                tile(2, smallW, smallH)
+            }
+        }
+    }
+
+    private var fourLayout: some View {
+        let t = (albumWidth - spacing) / 2
+        let extra = itemCount > maxVisible ? itemCount - maxVisible : 0
+        return VStack(spacing: spacing) {
+            HStack(spacing: spacing) {
+                tile(0, t, t)
+                tile(1, t, t)
+            }
+            HStack(spacing: spacing) {
+                tile(2, t, t)
+                tile(3, t, t, extra: extra)
+            }
+        }
     }
 }
 
@@ -311,14 +356,12 @@ private struct GridCell: View {
     }
 
     private func loadThumbnail() {
-        if message.isSentByMe {
-            if let data = MediaManager.shared.retrieveThumbnail(for: message.id, at: itemIndex),
-               let img = PlatformImage(data: data)
-            {
-                thumbnailImage = img
-                MediaImageCache.shared.store(img, for: message.id, at: itemIndex)
-                return
-            }
+        if thumbnailImage != nil { return }
+        // Fast paint from a local thumbnail (sent), then upgrade to full via the cache.
+        if message.isSentByMe,
+           let data = MediaManager.shared.retrieveThumbnail(for: message.id, at: itemIndex),
+           let img = PlatformImage(data: data) {
+            thumbnailImage = img
         }
         guard let mediaId = itemDict["mediaId"] as? String,
               let mediaUrl = itemDict["mediaUrl"] as? String,
@@ -333,6 +376,7 @@ private struct GridCell: View {
             ),
                 let image = PlatformImage(data: imageData)
             else { return }
+            // Full image → gallery cache; a 200px thumb keeps the tile light.
             let thumb = MediaManager.shared.generateThumbnailImage(from: image, maxSize: 200)
             await MainActor.run {
                 MediaImageCache.shared.store(image, for: message.id, at: itemIndex)

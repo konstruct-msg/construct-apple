@@ -28,7 +28,10 @@ enum MediaQuality: Sendable {
     case original
 }
 
-struct MediaAttachment: Identifiable {
+// @unchecked Sendable: the only non-Sendable field is the immutable display image
+// (UIImage/NSImage are safe to read across threads); all other fields are value types.
+// Lets attachments be captured by concurrent upload tasks.
+struct MediaAttachment: Identifiable, @unchecked Sendable {
     let id = UUID()
     /// Original, unmodified source bytes (photo picker / file / camera encode).
     let originalData: Data

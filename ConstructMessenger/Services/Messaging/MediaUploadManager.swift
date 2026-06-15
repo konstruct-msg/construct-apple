@@ -29,25 +29,39 @@ class MediaUploadManager {
         caption: String,
         recipientId: String
     ) async throws -> MediaUploadResult {
+        // Local thumbnails for the sender placeholder (per item, in order).
+        let thumbnails: [Data] = attachments.compactMap { att in
+            att.displayImage.flatMap { MediaManager.shared.generateThumbnail(from: $0) }
+        }
+
+        // Upload with bounded concurrency so large albums (up to 99) overlap their I/O
+        // without unbounded memory/connections. Order is preserved across batches.
+        let maxConcurrent = 4
         var mediaDataList: [MediaMessageData] = []
-        var thumbnails: [Data] = []
+        mediaDataList.reserveCapacity(attachments.count)
 
-        // Upload each image using MediaManager
-        for (index, attachment) in attachments.enumerated() {
-            Log.info("Uploading image \(index + 1)/\(attachments.count)", category: "MediaUploadManager")
+        var index = 0
+        while index < attachments.count {
+            let end = min(index + maxConcurrent, attachments.count)
+            let base = index
+            let batch = Array(attachments[index..<end])
+            Log.info("Uploading album batch \(base + 1)…\(end) of \(attachments.count)", category: "MediaUploadManager")
 
-            // Generate thumbnail before upload (for local storage on sender side)
-            if let displayImage = attachment.displayImage,
-               let thumbnail = MediaManager.shared.generateThumbnail(from: displayImage) {
-                thumbnails.append(thumbnail)
-                Log.debug("Generated thumbnail: \(thumbnail.count) bytes", category: "MediaUploadManager")
+            let uploaded: [(Int, MediaMessageData)] = try await withThrowingTaskGroup(
+                of: (Int, MediaMessageData).self
+            ) { group in
+                for (offset, attachment) in batch.enumerated() {
+                    group.addTask {
+                        let data = try await MediaManager.shared.uploadImage(attachment, for: recipientId)
+                        return (base + offset, data)
+                    }
+                }
+                var acc: [(Int, MediaMessageData)] = []
+                for try await pair in group { acc.append(pair) }
+                return acc
             }
-
-            // Upload via MediaManager
-            let mediaData = try await MediaManager.shared.uploadImage(attachment, for: recipientId)
-            mediaDataList.append(mediaData)
-
-            Log.info("Image \(index + 1) uploaded: \(mediaData.mediaId)", category: "MediaUploadManager")
+            mediaDataList.append(contentsOf: uploaded.sorted { $0.0 < $1.0 }.map { $0.1 })
+            index = end
         }
         
         // Build message content with media references

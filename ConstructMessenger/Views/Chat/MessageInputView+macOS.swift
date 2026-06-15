@@ -120,7 +120,7 @@ struct MacMessageInputView: View {
             }
             .frame(width: 180)
         }
-        .photosPicker(isPresented: $showPhotoPicker, selection: $selectedPhotos, maxSelectionCount: 10, matching: .images)
+        .photosPicker(isPresented: $showPhotoPicker, selection: $selectedPhotos, maxSelectionCount: 99, matching: .images)
     }
 
     private func popoverButton(label: String, icon: String, action: @escaping () -> Void) -> some View {
