@@ -28,10 +28,14 @@ struct CallHistoryView: View {
                 trailingAction: { showClearConfirm = true }
             )
 
-            if records.isEmpty {
-                emptyState
-            } else {
-                callList
+            ZStack {
+                CTMatrixBackground().ignoresSafeArea()
+
+                if records.isEmpty {
+                    emptyState
+                } else {
+                    callList
+                }
             }
         }
         .background(Color.CT.bg.ignoresSafeArea())

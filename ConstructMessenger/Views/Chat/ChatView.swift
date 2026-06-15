@@ -40,9 +40,7 @@ struct ChatView: View {
 
     // Key Transparency status for the contact in this chat
     @State private var contactKTStatus: KTStatus = .unverified
-    
-    // ✅ Swipe-to-dismiss gesture state (not scroll-related)
-    @GestureState private var dragState: CGFloat = 0
+
     @State private var containerWidth: CGFloat = 390
     
     // ❌ REMOVED: Scroll-related @State variables (moved to ChatScrollManager)
@@ -246,31 +244,8 @@ struct ChatView: View {
         .toolbar(.hidden, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
         #endif
-        .gesture(
-            DragGesture(minimumDistance: 10)
-                .updating($dragState) { value, state, _ in
-                    // Only allow swipe from left edge (right swipe)
-                    if value.startLocation.x < 20 && value.translation.width > 0 {
-                        state = min(value.translation.width, containerWidth * ChatViewConstants.Gesture.maxDragRatio)
-                    }
-                }
-                .onEnded { value in
-                    // If swiped more than threshold, dismiss
-                    let threshold = max(
-                        ChatViewConstants.Gesture.dismissThreshold,
-                        containerWidth * ChatViewConstants.Gesture.dismissThresholdRatio
-                    )
-                    if value.translation.width > threshold && value.startLocation.x < 20 {
-                        withAnimation(.spring(
-                            response: ChatViewConstants.Gesture.dismissSpringResponse,
-                            dampingFraction: ChatViewConstants.Gesture.dismissSpringDamping
-                        )) {
-                            dismiss()
-                        }
-                    }
-                }
-        )
-        .offset(x: dragState)
+        // Edge-swipe-back is handled natively by interactivePopGestureRecognizer
+        // (see InteractiveSwipeBack.swift) — no manual DragGesture needed.
         .onDrop(of: [.image, .fileURL], isTargeted: $isChatDropTargeted) { providers in
             handleChatDrop(providers: providers)
         }

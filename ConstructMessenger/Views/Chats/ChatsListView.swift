@@ -115,7 +115,8 @@ struct ChatsListView: View {
                     ChatRowView(chat: chat)
                 }
                 .buttonStyle(.plain)
-                .listRowBackground(Color.CT.bg)
+                // Clear so the CTMatrixBackground watermark shows through the rows.
+                .listRowBackground(Color.clear)
                 .listRowSeparatorTint(Color.CT.noise)
                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                     Button(role: .destructive) {
@@ -152,7 +153,8 @@ struct ChatsListView: View {
         .scrollDismissesKeyboard(.immediately)
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
-        .background(Color.CT.bg)
+        // ASCII matrix watermark behind the rows (base #090909 comes from .ctBackground()).
+        .background(CTMatrixBackground())
     }
 
     // MARK: - Actions
