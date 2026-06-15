@@ -142,6 +142,10 @@ enum CTLayout {
 
     /// Large icon for full-screen call UI (accept / decline / mute buttons).
     static let callIconSize: CGFloat = 24
+
+    /// Fixed side zones keep the title visually centered even when leading and
+    /// trailing controls differ between screens or editing states.
+    static let navBarSideWidth: CGFloat = 96
 }
 
 // MARK: - Cross-platform helpers
@@ -462,9 +466,12 @@ struct CTNavBar: View {
     var showBack: Bool      = false
     /// On macOS sheet/modal contexts pass true — renders xmark.circle (close) instead of chevron (back).
     var isModal: Bool       = false
+    var leadingSystemImage: String? = nil
+    var leadingSymbol: String? = nil
     var trailingSymbol: String? = nil
     var trailingSystemImage: String? = nil
     var trailingSecondarySystemImage: String? = nil
+    var leadingColor: Color = Color.CT.accent
     var trailingColor: Color    = Color.CT.accent
     /// Colour for the secondary trailing icon (typically a cancel/dismiss
     /// next to a primary confirm). Defaults to dim so confirm vs cancel are
@@ -472,62 +479,129 @@ struct CTNavBar: View {
     /// buttons" and confuses the user (FaceTime-style: primary = accent,
     /// secondary = muted).
     var trailingSecondaryColor: Color = Color.CT.textDim
+    var leadingAction: (() -> Void)? = nil
     var backAction: (() -> Void)?     = nil
     var trailingAction: (() -> Void)? = nil
     var trailingSecondaryAction: (() -> Void)? = nil
 
+    init(
+        title: String,
+        showBack: Bool = false,
+        isModal: Bool = false,
+        leadingSystemImage: String? = nil,
+        leadingSymbol: String? = nil,
+        trailingSymbol: String? = nil,
+        trailingSystemImage: String? = nil,
+        trailingSecondarySystemImage: String? = nil,
+        leadingColor: Color = Color.CT.accent,
+        trailingColor: Color = Color.CT.accent,
+        trailingSecondaryColor: Color = Color.CT.textDim,
+        leadingAction: (() -> Void)? = nil,
+        backAction: (() -> Void)? = nil,
+        trailingAction: (() -> Void)? = nil,
+        trailingSecondaryAction: (() -> Void)? = nil
+    ) {
+        self.title = title
+        self.showBack = showBack
+        self.isModal = isModal
+        self.leadingSystemImage = leadingSystemImage
+        self.leadingSymbol = leadingSymbol
+        self.trailingSymbol = trailingSymbol
+        self.trailingSystemImage = trailingSystemImage
+        self.trailingSecondarySystemImage = trailingSecondarySystemImage
+        self.leadingColor = leadingColor
+        self.trailingColor = trailingColor
+        self.trailingSecondaryColor = trailingSecondaryColor
+        self.leadingAction = leadingAction
+        self.backAction = backAction
+        self.trailingAction = trailingAction
+        self.trailingSecondaryAction = trailingSecondaryAction
+    }
+
     var body: some View {
-        HStack(alignment: .center, spacing: 10) {
-            if showBack {
-                Button(action: { backAction?() }) {
-                    #if os(macOS)
-                    Image(systemName: isModal ? "xmark.circle" : "chevron.backward.circle")
-                        .font(.system(size: 18))
-                        .foregroundColor(Color.CT.accent)
-                    #else
-                    Image(systemName: "chevron.backward.circle.fill")
-                        .font(.system(size: 22))
-                        .foregroundColor(Color.CT.accent)
-                    #endif
-                }
-                .buttonStyle(.plain)
+        ZStack {
+            HStack(alignment: .center, spacing: 0) {
+                leadingContent
+                    .frame(width: CTLayout.navBarSideWidth, alignment: .leading)
+                Spacer(minLength: 0)
+                trailingContent
+                    .frame(width: CTLayout.navBarSideWidth, alignment: .trailing)
             }
             Text(title.uppercased())
                 .font(CTFont.bold(14))
                 .foregroundColor(Color.CT.text)
                 .tracking(4)
-            Spacer()
-            if trailingSystemImage != nil || trailingSecondarySystemImage != nil {
-                HStack(spacing: 10) {
-                    if let secondaryImageName = trailingSecondarySystemImage {
-                        Button(action: { trailingSecondaryAction?() }) {
-                            Image(systemName: secondaryImageName)
-                                .font(.system(size: 18))
-                                .foregroundColor(trailingSecondaryColor)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    if let imageName = trailingSystemImage {
-                        Button(action: { trailingAction?() }) {
-                            Image(systemName: imageName)
-                                .font(.system(size: 18))
-                                .foregroundColor(trailingColor)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            } else if let sym = trailingSymbol {
-                Button(action: { trailingAction?() }) {
-                    Text(sym)
-                        .font(CTFont.regular(13))
-                        .foregroundColor(trailingColor)
-                }
-                .buttonStyle(.plain)
-            }
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .padding(.horizontal, CTLayout.navBarSideWidth)
         }
         .padding(.horizontal, CTLayout.edgePad)
         .frame(height: CTLayout.navBarHeight)
         .ctBorderBottom()
+    }
+
+    @ViewBuilder
+    private var leadingContent: some View {
+        if showBack {
+            Button(action: { backAction?() }) {
+                #if os(macOS)
+                Image(systemName: isModal ? "xmark.circle" : "chevron.backward.circle")
+                    .font(.system(size: 18))
+                    .foregroundColor(Color.CT.accent)
+                #else
+                Image(systemName: "chevron.backward.circle.fill")
+                    .font(.system(size: 22))
+                    .foregroundColor(Color.CT.accent)
+                #endif
+            }
+            .buttonStyle(.plain)
+        } else if let imageName = leadingSystemImage {
+            Button(action: { leadingAction?() }) {
+                Image(systemName: imageName)
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundColor(leadingColor)
+            }
+            .buttonStyle(.plain)
+        } else if let sym = leadingSymbol {
+            Button(action: { leadingAction?() }) {
+                Text(sym)
+                    .font(CTFont.bold(13))
+                    .foregroundColor(leadingColor)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    @ViewBuilder
+    private var trailingContent: some View {
+        if trailingSystemImage != nil || trailingSecondarySystemImage != nil {
+            HStack(spacing: 10) {
+                if let secondaryImageName = trailingSecondarySystemImage {
+                    Button(action: { trailingSecondaryAction?() }) {
+                        Image(systemName: secondaryImageName)
+                            .font(.system(size: 18))
+                            .foregroundColor(trailingSecondaryColor)
+                    }
+                    .buttonStyle(.plain)
+                }
+                if let imageName = trailingSystemImage {
+                    Button(action: { trailingAction?() }) {
+                        Image(systemName: imageName)
+                            .font(.system(size: 18))
+                            .foregroundColor(trailingColor)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        } else if let sym = trailingSymbol {
+            Button(action: { trailingAction?() }) {
+                Text(sym)
+                    .font(CTFont.bold(13))
+                    .foregroundColor(trailingColor)
+                    .lineLimit(1)
+            }
+            .buttonStyle(.plain)
+        }
     }
 }
 
